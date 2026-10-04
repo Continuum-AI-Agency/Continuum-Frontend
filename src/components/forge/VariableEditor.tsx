@@ -70,7 +70,7 @@ function rolesForKind(kind: string): SlotRole[] {
 
 const roleLabel = (role: string) => role.replace(/_/g, ' ');
 
-function DefaultValueControl({
+export function DefaultValueControl({
   variable,
   label,
   value,
@@ -140,11 +140,13 @@ function DefaultValueControl({
             if (!asset) return;
             // Version-pinned like every other Library reference on the render path: an unpinned
             // default silently changes what renders the next time someone uploads a new version.
-            onChange(
-              asset.headVersionId
-                ? { assetId: asset.id, versionId: asset.headVersionId }
-                : { assetId: asset.id },
-            );
+            if (!asset.headVersionId) {
+              toast.error(
+                'This file has no saved Library version. Upload it again before using it as a default.',
+              );
+              return;
+            }
+            onChange({ assetId: asset.id, versionId: asset.headVersionId });
             setPicking(false);
           }}
           anchor={

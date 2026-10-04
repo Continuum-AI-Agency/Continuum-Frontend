@@ -124,6 +124,11 @@ export const designLeafSchema = z
     blendMode: z.string().min(1),
     /** The artboard it sits on, or null for a document without artboards. */
     artboardId: z.number().int().nullable(),
+    /** Explicit editor dimensions; other dimensions keep the importer's measured room. */
+    textBoxOverride: z
+      .object({ w: z.number().positive().optional(), h: z.number().positive().optional() })
+      .strict()
+      .optional(),
     /** A PNG of it is in the pixels zip (every non-text leaf with pixels). */
     pixels: z.boolean(),
     text: designTextSpecSchema.nullable(),
@@ -317,3 +322,49 @@ export const designArrangementsResponseSchema = z
   })
   .strict();
 export type DesignArrangementsResponse = z.infer<typeof designArrangementsResponseSchema>;
+
+/** Layer footage conversion, preserving the uploaded AEP rather than authoring a new timeline. */
+export const forgeArtworkRepairRequestSchema = z
+  .object({
+    filename: z.string().min(1),
+    inlineBase64: z.string().min(1),
+    artwork: z
+      .array(
+        z
+          .object({
+            file: z.string().min(1),
+            source: designImportSourceSchema,
+            width: z.number().int().positive(),
+            height: z.number().int().positive(),
+            layers: z.array(
+              z
+                .object({
+                  id: z.number().int(),
+                  name: z.string(),
+                  pixel: z.string().min(1),
+                  x: z.number(),
+                  y: z.number(),
+                  w: z.number().positive(),
+                  h: z.number().positive(),
+                })
+                .strict(),
+            ),
+          })
+          .strict(),
+      )
+      .max(128),
+  })
+  .strict();
+export type ForgeArtworkRepairRequest = z.infer<typeof forgeArtworkRepairRequestSchema>;
+export const forgeArtworkRepairResponseSchema = z
+  .object({
+    filename: z.string().min(1),
+    inlineBase64: z.string().min(1),
+    checksum: z.string().regex(/^[a-f0-9]{64}$/),
+    repairs: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const forgeArtworkInspectionSchema = z
+  .object({ files: z.array(z.string().min(1)).max(128) })
+  .strict();

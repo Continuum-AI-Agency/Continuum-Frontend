@@ -17,6 +17,7 @@ import {
   type ForgeRenderSetRow,
   type MediaAsset,
   readableLayerName,
+  type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
 import {
@@ -144,7 +145,10 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
-import { fetchTemplateVariants, saveTemplateVariables } from '@/lib/library/templateSources';
+import {
+  fetchTemplateRevisionVariants,
+  fetchTemplateVariants,
+} from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
@@ -344,6 +348,7 @@ export type ForgeRenderIntent = {
    * which could list heads but never aim a render at one, so every name on it was decoration.
    */
   templateRef?: string;
+  templateRevision?: TemplateRevisionRef;
   /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
   rowId?: string;
   /** Select that row alone, so Render (and its review) is the next step. Never renders by itself. */
@@ -396,6 +401,7 @@ export function RenderRequestsGrid({
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
   // Which template, and optionally which saved set, the rows come from. A new object is a new
   // load, so an intent for another set of the same template still reloads.
+  const [templateRevision, setTemplateRevision] = useState<TemplateRevisionRef | null>(null);
   const [selection, setSelection] = useState<ForgeRenderIntent>({ templateKey: '' });
   const { templateKey } = selection;
   /**
@@ -638,6 +644,15 @@ export function RenderRequestsGrid({
       activeSetRef.current = set;
       savedBase.current = set.rows;
       setActiveSet(set);
+      setTemplateRevision(
+        set.templateRevision
+          ? {
+              templateId: set.templateRevision.templateId,
+              variantId: set.templateRevision.variantId,
+              revisionId: set.templateRevision.revisionId,
+            }
+          : null,
+      );
       setConflict(null);
       const loaded = fromRenderSetRows(set.rows);
       // Published arrangement names can change without changing the reflected contract hash.
@@ -947,6 +962,14 @@ export function RenderRequestsGrid({
             contractHash,
             variables: resolved,
             ...(templateRef ? { templateRef } : {}),
+            ...(templateRevision ? { templateRevision } : {}),
+            ...(activeSet && signatureOf(rows, contract) === savedSignature
+              ? {
+                  renderSetId: activeSet.id,
+                  renderSetRowId: row.id,
+                  expectedRenderSetRevision: activeSet.revision,
+                }
+              : {}),
             ...(encode ? { encode } : {}),
           });
           check = {
@@ -974,7 +997,16 @@ export function RenderRequestsGrid({
       }, PREFLIGHT_DEBOUNCE_MS);
       pending.set(row.id, { timer, snapshot });
     }
-  }, [rows, contract, clientErrors, brandId, bindingId]);
+  }, [
+    rows,
+    contract,
+    clientErrors,
+    brandId,
+    bindingId,
+    templateRevision,
+    activeSet,
+    savedSignature,
+  ]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -1125,6 +1157,100 @@ export function RenderRequestsGrid({
     queryFn: () => fetchTemplateVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
+  const { data: revisionVariants } = useQuery({
+    queryKey: [
+      ...forgeQueryKeys.revisionVariants(brandId, contract?.template.sourceAssetId ?? ''),
+      'history',
+    ],
+    queryFn: () => fetchTemplateRevisionVariants(brandId, contract!.template.sourceAssetId!, true),
+    enabled: !!contract?.template.sourceAssetId,
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const [pickedRevision, setPickedRevision] = useState('');
+  const [revisionChangeBusy, setRevisionChangeBusy] = useState(false);
+  const publishedRevisions =
+    revisionVariants
+      ?.filter((variant) => !variant.archivedAt)
+      .flatMap((variant) =>
+        variant.revisions
+          .filter((revision) => revision.publications.length > 0)
+          .flatMap((revision) =>
+            revision.publications.map((target) => ({
+              id: `${revision.id}:${target.bindingId}:${target.templateKey}`,
+              label: `${variant.name} · Revision ${revision.number}${revision.publications.length > 1 ? ` · ${target.templateKey}` : ''}`,
+              ref: {
+                templateId: variant.templateId,
+                variantId: variant.variantId,
+                revisionId: revision.id,
+              },
+              target,
+            })),
+          ),
+      ) ?? [];
+  const pinnedRevisionLabel = revisionVariants
+    ?.flatMap((variant) => variant.revisions.map((revision) => ({ variant, revision })))
+    .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
+  const changeRevision = async () => {
+    const picked = publishedRevisions.find((item) => item.id === pickedRevision);
+    if (!picked) return;
+    setRevisionChangeBusy(true);
+    try {
+      if (activeSet) {
+        const saved = await apiRendersApi.changeRenderSetTemplateRevision(activeSet.id, {
+          brandId,
+          expectedRevision: activeSet.revision,
+          templateRevision: picked.ref,
+          templateKey: picked.target.templateKey,
+          bindingId: picked.target.bindingId,
+        });
+        setTemplateRevision(
+          saved.templateRevision
+            ? {
+                templateId: saved.templateRevision.templateId,
+                variantId: saved.templateRevision.variantId,
+                revisionId: saved.templateRevision.revisionId,
+              }
+            : null,
+        );
+        const next = await apiRendersApi.getContract(brandId, saved.templateKey, saved.bindingId);
+        setContract(next);
+        setLayerSwitches(next.layerSwitchesNotAsked);
+        setLinkedFields(next.linkedFields ?? []);
+        adoptSet(saved, latestRows.current);
+        showRows(latestRows.current, latestRows.current, next);
+        queryClient.setQueryData<{ items: ForgeRenderSet[]; nextCursor: null }>(
+          forgeQueryKeys.renderSetList(brandId, saved.templateKey),
+          (current) => ({
+            items: [saved, ...(current?.items ?? []).filter((item) => item.id !== saved.id)],
+            nextCursor: null,
+          }),
+        );
+        setSelection({
+          templateKey: saved.templateKey,
+          bindingId: saved.bindingId,
+          renderSetId: saved.id,
+        });
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
+        toast.success('Set now uses the selected template revision.');
+      } else {
+        confirmDiscard(() => {
+          setTemplateRevision(picked.ref);
+          setTemplateRef(null);
+          setSelection({
+            templateKey: picked.target.templateKey,
+            bindingId: picked.target.bindingId,
+          });
+        });
+      }
+      setPickedRevision('');
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : 'Rows need attention before changing revision.',
+      );
+    } finally {
+      setRevisionChangeBusy(false);
+    }
+  };
   const currentSource = sourceVariants?.find(
     (item) => item.assetId === contract?.template.sourceAssetId,
   );
@@ -1144,27 +1270,8 @@ export function RenderRequestsGrid({
   // One click from Render: a layer's Show switch becomes a column for every set of this
   // template — the same edit as "Ask per row" in the template's Variables. Rows that never set
   // it keep rendering what the file has.
-  const askSwitch = async (variable: ApiRenderVariable) => {
-    const assetId = contract?.template.sourceAssetId;
-    if (!assetId || !variable.sourceSlotKey || !templateKey) return;
-    try {
-      await saveTemplateVariables(brandId, assetId, [
-        { slotKey: variable.sourceSlotKey, exposed: true },
-      ]);
-      const next = await queryClient.fetchQuery({
-        queryKey: forgeQueryKeys.contract(brandId, contractBindingId, templateKey),
-        queryFn: () => apiRendersApi.getContract(brandId, templateKey, contractBindingId),
-        staleTime: 0,
-      });
-      setContract(next);
-      setLayerSwitches(next.layerSwitchesNotAsked);
-      setLinkedFields(next.linkedFields ?? []);
-      toast.success(
-        `${readableLayerName(variable.label)} is now a column — each row can show or hide it`,
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not add that switch');
-    }
+  const askSwitch = async (_variable: ApiRenderVariable) => {
+    toast.info('Open Edit layers to expose this field, save a template revision, then publish it.');
   };
 
   const saveAsInputs = (id: string) => {
@@ -1405,6 +1512,7 @@ export function RenderRequestsGrid({
     // than leaving it set — means switching template clears it, so a ref can never be carried
     // onto a template whose tree has never heard of it.
     setTemplateRef(intent.templateRef ?? null);
+    setTemplateRevision(intent.templateRevision ?? null);
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
@@ -1448,6 +1556,15 @@ export function RenderRequestsGrid({
     activeSetRef.current = saved;
     savedBase.current = saved.rows;
     setActiveSet(saved);
+    setTemplateRevision(
+      saved.templateRevision
+        ? {
+            templateId: saved.templateRevision.templateId,
+            variantId: saved.templateRevision.variantId,
+            revisionId: saved.templateRevision.revisionId,
+          }
+        : null,
+    );
     if (saved.contractHash === contract?.template.contractHash) setRebaseDrops([]);
     setRenderSets((current) => [saved, ...current.filter((set) => set.id !== saved.id)]);
     setSavedSignature(signatureOf(savedRows, contract));
@@ -1458,7 +1575,11 @@ export function RenderRequestsGrid({
   const createSet = async (
     name: string,
     rowsToSave: RequestRow[],
-    { announce = true, description }: { announce?: boolean; description?: string | null } = {},
+    {
+      announce = true,
+      description,
+      revisionRef,
+    }: { announce?: boolean; description?: string | null; revisionRef?: TemplateRevisionRef } = {},
   ): Promise<ForgeRenderSet | null> => {
     if (!contract || !bindingId) return null;
     try {
@@ -1469,6 +1590,9 @@ export function RenderRequestsGrid({
         ...(description ? { description } : {}),
         templateKey: contract.template.key,
         contractHash: contract.template.contractHash,
+        ...((revisionRef ?? templateRevision)
+          ? { templateRevision: revisionRef ?? templateRevision! }
+          : {}),
         rows: toRenderSetRows(rowsToSave, allOutputIdsOf(contract)),
       });
       adoptSet(created, rowsToSave);
@@ -1692,11 +1816,32 @@ export function RenderRequestsGrid({
   /** A kept version as a new set. The set it came from is never written back over. */
   const restoreRevision = async (revision: ForgeRenderSetRevision) => {
     if (!contract) return;
-    const restored = rebaseRows(fromRenderSetRows(revision.rows), contract).rows;
+    if (
+      revision.templateRevision &&
+      (revision.templateRevision.templateKey !== contract.template.key ||
+        revision.templateRevision.bindingId !== bindingId)
+    ) {
+      toast.info('Load the historical template revision before restoring this set.');
+      return;
+    }
+    const restored = revision.templateRevision
+      ? fromRenderSetRows(revision.rows)
+      : rebaseRows(fromRenderSetRows(revision.rows), contract).rows;
     const created = await createSet(
       `${revision.name} (restored ${formatRelativeTime(revision.savedAt)})`,
       restored,
-      { announce: false },
+      {
+        announce: false,
+        ...(revision.templateRevision
+          ? {
+              revisionRef: {
+                templateId: revision.templateRevision.templateId,
+                variantId: revision.templateRevision.variantId,
+                revisionId: revision.templateRevision.revisionId,
+              },
+            }
+          : {}),
+      },
     );
     if (!created) return;
     showRows(restored, restored, contract);
@@ -1924,7 +2069,9 @@ export function RenderRequestsGrid({
     setBusy('firing');
     try {
       const submittedSet =
-        activeSet && !needsSave ? activeSet : await saveRenderSet({ announce: false });
+        activeSet && signatureOf(rows, contract) === savedSignature
+          ? activeSet
+          : await saveRenderSet({ announce: false });
       if (!submittedSet) return;
       const current = latestRows.current;
       const signature = reviewSignature(
@@ -2083,6 +2230,43 @@ export function RenderRequestsGrid({
   return (
     // Bounded by the tab: the toolbar stays put, the rows and the review tray share the rest.
     <div className="flex h-full min-h-0 flex-col gap-2">
+      {publishedRevisions.length || activeSet?.templateRevision ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {activeSet?.templateRevision ? (
+            <span>
+              {pinnedRevisionLabel
+                ? `${pinnedRevisionLabel.variant.name} · Revision ${pinnedRevisionLabel.revision.number}`
+                : `Revision ${activeSet.templateRevision.revisionId.slice(0, 8)}`}{' '}
+              · pinned to this set
+            </span>
+          ) : null}
+          <label className="flex items-center gap-2">
+            Template variant / revision
+            <select
+              aria-label="Published template revision"
+              className="h-8 max-w-64 rounded-md border bg-background px-2"
+              value={pickedRevision}
+              disabled={revisionChangeBusy || needsSave}
+              onChange={(event) => setPickedRevision(event.target.value)}
+            >
+              <option value="">Choose a published revision</option>
+              {publishedRevisions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={!pickedRevision || revisionChangeBusy || needsSave}
+            onClick={() => void changeRevision()}
+          >
+            {activeSet ? 'Change set template revision' : 'Load template revision'}
+          </Button>
+        </div>
+      ) : null}
       <RenderToolbar
         templates={templates}
         templateKey={templateKey}
@@ -2095,11 +2279,12 @@ export function RenderRequestsGrid({
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
           confirmDiscard(() => {
             setTemplateRef(null);
+            setTemplateRevision(null);
             setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
           });
         }}
         ready={contract !== null}
-        sourceVariants={sourceRoot ? publishedVariants : undefined}
+        sourceVariants={revisionVariants ? [] : sourceRoot ? publishedVariants : undefined}
         variants={contract?.outputs}
         variant={variant}
         onVariantChange={(id) => {

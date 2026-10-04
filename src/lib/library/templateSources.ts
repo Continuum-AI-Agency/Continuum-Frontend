@@ -27,9 +27,11 @@ import {
   fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
   readFontNames,
+  type SaveTemplateRevisionRequest,
   type TemplateFontAliasRequest,
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
+  type TemplateRevisionPreviewRequest,
   type TemplateSourceEvent,
   type TemplateTextMoveRequest,
   type TemplateTextMoveResponse,
@@ -41,8 +43,11 @@ import {
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
   templateForgeBundleSchema,
+  templateLayerPreviewResponseSchema,
   templateMappingReviewSchema,
   templateRebindPreviewSchema,
+  templateRevisionSchema,
+  templateRevisionVariantsResponseSchema,
   templateSourceEventsResponseSchema,
   templateSourceSchema,
   templateSourceSummarySchema,
@@ -608,4 +613,62 @@ export async function loadWorkspaceTemplates(brandId: string): Promise<Workspace
   return discoverWorkspaceTemplates(brandId)
     .then((result) => result.items)
     .catch(() => []);
+}
+
+export async function fetchTemplateRevisionVariants(
+  brandId: string,
+  assetId?: string,
+  includeArchived = false,
+) {
+  return templateRevisionVariantsResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        assetId
+          ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`
+          : `/api/ai-studio/templates/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`,
+      ),
+      'Template revision variants',
+    ),
+  ).items;
+}
+
+export async function previewTemplateRevision(
+  assetId: string,
+  request: TemplateRevisionPreviewRequest,
+) {
+  return templateLayerPreviewResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions/preview`,
+        { method: 'POST', body: JSON.stringify(request) },
+      ),
+      'Template revision preview',
+    ),
+  );
+}
+
+export async function saveTemplateRevision(assetId: string, request: SaveTemplateRevisionRequest) {
+  return templateRevisionSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+      'Save template revision',
+    ),
+  );
+}
+
+export async function archiveTemplateRevisionVariant(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await unwrap(
+    await authorizedFetch(
+      `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/archive`,
+      { method: 'POST', body: JSON.stringify({ brandId }) },
+    ),
+    'Archive template variant',
+  );
 }

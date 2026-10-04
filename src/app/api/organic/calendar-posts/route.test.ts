@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { fetchPublishedPostPages } from './route';
+import { fetchPublishedPostPages } from './publishedPostPages';
 
 describe('fetchPublishedPostPages', () => {
   it('reads every page beyond Supabase’s default 1000 row limit', async () => {

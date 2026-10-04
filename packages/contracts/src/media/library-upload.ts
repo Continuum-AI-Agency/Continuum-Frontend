@@ -50,6 +50,8 @@ export const registerMediaRequestSchema = z
     // failures must never block an upload.
     checksum: z.string().min(1).optional(),
     integrityState: assetIntegrityStateSchema.default('unknown'),
+    // Reserve a separate authored AE upload for this template family.
+    templateVariantOf: z.string().uuid().optional(),
   })
   .strict();
 

@@ -565,3 +565,20 @@ describe('resuming across a reload', () => {
     expect(store.map.size).toBe(0);
   });
 });
+
+it('reserves an authored variant at registration before catalog discovery', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const client = makeClient({ calls: [], bodies });
+  const parent = '11111111-1111-4111-8111-111111111111';
+  await uploadMediaAsset(
+    { brandId: 'b1', file: new File(['aep'], 'Variant.aep'), templateVariantOf: parent },
+    {
+      createClient: () => client,
+      attachPreview: async () => 'unsupported',
+      supabaseUrl: 'https://db.test',
+      resumableUpload: async () => ({ uploadUrl: 'https://db.test/upload/id' }),
+    },
+  );
+  expect(bodies.find((body) => body.action === 'register')?.templateVariantOf).toBe(parent);
+  expect(bodies.find((body) => body.action === 'sign_upload')?.templateVariantOf).toBeUndefined();
+});

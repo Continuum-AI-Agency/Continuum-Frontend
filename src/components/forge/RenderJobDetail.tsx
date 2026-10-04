@@ -33,6 +33,7 @@ import { templateVersionOf, templateVersionTitle } from '@/components/forge/temp
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '@/lib/api/config';
+import { fetchTemplateRevisionVariants } from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { formatDuration, renderJobChecks } from './renderJobChecks';
 
@@ -156,8 +157,15 @@ export function RenderModePill({ test }: { test: boolean }) {
 export function TemplateVersion({
   job,
 }: {
-  job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'>;
+  job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'> &
+    Partial<Pick<ApiRenderJob, 'templateRevision' | 'brandId'>>;
 }) {
+  if (job.templateRevision && job.brandId)
+    return (
+      <RevisionTemplateVersion
+        job={{ ...job, brandId: job.brandId, templateRevision: job.templateRevision }}
+      />
+    );
   const view = templateVersionOf(job);
   if (view.state === 'unrecorded') {
     return (
@@ -176,6 +184,31 @@ export function TemplateVersion({
       {view.variant ? (
         <span className="font-mono text-2xs text-muted-foreground">{view.variant}</span>
       ) : null}
+    </span>
+  );
+}
+
+function RevisionTemplateVersion({
+  job,
+}: {
+  job: Pick<ApiRenderJob, 'brandId' | 'templateRevision'>;
+}) {
+  const pin = job.templateRevision!;
+  const { data } = useQuery({
+    queryKey: [...forgeQueryKeys.revisionVariants(job.brandId, pin.sourceAssetId), 'history'],
+    queryFn: () => fetchTemplateRevisionVariants(job.brandId, pin.sourceAssetId, true),
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const variant = data?.find((item) => item.variantId === pin.variantId);
+  const revision = variant?.revisions.find((item) => item.id === pin.revisionId);
+  return (
+    <span
+      className="tabular-nums"
+      title={`Immutable template revision ${pin.revisionId} · ${pin.checksum}`}
+    >
+      {variant && revision
+        ? `${variant.name} · Revision ${revision.number}`
+        : `Revision ${pin.revisionId.slice(0, 8)}`}
     </span>
   );
 }
@@ -343,7 +376,10 @@ export function RenderJobDetail({
   const inLibrary = files.flatMap((output) =>
     output.assetId ? [{ fileName: output.fileName, assetId: output.assetId }] : [],
   );
-  const libraryState = useLibraryState(job.brandId, inLibrary.map((output) => output.assetId));
+  const libraryState = useLibraryState(
+    job.brandId,
+    inLibrary.map((output) => output.assetId),
+  );
 
   return (
     <div className="flex flex-col divide-y divide-border">

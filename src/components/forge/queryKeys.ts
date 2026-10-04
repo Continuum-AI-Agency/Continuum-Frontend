@@ -8,6 +8,8 @@ export const forgeQueryKeys = {
   all: ['forge'] as const,
   brand: (brandId: string) => ['forge', brandId] as const,
   templateVariants: (brandId: string) => ['forge', brandId, 'template-variants'] as const,
+  revisionVariants: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'revision-variants', assetId] as const,
   templateSources: (brandId: string) => ['forge', brandId, 'template-sources'] as const,
   templateVariables: (brandId: string, assetId: string, versionId: string) =>
     ['forge', brandId, 'template-variables', assetId, versionId] as const,
