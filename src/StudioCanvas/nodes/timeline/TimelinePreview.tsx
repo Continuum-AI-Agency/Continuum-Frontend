@@ -359,7 +359,7 @@ export function TimelinePreview({
           </div>
         ) : null}
 
-        {isEmpty ? (
+        {isEmpty && totalSec <= 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
             <Video className="h-7 w-7 opacity-30" />
             <span className="text-xs">Drag clips from the media bin onto the timeline</span>
@@ -373,7 +373,7 @@ export function TimelinePreview({
           size="icon"
           className="h-8 w-8"
           onClick={onTogglePlay}
-          disabled={isEmpty}
+          disabled={totalSec <= 0}
           aria-label={isPlaying || isPreparing ? 'Pause preview' : 'Play preview'}
         >
           {isPlaying || isPreparing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}

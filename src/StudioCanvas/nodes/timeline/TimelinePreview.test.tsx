@@ -58,3 +58,19 @@ describe('TimelinePreview effect parity', () => {
     });
   }
 });
+
+it('plays a nonempty image/audio sequence without a primary video track', () => {
+  render(
+    <TimelinePreview
+      videoRef={createRef<HTMLVideoElement>()}
+      showVideo={false}
+      isEmpty
+      isPlaying={false}
+      onTogglePlay={() => undefined}
+      playheadSec={0}
+      totalSec={3}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Play preview' }).hasAttribute('disabled')).toBe(false);
+  expect(screen.queryByText('Drag clips from the media bin onto the timeline')).toBeNull();
+});

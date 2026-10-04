@@ -238,7 +238,14 @@ export function useEditorProject(projectId: string) {
     try {
       const next = await restore(entry.beforeRevision, `Undo ${entry.label}`);
       if (!next) return;
-      setUndoStack((stack) => stack.slice(0, -1));
+      setUndoStack((stack) => {
+        const remaining = stack.slice(0, -1);
+        const previous = remaining.at(-1);
+        // Restoring the same timeline creates a new revision and fingerprint.
+        return previous
+          ? remaining.with(-1, { ...previous, appliedFingerprint: next.fingerprint })
+          : remaining;
+      });
       setRedoStack((stack) => [...stack, { ...entry, redoFingerprint: next.fingerprint }]);
     } catch (error) {
       show({
@@ -264,7 +271,13 @@ export function useEditorProject(projectId: string) {
     try {
       const next = await restore(entry.afterRevision, `Redo ${entry.label}`);
       if (!next) return;
-      setRedoStack((stack) => stack.slice(0, -1));
+      setRedoStack((stack) => {
+        const remaining = stack.slice(0, -1);
+        const previous = remaining.at(-1);
+        return previous
+          ? remaining.with(-1, { ...previous, redoFingerprint: next.fingerprint })
+          : remaining;
+      });
       setUndoStack((stack) => [...stack, { ...entry, appliedFingerprint: next.fingerprint }]);
     } catch (error) {
       show({
