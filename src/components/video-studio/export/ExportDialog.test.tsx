@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { VideoStudioContext } from '../types';
 
 // Export all variants against a faked ops client: A is this project (edited through the
-// workspace's runOp), B and C are siblings (edited through the client). B's format differs
-// from the chosen preset, A's matches; B's first render fails and is retried alone.
+// workspace's runOp), B and C are siblings (edited through the client). Every cut applies
+// the requested framing; B's first render fails and is retried alone.
 const A = '22222222-2222-4222-8222-222222222222';
 const B = '33333333-3333-4333-8333-333333333333';
 const C = '44444444-4444-4444-8444-444444444444';
@@ -28,9 +28,6 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
           current: id === A,
         })),
       };
-    }
-    if (op === 'get_project') {
-      return { exportPresetId: projectId === B ? 'reels' : 'tiktok' };
     }
     if (op === 'set_format') return {};
     if (op === 'export') return { jobId: `job-${label}`, state: 'queued', warnings: [] };
@@ -99,7 +96,7 @@ const downloads = () =>
 
 describe('ExportDialog — all variants', () => {
   it(
-    'exports every sibling with one preset, reframes only a differing one, and retries a failure alone',
+    'exports every sibling with the requested framing and retries a failure alone',
     async () => {
       const workspaceCalls = renderDialog();
       const start = await screen.findByTestId('export-all-start');
@@ -111,9 +108,12 @@ describe('ExportDialog — all variants', () => {
         'Download A https://storage.test/A.mp4?download=',
         'Download C https://storage.test/C.mp4?download=',
       ]);
-      // Only B was in another format; this project's export ran through the workspace.
-      expect(clientCalls.filter((call) => call.endsWith(':set_format'))).toEqual(['B:set_format']);
-      expect(workspaceCalls).toEqual(['A:export']);
+      // This project's framing and export join its workspace history; siblings stay independent.
+      expect(clientCalls.filter((call) => call.endsWith(':set_format'))).toEqual([
+        'B:set_format',
+        'C:set_format',
+      ]);
+      expect(workspaceCalls).toEqual(['A:set_format', 'A:export']);
       expect(clientCalls.filter((call) => call.endsWith(':export')).sort()).toEqual([
         'B:export',
         'C:export',
@@ -127,7 +127,7 @@ describe('ExportDialog — all variants', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Retry B' }));
       await waitFor(() => expect(downloads()).toHaveLength(3), { timeout: TIMEOUT_MS });
       expect(clientCalls.filter((call) => call.endsWith(':export'))).toEqual(['B:export']);
-      expect(workspaceCalls).toEqual(['A:export']);
+      expect(workspaceCalls).toEqual(['A:set_format', 'A:export']);
     },
     TIMEOUT_MS * 2,
   );
