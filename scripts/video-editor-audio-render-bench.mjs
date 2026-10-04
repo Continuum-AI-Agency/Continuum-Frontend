@@ -1,4 +1,25 @@
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+if (process.argv.includes('--ducking-local')) {
+  const child = spawnSync(
+    'bun',
+    [
+      '--no-env-file',
+      '--env-file=.env',
+      'scripts/video-editor-ops-e2e-bench.ts',
+      '--sink=library',
+      ...process.argv.slice(2),
+    ],
+    {
+      cwd: fileURLToPath(new URL('../../Continuum-Backend/', import.meta.url)),
+      stdio: 'inherit',
+      env: process.env,
+    },
+  );
+  if (child.error) throw child.error;
+  process.exit(child.status ?? 1);
+}
 
 const native = process.argv.includes('--native-volume');
 const args = [
