@@ -111,7 +111,10 @@ export const editorRenderBlockers = (project: EditorProjectV2): string[] => {
   }
   // `muted` silences a video track; only `enabled` takes its picture away.
   const hasPicture = project.tracks.some(
-    (track) => track.kind === 'video' && track.enabled && track.clips.some((clip) => clip.enabled),
+    (track) =>
+      track.enabled &&
+      (track.kind === 'video' || (track.kind === 'overlay' && !track.muted)) &&
+      track.clips.some((clip) => clip.enabled),
   );
   if (!hasPicture) blockers.push('The timeline is empty.');
   return blockers;

@@ -694,13 +694,12 @@ export async function buildTimelineEditorRenderPlan(input: {
     .filter((track) => track.enabled)
     .sort((left, right) => left.order - right.order);
   const primary = videoTracks[0];
-  if (!primary) throw new Error('The editor project has no enabled video track.');
   const incomingTransitionByClip = new Map(
     input.project.transitions
-      .filter((transition) => transition.trackId === primary.id)
+      .filter((transition) => transition.trackId === primary?.id)
       .map((transition) => [transition.toClipId, transition] as const),
   );
-  const primaryClips = primary.clips
+  const primaryClips = (primary?.clips ?? [])
     .filter((clip) => clip.enabled)
     .sort((left, right) => left.timelineStartSec - right.timelineStartSec);
   let expectedStartSec = 0;
@@ -714,7 +713,7 @@ export async function buildTimelineEditorRenderPlan(input: {
     }
     expectedStartSec += clip.durationSec;
   }
-  if (Math.abs(input.project.durationSec - expectedStartSec) > 0.001) {
+  if (primaryClips.length > 0 && Math.abs(input.project.durationSec - expectedStartSec) > 0.001) {
     throw new Error(
       `Project duration ${input.project.durationSec}s does not match the canonical sequence duration ${expectedStartSec}s.`,
     );
@@ -728,7 +727,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       trimStartSec: clip.sourceInSec,
       trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
       durationSec: clip.durationSec,
-      muteAudio: !clip.audioEnabled || !audibleTracks.has(primary.id),
+      muteAudio: !clip.audioEnabled || !audibleTracks.has(primary!.id),
       volume: clip.volume,
       audioFadeClock: clip.audioFadeClock,
       audioFadeInSec: clip.fadeInSec,
@@ -739,6 +738,23 @@ export async function buildTimelineEditorRenderPlan(input: {
       transition: transitionFor(incomingTransitionByClip.get(clip.id)),
     })),
   );
+
+  if (items.length === 0) {
+    if (input.project.durationSec <= 0) throw new Error('The timeline is empty.');
+    // Overlay-only edits still render over their authored canvas for the full sequence.
+    const canvas = new OffscreenCanvas(1, 1);
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Timeline background canvas unavailable.');
+    context.fillStyle = input.project.canvas.backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    items.push({
+      itemId: 'canvas-background',
+      kind: 'image',
+      blob: await canvas.convertToBlob({ type: 'image/png' }),
+      durationSec: input.project.durationSec,
+      muteAudio: true,
+    });
+  }
 
   const overlayClips = [
     ...input.project.tracks

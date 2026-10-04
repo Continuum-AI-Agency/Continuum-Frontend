@@ -86,6 +86,39 @@ describe('editorRenderBlockers', () => {
     expect(editorRenderBlockers(hidden)).toEqual(['The timeline is empty.']);
   });
 
+  test('an enabled Library image provides picture without a primary video track', () => {
+    const project = withFootage(blank());
+    const image = editorProjectV2Schema.parse({
+      ...project,
+      tracks: [
+        {
+          ...project.tracks[0],
+          kind: 'overlay',
+          clips: [
+            {
+              id: 'image',
+              kind: 'overlay',
+              mediaKind: 'image',
+              timelineStartSec: 0,
+              durationSec: 4,
+              enabled: true,
+              locked: false,
+              tags: [],
+              source: { sourceType: 'library_asset', assetId: 'a', renditionId: 'v' },
+            },
+          ],
+        },
+      ],
+    });
+    expect(editorRenderBlockers(image)).toEqual([]);
+    expect(
+      editorRenderBlockers({
+        ...image,
+        tracks: image.tracks.map((track) => ({ ...track, muted: true })),
+      }),
+    ).toEqual(['The timeline is empty.']);
+  });
+
   test('a production project still answers to its approval gates', () => {
     const project = withFootage(blank());
     const production = editorProjectV2Schema.parse({
@@ -305,5 +338,37 @@ describe('first cuts from a brief', () => {
     const tagged = batch(project, brief);
     expect(tagged.brief).toEqual(brief);
     expect(batch(tagged, null).brief).toBeUndefined();
+
+    const restore = applyEditorCommandBatch(tagged, {
+      batchId: 'b-restore',
+      projectId: tagged.projectId,
+      sequenceId: tagged.sequenceId,
+      idempotencyKey: 'batch-restore-brief',
+      expectedRevision: tagged.revision,
+      expectedFingerprint: tagged.fingerprint,
+      atomic: true,
+      issuedAt: '2026-09-30T00:00:00.000Z',
+      actor: user,
+      commands: [
+        {
+          commandId: 'c-restore',
+          commandType: 'restore_timeline_snapshot',
+          snapshot: {
+            sourceRevision: project.revision,
+            sourceFingerprint: project.fingerprint,
+            durationSec: project.durationSec,
+            tracks: project.tracks,
+            transitions: project.transitions,
+            nestedSequences: project.nestedSequences,
+            brief: null,
+          },
+          idempotencyKey: 'restore-brief-command',
+          expectedRevision: tagged.revision,
+          issuedAt: '2026-09-30T00:00:00.000Z',
+          actor: user,
+        },
+      ],
+    } as EditorCommandBatch);
+    expect(restore.brief).toBeUndefined();
   });
 });

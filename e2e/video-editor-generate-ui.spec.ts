@@ -41,6 +41,15 @@ import { objectsFor, removeAssets, removeProjects } from './video-editor-workspa
 test.describe.configure({ timeout: 1_200_000 });
 
 const LIBRARY_JOURNEY = process.env.VIDEO_EDITOR_LIBRARY_JOURNEY === '1';
+const NATIVE_EXPORT_URL = process.env.VIDEO_EDITOR_LIBRARY_EXPORT_URL;
+if (
+  NATIVE_EXPORT_URL &&
+  (!LIBRARY_JOURNEY || !['127.0.0.1', 'localhost'].includes(new URL(NATIVE_EXPORT_URL).hostname))
+) {
+  throw new Error(
+    'Native Library export requires explicit loopback Library and Render dependencies.',
+  );
+}
 const BENCH = 'videoeditor:generate:e2e:bench';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
@@ -632,8 +641,7 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
     if (!file) throw new Error('Library journey requires actual recorded source.');
     const sourceBytes = readFileSync(file);
     note(`f03 recorded source SHA256: ${createHash('sha256').update(sourceBytes).digest('hex')}`);
-    const skip =
-      'f03 paid generation, STT, upload/recording, GCS, native Export and current production';
+    const skip = `f03 paid generation, STT, upload/recording, GCS, ${NATIVE_EXPORT_URL ? 'full browser-export feature certification' : 'native Export'} and current production`;
     rec.record(skip, 'SKIP', 'Actual stored Library image/audio picker imports on loopback only.');
     results.push({
       step: skip,
@@ -641,7 +649,10 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
       detail: 'Actual stored Library image/audio picker imports on loopback only.',
     });
     const port = await freePort(),
-      backend = await bootBackend(`http://localhost:${port}`);
+      backend = await bootBackend(
+        `http://localhost:${port}`,
+        NATIVE_EXPORT_URL ? { CONTINUUM_RENDER_SERVICE_URL: NATIVE_EXPORT_URL } : {},
+      );
     servers.push(backend);
     const frontend = await bootFrontend(port, backend.url, '.next/video-generate-e2e');
     servers.push(frontend);
@@ -998,6 +1009,94 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
         `f03 case${i}: both appropriate tracks survive reload`,
         JSON.stringify(reopened.tracks) === JSON.stringify(added.tracks),
       );
+      if (NATIVE_EXPORT_URL) {
+        const button = page.getByRole('button', { name: 'Export', exact: true });
+        const enabled = await button.isEnabled();
+        check(`native export case${i}: real image/audio sequence can export`, enabled);
+        await page.screenshot({ path: join(folder, `${i}-export-ready.png`) });
+        if (!enabled) continue;
+        await button.click();
+        const dialog = page.locator('[data-testid="video-studio-export-dialog"]');
+        await dialog.locator('[data-testid="export-preset-youtube"]').click();
+        await dialog.getByRole('button', { name: 'Fit (letterbox)', exact: true }).click();
+        const exported = page.waitForResponse(
+          (response) =>
+            response.url().endsWith(`/video-projects/${id}/ops/export`) &&
+            response.request().method() === 'POST',
+        );
+        const start = performance.now();
+        await dialog.locator('[data-testid="export-start"]').click();
+        const response = await exported,
+          output = await response.json();
+        check(
+          `native export case${i}: actual export operation succeeds`,
+          response.ok(),
+          `HTTP${response.status()}`,
+        );
+        writeFileSync(join(folder, `${i}-export-operation.json`), JSON.stringify(output, null, 2));
+        if (!response.ok()) continue;
+        const terminal = await until(
+          async () => {
+            const status = await postOp(api, id, 'export_status', { jobId: output.jobId });
+            if (status.status !== 200) throw new Error(status.text);
+            return JSON.parse(status.text) as { state: string; error?: string };
+          },
+          (status) => ['completed', 'failed'].includes(status.state),
+          180000,
+        );
+        writeFileSync(join(folder, `${i}-export-terminal.json`), JSON.stringify(terminal, null, 2));
+        if (terminal.state !== 'completed')
+          throw new Error(
+            `Native export ${terminal.state}: ${terminal.error ?? 'no terminal result'}`,
+          );
+        await dialog.locator('[data-testid="export-complete"]').waitFor();
+        const downloadPromise = page.waitForEvent('download');
+        await dialog.getByRole('link', { name: 'Download MP4', exact: true }).click();
+        const download = await downloadPromise,
+          path = join(folder, `${i}-native-export.mp4`);
+        await download.saveAs(path);
+        const durationMs = performance.now() - start;
+        const metadata = JSON.parse(
+          execFileSync(
+            'ffprobe',
+            ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', path],
+            { encoding: 'utf8' },
+          ),
+        ) as {
+          streams: Array<{ codec_type: string; width?: number; height?: number }>;
+          format: { duration: string };
+        };
+        const picture = metadata.streams.find((stream) => stream.codec_type === 'video');
+        const project = await getProject(api, id);
+        check(
+          `native export case${i}: downloaded MP4 has actual picture audio and duration`,
+          picture?.width === 1920 &&
+            picture.height === 1080 &&
+            metadata.streams.some((stream) => stream.codec_type === 'audio') &&
+            Math.abs(Number(metadata.format.duration) - project.durationSec) <= 1 / 30,
+        );
+        check(
+          `native export case${i}: complete native export and download within120000ms`,
+          durationMs > 0 && durationMs <= 120000,
+        );
+        writeFileSync(
+          join(folder, `${i}-export-readback.json`),
+          JSON.stringify(
+            {
+              project,
+              output,
+              durationMs,
+              metadata,
+              sha256: createHash('sha256').update(readFileSync(path)).digest('hex'),
+              downloadFailure: await download.failure(),
+            },
+            null,
+            2,
+          ),
+        );
+        await page.screenshot({ path: join(folder, `${i}-export-complete.png`) });
+        await page.keyboard.press('Escape');
+      }
     }
     check('f03 no uncaught native page errors', errors.length === 0, errors.join(' | '));
     check(
@@ -1011,6 +1110,63 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
     note(`speed samples: ${JSON.stringify({ library_import: timings.map((t) => t.durationMs) })}`);
     await context?.close();
     try {
+      await (async () => {
+        if (NATIVE_EXPORT_URL && projectIds.length) {
+          const { data: jobs, error: jobError } = await media
+            .from('client_render_jobs')
+            .select('id,state,result_asset_ids')
+            .eq('brand_id', BRAND)
+            .in('source_id', projectIds);
+          if (jobError) throw jobError;
+          writeFileSync(join(folder, 'export-cleanup-jobs.json'), JSON.stringify(jobs, null, 2));
+          if (
+            (jobs ?? []).some((job) => !['completed', 'failed', 'superseded'].includes(job.state))
+          )
+            throw new Error('Owned export remains live; retain exact fixtures for recovery.');
+          for (const assetId of (jobs ?? []).flatMap((job) => job.result_asset_ids as string[])) {
+            const { data: versions, error: versionError } = await media
+              .from('asset_versions')
+              .select('bucket,storage_path')
+              .eq('asset_id', assetId)
+              .eq('brand_id', BRAND);
+            if (versionError) throw versionError;
+            for (const version of versions ?? []) {
+              const { error } = await admin.storage
+                .from(version.bucket)
+                .remove([version.storage_path]);
+              if (error) throw error;
+            }
+            const { error } = await media
+              .from('assets')
+              .delete()
+              .eq('id', assetId)
+              .eq('brand_id', BRAND);
+            if (error) throw error;
+            execFileSync('docker', [
+              'exec',
+              '-i',
+              'supabase_db_continuum',
+              'psql',
+              '-U',
+              'postgres',
+              '-d',
+              'postgres',
+              '-v',
+              'ON_ERROR_STOP=1',
+              '-At',
+              '-c',
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId'='${assetId}';`,
+            ]);
+          }
+          const { error } = await media
+            .from('client_render_jobs')
+            .delete()
+            .eq('brand_id', BRAND)
+            .in('source_id', projectIds);
+          if (error) throw error;
+          check('native export owned jobs and output assets removed', true);
+        }
+      })();
       await removeProjects(admin, BRAND, projectIds);
       const { count, error } = await media
         .from('editor_projects')
