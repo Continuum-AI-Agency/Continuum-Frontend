@@ -36,8 +36,11 @@ import { createBenchRecorder } from './support/benchRecorder';
 import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import {
+  bandScore,
   captionBand,
+  decodeBand,
   decodeBandRgb,
+  ffprobe,
   highlightMask,
   judgeWordTiming,
   spokenWordPerFrame,
@@ -73,7 +76,8 @@ const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY ===
 const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
 const MENU_JOURNEY = process.env.VIDEO_EDITOR_MENU_JOURNEY === '1';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
-const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
+const AUTO_CAPTIONS_ONLY = process.env.VIDEO_EDITOR_AUTO_CAPTIONS_ONLY === '1';
+const SPEECH_JOURNEY = AUTO_CAPTIONS_ONLY || process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const ANIMATED_SPEECH_JOURNEY = process.env.VIDEO_EDITOR_ANIMATED_SPEECH_JOURNEY === '1';
 const COLLAGE_JOURNEY = process.env.VIDEO_EDITOR_COLLAGE_JOURNEY === '1';
 const VINTAGE_LOOK_JOURNEY = process.env.VIDEO_EDITOR_VINTAGE_LOOK_JOURNEY === '1';
@@ -104,6 +108,12 @@ const HOOK_LINE = `Motion bench ${RUN}`;
 const OUTSIDE_LINE = `Outside ${RUN}`;
 const WORKFLOW_NAME = `Workflow ${RUN}`;
 const WORKFLOW_PROMPT = 'Make the current edit YouTube.';
+
+if (
+  AUTO_CAPTIONS_ONLY &&
+  (!LOCAL_CURVE_JOURNEY || ANIMATED_SPEECH_JOURNEY || TEXT_JOURNEY || COLLAGE_JOURNEY)
+)
+  throw new Error('Auto-caption proof requires only the owned loopback speech journey.');
 
 const { url: supabaseUrl, serviceRoleKey } = LOCAL_CURVE_JOURNEY
   ? loadLocalSupabaseEnv()
@@ -1089,31 +1099,33 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    COLLAGE_JOURNEY
-      ? VINTAGE_LOOK_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:vintage-looks'
-        : 'videoeditor:motion:e2e:bench:collage'
-      : KEYFRAME_LOCAL || MENU_JOURNEY
-        ? BENCH
-        : STAGE_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:stage-handles'
-          : NESTED_CONTROLS_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:composition-controls'
-            : NESTED_AUDIO_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
-              : NESTED_JOURNEY
-                ? 'videoeditor:motion:e2e:bench:retained-nested'
-                : CAPTION_JOURNEY
-                  ? 'videoeditor:motion:e2e:bench:retained-captions'
-                  : SPEECH_JOURNEY
-                    ? ANIMATED_SPEECH_JOURNEY
-                      ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
-                      : 'videoeditor:motion:e2e:bench:speech-jumps'
-                    : PARENT_JOURNEY
-                      ? 'videoeditor:motion:e2e:bench:retained-parent'
-                      : TEXT_JOURNEY
-                        ? 'videoeditor:motion:e2e:bench:retained-text'
-                        : 'videoeditor:motion:e2e:bench:retained-project',
+    AUTO_CAPTIONS_ONLY
+      ? 'video-editor:e2e:bench'
+      : COLLAGE_JOURNEY
+        ? VINTAGE_LOOK_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:vintage-looks'
+          : 'videoeditor:motion:e2e:bench:collage'
+        : KEYFRAME_LOCAL || MENU_JOURNEY
+          ? BENCH
+          : STAGE_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:stage-handles'
+            : NESTED_CONTROLS_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:composition-controls'
+              : NESTED_AUDIO_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+                : NESTED_JOURNEY
+                  ? 'videoeditor:motion:e2e:bench:retained-nested'
+                  : CAPTION_JOURNEY
+                    ? 'videoeditor:motion:e2e:bench:retained-captions'
+                    : SPEECH_JOURNEY
+                      ? ANIMATED_SPEECH_JOURNEY
+                        ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
+                        : 'videoeditor:motion:e2e:bench:speech-jumps'
+                      : PARENT_JOURNEY
+                        ? 'videoeditor:motion:e2e:bench:retained-parent'
+                        : TEXT_JOURNEY
+                          ? 'videoeditor:motion:e2e:bench:retained-text'
+                          : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1195,11 +1207,36 @@ test('retained project journey: native splits and deletes preserve stored pictur
     const fePort = await freePort();
     const backend = await bootBackend(
       `http://localhost:${fePort}`,
-      SPEECH_JOURNEY ? { AI_STUDIO_BUCKET: 'brand-profile-assets' } : {},
+      SPEECH_JOURNEY
+        ? {
+            AI_STUDIO_BUCKET: 'brand-profile-assets',
+            ...(AUTO_CAPTIONS_ONLY
+              ? {
+                  GEMINI_API_KEY: '',
+                  GOOGLE_API_KEY: '',
+                  GOOGLE_GENAI_API_KEY: '',
+                  OPENAI_API_KEY: '',
+                  ANTHROPIC_API_KEY: '',
+                  VERTEX_API_KEY: '',
+                  GOOGLE_APPLICATION_CREDENTIALS:
+                    '/tmp/continuum-caption-bench-no-provider-credentials',
+                }
+              : {}),
+          }
+        : {},
     );
     servers.push(backend);
     const frontend = await bootFrontend(fePort, backend.url, '.next/video-curve-journey-e2e');
     servers.push(frontend);
+    if (AUTO_CAPTIONS_ONLY)
+      writeFileSync(
+        join(folder, 'server-logs.json'),
+        JSON.stringify(
+          servers.map(({ url, log }) => ({ url, log })),
+          null,
+          2,
+        ),
+      );
     process.env.PLAYWRIGHT_BASE_URL = frontend.url;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
     const api: Api = { base: backend.url, token: session.accessToken };
@@ -1460,6 +1497,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
     const previewAudio = async (project: EditorProjectV2, fromSec = 0, channel = 0) =>
       (await previewChannels(project, fromSec))[channel]!;
     const summary = [];
+    const autoCaptionMs: number[] = [];
     const vintageResults: Array<{
       tag: string;
       target: string;
@@ -2701,12 +2739,26 @@ test('retained project journey: native splits and deletes preserve stored pictur
           editTimings.every((s) => s.durationMs > 0 && s.durationMs <= 1000),
       );
     }
+    let speechCaseIndex = 0;
     for (const interpolation of !SPEECH_JOURNEY
       ? []
-      : ANIMATED_SPEECH_JOURNEY
-        ? (['hold', 'linear', 'bezier', 'spring'] as const)
-        : ([undefined] as const)) {
-      const speechFolder = interpolation ? join(folder, interpolation) : folder;
+      : AUTO_CAPTIONS_ONLY
+        ? ([undefined, undefined, undefined] as const)
+        : ANIMATED_SPEECH_JOURNEY
+          ? (['hold', 'linear', 'bezier', 'spring'] as const)
+          : ([undefined] as const)) {
+      const captionCase = AUTO_CAPTIONS_ONLY
+        ? [
+            { name: 'ordinary', sourceInSec: 64.7, durationSec: 11.3, timelineStartSec: 0 },
+            { name: 'trimmed', sourceInSec: 65.03, durationSec: 8.11, timelineStartSec: 0 },
+            { name: 'delayed', sourceInSec: 64.7, durationSec: 11.3, timelineStartSec: 2 },
+          ][speechCaseIndex++]!
+        : null;
+      const speechFolder = captionCase
+        ? join(folder, captionCase.name)
+        : interpolation
+          ? join(folder, interpolation)
+          : folder;
       mkdirSync(speechFolder, { recursive: true });
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
@@ -2716,8 +2768,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
       const initial = await getProject(api, projectId);
       // Start/end between complete cached words; an already-truncated source word
       // cannot establish preservation by the subsequent jump operation.
-      const sourceInSec = 64.7;
-      const durationSec = 11.3;
+      const sourceInSec = captionCase?.sourceInSec ?? 64.7;
+      const durationSec = captionCase?.durationSec ?? 11.3;
+      const timelineStartSec = captionCase?.timelineStartSec ?? 0;
       const seeded = await postOp(api, projectId, 'apply_commands', {
         expectedRevision: initial.revision,
         commands: [
@@ -2729,10 +2782,23 @@ test('retained project journey: native splits and deletes preserve stored pictur
               name: 'Real NASA interview',
               order: 0,
               clips: [
+                ...(timelineStartSec > 0
+                  ? [
+                      {
+                        id: 'silent-intro',
+                        kind: 'video',
+                        timelineStartSec: 0,
+                        sourceInSec: 0,
+                        durationSec: timelineStartSec,
+                        audioEnabled: false,
+                        source: { sourceType: 'library_asset', assetId, renditionId: versionId },
+                      },
+                    ]
+                  : []),
                 {
                   id: 'speaker',
                   kind: 'video',
-                  timelineStartSec: 0,
+                  timelineStartSec,
                   sourceInSec,
                   durationSec,
                   audioEnabled: true,
@@ -2795,7 +2861,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
           {
             commandType: 'set_project_metadata',
             canvas: { ...initial.canvas, width: 640, height: 640 },
-            durationSec,
+            durationSec: timelineStartSec + durationSec,
           },
           {
             commandType: 'set_export_settings',
@@ -2830,13 +2896,27 @@ test('retained project journey: native splits and deletes preserve stored pictur
         timeout: 30_000,
       });
       const captionStarted = performance.now();
+      const captionResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith(`/${projectId}/ops/set_captions`),
+      );
       await visible(page.getByRole('button', { name: 'Auto-captions', exact: true })).click();
+      const generated = await captionResponse;
+      assert(
+        'native Auto-captions commits through the shared operation',
+        generated.ok(),
+        (await generated.text()).slice(0, 200),
+      );
+      await expect(page.locator('[data-clip-kind="caption"]:visible').first()).toBeVisible();
       const captioned = await until(
         () => getProject(api, projectId),
         (p) => p.tracks.some((t) => t.kind === 'caption' && t.clips.length > 0),
       );
+      const captionMs = performance.now() - captionStarted;
+      autoCaptionMs.push(captionMs);
       proof.notes.push(
-        `Native Auto-captions wall time including UI/store readback: ${performance.now() - captionStarted}ms`,
+        `Native Auto-captions wall time including UI/store readback: ${captionMs}ms`,
       );
       const wordsOf = (project: EditorProjectV2) =>
         project.tracks
@@ -2856,8 +2936,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
         .filter((word) => word.endSec > sourceInSec && word.startSec < sourceInSec + durationSec)
         .map((word) => ({
           text: word.text,
-          startSec: Math.max(0, word.startSec - sourceInSec),
-          endSec: Math.min(durationSec, word.endSec - sourceInSec),
+          startSec: timelineStartSec + Math.max(0, word.startSec - sourceInSec),
+          endSec: timelineStartSec + Math.min(durationSec, word.endSec - sourceInSec),
         }));
       const captionWords = wordsOf(captioned);
       writeFileSync(
@@ -2890,6 +2970,103 @@ test('retained project journey: native splits and deletes preserve stored pictur
       const before = await getProject(api, projectId);
       const baselinePath = join(speechFolder, 'speech-baseline.mp4');
       await render(before, baselinePath);
+      if (AUTO_CAPTIONS_ONLY) {
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="caption"]:visible').first()).toBeVisible();
+        const reloaded = await getProject(api, projectId);
+        assert(
+          `${captionCase!.name}: captions and exact word times survive reload`,
+          isDeepStrictEqual(reloaded.tracks, before.tracks),
+        );
+        const burnedProject = {
+          ...before,
+          exportSettings: { ...before.exportSettings, captionMode: 'burn_in' as const },
+        };
+        const burnedPath = join(speechFolder, 'captions.mp4');
+        await render(burnedProject, burnedPath);
+        const encoded = ffprobe(burnedPath),
+          bareProbe = ffprobe(baselinePath);
+        const frameTimes = (path: string) =>
+          (
+            JSON.parse(
+              execFileSync(
+                'ffprobe',
+                [
+                  '-v',
+                  'error',
+                  '-select_streams',
+                  'v:0',
+                  '-show_entries',
+                  'frame=best_effort_timestamp_time',
+                  '-of',
+                  'json',
+                  path,
+                ],
+                { encoding: 'utf8' },
+              ),
+            ) as { frames: Array<{ best_effort_timestamp_time: string }> }
+          ).frames.map((frame) => Number(frame.best_effort_timestamp_time));
+        const burnedTimes = frameTimes(burnedPath),
+          bareTimes = frameTimes(baselinePath);
+        assert(
+          `${captionCase!.name}: both full exports contain every 30fps timeline frame`,
+          encoded.frames === Math.ceil(before.durationSec * 30 - 1e-9) &&
+            bareProbe.frames === encoded.frames &&
+            burnedTimes.length === encoded.frames &&
+            bareTimes.length === encoded.frames &&
+            [burnedTimes, bareTimes].every((times) =>
+              times.every((time, frame) => near(time, frame / 30, 1e-6)),
+            ) &&
+            near(encoded.videoSec, before.durationSec, 1 / 30),
+          JSON.stringify({ encoded, bareProbe }),
+        );
+        const band = captionBand(burnedProject, 640);
+        const keys = spokenWordPerFrame(burnedProject, encoded.frames, 30);
+        const burnedFrames = decodeBandRgb(burnedPath, 640, band);
+        const bareFrames = decodeBandRgb(baselinePath, 640, band);
+        const wordTiming = judgeWordTiming(
+          keys,
+          burnedFrames.map((frame, i) => highlightMask(frame, bareFrames[i]!)),
+        );
+        assert(
+          `${captionCase!.name}: every isolated word highlight follows speech within one frame`,
+          wordTiming.offsets.length > 10 &&
+            wordTiming.off.length === 0 &&
+            wordTiming.unseen === 0 &&
+            wordTiming.darkWhileSpoken === 0 &&
+            wordTiming.litWhileSilent === 0,
+          JSON.stringify(wordTiming),
+        );
+        const burnedBands = decodeBand(burnedPath, 640, band),
+          bareBands = decodeBand(baselinePath, 640, band);
+        const spokenFrames = keys.flatMap((key, frame) => (key ? [frame] : []));
+        const darkFrames = spokenFrames.filter(
+          (frame) => bandScore(burnedBands[frame]!, bareBands[frame]!).strongFrac < 0.002,
+        );
+        assert(
+          `${captionCase!.name}: every spoken frame has visible caption glyphs`,
+          spokenFrames.length > 100 && darkFrames.length === 0,
+          JSON.stringify({ spokenFrames: spokenFrames.length, darkFrames }),
+        );
+        const result = {
+          name: captionCase!.name,
+          sourceInSec,
+          durationSec,
+          timelineStartSec,
+          captionMs,
+          expectedWords,
+          captionWords,
+          project: burnedProject,
+          encoded,
+          band,
+          spokenFrames: spokenFrames.length,
+          darkFrames,
+          wordTiming,
+        };
+        writeFileSync(join(speechFolder, 'result.json'), JSON.stringify(result, null, 2));
+        summary.push(result);
+        continue;
+      }
       await page.reload();
       await expect(page.locator('[data-clip-id="speaker"]:visible')).toHaveCount(1, {
         timeout: 30_000,
@@ -6315,20 +6492,31 @@ test('retained project journey: native splits and deletes preserve stored pictur
         JSON.stringify(samples),
       );
     }
+    if (AUTO_CAPTIONS_ONLY) {
+      proof.notes.push(`speed samples: ${JSON.stringify({ auto_captions: autoCaptionMs })}`);
+      writeFileSync(join(folder, 'auto-captions-summary.json'), JSON.stringify(summary, null, 2));
+      assert(
+        'f15 all three complete native Auto-captions samples meet the original 25000ms ceiling',
+        autoCaptionMs.length === 3 && autoCaptionMs.every((ms) => ms > 0 && ms <= 25000),
+        JSON.stringify(autoCaptionMs),
+      );
+    }
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
-      MENU_JOURNEY
-        ? 'Every offered motion preset/look/seam through both native menus, real loopback store, undo/reload and full commit plus refresh latency. Timeline/text/format/provider-dependent palette commands, multi-selection, hosted production and model agent are unexercised.'
-        : COLLAGE_JOURNEY
-          ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
-          : KEYFRAME_JOURNEY
-            ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
-            : ANIMATED_SPEECH_JOURNEY
-              ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-              : SPEECH_JOURNEY
-                ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-                : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+      AUTO_CAPTIONS_ONLY
+        ? 'Real cached NASA speech, native Auto-captions, local store/reload and actual browser compositor MP4s in three cases. Fresh STT and independent transcript accuracy, native Export dialog, hosted Render, agent/MCP decisions and current production are unexercised. No provider call.'
+        : MENU_JOURNEY
+          ? 'Every offered motion preset/look/seam through both native menus, real loopback store, undo/reload and full commit plus refresh latency. Timeline/text/format/provider-dependent palette commands, multi-selection, hosted production and model agent are unexercised.'
+          : COLLAGE_JOURNEY
+            ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
+            : KEYFRAME_JOURNEY
+              ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
+              : ANIMATED_SPEECH_JOURNEY
+                ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+                : SPEECH_JOURNEY
+                  ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+                  : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
     );
   } catch (error) {
     proof.record(
@@ -6338,6 +6526,23 @@ test('retained project journey: native splits and deletes preserve stored pictur
     );
     throw error;
   } finally {
+    if (AUTO_CAPTIONS_ONLY)
+      writeFileSync(
+        join(folder, 'owned-fixtures.json'),
+        JSON.stringify(
+          {
+            ids,
+            ownedSources,
+            transcriptPath,
+            userId: session?.userId,
+            previousBrand,
+            brand: BRAND,
+            servers: servers.map(({ url, log }) => ({ url, log })),
+          },
+          null,
+          2,
+        ),
+      );
     await context?.close();
     try {
       await removeProjects(admin, BRAND, ids);

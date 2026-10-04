@@ -8,13 +8,18 @@ const run = spawnSync(
   [
     'test',
     '--config=playwright.browser-render.config.ts',
-    'e2e/video-editor-journey.spec.ts',
+    process.env.VIDEO_EDITOR_AUTO_CAPTIONS_ONLY === '1'
+      ? 'e2e/video-editor-motion-ui.spec.ts'
+      : 'e2e/video-editor-journey.spec.ts',
     '--workers=1',
   ],
   {
     stdio: 'inherit',
     env: {
       ...process.env,
+      ...(process.env.VIDEO_EDITOR_AUTO_CAPTIONS_ONLY === '1'
+        ? { VIDEO_EDITOR_CURVE_JOURNEY: '1', VIDEO_EDITOR_CURVE_JOURNEY_LOCAL: '1' }
+        : {}),
       ...(flag ? { VIDEO_EDITOR_RENDER_URL: flag.slice('--render-url='.length) } : {}),
     },
   },
