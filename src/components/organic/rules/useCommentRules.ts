@@ -9,8 +9,8 @@
 import {
   type CommentTriggerRule,
   type ListCommentTriggerRulesResponse,
-  type SaveCommentTriggerRuleRequest,
   listCommentTriggerRulesResponseSchema,
+  type SaveCommentTriggerRuleRequest,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { http } from '@/lib/api/http';

@@ -3,9 +3,9 @@ import { saveCommentTriggerRuleRequestSchema } from '@continuum/contracts';
 import {
   emptyRuleForm,
   formToRule,
+  type RuleFormValues,
   ruleFormSchema,
   ruleToForm,
-  type RuleFormValues,
 } from './ruleFormSchema';
 
 const BRAND_ID = '11111111-1111-4111-8111-111111111111';
@@ -66,8 +66,12 @@ describe('ruleFormSchema', () => {
   });
 
   it('treats an empty date as no bound rather than as an error', () => {
-    expect(ruleFormSchema.safeParse(filled({ activeFrom: '', activeUntil: '' })).success).toBe(true);
-    expect(ruleFormSchema.safeParse(filled({ activeUntil: '2026-10-01T09:00' })).success).toBe(true);
+    expect(ruleFormSchema.safeParse(filled({ activeFrom: '', activeUntil: '' })).success).toBe(
+      true,
+    );
+    expect(ruleFormSchema.safeParse(filled({ activeUntil: '2026-10-01T09:00' })).success).toBe(
+      true,
+    );
   });
 });
 

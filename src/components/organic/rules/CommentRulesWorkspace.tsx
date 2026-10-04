@@ -5,13 +5,23 @@
 // Two panes rather than a dialog because the list answers "what is my account
 // sending right now", and that question stays worth seeing while you edit one
 // of the answers.
+//
+// Decisions worth knowing before changing this file:
+// - Even halves, not a fixed sidebar. The editor carries keyword chips, several
+//   messages and a date range; a 26rem pane squeezed all of them to make room
+//   for a list that did not need the width.
+// - The tracked address is assembled here, not sent by the server: the code
+//   identifies the link, the host it is served from is a property of the
+//   browser's environment.
+// - The editor is keyed on the rule, so opening a second rule remounts it
+//   rather than carrying the first one's form state across.
 
 import type { CommentTriggerRule } from '@continuum/contracts';
 import React from 'react';
-import { CommentRuleForm } from './CommentRuleForm';
 import { getApiBaseUrl } from '@/lib/api/config';
+import { CommentRuleForm } from './CommentRuleForm';
 import { CommentRulesList } from './CommentRulesList';
-import { type RuleFormValues, emptyRuleForm, formToRule, ruleToForm } from './ruleFormSchema';
+import { emptyRuleForm, formToRule, type RuleFormValues, ruleToForm } from './ruleFormSchema';
 import {
   useCommentRules,
   useDeleteCommentRule,
@@ -22,7 +32,13 @@ import {
 /** Which rule the editor is showing: none, a new one, or an existing one. */
 type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'existing'; rule: CommentTriggerRule };
 
-export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
+export function CommentRulesWorkspace({
+  brandId,
+  instagramAccountId = null,
+}: {
+  brandId: string | null;
+  instagramAccountId?: string | null;
+}) {
   const { data, isLoading, error } = useCommentRules(brandId);
   const save = useSaveCommentRule(brandId);
   const remove = useDeleteCommentRule(brandId);
@@ -32,9 +48,6 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
   const rules = data?.rules ?? [];
   const linkStats = data?.linkStats ?? [];
 
-  // The address the rule being edited actually hands out. Assembled here rather
-  // than sent by the server: the code is what identifies the link, and the host
-  // it is served from is a property of the environment the browser is in.
   const editedLinkUrl = React.useMemo(() => {
     if (editing.kind !== 'existing') return null;
     const linkId = editing.rule.trackedLinkId;
@@ -76,7 +89,7 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
   }
 
   return (
-    <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_26rem]">
+    <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex min-h-0 flex-col gap-2">
         {error ? (
           <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -86,6 +99,7 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
         <CommentRulesList
           rules={rules}
           linkStats={linkStats}
+          selectedRuleId={editing.kind === 'existing' ? editing.rule.id : null}
           isLoading={isLoading}
           onCreate={() => setEditing({ kind: 'new' })}
           onEdit={(rule) => setEditing({ kind: 'existing', rule })}
@@ -97,8 +111,6 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
       <div className="min-h-0 rounded-md border lg:h-full">
         {defaultValues ? (
           <CommentRuleForm
-            // Remounting per rule keeps the form's own state from leaking
-            // between two rules opened one after the other.
             key={editing.kind === 'existing' ? editing.rule.id : 'new'}
             defaultValues={defaultValues}
             isEditing={editing.kind === 'existing'}
@@ -107,6 +119,8 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
             onDelete={editing.kind === 'existing' ? handleDelete : undefined}
             isSaving={save.isPending || remove.isPending}
             trackedLinkUrl={editedLinkUrl}
+            brandId={brandId}
+            instagramAccountId={instagramAccountId}
           />
         ) : (
           <p className="px-4 py-8 text-center text-xs text-muted-foreground">

@@ -6,17 +6,28 @@
 // importing a pre-composed schema: React Hook Form needs the errors attached to
 // the field a person can actually see and fix. The backend re-validates
 // everything on submit (dual-validation rule).
+//
+// Decisions worth knowing before changing this file:
+// - An empty link is valid: it means the message carries no link at all, and a
+//   button label without one would label a button that is never sent.
+// - `datetime-local` yields a local wall-clock string or ''. It is kept as typed
+//   and converted at the edges, never mid-form.
+// - The window error is attached to the pair, not to one date. Whichever of the
+//   two was edited last, the complaint is about both together, and blaming one
+//   sends people to correct the wrong field.
+// - A new rule starts with three public replies. Rotating variations is what
+//   keeps a busy post from reading as a bot to the platform; all are deletable.
 
 import {
   type CommentTriggerRule,
-  MAX_KEYWORDS_PER_RULE,
+  commentTriggerMatchModeSchema,
+  commentTriggerPostScopeSchema,
   MAX_KEYWORD_LENGTH,
+  MAX_KEYWORDS_PER_RULE,
   MAX_LINK_BUTTON_LABEL_LENGTH,
   MAX_PUBLIC_REPLY_VARIATIONS,
   MAX_REPLY_MESSAGE_LENGTH,
   type SaveCommentTriggerRuleRequest,
-  commentTriggerMatchModeSchema,
-  commentTriggerPostScopeSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 
@@ -34,11 +45,8 @@ export const ruleFormSchema = z
       .array(z.string().min(1, 'A public reply cannot be empty'))
       .max(MAX_PUBLIC_REPLY_VARIATIONS),
     linkButtonLabel: z.string().max(MAX_LINK_BUTTON_LABEL_LENGTH),
-    // Empty means the message carries no link at all, which is valid.
     destinationUrl: z.string(),
     enabled: z.boolean(),
-    // `datetime-local` gives a local wall-clock string or ''. Kept as typed for
-    // the field and converted at the edges.
     activeFrom: z.string(),
     activeUntil: z.string(),
   })
@@ -55,8 +63,6 @@ export const ruleFormSchema = z
       form.activeFrom === '' ||
       form.activeUntil === '' ||
       Date.parse(form.activeFrom) <= Date.parse(form.activeUntil),
-    // Attached to the pair, not to one field: whichever of the two you edited,
-    // the complaint is about both of them together.
     { message: 'The end date is before the start date', path: ['activeWindow'] },
   )
   .refine((form) => form.destinationUrl === '' || isHttpUrl(form.destinationUrl), {
@@ -85,8 +91,6 @@ export function emptyRuleForm(): RuleFormValues {
     keywords: [],
     matchMode: 'contains_word',
     replyMessage: '',
-    // Three starters, because rotating variations is what keeps a busy post
-    // from reading as a bot to the platform. All of them are deletable.
     publicReplyMessages: ['Sent you a DM!', 'Check your inbox', 'Just messaged you'],
     linkButtonLabel: '',
     destinationUrl: '',
@@ -140,11 +144,8 @@ export function formToRule(
     replyMessage: values.replyMessage,
     publicReplyMessages: values.publicReplyMessages,
     destinationUrl: values.destinationUrl === '' ? null : values.destinationUrl,
-    // A button label without a link would label a button that is never sent.
     linkButtonLabel:
-      values.destinationUrl === '' || values.linkButtonLabel === ''
-        ? null
-        : values.linkButtonLabel,
+      values.destinationUrl === '' || values.linkButtonLabel === '' ? null : values.linkButtonLabel,
     followUpMessage: context.existing?.followUpMessage ?? null,
     followUpDelayMinutes: context.existing?.followUpDelayMinutes ?? 0,
     enabled: values.enabled,

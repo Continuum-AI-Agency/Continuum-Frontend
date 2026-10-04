@@ -3,15 +3,36 @@
 // The rule editor, ordered the way the thing actually happens rather than the
 // way it is stored: where it listens, what fires it, what the commenter sees in
 // public, what they get in private, and when it stops. Read top to bottom, it
-// is the sequence the audience experiences.
+// is the sequence the audience experiences. A two-column grid would fill the
+// panel better and destroy that order, so only semantic pairs sit side by side.
+//
+// Decisions worth knowing before changing this file:
+// - The tracked short address is shown, not just the destination. It is the only
+//   one whose clicks are counted, and while it was hidden nobody could check it
+//   or put it in a bio. It appears only on a saved rule, because the link is
+//   minted on save.
+// - No link means no button-label field. A button reading "Open the guide" that
+//   goes nowhere is a mistake, never a choice; a message with no link at all is
+//   a real use, so that stays allowed and unremarked.
+// - The window error is read off the synthetic `activeWindow` path because it
+//   belongs to the pair of dates, not to either one.
+// - The editor is remounted per rule by its caller, so fields follow the
+//   selection rather than keeping the first rule opened.
+// - Field widths answer to a container query, not the viewport: this panel is
+//   half the window, so what the window measures is not what the fields fit in.
+// - Public replies are keyed by index, and the lint rule for that is suppressed.
+//   They are plain strings with no reorder affordance and each input reads its
+//   value from the array, so the index is the identity. Stable ids would mean
+//   holding objects in the form value — which is the shape useFieldArray forced
+//   here before, and it was worse.
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   MAX_KEYWORDS_PER_RULE,
   MAX_LINK_BUTTON_LABEL_LENGTH,
   MAX_PUBLIC_REPLY_VARIATIONS,
   MAX_REPLY_MESSAGE_LENGTH,
 } from '@continuum/contracts';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Copy, Plus, X } from 'lucide-react';
 import React from 'react';
 import { type Control, useForm } from 'react-hook-form';
@@ -28,7 +49,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+import { CommentRulePreview } from './CommentRulePreview';
+import { PostPicker } from './PostPicker';
 import { type RuleFormValues, ruleFormSchema } from './ruleFormSchema';
+import { usePublishedPosts } from './usePublishedPosts';
 
 function KeywordField({ control }: { control: Control<RuleFormValues> }) {
   const [pending, setPending] = React.useState('');
@@ -41,9 +66,6 @@ function KeywordField({ control }: { control: Control<RuleFormValues> }) {
         const add = () => {
           const value = pending.trim();
           setPending('');
-          // Case folding is the matcher's job, but a list showing "precio"
-          // twice because one was typed "Precio" reads as a bug to whoever
-          // wrote it.
           const clash = field.value.some((k) => k.toLowerCase() === value.toLowerCase());
           if (value === '' || clash || field.value.length >= MAX_KEYWORDS_PER_RULE) return;
           field.onChange([...field.value, value]);
@@ -90,8 +112,8 @@ function KeywordField({ control }: { control: Control<RuleFormValues> }) {
               </div>
             </FormControl>
             <FormDescription className="text-2xs">
-              Whole words only; capitals and accents are ignored. “price” fires on “PRICE?” but
-              not on “pricey”.
+              Whole words only; capitals and accents are ignored. “price” fires on “PRICE?” but not
+              on “pricey”.
             </FormDescription>
             <FormMessage />
           </FormItem>
@@ -111,6 +133,7 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
           <FormLabel className="text-xs">Public replies</FormLabel>
           <div className="flex flex-col gap-1.5">
             {field.value.map((message, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: see the note at the top of this file
               <div key={`reply-${index}`} className="flex gap-1.5">
                 <FormControl>
                   <Input
@@ -165,23 +188,11 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
   );
 }
 
-/**
- * The address that actually goes out, and the way to get it out of the screen.
- *
- * The field above holds the DESTINATION — where a person ends up. What the
- * message carries is this shortened address, and it is the only one whose
- * clicks are counted. Without showing it, the link exists and works and is
- * invisible: nobody can put it in a story or a bio, and nobody can check it.
- *
- * It appears only for a saved rule, because the link is minted when the rule is
- * saved. On a rule being written for the first time there is nothing to show.
- */
+/** Shown only on a saved rule: the link is minted when the rule is saved. */
 function TrackedLinkRow({ url }: { url: string }) {
   const [copied, setCopied] = React.useState(false);
 
   const copy = React.useCallback(() => {
-    // Absent in an insecure context and refusable by permission, and a failed
-    // copy must not throw into a form the person is still filling in.
     void navigator.clipboard
       ?.writeText(url)
       .then(() => {
@@ -220,6 +231,8 @@ export function CommentRuleForm({
   onDelete,
   isSaving,
   trackedLinkUrl = null,
+  brandId = null,
+  instagramAccountId = null,
 }: {
   defaultValues: RuleFormValues;
   isEditing: boolean;
@@ -229,6 +242,9 @@ export function CommentRuleForm({
   isSaving: boolean;
   /** The shortened address this rule hands out. Null until the rule has been saved once. */
   trackedLinkUrl?: string | null;
+  brandId?: string | null;
+  /** Which connected account's posts the picker offers. */
+  instagramAccountId?: string | null;
 }) {
   const form = useForm<RuleFormValues>({
     resolver: zodResolver(ruleFormSchema),
@@ -236,20 +252,18 @@ export function CommentRuleForm({
     mode: 'onChange',
   });
 
-  // Switching between rules in the list reuses this component, so the fields
-  // have to follow the selection instead of keeping the first rule opened.
   React.useEffect(() => {
     form.reset(defaultValues);
   }, [defaultValues, form]);
 
-  const postScope = form.watch('postScope');
-  // No link, no button. Hiding the label rather than warning about it removes
-  // the state entirely: a button reading "Open the guide" that goes nowhere is
-  // a mistake, never a choice. A message with no link at all is a real use —
-  // "comment INFO and I'll tell you" — so that stays allowed and unremarked.
-  const hasLink = form.watch('destinationUrl').trim() !== '';
-  // The window error belongs to the pair, so it is read off the synthetic
-  // `activeWindow` path rather than either input's own message slot.
+  const previewValues = form.watch();
+  const postScope = previewValues.postScope;
+  const publishedPosts = usePublishedPosts({
+    brandId,
+    accountId: instagramAccountId,
+    enabled: postScope === 'specific_posts',
+  });
+  const hasLink = previewValues.destinationUrl.trim() !== '';
   const hasWindowError = 'activeWindow' in form.formState.errors;
 
   return (
@@ -277,188 +291,196 @@ export function CommentRuleForm({
           />
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <FormField
-            control={form.control}
-            name="postScope"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs">Which posts</FormLabel>
-                <FormControl>
-                  <div className="flex gap-1.5">
-                    {(['all_posts', 'specific_posts'] as const).map((scope) => (
-                      <Button
-                        key={scope}
-                        type="button"
-                        size="sm"
-                        variant={field.value === scope ? 'default' : 'outline'}
-                        onClick={() => field.onChange(scope)}
+        <div className="@container/rule-form min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="grid items-start gap-4 @2xl/rule-form:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="postScope"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Which posts</FormLabel>
+                    <FormControl>
+                      <div className="flex gap-1.5">
+                        {(['all_posts', 'specific_posts'] as const).map((scope) => (
+                          <Button
+                            key={scope}
+                            type="button"
+                            size="sm"
+                            variant={field.value === scope ? 'default' : 'outline'}
+                            onClick={() => field.onChange(scope)}
+                            className="text-xs"
+                          >
+                            {scope === 'all_posts' ? 'All posts' : 'Specific posts'}
+                          </Button>
+                        ))}
+                      </div>
+                    </FormControl>
+                    <FormDescription className="text-2xs">
+                      {field.value === 'all_posts'
+                        ? 'Every post on the account, including ones published later.'
+                        : 'Only the posts you name.'}
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              {postScope === 'specific_posts' ? (
+                <FormField
+                  control={form.control}
+                  name="platformPostIds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Posts</FormLabel>
+                      <FormControl>
+                        <PostPicker
+                          posts={publishedPosts.posts}
+                          selectedIds={field.value}
+                          isLoading={publishedPosts.isLoading}
+                          error={publishedPosts.isError}
+                          hasAccount={publishedPosts.hasAccount}
+                          isRefreshing={publishedPosts.isRefreshing}
+                          onRefresh={publishedPosts.refresh}
+                          hasMore={publishedPosts.hasMore}
+                          isLoadingMore={publishedPosts.isLoadingMore}
+                          onLoadMore={publishedPosts.loadMore}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+
+              <KeywordField control={form.control} />
+              <PublicRepliesField control={form.control} />
+
+              <FormField
+                control={form.control}
+                name="replyMessage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Direct message</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Hey! Here's the guide 👇"
                         className="text-xs"
-                      >
-                        {scope === 'all_posts' ? 'All posts' : 'Specific posts'}
-                      </Button>
-                    ))}
-                  </div>
-                </FormControl>
-                <FormDescription className="text-2xs">
-                  {field.value === 'all_posts'
-                    ? 'Every post on the account, including ones published later.'
-                    : 'Only the posts you name.'}
-                </FormDescription>
-              </FormItem>
-            )}
-          />
+                      />
+                    </FormControl>
+                    <FormDescription className="text-2xs">
+                      {field.value.length}/{MAX_REPLY_MESSAGE_LENGTH}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          {postScope === 'specific_posts' ? (
-            <FormField
-              control={form.control}
-              name="platformPostIds"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Posts</FormLabel>
-                  <FormControl>
-                    <Input
-                      value={field.value.join(', ')}
-                      onChange={(event) =>
-                        field.onChange(
-                          event.target.value
-                            .split(',')
-                            .map((id) => id.trim())
-                            .filter((id) => id !== ''),
-                        )
-                      }
-                      placeholder="17912345678901234"
-                      className="h-8 text-xs"
-                    />
-                  </FormControl>
-                  <FormDescription className="text-2xs">
-                    Post ids, separated by commas.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          ) : null}
-
-          <KeywordField control={form.control} />
-          <PublicRepliesField control={form.control} />
-
-          <FormField
-            control={form.control}
-            name="replyMessage"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs">Direct message</FormLabel>
-                <FormControl>
-                  <Textarea
-                    {...field}
-                    rows={3}
-                    placeholder="Hey! Here's the guide 👇"
-                    className="text-xs"
+              <div className={cn('grid gap-3', hasLink && '@md/rule-form:grid-cols-[2fr_1fr]')}>
+                <FormField
+                  control={form.control}
+                  name="destinationUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Link</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          inputMode="url"
+                          placeholder="https://yoursite.com/guide"
+                          className="h-8 text-xs"
+                        />
+                      </FormControl>
+                      <FormDescription className="text-2xs">
+                        Shortened automatically so its clicks can be counted against the post it
+                        came from. Leave empty to send a message with no link.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {hasLink ? (
+                  <FormField
+                    control={form.control}
+                    name="linkButtonLabel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Button text</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            maxLength={MAX_LINK_BUTTON_LABEL_LENGTH}
+                            placeholder="Open the guide"
+                            className="h-8 text-xs"
+                          />
+                        </FormControl>
+                        <FormDescription className="text-2xs">
+                          {field.value.trim() === ''
+                            ? 'The link goes in the message. Add text to send it as a button instead.'
+                            : `The link becomes a button, up to ${MAX_LINK_BUTTON_LABEL_LENGTH} characters. Clear this to send the link in the message.`}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </FormControl>
-                <FormDescription className="text-2xs">
-                  {field.value.length}/{MAX_REPLY_MESSAGE_LENGTH}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                ) : null}
+              </div>
 
-          <FormField
-            control={form.control}
-            name="destinationUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs">Link</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    inputMode="url"
-                    placeholder="https://yoursite.com/guide"
-                    className="h-8 text-xs"
-                  />
-                </FormControl>
-                <FormDescription className="text-2xs">
-                  Shortened automatically so its clicks can be counted against the post it came
-                  from. Leave empty to send a message with no link.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+              {trackedLinkUrl !== null && hasLink ? <TrackedLinkRow url={trackedLinkUrl} /> : null}
 
-          {trackedLinkUrl !== null && hasLink ? <TrackedLinkRow url={trackedLinkUrl} /> : null}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="activeFrom"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Starts</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="datetime-local"
+                          aria-invalid={hasWindowError}
+                          className="h-8 text-xs"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="activeUntil"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Ends</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="datetime-local"
+                          aria-invalid={hasWindowError}
+                          className="h-8 text-xs"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-2xs text-muted-foreground">
+                Leave both empty to run until you switch it off. An end date is what stops a
+                finished campaign answering people months later with a dead link.
+              </p>
+              {hasWindowError ? (
+                <p className="text-2xs text-destructive" role="alert">
+                  The end date is before the start date
+                </p>
+              ) : null}
+            </div>
 
-          {hasLink ? (
-          <FormField
-            control={form.control}
-            name="linkButtonLabel"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs">Button text</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    maxLength={MAX_LINK_BUTTON_LABEL_LENGTH}
-                    placeholder="Open the guide"
-                    className="h-8 text-xs"
-                  />
-                </FormControl>
-                <FormDescription className="text-2xs">
-                  What the button says. The link is sent as a tappable button rather than a bare
-                  address, which gets scrolled past.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name="activeFrom"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Starts</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="datetime-local"
-                      aria-invalid={hasWindowError}
-                      className="h-8 text-xs"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="activeUntil"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">Ends</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="datetime-local"
-                      aria-invalid={hasWindowError}
-                      className="h-8 text-xs"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <div className="@2xl/rule-form:sticky @2xl/rule-form:top-0">
+              <CommentRulePreview values={previewValues} />
+            </div>
           </div>
-          {/* Reserved height so appearing and clearing never shifts the rows below. */}
-          <p className="min-h-4 text-2xs text-destructive" role="alert">
-            {hasWindowError ? 'The end date is before the start date' : ''}
-          </p>
-          <p className="text-2xs text-muted-foreground">
-            Leave both empty to run until you switch it off. An end date is what stops a finished
-            campaign answering people months later with a dead link.
-          </p>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t px-4 py-2.5">

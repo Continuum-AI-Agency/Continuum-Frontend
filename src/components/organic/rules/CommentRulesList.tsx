@@ -6,6 +6,16 @@
 // right now?". That question has no other home in the product, and the rules
 // send messages to strangers on the account owner's behalf, so the state of
 // each rule and the way to stop all of them are the two things that read first.
+//
+// Decisions worth knowing before changing this file:
+// - The open row is marked with aria-current and a filled background, matching
+//   CompetitorRail and BoardsPanel. It keeps full contrast even when switched
+//   off, because what is being edited has to stay legible.
+// - Click counts are pinned right with tabular figures so they line up into a
+//   column that reads down across rows.
+// - A rule with no link shows no count, and a link nobody clicked shows zero.
+//   Absent and zero are different answers; collapsing them prints a
+//   measurement nobody took.
 
 import type { CommentTriggerRule, TrackedLinkStats } from '@continuum/contracts';
 import { MessageSquare, MousePointerClick, Plus, Power } from 'lucide-react';
@@ -53,14 +63,7 @@ function windowLabel(rule: CommentTriggerRule): string | null {
   return `Until ${formatDay(rule.activeUntil as string)}`;
 }
 
-/**
- * Clicks for this rule's link, or null when there is nothing to say.
- *
- * Null is NOT zero. A rule with no link has no number to show, and a link whose
- * stats have not arrived has an unknown one — printing "0 clicks" for either
- * would be inventing a measurement. Zero only appears when the server actually
- * counted zero.
- */
+/** Null, not zero, when the rule has no link or its count has not arrived. */
 function clicksFor(rule: CommentTriggerRule, stats: Map<string, TrackedLinkStats>): number | null {
   if (rule.trackedLinkId === null) return null;
   return stats.get(rule.trackedLinkId)?.clicks ?? null;
@@ -70,11 +73,13 @@ function RuleRow({
   rule,
   now,
   clicks,
+  isEditing,
   onEdit,
 }: {
   rule: CommentTriggerRule;
   now: Date;
   clicks: number | null;
+  isEditing: boolean;
   onEdit: (rule: CommentTriggerRule) => void;
 }) {
   const state = ruleState(rule, now);
@@ -84,10 +89,12 @@ function RuleRow({
     <button
       type="button"
       onClick={() => onEdit(rule)}
+      aria-current={isEditing}
       className={cn(
         'flex w-full flex-col gap-2 border-b px-4 py-3 text-left transition-colors last:border-b-0',
-        'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        state !== 'live' && 'opacity-70',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        isEditing ? 'bg-muted' : 'hover:bg-muted/40',
+        state !== 'live' && !isEditing && 'opacity-70',
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -109,9 +116,6 @@ function RuleRow({
         {window ? <span className="text-xs text-muted-foreground">· {window}</span> : null}
       </div>
       <div className="flex items-center gap-2.5">
-        {/* Pinned right, with tabular figures: across a list of rules the counts
-            line up into a column that reads down at a glance, which is worth
-            more than sitting next to the sentence it belongs to. */}
         <p className="line-clamp-1 min-w-0 flex-1 text-xs text-muted-foreground">
           {rule.replyMessage}
         </p>
@@ -136,6 +140,7 @@ function RuleRow({
 export function CommentRulesList({
   rules,
   linkStats = [],
+  selectedRuleId = null,
   isLoading,
   onCreate,
   onEdit,
@@ -145,6 +150,8 @@ export function CommentRulesList({
 }: {
   rules: CommentTriggerRule[];
   linkStats?: TrackedLinkStats[];
+  /** The rule whose editor is open, so the list can say which one that is. */
+  selectedRuleId?: string | null;
   isLoading: boolean;
   onCreate: () => void;
   onEdit: (rule: CommentTriggerRule) => void;
@@ -157,8 +164,6 @@ export function CommentRulesList({
     () => new Map(linkStats.map((entry) => [entry.linkId, entry])),
     [linkStats],
   );
-  // Summed over the links we actually have a count for, so the headline never
-  // claims a total that silently omits a link whose stats failed to load.
   const totalClicks = React.useMemo(
     () => linkStats.reduce((sum, entry) => sum + entry.clicks, 0),
     [linkStats],
@@ -166,12 +171,6 @@ export function CommentRulesList({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border">
-      {/* A header BAND, padded and ruled off, the same shape the form panel uses
-          on the other side. Floating this row above the list gave it no space of
-          its own, so its contents had nothing to be centred in.
-          leading-none on each label is what aligns them to each other: these are
-          three different type sizes, and centring their default line boxes
-          centres boxes of different heights, which reads as ragged. */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <h2 className="text-sm font-semibold leading-none">Comment rules</h2>
@@ -230,6 +229,7 @@ export function CommentRulesList({
               rule={rule}
               now={now}
               clicks={clicksFor(rule, statsByLink)}
+              isEditing={rule.id === selectedRuleId}
               onEdit={onEdit}
             />
           ))
