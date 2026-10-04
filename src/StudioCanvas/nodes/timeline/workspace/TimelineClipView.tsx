@@ -156,6 +156,13 @@ export function TimelineClipView({
     isVideo: isVideo && widthPx > 60,
     hasAudio: isAudio,
     thumbnailCount: Math.max(1, Math.min(8, Math.round(widthPx / 80))),
+    sourceStartSec: 'sourceInSec' in clip ? clip.sourceInSec : 0,
+    sourceEndSec:
+      'sourceInSec' in clip
+        ? (clip.sourceInSec ?? 0) +
+          clip.durationSec * ('playbackRate' in clip ? clip.playbackRate : 1)
+        : undefined,
+    reverse: 'reverse' in clip && clip.reverse,
   });
   const label = clipLabel(clip);
   const sourceIn = 'sourceInSec' in clip ? (clip.sourceInSec ?? 0) : undefined;

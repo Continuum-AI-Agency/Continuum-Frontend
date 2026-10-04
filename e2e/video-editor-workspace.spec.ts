@@ -1263,8 +1263,8 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
                 timelineStartSec: 0,
                 durationSec: project.durationSec,
                 source: video(project).source,
-                sourceInSec: 0,
-                playbackRate: 1,
+                sourceInSec: [0.7, 3.4, 10.95][index],
+                playbackRate: values.speed,
                 volume: 0.5,
               },
             },
@@ -1272,34 +1272,103 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         });
         project = await getProject(api, id);
         await page.reload({ waitUntil: 'domcontentloaded' });
-        const waveform = page.locator('[data-clip-id="recorded-waveform"] svg path');
-        await expect(waveform).toBeVisible({ timeout: 30_000 });
-        const path = await waveform.getAttribute('d');
-        const ys = [...(path ?? '').matchAll(/L \d+ ([\d.]+)/g)]
-          .slice(0, 60)
-          .map((m) => Number(m[1]));
-        const reference = sourcePcm[0]!;
-        const peaks = Array.from({ length: 60 }, (_, bucket) => {
-          let peak = 0;
-          for (
-            let n = Math.floor((bucket * reference.length) / 60);
-            n < Math.floor(((bucket + 1) * reference.length) / 60);
-            n++
-          )
-            peak = Math.max(peak, Math.abs(reference[n]!));
-          return Math.min(1, peak);
-        });
+        const compareWaveforms = async (label: string) => {
+          for (const audio of project.tracks.flatMap((t) => (t.kind === 'audio' ? t.clips : []))) {
+            if (audio.kind !== 'audio') throw new Error('Expected audio clip');
+            const waveform = page.locator(`[data-clip-id="${audio.id}"] svg path`);
+            await expect(waveform).toBeVisible({ timeout: 30_000 });
+            const reference = sourcePcm[0]!;
+            const span = audio.durationSec * audio.playbackRate;
+            const peaks = Array.from({ length: 60 }, (_, bucket) => {
+              let peak = 0;
+              for (
+                let n = Math.ceil((audio.sourceInSec + (bucket * span) / 60) * 48000 - 1e-6);
+                n < Math.ceil((audio.sourceInSec + ((bucket + 1) * span) / 60) * 48000 - 1e-6);
+                n++
+              )
+                peak = Math.max(peak, Math.abs(reference[n] ?? 0));
+              return Math.min(1, peak);
+            });
+            const valuesOf = (path: string | null) =>
+              [...(path ?? '').matchAll(/L \d+ ([\d.]+)/g)]
+                .slice(0, 60)
+                .map((m) => (10 - Number(m[1])) / 10);
+            const matches = (path: string | null) => {
+              const values = valuesOf(path);
+              const signal = peaks.reduce((sum, p) => sum + p, 0);
+              const error = peaks.reduce(
+                (sum, p, n) => sum + Math.abs(p - (values[n] ?? Infinity)),
+                0,
+              );
+              return (
+                values.length === 60 &&
+                signal > 1e-9 &&
+                error / signal < 0.1 &&
+                values.every((v, n) => Math.abs(v - peaks[n]!) < 0.01)
+              );
+            };
+            const path = await until(() => waveform.getAttribute('d'), matches, 15_000);
+            const values = valuesOf(path);
+            const maxError = Math.max(
+              ...peaks.map((p, n) => Math.abs(p - (values[n] ?? Infinity))),
+            );
+            const relativeError =
+              peaks.reduce((sum, p, n) => sum + Math.abs(p - (values[n] ?? Infinity)), 0) /
+              peaks.reduce((sum, p) => sum + p, 0);
+            writeFileSync(
+              join(folder, `timeline-${index}-waveform-${label}-${audio.id}.json`),
+              JSON.stringify({ audio, path, values, peaks, maxError, relativeError }, null, 2),
+            );
+            assert(
+              `f05 case ${index}: ${label} waveform matches the retained source window`,
+              matches(path),
+              JSON.stringify({
+                sourceIn: audio.sourceInSec,
+                span,
+                values,
+                peaks,
+                maxError,
+                relativeError,
+              }),
+            );
+          }
+        };
+        await compareWaveforms('initial');
+        if ((await snapping.getAttribute('aria-pressed')) === 'true') await snapping.click();
+        const beforeAudioTrim = project.tracks.flatMap((t) =>
+          t.kind === 'audio' ? t.clips : [],
+        )[0]!;
+        await drag(
+          page.locator('[data-clip-id="recorded-waveform"] [data-trim-handle="start"]'),
+          0.137,
+          'audio-start-trim',
+        );
+        const afterAudioTrim = project.tracks.flatMap((t) =>
+          t.kind === 'audio' ? t.clips : [],
+        )[0]!;
         assert(
-          `f05 case ${index}: actual waveform matches independently decoded recorded audio`,
-          ys.length === 60 &&
-            peaks.some((p) => p > 0.01) &&
-            ys.every((y, n) => Math.abs((10 - y) / 10 - peaks[n]!) < 0.01),
-          JSON.stringify({ ys, peaks }),
+          `f05 case ${index}: audio trim preserves the retained source end`,
+          beforeAudioTrim.kind === 'audio' &&
+            afterAudioTrim.kind === 'audio' &&
+            near(
+              beforeAudioTrim.sourceInSec +
+                beforeAudioTrim.durationSec * beforeAudioTrim.playbackRate,
+              afterAudioTrim.sourceInSec + afterAudioTrim.durationSec * afterAudioTrim.playbackRate,
+            ),
         );
-        writeFileSync(
-          join(folder, `timeline-${index}-waveform.json`),
-          JSON.stringify({ path, peaks }, null, 2),
+        await compareWaveforms('trimmed');
+        await seek(0.6);
+        await page
+          .locator('[data-clip-id="recorded-waveform"]:visible')
+          .click({ position: { x: 12, y: 20 } });
+        await commitPointerEdit('audio-split', 'keydown', () => page.locator('body').press('s'));
+        assert(
+          `f05 case ${index}: native audio split produces two independent windows`,
+          project.tracks.flatMap((t) => (t.kind === 'audio' ? t.clips : [])).length === 2,
         );
+        await compareWaveforms('split');
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await compareWaveforms('reloaded');
         writeFileSync(join(folder, `timeline-${index}-native.png`), await page.screenshot());
         const reloaded = await getProject(api, id);
         assert(

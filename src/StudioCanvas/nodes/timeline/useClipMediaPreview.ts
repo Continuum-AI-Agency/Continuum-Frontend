@@ -11,8 +11,20 @@ export function useClipMediaPreview(params: {
   hasAudio: boolean;
   thumbnailCount?: number;
   waveformBuckets?: number;
+  sourceStartSec?: number;
+  sourceEndSec?: number;
+  reverse?: boolean;
 }): { thumbnails: string[]; peaks: number[] } {
-  const { url, isVideo, hasAudio, thumbnailCount = 6, waveformBuckets = 60 } = params;
+  const {
+    url,
+    isVideo,
+    hasAudio,
+    thumbnailCount = 6,
+    waveformBuckets = 60,
+    sourceStartSec = 0,
+    sourceEndSec,
+    reverse = false,
+  } = params;
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [peaks, setPeaks] = useState<number[]>([]);
 
@@ -32,17 +44,16 @@ export function useClipMediaPreview(params: {
 
   useEffect(() => {
     let active = true;
-    if (!url || !hasAudio) {
-      setPeaks([]);
-    } else {
-      getWaveform(url, waveformBuckets).then((result) => {
+    setPeaks([]);
+    if (url && hasAudio) {
+      getWaveform(url, waveformBuckets, sourceStartSec, sourceEndSec, reverse).then((result) => {
         if (active) setPeaks(result);
       });
     }
     return () => {
       active = false;
     };
-  }, [url, hasAudio, waveformBuckets]);
+  }, [url, hasAudio, waveformBuckets, sourceStartSec, sourceEndSec, reverse]);
 
   return { thumbnails, peaks };
 }
