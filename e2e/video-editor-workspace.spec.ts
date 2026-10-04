@@ -10,6 +10,8 @@ import {
   editorProjectResponseSchema,
   registerGeneratedAssetResponseSchema,
   registerVersionResponseSchema,
+  TIMELINE_MEDIA_INPUT_HANDLE,
+  type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
@@ -44,12 +46,13 @@ import {
 
 test.describe.configure({ timeout: 900_000 });
 
-const BENCH = 'videoeditor:workspace:e2e:bench';
-const IMPORT_JOURNEY = process.env.VIDEO_EDITOR_IMPORT_JOURNEY === '1';
+const GRAPH_JOURNEY = process.env.VIDEO_EDITOR_GRAPH_JOURNEY === '1';
+const BENCH = GRAPH_JOURNEY ? 'video-editor:sources:e2e:bench' : 'videoeditor:workspace:e2e:bench';
+const IMPORT_JOURNEY = GRAPH_JOURNEY || process.env.VIDEO_EDITOR_IMPORT_JOURNEY === '1';
 const TIMELINE_JOURNEY = process.env.VIDEO_EDITOR_TIMELINE_JOURNEY === '1';
 const INSPECTOR_JOURNEY =
   IMPORT_JOURNEY || TIMELINE_JOURNEY || process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
-const FEATURE = IMPORT_JOURNEY ? 'f01' : TIMELINE_JOURNEY ? 'f05' : 'f06';
+const FEATURE = GRAPH_JOURNEY ? 'f02' : IMPORT_JOURNEY ? 'f01' : TIMELINE_JOURNEY ? 'f05' : 'f06';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (INSPECTOR_JOURNEY
@@ -767,6 +770,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         versionReceiptKey?: string;
       }
     | undefined;
+  const roomIds: string[] = [];
   const network: Array<Record<string, unknown>> = [];
   const timings: Array<{
     case: number;
@@ -778,14 +782,16 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   }> = [];
   try {
     note(
-      IMPORT_JOURNEY
-        ? 'f01 scope: native pinned Media panel plus/context imports after the actual Library head advances; real Edge version reads, HTTP/store, network transfers, reload and undo. File-upload/recording Edge and GCS paths, native Export and current production unexercised.'
-        : TIMELINE_JOURNEY
-          ? 'f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through local Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.'
-          : 'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
+      GRAPH_JOURNEY
+        ? 'f02 scope: actual Canvas session/binding, pinned Graph pool after authenticated Edge advances Library head, native hover preview/add, HTTP/store/network/undo/reload. Paid generation, GCS/export and currentproduction unexercised.'
+        : IMPORT_JOURNEY
+          ? `${FEATURE} scope: native pinned Media panel plus/context imports after the actual Library head advances; real Edge version reads, HTTP/store, network transfers, reload and undo. File-upload/recording Edge and GCS paths, native Export and current production unexercised.`
+          : TIMELINE_JOURNEY
+            ? 'f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through local Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.'
+            : 'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
     );
     if (IMPORT_JOURNEY) {
-      const step = 'f01 file upload/recording, GCS, native Export and current production';
+      const step = `${FEATURE} file upload/recording, paid generation, GCS, native Export and current production`;
       const detail =
         'Only normal Supabase pinned-media native/store/network imports are exercised.';
       rec.record(step, 'SKIP', detail);
@@ -841,6 +847,21 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       );
     if (prefSetError) throw prefSetError;
     brandChanged = true;
+    if (GRAPH_JOURNEY)
+      writeFileSync(
+        join(folder, 'cleanup-identity.json'),
+        JSON.stringify(
+          {
+            userId: session.userId,
+            previousBrand,
+            sessionId: JSON.parse(
+              Buffer.from(session.accessToken.split('.')[1]!, 'base64url').toString(),
+            ).session_id,
+          },
+          null,
+          2,
+        ),
+      );
     const { buildRegisterGeneratedAssetOperation } = await import(
       '../../Continuum-Backend/App/media/registerGeneratedAsset'
     );
@@ -979,14 +1000,14 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       });
       const body: unknown = await response.json();
       assert(
-        'f01 actual authenticated Edge advances the real Library head',
+        `${FEATURE} actual authenticated Edge advances the real Library head`,
         response.ok,
         response.ok ? 'actual stored version registered' : JSON.stringify(body),
       );
       const version = registerVersionResponseSchema.parse(body);
       newerVersionId = version.versionId;
       assert(
-        'f01 the newer actual stored version differs from the pin',
+        `${FEATURE} the newer actual stored version differs from the pin`,
         Boolean(newerVersionId && newerVersionId !== receipt.versionId),
       );
       writeFileSync(
@@ -1180,7 +1201,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           },
         ],
       });
-      if (IMPORT_JOURNEY && index === 2) {
+      if (IMPORT_JOURNEY && !GRAPH_JOURNEY && index === 2) {
         const seeded = await getProject(api, id);
         await post(id, 'apply_commands', {
           expectedRevision: seeded.revision,
@@ -1216,6 +1237,109 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           ],
         });
       }
+      if (GRAPH_JOURNEY) {
+        const nodeId = `graph-editor-${RUN}-${index}`;
+        const { data: room, error: roomError } = await admin
+          .schema('brand_profiles')
+          .from('canvas_rooms')
+          .insert({
+            brand_profile_id: BRAND,
+            name: `graph-bench-${RUN}-${index}`,
+            created_by: session.userId,
+          })
+          .select('id')
+          .single();
+        if (roomError || !room) throw roomError ?? new Error('Missing canvas room');
+        roomIds.push(room.id);
+        const absentPin = randomUUID();
+        const sources = [
+          receipt.versionId,
+          ...(index === 2 ? [newerVersionId!] : index === 1 ? [absentPin] : []),
+        ].map((versionId, n) => ({
+          id: `graph-source-${RUN}-${index}-${n}`,
+          type: 'video',
+          position: { x: 0, y: n * 200 },
+          data: {
+            label: n ? 'Actual newer version' : 'Pinned recorded source',
+            assetId: receipt.assetId,
+            assetVersionId: versionId,
+            bucket: 'media-library',
+            sourcePath: n ? owned!.headPath! : owned!.path,
+            fileName: n ? 'newer-head.mp4' : 'recorded.mp4',
+          },
+        }));
+        const { error: graphError } = await admin
+          .schema('brand_profiles')
+          .from('canvas_sessions')
+          .insert({
+            brand_profile_id: BRAND,
+            room_id: room.id,
+            nodes: [
+              ...sources,
+              {
+                id: nodeId,
+                type: 'timelineEditor',
+                position: { x: 500, y: 0 },
+                data: { label: 'Actual editor', items: [] },
+              },
+            ],
+            edges: sources.map((source) => ({
+              id: `edge-${source.id}`,
+              source: source.id,
+              target: nodeId,
+              targetHandle: TIMELINE_MEDIA_INPUT_HANDLE,
+            })),
+          });
+        if (graphError) throw graphError;
+        const { error: bindingError } = await admin
+          .schema('media')
+          .from('editor_project_bindings')
+          .insert({
+            brand_id: BRAND,
+            project_id: id,
+            binding_type: 'canvas_node',
+            external_id: nodeId,
+          });
+        if (bindingError) throw bindingError;
+        const pool = (await post(id, 'get_pool', {})) as { assets: VideoEditorPoolAsset[] };
+        if (index === 1)
+          check(
+            'f02 absent explicit Graph pin never falls back to head',
+            pool.assets.filter((asset) => asset.origin === 'graph').length === 1 &&
+              !pool.assets.some(
+                (asset) => asset.versionId === absentPin || asset.versionId === newerVersionId,
+              ),
+          );
+
+        writeFileSync(
+          join(folder, `graph-${index}-pool.json`),
+          JSON.stringify(
+            {
+              nodeId,
+              sources,
+              pool: { assets: pool.assets.map(({ thumbnailUrl: _url, ...asset }) => asset) },
+            },
+            null,
+            2,
+          ),
+        );
+        check(
+          `f02 case ${index}: actual Graph pool retains saved source pins`,
+          sources
+            .filter((source) => source.data.assetVersionId !== absentPin)
+            .every((source) =>
+              pool.assets.some(
+                (asset) =>
+                  asset.origin === 'graph' &&
+                  asset.assetId === receipt.assetId &&
+                  asset.versionId === source.data.assetVersionId,
+              ),
+            ),
+          JSON.stringify(
+            pool.assets.map(({ assetId, versionId, origin }) => ({ assetId, versionId, origin })),
+          ),
+        );
+      }
       await page.reload({ waitUntil: 'domcontentloaded' });
       const clip = page.locator('[data-clip-id="recorded"]:visible');
       await expect(clip).toBeVisible({ timeout: 30_000 });
@@ -1225,14 +1349,45 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       let project = await getProject(api, id);
       if (IMPORT_JOURNEY) {
         const initial = project;
-        const bin = page.locator(
-          `[data-bin-asset="${receipt.assetId}"][data-bin-version="${receipt.versionId}"]`,
-        );
+        let graphLoadMs = 0;
+        if (GRAPH_JOURNEY) {
+          const at = await page.evaluate(() => performance.now());
+          await page.getByRole('tab', { name: 'Graph', exact: true }).click();
+          await expect(
+            page
+              .locator(`[data-pool-section="graph"] [data-pool-asset="${receipt.assetId}"]`)
+              .first(),
+          ).toBeVisible();
+          graphLoadMs = (await page.evaluate(() => performance.now())) - at;
+        }
+        const bin = GRAPH_JOURNEY
+          ? page
+              .locator(`[data-pool-section="graph"] [data-pool-asset="${receipt.assetId}"]`)
+              .first()
+          : page.locator(
+              `[data-bin-asset="${receipt.assetId}"][data-bin-version="${receipt.versionId}"]`,
+            );
         await expect(bin).toBeVisible();
-        if (index === 2) {
+        if (GRAPH_JOURNEY && index === 2) {
+          const cards = page.locator(
+            `[data-pool-section="graph"] [data-pool-asset="${receipt.assetId}"]`,
+          );
+          assert(
+            'f02 same-asset Graph pins remain two distinct native cards',
+            (await cards.count()) === 2 &&
+              (await cards.evaluateAll(
+                (elements, versions) =>
+                  elements.every(
+                    (element, i) => element.getAttribute('data-pool-version') === versions[i],
+                  ),
+                [receipt.versionId, newerVersionId!],
+              )),
+          );
+        }
+        if (index === 2 && !GRAPH_JOURNEY) {
           const bins = page.locator(`[data-bin-asset="${receipt.assetId}"]`);
           assert(
-            'f01 two pins of one asset remain distinct native media cards',
+            `${FEATURE} two pins of one asset remain distinct native media cards`,
             (await bins.count()) === 2,
           );
           const olderSrc = await bin.locator('video').getAttribute('src');
@@ -1242,7 +1397,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             )
             .getAttribute('src');
           assert(
-            'f01 each native media card previews its own actual stored version',
+            `${FEATURE} each native media card previews its own actual stored version`,
             Boolean(olderSrc?.includes(owned!.path) && newerSrc?.includes(owned!.headPath!)),
           );
           await expect
@@ -1263,14 +1418,39 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             timeout: 30_000,
           })
           .toBeGreaterThan(0);
+        if (GRAPH_JOURNEY) {
+          await bin.hover();
+          const hoverVideo = page.locator('[data-slot="hover-card-content"] video:visible');
+          const shown = await hoverVideo.waitFor({ state: 'visible', timeout: 6000 }).then(
+            () => true,
+            () => false,
+          );
+          const src = shown ? await hoverVideo.getAttribute('src') : null;
+          check(
+            `f02 case ${index}: native Graph hover reads the saved stored version`,
+            Boolean(src?.includes(owned!.path)),
+            src ? new URL(src).pathname : 'No playable hover preview',
+          );
+          if (shown)
+            await expect
+              .poll(() => hoverVideo.evaluate((v) => (v as HTMLVideoElement).readyState), {
+                timeout: 10000,
+              })
+              .toBeGreaterThanOrEqual(1);
+          await page.mouse.move(500, 80);
+        }
         const beforeDownloads = network.length;
-        const control = ['bin plus', 'context at playhead', 'context new track'][index]!;
-        if (index === 0) await bin.hover();
+        const control = GRAPH_JOURNEY
+          ? index === 1
+            ? 'Graph context at playhead'
+            : 'Graph plus'
+          : ['bin plus', 'context at playhead', 'context new track'][index]!;
+        if (index === 0 || (GRAPH_JOURNEY && index === 2)) await bin.hover();
         else {
           await bin.click({ button: 'right' });
           await expect(
             page.getByRole('menuitem', {
-              name: index === 1 ? 'Add at playhead' : 'Add on a new track',
+              name: GRAPH_JOURNEY || index === 1 ? 'Add at playhead' : 'Add on a new track',
               exact: true,
             }),
           ).toBeVisible();
@@ -1289,17 +1469,18 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             r.url().endsWith(`/video-projects/${id}/ops/add_clip`) &&
             r.request().method() === 'POST',
         );
-        if (index === 0) await bin.getByRole('button', { name: /Add .* at the playhead/ }).click();
+        if (index === 0 || (GRAPH_JOURNEY && index === 2))
+          await bin.getByRole('button', { name: /Add .* at the playhead/ }).click();
         else
           await page
             .getByRole('menuitem', {
-              name: index === 1 ? 'Add at playhead' : 'Add on a new track',
+              name: GRAPH_JOURNEY || index === 1 ? 'Add at playhead' : 'Add on a new track',
               exact: true,
             })
             .click();
         const response = await responsePromise;
         assert(
-          `f01 case ${index}: ${control} actual op succeeds`,
+          `${FEATURE} case ${index}: ${control} actual op succeeds`,
           response.status() === 200,
           response.status() === 200 ? 'real HTTP200' : await response.text(),
         );
@@ -1309,16 +1490,35 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           commit: { revision: number };
         };
         await expect(page.locator(`[data-clip-id="${output.clipId}"]:visible`)).toBeVisible();
+        if (GRAPH_JOURNEY) {
+          const stage = page.getByTestId('edit-stage').locator('video').first();
+          await expect
+            .poll(
+              () =>
+                stage.evaluate(
+                  (video, path) =>
+                    (video as HTMLVideoElement).currentSrc.includes(path) &&
+                    (video as HTMLVideoElement).readyState >= 2 &&
+                    (video as HTMLVideoElement).videoWidth > 0,
+                  owned!.path,
+                ),
+              { timeout: 10000 },
+            )
+            .toBe(true);
+          assert(`f02 case ${index}: native timeline displays the pinned stored source`, true);
+        }
         const timing = await page.evaluate(() => ({
           durationMs: performance.now() - (window as unknown as { __importAt: number }).__importAt,
           resourceStart: 0,
           responseEnd: performance.now(),
         }));
+        const timingComponents = { graphLoadMs, nativeAddMs: timing.durationMs };
+        if (GRAPH_JOURNEY) timing.durationMs += graphLoadMs;
         timings.push({ case: index, control, ...timing, revision: output.commit.revision });
         project = await getProject(api, id);
         const added = project.tracks.flatMap((t) => t.clips).find((c) => c.id === output.clipId);
         check(
-          `f01 case ${index}: ${control} preserves the pinned version instead of the newer head`,
+          `${FEATURE} case ${index}: ${control} preserves the pinned version instead of the newer head`,
           Boolean(
             added &&
               'source' in added &&
@@ -1333,12 +1533,12 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           }),
         );
         check(
-          `f01 case ${index}: ${control} uses the pinned version duration`,
+          `${FEATURE} case ${index}: ${control} uses the pinned version duration`,
           Boolean(
             added &&
               Math.abs(
                 added.durationSec -
-                  (index === 2
+                  (index === 2 && !GRAPH_JOURNEY
                     ? Math.min(initial.durationSec, Number(probe.format.duration))
                     : Number(probe.format.duration)),
               ) <=
@@ -1346,21 +1546,21 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           ),
           JSON.stringify({
             expected:
-              index === 2
+              index === 2 && !GRAPH_JOURNEY
                 ? Math.min(initial.durationSec, Number(probe.format.duration))
                 : Number(probe.format.duration),
             actual: added?.durationSec,
-            newTrackIsBoundedByMain: index === 2,
+            newTrackIsBoundedByMain: index === 2 && !GRAPH_JOURNEY,
           }),
         );
         assert(
-          `f01 case ${index}: ${control} makes exactly one native revision`,
+          `${FEATURE} case ${index}: ${control} makes exactly one native revision`,
           project.revision === initial.revision + 1 && output.commit.revision === project.revision,
         );
         await page.waitForTimeout(1000);
         const transfers = network.slice(beforeDownloads);
         check(
-          `f01 case ${index}: ${control} does not download the newer head`,
+          `${FEATURE} case ${index}: ${control} does not download the newer head`,
           !transfers.some((n) => String(n.path).includes(owned!.headPath!)),
           JSON.stringify(transfers),
         );
@@ -1371,13 +1571,17 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             Math.max(Number(n.encodedDataLength), Number(n.dataEncodedBytes ?? 0)) >= bytes.length,
         );
         check(
-          `f01 case ${index}: ${control} does not repeat a full pinned source download`,
+          `${FEATURE} case ${index}: ${control} does not repeat a full pinned source download`,
           duplicateFullDownloads.length === 0,
           JSON.stringify(duplicateFullDownloads),
         );
         writeFileSync(
           join(folder, `import-${index}-readback.json`),
-          JSON.stringify({ initial, after: project, output, timing, transfers }, null, 2),
+          JSON.stringify(
+            { initial, after: project, output, timing, timingComponents, transfers },
+            null,
+            2,
+          ),
         );
         writeFileSync(join(folder, `import-${index}-native.png`), await page.screenshot());
         const undoResponse = page.waitForResponse(
@@ -1389,16 +1593,215 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         await undoResponse;
         const undone = await getProject(api, id);
         assert(
-          `f01 case ${index}: native undo restores exact pinned tracks and duration`,
+          `${FEATURE} case ${index}: native undo restores exact pinned tracks and duration`,
           JSON.stringify(undone.tracks) === JSON.stringify(initial.tracks) &&
             undone.durationSec === initial.durationSec,
         );
         await page.reload({ waitUntil: 'domcontentloaded' });
         await expect(page.locator('[data-clip-id="recorded"]:visible')).toBeVisible();
         assert(
-          `f01 case ${index}: pin and exact original tracks survive reload`,
+          `${FEATURE} case ${index}: pin and exact original tracks survive reload`,
           JSON.stringify((await getProject(api, id)).tracks) === JSON.stringify(initial.tracks),
         );
+        if (GRAPH_JOURNEY && index === 2) {
+          await page.getByRole('tab', { name: 'Graph', exact: true }).click();
+          const newerCard = page.locator(
+            `[data-pool-section="graph"] [data-pool-asset="${receipt.assetId}"][data-pool-version="${newerVersionId}"]`,
+          );
+          await expect(newerCard).toBeVisible();
+          await newerCard.hover();
+          const newerHover = page.locator('[data-slot="hover-card-content"] video:visible');
+          await expect(newerHover).toBeVisible();
+          await expect
+            .poll(() => newerHover.evaluate((v) => (v as HTMLVideoElement).readyState))
+            .toBeGreaterThanOrEqual(1);
+          assert(
+            'f02 newer Graph card previews its own actual stored bytes',
+            Boolean((await newerHover.getAttribute('src'))?.includes(owned!.headPath!)),
+          );
+          await page.mouse.move(500, 80);
+          const beforeNewer = await getProject(api, id);
+          const beforeProbe = await admin
+            .schema('media')
+            .from('asset_versions')
+            .select('duration_ms,media_info')
+            .eq('id', newerVersionId!)
+            .single();
+          if (beforeProbe.error) throw beforeProbe.error;
+          assert(
+            'f02 newer stored version starts without primed duration or probe',
+            beforeProbe.data.duration_ms === null && beforeProbe.data.media_info === null,
+          );
+          const request = page.waitForResponse(
+            (r) =>
+              r.url().endsWith(`/video-projects/${id}/ops/add_clip`) &&
+              r.request().method() === 'POST',
+          );
+          const start = await page.evaluate(() => performance.now());
+          await newerCard.getByRole('button', { name: /Add .* at the playhead/ }).click();
+          const response = await request;
+          if (response.status() !== 200) {
+            const { probeLibraryVersion } = await import(
+              '../../Continuum-Backend/App/media/mediaProbe/probeVersion'
+            );
+            const diagnosis = await probeLibraryVersion(newerVersionId!, admin).then(
+              (result) => ({ state: result.state }),
+              (error: unknown) => ({
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            );
+            writeFileSync(
+              join(folder, 'newer-probe-diagnosis.json'),
+              JSON.stringify(diagnosis, null, 2),
+            );
+          }
+          assert(
+            'f02 newer Graph version with missing metadata is natively placeable',
+            response.status() === 200,
+            response.status() === 200 ? 'real HTTP200' : await response.text(),
+          );
+          const result = (await response.json()) as {
+            clipId: string;
+            commit: { revision: number };
+          };
+          await expect(page.locator(`[data-clip-id="${result.clipId}"]:visible`)).toBeVisible();
+          const stage = page.getByTestId('edit-stage').locator('video').first();
+          await expect
+            .poll(
+              () =>
+                stage.evaluate(
+                  (video, path) =>
+                    (video as HTMLVideoElement).currentSrc.includes(path) &&
+                    (video as HTMLVideoElement).readyState >= 2 &&
+                    (video as HTMLVideoElement).videoWidth > 0,
+                  owned!.headPath!,
+                ),
+              { timeout: 10000 },
+            )
+            .toBe(true);
+          assert('f02 native timeline displays the actual newer stored source', true);
+          const ms = (await page.evaluate(() => performance.now())) - start;
+          timings.push({
+            case: index,
+            control: 'Graph newer plus with real cold probe',
+            durationMs: ms,
+            resourceStart: 0,
+            responseEnd: 0,
+            revision: result.commit.revision,
+          });
+          const newer = await getProject(api, id);
+          const added = newer.tracks
+            .flatMap((track) => track.clips)
+            .find((clip) => clip.id === result.clipId);
+          const decodedFrames = JSON.parse(
+            execFileSync(
+              'ffprobe',
+              [
+                '-v',
+                'error',
+                '-show_frames',
+                '-show_entries',
+                'frame=best_effort_timestamp_time,duration_time,media_type',
+                '-of',
+                'json',
+                join(folder, 'newer-head.mp4'),
+              ],
+              { encoding: 'utf8' },
+            ),
+          ) as {
+            frames: Array<{
+              best_effort_timestamp_time?: string;
+              duration_time?: string;
+              media_type?: string;
+            }>;
+          };
+          const actualDuration = Math.max(
+            ...decodedFrames.frames.map(
+              (frame) =>
+                Number(frame.best_effort_timestamp_time ?? 0) + Number(frame.duration_time ?? 0),
+            ),
+          );
+          writeFileSync(
+            join(folder, 'newer-decoded-frames.json'),
+            JSON.stringify(decodedFrames, null, 2),
+          );
+          writeFileSync(
+            join(folder, 'newer-before-assertions.json'),
+            JSON.stringify(
+              { before: beforeNewer, after: newer, result, actualDuration, durationMs: ms, added },
+              null,
+              2,
+            ),
+          );
+          assert(
+            'f02 newer Graph add retains its own version and actual source duration',
+            Boolean(
+              added &&
+                'source' in added &&
+                added.source.sourceType === 'library_asset' &&
+                added.source.renditionId === newerVersionId &&
+                Math.abs(added.durationSec - actualDuration) <= 1 / 30,
+            ),
+            JSON.stringify({ actualDuration, added }),
+          );
+          assert(
+            'f02 newer Graph add makes exactly one revision',
+            newer.revision === beforeNewer.revision + 1 &&
+              newer.revision === result.commit.revision,
+          );
+          const afterProbe = await admin
+            .schema('media')
+            .from('asset_versions')
+            .select('duration_ms,width,height,media_info')
+            .eq('id', newerVersionId!)
+            .single();
+          if (afterProbe.error) throw afterProbe.error;
+          assert(
+            'f02 native newer add probes and persists real technical metadata',
+            afterProbe.data.duration_ms > 0 &&
+              afterProbe.data.width === probe.streams[0]?.width &&
+              afterProbe.data.height === probe.streams[0]?.height &&
+              Boolean(afterProbe.data.media_info?.probedAt),
+          );
+          writeFileSync(
+            join(folder, 'newer-readback.json'),
+            JSON.stringify(
+              {
+                before: beforeNewer,
+                after: newer,
+                result,
+                actualDuration,
+                durationMs: ms,
+                beforeProbe: beforeProbe.data,
+                afterProbe: afterProbe.data,
+              },
+              null,
+              2,
+            ),
+          );
+          await page.getByRole('button', { name: 'Play preview', exact: true }).click();
+          await expect
+            .poll(() => stage.evaluate((video) => (video as HTMLVideoElement).currentTime), {
+              timeout: 10000,
+            })
+            .toBeGreaterThan(0.15);
+          await page.getByRole('button', { name: 'Pause preview', exact: true }).click();
+          assert('f02 newer stored source plays through the native timeline', true);
+          writeFileSync(join(folder, 'newer-native.png'), await page.screenshot());
+          const undo = page.waitForResponse(
+            (r) =>
+              r.url().endsWith(`/video-projects/${id}/timeline/restore`) &&
+              r.request().method() === 'POST',
+          );
+          await page.getByRole('button', { name: 'Undo', exact: true }).click();
+          await undo;
+          const restored = await getProject(api, id);
+          assert(
+            'f02 newer native add is exactly undoable',
+            JSON.stringify(restored.tracks) === JSON.stringify(beforeNewer.tracks) &&
+              restored.durationSec === beforeNewer.durationSec,
+          );
+        }
         continue;
       }
       const commitPointerEdit = async (
@@ -2223,7 +2626,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
     check('f06 journey completed', false, error instanceof Error ? error.message : String(error));
   } finally {
     note(
-      `speed samples: ${JSON.stringify({ [IMPORT_JOURNEY ? 'import' : TIMELINE_JOURNEY ? 'timeline' : 'inspector']: timings.map((t) => t.durationMs) })}`,
+      `speed samples: ${JSON.stringify({ [GRAPH_JOURNEY ? 'graph_pool' : IMPORT_JOURNEY ? 'import' : TIMELINE_JOURNEY ? 'timeline' : 'inspector']: timings.map((t) => t.durationMs) })}`,
     );
     note(
       `${FEATURE} native ${IMPORT_JOURNEY ? 1000 : 200}ms gate: ${timings.length >= 3 && timings.every((t) => t.durationMs <= (IMPORT_JOURNEY ? 1000 : 200)) ? 'PASS' : 'OPEN'}; every sample retained, no excluded slow saves`,
@@ -2231,8 +2634,9 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
     writeFileSync(join(folder, 'save-timings.json'), JSON.stringify(timings, null, 2));
     if (IMPORT_JOURNEY) {
       check(
-        'f01 every full native import and refresh passes1000ms',
-        timings.length === 3 && timings.every((t) => t.durationMs > 0 && t.durationMs <= 1000),
+        `${FEATURE} every full native import and refresh passes1000ms`,
+        timings.length === (GRAPH_JOURNEY ? 4 : 3) &&
+          timings.every((t) => t.durationMs > 0 && t.durationMs <= 1000),
       );
       writeFileSync(join(folder, 'network.json'), JSON.stringify(network, null, 2));
     }
@@ -2258,6 +2662,27 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         assert(
           'f06 owned projects and revisions removed',
           !error && !revError && count === 0 && revisions === 0,
+        );
+      }
+      if (roomIds.length) {
+        const sessions = admin.schema('brand_profiles').from('canvas_sessions');
+        const { error: sessionError } = await sessions
+          .delete()
+          .eq('brand_profile_id', BRAND)
+          .in('room_id', roomIds);
+        const { error: roomError } = await admin
+          .schema('brand_profiles')
+          .from('canvas_rooms')
+          .delete()
+          .eq('brand_profile_id', BRAND)
+          .in('id', roomIds);
+        const { count, error: countError } = await sessions
+          .select('room_id', { count: 'exact', head: true })
+          .in('room_id', roomIds);
+        assert(
+          'f02 owned Canvas sessions and rooms removed',
+          !sessionError && !roomError && !countError && count === 0,
+          JSON.stringify({ sessionError, roomError, countError, count }),
         );
       }
       if (session && brandChanged) {
@@ -2294,7 +2719,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         assert('f06 owned media removed', !storageError && !assetError);
         if (owned.versionReceiptKey) {
           assert(
-            'f01 version receipt key is safe',
+            `${FEATURE} version receipt key is safe`,
             /^import-head-[a-f0-9]{8}$/.test(owned.versionReceiptKey),
           );
           const left = execFileSync(
@@ -2314,7 +2739,10 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             ],
             { encoding: 'utf8', stdio: 'pipe' },
           );
-          assert('f01 owned version receipt removed', left.trim().split('\n').at(-1) === '0');
+          assert(
+            `${FEATURE} owned version receipt removed`,
+            left.trim().split('\n').at(-1) === '0',
+          );
         }
         if (owned.receiptKey) {
           assert(

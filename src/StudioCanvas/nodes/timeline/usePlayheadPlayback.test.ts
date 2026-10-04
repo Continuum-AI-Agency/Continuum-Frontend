@@ -384,6 +384,45 @@ describe('syncVideoToTimelineTime — Web Audio owns the clock', () => {
   });
 });
 
+describe('usePlayheadPlayback paused media', () => {
+  it('cues a resolved URL and a changed clip without pressing Play or scrubbing', () => {
+    const first = layoutOf([clipOf({ id: 'a', startSec: 0, durationSec: 4 })]);
+    const second = layoutOf([clipOf({ id: 'b', startSec: 0, durationSec: 3 })]);
+    const { result, rerender } = renderHook(
+      ({
+        layout,
+        mediaFor,
+      }: {
+        layout: TimelineLayout;
+        mediaFor: (id: string) => ClipMedia | undefined;
+      }) => usePlayheadPlayback({ layout, mediaFor }),
+      { initialProps: { layout: first, mediaFor: mediaLookup({}) } },
+    );
+    const video = document.createElement('video');
+    result.current.videoRef.current = video;
+    rerender({
+      layout: first,
+      mediaFor: mediaLookup({
+        a: { kind: 'video', url: 'https://example.test/a.mp4', trimStartSec: 0.2 },
+      }),
+    });
+    expect(video.src).toBe('https://example.test/a.mp4');
+    expect(video.currentTime).toBe(0.2);
+    rerender({
+      layout: second,
+      mediaFor: mediaLookup({
+        b: { kind: 'video', url: 'https://example.test/b.mp4', trimStartSec: 0.5 },
+      }),
+    });
+    expect(video.src).toBe('https://example.test/b.mp4');
+    expect(video.currentTime).toBe(0.5);
+    video.currentTime = 0;
+    act(() => video.dispatchEvent(new Event('loadedmetadata')));
+    expect(video.currentTime).toBe(0.5);
+    expect(result.current.isPlaying).toBe(false);
+  });
+});
+
 describe('usePlayheadPlayback — the running loop follows edits made mid-playback', () => {
   const originalRequestFrame = globalThis.requestAnimationFrame;
   const originalCancelFrame = globalThis.cancelAnimationFrame;

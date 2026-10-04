@@ -101,7 +101,8 @@ function FootageRow({
       <HoverCard
         openDelay={300}
         onOpenChange={(open) => {
-          if (open && !mediaUrl) void signAsset(brandId, asset.assetId).then(setMediaUrl);
+          if (open && !mediaUrl)
+            void signAsset(brandId, asset.assetId, asset.versionId).then(setMediaUrl);
         }}
       >
         <HoverCardTrigger
