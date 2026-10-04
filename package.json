@@ -126,7 +126,8 @@
     "videoeditor:motion:render:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-motion-render.spec.ts --workers=1",
     "videoeditor:generate:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-generate-ui.spec.ts --workers=1",
     "videoeditor:audio:render:bench": "node scripts/video-editor-audio-render-bench.mjs",
-    "videoeditor:first-cut:finish:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-first-cut-finish.spec.ts --workers=1"
+    "videoeditor:first-cut:finish:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-first-cut-finish.spec.ts --workers=1",
+    "videoeditor:record:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-record.spec.ts --workers=1"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.109",

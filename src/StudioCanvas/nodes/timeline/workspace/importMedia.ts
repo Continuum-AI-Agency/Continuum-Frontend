@@ -1,6 +1,5 @@
 import type { MediaAsset, VideoEditorPoolAsset } from '@continuum/contracts';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
-import { probeAudioDuration, probeVideoDuration } from '../mediaProbe';
 import { rememberPreviewUrl } from '../useClipPreviewUrls';
 
 export const IMPORTABLE_MEDIA = 'video/*,audio/*,image/*,.mov,.mp4,.webm,.m4a,.mp3,.wav';
@@ -13,23 +12,6 @@ const kindOf = (file: File): VideoEditorPoolAsset['kind'] | null => {
   return null;
 };
 
-/** The file's own length, read locally before the upload finishes — no round trip. */
-async function probeFile(
-  file: File,
-  kind: VideoEditorPoolAsset['kind'],
-): Promise<number | undefined> {
-  if (kind === 'image') return undefined;
-  const url = URL.createObjectURL(file);
-  try {
-    const seconds = await (kind === 'audio' ? probeAudioDuration(url) : probeVideoDuration(url));
-    return seconds > 0 ? seconds : undefined;
-  } catch {
-    return undefined;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
 /**
  * A dropped or recorded file becomes a Library asset through the Library's own upload
  * path, so it is a real, versioned asset the export and the agent can read — never a
@@ -38,17 +20,14 @@ async function probeFile(
 export async function importMediaFile(brandId: string, file: File): Promise<VideoEditorPoolAsset> {
   const kind = kindOf(file);
   if (!kind) throw new Error(`${file.name} is not a video, audio or image file.`);
-  const [durationSec, uploaded] = await Promise.all([
-    probeFile(file, kind),
-    uploadMediaAsset({ file, brandId }),
-  ]);
+  const uploaded = await uploadMediaAsset({ file, brandId });
   rememberPreviewUrl(uploaded.assetId, uploaded.versionId, uploaded.signedUrl);
   return {
     assetId: uploaded.assetId,
     versionId: uploaded.versionId,
     kind,
     title: file.name,
-    ...(durationSec ? { durationSec } : {}),
+    ...(uploaded.durationSec ? { durationSec: uploaded.durationSec } : {}),
     origin: 'project',
   };
 }

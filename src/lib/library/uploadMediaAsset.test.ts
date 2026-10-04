@@ -139,13 +139,14 @@ describe('uploadMediaAsset', () => {
     const bodies: Record<string, unknown>[] = [];
     const client = makeClient({ calls, bodies });
 
-    await uploadMediaAsset(
+    const result = await uploadMediaAsset(
       { file: mp4File(), brandId: 'b1' },
       { createClient: () => client, attachPoster: async () => null, probeDuration: async () => 96 },
     );
 
     const register = bodies.find((body) => body.action === 'register');
     expect(register?.durationSec).toBe(96);
+    expect(result.durationSec).toBe(96);
   });
 
   // Past 20 minutes a recording is transcribed on the server; the upload asks for it.
@@ -178,7 +179,7 @@ describe('uploadMediaAsset', () => {
   // file through the short inline path.
   it('sends a probed duration with register for an audio recording', async () => {
     const bodies: Record<string, unknown>[] = [];
-    await uploadMediaAsset(
+    const result = await uploadMediaAsset(
       {
         file: new File([new Uint8Array([1, 2, 3])], 'interview.mp3', { type: 'audio/mpeg' }),
         brandId: 'b1',
@@ -190,6 +191,7 @@ describe('uploadMediaAsset', () => {
       },
     );
     expect(bodies.find((body) => body.action === 'register')?.durationSec).toBe(342.5);
+    expect(result.durationSec).toBe(342.5);
   });
 
   it('omits the duration for an image, and when the probe cannot read one', async () => {
