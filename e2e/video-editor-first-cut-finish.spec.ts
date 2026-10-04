@@ -51,7 +51,10 @@ import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
 
 test.describe.configure({ timeout: 2_700_000 });
 
-const BENCH = 'videoeditor:first-cut:finish:e2e:bench';
+const BENCH =
+  process.env.VIDEO_EDITOR_FINISH_BACKEND_ENTRY === '1'
+    ? 'video-editor:first-cut:finish:e2e:bench'
+    : 'videoeditor:first-cut:finish:e2e:bench';
 const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
 /** Where the Backend keeps transcripts per version and stores exports (AI_STUDIO_BUCKET). */
 const BRAND_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
