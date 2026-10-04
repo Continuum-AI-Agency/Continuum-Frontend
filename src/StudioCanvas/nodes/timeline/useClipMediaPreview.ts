@@ -30,17 +30,16 @@ export function useClipMediaPreview(params: {
 
   useEffect(() => {
     let active = true;
-    if (!url || !isVideo) {
-      setThumbnails([]);
-    } else {
-      getThumbnails(url, thumbnailCount).then((result) => {
+    setThumbnails([]);
+    if (url && isVideo) {
+      getThumbnails(url, thumbnailCount, sourceStartSec, sourceEndSec, reverse).then((result) => {
         if (active) setThumbnails(result.filter(Boolean));
       });
     }
     return () => {
       active = false;
     };
-  }, [url, isVideo, thumbnailCount]);
+  }, [url, isVideo, thumbnailCount, sourceStartSec, sourceEndSec, reverse]);
 
   useEffect(() => {
     let active = true;

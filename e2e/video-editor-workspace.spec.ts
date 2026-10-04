@@ -1142,6 +1142,185 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             JSON.stringify(project, null, 2),
           );
         };
+        const frameTimes = JSON.parse(
+          execFileSync(
+            'ffprobe',
+            [
+              '-v',
+              'error',
+              '-select_streams',
+              'v:0',
+              '-show_frames',
+              '-show_entries',
+              'stream=time_base:frame=best_effort_timestamp',
+              '-of',
+              'json',
+              file,
+            ],
+            { encoding: 'utf8' },
+          ),
+        ) as {
+          frames: Array<{ best_effort_timestamp: number }>;
+          streams: Array<{ time_base: string }>;
+        };
+        const [timeNum, timeDen] = frameTimes.streams[0]!.time_base.split('/').map(Number);
+        const thumbWidth = Math.max(
+          1,
+          Math.round((64 * probe.streams[0]!.width) / probe.streams[0]!.height),
+        );
+        const referenceFrame = async (sec: number) => {
+          const frame = frameTimes.frames.findLastIndex(
+            (f) => (f.best_effort_timestamp * timeNum!) / timeDen! <= sec + 1e-9,
+          );
+          if (frame < 0) throw new Error('No independent source frame at requested timestamp');
+          const png = execFileSync('ffmpeg', [
+            '-v',
+            'error',
+            '-i',
+            file,
+            '-vf',
+            `select='eq(n,${frame})'`,
+            '-frames:v',
+            '1',
+            '-f',
+            'image2pipe',
+            '-vcodec',
+            'png',
+            'pipe:1',
+          ]);
+          writeFileSync(join(folder, `source-frame-${frame}.png`), png);
+          // Canvas sources use a different native resize path from PNG images. Normalize
+          // independent FFmpeg pixels through the real preview's canvas/JPEG format.
+          const url = await page.evaluate(
+            async ({ url, width }) => {
+              const image = new Image();
+              image.src = url;
+              await image.decode();
+              const full = document.createElement('canvas');
+              full.width = image.naturalWidth;
+              full.height = image.naturalHeight;
+              full.getContext('2d')!.drawImage(image, 0, 0);
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = 64;
+              canvas.getContext('2d')!.drawImage(full, 0, 0, width, 64);
+              return canvas.toDataURL('image/jpeg', 0.6);
+            },
+            { url: `data:image/png;base64,${png.toString('base64')}`, width: thumbWidth },
+          );
+          return execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-i',
+              'pipe:0',
+              '-frames:v',
+              '1',
+              '-pix_fmt',
+              'rgb24',
+              '-f',
+              'rawvideo',
+              'pipe:1',
+            ],
+            { input: Buffer.from(url.split(',')[1]!, 'base64') },
+          );
+        };
+        const compareFilmstrips = async (label: string) => {
+          for (const c of mainClips(project)) {
+            if (c.kind !== 'video') throw new Error('Expected recorded video');
+            const block = page.locator(`[data-clip-id="${c.id}"]:visible`);
+            const box = await block.boundingBox();
+            if (!box || box.width <= 60) continue; // Native UI deliberately hides narrow filmstrips.
+            const count = Math.max(1, Math.min(8, Math.round(box.width / 80)));
+            const span = c.durationSec * c.playbackRate;
+            const times = Array.from(
+              { length: count },
+              (_, n) => c.sourceInSec + (span * (n + 0.5)) / count,
+            );
+            const references = await Promise.all(times.map(referenceFrame));
+            const wrong = await Promise.all(
+              times.map((_, n) =>
+                referenceFrame((Number(probe.format.duration) * (n + 0.5)) / count),
+              ),
+            );
+            const meanError = (a: Buffer, b: Buffer) =>
+              a.length === b.length && a.length === thumbWidth * 64 * 3
+                ? a.reduce((sum, value, n) => sum + Math.abs(value - b[n]!), 0) / a.length
+                : Infinity;
+            const controls = wrong.map((v, n) => meanError(v, references[n]!));
+            assert(
+              `f05 case ${index}: ${label} filmstrip whole-source control is distinguishable`,
+              Math.max(...controls) > 12,
+              JSON.stringify({ times, controls }),
+            );
+            const images = block.locator('img');
+            await expect(images).toHaveCount(count, { timeout: 30_000 });
+            const decode = (urls: string[]) =>
+              urls.map((url) =>
+                execFileSync(
+                  'ffmpeg',
+                  [
+                    '-v',
+                    'error',
+                    '-i',
+                    'pipe:0',
+                    '-frames:v',
+                    '1',
+                    '-pix_fmt',
+                    'rgb24',
+                    '-f',
+                    'rawvideo',
+                    'pipe:1',
+                  ],
+                  { input: Buffer.from(url.split(',')[1] ?? '', 'base64') },
+                ),
+              );
+            const urls = await until(
+              () =>
+                images.evaluateAll((elements) =>
+                  elements.map((img) => (img as HTMLImageElement).src),
+                ),
+              (urls) =>
+                urls.length === count &&
+                decode(urls).every((pixels, n) => meanError(pixels, references[n]!) < 12),
+              15_000,
+            );
+            const actual = decode(urls);
+            const errors = actual.map((pixels, n) => meanError(pixels, references[n]!));
+            const prefix = `timeline-${index}-filmstrip-${label}-${c.id}`;
+            for (const [n, url] of urls.entries()) {
+              writeFileSync(
+                join(folder, `${prefix}-${n}.jpg`),
+                Buffer.from(url.split(',')[1]!, 'base64'),
+              );
+              writeFileSync(join(folder, `${prefix}-${n}-reference.rgb`), references[n]!);
+              writeFileSync(join(folder, `${prefix}-${n}-whole-source.rgb`), wrong[n]!);
+            }
+            writeFileSync(
+              join(folder, `${prefix}.json`),
+              JSON.stringify(
+                {
+                  clip: c,
+                  times,
+                  width: thumbWidth,
+                  height: 64,
+                  errors,
+                  controls,
+                  gate: 'every mean RGB error <12; at least one whole-source control error >12',
+                },
+                null,
+                2,
+              ),
+            );
+            assert(
+              `f05 case ${index}: ${label} filmstrip pixels match retained source frames`,
+              errors.length === count && errors.every((v) => v < 12),
+              JSON.stringify({ times, errors }),
+            );
+          }
+        };
+        await compareFilmstrips('initial');
         const snapping = page.getByRole('button', { name: 'Toggle snapping', exact: true });
         if ((await snapping.getAttribute('aria-pressed')) === 'true') await snapping.click();
         const px = clipBox.width / video(initial).durationSec;
@@ -1164,6 +1343,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             Math.abs(video(project).durationSec - (4 - 0.427)) < 1 / 30,
         );
         invariant('end-trim');
+        await compareFilmstrips('end-trim');
         const ended = project;
         await drag(clip.locator('[data-trim-handle="start"]'), 0.223, 'start-trim');
         assert(
@@ -1176,6 +1356,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             ),
         );
         invariant('start-trim');
+        await compareFilmstrips('start-trim');
         const seek = async (sec: number) => {
           await page.keyboard.press('Escape');
           const ruler = page.locator('[data-timeline-ruler]:visible');
@@ -1200,12 +1381,14 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
             ),
         );
         invariant('split');
+        await compareFilmstrips('split');
         await drag(page.locator(`[data-clip-id="${pieces[0]!.id}"]:visible`), 3, 'reorder');
         assert(
           `f05 case ${index}: native reorder preserves both complete source spans`,
           JSON.stringify(spans(project)) === JSON.stringify([pieces[1], pieces[0]]),
         );
         invariant('reorder');
+        await compareFilmstrips('reorder');
         const beforeDelete = spans(project);
         await page
           .locator(`[data-clip-id="${beforeDelete[0]!.id}"]:visible`)
@@ -1218,6 +1401,9 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           JSON.stringify(spans(project)) === JSON.stringify(beforeDelete.slice(1)),
         );
         invariant('ripple-delete');
+        await compareFilmstrips('ripple-delete');
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await compareFilmstrips('reloaded');
         await seek(0.713);
         await commitPointerEdit('marker', 'keydown', () => page.locator('body').press('m'));
         const marker = project.markers.at(-1);
@@ -1226,7 +1412,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           Boolean(marker && aligned(marker.timeSec) && Math.abs(marker.timeSec - 0.713) < 1 / 30),
         );
         await expect(page.locator('[data-timeline-ruler] [aria-label="Marker"]')).toHaveCount(1);
-        await snapping.click();
+        if ((await snapping.getAttribute('aria-pressed')) === 'false') await snapping.click();
         await seek(marker!.timeSec + 2 / px);
         const beforeSnap = spans(project)[0]!;
         await commitPointerEdit('marker-snap-split', 'keydown', () =>

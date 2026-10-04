@@ -1,6 +1,6 @@
 // Filmstrip thumbnails + audio waveforms for timeline clips (Wave 2 UX). Decodes
 // media via mediabunny (CanvasSink frames, AudioBufferSink samples) and caches
-// thumbnails by URL and waveforms by retained source range. Audio decodes only
+// thumbnails and waveforms by retained source range. Audio decodes only
 // that range, without retaining a whole PCM recording. The decode needs WebCodecs
 // and runs on the main thread lazily (dynamic import keeps it out of the bundle).
 
@@ -68,7 +68,20 @@ function downscaleToDataUrl(source: HTMLCanvasElement | OffscreenCanvas): string
   return scratch.toDataURL('image/jpeg', 0.6);
 }
 
-async function decodeThumbnails(url: string, count: number): Promise<string[]> {
+async function decodeThumbnails(
+  url: string,
+  count: number,
+  startSec: number,
+  endSec?: number,
+): Promise<string[]> {
+  if (
+    !Number.isInteger(count) ||
+    count <= 0 ||
+    !Number.isFinite(startSec) ||
+    startSec < 0 ||
+    (endSec !== undefined && (!Number.isFinite(endSec) || endSec <= startSec))
+  )
+    return [];
   const mb = await loadMediabunny();
   const response = await fetch(url, { cache: 'force-cache' });
   if (!response.ok) return [];
@@ -77,9 +90,13 @@ async function decodeThumbnails(url: string, count: number): Promise<string[]> {
   try {
     const track = await input.getPrimaryVideoTrack();
     if (!track) return [];
-    const duration = await input.computeDuration();
+    const end = endSec ?? (await input.computeDuration());
+    if (end <= startSec) return [];
     const sink = new mb.CanvasSink(track);
-    const timestamps = Array.from({ length: count }, (_, i) => (duration * (i + 0.5)) / count);
+    const timestamps = Array.from(
+      { length: count },
+      (_, i) => startSec + ((end - startSec) * (i + 0.5)) / count,
+    );
     const frames: string[] = [];
     for await (const wrapped of sink.canvasesAtTimestamps(timestamps)) {
       frames.push(wrapped ? downscaleToDataUrl(wrapped.canvas) : '');
@@ -142,11 +159,19 @@ async function decodeWaveform(
 
 // Cached, deduped accessors. A failed decode caches an empty result so it is not
 // retried in a tight render loop.
-export function getThumbnails(url: string, count = 6): Promise<string[]> {
-  const key = `${url}|${count}`;
+export function getThumbnails(
+  url: string,
+  count = 6,
+  startSec = 0,
+  endSec?: number,
+  reverse = false,
+): Promise<string[]> {
+  const key = JSON.stringify([url, count, startSec, endSec, reverse]);
   let promise = thumbCache.get(key);
   if (!promise) {
-    promise = decodeThumbnails(url, count).catch(() => []);
+    promise = decodeThumbnails(url, count, startSec, endSec)
+      .then((frames) => (reverse ? frames.reverse() : frames))
+      .catch(() => []);
     thumbCache.set(key, promise);
   }
   return promise;
