@@ -54,8 +54,9 @@ import { removeProjects } from './video-editor-workspace/ledger';
 
 test.describe.configure({ timeout: 900_000 });
 
-const BENCH = 'videoeditor:motion:e2e:bench';
-const KEYFRAME_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_JOURNEY === '1';
+const VOLUME_JOURNEY = process.env.AUDIO_RENDER_NATIVE_VOLUME === '1';
+const BENCH = VOLUME_JOURNEY ? 'videoeditor:audio:render:bench' : 'videoeditor:motion:e2e:bench';
+const KEYFRAME_JOURNEY = VOLUME_JOURNEY || process.env.VIDEO_EDITOR_KEYFRAME_JOURNEY === '1';
 const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY === '1';
 const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
@@ -3478,6 +3479,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
       if (!box) throw new Error('Original clip not visible');
       const pxPerSec = box.width / 4;
       if (KEYFRAME_JOURNEY) {
+        const feature = VOLUME_JOURNEY ? 'f28' : 'f22';
         const editTimings: Array<{
           label: string;
           durationMs: number;
@@ -3519,14 +3521,14 @@ test('retained project journey: native splits and deletes preserve stored pictur
           }, response.url());
           const persisted = await getProject(api, projectId);
           assert(
-            `f22 ${label}: one native revision acknowledges the exact stored edit`,
+            `${feature} ${label}: one native revision acknowledges the exact stored edit`,
             response.ok() &&
               saved.revision === old.revision + 1 &&
               persisted.revision === saved.revision &&
               JSON.stringify(saved.tracks) === JSON.stringify(persisted.tracks),
           );
           assert(
-            `f22 ${label}: release-to-response-end timing retained`,
+            `${feature} ${label}: release-to-response-end timing retained`,
             Number.isFinite(timing) && timing > 0,
           );
           editTimings.push({
@@ -3541,7 +3543,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
           );
           await page.waitForTimeout(250);
           assert(
-            `f22 ${label}: settling does not create a duplicate revision`,
+            `${feature} ${label}: settling does not create a duplicate revision`,
             (await getProject(api, projectId)).revision === saved.revision,
           );
           return persisted;
@@ -3700,7 +3702,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
           },
         ] as const;
         const comparisons: unknown[] = [];
-        for (const c of cases)
+        const channels = VOLUME_JOURNEY ? cases.filter((c) => c.label === 'Volume') : cases;
+        for (const c of channels)
           for (const [choiceIndex, choice] of [
             'Linear',
             'Hold',
@@ -3755,11 +3758,11 @@ test('retained project journey: native splits and deletes preserve stored pictur
               ],
             });
             assert(
-              `f22 ${tag}: actual recorded source and retained clock seed`,
+              `${feature} ${tag}: actual recorded source and retained clock seed`,
               seeded.status === 200,
               seeded.status === 200 ? undefined : seeded.text.slice(0, 400),
             );
-            await page.reload();
+            await page.reload({ waitUntil: 'domcontentloaded' });
             await selectClip(page, video.id);
             await visible(
               page.getByRole('button', { name: `${c.label} keyframe at 0.50 s`, exact: true }),
@@ -3784,7 +3787,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                     ? 'bezier'
                     : 'linear';
             assert(
-              `f22 ${tag}: typed key values and easing preserve both linked scale axes and source`,
+              `${feature} ${tag}: typed key values and easing preserve both linked scale axes and source`,
               keyed.sourceInSec === 64.7 &&
                 keyed.durationSec === 4 &&
                 keyed.keyframeOffsetSec === offset &&
@@ -3828,7 +3831,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               format: { duration: string };
             };
             assert(
-              `f22 ${tag}: actual browser export contains 120 recorded frames at exact duration`,
+              `${feature} ${tag}: actual browser export contains 120 recorded frames at exact duration`,
               meta.streams[0]?.width === 640 &&
                 meta.streams[0]?.height === 360 &&
                 Number(meta.streams[0]?.nb_frames) === 120 &&
@@ -3861,7 +3864,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               const reference = join(folder, `${tag}-${sec}-reference.png`),
                 image = await render(control, reference, sec);
               assert(
-                `f22 ${tag} ${sec}s: independent static physical reference is full PNG`,
+                `${feature} ${tag} ${sec}s: independent static physical reference is full PNG`,
                 image.contentType === 'image/png' && image.width === 640 && image.height === 360,
               );
               const a = decode(film, sec),
@@ -3872,7 +3875,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 distance = Math.hypot(actual.x - expected.x, actual.y - expected.y),
                 energyError = Math.abs(actual.energy - expected.energy) / expected.energy;
               assert(
-                `f22 ${tag} ${sec}s: encoded motion matches independent easing and physical transform`,
+                `${feature} ${tag} ${sec}s: encoded motion matches independent easing and physical transform`,
                 a.length === 640 * 360 * 3 &&
                   error <= 2 &&
                   actual.energy > 10000 &&
@@ -3907,7 +3910,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 await element.locator('..').screenshot(),
               );
               assert(
-                `f22 ${tag} ${sec}s: native transform and source clock match physical values`,
+                `${feature} ${tag} ${sec}s: native transform and source clock match physical values`,
                 (await nativeError()) <= 1,
               );
               comparisons.push({ tag, sec, k, value, error, distance, energyError });
@@ -3941,7 +3944,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 }
               }
               assert(
-                `f22 ${tag}: native and encoded stereo gain follow independently decoded recorded audio`,
+                `${feature} ${tag}: native and encoded stereo gain follow independently decoded recorded audio`,
                 errors.every((e) => e.energy > 1e-9 && e.relativeError < 0.05),
                 JSON.stringify(errors),
               );
@@ -3949,7 +3952,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
             }
             const reloaded = await getProject(api, projectId);
             assert(
-              `f22 ${tag}: fresh read retains all authored keys`,
+              `${feature} ${tag}: fresh read retains all authored keys`,
               JSON.stringify(reloaded.tracks) === JSON.stringify(edited.tracks),
             );
             if (choiceIndex === 0) {
@@ -3960,7 +3963,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 ).click(),
               );
               assert(
-                `f22 ${c.label}: native add retains local and original clock`,
+                `${feature} ${c.label}: native add retains local and original clock`,
                 keyframesOf(clipById(added, video.id)).filter(
                   (k) =>
                     (c.properties as readonly string[]).includes(k.property) &&
@@ -3977,7 +3980,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 'keydown',
               );
               assert(
-                `f22 ${c.label}: native arrow nudges one frame without moving the clip`,
+                `${feature} ${c.label}: native arrow nudges one frame without moving the clip`,
                 keyframesOf(clipById(nudged, video.id)).filter(
                   (k) =>
                     (c.properties as readonly string[]).includes(k.property) &&
@@ -3997,7 +4000,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               });
               const dragged = await edit(`${c.label} drag`, () => page.mouse.up());
               assert(
-                `f22 ${c.label}: native drag retains one key per channel property`,
+                `${feature} ${c.label}: native drag retains one key per channel property`,
                 keyframesOf(clipById(dragged, video.id)).filter(
                   (k) =>
                     (c.properties as readonly string[]).includes(k.property) &&
@@ -4023,7 +4026,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 'keydown',
               );
               assert(
-                `f22 ${c.label}: native delete restores the exact pre-gesture keys`,
+                `${feature} ${c.label}: native delete restores the exact pre-gesture keys`,
                 JSON.stringify(mainClips(removed)[0]?.keyframes) ===
                   JSON.stringify(keyed.keyframes) && mainClips(removed).length === 1,
               );
@@ -4032,12 +4035,12 @@ test('retained project journey: native splits and deletes preserve stored pictur
         const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision }),
           restored = await getProject(api, projectId);
         assert(
-          'f22 persisted undo restores the complete original matrix timeline',
+          `${feature} persisted undo restores the complete original matrix timeline`,
           undo.status === 200 && JSON.stringify(restored.tracks) === JSON.stringify(before.tracks),
         );
-        await page.reload();
+        await page.reload({ waitUntil: 'domcontentloaded' });
         assert(
-          'f22 native reload sees the restored durable keys',
+          `${feature} native reload sees the restored durable keys`,
           JSON.stringify((await getProject(api, projectId)).tracks) ===
             JSON.stringify(before.tracks),
         );
@@ -4048,9 +4051,21 @@ test('retained project journey: native splits and deletes preserve stored pictur
           join(folder, 'keyframe-matrix-results.json'),
           JSON.stringify({ comparisons, editTimings }, null, 2),
         );
-        summary.push({ fixture: 'NASA recorded Library', cases: 25, comparisons, editTimings });
+        summary.push({
+          fixture: 'NASA recorded Library',
+          cases: channels.length * 5,
+          comparisons,
+          editTimings,
+        });
+        if (VOLUME_JOURNEY)
+          assert(
+            'f28 every native gain save completes within200ms, at least3 representative samples',
+            editTimings.length >= 3 &&
+              editTimings.every((sample) => sample.durationMs > 0 && sample.durationMs <= 200),
+            JSON.stringify(editTimings),
+          );
         proof.record(
-          'f22 native Export dialog, physical device audio, arbitrary expressions/3D/nested combinations, agent and production remain open',
+          `${feature} native Export dialog, physical device audio, arbitrary expressions/3D/nested combinations, agent and production remain open`,
           'SKIP',
         );
         continue;
