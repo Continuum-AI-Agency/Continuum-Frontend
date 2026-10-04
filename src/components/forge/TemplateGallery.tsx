@@ -26,7 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { fetchTemplateVariants } from '@/lib/library/templateSources';
+import {
+  fetchTemplateRevisionVariants,
+  fetchTemplateVariants,
+} from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -131,6 +134,7 @@ type Item =
       updatedAt: string;
       motion: Motion | null;
       source: TemplateSourceSummary;
+      status: ReturnType<typeof templateStatus>;
       sourceKind?: Exclude<SourceType, 'all'>;
     }
   | {
@@ -209,20 +213,50 @@ export function TemplateGallery({
     queryFn: () => fetchTemplateVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
+  const { data: canonicalVariants } = useQuery({
+    queryKey: ['forge', brandId, 'revision-variants', 'all'],
+    queryFn: () => fetchTemplateRevisionVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const canonicalBySource = new Map(
+    canonicalVariants?.flatMap((variant) =>
+      variant.revisions.map((revision) => [revision.sourceAssetId, variant] as const),
+    ),
+  );
   const metadata = new Map(catalog?.map((item) => [item.assetId, item]));
+  const familyStatus = (source: TemplateSourceSummary) => {
+    const family = canonicalBySource.get(source.assetId)?.templateId;
+    return family &&
+      canonicalVariants?.some(
+        (variant) =>
+          variant.templateId === family &&
+          variant.revisions.some(
+            (revision) =>
+              revision.id === variant.publishedHeadRevisionId && revision.publications.length > 0,
+          ),
+      )
+      ? ('ready' as const)
+      : templateStatus(source);
+  };
+
   const items = useMemo<Item[]>(
     () => [
       ...sources
         .filter((source) => {
+          const canonical = canonicalBySource.get(source.assetId);
+          if (canonical) return canonical.original && canonical.templateId === source.assetId;
           const parent = catalog?.find((item) => item.assetId === source.assetId)?.parentAssetId;
           return !parent || !catalog?.some((item) => item.assetId === parent);
         })
         .map((source) => ({
-          sourceKind: catalog?.find((item) => item.assetId === source.assetId)?.sourceKind,
+          sourceKind:
+            canonicalBySource.get(source.assetId)?.sourceKind ??
+            catalog?.find((item) => item.assetId === source.assetId)?.sourceKind,
           kind: 'source' as const,
           key: source.assetId,
           name: sourceDisplayName(source),
-          group: TEMPLATE_STATUS[templateStatus(source)].group,
+          group: TEMPLATE_STATUS[familyStatus(source)].group,
+          status: familyStatus(source),
           updatedAt: source.updatedAt ?? source.createdAt,
           motion: templateMotion(
             source.parse,
@@ -230,21 +264,42 @@ export function TemplateGallery({
           ),
           source,
         })),
-      ...shared.map((template) => ({
-        sourceKind: catalog?.find((item) => item.assetId === template.sourceAssetId)?.sourceKind,
-        kind: 'shared' as const,
-        key: `shared:${sharedTemplateId(template)}`,
-        name: template.displayName ?? templateDisplayName(template.name),
-        group: template.draft ? 'drafts' : 'ready',
-        updatedAt: template.updatedAt ?? '',
-        motion: templateMotion(
-          catalog?.find((item) => item.assetId === template.sourceAssetId)?.source.parse ?? null,
-          rendersByTemplate.get(template.templateKey) ?? NO_RENDERS,
-        ),
-        shared: template,
-      })),
+      ...shared
+        .filter((template, index) => {
+          const canonical = canonicalBySource.get(template.sourceAssetId ?? '');
+          if (!canonical) return true;
+          if (
+            sources.some(
+              (source) =>
+                canonicalBySource.get(source.assetId)?.templateId === canonical.templateId,
+            )
+          )
+            return false;
+          return !shared
+            .slice(0, index)
+            .some(
+              (item) =>
+                canonicalBySource.get(item.sourceAssetId ?? '')?.templateId ===
+                canonical.templateId,
+            );
+        })
+        .map((template) => ({
+          sourceKind:
+            canonicalBySource.get(template.sourceAssetId ?? '')?.sourceKind ??
+            catalog?.find((item) => item.assetId === template.sourceAssetId)?.sourceKind,
+          kind: 'shared' as const,
+          key: `shared:${sharedTemplateId(template)}`,
+          name: template.displayName ?? templateDisplayName(template.name),
+          group: template.draft ? 'drafts' : 'ready',
+          updatedAt: template.updatedAt ?? '',
+          motion: templateMotion(
+            catalog?.find((item) => item.assetId === template.sourceAssetId)?.source.parse ?? null,
+            rendersByTemplate.get(template.templateKey) ?? NO_RENDERS,
+          ),
+          shared: template,
+        })),
     ],
-    [sources, shared, rendersByTemplate, catalog],
+    [sources, shared, rendersByTemplate, catalog, canonicalVariants],
   );
 
   const counts = useMemo(() => {
@@ -507,12 +562,12 @@ export function TemplateGallery({
                           <TableCell className="font-mono">
                             {source
                               ? (source.ratios.join(' · ') || '—') +
-                                ` / ${1 + (catalog?.filter((variant) => variant.rootAssetId === (metadata.get(source.assetId)?.rootAssetId ?? source.assetId) && variant.assetId !== (metadata.get(source.assetId)?.rootAssetId ?? source.assetId)).length ?? 0)}`
+                                ` / ${canonicalVariants?.filter((variant) => variant.templateId === canonicalBySource.get(source.assetId)?.templateId).length || 1 + (catalog?.filter((variant) => variant.rootAssetId === (metadata.get(source.assetId)?.rootAssetId ?? source.assetId) && variant.assetId !== (metadata.get(source.assetId)?.rootAssetId ?? source.assetId)).length ?? 0)}`
                               : '—'}
                           </TableCell>
                           <TableCell>
                             {item.kind === 'source' ? (
-                              <TemplateStatusPill status={templateStatus(item.source)} />
+                              <TemplateStatusPill status={item.status} />
                             ) : item.shared.draft ? (
                               'Draft · Shared'
                             ) : (

@@ -10,6 +10,7 @@ import {
   type TemplateFontReadiness,
   type TemplateSourceSummary,
   templateNameProblem,
+  templateSourceSlotEditSchema,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,7 +35,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
-import { DesignLayersPanel } from '@/components/forge/DesignLayersPanel';
 import { FactList } from '@/components/forge/FactList';
 import {
   type FontSubstitutionChoice,
@@ -51,6 +51,7 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
+import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import {
@@ -89,12 +90,14 @@ import {
   fetchTemplateFonts,
   fetchTemplateForgeBundle,
   fetchTemplateMappingReview,
+  fetchTemplateRevisionVariants,
   fetchTemplateVariables,
   fetchTemplateVariants,
   healTemplateFonts,
   previewTemplateRebind,
   pushTemplateFonts,
   repairTemplateText,
+  saveTemplateRevision,
   saveTemplateVariables,
   sendTemplateToForge,
   setTemplateFontAlias,
@@ -214,11 +217,13 @@ export function TemplateDetail({
   onChanged,
   revisionFile,
   onRevisionTaken,
+  initialTab,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
   onBack: () => void;
-  onOpenVariant?: (assetId: string) => void | Promise<void>;
+  onOpenVariant?: (assetId: string, tab?: string) => void | Promise<void>;
+  initialTab?: string;
   onDeleteVariant?: (variant: import('@continuum/contracts').TemplateVariant) => void;
   onRename: (title: string) => void;
   onRemove?: () => void;
@@ -245,6 +250,14 @@ export function TemplateDetail({
     queryFn: () => fetchTemplateVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
+  const { data: revisionCatalog } = useQuery({
+    queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
+    queryFn: () => fetchTemplateRevisionVariants(brandId, assetId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const selectedRevisionVariant = revisionCatalog?.find((variant) =>
+    variant.revisions.some((revision) => revision.sourceAssetId === assetId),
+  );
   const variantRoot =
     variantCatalog?.find((variant) => variant.assetId === assetId)?.rootAssetId ?? assetId;
   const familyVariants =
@@ -277,7 +290,7 @@ export function TemplateDetail({
   const [savedMediaRepair, setSavedMediaRepair] = useState<string | null>(null);
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
-  const [tab, setTab] = useState(revisionFile ? 'source' : 'checks');
+  const [tab, setTab] = useState(initialTab ?? (revisionFile ? 'source' : 'checks'));
   const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
@@ -330,6 +343,11 @@ export function TemplateDetail({
     });
   };
   const saveTextMoves = async () => {
+    if (selectedRevisionVariant) {
+      setTab('layers');
+      toast.info('Use Edit layers to save text changes in a new revision.');
+      return;
+    }
     const moves = Object.values(textMoves).filter(
       (move) => move.dx !== 0 || move.dy !== 0 || move.dw || move.dh || move.font,
     );
@@ -543,6 +561,45 @@ export function TemplateDetail({
   }, [refreshEvents, run?.state]);
 
   const onSave = async (edits: TemplateSlotEdit[]) => {
+    if (selectedRevisionVariant) {
+      const selected = selectedRevisionVariant.revisions.find(
+        (revision) =>
+          revision.sourceAssetId === assetId && revision.sourceVersionId === source.versionId,
+      );
+      if (
+        !selected ||
+        selectedRevisionVariant.original ||
+        selected.id !== selectedRevisionVariant.draftHeadRevisionId
+      ) {
+        setTab('layers');
+        toast.info('Create a named variant in Edit layers before changing this revision.');
+        return false;
+      }
+      setSaving(true);
+      try {
+        const saved = await saveTemplateRevision(assetId, {
+          brandId,
+          parentRevisionId: selected.id,
+          variantId: selectedRevisionVariant.variantId,
+          expectedHeadRevisionId: selected.id,
+          idempotencyKey: crypto.randomUUID(),
+          edits: {
+            layers: [],
+            slots: edits.map((edit) => templateSourceSlotEditSchema.parse(edit)),
+          },
+        });
+        await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+        await onChanged();
+        await onOpenVariant?.(saved.sourceAssetId, 'variables');
+        toast.success('Saved template revision');
+        return true;
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : 'Could not save revision');
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    }
     setSaving(true);
     try {
       await saveTemplateVariables(brandId, assetId, edits);
@@ -750,7 +807,7 @@ export function TemplateDetail({
       if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
       // The file is read again with the faces just added, so its text is measured now rather
       // than after someone finds a Fix button that nothing else is asking them to press.
-      if (stored.length) {
+      if (stored.length && !selectedRevisionVariant) {
         await healTemplateFonts(brandId, assetId).catch((error: unknown) =>
           toast.error(
             `Fonts are stored, but the file was not read again: ${error instanceof Error ? error.message : 'unknown error'}. Press Fix to retry.`,
@@ -768,6 +825,11 @@ export function TemplateDetail({
   };
 
   const applyFontSubstitutions = async (choices: FontSubstitutionChoice[]) => {
+    if (selectedRevisionVariant) {
+      setTab('layers');
+      toast.info('Choose a font face in Edit layers, then save a revision.');
+      return;
+    }
     setFontBusy(true);
     try {
       // One at a time and in order: each call returns the readiness AFTER it, and a person
@@ -803,6 +865,11 @@ export function TemplateDetail({
   // The problems every new upload hits, fixed without asking: faces from the package or Google
   // Fonts, and a build re-planned against the columns it made for itself.
   const onFix = async () => {
+    if (selectedRevisionVariant) {
+      setTab('layers');
+      toast.info('This revision is preserved. Save repairs as a new revision or variant.');
+      return;
+    }
     setFixing(true);
     try {
       // Always: besides finding missing faces, this reads the file again with every face the
@@ -1233,19 +1300,27 @@ export function TemplateDetail({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {onOpenVariant && familyVariants.length ? (
+          {onOpenVariant && revisionCatalog?.length ? (
             <label className="flex items-center gap-2 text-xs">
               Variant
               <select
                 aria-label="Inspect template variant"
-                className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
-                value={assetId}
-                onChange={(event) => void onOpenVariant(event.target.value)}
+                className="h-8 max-w-56 rounded-md border bg-background px-2 text-xs"
+                value={selectedRevisionVariant?.variantId ?? ''}
+                onChange={(event) => {
+                  const variant = revisionCatalog.find(
+                    (item) => item.variantId === event.target.value,
+                  );
+                  const head = variant?.revisions.find(
+                    (item) => item.id === variant.draftHeadRevisionId,
+                  );
+                  if (head) void onOpenVariant(head.sourceAssetId, tab);
+                }}
               >
-                {familyVariants.map((variant) => (
-                  <option key={variant.assetId} value={variant.assetId}>
-                    {variant.parentAssetId ? variant.name : 'Original'} ·{' '}
-                    {variant.source.templateKey ? 'Published' : 'Draft'}
+                {revisionCatalog.map((variant) => (
+                  <option key={variant.variantId} value={variant.variantId}>
+                    {variant.original ? 'Original' : variant.name} ·{' '}
+                    {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
                   </option>
                 ))}
               </select>
@@ -1588,7 +1663,7 @@ export function TemplateDetail({
             <TabsTrigger value="checks">Checks</TabsTrigger>
             <TabsTrigger value="layers">Edit layers</TabsTrigger>
             <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-              Variants {familyVariants.length ? `(${familyVariants.length})` : ''}
+              Variants {revisionCatalog?.length ? `(${revisionCatalog.length})` : ''}
             </TabsTrigger>
             <TabsTrigger value="variables" className="flex-none px-0 text-xs">
               Variables
@@ -1683,19 +1758,17 @@ export function TemplateDetail({
             </Panel>
           </TabsContent>
           <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
-            <DesignLayersPanel
+            <TemplateLayerEditor
               brandId={brandId}
               assetId={assetId}
               active={tab === 'layers'}
-              expectedVersionId={source.versionId}
-              onCreated={async (variant) => {
-                await queryClient.invalidateQueries({
-                  queryKey: forgeQueryKeys.templateVariants(brandId),
-                });
-                await onChanged();
-                await onOpenVariant?.(variant.assetId);
+              versionId={source.versionId}
+              name={source.displayName ?? source.parse?.filename ?? 'Template'}
+              onSaved={async () => {
+                await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+                await Promise.all([onChanged(), loadVariables()]);
               }}
-              onSaved={() => Promise.all([onChanged(), loadVariables()])}
+              onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
             />
           </TabsContent>
           <TabsContent value="variables" keepMounted>
@@ -1720,28 +1793,40 @@ export function TemplateDetail({
             </TabsContent>
           ) : null}
           <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
-            <SourceRebindPanel
-              brandId={brandId}
-              assetId={assetId}
-              expectedVersionId={source.versionId}
-              suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
-              aepName={source.parse?.filename}
-              missingFootage={missingFootage}
-              initialFile={revisionFile}
-              onInitialFileTaken={onRevisionTaken}
-              onConfirmed={async () => {
-                await Promise.all([onChanged(), loadVariables()]);
-                setSavedTextRepair(null);
-                setSavedMediaRepair(null);
-              }}
-            />
+            {selectedRevisionVariant ? (
+              <div className="space-y-2 text-xs">
+                <p>
+                  This source belongs to an immutable template revision. To replace an After Effects
+                  project, upload an authored variant.
+                </p>
+                <Button size="xs" variant="outline" onClick={() => setTab('variants')}>
+                  Open variants
+                </Button>
+              </div>
+            ) : (
+              <SourceRebindPanel
+                brandId={brandId}
+                assetId={assetId}
+                expectedVersionId={source.versionId}
+                suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
+                aepName={source.parse?.filename}
+                missingFootage={missingFootage}
+                initialFile={revisionFile}
+                onInitialFileTaken={onRevisionTaken}
+                onConfirmed={async () => {
+                  await Promise.all([onChanged(), loadVariables()]);
+                  setSavedTextRepair(null);
+                  setSavedMediaRepair(null);
+                }}
+              />
+            )}
           </TabsContent>
           <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
             <VariantsPanel
               brandId={brandId}
               assetId={assetId}
               expectedVersionId={source.versionId}
-              onInspect={onOpenVariant}
+              onInspect={(assetId) => onOpenVariant?.(assetId, 'variants')}
               onDelete={onDeleteVariant}
               onCreated={async (variant) => {
                 await onChanged();
@@ -1751,7 +1836,37 @@ export function TemplateDetail({
             />
           </TabsContent>
           <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-            <LineagePanel brandId={brandId} assetId={assetId} />
+            {revisionCatalog ? (
+              <ol aria-label="Template revision history" className="space-y-3">
+                {revisionCatalog
+                  .flatMap((variant) =>
+                    variant.revisions.map((revision) => ({ variant, revision })),
+                  )
+                  .sort((a, b) => b.revision.createdAt.localeCompare(a.revision.createdAt))
+                  .map(({ variant, revision }) => (
+                    <li key={revision.id} className="rounded-md border p-3 text-xs">
+                      <p className="font-medium">
+                        {variant.name} · Revision {revision.number}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {new Date(revision.createdAt).toLocaleString()} ·{' '}
+                        {revision.publications.length ? 'Published' : 'Draft'}
+                      </p>
+                      {onOpenVariant ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => void onOpenVariant(revision.sourceAssetId, 'history')}
+                        >
+                          Inspect revision
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+              </ol>
+            ) : (
+              <p className="text-xs text-muted-foreground">Reading revision history…</p>
+            )}
           </TabsContent>
           <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">

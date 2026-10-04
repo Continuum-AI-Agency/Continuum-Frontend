@@ -59,7 +59,11 @@ export function uploadTooLargeMessage(file: { name: string; size: number }): str
  * The refusal to show before any network call, or null: the Storage cap, the forge's
  * project-file cap, or a font (which belongs in the brand font store).
  */
-export function uploadSizeRefusal(file: { name: string; size: number; type?: string }): string | null {
+export function uploadSizeRefusal(file: {
+  name: string;
+  size: number;
+  type?: string;
+}): string | null {
   return libraryUploadRefusal({ fileName: file.name, mimeType: file.type, sizeBytes: file.size });
 }
 
@@ -179,6 +183,7 @@ export type UploadResumeState = {
 export type UploadMediaAssetParams = {
   file: File;
   brandId: string;
+  templateVariantOf?: string;
   signal?: AbortSignal;
   resume?: UploadResumeState | null;
   onResumeState?: (state: UploadResumeState) => void;
@@ -260,7 +265,10 @@ export async function uploadToLibraryTicket(
 }
 
 function isProjectFile(file: File): boolean {
-  return classifyLibraryFileOrGeneric({ fileName: file.name, mimeType: file.type }).originalKind === 'file';
+  return (
+    classifyLibraryFileOrGeneric({ fileName: file.name, mimeType: file.type }).originalKind ===
+    'file'
+  );
 }
 
 // TUS: chunked, resumable after a pause or a dropped connection. Used for
@@ -367,6 +375,7 @@ export async function uploadMediaAsset(
     sizeBytes: file.size,
     ...(checksum ? { checksum } : {}),
     integrityState,
+    ...(params.templateVariantOf ? { templateVariantOf: params.templateVariantOf } : {}),
     ...(durationSec === null ? {} : { durationSec }),
   });
 

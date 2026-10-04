@@ -101,3 +101,48 @@ describe('Vercel bundle budgets', () => {
     ).toThrow(/no route-bundle-stats row/);
   });
 });
+
+describe('Webpack emitted route bootstrap budgets', () => {
+  const webpackDist = mkdtempSync(path.join(tmpdir(), 'webpack-budget-'));
+  afterAll(() => rmSync(webpackDist, { recursive: true, force: true }));
+  mkdirSync(path.join(webpackDist, 'static', 'chunks'), { recursive: true });
+  mkdirSync(path.join(webpackDist, 'server', 'app', 'login.segments'), { recursive: true });
+  writeFileSync(
+    path.join(webpackDist, 'build-manifest.json'),
+    JSON.stringify({ rootMainFiles: ['static/chunks/main.js'] }),
+  );
+  writeFileSync(path.join(webpackDist, 'static/chunks/main.js'), 'main');
+  writeFileSync(path.join(webpackDist, 'static/chunks/login.js'), 'login');
+  const check = (route: string) =>
+    checkBundleBudgets({
+      distDirectory: webpackDist,
+      configuration: {
+        maxGrowthPercent: 0,
+        budgets: [{ name: 'route', source: 'routeFirstLoad', route, baselineBytes: 9 }],
+      },
+    });
+  it('counts shared and document/RSC chunk imports exactly once for postponed HTML', () => {
+    writeFileSync(path.join(webpackDist, 'server/app/login.html'), '');
+    writeFileSync(
+      path.join(webpackDist, 'server/app/login.segments/_full.segment.rsc'),
+      '2:I[12,["static/chunks/main.js","static/chunks/login.js","static/chunks/login.js"],"Login"]',
+    );
+    expect(check('/login')[0]).toMatchObject({ actualBytes: 9, passed: true });
+  });
+  it('measures scripts and preloads from emitted HTML', () => {
+    writeFileSync(
+      path.join(webpackDist, 'server/app/page.html'),
+      '<link rel="preload" href="/_next/static/chunks/login.js"/><script src="/_next/static/chunks/main.js"></script>',
+    );
+    expect(check('/page')[0]).toMatchObject({ actualBytes: 9, passed: true });
+  });
+  it('refuses missing output and traversal instead of silently skipping budgets', () => {
+    expect(() => check('/missing')).toThrow('no emitted route bootstrap');
+    expect(() => check('/../../../outside')).toThrow('escapes the build directory');
+    writeFileSync(
+      path.join(webpackDist, 'server/app/escape.html'),
+      '<script src="/_next/static/chunks/../../../outside.js"></script>',
+    );
+    expect(() => check('/escape')).toThrow('escapes the build directory');
+  });
+});

@@ -90,6 +90,10 @@ const nextConfig: NextConfig = {
     // lucide-react is already in Next's built-in optimizePackageImports list.
     optimizePackageImports: ['@phosphor-icons/react'],
   },
+  webpack(config) {
+    config.module.rules.push({ test: /\.wgsl$/, loader: '@vgpu/wgsl/loader-webpack' });
+    return config;
+  },
   turbopack: {
     root: workspaceRoot,
     rules: {

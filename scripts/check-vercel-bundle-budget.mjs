@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -25,7 +25,9 @@ function readJson(filePath) {
 // are segments, not routes, so they can never be rows of their own — budget the route that carries
 // them instead.
 function routeFirstLoad(distDirectory, budget) {
-  const rows = readJson(path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json'));
+  const statistics = path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json');
+  if (!existsSync(statistics)) return emittedRouteFirstLoad(distDirectory, budget);
+  const rows = readJson(statistics);
   const row = rows.find((candidate) => candidate.route === budget.route);
   if (!row) {
     throw new Error(
@@ -38,6 +40,46 @@ function routeFirstLoad(distDirectory, budget) {
       row.firstLoadChunkPaths.map((file) => path.resolve(projectDirectory, file)),
     ),
   };
+}
+
+// Webpack does not emit Turbopack's route diagnostics. Measure the actual prerendered
+// document and full RSC bootstrap imports instead, including shared runtime files once.
+function emittedRouteFirstLoad(distDirectory, budget) {
+  const appDirectory = path.join(distDirectory, 'server', 'app');
+  const route = budget.route === '/' ? 'index' : budget.route.replace(/^\//, '');
+  const routeFile = path.resolve(appDirectory, route);
+  assertInside(appDirectory, routeFile);
+  const documents = [`${routeFile}.html`, `${routeFile}.segments/_full.segment.rsc`]
+    .filter((file) => existsSync(file))
+    .map((file) => readFileSync(file, 'utf8'));
+  const chunks = new Set(
+    documents.flatMap((document) =>
+      [...document.matchAll(/static\/chunks\/[^"\\\s<>]+?\.js/g)].map((match) =>
+        decodeURIComponent(match[0]),
+      ),
+    ),
+  );
+  if (!chunks.size)
+    throw new Error(`${budget.name}: no emitted route bootstrap for "${budget.route}"`);
+  const manifest = readJson(path.join(distDirectory, 'build-manifest.json'));
+  if (!Array.isArray(manifest.rootMainFiles))
+    throw new Error('build-manifest.json does not contain rootMainFiles');
+  for (const file of manifest.rootMainFiles) chunks.add(file);
+  const files = [...chunks].map((file) => {
+    const resolved = path.resolve(distDirectory, file);
+    assertInside(distDirectory, resolved);
+    return resolved;
+  });
+  return {
+    actualBytes: files.reduce((total, file) => total + statSync(file).size, 0),
+    gzipBytes: gzipChunks(files),
+  };
+}
+
+function assertInside(directory, file) {
+  const relative = path.relative(directory, file);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+    throw new Error('Bundle output path escapes the build directory');
 }
 
 function gzipChunks(files) {
