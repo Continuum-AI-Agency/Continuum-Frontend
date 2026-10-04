@@ -6,6 +6,7 @@ import {
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import {
+  addMarkerEdit,
   clipEnd,
   clipRows,
   deleteClipsEdit,
@@ -16,6 +17,7 @@ import {
   mainEndSec,
   mainVideoTrack,
   moveClipEdit,
+  nudgeClipsEdit,
   placeAssetEdit,
   replaceClipEdit,
   setTrackStateEdit,
@@ -50,6 +52,78 @@ const round = (sec: number) => Math.round(sec * 1_000) / 1_000;
 
 const blank = () =>
   createEditorProjectV2({ projectId: 'p1', title: 'Edit', width: 1080, height: 1920 });
+
+test('native edits follow the project frame grid and conserve bounded source intervals', () => {
+  for (const frameRate of [
+    { numerator: 24, denominator: 1 },
+    { numerator: 30, denominator: 1 },
+    { numerator: 30000, denominator: 1001 },
+  ]) {
+    const fps = frameRate.numerator / frameRate.denominator;
+    const base = { ...blank(), frameRate };
+    let project = commit(base, placeAssetEdit(base, video('a', 120 / fps), { atSec: 0 }));
+    const id = project.tracks[0]!.clips[0]!.id;
+    project = editorProjectV2Schema.parse({
+      ...project,
+      tracks: [
+        {
+          ...project.tracks[0],
+          clips: [
+            {
+              ...project.tracks[0]!.clips[0],
+              sourceInSec: 0.2,
+              playbackRate: 1.5,
+            },
+          ],
+        },
+      ],
+    });
+    project = commit(project, trimEdit(project, id, 'end', 83.2 / fps));
+    const ended = mainVideoTrack(project)!.clips[0]!;
+    expect(ended.durationSec * fps).toBeCloseTo(83, 8);
+    const sourceEnd = ended.sourceInSec + ended.durationSec * ended.playbackRate;
+    project = commit(project, trimEdit(project, id, 'start', 7.2 / fps));
+    const trimmed = mainVideoTrack(project)!.clips[0]!;
+    expect(trimmed.durationSec * fps).toBeCloseTo(76, 8);
+    expect(trimmed.sourceInSec + trimmed.durationSec * trimmed.playbackRate).toBeCloseTo(
+      sourceEnd,
+      8,
+    );
+    project = commit(project, splitEdit(project, [id], 31.2 / fps));
+    const [left, right] = mainVideoTrack(project)!.clips;
+    expect(left!.durationSec * fps).toBeCloseTo(31, 8);
+    expect(right!.durationSec * fps).toBeCloseTo(45, 8);
+    expect(left!.sourceInSec + left!.durationSec * left!.playbackRate).toBeCloseTo(
+      right!.sourceInSec,
+      8,
+    );
+    project = commit(project, addMarkerEdit(project, 10.2 / fps));
+    expect(project.markers[0]!.timeSec * fps).toBeCloseTo(10, 8);
+    project = editorProjectV2Schema.parse({
+      ...project,
+      tracks: [
+        ...project.tracks,
+        {
+          ...project.tracks[0],
+          id: 'v2',
+          order: 1,
+          clips: [{ ...left, id: 'free', timelineStartSec: 0 }],
+        },
+      ],
+    });
+    project = commit(project, moveClipEdit(project, 'free', 'v2', 7.2 / fps));
+    project = commit(project, nudgeClipsEdit(project, ['free'], 2.2 / fps));
+    expect(findClip(project, 'free')!.clip.timelineStartSec * fps).toBeCloseTo(9, 8);
+    const bounded = commit(project, trimEdit(project, 'free', 'end', 100, sourceEnd));
+    const clip = findClip(bounded, 'free')!.clip;
+    expect(clipEnd(clip) * fps).toBeCloseTo(Math.round(clipEnd(clip) * fps), 8);
+    expect(
+      'sourceInSec' in clip &&
+        'playbackRate' in clip &&
+        clip.sourceInSec + clip.durationSec * clip.playbackRate <= sourceEnd + 1e-9,
+    ).toBe(true);
+  }
+});
 
 test('inspector replacement honors the latest clip and track locks', () => {
   const project = commit(blank(), placeAssetEdit(blank(), video('a', 4), { atSec: 0 }));

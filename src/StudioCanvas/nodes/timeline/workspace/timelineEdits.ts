@@ -70,6 +70,10 @@ export function clipRows(clips: readonly EditorClip[]): {
 
 const rateOf = (clip: EditorClip): number =>
   'playbackRate' in clip && clip.playbackRate > 0 ? clip.playbackRate : 1;
+const onFrame = (project: EditorProjectV2, sec: number): number => {
+  const fps = project.frameRate.numerator / project.frameRate.denominator;
+  return Math.round(sec * fps) / fps;
+};
 const newId = (): string => crypto.randomUUID();
 
 /**
@@ -435,7 +439,7 @@ export function moveClipEdit(
     return null;
   }
   const main = mainVideoTrack(project);
-  const at = Math.max(0, startSec);
+  const at = Math.max(0, onFrame(project, startSec));
   const forward: EditorCommandDraft[] = [];
   const fromMain = found.track.id === main?.id;
   const toMain = target.id === main?.id;
@@ -496,7 +500,10 @@ export function nudgeClipsEdit(
       Boolean(ref && !ref.track.locked && ref.track.id !== main?.id),
     );
   if (refs.length === 0 || Math.abs(deltaSec) < EPSILON) return null;
-  const shift = Math.max(deltaSec, -Math.min(...refs.map((ref) => ref.clip.timelineStartSec)));
+  const shift = Math.max(
+    onFrame(project, deltaSec),
+    -Math.min(...refs.map((ref) => ref.clip.timelineStartSec)),
+  );
   return {
     label: `Move ${refs.length} clips`,
     forward: refs.map((ref) => ({
@@ -536,10 +543,16 @@ export function trimEdit(
       : sourceDurationSec;
   const start = clip.timelineStartSec;
   const end = clipEnd(clip);
+  const fps = project.frameRate.numerator / project.frameRate.denominator;
+  const minimumSec = Math.ceil(MIN_ASSEMBLY_CLIP_SEC * fps) / fps;
+  toSec = onFrame(project, toSec);
   let draft: EditorCommandDraft;
   if (edge === 'start') {
     const earliest = hasMedia ? start - sourceIn / rate : 0;
-    const nextStart = Math.max(Math.max(0, earliest), Math.min(toSec, end - MIN_ASSEMBLY_CLIP_SEC));
+    const nextStart = Math.max(
+      Math.max(0, Math.ceil(earliest * fps) / fps),
+      Math.min(toSec, Math.floor((end - minimumSec) * fps + 1e-9) / fps),
+    );
     if (Math.abs(nextStart - start) < EPSILON) return null;
     draft = {
       commandType: 'trim_clip',
@@ -557,7 +570,10 @@ export function trimEdit(
       : sourceDuration
         ? start + (sourceDuration - sourceIn) / rate
         : end;
-    const nextEnd = Math.min(latest, Math.max(toSec, start + MIN_ASSEMBLY_CLIP_SEC));
+    const nextEnd = Math.min(
+      Math.floor(latest * fps + 1e-9) / fps,
+      Math.max(toSec, Math.ceil((start + minimumSec) * fps - 1e-9) / fps),
+    );
     if (Math.abs(nextEnd - end) < EPSILON) return null;
     draft = {
       commandType: 'trim_clip',
@@ -617,6 +633,7 @@ export function splitEdit(
   clipIds: readonly string[],
   atSec: number,
 ): TimelineEdit | null {
+  atSec = onFrame(project, atSec);
   const targets = clipsUnder(project, atSec, clipIds);
   if (targets.length === 0) return null;
   return {
@@ -803,12 +820,12 @@ export function snapTimes(
 export const beatTimes = (project: EditorProjectV2): number[] =>
   project.markers.filter((marker) => marker.kind === 'beat').map((marker) => marker.timeSec);
 
-export const addMarkerEdit = (atSec: number): TimelineEdit => ({
+export const addMarkerEdit = (project: EditorProjectV2, atSec: number): TimelineEdit => ({
   label: 'Add marker',
   forward: [
     {
       commandType: 'upsert_marker',
-      marker: { id: newId(), kind: 'timeline', timeSec: atSec, label: 'Marker' },
+      marker: { id: newId(), kind: 'timeline', timeSec: onFrame(project, atSec), label: 'Marker' },
     },
   ],
 });

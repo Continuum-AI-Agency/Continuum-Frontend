@@ -44,7 +44,9 @@ import {
 test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:workspace:e2e:bench';
-const INSPECTOR_JOURNEY = process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
+const TIMELINE_JOURNEY = process.env.VIDEO_EDITOR_TIMELINE_JOURNEY === '1';
+const INSPECTOR_JOURNEY = TIMELINE_JOURNEY || process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
+const FEATURE = TIMELINE_JOURNEY ? 'f05' : 'f06';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (INSPECTOR_JOURNEY
@@ -764,7 +766,9 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   }> = [];
   try {
     note(
-      'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
+      TIMELINE_JOURNEY
+        ? 'f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through local Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.'
+        : 'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
     );
     const file = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
     if (!file) throw new Error('Inspector journey requires a real recorded MP4.');
@@ -788,7 +792,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
     ) as { streams: Array<{ width: number; height: number }>; format: { duration: string } };
     assert(
       'f06 recorded source has enough media and retained checksum',
-      Number(probe.format.duration) >= 4.2,
+      Number(probe.format.duration) >= (TIMELINE_JOURNEY ? 6.2 : 4.2),
       createHash('sha256').update(bytes).digest('hex'),
     );
     const port = await freePort(),
@@ -1028,7 +1032,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
                     renditionId: receipt.versionId,
                   },
                   sourceInSec: 0.2,
-                  playbackRate: 1,
+                  playbackRate: TIMELINE_JOURNEY ? values.speed : 1,
                   transform: { scaleX: -0.9, scaleY: 0.75, anchorX: 0.25, anchorY: 0.75 },
                   audioEnabled: true,
                   volume: 1,
@@ -1038,33 +1042,43 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           },
         ],
       });
-      await page.reload();
+      await page.reload({ waitUntil: 'domcontentloaded' });
       const clip = page.locator('[data-clip-id="recorded"]:visible');
       await expect(clip).toBeVisible({ timeout: 30_000 });
       const clipBox = await clip.boundingBox();
       if (!clipBox) throw new Error('Clip box absent');
       await clip.click({ position: { x: clipBox.width * 0.1, y: clipBox.height / 2 } });
       let project = await getProject(api, id);
-      const commitPointerEdit = async (label: string) => {
-        await page.evaluate(() =>
-          window.addEventListener(
-            'pointerup',
-            () => {
-              (window as unknown as { __inspectorCommitAt: number }).__inspectorCommitAt =
-                performance.now();
-            },
-            { capture: true, once: true },
-          ),
+      const commitPointerEdit = async (
+        label: string,
+        event = 'pointerup',
+        action: () => Promise<unknown> = () => page.mouse.up(),
+      ) => {
+        const before = project;
+        await page.evaluate(
+          (event) =>
+            window.addEventListener(
+              event,
+              () => {
+                (window as unknown as { __inspectorCommitAt: number }).__inspectorCommitAt =
+                  performance.now();
+              },
+              { capture: true, once: true },
+            ),
+          event,
         );
         const responsePromise = page.waitForResponse(
           (r) =>
             r.url().endsWith(`/video-projects/${id}/commands`) && r.request().method() === 'POST',
           { timeout: 20_000 },
         );
-        await page.mouse.up();
+        await action();
         const response = await responsePromise;
         await response.finished();
-        assert(`f06 case ${index}: ${label} control saves successfully`, response.status() === 200);
+        assert(
+          `${FEATURE} case ${index}: ${label} control saves successfully`,
+          response.status() === 200,
+        );
         const saved = editorProjectResponseSchema.parse(await response.json());
         const timing = await page.evaluate((url) => {
           const start = (window as unknown as { __inspectorCommitAt: number }).__inspectorCommitAt;
@@ -1080,16 +1094,227 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           };
         }, response.url());
         assert(
-          `f06 case ${index}: ${label} save timing is retained`,
+          `${FEATURE} case ${index}: ${label} save timing is retained`,
           Number.isFinite(timing.durationMs) && timing.durationMs > 0,
         );
         timings.push({ case: index, control: label, ...timing, revision: saved.project.revision });
         project = await getProject(api, id);
         assert(
-          `f06 case ${index}: ${label} acknowledgement matches persisted revision`,
-          project.revision === saved.project.revision,
+          `${FEATURE} case ${index}: ${label} acknowledgement matches persisted revision`,
+          project.revision === saved.project.revision &&
+            (!TIMELINE_JOURNEY || project.revision === before.revision + 1),
         );
       };
+      if (TIMELINE_JOURNEY) {
+        const initial = project;
+        const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+        const aligned = (sec: number) => near(sec * 30, Math.round(sec * 30));
+        const spans = (p: EditorProjectV2) =>
+          mainClips(p).map((c) => {
+            if (c.kind !== 'video') throw new Error('Non-video main clip');
+            return {
+              id: c.id,
+              source: c.source,
+              sourceIn: c.sourceInSec,
+              sourceOut: c.sourceInSec + c.durationSec * c.playbackRate,
+              rate: c.playbackRate,
+            };
+          });
+        const invariant = (label: string) => {
+          const clips = mainClips(project);
+          assert(
+            `f05 case ${index}: ${label} main sequence is packed and frame-aligned`,
+            clips.every(
+              (c, i) =>
+                aligned(c.timelineStartSec) &&
+                aligned(c.durationSec) &&
+                near(
+                  c.timelineStartSec,
+                  i ? clips[i - 1]!.timelineStartSec + clips[i - 1]!.durationSec : 0,
+                ),
+            ),
+            JSON.stringify(
+              clips.map((c) => ({ start: c.timelineStartSec, duration: c.durationSec })),
+            ),
+          );
+          writeFileSync(
+            join(folder, `timeline-${index}-${label}.json`),
+            JSON.stringify(project, null, 2),
+          );
+        };
+        const snapping = page.getByRole('button', { name: 'Toggle snapping', exact: true });
+        if ((await snapping.getAttribute('aria-pressed')) === 'true') await snapping.click();
+        const px = clipBox.width / video(initial).durationSec;
+        const drag = async (target: Locator, delta: number, label: string) => {
+          const box = await target.boundingBox();
+          if (!box) throw new Error(`Missing ${label} pointer geometry`);
+          const x = box.x + box.width / 2,
+            y = box.y + box.height / 2;
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x + delta * px, y, { steps: 8 });
+          await commitPointerEdit(label);
+        };
+        await drag(clip.locator('[data-trim-handle="end"]'), -0.427, 'end-trim');
+        assert(
+          `f05 case ${index}: end trim preserves source start, identity and rate`,
+          near(video(project).sourceInSec, video(initial).sourceInSec) &&
+            JSON.stringify(video(project).source) === JSON.stringify(video(initial).source) &&
+            video(project).playbackRate === values.speed &&
+            Math.abs(video(project).durationSec - (4 - 0.427)) < 1 / 30,
+        );
+        invariant('end-trim');
+        const ended = project;
+        await drag(clip.locator('[data-trim-handle="start"]'), 0.223, 'start-trim');
+        assert(
+          `f05 case ${index}: start trim conserves the retained source end`,
+          near(spans(project)[0]!.sourceOut, spans(ended)[0]!.sourceOut) &&
+            near(
+              video(project).sourceInSec,
+              video(ended).sourceInSec +
+                (video(ended).durationSec - video(project).durationSec) * values.speed,
+            ),
+        );
+        invariant('start-trim');
+        const seek = async (sec: number) => {
+          await page.keyboard.press('Escape');
+          const ruler = page.locator('[data-timeline-ruler]:visible');
+          const box = await ruler.boundingBox();
+          if (!box) throw new Error('Ruler missing');
+          await ruler.click({ position: { x: sec * px, y: box.height / 2 } });
+        };
+        await seek(1.113);
+        const trimmed = spans(project)[0]!;
+        await commitPointerEdit('split', 'keydown', () => page.locator('body').press('s'));
+        const pieces = spans(project);
+        assert(
+          `f05 case ${index}: split partitions the exact retained source interval`,
+          pieces.length === 2 &&
+            near(pieces[0]!.sourceIn, trimmed.sourceIn) &&
+            near(pieces[0]!.sourceOut, pieces[1]!.sourceIn) &&
+            near(pieces[1]!.sourceOut, trimmed.sourceOut) &&
+            pieces.every(
+              (c) =>
+                c.rate === values.speed &&
+                JSON.stringify(c.source) === JSON.stringify(trimmed.source),
+            ),
+        );
+        invariant('split');
+        await drag(page.locator(`[data-clip-id="${pieces[0]!.id}"]:visible`), 3, 'reorder');
+        assert(
+          `f05 case ${index}: native reorder preserves both complete source spans`,
+          JSON.stringify(spans(project)) === JSON.stringify([pieces[1], pieces[0]]),
+        );
+        invariant('reorder');
+        const beforeDelete = spans(project);
+        await page
+          .locator(`[data-clip-id="${beforeDelete[0]!.id}"]:visible`)
+          .click({ position: { x: 12, y: 20 } });
+        await commitPointerEdit('ripple-delete', 'pointerup', () =>
+          page.getByRole('button', { name: 'Ripple delete selection', exact: true }).click(),
+        );
+        assert(
+          `f05 case ${index}: ripple deletion preserves the surviving source span`,
+          JSON.stringify(spans(project)) === JSON.stringify(beforeDelete.slice(1)),
+        );
+        invariant('ripple-delete');
+        await seek(0.713);
+        await commitPointerEdit('marker', 'keydown', () => page.locator('body').press('m'));
+        const marker = project.markers.at(-1);
+        assert(
+          `f05 case ${index}: marker is saved on the project frame grid`,
+          Boolean(marker && aligned(marker.timeSec) && Math.abs(marker.timeSec - 0.713) < 1 / 30),
+        );
+        await expect(page.locator('[data-timeline-ruler] [aria-label="Marker"]')).toHaveCount(1);
+        await snapping.click();
+        await seek(marker!.timeSec + 2 / px);
+        const beforeSnap = spans(project)[0]!;
+        await commitPointerEdit('marker-snap-split', 'keydown', () =>
+          page.locator('body').press('s'),
+        );
+        assert(
+          `f05 case ${index}: ruler snaps within two pixels of saved marker`,
+          near(mainClips(project)[0]!.durationSec, marker!.timeSec) &&
+            near(spans(project)[0]!.sourceIn, beforeSnap.sourceIn) &&
+            near(spans(project).at(-1)!.sourceOut, beforeSnap.sourceOut),
+        );
+        invariant('marker-snap-split');
+        for (const kind of ['Video', 'Audio']) {
+          await page.getByRole('button', { name: 'Track', exact: true }).click();
+          await commitPointerEdit(`add-${kind}-track`, 'pointerup', () =>
+            page.getByRole('menuitem', { name: `${kind} track`, exact: true }).click(),
+          );
+          assert(
+            `f05 case ${index}: native ${kind} track is stored`,
+            project.tracks.filter((t) => t.kind === kind.toLowerCase()).length ===
+              (kind === 'Video' ? 2 : 1),
+          );
+        }
+        const audioTrack = project.tracks.find((t) => t.kind === 'audio')!;
+        await post(id, 'apply_commands', {
+          expectedRevision: project.revision,
+          commands: [
+            {
+              commandType: 'upsert_clip',
+              trackId: audioTrack.id,
+              clip: {
+                id: 'recorded-waveform',
+                kind: 'audio',
+                timelineStartSec: 0,
+                durationSec: project.durationSec,
+                source: video(project).source,
+                sourceInSec: 0,
+                playbackRate: 1,
+                volume: 0.5,
+              },
+            },
+          ],
+        });
+        project = await getProject(api, id);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        const waveform = page.locator('[data-clip-id="recorded-waveform"] svg path');
+        await expect(waveform).toBeVisible({ timeout: 30_000 });
+        const path = await waveform.getAttribute('d');
+        const ys = [...(path ?? '').matchAll(/L \d+ ([\d.]+)/g)]
+          .slice(0, 60)
+          .map((m) => Number(m[1]));
+        const reference = sourcePcm[0]!;
+        const peaks = Array.from({ length: 60 }, (_, bucket) => {
+          let peak = 0;
+          for (
+            let n = Math.floor((bucket * reference.length) / 60);
+            n < Math.floor(((bucket + 1) * reference.length) / 60);
+            n++
+          )
+            peak = Math.max(peak, Math.abs(reference[n]!));
+          return Math.min(1, peak);
+        });
+        assert(
+          `f05 case ${index}: actual waveform matches independently decoded recorded audio`,
+          ys.length === 60 &&
+            peaks.some((p) => p > 0.01) &&
+            ys.every((y, n) => Math.abs((10 - y) / 10 - peaks[n]!) < 0.01),
+          JSON.stringify({ ys, peaks }),
+        );
+        writeFileSync(
+          join(folder, `timeline-${index}-waveform.json`),
+          JSON.stringify({ path, peaks }, null, 2),
+        );
+        writeFileSync(join(folder, `timeline-${index}-native.png`), await page.screenshot());
+        const reloaded = await getProject(api, id);
+        assert(
+          `f05 case ${index}: reload preserves all tracks, clips and markers`,
+          JSON.stringify(reloaded) === JSON.stringify(project),
+        );
+        await post(id, 'undo', { toRevision: initial.revision });
+        const undone = await getProject(api, id);
+        assert(
+          `f05 case ${index}: complete undo restores the initial source, tracks and markers`,
+          JSON.stringify(undone.tracks) === JSON.stringify(initial.tracks) &&
+            JSON.stringify(undone.markers) === JSON.stringify(initial.markers),
+        );
+        continue;
+      }
       const setSlider = async (label: string, value: number) => {
         const group = page.getByRole('group', { name: label, exact: true });
         const slider = group.getByRole('slider');
@@ -1114,7 +1339,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           JSON.stringify(bounds, null, 2),
         );
         assert(
-          `f06 case ${index}: ${label} native slider has valid bounds`,
+          `${FEATURE} case ${index}: ${label} native slider has valid bounds`,
           Number.isFinite(min) && Number.isFinite(max) && max > min,
         );
         const thumbControl = group.locator('[data-slot="slider-thumb"]');
@@ -1137,7 +1362,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           JSON.stringify({ ...bounds, box, thumb, pointerHit }, null, 2),
         );
         assert(
-          `f06 case ${index}: ${label} thumb is reachable`,
+          `${FEATURE} case ${index}: ${label} thumb is reachable`,
           pointerHit.label === label && pointerHit.thumb,
         );
         await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
@@ -1390,11 +1615,18 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   } catch (error) {
     check('f06 journey completed', false, error instanceof Error ? error.message : String(error));
   } finally {
-    note(`speed samples: ${JSON.stringify({ inspector: timings.map((t) => t.durationMs) })}`);
     note(
-      `f06 inspector 200ms gate: ${timings.length >= 3 && timings.every((t) => t.durationMs <= 200) ? 'PASS' : 'OPEN'}; every sample retained, no excluded slow saves`,
+      `speed samples: ${JSON.stringify({ [TIMELINE_JOURNEY ? 'timeline' : 'inspector']: timings.map((t) => t.durationMs) })}`,
+    );
+    note(
+      `${FEATURE} native 200ms gate: ${timings.length >= 3 && timings.every((t) => t.durationMs <= 200) ? 'PASS' : 'OPEN'}; every sample retained, no excluded slow saves`,
     );
     writeFileSync(join(folder, 'save-timings.json'), JSON.stringify(timings, null, 2));
+    if (TIMELINE_JOURNEY)
+      check(
+        'f05 every representative native save passes200ms',
+        timings.length >= 3 && timings.every((t) => t.durationMs > 0 && t.durationMs <= 200),
+      );
     await context?.close();
     try {
       await removeProjects(admin, BRAND, ids);

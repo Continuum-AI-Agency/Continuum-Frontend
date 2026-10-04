@@ -476,7 +476,7 @@ export function EditWorkspace({
         void apply((current) => pasteClipsEdit(current, clipboard.current, store.getSec())),
       duplicate: () => void apply((current) => duplicateClipsEdit(current, selectionRef.current)),
       palette: () => setPaletteOpen(true),
-      marker: () => void apply(addMarkerEdit(store.getSec())),
+      marker: () => void apply((current) => addMarkerEdit(current, store.getSec())),
       deselect: () => setSelection([]),
     }),
     [apply, deleteClips, redo, store, undo],
