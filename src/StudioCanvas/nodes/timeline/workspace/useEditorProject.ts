@@ -291,18 +291,19 @@ export function useEditorProject(projectId: string) {
   const runOp = useCallback<RunVideoEditorOp>(
     async (op, input) => {
       setBusy(op);
+      const spec = VIDEO_EDITOR_OPS[op as VideoEditorOpName];
+      // Draft jobs commit later; their completion path refreshes the project.
+      const deferred = spec.group === 'draft';
       // Claimed before the request: Realtime can deliver the op's own revision before the
       // response does, and it must not read as someone else's edit.
-      const claimed = VIDEO_EDITOR_OPS[op as VideoEditorOpName].commits
-        ? (projectRef.current?.revision ?? -1) + 1
-        : null;
+      const claimed = spec.commits && !deferred ? (projectRef.current?.revision ?? -1) + 1 : null;
       if (claimed !== null) ownRevisions.current.add(claimed);
       const beforeRevision = projectRef.current?.revision;
       try {
         const output = await runVideoEditorOp(projectId, op, input);
         const commit = (output as { commit?: { revision?: number; fingerprint?: string } }).commit;
         if (typeof commit?.revision === 'number') ownRevisions.current.add(commit.revision);
-        if (VIDEO_EDITOR_OPS[op as VideoEditorOpName].access === 'operate') await refresh();
+        if (spec.access === 'operate' && !deferred) await refresh();
         // An op this page ran is undoable like any other edit made here — except `undo`
         // itself, whose own caller (the first-cut toast) owns what it restored.
         if (

@@ -13,6 +13,8 @@ import {
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { Client as PgClient } from 'pg';
+import { z } from 'zod';
 import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
@@ -75,9 +77,8 @@ const DRAFT_BUDGET_MS = 15 * 60_000;
 const RUN = randomUUID().slice(0, 8);
 const DROP_PREFIX = `bench-first-cut-${RUN}-`;
 
-const { url: supabaseUrl, serviceRoleKey } = BRIEF_ONLY
-  ? loadLocalSupabaseEnv()
-  : loadProdSupabaseEnv();
+const supabaseEnv = BRIEF_ONLY ? loadLocalSupabaseEnv() : loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } = supabaseEnv;
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const rec = new Recorder(BENCH);
@@ -822,6 +823,8 @@ test(BENCH, async ({ browser }) => {
 test(`${BENCH}: native brief admission`, async ({ browser }) => {
   test.skip(!BRIEF_ONLY, 'Explicit loopback brief-only mode.');
   expect(/^[a-f0-9-]{36}$/.test(BRAND)).toBe(true);
+  if (!('dbUrl' in supabaseEnv)) throw new Error('Local database URL required.');
+  const db = new PgClient({ connectionString: supabaseEnv.dbUrl });
   const folder = resolve(process.env.VIDEO_EDITOR_BRIEF_OUTPUT ?? '/tmp/video-brief-proof');
   mkdirSync(folder, { recursive: true });
   const save = (name: string, value: unknown) =>
@@ -857,6 +860,7 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
   let previousBrand: string | null | undefined;
   let brandChanged = false;
   try {
+    await db.connect();
     const source = process.env.VIDEO_EDITOR_RECORDED_FIXTURE,
       transcriptFile = process.env.VIDEO_EDITOR_SPEECH_TRANSCRIPT;
     if (!source || !transcriptFile)
@@ -921,7 +925,7 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
     const { buildRegisterGeneratedAssetOperation } = await import(
       '../../Continuum-Backend/App/media/registerGeneratedAsset'
     );
-    for (const label of ['A', 'B']) {
+    for (const label of ['A', 'B', 'C']) {
       const path = `${BRAND}/video-brief-bench/${RUN}/${label}.mp4`;
       paths.push(path);
       const { error: uploadError } = await admin.storage
@@ -1215,6 +1219,15 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
         brandCaptions: options.brandCaptions,
         sourceAssetIds: options.selected.map((s) => s.assetId),
       };
+      const refreshRequests: string[] = [];
+      const countRefresh = (request: import('@playwright/test').Request) => {
+        if (
+          request.method() === 'GET' &&
+          request.url().endsWith(`/api/ai-studio/video-projects/${project.projectId}`)
+        )
+          refreshRequests.push(request.url());
+      };
+      page.on('request', countRefresh);
       const responsePromise = page.waitForResponse(
         (res) =>
           res.request().method() === 'POST' &&
@@ -1238,12 +1251,16 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
       const started = (await response.json()) as { jobId: string };
       expect(JOB_ID.test(started.jobId)).toBe(true);
       jobs.push(started.jobId);
-      const row = JSON.parse(
-        localSql(`select row_to_json(j) from (
-        select job_id,brand_id,user_id,tool,params,params_hash,status
-        from plugin_mcp.jobs where job_id='${started.jobId}' and brand_id='${BRAND}'
-      ) j;`),
+      const persisted = await db.query<{ params: unknown }>(
+        'select job_id,brand_id,user_id,tool,params,params_hash,status from plugin_mcp.jobs where job_id=$1 and brand_id=$2 and user_id=$3',
+        [started.jobId, BRAND, session.userId],
       );
+      const row = z
+        .object({
+          params: z.object({ footage: z.array(z.string().uuid()) }).passthrough(),
+        })
+        .passthrough()
+        .parse(persisted.rows[0]);
       const readbackMs = performance.now() - began;
       await expect(dialog.getByTestId('brief-progress')).toBeVisible();
       const elapsed = performance.now() - began;
@@ -1274,6 +1291,7 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
         row,
         admittedMs,
         networkTiming: response.request().timing(),
+        refreshRequests,
         readbackMs,
         elapsed,
         headVersion,
@@ -1290,12 +1308,65 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
         terminalBody.state === 'failed' &&
           isDeepStrictEqual(await getProject(api, project.projectId), beforeDraft),
       );
+      check(
+        `f32 case${index}: pending draft does not refetch the unchanged project`,
+        refreshRequests.length === 0,
+        JSON.stringify(refreshRequests),
+      );
+      page.off('request', countRefresh);
+      save('readbacks.json', readbacks);
       save(`terminal-${index}.json`, {
         terminalBody,
         beforeDraft,
         afterDraft: await getProject(api, project.projectId),
       });
     }
+    const guardProject = projects.at(-1)!;
+    const beforeGuard = await getProject(api, guardProject);
+    const refused = await postOp(api, guardProject, 'draft_cut', {
+      brief: 'Keep all three recorded interviews.',
+      sourceAssetIds: owned.map((asset) => asset.assetId),
+      music: true,
+      captions: true,
+    });
+    expect(refused.status).toBe(200);
+    const guardJob = (JSON.parse(refused.text) as { jobId: string }).jobId;
+    expect(JOB_ID.test(guardJob)).toBe(true);
+    jobs.push(guardJob);
+    const guardTerminal = await until(
+      () => postOp(api, guardProject, 'draft_cut_status', { jobId: guardJob }),
+      (response) => ['failed', 'completed'].includes(JSON.parse(response.text).state),
+      30000,
+    );
+    const guardBody = JSON.parse(guardTerminal.text) as { state: string; error?: string };
+    check(
+      'f32 real over-limit footage fails before generation and leaves the project unchanged',
+      guardBody.state === 'failed' &&
+        guardBody.error?.includes('at most 20 min') === true &&
+        isDeepStrictEqual(await getProject(api, guardProject), beforeGuard),
+      JSON.stringify(guardBody),
+    );
+    const countJobs = async () =>
+      (
+        await db.query<{ count: string }>(
+          "select count(*) from plugin_mcp.jobs where brand_id=$1 and user_id=$2 and params->>'projectId'=$3",
+          [BRAND, session.userId, guardProject],
+        )
+      ).rows[0]!.count;
+    const jobsBeforeEmpty = await countJobs();
+    const empty = await postOp(api, guardProject, 'draft_cut', {
+      brief: 'Use none of the footage.',
+      sourceAssetIds: [],
+    });
+    check(
+      'f32 explicit empty selection refuses before creating a job',
+      empty.status === 400 &&
+        empty.text.includes('There is no footage to cut') &&
+        (await countJobs()) === jobsBeforeEmpty &&
+        isDeepStrictEqual(await getProject(api, guardProject), beforeGuard),
+      empty.text,
+    );
+    save('guards.json', { guardJob, guardBody, beforeGuard, empty, jobsBeforeEmpty });
     check(
       'f32 native page has no uncaught errors',
       pageErrors.length === 0,
@@ -1436,6 +1507,9 @@ test(`${BENCH}: native brief admission`, async ({ browser }) => {
         [leftProjects, leftAssets, leftJobs].every((row) => !row.error && row.count === 0),
       );
     } finally {
+      await db
+        .end()
+        .catch((error) => check('owned local database connection closes', false, String(error)));
       for (const server of servers.reverse()) server.stop();
       printEnvelope();
     }

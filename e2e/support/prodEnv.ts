@@ -152,7 +152,7 @@ export function benchBrowserChannel(): { channel?: string } {
 }
 
 /** Existing loopback stack only; never starts, resets or hydrates shared data. */
-export function loadLocalSupabaseEnv(): { url: string; serviceRoleKey: string } {
+export function loadLocalSupabaseEnv(): { url: string; serviceRoleKey: string; dbUrl: string } {
   const status = execFileSync('supabase', ['status', '-o', 'env'], {
     cwd: resolve(__dirname, '../../..'),
     encoding: 'utf8',
@@ -165,11 +165,15 @@ export function loadLocalSupabaseEnv(): { url: string; serviceRoleKey: string } 
     }),
   );
   const url = env.API_URL;
+  const dbUrl = env.DB_URL;
   if (
     !url ||
     !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname) ||
     !env.SERVICE_ROLE_KEY ||
-    !env.ANON_KEY
+    !env.ANON_KEY ||
+    !dbUrl ||
+    !['postgres:', 'postgresql:'].includes(new URL(dbUrl).protocol) ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(dbUrl).hostname)
   )
     throw new Error(
       'Local editor journey requires the running loopback Supabase stack; no reset/hydration is performed.',
@@ -180,5 +184,5 @@ export function loadLocalSupabaseEnv(): { url: string; serviceRoleKey: string } 
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = env.ANON_KEY;
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = env.ANON_KEY;
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY = env.ANON_KEY;
-  return { url, serviceRoleKey: env.SERVICE_ROLE_KEY };
+  return { url, serviceRoleKey: env.SERVICE_ROLE_KEY, dbUrl };
 }
