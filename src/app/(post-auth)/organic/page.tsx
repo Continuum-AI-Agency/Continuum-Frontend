@@ -4,11 +4,11 @@ import type { OrganicAgentMentionContext } from '@/components/organic/agent/Orga
 import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
 import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
 import { OrganicNoticeBridge } from '@/components/organic/OrganicNoticeBridge';
-import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
 import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs';
 import { OrganicCalendarWorkspace } from '@/components/organic/primitives/OrganicCalendarWorkspace';
 import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
 import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
+import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
@@ -342,7 +342,12 @@ async function OrganicContent({
       />
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
-        rulesSlot={<CommentRulesWorkspace brandId={brandProfileId} />}
+        rulesSlot={
+          <CommentRulesWorkspace
+            brandId={brandProfileId}
+            instagramAccountId={metricAccountsByPlatform.instagram[0]?.integrationAccountId ?? null}
+          />
+        }
         plannerSlot={
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}
