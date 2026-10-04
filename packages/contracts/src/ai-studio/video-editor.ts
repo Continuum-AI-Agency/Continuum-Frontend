@@ -694,11 +694,12 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Place a Library or pool asset on the timeline at a time: video on a video track, an image as an overlay, audio on an audio track. sourceInSec/durationSec trim it; newTrack puts it on a track of its own.',
+      'Place a Library or pool asset on the timeline at a time: video on a video track, an image as an overlay, audio on an audio track. versionId keeps a specific stored version; omit it to use the current head. sourceInSec/durationSec trim it; newTrack puts it on a track of its own.',
     input: z
       .object({
         ...projectRef,
         assetId: z.string().min(1),
+        versionId: z.string().uuid().optional(),
         atSec: secSchema.default(0),
         trackId: z.string().optional(),
         newTrack: z.boolean().default(false),

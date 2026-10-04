@@ -58,7 +58,11 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         projectId = project.projectId;
       }
       if (project.tracks.length === 0 && asset.kind !== 'video') {
-        await runVideoEditorOp(project.projectId, 'add_clip', { assetId: asset.id, atSec: 0 });
+        await runVideoEditorOp(project.projectId, 'add_clip', {
+          assetId: asset.id,
+          versionId: asset.headVersionId,
+          atSec: 0,
+        });
       } else if (project.tracks.length === 0) {
         const durationSec = Math.max(0.1, (asset.durationMs ?? 5_000) / 1_000);
         const issuedAt = new Date().toISOString();

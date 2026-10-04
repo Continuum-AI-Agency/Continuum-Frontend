@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
-const native = process.argv.includes('--native-timeline');
+const imports = process.argv.includes('--native-import');
+const native = imports || process.argv.includes('--native-timeline');
 const child = spawnSync(
   'bunx',
   [
@@ -10,14 +11,20 @@ const child = spawnSync(
     'e2e/video-editor-workspace.spec.ts',
     '--workers=1',
     ...(native ? ['--grep=workspace inspector:'] : []),
-    ...process.argv.slice(2).filter((argument) => argument !== '--native-timeline'),
+    ...process.argv
+      .slice(2)
+      .filter((argument) => argument !== '--native-timeline' && argument !== '--native-import'),
   ],
   {
     stdio: 'inherit',
     env: {
       ...process.env,
       BENCH_SINK: 'library',
-      ...(native ? { VIDEO_EDITOR_TIMELINE_JOURNEY: '1' } : {}),
+      ...(native
+        ? imports
+          ? { VIDEO_EDITOR_IMPORT_JOURNEY: '1' }
+          : { VIDEO_EDITOR_TIMELINE_JOURNEY: '1' }
+        : {}),
     },
   },
 );

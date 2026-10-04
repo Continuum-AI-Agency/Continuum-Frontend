@@ -9,6 +9,7 @@ import {
   editorExportSettingsSchema,
   editorProjectResponseSchema,
   registerGeneratedAssetResponseSchema,
+  registerVersionResponseSchema,
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
@@ -44,9 +45,11 @@ import {
 test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:workspace:e2e:bench';
+const IMPORT_JOURNEY = process.env.VIDEO_EDITOR_IMPORT_JOURNEY === '1';
 const TIMELINE_JOURNEY = process.env.VIDEO_EDITOR_TIMELINE_JOURNEY === '1';
-const INSPECTOR_JOURNEY = TIMELINE_JOURNEY || process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
-const FEATURE = TIMELINE_JOURNEY ? 'f05' : 'f06';
+const INSPECTOR_JOURNEY =
+  IMPORT_JOURNEY || TIMELINE_JOURNEY || process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
+const FEATURE = IMPORT_JOURNEY ? 'f01' : TIMELINE_JOURNEY ? 'f05' : 'f06';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (INSPECTOR_JOURNEY
@@ -68,7 +71,7 @@ const { url: supabaseUrl, serviceRoleKey } = INSPECTOR_JOURNEY
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const rec = new Recorder(BENCH);
-const results: { step: string; grade: 'PASS' | 'FAIL'; detail?: string }[] = [];
+const results: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
 const notes: string[] = [];
 const startedAt = new Date().toISOString();
 const startedMs = Date.now();
@@ -755,7 +758,16 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | undefined;
   let previousBrand: string | null | undefined,
     brandChanged = false;
-  let owned: { path: string; assetId?: string; receiptKey?: string } | undefined;
+  let owned:
+    | {
+        path: string;
+        assetId?: string;
+        receiptKey?: string;
+        headPath?: string;
+        versionReceiptKey?: string;
+      }
+    | undefined;
+  const network: Array<Record<string, unknown>> = [];
   const timings: Array<{
     case: number;
     control: string;
@@ -766,10 +778,19 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   }> = [];
   try {
     note(
-      TIMELINE_JOURNEY
-        ? 'f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through local Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.'
-        : 'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
+      IMPORT_JOURNEY
+        ? 'f01 scope: native pinned Media panel plus/context imports after the actual Library head advances; real Edge version reads, HTTP/store, network transfers, reload and undo. File-upload/recording Edge and GCS paths, native Export and current production unexercised.'
+        : TIMELINE_JOURNEY
+          ? 'f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through local Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.'
+          : 'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
     );
+    if (IMPORT_JOURNEY) {
+      const step = 'f01 file upload/recording, GCS, native Export and current production';
+      const detail =
+        'Only normal Supabase pinned-media native/store/network imports are exercised.';
+      rec.record(step, 'SKIP', detail);
+      results.push({ step, grade: 'SKIP', detail });
+    }
     const file = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
     if (!file) throw new Error('Inspector journey requires a real recorded MP4.');
     const bytes = readFileSync(file);
@@ -901,6 +922,123 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       if (!response.ok) throw new Error(`${op}: ${response.status} ${await response.text()}`);
       return response.json();
     };
+    let newerVersionId: string | undefined;
+    if (IMPORT_JOURNEY) {
+      owned.headPath = `${BRAND}/${receipt.assetId}/v2/newer-head.mp4`;
+      const headFile = join(folder, 'newer-head.mp4');
+      execFileSync(
+        'ffmpeg',
+        [
+          '-v',
+          'error',
+          '-y',
+          '-ss',
+          '2',
+          '-i',
+          file,
+          '-t',
+          '3',
+          '-c',
+          'copy',
+          '-movflags',
+          '+faststart',
+          headFile,
+        ],
+        { timeout: 30_000 },
+      );
+      const headBytes = readFileSync(headFile);
+      const { error } = await admin.storage
+        .from('media-library')
+        .upload(owned.headPath, headBytes, { contentType: 'video/mp4' });
+      if (error) throw error;
+      owned.versionReceiptKey = `import-head-${RUN}`;
+      const response = await fetch(`${supabaseUrl}/functions/v1/library-creative-operations`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${api.token}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'register_asset_version',
+          brandId: BRAND,
+          assetId: receipt.assetId,
+          baseVersionId: receipt.versionId,
+          bucket: 'media-library',
+          storagePath: owned.headPath,
+          fileName: `newer-${RUN}.mp4`,
+          mimeType: 'video/mp4',
+          sizeBytes: headBytes.length,
+          width: probe.streams[0]?.width,
+          height: probe.streams[0]?.height,
+          durationMs: 3000,
+          checksum: createHash('sha256').update(headBytes).digest('hex'),
+          integrityState: 'verified',
+          idempotencyKey: owned.versionReceiptKey,
+        }),
+      });
+      const body: unknown = await response.json();
+      assert(
+        'f01 actual authenticated Edge advances the real Library head',
+        response.ok,
+        response.ok ? 'actual stored version registered' : JSON.stringify(body),
+      );
+      const version = registerVersionResponseSchema.parse(body);
+      newerVersionId = version.versionId;
+      assert(
+        'f01 the newer actual stored version differs from the pin',
+        Boolean(newerVersionId && newerVersionId !== receipt.versionId),
+      );
+      writeFileSync(
+        join(folder, 'versions.json'),
+        JSON.stringify(
+          {
+            assetId: receipt.assetId,
+            pinned: receipt.versionId,
+            head: newerVersionId,
+            recordedSha256: createHash('sha256').update(bytes).digest('hex'),
+            headSha256: createHash('sha256').update(headBytes).digest('hex'),
+            sizeBytes: bytes.length,
+            headSizeBytes: headBytes.length,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+    if (IMPORT_JOURNEY) {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Network.enable');
+      const inFlight = new Map<string, Record<string, unknown>>();
+      cdp.on('Network.responseReceived', ({ requestId, response }) => {
+        const path = new URL(response.url).pathname;
+        if (!path.includes(owned!.path) && !path.includes(owned!.headPath!)) return;
+        const row = {
+          path,
+          status: response.status,
+          range: response.headers['content-range'] ?? response.headers['Content-Range'] ?? null,
+          fromDiskCache: response.fromDiskCache ?? false,
+          fromServiceWorker: response.fromServiceWorker ?? false,
+          mimeType: response.mimeType,
+          encodedDataLength: 0,
+          finished: false,
+        };
+        network.push(row);
+        inFlight.set(requestId, row);
+      });
+      cdp.on('Network.dataReceived', ({ requestId, encodedDataLength }) => {
+        const row = inFlight.get(requestId);
+        if (row) row.dataEncodedBytes = Number(row.dataEncodedBytes ?? 0) + encodedDataLength;
+      });
+      cdp.on('Network.loadingFinished', ({ requestId, encodedDataLength }) => {
+        const row = inFlight.get(requestId);
+        if (row) Object.assign(row, { encodedDataLength, finished: true });
+      });
+      cdp.on('Network.loadingFailed', ({ requestId, errorText, canceled }) => {
+        const row = inFlight.get(requestId);
+        if (row) Object.assign(row, { errorText, canceled });
+      });
+    }
     const video = (project: EditorProjectV2): EditorVideoClip => {
       const c = mainClips(project)[0];
       if (!c || c.kind !== 'video') throw new Error('Missing video');
@@ -1042,6 +1180,42 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           },
         ],
       });
+      if (IMPORT_JOURNEY && index === 2) {
+        const seeded = await getProject(api, id);
+        await post(id, 'apply_commands', {
+          expectedRevision: seeded.revision,
+          commands: [
+            {
+              commandType: 'add_track',
+              track: {
+                id: 'other-version',
+                name: 'Stored alternate',
+                kind: 'video',
+                order: 1,
+                enabled: false,
+                muted: true,
+                clips: [
+                  {
+                    id: 'other-version',
+                    name: 'Other stored version',
+                    kind: 'video',
+                    timelineStartSec: 0,
+                    durationSec: 1,
+                    source: {
+                      sourceType: 'library_asset',
+                      assetId: receipt.assetId,
+                      renditionId: newerVersionId!,
+                    },
+                    sourceInSec: 0,
+                    playbackRate: 1,
+                    audioEnabled: false,
+                  },
+                ],
+              },
+            },
+          ],
+        });
+      }
       await page.reload({ waitUntil: 'domcontentloaded' });
       const clip = page.locator('[data-clip-id="recorded"]:visible');
       await expect(clip).toBeVisible({ timeout: 30_000 });
@@ -1049,6 +1223,184 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       if (!clipBox) throw new Error('Clip box absent');
       await clip.click({ position: { x: clipBox.width * 0.1, y: clipBox.height / 2 } });
       let project = await getProject(api, id);
+      if (IMPORT_JOURNEY) {
+        const initial = project;
+        const bin = page.locator(
+          `[data-bin-asset="${receipt.assetId}"][data-bin-version="${receipt.versionId}"]`,
+        );
+        await expect(bin).toBeVisible();
+        if (index === 2) {
+          const bins = page.locator(`[data-bin-asset="${receipt.assetId}"]`);
+          assert(
+            'f01 two pins of one asset remain distinct native media cards',
+            (await bins.count()) === 2,
+          );
+          const olderSrc = await bin.locator('video').getAttribute('src');
+          const newerSrc = await page
+            .locator(
+              `[data-bin-asset="${receipt.assetId}"][data-bin-version="${newerVersionId}"] video`,
+            )
+            .getAttribute('src');
+          assert(
+            'f01 each native media card previews its own actual stored version',
+            Boolean(olderSrc?.includes(owned!.path) && newerSrc?.includes(owned!.headPath!)),
+          );
+          await expect
+            .poll(
+              () =>
+                page
+                  .locator(`[data-bin-asset="${receipt.assetId}"] video`)
+                  .evaluateAll((videos) =>
+                    videos.every((v) => (v as HTMLVideoElement).readyState >= 1),
+                  ),
+              { timeout: 30_000 },
+            )
+            .toBe(true);
+        }
+        // Wait for the native preview's actual source read, never seed a preview URL.
+        await expect
+          .poll(() => network.filter((n) => String(n.path).includes(owned!.path)).length, {
+            timeout: 30_000,
+          })
+          .toBeGreaterThan(0);
+        const beforeDownloads = network.length;
+        const control = ['bin plus', 'context at playhead', 'context new track'][index]!;
+        if (index === 0) await bin.hover();
+        else {
+          await bin.click({ button: 'right' });
+          await expect(
+            page.getByRole('menuitem', {
+              name: index === 1 ? 'Add at playhead' : 'Add on a new track',
+              exact: true,
+            }),
+          ).toBeVisible();
+        }
+        await page.evaluate(() =>
+          window.addEventListener(
+            'click',
+            () => {
+              (window as unknown as { __importAt: number }).__importAt = performance.now();
+            },
+            { capture: true, once: true },
+          ),
+        );
+        const responsePromise = page.waitForResponse(
+          (r) =>
+            r.url().endsWith(`/video-projects/${id}/ops/add_clip`) &&
+            r.request().method() === 'POST',
+        );
+        if (index === 0) await bin.getByRole('button', { name: /Add .* at the playhead/ }).click();
+        else
+          await page
+            .getByRole('menuitem', {
+              name: index === 1 ? 'Add at playhead' : 'Add on a new track',
+              exact: true,
+            })
+            .click();
+        const response = await responsePromise;
+        assert(
+          `f01 case ${index}: ${control} actual op succeeds`,
+          response.status() === 200,
+          response.status() === 200 ? 'real HTTP200' : await response.text(),
+        );
+        const output = (await response.json()) as {
+          clipId: string;
+          trackId: string;
+          commit: { revision: number };
+        };
+        await expect(page.locator(`[data-clip-id="${output.clipId}"]:visible`)).toBeVisible();
+        const timing = await page.evaluate(() => ({
+          durationMs: performance.now() - (window as unknown as { __importAt: number }).__importAt,
+          resourceStart: 0,
+          responseEnd: performance.now(),
+        }));
+        timings.push({ case: index, control, ...timing, revision: output.commit.revision });
+        project = await getProject(api, id);
+        const added = project.tracks.flatMap((t) => t.clips).find((c) => c.id === output.clipId);
+        check(
+          `f01 case ${index}: ${control} preserves the pinned version instead of the newer head`,
+          Boolean(
+            added &&
+              'source' in added &&
+              added.source.sourceType === 'library_asset' &&
+              added.source.assetId === receipt.assetId &&
+              added.source.renditionId === receipt.versionId,
+          ),
+          JSON.stringify({
+            expected: receipt.versionId,
+            newerVersionId,
+            actual: added && 'source' in added ? added.source : null,
+          }),
+        );
+        check(
+          `f01 case ${index}: ${control} uses the pinned version duration`,
+          Boolean(
+            added &&
+              Math.abs(
+                added.durationSec -
+                  (index === 2
+                    ? Math.min(initial.durationSec, Number(probe.format.duration))
+                    : Number(probe.format.duration)),
+              ) <=
+                1 / 30,
+          ),
+          JSON.stringify({
+            expected:
+              index === 2
+                ? Math.min(initial.durationSec, Number(probe.format.duration))
+                : Number(probe.format.duration),
+            actual: added?.durationSec,
+            newTrackIsBoundedByMain: index === 2,
+          }),
+        );
+        assert(
+          `f01 case ${index}: ${control} makes exactly one native revision`,
+          project.revision === initial.revision + 1 && output.commit.revision === project.revision,
+        );
+        await page.waitForTimeout(1000);
+        const transfers = network.slice(beforeDownloads);
+        check(
+          `f01 case ${index}: ${control} does not download the newer head`,
+          !transfers.some((n) => String(n.path).includes(owned!.headPath!)),
+          JSON.stringify(transfers),
+        );
+        const duplicateFullDownloads = transfers.filter(
+          (n) =>
+            !n.fromDiskCache &&
+            !n.fromServiceWorker &&
+            Math.max(Number(n.encodedDataLength), Number(n.dataEncodedBytes ?? 0)) >= bytes.length,
+        );
+        check(
+          `f01 case ${index}: ${control} does not repeat a full pinned source download`,
+          duplicateFullDownloads.length === 0,
+          JSON.stringify(duplicateFullDownloads),
+        );
+        writeFileSync(
+          join(folder, `import-${index}-readback.json`),
+          JSON.stringify({ initial, after: project, output, timing, transfers }, null, 2),
+        );
+        writeFileSync(join(folder, `import-${index}-native.png`), await page.screenshot());
+        const undoResponse = page.waitForResponse(
+          (r) =>
+            r.url().endsWith(`/video-projects/${id}/timeline/restore`) &&
+            r.request().method() === 'POST',
+        );
+        await page.getByRole('button', { name: 'Undo', exact: true }).click();
+        await undoResponse;
+        const undone = await getProject(api, id);
+        assert(
+          `f01 case ${index}: native undo restores exact pinned tracks and duration`,
+          JSON.stringify(undone.tracks) === JSON.stringify(initial.tracks) &&
+            undone.durationSec === initial.durationSec,
+        );
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await expect(page.locator('[data-clip-id="recorded"]:visible')).toBeVisible();
+        assert(
+          `f01 case ${index}: pin and exact original tracks survive reload`,
+          JSON.stringify((await getProject(api, id)).tracks) === JSON.stringify(initial.tracks),
+        );
+        continue;
+      }
       const commitPointerEdit = async (
         label: string,
         event = 'pointerup',
@@ -1871,12 +2223,19 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
     check('f06 journey completed', false, error instanceof Error ? error.message : String(error));
   } finally {
     note(
-      `speed samples: ${JSON.stringify({ [TIMELINE_JOURNEY ? 'timeline' : 'inspector']: timings.map((t) => t.durationMs) })}`,
+      `speed samples: ${JSON.stringify({ [IMPORT_JOURNEY ? 'import' : TIMELINE_JOURNEY ? 'timeline' : 'inspector']: timings.map((t) => t.durationMs) })}`,
     );
     note(
-      `${FEATURE} native 200ms gate: ${timings.length >= 3 && timings.every((t) => t.durationMs <= 200) ? 'PASS' : 'OPEN'}; every sample retained, no excluded slow saves`,
+      `${FEATURE} native ${IMPORT_JOURNEY ? 1000 : 200}ms gate: ${timings.length >= 3 && timings.every((t) => t.durationMs <= (IMPORT_JOURNEY ? 1000 : 200)) ? 'PASS' : 'OPEN'}; every sample retained, no excluded slow saves`,
     );
     writeFileSync(join(folder, 'save-timings.json'), JSON.stringify(timings, null, 2));
+    if (IMPORT_JOURNEY) {
+      check(
+        'f01 every full native import and refresh passes1000ms',
+        timings.length === 3 && timings.every((t) => t.durationMs > 0 && t.durationMs <= 1000),
+      );
+      writeFileSync(join(folder, 'network.json'), JSON.stringify(network, null, 2));
+    }
     if (TIMELINE_JOURNEY)
       check(
         'f05 every representative native save passes200ms',
@@ -1923,7 +2282,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       if (owned) {
         const { error: storageError } = await admin.storage
           .from('media-library')
-          .remove([owned.path]);
+          .remove([owned.path, ...(owned.headPath ? [owned.headPath] : [])]);
         const { error: assetError } = owned.assetId
           ? await admin
               .schema('media')
@@ -1933,6 +2292,30 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
               .eq('brand_id', BRAND)
           : { error: null };
         assert('f06 owned media removed', !storageError && !assetError);
+        if (owned.versionReceiptKey) {
+          assert(
+            'f01 version receipt key is safe',
+            /^import-head-[a-f0-9]{8}$/.test(owned.versionReceiptKey),
+          );
+          const left = execFileSync(
+            'docker',
+            [
+              'exec',
+              'supabase_db_continuum',
+              'psql',
+              '-U',
+              'postgres',
+              '-d',
+              'postgres',
+              '-v',
+              'ON_ERROR_STOP=1',
+              '-Atc',
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.versionReceiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.versionReceiptKey}';`,
+            ],
+            { encoding: 'utf8', stdio: 'pipe' },
+          );
+          assert('f01 owned version receipt removed', left.trim().split('\n').at(-1) === '0');
+        }
         if (owned.receiptKey) {
           assert(
             'f06 owned receipt identity is safe',
