@@ -20,6 +20,7 @@ import { registerCaptionFonts } from '../../src/lib/clips/captionFonts';
 import { simulate } from '../../src/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
 import { drawActiveCaption } from '../../src/StudioCanvas/utils/splice/drawCaptions';
+import { runTimelineInWorker } from '../../src/StudioCanvas/workers/spliceWorkerClient';
 
 const WIDTH = 360;
 const HEIGHT = 640;
@@ -1100,6 +1101,59 @@ export async function runRetainedCurves(sourceUrl: string) {
   return results;
 }
 
+/** Replays retained project/media through the same worker used by browser export. */
+export async function runRecordedExport(
+  input: Pick<ServerCompareInput, 'project' | 'sources'> & {
+    workerUrl: string;
+    frameTimeSec?: number;
+  },
+) {
+  const project = editorProjectV2Schema.parse(input.project);
+  const ids = Object.keys(input.sources);
+  const plan = await buildTimelineEditorRenderPlan({
+    project,
+    jobInputs: ids.map((sourceId) => ({
+      sourceId,
+      sourceAssetId: input.sources[sourceId]?.assetId,
+      sourceRevision: input.sources[sourceId]?.versionId,
+      storage: { bucket: 'bench', path: sourceId },
+    })),
+    signedUrls: new Map(ids.map((id) => [`bench\n${id}`, input.sources[id]?.url ?? ''])),
+    signal: new AbortController().signal,
+  });
+  const settings = {
+    ...plan,
+    targetWidth: project.exportSettings.width,
+    targetHeight: project.exportSettings.height,
+    frameRate:
+      project.exportSettings.frameRate.numerator / project.exportSettings.frameRate.denominator,
+    videoBitrate: project.exportSettings.videoBitrateKbps * 1_000,
+    audioBitrate: project.exportSettings.audioBitrateKbps * 1_000,
+  };
+  if (input.frameTimeSec !== undefined) await registerCaptionFonts(plan.captionFonts);
+  const result =
+    input.frameTimeSec === undefined
+      ? await runTimelineInWorker({
+          ...settings,
+          workerFactory: () => new Worker(input.workerUrl, { type: 'module' }),
+        })
+      : await composeTimeline({ ...settings, frameTimeSec: input.frameTimeSec });
+  try {
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000)
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    return {
+      base64: btoa(binary),
+      durationSec: result.durationSec,
+      width: result.width,
+      height: result.height,
+    };
+  } finally {
+    URL.revokeObjectURL(result.objectUrl);
+  }
+}
+
 declare global {
   interface Window {
     __motionRenderBench: {
@@ -1109,6 +1163,7 @@ declare global {
       highlights: typeof runCaptionHighlights;
       looks: typeof runLooks;
       curves: typeof runRetainedCurves;
+      recordedExport: typeof runRecordedExport;
     };
   }
 }
@@ -1120,4 +1175,5 @@ window.__motionRenderBench = {
   highlights: runCaptionHighlights,
   looks: runLooks,
   curves: runRetainedCurves,
+  recordedExport: runRecordedExport,
 };
