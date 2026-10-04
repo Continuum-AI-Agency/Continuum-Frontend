@@ -209,6 +209,15 @@ export const saveCommentTriggerRuleRequestSchema = commentTriggerRuleFields
   .refine(windowIsOrdered, WINDOW_ORDERED);
 export type SaveCommentTriggerRuleRequest = z.infer<typeof saveCommentTriggerRuleRequestSchema>;
 
+/**
+ * How long one person waits between private replies from the same rule.
+ *
+ * Lives here because both sides state it: the Backend enforces it and the editor
+ * tells the person writing a rule what will happen. Two copies of a number like
+ * this drift, and the screen is the copy that ends up lying.
+ */
+export const PRIVATE_REPLY_COOLDOWN_MINUTES = 24 * 60;
+
 export const listCommentTriggerRulesResponseSchema = z.object({
   rules: z.array(commentTriggerRuleSchema),
   /**
