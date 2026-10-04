@@ -798,7 +798,13 @@ export const VIDEO_EDITOR_OPS = {
         variants: z.number().int().min(1).max(5).default(1),
         preset: platformExportPresetIdSchema.optional(),
         captions: z.boolean().default(true),
-        sourceAssetIds: z.array(z.string()).max(20).optional(),
+        sourceAssetIds: z
+          .array(z.string())
+          .max(20)
+          .optional()
+          .describe(
+            'Omit to use enabled timeline videos. An explicit list is exclusive: selected timeline videos keep their pinned versions; new Library videos use their head version.',
+          ),
         /** Finishing: a music bed under each cut, ducked under its speech. */
         music: z.boolean().default(false),
         /** The bed's mood; drawn from the brief when absent. */

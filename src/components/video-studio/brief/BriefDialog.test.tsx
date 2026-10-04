@@ -103,10 +103,17 @@ describe('BriefDialog', () => {
     'the Finish switches start on and go out as draft_cut flags, with the mood a chip picks',
     async () => {
       const calls = renderDialog(() => ({ jobId: 'job_f', state: 'running' }));
+      expect(
+        screen.getByLabelText('Length in seconds', { selector: 'input[type="range"]' }),
+      ).toBeTruthy();
       const switchNamed = (name: string) => screen.getByRole('switch', { name });
       for (const name of ['Music', 'Hook title', 'B-roll', 'Brand captions']) {
         expect(switchNamed(name).getAttribute('aria-checked')).toBe('true');
       }
+      fireEvent.change(screen.getByLabelText('What do you want?'), {
+        target: { value: 'Keep my exact astronaut brief.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '30s hook' }));
       fireEvent.click(screen.getByRole('button', { name: 'Lo-fi chill' }));
       expect((screen.getByLabelText('Music mood') as HTMLInputElement).value).toBe('Lo-fi chill');
       fireEvent.click(switchNamed('B-roll'));
@@ -114,6 +121,7 @@ describe('BriefDialog', () => {
       submit();
       await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), { timeout: TIMEOUT_MS });
       expect(calls[0]?.input).toMatchObject({
+        brief: 'Keep my exact astronaut brief.',
         captions: true,
         music: true,
         musicPrompt: 'Lo-fi chill',

@@ -1,11 +1,22 @@
-import { randomUUID } from 'node:crypto';
-import type { EditorProjectV2, VideoEditorOpOutput } from '@continuum/contracts';
+import { execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import {
+  type EditorProjectV2,
+  editorProjectResponseSchema,
+  registerGeneratedAssetResponseSchema,
+  registerVersionResponseSchema,
+  type VideoEditorOpOutput,
+  videoStudioEditorPath,
+} from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
-import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   brandObjectCount,
@@ -38,8 +49,13 @@ import {
 test.describe.configure({ timeout: 1_800_000 });
 
 const BENCH = 'videoeditor:first-cut:e2e:bench';
-const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
-const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
+const BRIEF_ONLY = process.env.VIDEO_EDITOR_BRIEF_ONLY === '1';
+const BRAND =
+  process.env.CONTINUUM_TEST_BRAND_ID ??
+  (BRIEF_ONLY ? '00000000-0000-4000-8000-0000000000b2' : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
+const OWNER_EMAIL = BRIEF_ONLY
+  ? 'local@continuum.test'
+  : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** Six first-person Vivo 47 gym testimonials (Spanish), ~20 s each, each with its own lines. */
 const SOURCE_ASSET_IDS = (
   process.env.FIRST_CUT_SOURCE_ASSETS ??
@@ -59,11 +75,13 @@ const DRAFT_BUDGET_MS = 15 * 60_000;
 const RUN = randomUUID().slice(0, 8);
 const DROP_PREFIX = `bench-first-cut-${RUN}-`;
 
-const { url: supabaseUrl, serviceRoleKey } = loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } = BRIEF_ONLY
+  ? loadLocalSupabaseEnv()
+  : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const rec = new Recorder(BENCH);
-const results: { step: string; grade: 'PASS' | 'FAIL'; detail?: string }[] = [];
+const results: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
 const notes: string[] = [];
 const startedAt = new Date().toISOString();
 const startedMs = Date.now();
@@ -212,6 +230,7 @@ async function dropFiles(
 }
 
 test(BENCH, async ({ browser }) => {
+  test.skip(BRIEF_ONLY, 'Paid hosted first cuts are excluded from explicit local brief-only mode.');
   const sinkLibrary = process.env.BENCH_SINK === 'library';
   if (!check('Library sink enabled for the upload hop', sinkLibrary, 'BENCH_SINK=library')) {
     printEnvelope();
@@ -798,4 +817,628 @@ test(BENCH, async ({ browser }) => {
   }
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
+});
+
+test(`${BENCH}: native brief admission`, async ({ browser }) => {
+  test.skip(!BRIEF_ONLY, 'Explicit loopback brief-only mode.');
+  expect(/^[a-f0-9-]{36}$/.test(BRAND)).toBe(true);
+  const folder = resolve(process.env.VIDEO_EDITOR_BRIEF_OUTPUT ?? '/tmp/video-brief-proof');
+  mkdirSync(folder, { recursive: true });
+  const save = (name: string, value: unknown) =>
+    writeFileSync(join(folder, name), JSON.stringify(value, null, 2));
+  const localSql = (sql: string) =>
+    execFileSync(
+      'docker',
+      [
+        'exec',
+        'supabase_db_continuum',
+        'psql',
+        '-U',
+        'postgres',
+        '-d',
+        'postgres',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-Atc',
+        sql,
+      ],
+      { encoding: 'utf8' },
+    ).trim();
+  const servers: Server[] = [],
+    projects: string[] = [],
+    jobs: string[] = [];
+  const owned: Array<{ assetId: string; versionId: string; path: string; receipt: string }> = [];
+  const paths: string[] = [],
+    receipts: string[] = [],
+    timings: number[] = [],
+    readbacks: unknown[] = [];
+  let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
+  let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
+  let previousBrand: string | null | undefined;
+  let brandChanged = false;
+  try {
+    const source = process.env.VIDEO_EDITOR_RECORDED_FIXTURE,
+      transcriptFile = process.env.VIDEO_EDITOR_SPEECH_TRANSCRIPT;
+    if (!source || !transcriptFile)
+      throw new Error('Brief proof requires recorded NASA media and its saved transcript.');
+    const bytes = readFileSync(source),
+      transcriptBytes = readFileSync(transcriptFile);
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(
+      '59c4807dc9c32bfbd2d97e7bfd400373ccc4eaa14ee14f3ba7f5aa88914cdc51',
+    );
+    expect(createHash('sha256').update(transcriptBytes).digest('hex')).toBe(
+      'ed31a49487965a49095c15076d5c845d8b8413a8e1c621bbf0daf8e0e16c3934',
+    );
+    const transcript = JSON.parse(transcriptBytes.toString()) as {
+      sources: Array<{
+        durationSec: number;
+        language: string;
+        words: Array<{ text: string; startSec: number; endSec: number }>;
+      }>;
+    };
+    const speech = transcript.sources[0]!;
+    const port = await freePort();
+    const backend = await bootBackend(`http://localhost:${port}`, {
+      AI_STUDIO_BUCKET: KEPT_BUCKET,
+      GEMINI_API_KEY: '',
+      GOOGLE_API_KEY: '',
+      GOOGLE_GENAI_API_KEY: '',
+      OPENAI_API_KEY: '',
+      VERTEX_API_KEY: '',
+      VERTEX_PROJECT_ID: '',
+      GOOGLE_CLOUD_PROJECT: '',
+      GCLOUD_PROJECT: '',
+      GOOGLE_VERTEX_PROJECT: '',
+      GOOGLE_PROJECT_ID: '',
+      GOOGLE_CLIENT_EMAIL: '',
+      GOOGLE_PRIVATE_KEY: '',
+      GOOGLE_APPLICATION_CREDENTIALS: '/tmp/continuum-brief-no-provider-credentials',
+    });
+    servers.push(backend);
+    const frontend = await bootFrontend(port, backend.url, '.next/video-brief-only');
+    servers.push(frontend);
+    save(
+      'servers.json',
+      servers.map(({ url, log }) => ({ url, log })),
+    );
+    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    session = await mintSessionBundleForEmail(OWNER_EMAIL);
+    const api: Api = { base: backend.url, token: session.accessToken };
+    const { data: preference, error: preferenceError } = await admin
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .select('active_brand_id')
+      .eq('user_id', session.userId)
+      .maybeSingle();
+    if (preferenceError) throw preferenceError;
+    previousBrand = preference?.active_brand_id;
+    const { error: brandError } = await admin
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .upsert({ user_id: session.userId, active_brand_id: BRAND }, { onConflict: 'user_id' });
+    if (brandError) throw brandError;
+    brandChanged = true;
+    const { buildRegisterGeneratedAssetOperation } = await import(
+      '../../Continuum-Backend/App/media/registerGeneratedAsset'
+    );
+    for (const label of ['A', 'B']) {
+      const path = `${BRAND}/video-brief-bench/${RUN}/${label}.mp4`;
+      paths.push(path);
+      const { error: uploadError } = await admin.storage
+        .from('media-library')
+        .upload(path, bytes, { contentType: 'video/mp4' });
+      if (uploadError) throw uploadError;
+      const operation = buildRegisterGeneratedAssetOperation({
+        brandId: BRAND,
+        kind: 'video',
+        bucket: 'media-library',
+        storagePath: path,
+        fileName: `brief-${label}-${RUN}.mp4`,
+        title: `Brief footage ${label} ${RUN}`,
+        mimeType: 'video/mp4',
+        createdBy: session.userId,
+        width: 800,
+        height: 450,
+        durationMs: Math.round(speech.durationSec * 1000),
+        sizeBytes: bytes.length,
+        checksum: createHash('sha256').update(bytes).digest('hex'),
+        source: 'canvas',
+        operation: 'video_editor_brief_fixture',
+      });
+      receipts.push(operation.idempotencyKey);
+      const { data, error } = await admin.schema('media').rpc('library_execute_operation', {
+        p_action: operation.action,
+        p_payload: { ...operation, actor: session.userId },
+      });
+      check('owned cleanup operation succeeds', !error, error?.message);
+      const receipt = registerGeneratedAssetResponseSchema.parse(data);
+      owned.push({
+        assetId: receipt.assetId,
+        versionId: receipt.versionId,
+        path,
+        receipt: operation.idempotencyKey,
+      });
+      const transcriptPath = `${BRAND}/video-editor/transcripts/${receipt.versionId}.json`;
+      paths.push(transcriptPath);
+      const { error: cacheError } = await admin.storage.from(KEPT_BUCKET).upload(
+        transcriptPath,
+        JSON.stringify({
+          ranges: [
+            {
+              startSec: 0,
+              endSec: speech.durationSec,
+              words: speech.words,
+              language: speech.language,
+            },
+          ],
+        }),
+        { contentType: 'application/json' },
+      );
+      if (cacheError) throw cacheError;
+    }
+    const [a, b] = owned;
+    if (!a || !b) throw new Error('Owned footage registration missing.');
+    // A real newer version challenges the selected project's immutable pin.
+    const newerFile = join(folder, 'newer-head.mp4');
+    execFileSync(
+      'ffmpeg',
+      [
+        '-v',
+        'error',
+        '-y',
+        '-ss',
+        '64.7',
+        '-i',
+        source,
+        '-t',
+        '11.3',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-c:a',
+        'aac',
+        '-movflags',
+        '+faststart',
+        newerFile,
+      ],
+      { timeout: 30000 },
+    );
+    const newerBytes = readFileSync(newerFile),
+      headPath = `${BRAND}/${a.assetId}/v2/newer-${RUN}.mp4`;
+    paths.push(headPath);
+    const { error: headUploadError } = await admin.storage
+      .from('media-library')
+      .upload(headPath, newerBytes, { contentType: 'video/mp4' });
+    if (headUploadError) throw headUploadError;
+    const headReceipt = `brief-head-${RUN}`;
+    receipts.push(headReceipt);
+    const head = await fetch(`${supabaseUrl}/functions/v1/library-creative-operations`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${api.token}`,
+        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'register_asset_version',
+        brandId: BRAND,
+        assetId: a.assetId,
+        baseVersionId: a.versionId,
+        bucket: 'media-library',
+        storagePath: headPath,
+        fileName: 'newer-head.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: newerBytes.length,
+        width: 800,
+        height: 450,
+        durationMs: 11300,
+        checksum: createHash('sha256').update(newerBytes).digest('hex'),
+        integrityState: 'verified',
+        idempotencyKey: headReceipt,
+      }),
+    });
+    const headBody = await head.text();
+    save('head-response.json', {
+      status: head.status,
+      body: headBody.replace(
+        /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+        '[redacted-owned-local-token]',
+      ),
+    });
+    expect(head.ok, headBody).toBe(true);
+    const headVersion = registerVersionResponseSchema.parse(JSON.parse(headBody)).versionId;
+    const headTranscript = `${BRAND}/video-editor/transcripts/${headVersion}.json`;
+    paths.push(headTranscript);
+    const { error: headCacheError } = await admin.storage.from(KEPT_BUCKET).upload(
+      headTranscript,
+      JSON.stringify({
+        ranges: [
+          {
+            startSec: 0,
+            endSec: 11.3,
+            words: speech.words
+              .filter((w) => w.endSec > 64.7 && w.startSec < 76)
+              .map((w) => ({
+                ...w,
+                startSec: Math.max(0, w.startSec - 64.7),
+                endSec: Math.min(11.3, w.endSec - 64.7),
+              })),
+            language: speech.language,
+          },
+        ],
+      }),
+      { contentType: 'application/json' },
+    );
+    if (headCacheError) throw headCacheError;
+    context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1600, height: 1100 },
+    });
+    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    const page = await context.newPage();
+    page.setDefaultTimeout(15000);
+    const stage = (step: string) => save('progress.json', { step });
+    const pageErrors: string[] = [];
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+    for (const [index, options] of [
+      {
+        text: 'Keep the chosen astronaut interview. Do not use the second take.',
+        kind: 'hook',
+        length: 30,
+        variants: 3,
+        captions: true,
+        music: true,
+        mood: 'Warm acoustic',
+        hookTitle: true,
+        broll: false,
+        brandCaptions: true,
+        preset: 'youtube',
+        selected: [a],
+      },
+      {
+        text: 'A short testimonial, without music or captions.',
+        kind: 'testimonial',
+        length: 15,
+        variants: 1,
+        captions: false,
+        music: false,
+        mood: '',
+        hookTitle: false,
+        broll: false,
+        brandCaptions: false,
+        preset: null,
+        selected: [b],
+      },
+      {
+        text: 'A 15-second highlight from both takes.',
+        kind: 'highlight',
+        length: 15,
+        variants: 3,
+        captions: true,
+        music: true,
+        mood: 'Driving electronic',
+        hookTitle: true,
+        broll: true,
+        brandCaptions: false,
+        preset: 'tiktok',
+        selected: [a, b],
+      },
+    ].entries()) {
+      const created = await fetch(`${api.base}/api/ai-studio/video-projects`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${api.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId: BRAND,
+          title: `Brief ${RUN} ${index}`,
+          width: 640,
+          height: 640,
+        }),
+      });
+      expect(created.ok).toBe(true);
+      const project = editorProjectResponseSchema.parse(await created.json()).project;
+      projects.push(project.projectId);
+      for (const [i, source] of owned.entries()) {
+        const placed = await postOp(api, project.projectId, 'add_clip', {
+          assetId: source.assetId,
+          versionId: source.versionId,
+          sourceInSec: 64.7,
+          durationSec: 5,
+          atSec: i * 5,
+        });
+        expect(placed.status).toBe(200);
+      }
+      const beforeDraft = await getProject(api, project.projectId);
+      stage(`case${index}: open editor`);
+      await page.goto(`${frontend.url}${videoStudioEditorPath(project.projectId)}`);
+      await page.getByTestId('video-studio-edit').waitFor({ timeout: 180000 });
+      await page
+        .getByRole('button', { name: 'First cut', exact: true })
+        .filter({ visible: true })
+        .click();
+      const dialog = page.locator('[data-testid="brief-dialog"]:visible');
+      await expect(dialog).toBeVisible();
+      stage(`case${index}: enter brief`);
+      await dialog.getByLabel('What do you want?').fill(options.text);
+      await expect(dialog.getByLabel('What do you want?')).toHaveValue(options.text);
+      if (options.kind === 'hook')
+        await dialog.getByRole('button', { name: '30s hook', exact: true }).click();
+      else if (options.kind === 'testimonial') {
+        await dialog.getByRole('button', { name: 'Testimonials', exact: true }).click();
+        await dialog.getByRole('slider', { name: 'Length in seconds' }).press('Home');
+        for (let i = 0; i < 10; i++)
+          await dialog.getByRole('slider', { name: 'Length in seconds' }).press('ArrowRight');
+      } else await dialog.getByRole('button', { name: '15s teaser', exact: true }).click();
+      if (options.variants === 3)
+        await dialog.getByRole('button', { name: '3 variants', exact: true }).click();
+      stage(`case${index}: finishing switches`);
+      for (const [label, wanted] of [
+        ['Word-timed captions', options.captions],
+        ['Music', options.music],
+        ['Hook title', options.hookTitle],
+        ['B-roll', options.broll],
+        ['Brand captions', options.brandCaptions],
+      ] as const) {
+        stage(`case${index}: switch ${label}`);
+        const control = dialog.getByRole('switch', { name: label, exact: true });
+        if (((await control.getAttribute('aria-checked')) === 'true') !== wanted)
+          await control.click();
+      }
+      stage(`case${index}: music mood and format`);
+      if (options.music)
+        await dialog.getByRole('button', { name: options.mood, exact: true }).click();
+      if (options.preset) {
+        await dialog.getByRole('combobox', { name: 'Format', exact: true }).click();
+        await page
+          .getByRole('option', {
+            name: options.preset === 'youtube' ? 'YouTube' : 'TikTok',
+            exact: true,
+          })
+          .click();
+      }
+      stage(`case${index}: source checkboxes`);
+      for (const asset of owned)
+        if (!options.selected.includes(asset))
+          await dialog.locator(`label[for="brief-footage-${asset.assetId}"]`).click();
+      await expect(dialog.getByLabel('What do you want?')).toHaveValue(options.text);
+      const expected = {
+        brief: options.text,
+        kind: options.kind,
+        targetDurationSec: options.length,
+        variants: options.variants,
+        ...(options.preset ? { preset: options.preset } : {}),
+        captions: options.captions,
+        music: options.music,
+        ...(options.music ? { musicPrompt: options.mood } : {}),
+        hookTitle: options.hookTitle,
+        broll: options.broll,
+        brandCaptions: options.brandCaptions,
+        sourceAssetIds: options.selected.map((s) => s.assetId),
+      };
+      const responsePromise = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          res.url().endsWith(`/${project.projectId}/ops/draft_cut`),
+      );
+      stage(`case${index}: submit`);
+      const began = performance.now();
+      await dialog.getByTestId('brief-submit').click();
+      const response = await responsePromise;
+      const admittedMs = performance.now() - began;
+      check(
+        `f32 case${index}: native submit accepts a real draft job`,
+        response.ok(),
+        (await response.text()).slice(0, 180),
+      );
+      const request = response.request().postDataJSON();
+      check(
+        `f32 case${index}: every UI choice reaches the shared HTTP operation unchanged`,
+        isDeepStrictEqual(request, expected),
+      );
+      const started = (await response.json()) as { jobId: string };
+      expect(JOB_ID.test(started.jobId)).toBe(true);
+      jobs.push(started.jobId);
+      const row = JSON.parse(
+        localSql(`select row_to_json(j) from (
+        select job_id,brand_id,user_id,tool,params,params_hash,status
+        from plugin_mcp.jobs where job_id='${started.jobId}' and brand_id='${BRAND}'
+      ) j;`),
+      );
+      const readbackMs = performance.now() - began;
+      await expect(dialog.getByTestId('brief-progress')).toBeVisible();
+      const elapsed = performance.now() - began;
+      timings.push(elapsed);
+      const expectedParams = {
+        projectId: project.projectId,
+        ...expected,
+        footage: options.selected.map((s) => s.versionId),
+      };
+      check(
+        `f32 case${index}: durable draft input retains every brief and finishing choice`,
+        isDeepStrictEqual(row.params, expectedParams),
+      );
+      check(
+        `f32 case${index}: only selected immutable source versions enter the draft`,
+        isDeepStrictEqual(row.params.footage, expectedParams.footage),
+      );
+      check(
+        `f32 case${index}: complete native admission meets original200ms`,
+        elapsed > 0 && elapsed <= 200,
+        String(elapsed),
+      );
+      readbacks.push({
+        index,
+        expected,
+        request,
+        expectedParams,
+        row,
+        admittedMs,
+        networkTiming: response.request().timing(),
+        readbackMs,
+        elapsed,
+        headVersion,
+      });
+      save('readbacks.json', readbacks);
+      const terminal = await until(
+        () => postOp(api, project.projectId, 'draft_cut_status', { jobId: started.jobId }),
+        (r) => ['failed', 'completed'].includes(JSON.parse(r.text).state),
+        30000,
+      );
+      const terminalBody = JSON.parse(terminal.text) as { state: string; error?: string };
+      check(
+        `f32 case${index}: disabled provider failure is terminal and leaves timeline unchanged`,
+        terminalBody.state === 'failed' &&
+          isDeepStrictEqual(await getProject(api, project.projectId), beforeDraft),
+      );
+      save(`terminal-${index}.json`, {
+        terminalBody,
+        beforeDraft,
+        afterDraft: await getProject(api, project.projectId),
+      });
+    }
+    check(
+      'f32 native page has no uncaught errors',
+      pageErrors.length === 0,
+      pageErrors.join(' | '),
+    );
+    note(`speed samples: ${JSON.stringify({ brief: timings })}`);
+    results.push({
+      step: 'unexercised paid draft and production',
+      grade: 'SKIP',
+      detail:
+        'Model selection, generated finishing, completed cuts and production are unexercised; provider configuration disabled.',
+    });
+    rec.record(
+      'unexercised paid draft and production',
+      'SKIP',
+      'Real native dialog→authorized operation→resolved footage→durable job input only. Model selection, generated finishing, completed first cuts, export and production are unexercised; provider configuration disabled.',
+    );
+  } catch (error) {
+    check(
+      'brief journey completion',
+      false,
+      error instanceof Error ? error.message : String(error),
+    );
+    throw error;
+  } finally {
+    save('owned.json', {
+      brandId: BRAND,
+      projects,
+      jobs,
+      owned,
+      paths,
+      receipts,
+      previousBrand,
+      sessionId: session
+        ? JSON.parse(Buffer.from(session.accessToken.split('.')[1]!, 'base64url').toString())
+            .session_id
+        : undefined,
+      userId: session?.userId,
+      servers: servers.map(({ url, log }) => ({ url, log })),
+    });
+    await context
+      ?.close()
+      .catch((error) => check('owned browser context closes', false, String(error)));
+    try {
+      await removeProjects(admin, BRAND, projects);
+      if (jobs.length) {
+        expect(jobs.every((id) => JOB_ID.test(id))).toBe(true);
+        localSql(
+          `delete from plugin_mcp.jobs where brand_id='${BRAND}' and job_id in (${jobs.map((id) => `'${id}'`).join(',')});`,
+        );
+      }
+      for (const bucket of ['media-library', KEPT_BUCKET]) {
+        const targets = paths.filter(
+          (path) => (bucket === KEPT_BUCKET) === path.includes('/transcripts/'),
+        );
+        if (targets.length) {
+          const { error } = await admin.storage.from(bucket).remove(targets);
+          check('owned cleanup operation succeeds', !error, error?.message);
+        }
+      }
+      for (const asset of owned) {
+        const { error } = await admin
+          .schema('media')
+          .from('assets')
+          .delete()
+          .eq('brand_id', BRAND)
+          .eq('id', asset.assetId);
+        check('owned cleanup operation succeeds', !error, error?.message);
+      }
+      if (receipts.length) {
+        expect(
+          receipts.every((v) => /^(generated:[a-f0-9]{64}|brief-head-[a-f0-9]{8})$/.test(v)),
+        ).toBe(true);
+        execFileSync(
+          'docker',
+          [
+            'exec',
+            'supabase_db_continuum',
+            'psql',
+            '-U',
+            'postgres',
+            '-d',
+            'postgres',
+            '-v',
+            'ON_ERROR_STOP=1',
+            '-Atc',
+            `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key in (${receipts.map((v) => `'${v}'`).join(',')});`,
+          ],
+          { stdio: 'pipe' },
+        );
+      }
+      if (session) {
+        if (brandChanged) {
+          const preferences = admin.schema('brand_profiles').from('user_brand_preferences');
+          const { error } =
+            previousBrand === undefined
+              ? await preferences.delete().eq('user_id', session.userId)
+              : await preferences.upsert(
+                  { user_id: session.userId, active_brand_id: previousBrand },
+                  { onConflict: 'user_id' },
+                );
+          check('owned cleanup operation succeeds', !error, error?.message);
+        }
+        const { error } = await admin.auth.admin.signOut(session.accessToken, 'local');
+        check('owned cleanup operation succeeds', !error, error?.message);
+      }
+      const [leftProjects, leftAssets, leftJobs] = await Promise.all([
+        projects.length
+          ? admin
+              .schema('media')
+              .from('editor_projects')
+              .select('id', { count: 'exact', head: true })
+              .in('id', projects)
+          : { count: 0, error: null },
+        owned.length
+          ? admin
+              .schema('media')
+              .from('assets')
+              .select('id', { count: 'exact', head: true })
+              .in(
+                'id',
+                owned.map((a) => a.assetId),
+              )
+          : { count: 0, error: null },
+        {
+          count: jobs.length
+            ? Number(
+                localSql(
+                  `select count(*) from plugin_mcp.jobs where job_id in (${jobs.map((id) => `'${id}'`).join(',')});`,
+                ),
+              )
+            : 0,
+          error: null,
+        },
+      ]);
+      check(
+        'f32 owned projects assets and jobs are absent after cleanup',
+        [leftProjects, leftAssets, leftJobs].every((row) => !row.error && row.count === 0),
+      );
+    } finally {
+      for (const server of servers.reverse()) server.stop();
+      printEnvelope();
+    }
+  }
+  expect(rec.summary().fail).toBe(0);
 });
