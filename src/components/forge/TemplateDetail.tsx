@@ -43,7 +43,6 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
-import { LineagePanel } from '@/components/forge/LineagePanel';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
@@ -79,6 +78,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import { Video } from '@/components/ui/video';
 import {
   advanceTemplateForgeBundle,
   advanceTemplateForgeRun,
@@ -1338,14 +1338,12 @@ export function TemplateDetail({
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
                       node:
                         rendered.kind === 'video' ? (
-                          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-                          <video
+                          <Video
                             src={rendered.url}
-                            className="size-full object-contain"
-                            controls
+                            ariaLabel={`${name} · ${picked.ratio ?? picked.label}`}
                             muted
-                            playsInline
-                            preload="metadata"
+                            className="aspect-auto! size-full rounded-none border-0"
+                            videoClassName="object-contain"
                           />
                         ) : (
                           // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
@@ -1649,10 +1647,7 @@ export function TemplateDetail({
             Source revision
           </TabsTrigger>
           <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-            Variants
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex-none px-0 text-xs">
-            History
+            Versions
           </TabsTrigger>
           <TabsTrigger value="details" className="flex-none px-0 text-xs">
             Details
@@ -1715,8 +1710,9 @@ export function TemplateDetail({
           />
         </TabsContent>
         <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
-          {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
-              the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
+          {/* The template as a git history: checkpoints, forks (sizes, languages, looks), tags, and
+              the live checkpoint every render uses. It replaced a History tab that drew only the
+              tree, which production returns empty. */}
           <VariantsPanel
             brandId={brandId}
             assetId={assetId}
@@ -1730,9 +1726,6 @@ export function TemplateDetail({
                 }
               : {})}
           />
-        </TabsContent>
-        <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-          <LineagePanel brandId={brandId} assetId={assetId} />
         </TabsContent>
         <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">

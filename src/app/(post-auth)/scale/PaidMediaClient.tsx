@@ -515,7 +515,7 @@ export default function PaidMediaClientPage({
           <div data-tour-id="paid-account-selector" className="inline-flex">
             <AdAccountSelector
               brandId={brandProfileId}
-              platform={platform}
+              platform={activeTab === 'jaina' ? 'all' : platform}
               selectedAccountId={selectedAdAccount}
               onSelect={setSelectedAdAccount}
               initialTimelineAccounts={initialAccounts}

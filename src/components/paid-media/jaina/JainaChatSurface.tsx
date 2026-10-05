@@ -41,7 +41,6 @@ import type {
 import {
   AGENT_RUN_QUEUED,
   JAINA_MAX_AD_ACCOUNTS,
-  normalizeAdAccountId,
   updateAgentSessionTagsResponseSchema,
 } from '@continuum/contracts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -151,6 +150,7 @@ const SCAFFOLD_GATE_BY_TOOL_NAME: Record<string, PaidScaffoldGate> = {
 };
 
 import type { PlanStatus } from '@/components/ai-elements/plan';
+import { jainaAccountOptions } from './accountOptions';
 import type { PlanFeedbackPayload } from './components/PlanSection';
 import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
 import { getReportSummary, hasReportContent } from './jainaUtils';
@@ -246,40 +246,6 @@ type JainaMentionAdSet = {
   name: string;
   status?: string;
 };
-
-function metaAccountOptions(
-  adAccountId: string | null,
-  accounts:
-    | Array<{
-        integrationAccountId: string;
-        externalAccountId: string | null;
-        alias: string | null;
-        name: string;
-        type: string | null;
-      }>
-    | undefined,
-) {
-  if (!adAccountId) return [];
-  const primaryKey = normalizeAdAccountId(adAccountId);
-  const seen = new Set<string>();
-  const options: Array<{ id: string; label: string }> = [];
-
-  for (const account of accounts ?? []) {
-    if (account.type !== 'meta_ad_account') continue;
-    const sourceId = account.externalAccountId ?? account.integrationAccountId;
-    const key = normalizeAdAccountId(sourceId);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    options.push({
-      id: key === primaryKey ? adAccountId : sourceId,
-      label: account.alias ?? account.name,
-    });
-  }
-
-  const primary = options.find(({ id }) => normalizeAdAccountId(id) === primaryKey);
-  if (primary) return [primary, ...options.filter((option) => option !== primary)];
-  return [{ id: adAccountId, label: adAccountId }, ...options];
-}
 
 function matchesJainaMentionQuery(
   query: string,
@@ -831,7 +797,7 @@ export function JainaChatSurface({
   // is the evidence — ad accounts and the documents the turn may read.
   const activeProjectId = useActiveProjectOptional()?.activeProjectId ?? null;
   const accountScopeOptions = React.useMemo(
-    () => metaAccountOptions(adAccountId, integrations?.facebook?.accounts),
+    () => jainaAccountOptions(adAccountId, integrations),
     [adAccountId, integrations],
   );
   const [selectedAdAccountIds, setSelectedAdAccountIds] = React.useState<string[]>(() =>
@@ -2050,7 +2016,17 @@ export function JainaChatSurface({
           : {}),
         canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
-        ...(selectedAdAccountIds.length > 1 ? { adAccountIds: selectedAdAccountIds } : {}),
+        ...(selectedAdAccountIds.length > 1 ||
+        accountScopeOptions.some(
+          (option) => option.id === adAccountId && option.platform === 'google_ads',
+        )
+          ? {
+              adAccountIds: selectedAdAccountIds,
+              accounts: accountScopeOptions
+                .filter((option) => selectedAdAccountIds.includes(option.id))
+                .map((option) => ({ platform: option.platform, accountId: option.id })),
+            }
+          : {}),
         brandId: brandProfileId,
         projectId: activeProjectId,
         sessionId: activeSessionId,
@@ -2079,6 +2055,7 @@ export function JainaChatSurface({
       activeProjectId,
       adAccountId,
       selectedAdAccountIds,
+      accountScopeOptions,
       brandProfileId,
       campaignCanvasPayload,
       ensureConversationSession,
@@ -2950,7 +2927,7 @@ export function JainaChatSurface({
                 <div data-tour-id="paid-jaina-chat" className="w-full">
                   <div className="mb-1 px-1">
                     <AgentDataScopePicker
-                      label="Meta accounts"
+                      label="Ad accounts"
                       options={accountScopeOptions}
                       selectedIds={selectedAdAccountIds}
                       requiredIds={[adAccountId]}

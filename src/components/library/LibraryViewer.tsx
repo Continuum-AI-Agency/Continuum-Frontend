@@ -51,8 +51,8 @@ import {
   useState,
   useTransition,
 } from 'react';
-import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
+import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
 import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -792,12 +792,17 @@ export function LibraryViewer({
         void importDesignTemplate(brandId, uploaded.assetId)
           .then((imported) => {
             toast.success(
-              imported.status === 'exists' ? `${file.name} is already a template` : `Template made from ${file.name}`,
+              imported.status === 'exists'
+                ? `${file.name} is already a template`
+                : `Template made from ${file.name}`,
             );
+            setAssetRevision((revision) => revision + 1);
             router.refresh();
           })
           .catch((error: unknown) =>
-            toast.error(`${file.name}: ${error instanceof Error ? error.message : 'the import failed'}`),
+            toast.error(
+              `${file.name}: ${error instanceof Error ? error.message : 'the import failed'}`,
+            ),
           );
       }
       const collectionId = folderTargets.current.get(file);
@@ -837,11 +842,22 @@ export function LibraryViewer({
   );
 
   const routeUploadFiles = useCallback(
-    (fileList: FileList | File[]) => {
-      const { fonts, media } = partitionLibraryUploadFiles(fileList);
+    async (fileList: FileList | File[]) => {
+      let files = Array.from(fileList);
+      if (showTemplates) {
+        try {
+          const { expandDesignArchives } = await import('@/components/forge/designArchive');
+          files = await expandDesignArchives(files);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Could not open the ZIP');
+          return;
+        }
+      }
+      const { fonts, media } = partitionLibraryUploadFiles(files);
       if (fonts.length > 0) setFontReviewFiles(fonts);
       if (showTemplates) {
-        for (const file of media) if (isForgeDesignFile(file.name)) templateDesigns.current.add(file);
+        for (const file of media)
+          if (isForgeDesignFile(file.name)) templateDesigns.current.add(file);
       }
       if (media.length > 0) void uploadFiles(media);
     },

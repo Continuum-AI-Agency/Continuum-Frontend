@@ -62,7 +62,6 @@ mock.module('motion/react', () => ({ ...motion, useReducedMotion: () => reducedM
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({ run: null, pushed: true, loading: false, refresh: async () => undefined }),
 }));
-mock.module('@/components/forge/LineagePanel', () => ({ LineagePanel: () => null }));
 mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({ OutputSettingsPanel: () => null }));
 mock.module('@/components/library/useMediaUpload', () => ({

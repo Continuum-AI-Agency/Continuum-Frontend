@@ -39,7 +39,7 @@ type AdAccountSelectorProps = {
   selectedAccountId: string | null;
   onSelect: (accountId: string) => void;
   /** Which ad platform's accounts to surface. Defaults to Meta. */
-  platform?: PaidMediaPlatform;
+  platform?: PaidMediaPlatform | 'all';
   /** Server-provided initial accounts to avoid a client-side fetch waterfall. */
   initialTimelineAccounts?: AdAccount[];
   /**
@@ -67,6 +67,7 @@ export function AdAccountSelector({
   assignedAccountIds,
 }: AdAccountSelectorProps) {
   const isGoogleAds = platform === 'google-ads';
+  const isAll = platform === 'all';
   const isLinkedIn = platform === 'linkedin';
   // OpenAI Ads, like Google and LinkedIn, has no timeline endpoint: its accounts come
   // from the brand integration summary, which the platform-key maps now group under
@@ -103,6 +104,13 @@ export function AdAccountSelector({
       pushIntegrationAccounts(integrations?.googleAds?.accounts);
       return merged;
     }
+    if (isAll) {
+      pushIntegrationAccounts(
+        integrations?.facebook?.accounts.filter((account) => account.type === 'meta_ad_account'),
+      );
+      pushIntegrationAccounts(integrations?.googleAds?.accounts);
+      return merged;
+    }
     if (isLinkedIn) {
       pushIntegrationAccounts(integrations?.linkedin?.accounts);
       return merged;
@@ -120,7 +128,7 @@ export function AdAccountSelector({
     pushIntegrationAccounts(integrations?.facebook?.accounts);
 
     return merged;
-  }, [integrations, timelineAccounts, isGoogleAds, isLinkedIn, isOpenAi]);
+  }, [integrations, timelineAccounts, isGoogleAds, isAll, isLinkedIn, isOpenAi]);
 
   // Scope to the brand's ASSIGNED accounts when the caller provides that set.
   // `null`/`undefined` ⇒ feature off (show every reachable account, today's
@@ -138,7 +146,7 @@ export function AdAccountSelector({
   React.useEffect(() => {
     // Non-Meta paid platforms have no timeline endpoint — accounts come from
     // the brand integration summary.
-    if (isGoogleAds || isLinkedIn || isOpenAi) {
+    if (isGoogleAds || isAll || isLinkedIn || isOpenAi) {
       initialAccountsUsedRef.current = false;
       setTimelineAccounts([]);
       setTimelineAccountsLoaded(true);
@@ -192,7 +200,7 @@ export function AdAccountSelector({
     return () => {
       isCancelled = true;
     };
-  }, [brandId, isGoogleAds, isLinkedIn, reloadNonce]);
+  }, [brandId, isGoogleAds, isAll, isLinkedIn, isOpenAi, reloadNonce]);
 
   // Auto-select an account when none is selected — and re-select when the current
   // selection is NOT among the visible (assigned) accounts, e.g. a server-seeded

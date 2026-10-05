@@ -10,14 +10,21 @@ import { cn } from '@/lib/utils';
 // The brand's Library storage allowance. Reserved bytes (uploads in flight) count as used,
 // matching the Backend's ceiling, so the bar fills the moment an upload starts.
 
-/** Where the allowance is explained and how to raise it — see DriveStorage. */
+/** Where the allowance is explained and how to raise it — see DriveBrands. */
 export const STORAGE_ALLOWANCE_HREF = '/settings/drive#storage';
 
-function formatGb(bytes: number): string {
+export function formatGb(bytes: number): string {
   return `${Number((bytes / 1e9).toFixed(1))} GB`;
 }
 
-export function StorageQuotaMeterView({ quota }: { quota: DriveQuota }) {
+/** `onUpgrade` lets a page that already holds the allowance explainer open it in place. */
+export function StorageQuotaMeterView({
+  quota,
+  onUpgrade,
+}: {
+  quota: DriveQuota;
+  onUpgrade?: () => void;
+}) {
   const { level, ratio } = storageQuotaLevel(quota);
   const percent = Math.min(100, Math.round(ratio * 100));
   const heldBytes = quota.usedBytes + quota.reservedBytes;
@@ -46,6 +53,7 @@ export function StorageQuotaMeterView({ quota }: { quota: DriveQuota }) {
           <Link
             data-testid="storage-quota-upgrade"
             href={STORAGE_ALLOWANCE_HREF}
+            onClick={onUpgrade}
             className="font-medium underline underline-offset-2"
           >
             Upgrade storage
@@ -56,8 +64,8 @@ export function StorageQuotaMeterView({ quota }: { quota: DriveQuota }) {
   );
 }
 
-export function StorageQuotaMeter({ brandId }: { brandId: string }) {
-  const quota = useQuery({
+export function useDriveQuota(brandId: string) {
+  return useQuery({
     queryKey: ['drive-quota', brandId],
     queryFn: () =>
       http.request<DriveQuota>({
@@ -66,6 +74,9 @@ export function StorageQuotaMeter({ brandId }: { brandId: string }) {
       }),
     retry: false,
   });
+}
 
+export function StorageQuotaMeter({ brandId }: { brandId: string }) {
+  const quota = useDriveQuota(brandId);
   return quota.data ? <StorageQuotaMeterView quota={quota.data} /> : null;
 }

@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Video } from '@/components/ui/video';
 import { cn } from '@/lib/utils';
 
 export type LightboxItem = {
@@ -56,12 +57,11 @@ export function MediaLightbox({
 
         <div className="relative flex items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
           {current?.isVideo ? (
-            // biome-ignore lint/a11y/useMediaCaption: user-generated creative preview
-            <video
+            <Video
+              key={current.url}
               src={current.url}
-              controls
-              playsInline
-              className="max-h-[65vh] w-auto max-w-full object-contain"
+              ariaLabel={current.caption}
+              className="aspect-auto! h-auto max-h-[65vh] w-full max-w-full rounded-lg border-0 [&_video]:h-auto [&_video]:max-h-[65vh] [&_video]:w-full [&_video]:object-contain"
             />
           ) : current ? (
             <div className="relative flex h-[65vh] w-full items-center justify-center">

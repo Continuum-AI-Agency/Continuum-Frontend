@@ -179,10 +179,7 @@ export const forgeLineageViewSchema = z
      *                             purpose: a tree for another design is worse than no tree,
      *                             because it looks like an answer.
      */
-    unavailable: z
-      .enum(['mirror_unreadable', 'mirror_wrong_master'])
-      .nullable()
-      .default(null),
+    unavailable: z.enum(['mirror_unreadable', 'mirror_wrong_master']).nullable().default(null),
   })
   .strict();
 export type ForgeLineageView = z.infer<typeof forgeLineageViewSchema>;
@@ -213,29 +210,9 @@ export function forgeLineageHasReason(node: ForgeLineageNode, reason: string): b
 export type ForgeVariantPin = { commitSha: string; ref: string | null };
 
 /**
- * Which VARIANT the template's graph is currently pointed at, named from the version tree.
- *
- * The forge's pin answers with an ATTACHMENT id and its bytes; the tree hangs `shipped` on the
- * commit those bytes came from. Matching the two is the only way a render can say it is the 9:16
- * cut rather than merely naming a sha256 — see template-forge `docs/TEMPLATE_IDENTITY.md`.
- *
- * Returns null for every UNCHECKED case, and they are all the same answer: no attachment id, no
- * cached tree, or a tree that has not recorded these bytes. A commit stamped `from-ledger` is a
- * fork whose checkout was deleted — it names bytes nobody has, so it is not a pin either.
- */
-/**
- * The commit a NAMED head points at — the same walk as `forgeLineageVariantOfAttachment`, asked
- * the other way round.
- *
- * The attachment lookup answers "which variant is the template pointing at right now", which is
- * what a render pins itself to when nobody chooses. This answers "which commit does THIS ref
- * name", which is what an operator picking a row off the variants panel is asking for. One
- * function per direction rather than one clever one: the predicates differ, the refusal differs
- * (an unknown ref is a 409 a person must see, an unmatched attachment is a quiet `absent`), and
- * merging them would hide that.
- *
- * Null when no node carries the ref, so the caller refuses rather than falling back to the live
- * pointer — silently rendering something other than what was chosen is the whole failure here.
+ * The commit a NAMED head points at in the tree — what an operator picking a checkpoint is asking
+ * for. Null when no node carries the ref, so the caller refuses rather than falling back to the
+ * live checkpoint: silently rendering something other than what was chosen is the whole failure.
  */
 export function forgeLineageVariantOfRef(
   view: Pick<ForgeLineageView, 'roots'>,
@@ -265,36 +242,206 @@ export function forgeLineageVariantOfRef(
   return null;
 }
 
-export function forgeLineageVariantOfAttachment(
-  view: Pick<ForgeLineageView, 'roots'>,
-  attachmentId: number | null | undefined,
-): ForgeVariantPin | null {
-  if (typeof attachmentId !== 'number' || !Number.isFinite(attachmentId)) return null;
+/**
+ * One CHECKPOINT — one commit of the template's version tree — however the view learned of it.
+ *
+ * In git terms: a commit. An upload is a root commit whose id IS its file's sha256; every later
+ * change (a clean-up, a size, an autofix round, a language fork, a look, a delivery flip) is a
+ * commit whose id hashes the instructions that made it, with `parent` the one before it and `base`
+ * the upload it all started from. Refs are branch names (`<key>/story/base`) or tags
+ * (`<workspace>/<key>@published`); `tags` are the notes the store hangs on a commit.
+ */
+export type ForgeCheckpoint = {
+  id: string;
+  parent: string | null;
+  base: string | null;
+  at: string | null;
+  tool: string | null;
+  reason: string | null;
+  facet: string | null;
+  why: string | null;
+  ops: number | null;
+  /** The file an upload was made from. */
+  file: string | null;
+  /** sha256 of the checkpoint's own bytes: the id for an upload, the checkout blob otherwise. */
+  blob: string | null;
+  refs: string[];
+  tags: Record<string, unknown>;
+};
 
-  const shippedAs = (node: ForgeLineageNode): number | null => {
-    const shipped = (node.tags ?? {}).shipped as { attachmentId?: unknown } | undefined;
-    return typeof shipped?.attachmentId === 'number' ? shipped.attachmentId : null;
-  };
+const textOf = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value : null;
+const fileOf = (input: unknown): string | null =>
+  textOf((input as { filename?: unknown } | null | undefined)?.filename);
+const shaOf = (value: string | null | undefined): string | null =>
+  value ? value.replace(/^sha256:/, '').toLowerCase() : null;
 
-  const walk = (node: ForgeLineageNode): ForgeVariantPin | null => {
-    if (shippedAs(node) === attachmentId) {
-      // `id` is the commit (a hash of the instruction set); `sha` is the checkout blob and is the
-      // commit only for an intake. Prefer the commit, and never pin to the ledger placeholder.
-      const commitSha = node.id || node.sha;
-      if (commitSha && commitSha !== 'from-ledger') {
-        return { commitSha, ref: node.refs[0] ?? null };
-      }
+/**
+ * Every checkpoint the view knows, parents before children: the tree's nodes, then the log's rows
+ * the tree did not return. In production the log is usually the ONLY place a template's commits
+ * appear — every cached tree on 2026-09-29 had `roots: []` and one upload commit in `log` — so a
+ * view built from the tree alone showed "empty" for a template with a perfectly good history.
+ */
+export function forgeCheckpointsOf(
+  view: Pick<ForgeLineageView, 'roots' | 'log' | 'refs'>,
+): ForgeCheckpoint[] {
+  const byId = new Map<string, ForgeCheckpoint>();
+  const refsTo = (id: string) =>
+    Object.entries(view.refs)
+      .filter(([, commit]) => commit === id)
+      .map(([name]) => name);
+  const walk = (node: ForgeLineageNode, parent: string | null) => {
+    const id = node.id || node.sha;
+    const real = id && id !== 'from-ledger';
+    if (real && !byId.has(id)) {
+      byId.set(id, {
+        id,
+        parent,
+        base: node.base ?? null,
+        at: textOf((node as { at?: unknown }).at),
+        tool: node.tool ?? null,
+        reason: node.reason ?? null,
+        facet: node.facet ?? null,
+        why: node.why ?? null,
+        ops: typeof node.ops === 'number' ? node.ops : null,
+        file: fileOf(node.input),
+        blob: shaOf(textOf(node.checkout?.blob) ?? (node.sha !== 'from-ledger' ? node.sha : null)),
+        refs: [...new Set([...node.refs, ...refsTo(id)])],
+        tags: node.tags ?? {},
+      });
     }
-    for (const child of node.children ?? []) {
-      const hit = walk(child);
-      if (hit) return hit;
-    }
-    return null;
+    for (const child of node.children ?? []) walk(child, real ? id : parent);
   };
-
-  for (const root of view.roots) {
-    const hit = walk(root);
-    if (hit) return hit;
+  for (const root of view.roots) walk(root, null);
+  // The log runs from the head back to the root; reversed, a parent lands before its child.
+  for (const row of [...view.log].reverse()) {
+    const id = row.id ?? row.child;
+    if (!id || byId.has(id)) continue;
+    byId.set(id, {
+      id,
+      parent: row.parent ?? null,
+      base: row.base ?? null,
+      at: row.at ?? null,
+      tool: row.tool ?? null,
+      reason: row.reason ?? null,
+      facet: row.facet ?? null,
+      why: row.why ?? null,
+      ops: typeof row.ops === 'number' ? row.ops : Array.isArray(row.ops) ? row.ops.length : null,
+      file: fileOf(row.input),
+      blob: shaOf(textOf(row.checkout?.blob) ?? (row.parent ? null : id)),
+      refs: refsTo(id),
+      tags: {},
+    });
   }
-  return null;
+  return [...byId.values()];
+}
+
+/**
+ * The refs that are THIS template's. The store's ref map is workspace-wide — every template's refs,
+ * other tenants' included — so a view must never hand the whole map to a browser. Kept:
+ *
+ *   - a tag or branch named for this template (`<workspace>/<key>@published`);
+ *   - a branch its own tree carries;
+ *   - a branch pointing at one of its own checkpoints.
+ *
+ * A TAG on its checkpoint that names another template is dropped: two templates can publish the
+ * very same bytes (171/174/175/180 did), and the other one's tag is not this template's to show.
+ */
+export function forgeTemplateRefs(
+  view: Pick<ForgeLineageView, 'refs' | 'roots' | 'log' | 'master'>,
+  ids: { workspace?: string | null; templateKey?: string | null },
+): Record<string, string> {
+  const own = new Set<string>();
+  const commits = new Set<string>(view.master ? [view.master] : []);
+  const walk = (node: ForgeLineageNode) => {
+    for (const ref of node.refs) own.add(ref);
+    commits.add(node.id || node.sha);
+    for (const child of node.children ?? []) walk(child);
+  };
+  for (const root of view.roots) walk(root);
+  for (const row of view.log) {
+    const id = row.id ?? row.child;
+    if (id) commits.add(id);
+  }
+  return Object.fromEntries(
+    Object.entries(view.refs).filter(([name, commit]) =>
+      name.includes('@') ? ownTag(name, ids) : own.has(name) || commits.has(commit),
+    ),
+  );
+}
+
+/**
+ * A TAG (`<workspace>/<key>@state`) is this template's only when it names this template. A shared
+ * commit's node carries every template's tags, so "it is on my tree" proves nothing for a tag.
+ */
+function ownTag(name: string, ids: { workspace?: string | null; templateKey?: string | null }) {
+  return (
+    !!ids.workspace &&
+    !!ids.templateKey &&
+    name.split('@')[0] === `${ids.workspace}/${ids.templateKey}`
+  );
+}
+
+/** Tags a view may carry across the boundary: facts about the bytes, not about who used them. */
+const SCOPED_TAGS = ['state', 'ae-accepted', 'class', 'rows'] as const;
+
+/**
+ * The view as ONE brand's template may see it. The forge store is content-addressed and
+ * workspace-wide, so the same bytes uploaded by two brands are ONE commit: its node carries every
+ * template's tags, its `shipped`/`pointer` notes name whichever template wrote last, and its log row
+ * names whoever uploaded it first — brand, asset and filename. On 2026-09-30 two packages were
+ * shared across brands this way (templates 171/174/175/180 and 176/179/183). So, before a view
+ * leaves the Backend:
+ *
+ *   - refs, on the map and on every node, pass `forgeTemplateRefs`'s rule;
+ *   - node tags keep only the byte facts in SCOPED_TAGS;
+ *   - an upload's `input` survives only when this brand made it;
+ *   - worktree paths are dropped.
+ */
+export function forgeScopeView(
+  view: ForgeLineageView,
+  ids: { workspace?: string | null; templateKey?: string | null; brandId: string },
+): ForgeLineageView {
+  const refs = forgeTemplateRefs(view, ids);
+  // ponytail: a BRANCH on this template's own tree is kept by name alone. Production has no branch
+  // refs yet (only `@published` tags); if shared bytes ever carry another template's branch, key
+  // branches by the forge's template slug here.
+  const ownRef = (name: string) => (name.includes('@') ? ownTag(name, ids) : true);
+  const ownInput = (input: unknown) => {
+    const brand = (input as { library?: { brandId?: unknown } } | null | undefined)?.library
+      ?.brandId;
+    return brand === ids.brandId ? input : null;
+  };
+  const scopeNode = (node: ForgeLineageNode): ForgeLineageNode => ({
+    ...node,
+    input: ownInput(node.input),
+    refs: node.refs.filter(ownRef),
+    tags: Object.fromEntries(
+      SCOPED_TAGS.filter((key) => key in (node.tags ?? {})).map((key) => [key, node.tags[key]]),
+    ),
+    children: (node.children ?? []).map(scopeNode),
+  });
+  return {
+    ...view,
+    refs,
+    roots: view.roots.map(scopeNode),
+    log: view.log.map((row) => ({ ...row, input: ownInput(row.input) })),
+    worktrees: view.worktrees.map(({ path: _path, ...worktree }) => worktree),
+  };
+}
+
+/**
+ * The checkpoint whose bytes are `sha256`. A render sends the worker exactly one digest and the
+ * worker refuses any other file, so the checkpoint holding that digest is the one the render WILL
+ * use — proven by the worker, not inferred from a pointer.
+ */
+export function forgeCheckpointOfBytes(
+  checkpoints: readonly ForgeCheckpoint[],
+  sha256: string | null | undefined,
+): ForgeCheckpoint | null {
+  const wanted = shaOf(sha256);
+  if (!wanted) return null;
+  return (
+    checkpoints.find((checkpoint) => checkpoint.id === wanted || checkpoint.blob === wanted) ?? null
+  );
 }

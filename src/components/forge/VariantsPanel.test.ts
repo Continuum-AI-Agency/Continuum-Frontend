@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { checkpointGraph, refLabel } from '@/components/forge/templateCheckpoints';
 import { variantLabel } from '@/components/forge/templateVersion';
-import { variantsOf } from '@/components/forge/VariantsPanel';
 
 // A variant is a sibling VERSION that differs deliberately — a ratio, a language, a legal wrap, a
 // motion preset. Same lineage, its own named head. The Render tab's "forks" are forks of DATA and
@@ -34,64 +34,86 @@ describe('variantLabel', () => {
   });
 });
 
-describe('variantsOf', () => {
-  test('lists every named head in the forest, nested ones included', () => {
+const UPLOAD = '881c3036'.padEnd(64, '0');
+
+// The production shape (2026-09-30): the tree empty, the upload only in the log, tagged published.
+const prodView = {
+  roots: [],
+  log: [
+    {
+      id: UPLOAD,
+      parent: null,
+      base: UPLOAD,
+      tool: 'intake',
+      reason: 'intake',
+      at: '2026-09-30T02:54:21.182Z',
+      input: { filename: 'speaker.zip' },
+      checkout: { blob: UPLOAD },
+    },
+  ],
+  refs: { 'Continuum_app/277@published': UPLOAD },
+  master: UPLOAD,
+} as never;
+
+describe('checkpointGraph', () => {
+  test('a template whose tree is empty still has its upload, live, and the tag it is pinned by', () => {
+    const graph = checkpointGraph(prodView);
+    expect(graph.rows.map((row) => [row.kind, row.file, row.live, row.depth])).toEqual([
+      ['Upload', 'speaker.zip', true, 0],
+    ]);
+    expect(graph.liveRef).toBe('Continuum_app/277@published');
+  });
+
+  test('forks nest under the checkpoint they branch from, like git log --graph', () => {
     const view = {
       roots: [
         node({
           sha: 'm'.repeat(64),
+          id: 'm'.repeat(64),
+          reason: 'intake',
+          tool: 'intake',
           refs: [],
           children: [
-            node({ sha: 'b'.repeat(64), refs: ['inyogo/9:16/base'] }),
+            node({ sha: 'b'.repeat(64), id: 'b'.repeat(64), refs: ['inyogo/9:16/base'] }),
             node({
               sha: 'c'.repeat(64),
-              refs: ['inyogo/1:1/base'],
-              children: [node({ sha: 'd'.repeat(64), refs: ['inyogo/1:1/tall'] })],
+              id: 'c'.repeat(64),
+              tool: 'preset_family',
+              reason: 'authored',
+              refs: ['inyogo/look/warm'],
+              children: [
+                node({ sha: 'd'.repeat(64), id: 'd'.repeat(64), reason: 'autofix', refs: [] }),
+              ],
             }),
           ],
         }),
       ],
+      log: [],
+      refs: {},
+      master: 'm'.repeat(64),
     } as never;
-    expect(variantsOf(view).map((v) => v.name)).toEqual(['9:16/base', '1:1/base', '1:1/tall']);
+    expect(
+      checkpointGraph(view).rows.map((row) => [row.kind, row.branch, row.depth, row.live]),
+    ).toEqual([
+      ['Upload', null, 0, true],
+      ['Size', '9:16/base', 1, false],
+      ['Look', 'look/warm', 1, false],
+      ['Autofix round', null, 2, false],
+    ]);
   });
 
-  test('a node with no ref is not a variant — an unnamed fork is a step, not a sibling', () => {
-    const view = { roots: [node({ refs: [] })] } as never;
-    expect(variantsOf(view)).toEqual([]);
+  test('live is found by the bytes renders send, then by the published tag', () => {
+    const byTag = { ...(prodView as object), master: 'f'.repeat(64) } as never;
+    expect(checkpointGraph(byTag).live?.id).toBe(UPLOAD);
+    const none = { ...(prodView as object), master: 'f'.repeat(64), refs: {} } as never;
+    expect(checkpointGraph(none).live).toBeNull();
+    expect(checkpointGraph(none).liveRef).toBeNull();
   });
+});
 
-  test('carries the outside-world facts the store hung on those bytes', () => {
-    const view = {
-      roots: [
-        node({
-          refs: ['inyogo/9:16/base'],
-          tags: {
-            state: 'needs_render',
-            'ae-accepted': true,
-            shipped: { attachmentId: 27612 },
-            pointer: [
-              { direction: 'flip', at: '2026-09-16T00:00:00Z', attachment: 27612 },
-              { direction: 'restore', at: '2026-09-16T00:05:00Z', attachment: 27612 },
-            ],
-          },
-        }),
-      ],
-    } as never;
-    const [variant] = variantsOf(view);
-    expect(variant.state).toBe('needs_render');
-    expect(variant.accepted).toBe(true);
-    expect(variant.shippedAs).toBe(27612);
-    // The LAST move, not the first: a pointer history that shows its opening move is a lie about
-    // where the template is now.
-    expect(variant.lastPointer?.direction).toBe('restore');
-  });
-
-  test('tolerates a node whose tags carry none of that', () => {
-    const view = { roots: [node({ refs: ['inyogo/9:16/base'], tags: {} })] } as never;
-    const [variant] = variantsOf(view);
-    expect(variant.state).toBeNull();
-    expect(variant.accepted).toBe(false);
-    expect(variant.shippedAs).toBeNull();
-    expect(variant.lastPointer).toBeNull();
+describe('refLabel', () => {
+  test('a fork reads as its branch, a tag as its state', () => {
+    expect(refLabel('inyogo/9:16/base')).toBe('9:16/base');
+    expect(refLabel('Continuum_app/277@published')).toBe('published');
   });
 });

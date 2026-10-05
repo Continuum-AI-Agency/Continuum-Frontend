@@ -27,6 +27,12 @@ describe('folder upload', () => {
     const levels = Array.from({ length: 12 }, (_, index) => `L${index + 1}`);
     expect(foldersOf(`${levels.join('/')}/deep.mp4`)).toEqual(levels.slice(0, 10));
     expect(foldersOf(`${levels.slice(0, 10).join('/')}/ten.mp4`)).toHaveLength(10);
+    expect(
+      folderFilesFromInput(
+        [file('deep.aep', `${levels.join('/')}/deep.aep`)],
+        Number.POSITIVE_INFINITY,
+      )[0].folders,
+    ).toEqual(levels);
   });
 
   it('lists every folder once, parents first, including ones holding only folders', () => {
@@ -91,5 +97,16 @@ describe('folder upload', () => {
     ]);
     const flat = [{ kind: 'file', webkitGetAsEntry: () => fileEntry('a.mp4') }];
     expect(await folderFilesFromDrop(flat as unknown as DataTransferItemList)).toBeNull();
+    const levels = Array.from({ length: 12 }, (_, index) => `L${index + 1}`);
+    const deep = levels.reduceRight(
+      (child, name) => dir(name, [[child]]),
+      fileEntry('deep.aep') as unknown as ReturnType<typeof dir>,
+    );
+    const deepItems = [
+      { kind: 'file', webkitGetAsEntry: () => deep },
+    ] as unknown as DataTransferItemList;
+    expect((await folderFilesFromDrop(deepItems, Number.POSITIVE_INFINITY))?.[0].folders).toEqual(
+      levels,
+    );
   });
 });

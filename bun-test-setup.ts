@@ -21,6 +21,10 @@ global.navigator = window.navigator as any;
 global.Element = window.Element as any;
 global.SVGElement = window.SVGElement as any;
 global.HTMLElement = window.HTMLElement as any;
+// Loomix reads HTMLMediaElement.HAVE_METADATA on the constructor, which
+// happy-dom keeps on window and never copies onto global.
+global.HTMLMediaElement = window.HTMLMediaElement as any;
+global.HTMLVideoElement = window.HTMLVideoElement as any;
 global.HTMLFormElement = window.HTMLFormElement as any;
 global.HTMLInputElement = window.HTMLInputElement as any;
 global.HTMLTextAreaElement = window.HTMLTextAreaElement as any;
