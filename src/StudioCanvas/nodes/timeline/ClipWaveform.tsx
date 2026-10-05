@@ -5,8 +5,8 @@ function buildWaveformPath(peaks: number[]): string {
   const mid = 10;
   const count = peaks.length;
   let path = `M 0 ${mid}`;
-  for (let i = 0; i < count; i += 1) path += ` L ${i} ${(mid - peaks[i] * mid).toFixed(2)}`;
-  for (let i = count - 1; i >= 0; i -= 1) path += ` L ${i} ${(mid + peaks[i] * mid).toFixed(2)}`;
+  for (let i = 0; i < count; i += 1) path += ` L ${i} ${(mid - peaks[i] * mid).toFixed(4)}`;
+  for (let i = count - 1; i >= 0; i -= 1) path += ` L ${i} ${(mid + peaks[i] * mid).toFixed(4)}`;
   return `${path} Z`;
 }
 

@@ -436,6 +436,32 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     );
     const patchedAudio = patched.tracks.find((track) => track.id === audioTrack.id)?.clips[0];
     expect(patchedAudio).toMatchObject({ volume: 0.6, fadeInSec: 1 });
+    const trimmed = applyDrafts(
+      patched,
+      patchAudioOperation(patched, audioTrack.id, audio.id, { durationSec: 2, sourceInSec: 4 })
+        .forward,
+    );
+    expect(trimmed.tracks.find((track) => track.id === audioTrack.id)?.clips[0]).toMatchObject({
+      fadeInSec: 1,
+      audioFadeClock: { offsetSec: 4, durationSec: 12 },
+    });
+    const volumeOnly = applyDrafts(
+      trimmed,
+      patchAudioOperation(trimmed, audioTrack.id, audio.id, { volume: 0.4 }).forward,
+    );
+    expect(volumeOnly.tracks.find((track) => track.id === audioTrack.id)?.clips[0]).toMatchObject({
+      volume: 0.4,
+      fadeInSec: 1,
+      audioFadeClock: { offsetSec: 4, durationSec: 12 },
+    });
+    const reauthored = applyDrafts(
+      volumeOnly,
+      patchAudioOperation(volumeOnly, audioTrack.id, audio.id, { fadeInSec: 0.5 }).forward,
+    );
+    expect(reauthored.tracks.find((track) => track.id === audioTrack.id)?.clips[0]).toMatchObject({
+      fadeInSec: 0.5,
+      audioFadeClock: undefined,
+    });
   });
 
   test('crossfades use shared overlap geometry for commands, preview, and project duration', () => {
@@ -565,4 +591,48 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     expect(exactVersionPreviewUrl(versions, 'pinned')).toBe('https://media.example/pinned.mp4');
     expect(exactVersionPreviewUrl(versions, 'missing')).toBeUndefined();
   });
+});
+
+test('full text form saves preserve retained animation for spelling and reset it for a changed preset', () => {
+  let project = projectFixture();
+  const input = {
+    clipId: 'title-clock',
+    text: 'Keep the clock',
+    timelineStartSec: 0,
+    durationSec: 4,
+    animationIn: 'pop' as const,
+    animationOut: 'floatIn' as const,
+  };
+  project = applyDrafts(project, upsertTextOperation(project, input).forward);
+  const track = project.tracks.find((track) => track.kind === 'text');
+  const title = track?.clips[0];
+  if (!track || !title || title.kind !== 'text') throw new Error('no title');
+  project = applyDrafts(project, [
+    {
+      commandType: 'upsert_clip',
+      trackId: track.id,
+      clip: {
+        ...title,
+        textAnimationClock: { offsetSec: 2, durationSec: 8 },
+        keyframeOffsetSec: 2,
+      },
+    },
+  ]);
+  project = applyDrafts(
+    project,
+    upsertTextOperation(project, { ...input, text: 'Keep our clock', timelineStartSec: 1 }).forward,
+  );
+  const preserved = project.tracks.find((track) => track.kind === 'text')?.clips[0];
+  expect(preserved?.kind === 'text' && preserved.textAnimationClock).toEqual({
+    offsetSec: 2,
+    durationSec: 8,
+  });
+  expect(preserved?.keyframeOffsetSec).toBe(2);
+  project = applyDrafts(
+    project,
+    upsertTextOperation(project, { ...input, animationIn: 'scaleIn' }).forward,
+  );
+  const changed = project.tracks.find((track) => track.kind === 'text')?.clips[0];
+  expect(changed?.kind === 'text' && changed.textAnimationClock).toBeUndefined();
+  expect(changed?.keyframeOffsetSec).toBe(2);
 });

@@ -68,6 +68,14 @@ const clip: EditorVideoClip = {
 };
 
 describe('visual clip ↔ effect spec', () => {
+  test('legacy flip controls round-trip and can remove a canonical negative scale', () => {
+    const spec = inspectorSpecFor(clip);
+    expect(spec.flipH).toBe(true);
+    expect(spec.transform?.scaleX).toBe(1.5);
+    const next = clipWithEffectSpec(clip, { ...spec, flipH: false }, false);
+    expect([next.transform.scaleX, next.transform.scaleY]).toEqual([1.5, 0.75]);
+  });
+
   test('an untouched spec writes the clip back unchanged', () => {
     expect(clipWithEffectSpec(clip, inspectorSpecFor(clip), false)).toEqual(clip);
   });
@@ -87,7 +95,12 @@ describe('visual clip ↔ effect spec', () => {
   });
 
   test('constant speed keeps the source span and stretches keyframes with it', () => {
-    const next = clipWithEffectSpec(clip, { ...inspectorSpecFor(clip), speed: 2 }, false);
+    const next = clipWithEffectSpec(
+      { ...clip, volume: 0.6, fadeInSec: 2, fadeOutSec: 3 },
+      { ...inspectorSpecFor(clip), speed: 2 },
+      false,
+    );
+    expect([next.volume, next.fadeInSec, next.fadeOutSec]).toEqual([0.6, 1, 1.5]);
     expect([next.playbackRate, next.durationSec, next.sourceInSec]).toEqual([2, 2, 1]);
     expect(next.keyframes.map((keyframe) => keyframe.timeSec)).toEqual([0, 1]);
   });

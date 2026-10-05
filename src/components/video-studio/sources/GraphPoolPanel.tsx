@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { libraryVersionKey } from '@/StudioCanvas/nodes/timeline/useClipPreviewUrls';
 import type { VideoStudioContext } from '../types';
 import { POOL_CHANGED_EVENT, PoolAssetCard } from './PoolAssetCard';
 
@@ -107,7 +108,11 @@ export function GraphPoolPanel({ studio }: { studio: VideoStudioContext }): Reac
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {section.map((asset) => (
-                <PoolAssetCard key={asset.assetId} asset={asset} studio={studio} />
+                <PoolAssetCard
+                  key={libraryVersionKey(asset.assetId, asset.versionId ?? '')}
+                  asset={asset}
+                  studio={studio}
+                />
               ))}
             </div>
           </section>

@@ -282,11 +282,45 @@ describe('the motion vocabulary (TEXT_ANIMATION_IDS)', () => {
   });
 
   it('wipes, blurs, zooms and bounces from their own starting points', () => {
-    const start = (id: string) => captionWordTransform(captionAnimationFromEditorId(id), 0, FONT_PX);
+    const start = (id: string) =>
+      captionWordTransform(captionAnimationFromEditorId(id), 0, FONT_PX);
     expect(start('wipe').wiped).toBe(0);
     expect(start('blur-in').blurPx).toBeCloseTo(30, 10);
     expect(start('zoom-out').scale).toBeCloseTo(1.4, 10);
     expect(start('bounce').dy).toBeLessThan(0);
     expect(start('fade').alpha).toBe(0);
   });
+});
+
+it('retained title entrances and exits match the original phase for every durable animation', () => {
+  for (const id of TEXT_ANIMATION_IDS) {
+    const animation = captionAnimationFromEditorId(id);
+    for (const localSec of [0, 0.1, 0.25, 0.75]) {
+      const sourceSec = localSec + 2;
+      const shared = {
+        entry: animation,
+        exit: animation,
+        fontPx: FONT_PX,
+        sequence: { index: 1, count: 3 },
+      };
+      const original = captionMotionTransform({
+        ...shared,
+        cueStartSec: 0,
+        cueEndSec: 4,
+        wordStartSec: 0,
+        wordEndSec: 4,
+        outputTimeSec: sourceSec,
+      });
+      const retained = captionMotionTransform({
+        ...shared,
+        cueStartSec: 1,
+        cueEndSec: 2,
+        cueAnimationClock: { offsetSec: 2, durationSec: 4 },
+        wordStartSec: 1,
+        wordEndSec: 2,
+        outputTimeSec: localSec + 1,
+      });
+      expect(retained).toEqual(original);
+    }
+  }
 });

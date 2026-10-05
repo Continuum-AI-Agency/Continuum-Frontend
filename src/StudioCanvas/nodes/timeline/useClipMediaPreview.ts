@@ -11,38 +11,48 @@ export function useClipMediaPreview(params: {
   hasAudio: boolean;
   thumbnailCount?: number;
   waveformBuckets?: number;
+  sourceStartSec?: number;
+  sourceEndSec?: number;
+  reverse?: boolean;
 }): { thumbnails: string[]; peaks: number[] } {
-  const { url, isVideo, hasAudio, thumbnailCount = 6, waveformBuckets = 60 } = params;
+  const {
+    url,
+    isVideo,
+    hasAudio,
+    thumbnailCount = 6,
+    waveformBuckets = 60,
+    sourceStartSec = 0,
+    sourceEndSec,
+    reverse = false,
+  } = params;
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [peaks, setPeaks] = useState<number[]>([]);
 
   useEffect(() => {
     let active = true;
-    if (!url || !isVideo) {
-      setThumbnails([]);
-    } else {
-      getThumbnails(url, thumbnailCount).then((result) => {
+    setThumbnails([]);
+    if (url && isVideo) {
+      getThumbnails(url, thumbnailCount, sourceStartSec, sourceEndSec, reverse).then((result) => {
         if (active) setThumbnails(result.filter(Boolean));
       });
     }
     return () => {
       active = false;
     };
-  }, [url, isVideo, thumbnailCount]);
+  }, [url, isVideo, thumbnailCount, sourceStartSec, sourceEndSec, reverse]);
 
   useEffect(() => {
     let active = true;
-    if (!url || !hasAudio) {
-      setPeaks([]);
-    } else {
-      getWaveform(url, waveformBuckets).then((result) => {
+    setPeaks([]);
+    if (url && hasAudio) {
+      getWaveform(url, waveformBuckets, sourceStartSec, sourceEndSec, reverse).then((result) => {
         if (active) setPeaks(result);
       });
     }
     return () => {
       active = false;
     };
-  }, [url, hasAudio, waveformBuckets]);
+  }, [url, hasAudio, waveformBuckets, sourceStartSec, sourceEndSec, reverse]);
 
   return { thumbnails, peaks };
 }

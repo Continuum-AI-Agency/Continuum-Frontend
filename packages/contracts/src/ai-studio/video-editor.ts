@@ -111,7 +111,10 @@ export const editorRenderBlockers = (project: EditorProjectV2): string[] => {
   }
   // `muted` silences a video track; only `enabled` takes its picture away.
   const hasPicture = project.tracks.some(
-    (track) => track.kind === 'video' && track.enabled && track.clips.some((clip) => clip.enabled),
+    (track) =>
+      track.enabled &&
+      (track.kind === 'video' || (track.kind === 'overlay' && !track.muted)) &&
+      track.clips.some((clip) => clip.enabled),
   );
   if (!hasPicture) blockers.push('The timeline is empty.');
   return blockers;
@@ -488,11 +491,11 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Make a rhythmic montage: switch_shots alternates at least two distinct source spans while keeping the original audio continuous. everyNBeats 0.5 or 0.25 makes rapid half/quarter-beat cuts. cut_on_beat only splits continuous footage for edit preparation. An explicit audioClipId redetects beats from that audio.',
+      'Make rhythmic cuts: jump_cuts skips footage from one forward primary clip and shortens the timeline while preserving authored motion and gain curves. It protects speech/captions and keeps music-bed audio continuous; speech protection can prevent cuts. The range must stay inside that clip without overlapping transitions; reversed or speed-ramped clips in the affected range are refused. switch_shots alternates at least two distinct source spans with original audio continuous. everyNBeats 0.5 or 0.25 makes half/quarter-beat cuts. cut_on_beat only splits for edit preparation. audioClipId redetects the beat source; it does not label narration as music.',
     input: z
       .object({
         ...projectRef,
-        mode: z.enum(['cut_on_beat', 'switch_shots']).default('switch_shots'),
+        mode: z.enum(['cut_on_beat', 'switch_shots', 'jump_cuts']).default('switch_shots'),
         everyNBeats: z
           .number()
           .finite()
@@ -511,7 +514,7 @@ export const VIDEO_EDITOR_OPS = {
         range: timelineRangeSchema.optional(),
       })
       .strict(),
-    output: committed({ cuts: z.array(secSchema) }),
+    output: committed({ cuts: z.array(secSchema), removedSec: secSchema.optional() }),
   },
   collage: {
     group: 'motion',
@@ -574,7 +577,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Change a video or audio clip to a constant playback rate, keeping its source span and scaling automation. Repack the main sequence and carry its captions and overlays with it. Reverse and speed ramps are not supported. One undo restores the edit.',
+      'Change a video, audio or composition clip to a constant playback rate, keeping its source span and scaling its own automation. Main-video changes repack the sequence and carry its captions and overlays; composition changes retain other instances and the child sequence. Reverse and speed ramps are not supported. One undo restores the edit.',
     input: z
       .object({
         ...projectRef,
@@ -637,7 +640,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Switch the project to a platform format (TikTok/Reels/Shorts 9:16, YouTube 16:9, square, 4:5) and reframe every clip to cover (fill, crop edges) or contain (fit, letterbox).',
+      'Switch the project to a platform format (TikTok/Reels/Shorts 9:16, YouTube 16:9, square, 4:5) and refit unlocked, centered full-frame video clips to cover (fill, crop edges) or contain (fit, letterbox). Preserve authored positioning, pivots, motion and 3D transforms.',
     input: z
       .object({
         ...projectRef,
@@ -694,11 +697,12 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Place a Library or pool asset on the timeline at a time: video on a video track, an image as an overlay, audio on an audio track. sourceInSec/durationSec trim it; newTrack puts it on a track of its own.',
+      'Place a Library or pool asset on the timeline at a time: video on a video track, an image as an overlay, audio on an audio track. versionId keeps a specific stored version; omit it to use the current head. sourceInSec/durationSec trim it; newTrack puts it on a track of its own.',
     input: z
       .object({
         ...projectRef,
         assetId: z.string().min(1),
+        versionId: z.string().uuid().optional(),
         atSec: secSchema.default(0),
         trackId: z.string().optional(),
         newTrack: z.boolean().default(false),
@@ -765,7 +769,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Give a video or overlay clip a look: a filter (bw, vintage, vivid, cool, warm, noir, dream) or an effect (blur, tint, vignette, film_grain, chromatic_aberration, vhs, pixelate, corner_radius, chroma_key) at a strength 0–1; remove takes it off.',
+      'Give a video or overlay clip a look: a filter (bw, vintage, vivid, cool, warm, noir, dream) or an effect (blur, tint, vignette, film_grain, dust, light_leaks, chromatic_aberration, vhs, pixelate, corner_radius, chroma_key) at a strength 0–1; remove takes it off.',
     input: z
       .object({
         ...projectRef,
@@ -794,7 +798,13 @@ export const VIDEO_EDITOR_OPS = {
         variants: z.number().int().min(1).max(5).default(1),
         preset: platformExportPresetIdSchema.optional(),
         captions: z.boolean().default(true),
-        sourceAssetIds: z.array(z.string()).max(20).optional(),
+        sourceAssetIds: z
+          .array(z.string())
+          .max(20)
+          .optional()
+          .describe(
+            'Omit to use enabled timeline videos. An explicit list is exclusive: selected timeline videos keep their pinned versions; new Library videos use their head version.',
+          ),
         /** Finishing: a music bed under each cut, ducked under its speech. */
         music: z.boolean().default(false),
         /** The bed's mood; drawn from the brief when absent. */

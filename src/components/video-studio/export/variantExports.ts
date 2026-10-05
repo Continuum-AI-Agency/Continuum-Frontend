@@ -7,8 +7,8 @@ import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import type { VideoStudioContext } from '../types';
 
 // Export all variants: every sibling drafted from this project's brief renders once with the
-// same platform preset. Each variant runs on its own — reframed only when its format
-// differs, exported, polled — so one failure stays that variant's, and retries alone.
+// same platform preset and requested framing. Each variant runs on its own — reframed,
+// exported, polled — so one failure stays that variant's, and retries alone.
 
 type ExportState = VideoEditorOpOutput<'export_status'>['state'];
 type Fit = 'cover' | 'contain';
@@ -102,13 +102,10 @@ export function useVariantExports(studio: VideoStudioContext, enabled: boolean) 
         error: undefined,
       });
       try {
-        const { exportPresetId } = await runVideoEditorOp(id, 'get_project', {});
         const edit = id === projectId ? runOpRef.current : null;
-        if (exportPresetId !== preset) {
-          await (edit
-            ? edit('set_format', { preset, fit })
-            : runVideoEditorOp(id, 'set_format', { preset, fit }));
-        }
+        await (edit
+          ? edit('set_format', { preset, fit })
+          : runVideoEditorOp(id, 'set_format', { preset, fit }));
         const { jobId } = await (edit
           ? edit('export', { preset })
           : runVideoEditorOp(id, 'export', { preset }));

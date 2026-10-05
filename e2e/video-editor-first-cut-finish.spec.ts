@@ -1,13 +1,19 @@
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type {
-  EditorClip,
-  EditorProjectV2,
-  VideoEditorOpInput,
-  VideoEditorOpName,
-  VideoEditorOpOutput,
+import {
+  type EditorClip,
+  type EditorProjectV2,
+  editorProjectResponseSchema,
+  editorVideoClipSchema,
+  PLATFORM_EXPORT_PRESETS,
+  registerGeneratedAssetResponseSchema,
+  type VideoEditorOpInput,
+  type VideoEditorOpName,
+  type VideoEditorOpOutput,
+  videoStudioEditorPath,
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
@@ -16,7 +22,7 @@ import { z } from 'zod';
 import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
-import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { ffprobe, type Probe } from './video-editor-journey/frames';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
@@ -51,11 +57,32 @@ import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
 
 test.describe.configure({ timeout: 2_700_000 });
 
-const BENCH = 'videoeditor:first-cut:finish:e2e:bench';
-const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
+const BENCH =
+  process.env.VIDEO_EDITOR_FINISH_BACKEND_ENTRY === '1'
+    ? 'video-editor:first-cut:finish:e2e:bench'
+    : 'videoeditor:first-cut:finish:e2e:bench';
+const EXPORT_ONLY = process.env.VIDEO_EDITOR_FINISH_EXPORT_ONLY === '1';
+if (
+  EXPORT_ONLY &&
+  !['localhost', '127.0.0.1', '[::1]'].includes(
+    new URL(process.env.VIDEO_EDITOR_RENDER_URL ?? 'https://invalid').hostname,
+  )
+)
+  throw new Error('Export-only mode requires an explicit loopback Render URL.');
+const BRAND = z
+  .string()
+  .uuid()
+  .parse(
+    process.env.CONTINUUM_TEST_BRAND_ID ??
+      (EXPORT_ONLY
+        ? '00000000-0000-4000-8000-0000000000b2'
+        : 'b411bba9-d09c-4892-9b86-5ff340ce64e5'),
+  );
 /** Where the Backend keeps transcripts per version and stores exports (AI_STUDIO_BUCKET). */
 const BRAND_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
-const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
+const OWNER_EMAIL = EXPORT_ONLY
+  ? 'local@continuum.test'
+  : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 const RENDER_URL =
   process.env.VIDEO_EDITOR_RENDER_URL ??
   'https://export-long---continuum-render-xhdlroxena-uw.a.run.app';
@@ -79,7 +106,9 @@ const RUN = randomUUID().slice(0, 8);
 const FIXTURE_FOLDER = `${BRAND}/video-editor-bench/first-cut-finish-${RUN}`;
 const JOB_ID = /^job_[0-9a-f]{32}$/;
 
-const { url: supabaseUrl, serviceRoleKey } = loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } = EXPORT_ONLY
+  ? loadLocalSupabaseEnv()
+  : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const media = admin.schema('media');
@@ -96,7 +125,7 @@ const google = new GoogleAuth({
 });
 const renderIdentity = new GoogleAuth({ keyFile });
 const rec = new Recorder(BENCH);
-const results: { step: string; grade: 'PASS' | 'FAIL'; detail?: string }[] = [];
+const results: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
 const notes: string[] = [];
 const startedAt = new Date().toISOString();
 const startedMs = Date.now();
@@ -362,6 +391,7 @@ const probeLine = (probe: Probe, timelineSec: number) =>
   `${probe.codec} ${probe.width}×${probe.height}, ${probe.videoSec.toFixed(3)} s vs timeline ${timelineSec.toFixed(3)} s`;
 
 test(BENCH, async ({ browser }) => {
+  test.skip(EXPORT_ONLY, 'Explicit local export-only scope; paid finishing is not exercised.');
   const sinkLibrary = process.env.BENCH_SINK === 'library';
   if (!check('Library sink enabled for the fixture + export hops', sinkLibrary)) {
     printEnvelope();
@@ -883,4 +913,628 @@ test(BENCH, async ({ browser }) => {
   }
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
+});
+
+// Same Export-all UI and real stores, with recorded media instead of paid first-cut generation.
+test(`${BENCH}: recorded variant export`, async ({ browser }) => {
+  test.skip(!EXPORT_ONLY, 'Only enabled by explicit loopback export-only mode.');
+  const folder = resolve(process.env.VIDEO_EDITOR_VARIANTS_OUTPUT ?? '/tmp/video-variant-export');
+  mkdirSync(folder, { recursive: true });
+  const save = (name: string, value: unknown) =>
+    writeFileSync(join(folder, name), JSON.stringify(value, null, 2));
+  const servers: Server[] = [],
+    projectIds: string[] = [],
+    assetIds: string[] = [];
+  const timings: number[] = [];
+  let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
+  let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
+  let previousPreference: {
+    user_id: string;
+    active_brand_id: string | null;
+    updated_at: string;
+  } | null = null;
+  let changedPreference = false;
+  const inputPath = `${BRAND}/video-variant-bench/${RUN}/recorded.mp4`;
+  const recorded = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+  const skip =
+    'Paid first-cut draft/finishing, generation, agent/MCP, hosted deployment and adoption';
+  rec.record(skip, 'SKIP', 'This scope certifies only f37 on owned loopback fixtures.');
+  results.push({ step: skip, grade: 'SKIP' });
+  try {
+    if (!recorded) throw new Error('Export-only benchmark requires real recorded footage.');
+    const bytes = readFileSync(recorded),
+      checksum = createHash('sha256').update(bytes).digest('hex');
+    save('recorded-source.json', { checksum, bytes: bytes.length });
+    const port = await freePort();
+    const backend = await bootBackend(`http://localhost:${port}`, {
+      CONTINUUM_RENDER_SERVICE_URL: RENDER_URL,
+    });
+    servers.push(backend);
+    const frontend = await bootFrontend(port, backend.url, '.next/video-first-cut-finish-local');
+    servers.push(frontend);
+    save(
+      'owned-server-logs.json',
+      servers.map((s) => ({ url: s.url, log: s.log })),
+    );
+    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    session = await mintSessionBundleForEmail(OWNER_EMAIL);
+    const api: Api = { base: backend.url, token: session.accessToken };
+    const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
+    const { data: preference, error: prefError } = await prefs
+      .select('user_id,active_brand_id,updated_at')
+      .eq('user_id', session.userId)
+      .maybeSingle();
+    if (prefError) throw prefError;
+    previousPreference = preference;
+    const { error: setError } = await prefs.upsert(
+      { user_id: session.userId, active_brand_id: BRAND, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+    if (setError) throw setError;
+    changedPreference = true;
+    save('cleanup-identity.json', {
+      userId: session.userId,
+      previousPreference,
+      sessionId: JSON.parse(Buffer.from(session.accessToken.split('.')[1]!, 'base64url').toString())
+        .session_id,
+    });
+    const { error: uploadError } = await admin.storage
+      .from('media-library')
+      .upload(inputPath, bytes, { contentType: 'video/mp4' });
+    if (uploadError) throw uploadError;
+    const { buildRegisterGeneratedAssetOperation } = await import(
+      '../../Continuum-Backend/App/media/registerGeneratedAsset'
+    );
+    const operation = buildRegisterGeneratedAssetOperation({
+      brandId: BRAND,
+      kind: 'video',
+      bucket: 'media-library',
+      storagePath: inputPath,
+      fileName: `variant-${RUN}.mp4`,
+      mimeType: 'video/mp4',
+      createdBy: session.userId,
+      width: 800,
+      height: 450,
+      durationMs: 6214,
+      sizeBytes: bytes.length,
+      checksum,
+      source: 'canvas',
+      operation: 'video_editor_variant_fixture',
+      originRef: { bench: BENCH, recordedSource: true },
+    });
+    const { data: receipt, error: registrationError } = await media.rpc(
+      'library_execute_operation',
+      { p_action: operation.action, p_payload: { ...operation, actor: session.userId } },
+    );
+    if (registrationError) throw registrationError;
+    const source = registerGeneratedAssetResponseSchema.parse(receipt);
+    assetIds.push(source.assetId);
+    save('source-registration.json', source);
+    const briefId = randomUUID();
+    const variants: Array<{ id: string; label: string; sourceIn: number }> = [];
+    for (const [index, label] of ['A', 'B', 'C'].entries()) {
+      const response = await fetch(`${api.base}/api/ai-studio/video-projects`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${api.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId: BRAND,
+          title: `Variant ${label} recorded ${RUN}`,
+          width: 1920,
+          height: 1080,
+        }),
+      });
+      if (!response.ok)
+        throw new Error(`Create ${label}: HTTP${response.status()} ${await response.text()}`);
+      const initial = editorProjectResponseSchema.parse(await response.json()).project;
+      projectIds.push(initial.projectId);
+      const sourceIn = 0.2 + index * 0.4;
+      await runOp(api, initial.projectId, 'apply_commands', {
+        expectedRevision: initial.revision,
+        commands: [
+          {
+            commandType: 'add_track',
+            track: {
+              id: 'main',
+              name: `Recorded ${label}`,
+              kind: 'video',
+              order: 0,
+              enabled: true,
+              locked: false,
+              clips: Array.from({ length: 6 }, (_, segment) =>
+                editorVideoClipSchema.parse({
+                  id: `${label}-${segment}`,
+                  name: `Recorded ${label} source ${sourceIn}`,
+                  kind: 'video',
+                  source: {
+                    sourceType: 'library_asset',
+                    assetId: source.assetId,
+                    renditionId: source.versionId,
+                  },
+                  sourceInSec: sourceIn,
+                  timelineStartSec: segment * 5,
+                  durationSec: 5,
+                }),
+              ),
+            },
+          },
+          {
+            commandType: 'set_brief',
+            brief: {
+              briefId,
+              text: 'Three distinct recorded 30-second variants',
+              kind: 'highlight',
+              targetDurationSec: 30,
+              variantLabel: label,
+              variantIndex: index,
+            },
+          },
+        ],
+      });
+      variants.push({ id: initial.projectId, label, sourceIn });
+      const project = await getProject(api, initial.projectId);
+      check(
+        `f37 ${label}: persisted distinct 30-second source ranges`,
+        project.durationSec === 30 &&
+          project.tracks[0]?.clips.every(
+            (c) =>
+              c.kind === 'video' && c.sourceInSec === sourceIn && assetOf(c) === source.assetId,
+          ) === true,
+      );
+      save(`${label}-initial.json`, project);
+    }
+    save('owned-ids.json', { brandId: BRAND, projectIds, assetIds, inputPath });
+    context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1600, height: 1000 },
+    });
+    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    const page = await context.newPage(),
+      pageErrors: string[] = [];
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+    page.setDefaultTimeout(30000);
+    const viewed = variants[1]!;
+    await page.goto(`${frontend.url}${videoStudioEditorPath(viewed.id)}`);
+    await page.getByTestId('video-studio-edit').waitFor({ timeout: 180000 });
+    const offer = page.locator('[data-testid="brief-dialog"]:visible');
+    if (await offer.count()) await page.keyboard.press('Escape');
+    for (const [presetId, fit] of [
+      ['tiktok', 'contain'],
+      ['youtube', 'contain'],
+      ['square', 'contain'],
+      ['square', 'cover'],
+    ] as const) {
+      const caseId = presetId + (fit === 'cover' ? '-cover' : '');
+      const preset = PLATFORM_EXPORT_PRESETS[presetId];
+      await page
+        .getByRole('button', { name: 'Export all variants', exact: true })
+        .filter({ visible: true })
+        .click();
+      const dialog = page.locator('[data-testid="video-studio-export-dialog"]:visible');
+      await dialog.getByTestId(`export-preset-${presetId}`).click();
+      await dialog
+        .getByRole('button', {
+          name: fit === 'contain' ? 'Fit (letterbox)' : 'Fill (crop)',
+          exact: true,
+        })
+        .click();
+      await expect(dialog.getByTestId('export-all-start')).toContainText('Export 3 variants');
+      const requests = variants.map((v) =>
+        page.waitForResponse(
+          (r) =>
+            r.url().endsWith(`/video-projects/${v.id}/ops/export`) &&
+            r.request().method() === 'POST',
+          { timeout: 120000 },
+        ),
+      );
+      const began = performance.now();
+      await dialog.getByTestId('export-all-start').click();
+      const responses = await Promise.all(requests);
+      const outputs = await Promise.all(
+        responses.map(async (r, i) => {
+          if (!r.ok())
+            throw new Error(`${variants[i]!.label}: export HTTP${r.status()} ${await r.text()}`);
+          return (await r.json()) as VideoEditorOpOutput<'export'>;
+        }),
+      );
+      save(`${caseId}-export-operations.json`, outputs);
+      const rows = await exportsSettle(dialog);
+      save(`${caseId}-terminal-rows.json`, rows);
+      check(
+        `f37 ${caseId}: Export all variants renders A, B and C, each with a download and a Library link`,
+        rows.length === 3 &&
+          rows.every((r) => r.state === 'completed') &&
+          (await dialog.getByRole('link', { name: /^Download [ABC]$/ }).count()) === 3 &&
+          (await dialog.getByRole('link', { name: /^Open [ABC] in Library$/ }).count()) === 3,
+        JSON.stringify(rows),
+      );
+      if (!rows.every((r) => r.state === 'completed'))
+        throw new Error('A variant did not complete.');
+      const downloads: Array<{
+        label: string;
+        path: string;
+        failure: string | null;
+        fileName: string;
+        libraryHref: string | null;
+      }> = [];
+      for (const v of variants) {
+        const event = page.waitForEvent('download', { timeout: 60000 });
+        await dialog.getByRole('link', { name: `Download ${v.label}`, exact: true }).click();
+        const download = await event,
+          path = join(folder, `${caseId}-${v.label}.mp4`);
+        await download.saveAs(path);
+        downloads.push({
+          label: v.label,
+          path,
+          failure: await download.failure(),
+          fileName: download.suggestedFilename(),
+          libraryHref: await dialog
+            .getByRole('link', { name: `Open ${v.label} in Library`, exact: true })
+            .getAttribute('href'),
+        });
+      }
+      const elapsedMs = performance.now() - began;
+      timings.push(elapsedMs);
+      check(
+        `f37 ${caseId}: whole batch and all three downloaded files within120000ms`,
+        elapsedMs > 0 && elapsedMs <= 120000,
+        String(elapsedMs),
+      );
+      await page.screenshot({ path: join(folder, `${caseId}-complete.png`) });
+      const hashes = new Set<string>();
+      for (const [index, v] of variants.entries()) {
+        const download = downloads[index]!,
+          output = outputs[index]!;
+        const project = await getProject(api, v.id),
+          status = await runOp(api, v.id, 'export_status', { jobId: output.jobId });
+        const { data: job, error: jobError } = await media
+          .from('client_render_jobs')
+          .select('id,source_id,state,execution_spec,result_asset_ids')
+          .eq('id', output.jobId)
+          .eq('brand_id', BRAND)
+          .single();
+        if (jobError) throw jobError;
+        const assetId = z.string().uuid().parse(status.assetId);
+        assetIds.push(assetId);
+        const { data: asset, error: assetError } = await media
+          .from('assets')
+          .select('id,origin_ref')
+          .eq('id', assetId)
+          .eq('brand_id', BRAND)
+          .single();
+        if (assetError) throw assetError;
+        const { data: version, error: versionError } = await media
+          .from('asset_versions')
+          .select('id,bucket,storage_path')
+          .eq('asset_id', assetId)
+          .eq('brand_id', BRAND)
+          .single();
+        if (versionError) throw versionError;
+        const { data: storedBytes, error: storedError } = await admin.storage
+          .from(version.bucket)
+          .download(version.storage_path);
+        if (storedError) throw storedError;
+        const sha256 = createHash('sha256').update(readFileSync(download.path)).digest('hex');
+        hashes.add(sha256);
+        const spec = job.execution_spec as { projectId: string; project: EditorProjectV2 };
+        const origin = asset.origin_ref as {
+          projectId: string;
+          projectFingerprint: string;
+          presetId: string;
+        };
+        check(
+          `f37 ${caseId} ${v.label}: job Library asset and full downloaded bytes retain own identity`,
+          job.source_id === v.id &&
+            spec.projectId === v.id &&
+            spec.project.brief?.variantLabel === v.label &&
+            origin.projectId === v.id &&
+            origin.projectFingerprint === spec.project.fingerprint &&
+            origin.presetId === presetId &&
+            download.libraryHref?.includes(assetId) === true &&
+            sha256 ===
+              createHash('sha256')
+                .update(Buffer.from(await storedBytes.arrayBuffer()))
+                .digest('hex') &&
+            !download.failure &&
+            new URL(page.url()).pathname === `/studio/video/${viewed.id}`,
+        );
+        const metadata = JSON.parse(
+          execFileSync(
+            'ffprobe',
+            ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', download.path],
+            { encoding: 'utf8' },
+          ),
+        ) as {
+          streams: Array<{
+            codec_type: string;
+            codec_name: string;
+            width?: number;
+            height?: number;
+            channels?: number;
+            duration?: string;
+          }>;
+          format: { duration: string };
+        };
+        const video = metadata.streams.find((s) => s.codec_type === 'video'),
+          audio = metadata.streams.find((s) => s.codec_type === 'audio');
+        check(
+          `f37 ${caseId} ${v.label}: requested format H264 stereo and exact30s timeline`,
+          video?.codec_name === 'h264' &&
+            video.width === preset.width &&
+            video.height === preset.height &&
+            audio?.channels === 2 &&
+            Math.abs(Number(video.duration) - 30) <= FRAME_SEC + 1e-6 &&
+            project.durationSec === 30 &&
+            project.exportSettings.presetId === presetId,
+          JSON.stringify(metadata),
+        );
+        const pictures: Array<{ timeSec: number; sourceTimeSec: number; meanRgbError: number }> =
+          [];
+        for (const timeSec of [1.25, 28.75]) {
+          const sourceTimeSec = v.sourceIn + (timeSec % 5);
+          const expectedRgb = execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-ss',
+              String(sourceTimeSec),
+              '-i',
+              recorded,
+              '-frames:v',
+              '1',
+              '-vf',
+              fit === 'contain'
+                ? `scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`
+                : `scale=${preset.width}:${preset.height}:force_original_aspect_ratio=increase,crop=${preset.width}:${preset.height}`,
+              '-pix_fmt',
+              'rgb24',
+              '-f',
+              'rawvideo',
+              'pipe:1',
+            ],
+            { maxBuffer: 8_000_000 },
+          );
+          const actualRgb = execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-ss',
+              String(timeSec),
+              '-i',
+              download.path,
+              '-frames:v',
+              '1',
+              '-pix_fmt',
+              'rgb24',
+              '-f',
+              'rawvideo',
+              'pipe:1',
+            ],
+            { maxBuffer: 8_000_000 },
+          );
+          let difference = 0;
+          for (let n = 0; n < expectedRgb.length; n += 1)
+            difference += Math.abs(expectedRgb[n]! - actualRgb[n]!);
+          const meanRgbError = difference / expectedRgb.length;
+          pictures.push({ timeSec, sourceTimeSec, meanRgbError });
+          check(
+            `f37 ${caseId} ${v.label} ${timeSec}s: requested fit retains recorded source pixels`,
+            expectedRgb.length === preset.width * preset.height * 3 &&
+              actualRgb.length === expectedRgb.length &&
+              meanRgbError <= 6,
+            JSON.stringify(pictures.at(-1)),
+          );
+        }
+        const sourcePcm = execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-ss',
+            String(v.sourceIn),
+            '-i',
+            recorded,
+            '-t',
+            '5',
+            '-vn',
+            '-ar',
+            '48000',
+            '-ac',
+            '2',
+            '-f',
+            'f32le',
+            'pipe:1',
+          ],
+          { maxBuffer: 4_000_000 },
+        );
+        const exportedPcm = execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-i',
+            download.path,
+            '-vn',
+            '-ar',
+            '48000',
+            '-ac',
+            '2',
+            '-f',
+            'f32le',
+            'pipe:1',
+          ],
+          { maxBuffer: 16_000_000 },
+        );
+        let error = 0,
+          energy = 0;
+        for (let n = 0; n < 30 * 48000 * 2; n += 1) {
+          const want = sourcePcm.readFloatLE((n % (5 * 48000 * 2)) * 4),
+            got = exportedPcm.readFloatLE(n * 4);
+          error += (got - want) ** 2;
+          energy += want ** 2;
+        }
+        const relativeSquaredPcmError = error / energy;
+        check(
+          `f37 ${caseId} ${v.label}: all stereo PCM samples retain distinct recorded cut`,
+          sourcePcm.length === 5 * 48000 * 2 * 4 &&
+            exportedPcm.length >= 30 * 48000 * 2 * 4 &&
+            energy > 0 &&
+            relativeSquaredPcmError <= 0.01,
+          JSON.stringify({ samplesPerChannel: 1440000, energy, relativeSquaredPcmError }),
+        );
+        const wrongProject = variants[(index + 1) % 3]!;
+        const wrongStatus = await fetch(
+          `${api.base}/api/ai-studio/video-projects/${wrongProject.id}/ops/export_status`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${api.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: output.jobId }),
+          },
+        );
+        check(
+          `f37 ${caseId} ${v.label}: another variant cannot claim this export job`,
+          wrongStatus.status === 404,
+          `HTTP${wrongStatus.status}`,
+        );
+        save(`${caseId}-${v.label}-readback.json`, {
+          variant: v,
+          project,
+          output,
+          status: {
+            ...status,
+            downloadUrl: status.downloadUrl ? '[signed URL omitted]' : undefined,
+          },
+          job,
+          asset,
+          version,
+          download: { ...download, sha256 },
+          metadata,
+          elapsedMs,
+          pictures,
+          pcm: { samplesPerChannel: 1440000, energy, relativeSquaredPcmError },
+        });
+      }
+      check(
+        `f37 ${caseId}: every exported variant has distinct full file bytes`,
+        hashes.size === 3,
+      );
+      await page.keyboard.press('Escape');
+    }
+    check(
+      'Every variant exports with the right identity and requested format.',
+      results.filter((r) => r.grade === 'FAIL').length === 0 && timings.length === 4,
+    );
+    check('f37 no uncaught native page errors', pageErrors.length === 0, pageErrors.join(' | '));
+  } catch (e) {
+    check(
+      'f37 actual variant export journey completes',
+      false,
+      e instanceof Error ? e.message : String(e),
+    );
+  } finally {
+    save('speed-samples.json', { export_all_variants: timings });
+    note(`speed samples: ${JSON.stringify({ export_all_variants: timings })}`);
+    await context?.close();
+    try {
+      await (async () => {
+        const { data: jobs, error: jobsError } = projectIds.length
+          ? await media
+              .from('client_render_jobs')
+              .select('id,state,result_asset_ids')
+              .eq('brand_id', BRAND)
+              .in('source_id', projectIds)
+          : { data: [], error: null };
+        if (jobsError) throw jobsError;
+        save('cleanup-jobs.json', jobs);
+        if ((jobs ?? []).some((j) => !['completed', 'failed', 'superseded'].includes(j.state)))
+          throw new Error('Owned export remains live; exact fixtures retained for recovery.');
+        for (const id of new Set([
+          ...assetIds,
+          ...(jobs ?? []).flatMap((j) => j.result_asset_ids as string[]),
+        ])) {
+          z.string().uuid().parse(id);
+          const { data: versions, error: versionsError } = await media
+            .from('asset_versions')
+            .select('bucket,storage_path')
+            .eq('brand_id', BRAND)
+            .eq('asset_id', id);
+          if (versionsError) throw versionsError;
+          for (const version of versions ?? []) {
+            const { error } = await admin.storage
+              .from(version.bucket)
+              .remove([version.storage_path]);
+            if (error) throw error;
+          }
+          const { error } = await media.from('assets').delete().eq('brand_id', BRAND).eq('id', id);
+          if (error) throw error;
+          execFileSync('docker', [
+            'exec',
+            '-i',
+            'supabase_db_continuum',
+            'psql',
+            '-U',
+            'postgres',
+            '-d',
+            'postgres',
+            '-v',
+            'ON_ERROR_STOP=1',
+            '-At',
+            '-c',
+            `delete from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId'='${id}';`,
+          ]);
+        }
+        if (projectIds.length) {
+          const { error } = await media
+            .from('client_render_jobs')
+            .delete()
+            .eq('brand_id', BRAND)
+            .in('source_id', projectIds);
+          if (error) throw error;
+        }
+        await removeProjects(admin, BRAND, projectIds);
+        const { error: inputError } = await admin.storage.from('media-library').remove([inputPath]);
+        if (inputError) throw inputError;
+        save('owned-ids.json', { brandId: BRAND, projectIds, assetIds, inputPath, jobs });
+        const { count, error: projectError } = projectIds.length
+          ? await media
+              .from('editor_projects')
+              .select('id', { count: 'exact', head: true })
+              .in('id', projectIds)
+          : { count: 0, error: null };
+        check(
+          'f37 all owned projects jobs assets and Storage paths cleaned',
+          !projectError && count === 0,
+        );
+      })();
+    } catch (e) {
+      check('f37 exact owned fixture cleanup', false, e instanceof Error ? e.message : String(e));
+    }
+    try {
+      await (async () => {
+        if (session && changedPreference) {
+          const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
+          const { error } = previousPreference
+            ? await prefs.upsert(previousPreference, { onConflict: 'user_id' })
+            : await prefs.delete().eq('user_id', session.userId);
+          if (error) throw error;
+          check('f37 prior active brand preference restored', true);
+        }
+        if (session) {
+          const { error } = await admin.auth.admin.signOut(session.accessToken, 'local');
+          if (error) throw error;
+          check('f37 own auth session revoked', true);
+        }
+      })();
+    } catch (e) {
+      check(
+        'f37 preference and session cleanup',
+        false,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+    for (const server of servers.reverse()) server.stop();
+  }
+  save('summary.json', { results, notes });
+  expect(printEnvelope(), 'graded FAIL steps').toBe(0);
 });

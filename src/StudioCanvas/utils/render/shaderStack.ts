@@ -39,6 +39,11 @@ export function shaderStackFromClipEffects(effects: ClipEffectSpec | undefined):
       keyframes: [],
     });
   }
+  for (const [effectId, parameters] of [
+    ['dust', effects?.dust],
+    ['light_leaks', effects?.lightLeaks],
+  ] as const)
+    if (parameters?.amount) set({ effectId, enabled: true, parameters, keyframes: [] });
   if (effects?.pixelate && effects.pixelate.blockPx >= 2) {
     set({
       effectId: 'pixelate',

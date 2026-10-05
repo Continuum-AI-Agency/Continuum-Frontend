@@ -86,6 +86,39 @@ describe('editorRenderBlockers', () => {
     expect(editorRenderBlockers(hidden)).toEqual(['The timeline is empty.']);
   });
 
+  test('an enabled Library image provides picture without a primary video track', () => {
+    const project = withFootage(blank());
+    const image = editorProjectV2Schema.parse({
+      ...project,
+      tracks: [
+        {
+          ...project.tracks[0],
+          kind: 'overlay',
+          clips: [
+            {
+              id: 'image',
+              kind: 'overlay',
+              mediaKind: 'image',
+              timelineStartSec: 0,
+              durationSec: 4,
+              enabled: true,
+              locked: false,
+              tags: [],
+              source: { sourceType: 'library_asset', assetId: 'a', renditionId: 'v' },
+            },
+          ],
+        },
+      ],
+    });
+    expect(editorRenderBlockers(image)).toEqual([]);
+    expect(
+      editorRenderBlockers({
+        ...image,
+        tracks: image.tracks.map((track) => ({ ...track, muted: true })),
+      }),
+    ).toEqual(['The timeline is empty.']);
+  });
+
   test('a production project still answers to its approval gates', () => {
     const project = withFootage(blank());
     const production = editorProjectV2Schema.parse({

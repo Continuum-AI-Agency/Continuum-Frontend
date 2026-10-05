@@ -90,6 +90,7 @@ export function ClipInspector({
   onSetMute,
   onSetAudio,
   onSetEffects,
+  onCommit,
   onSetTransition,
   onClose,
 }: {
@@ -111,6 +112,7 @@ export function ClipInspector({
   onSetMute: (mute: boolean) => void;
   onSetAudio?: (patch: ClipAudioPatch) => void;
   onSetEffects: (patch: Partial<ClipEffectSpec>) => void;
+  onCommit?: () => void;
   onSetTransition: (transition: ClipTransition | undefined) => void;
   onClose: () => void;
 }) {
@@ -234,6 +236,7 @@ export function ClipInspector({
 
           {context === 'overlay' ? null : (
             <SliderField
+              onCommit={onCommit}
               label="Speed"
               value={effects.speed ?? 1}
               min={0.25}
@@ -244,42 +247,47 @@ export function ClipInspector({
             />
           )}
 
-          <div className="flex flex-col gap-3">
-            <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Audio
-            </span>
-            <SliderField
-              label="Volume"
-              value={item.volume ?? 1}
-              min={0}
-              max={2}
-              step={0.05}
-              format={{ style: 'percent', maximumFractionDigits: 0 }}
-              onChange={(v) => onSetAudio?.({ volume: v })}
-            />
-            {context === 'overlay' ? null : (
-              <>
-                <SliderField
-                  label="Fade in"
-                  value={item.audioFadeInSec ?? 0}
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  suffix="s"
-                  onChange={(v) => onSetAudio?.({ audioFadeInSec: v })}
-                />
-                <SliderField
-                  label="Fade out"
-                  value={item.audioFadeOutSec ?? 0}
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  suffix="s"
-                  onChange={(v) => onSetAudio?.({ audioFadeOutSec: v })}
-                />
-              </>
-            )}
-          </div>
+          {onSetAudio ? (
+            <div className="flex flex-col gap-3">
+              <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Audio
+              </span>
+              <SliderField
+                onCommit={onCommit}
+                label="Volume"
+                value={item.volume ?? 1}
+                min={0}
+                max={2}
+                step={0.05}
+                format={{ style: 'percent', maximumFractionDigits: 0 }}
+                onChange={(v) => onSetAudio?.({ volume: v })}
+              />
+              {context === 'overlay' ? null : (
+                <>
+                  <SliderField
+                    onCommit={onCommit}
+                    label="Fade in"
+                    value={item.audioFadeInSec ?? 0}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    suffix="s"
+                    onChange={(v) => onSetAudio?.({ audioFadeInSec: v })}
+                  />
+                  <SliderField
+                    onCommit={onCommit}
+                    label="Fade out"
+                    value={item.audioFadeOutSec ?? 0}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    suffix="s"
+                    onChange={(v) => onSetAudio?.({ audioFadeOutSec: v })}
+                  />
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-1">
@@ -305,6 +313,7 @@ export function ClipInspector({
           Adjust
         </span>
         <SliderField
+          onCommit={onCommit}
           label="Opacity"
           value={effects.opacity ?? 1}
           min={0}
@@ -313,6 +322,7 @@ export function ClipInspector({
           onChange={(v) => onSetEffects({ opacity: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Brightness"
           value={adjustments.brightness ?? 1}
           min={0}
@@ -321,6 +331,7 @@ export function ClipInspector({
           onChange={(v) => patchAdjustments({ brightness: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Contrast"
           value={adjustments.contrast ?? 1}
           min={0}
@@ -329,6 +340,7 @@ export function ClipInspector({
           onChange={(v) => patchAdjustments({ contrast: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Saturation"
           value={adjustments.saturation ?? 1}
           min={0}
@@ -339,6 +351,7 @@ export function ClipInspector({
         {/* Warmth sits on the SPEC, not in `adjustments`: it compiles to a sepia +
             hue-rotate pair that the two sliders below must be able to override. */}
         <SliderField
+          onCommit={onCommit}
           label="Warmth"
           value={effects.warmth ?? 0}
           min={-1}
@@ -347,6 +360,7 @@ export function ClipInspector({
           onChange={(v) => onSetEffects({ warmth: v === 0 ? undefined : v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Hue"
           value={adjustments.hueRotate ?? 0}
           min={-180}
@@ -356,6 +370,7 @@ export function ClipInspector({
           onChange={(v) => patchAdjustments({ hueRotate: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Sepia"
           value={adjustments.sepia ?? 0}
           min={0}
@@ -364,6 +379,7 @@ export function ClipInspector({
           onChange={(v) => patchAdjustments({ sepia: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Grayscale"
           value={adjustments.grayscale ?? 0}
           min={0}
@@ -372,6 +388,7 @@ export function ClipInspector({
           onChange={(v) => patchAdjustments({ grayscale: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Invert"
           value={adjustments.invert ?? 0}
           min={0}
@@ -380,6 +397,7 @@ export function ClipInspector({
           onChange={(v) => patchAdjustments({ invert: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Blur"
           value={adjustments.blur ?? 0}
           min={0}
@@ -398,6 +416,7 @@ export function ClipInspector({
           Transform
         </span>
         <SliderField
+          onCommit={onCommit}
           label="Scale"
           value={transform.scale ?? 1}
           min={0.2}
@@ -406,6 +425,7 @@ export function ClipInspector({
           onChange={(v) => patchTransform({ scale: v })}
         />
         <SliderField
+          onCommit={onCommit}
           label="Rotate"
           value={transform.rotate ?? 0}
           min={-180}
@@ -578,6 +598,7 @@ export function ClipInspector({
             </div>
             {item.transition && item.transition.type !== 'cut' ? (
               <SliderField
+                onCommit={onCommit}
                 label="Duration"
                 value={item.transition.durationSec}
                 min={0.2}

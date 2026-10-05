@@ -1,6 +1,6 @@
 'use client';
 
-import type { EditorClip } from '@continuum/contracts';
+import { type EditorClip, sampleNumericTrack } from '@continuum/contracts';
 import { AudioLines, Copy, Scissors, Trash2, VolumeX, Waves } from 'lucide-react';
 import {
   ContextMenu,
@@ -34,6 +34,7 @@ export type ClipMenuActions = MotionMenuActions & {
 };
 
 const KIND_STYLES: Record<string, string> = {
+  nested_sequence: 'bg-indigo-600/85 border-indigo-300/60',
   video: 'bg-sky-600/85 border-sky-300/60',
   overlay: 'bg-violet-600/85 border-violet-300/60',
   text: 'bg-amber-600/85 border-amber-300/60',
@@ -82,12 +83,13 @@ function VolumeLine({ clip }: { clip: Extract<EditorClip, { kind: 'audio' }> }) 
   const last = keys.at(-1);
   if (!first || !last) return null;
   const end = clip.durationSec;
-  // Before the first key the clip plays at its own volume; after the last, at the last key.
-  const stops = [
-    { timeSec: 0, value: first.timeSec > 0 ? clip.volume : first.value },
-    ...keys.filter((key) => key.timeSec > 0 && key.timeSec < end),
-    { timeSec: end, value: last.value },
-  ];
+  const stops = Array.from({ length: 41 }, (_, index) => {
+    const timeSec = (index / 40) * end;
+    return {
+      timeSec,
+      value: sampleNumericTrack(keys, timeSec, clip.volume, clip.keyframeOffsetSec),
+    };
+  });
   const peak = Math.max(1e-6, ...stops.map((stop) => stop.value));
   const points = stops
     .map((stop) => `${stop.timeSec.toFixed(4)},${(1 - (0.9 * stop.value) / peak).toFixed(4)}`)
@@ -122,6 +124,8 @@ export function TimelineClipView({
   isMain,
   leftPx,
   widthPx,
+  topPx = 4,
+  heightPx,
   selected,
   ghost,
   previewUrl,
@@ -134,6 +138,8 @@ export function TimelineClipView({
   isMain: boolean;
   leftPx: number;
   widthPx: number;
+  topPx?: number;
+  heightPx?: number;
   selected: boolean;
   ghost?: boolean;
   previewUrl?: string;
@@ -150,6 +156,13 @@ export function TimelineClipView({
     isVideo: isVideo && widthPx > 60,
     hasAudio: isAudio,
     thumbnailCount: Math.max(1, Math.min(8, Math.round(widthPx / 80))),
+    sourceStartSec: 'sourceInSec' in clip ? clip.sourceInSec : 0,
+    sourceEndSec:
+      'sourceInSec' in clip
+        ? (clip.sourceInSec ?? 0) +
+          clip.durationSec * ('playbackRate' in clip ? clip.playbackRate : 1)
+        : undefined,
+    reverse: 'reverse' in clip && clip.reverse,
   });
   const label = clipLabel(clip);
   const sourceIn = 'sourceInSec' in clip ? (clip.sourceInSec ?? 0) : undefined;
@@ -178,7 +191,12 @@ export function TimelineClipView({
               ghost && 'pointer-events-none opacity-60',
               !clip.enabled && 'opacity-40',
             )}
-            style={{ left: leftPx, width: Math.max(4, widthPx) }}
+            style={{
+              left: leftPx,
+              width: Math.max(4, widthPx),
+              top: topPx,
+              ...(heightPx === undefined ? {} : { height: heightPx, bottom: 'auto' }),
+            }}
           />
         }
       >

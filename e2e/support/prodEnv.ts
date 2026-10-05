@@ -16,6 +16,7 @@
 // unquoted multi-word value that a POSIX shell tries to execute. This parser reads
 // `KEY=VALUE` literally and never evaluates anything.
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -148,4 +149,40 @@ export function benchBrowserChannel(): { channel?: string } {
   const channel = process.env.OPTIMIZER_E2E_BROWSER_CHANNEL;
   if (channel === 'bundled') return {};
   return { channel: channel && channel.length > 0 ? channel : 'chrome' };
+}
+
+/** Existing loopback stack only; never starts, resets or hydrates shared data. */
+export function loadLocalSupabaseEnv(): { url: string; serviceRoleKey: string; dbUrl: string } {
+  const status = execFileSync('supabase', ['status', '-o', 'env'], {
+    cwd: resolve(__dirname, '../../..'),
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const env = Object.fromEntries(
+    status.split('\n').flatMap((line) => {
+      const match = /^([A-Z_]+)="(.*)"$/.exec(line);
+      return match ? [[match[1], match[2]]] : [];
+    }),
+  );
+  const url = env.API_URL;
+  const dbUrl = env.DB_URL;
+  if (
+    !url ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname) ||
+    !env.SERVICE_ROLE_KEY ||
+    !env.ANON_KEY ||
+    !dbUrl ||
+    !['postgres:', 'postgresql:'].includes(new URL(dbUrl).protocol) ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(dbUrl).hostname)
+  )
+    throw new Error(
+      'Local editor journey requires the running loopback Supabase stack; no reset/hydration is performed.',
+    );
+  process.env.SUPABASE_ANON_KEY = env.ANON_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = env.SERVICE_ROLE_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = url;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = env.ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = env.ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY = env.ANON_KEY;
+  return { url, serviceRoleKey: env.SERVICE_ROLE_KEY, dbUrl };
 }

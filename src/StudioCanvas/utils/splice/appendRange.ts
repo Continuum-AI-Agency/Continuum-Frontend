@@ -43,11 +43,11 @@ export type AppendRangeParams = {
   audioSource: MbAudioSampleSource;
   targetWidth: number;
   targetHeight: number;
+  backgroundColor?: string;
   cumulativeOffset: number;
   muteAudio: boolean;
-  // When set, redraw decoded source frames on this exact output cadence. The
-  // source iterator remains sequential; low-rate frames are repeated and
-  // high/VFR frames are dropped onto the next cadence tick.
+  // When set, sample the source at every output tick, including the source
+  // frame covering the trim's start. Decoder timestamps must not skip output ticks.
   frameRate?: number;
   frameTimeSec?: number;
   // Word-synced caption cues on the OUTPUT timeline (already re-mapped past removed
@@ -113,87 +113,85 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
   const outputDurationSec = sourceSpan / speed;
   const overlays = resolveTextOverlays(effects);
   let nextCadenceFrame = 0;
+  if (frameRate !== undefined && (!Number.isFinite(frameRate) || frameRate <= 0))
+    throw new Error('Output frame rate must be finite and positive.');
 
   const canvasSink = new mb.CanvasSink(videoTrack);
   const snapshotLocal =
     params.frameTimeSec === undefined ? undefined : params.frameTimeSec - cumulativeOffset;
   if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= outputDurationSec))
     return;
+  const cadenceDuration = snapshotLocal === undefined && frameRate ? 1 / frameRate : undefined;
+  function* sourceTimestamps() {
+    if (snapshotLocal !== undefined) yield range.startSec + snapshotLocal * speed;
+    else if (cadenceDuration)
+      for (let frame = 0; frame * cadenceDuration < outputDurationSec - 1e-9; frame++)
+        yield range.startSec + frame * cadenceDuration * speed;
+  }
   const frames =
-    snapshotLocal === undefined
-      ? canvasSink.canvases(range.startSec, range.endSec)
-      : canvasSink.canvasesAtTimestamps([range.startSec + snapshotLocal * speed]);
+    snapshotLocal !== undefined || cadenceDuration
+      ? canvasSink.canvasesAtTimestamps(sourceTimestamps())
+      : canvasSink.canvases(range.startSec, range.endSec);
   for await (const wrapped of frames) {
     if (!wrapped) throw new Error('No decoded frame at the requested timeline time.');
     throwIfAborted(signal);
-    const localTimestamp =
-      snapshotLocal === undefined ? wrapped.timestamp - range.startSec : snapshotLocal * speed;
-    if (localTimestamp < 0) continue;
-    const sourceFrameEnd = Math.min(sourceSpan, localTimestamp + wrapped.duration);
-    const outputFrameEnd = sourceFrameEnd / speed;
-    const cadenceDuration = snapshotLocal === undefined && frameRate ? 1 / frameRate : undefined;
-    const nativeLocalOut = localTimestamp / speed;
-    if (cadenceDuration && nextCadenceFrame * cadenceDuration < nativeLocalOut - 1e-9) {
-      nextCadenceFrame = Math.ceil((nativeLocalOut - 1e-9) / cadenceDuration);
-    }
-
-    while (true) {
-      const localOut = cadenceDuration ? nextCadenceFrame * cadenceDuration : nativeLocalOut;
-      if (localOut >= outputFrameEnd - 1e-9 || localOut >= outputDurationSec - 1e-9) break;
-      const outputDuration = cadenceDuration
-        ? Math.min(cadenceDuration, outputDurationSec - localOut)
-        : Math.max(wrapped.duration / speed, 1 / 240);
-      const outputTimestamp = cumulativeOffset + localOut;
-      const clipT = outputDurationSec > 0 ? localOut / outputDurationSec : 0;
-      const fade = transitionOverlayAt(localOut, outputDurationSec, headFade, tailFade);
-      const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
-      await drawFrameComposition({
-        drawBase: async () => {
-          await drawClipFrame(
-            ctx,
-            wrapped.canvas,
-            sourceWidth,
-            sourceHeight,
-            targetWidth,
-            targetHeight,
-            effects,
-            clipT,
-            localOut,
-          );
-          if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
-        },
-        ...(compositeOverlays
-          ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) }
-          : {}),
-        ...(fade
-          ? {
-              drawColorTransition: () =>
-                drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
-            }
-          : {}),
-        ...(activeCues.length
-          ? {
-              drawCaption: () => {
-                for (const cue of activeCues) {
-                  drawActiveCaption(
-                    ctx,
-                    cue,
-                    outputTimestamp,
-                    targetWidth,
-                    targetHeight,
-                    captionStyle,
-                  );
-                }
-              },
-            }
-          : {}),
-      });
-      if (snapshotLocal !== undefined) return;
-      await videoSource.add(outputTimestamp, outputDuration);
-      params.onRangeProgress?.(localOut + outputDuration);
-      if (!cadenceDuration) break;
-      nextCadenceFrame += 1;
-    }
+    const localOut =
+      snapshotLocal ??
+      (cadenceDuration
+        ? nextCadenceFrame * cadenceDuration
+        : (wrapped.timestamp - range.startSec) / speed);
+    if (localOut < 0 || localOut >= outputDurationSec - 1e-9) continue;
+    const outputDuration = cadenceDuration
+      ? Math.min(cadenceDuration, outputDurationSec - localOut)
+      : Math.max(wrapped.duration / speed, 1 / 240);
+    const outputTimestamp = cumulativeOffset + localOut;
+    const clipT = outputDurationSec > 0 ? localOut / outputDurationSec : 0;
+    const fade = transitionOverlayAt(localOut, outputDurationSec, headFade, tailFade);
+    const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
+    await drawFrameComposition({
+      drawBase: async () => {
+        await drawClipFrame(
+          ctx,
+          wrapped.canvas,
+          sourceWidth,
+          sourceHeight,
+          targetWidth,
+          targetHeight,
+          effects,
+          clipT,
+          localOut,
+          params.backgroundColor,
+        );
+        if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
+      },
+      ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
+      ...(fade
+        ? {
+            drawColorTransition: () =>
+              drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
+          }
+        : {}),
+      ...(activeCues.length
+        ? {
+            drawCaption: () => {
+              for (const cue of activeCues) {
+                drawActiveCaption(
+                  ctx,
+                  cue,
+                  outputTimestamp,
+                  targetWidth,
+                  targetHeight,
+                  captionStyle,
+                );
+              }
+            },
+          }
+        : {}),
+    });
+    if (snapshotLocal !== undefined) return;
+    await videoSource.add(outputTimestamp, outputDuration);
+    params.onRangeProgress?.(localOut + outputDuration);
+    nextCadenceFrame += 1;
   }
   // The Video Editor mixdown owns all audio; skip inline audio entirely here.
   if (skipAudio) return;
@@ -253,6 +251,7 @@ export type AppendStillParams = {
   audioSource: MbAudioSampleSource;
   targetWidth: number;
   targetHeight: number;
+  backgroundColor?: string;
   cumulativeOffset: number;
   effects?: ClipEffectSpec;
   headFade?: FadeOverlay;
@@ -322,6 +321,7 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
       effects,
       t,
       timeSec,
+      params.backgroundColor,
     );
     if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
   };

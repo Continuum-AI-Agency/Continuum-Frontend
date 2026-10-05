@@ -9,6 +9,7 @@ import {
   type EditorAudioClip,
   type EditorCaptionClip,
   type EditorClip,
+  type EditorNestedSequenceClip,
   type EditorOverlayClip,
   type EditorProjectV2,
   type EditorTextClip,
@@ -16,8 +17,22 @@ import {
   type EditorTrack,
   type EditorVideoClip,
   editorClipAtSpeed,
+  editorClipWithLocalFades,
+  editorClipWithRetainedFades,
+  editorTextWithRetainedAnimation,
+  resolveNestedSequence,
 } from '@continuum/contracts';
-import { AlignCenter, AlignLeft, AlignRight, Loader2, Music, Type, Wand2, X } from 'lucide-react';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Film,
+  Loader2,
+  Music,
+  Type,
+  Wand2,
+  X,
+} from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
@@ -124,6 +139,8 @@ const SPEC_EFFECT_IDS = new Set([
   'tint',
   'vignette',
   'film_grain',
+  'dust',
+  'light_leaks',
   'pixelate',
   'chromatic_aberration',
   'vhs',
@@ -144,7 +161,22 @@ function patchClipEdit(
   label: string,
 ): TimelineEdit | null {
   const found = findClip(project, clipId);
-  return found ? replaceClipEdit(project, { ...found.clip, ...fields } as EditorClip, label) : null;
+  if (!found) return null;
+  const clip = found.clip;
+  const retained =
+    (clip.kind === 'audio' || clip.kind === 'video') &&
+    fields.durationSec !== undefined &&
+    fields.durationSec !== clip.durationSec &&
+    !('playbackRate' in fields && fields.playbackRate !== clip.playbackRate) &&
+    !('audioFadeClock' in fields)
+      ? editorClipWithRetainedFades(clip)
+      : clip.kind === 'text' &&
+          fields.durationSec !== undefined &&
+          fields.durationSec !== clip.durationSec &&
+          !('textAnimationClock' in fields)
+        ? editorTextWithRetainedAnimation(clip)
+        : clip;
+  return replaceClipEdit(project, { ...retained, ...fields } as EditorClip, label);
 }
 
 /** Several pending edits as ONE revision, each built on the project the previous leaves. */
@@ -244,7 +276,18 @@ function useClipDraft<T extends EditorClip>(
 /** A visual clip as the spec ClipInspector edits. Ken Burns is read from the clip's own
  *  motion keyframes, so the toggle shows what the clip actually does. */
 export function inspectorSpecFor(clip: VisualClip): ClipEffectSpec {
-  const spec = clipEffectSpecFromEditorClip(clip);
+  const rendered = clipEffectSpecFromEditorClip(clip);
+  // The legacy inspector edits flips separately; canonical render geometry stays signed.
+  const spec: ClipEffectSpec = {
+    ...rendered,
+    transform: {
+      ...rendered.transform,
+      scaleX: Math.abs(clip.transform.scaleX),
+      scaleY: Math.abs(clip.transform.scaleY),
+    },
+    flipH: clip.transform.scaleX < 0,
+    flipV: clip.transform.scaleY < 0,
+  };
   if (!clip.keyframes.some((keyframe) => MOTION_PROPERTIES.has(keyframe.property))) return spec;
   const stops = spec.keyframes ?? [];
   return {
@@ -297,7 +340,7 @@ export function clipWithEffectSpec<T extends VisualClip>(
   const owned = (effect: EditorVideoClip['effects'][number]) =>
     SPEC_EFFECT_TYPES.has(effect.effectType) || SPEC_EFFECT_IDS.has(effect.effectId);
   const next = {
-    ...clip,
+    ...retimed,
     transform: {
       ...mapped.transform,
       anchorX: clip.transform.anchorX,
@@ -305,7 +348,10 @@ export function clipWithEffectSpec<T extends VisualClip>(
     },
     effects: [...clip.effects.filter((effect) => !owned(effect)), ...mapped.effects],
     blendMode: mapped.blendMode,
-    keyframes: [...kept, ...motion],
+    keyframes: [
+      ...kept,
+      ...motion.map((key) => ({ ...key, timeSec: key.timeSec + (retimed.keyframeOffsetSec ?? 0) })),
+    ],
   };
   return (clip.kind === 'video' ? { ...next, playbackRate: nextRate, durationSec } : next) as T;
 }
@@ -420,7 +466,10 @@ function VisualClipInspector({
     trimStartSec: sourceIn,
     trimEndSec: sourceIn + clip.durationSec * rate,
     // Layers render muted; only a main-sequence video clip carries sound.
-    muteAudio: clip.kind === 'video' ? !clip.audioEnabled : true,
+    muteAudio: clip.kind === 'video' && onMain ? !clip.audioEnabled : true,
+    ...(view.kind === 'video'
+      ? { volume: view.volume, audioFadeInSec: view.fadeInSec, audioFadeOutSec: view.fadeOutSec }
+      : {}),
     effects,
     transition: draftTransition ? draftTransition.value : committedTransition,
   };
@@ -479,7 +528,26 @@ function VisualClipInspector({
               ),
             );
           }}
+          onSetAudio={
+            onMain && clip.kind === 'video'
+              ? (audio) =>
+                  patch(
+                    {
+                      ...(audio.volume !== undefined ? { volume: audio.volume } : {}),
+                      ...(view.kind === 'video' &&
+                      (audio.audioFadeInSec !== undefined || audio.audioFadeOutSec !== undefined)
+                        ? editorClipWithLocalFades(view, {
+                            fadeInSec: audio.audioFadeInSec,
+                            fadeOutSec: audio.audioFadeOutSec,
+                          })
+                        : {}),
+                    },
+                    'Edit clip audio',
+                  )
+              : undefined
+          }
           onSetEffects={setEffects}
+          onCommit={edits.flush}
           onSetTransition={(next) => {
             setDraftTransition({ value: next });
             schedule('transition', (latest) => transitionEdit(latest, clip.id, next));
@@ -499,11 +567,12 @@ function VisualClipInspector({
             step={0.01}
             format={{ style: 'percent', maximumFractionDigits: 0 }}
             onChange={(value) => patch({ crop: { ...view.crop, [edge]: value } }, 'Crop clip')}
+            onCommit={() => edits.flush()}
           />
         ))}
       </div>
       <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
-      <KeyframeLane clip={clip} store={store} onEdit={now} onSettle={schedule} />
+      <KeyframeLane clip={clip} audio={onMain} store={store} onEdit={now} onSettle={schedule} />
       <LookSection clip={clip} runOp={runOp} />
     </div>
   );
@@ -539,8 +608,14 @@ function InspectorHeader({
   );
 }
 
-function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<EditorAudioClip>) {
-  const { view, patch } = useClipDraft(project, clip, onEdit);
+function AudioClipInspector({
+  project,
+  clip,
+  onEdit,
+  onDeselect,
+  store,
+}: SectionProps<EditorAudioClip> & Pick<MotionProps, 'store'>) {
+  const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const fadeMax = Math.min(5, view.durationSec);
   const setSpeed = (playbackRate: number) => {
     patch(editorClipAtSpeed(view, playbackRate), 'Change speed');
@@ -569,7 +644,7 @@ function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<
         max={fadeMax}
         step={0.1}
         suffix="s"
-        onChange={(fadeInSec) => patch({ fadeInSec }, 'Fade in')}
+        onChange={(fadeInSec) => patch(editorClipWithLocalFades(view, { fadeInSec }), 'Fade in')}
       />
       <SliderField
         label="Fade out"
@@ -578,7 +653,7 @@ function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<
         max={fadeMax}
         step={0.1}
         suffix="s"
-        onChange={(fadeOutSec) => patch({ fadeOutSec }, 'Fade out')}
+        onChange={(fadeOutSec) => patch(editorClipWithLocalFades(view, { fadeOutSec }), 'Fade out')}
       />
       <SliderField
         label="Speed"
@@ -589,6 +664,170 @@ function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<
         suffix="x"
         onChange={setSpeed}
       />
+      <KeyframeLane clip={clip} store={store} onEdit={edits.now} onSettle={edits.schedule} />
+    </div>
+  );
+}
+
+function NestedSequenceInspector({
+  project,
+  clip,
+  onEdit,
+  onDeselect,
+  store,
+  runOp,
+}: SectionProps<EditorNestedSequenceClip> & MotionProps) {
+  const { view, patch, edits } = useClipDraft(project, clip, onEdit);
+  const [speed, setSpeed] = useState(clip.playbackRate);
+  const [sourceStart, setSourceStart] = useState(clip.sourceInSec);
+  const [sourceEnd, setSourceEnd] = useState(
+    clip.sourceInSec + clip.durationSec * clip.playbackRate,
+  );
+  useEffect(() => {
+    setSpeed(clip.playbackRate);
+    setSourceStart(clip.sourceInSec);
+    setSourceEnd(clip.sourceInSec + clip.durationSec * clip.playbackRate);
+  }, [clip.playbackRate, clip.sourceInSec, clip.durationSec]);
+  const trimSource = (edge: 'start' | 'end', sourceSec: number) =>
+    edits.schedule(`source-${edge}`, (latest) => {
+      const current = findClip(latest, clip.id)?.clip;
+      if (current?.kind !== 'nested_sequence') return null;
+      return trimEdit(
+        latest,
+        clip.id,
+        edge,
+        current.timelineStartSec + (sourceSec - current.sourceInSec) / current.playbackRate,
+      );
+    });
+  const child = resolveNestedSequence(project, clip);
+  const keyed = (property: string) => view.keyframes.some((key) => key.property === property);
+  return (
+    <div
+      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto"
+      data-testid="composition-inspector"
+    >
+      <div className="flex shrink-0 flex-col gap-3 rounded-lg border border-border/60 p-3">
+        <InspectorHeader
+          icon={<Film className="h-3.5 w-3.5 text-muted-foreground" />}
+          label={clip.name ?? 'Composition'}
+          onDeselect={onDeselect}
+        />
+        <span className={SECTION_LABEL}>Transform</span>
+        {(['x', 'y'] as const).map((axis) => (
+          <NumberScrubField
+            key={axis}
+            label={`Position ${axis.toUpperCase()}`}
+            value={view.transform.position[axis]}
+            min={-8}
+            max={8}
+            step={0.01}
+            disabled={keyed('transform.position')}
+            onChange={(value) =>
+              patch(
+                {
+                  transform: {
+                    ...view.transform,
+                    position: { ...view.transform.position, [axis]: value },
+                  },
+                },
+                'Move composition',
+              )
+            }
+            onCommit={edits.flush}
+          />
+        ))}
+        {(
+          [
+            ['scaleX', 'Scale X', -20, 20, 0.05],
+            ['scaleY', 'Scale Y', -20, 20, 0.05],
+            ['rotationDeg', 'Rotation', -36000, 36000, 1],
+          ] as const
+        ).map(([property, label, min, max, step]) => (
+          <NumberScrubField
+            key={property}
+            label={label}
+            value={view.transform[property]}
+            min={min}
+            max={max}
+            step={step}
+            disabled={keyed(`transform.${property}`)}
+            onChange={(value) =>
+              patch(
+                { transform: { ...view.transform, [property]: value } },
+                'Transform composition',
+              )
+            }
+            onCommit={edits.flush}
+          />
+        ))}
+        <SliderField
+          label="Opacity"
+          value={view.transform.opacity}
+          min={0}
+          max={1}
+          step={0.05}
+          disabled={keyed('transform.opacity')}
+          onChange={(opacity) =>
+            patch({ transform: { ...view.transform, opacity } }, 'Change composition opacity')
+          }
+        />
+        {view.keyframes.length > 0 && (
+          <p className="text-2xs text-muted-foreground">
+            Edit animated properties in Keyframes below.
+          </p>
+        )}
+        <span className={SECTION_LABEL}>Source window</span>
+        <NumberScrubField
+          label="Source start"
+          value={sourceStart}
+          min={0}
+          max={sourceEnd - MIN_ASSEMBLY_CLIP_SEC * speed}
+          step={0.01}
+          suffix="s"
+          disabled={!child}
+          onChange={setSourceStart}
+          onCommit={(value) => trimSource('start', value)}
+        />
+        <NumberScrubField
+          label="Source end"
+          value={sourceEnd}
+          min={sourceStart + MIN_ASSEMBLY_CLIP_SEC * speed}
+          max={child?.durationSec}
+          step={0.01}
+          suffix="s"
+          disabled={!child}
+          onChange={setSourceEnd}
+          onCommit={(value) => trimSource('end', value)}
+        />
+        <NumberScrubField
+          label="Speed"
+          value={speed}
+          min={0.05}
+          max={Math.min(20, (clip.durationSec * clip.playbackRate) / MIN_ASSEMBLY_CLIP_SEC)}
+          step={0.05}
+          suffix="x"
+          onChange={setSpeed}
+          onCommit={(rate) =>
+            edits.schedule('speed', (latest) => {
+              const current = findClip(latest, clip.id)?.clip;
+              if (current?.kind !== 'nested_sequence') return null;
+              const next = editorClipAtSpeed(current, rate);
+              return next.durationSec >= MIN_ASSEMBLY_CLIP_SEC
+                ? replaceClipEdit(latest, next, 'Change composition speed')
+                : null;
+            })
+          }
+        />
+        <Button
+          variant="outline"
+          aria-pressed={view.audioEnabled}
+          onClick={() => patch({ audioEnabled: !view.audioEnabled }, 'Toggle composition audio')}
+        >
+          Composition audio
+        </Button>
+      </div>
+      <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
+      <KeyframeLane clip={clip} store={store} onEdit={edits.now} onSettle={edits.schedule} />
     </div>
   );
 }
@@ -787,7 +1026,10 @@ function TextClipInspector({
           onPick={(field, id) => {
             const value = id === 'none' ? undefined : id;
             patch(
-              field === 'animationIn' ? { animationIn: value } : { animationOut: value },
+              {
+                ...(field === 'animationIn' ? { animationIn: value } : { animationOut: value }),
+                textAnimationClock: undefined,
+              },
               'Animate text',
             );
             edits.flush();
@@ -1093,6 +1335,8 @@ export function WorkspaceInspector({
   if (!found) return <InspectorNote>Select a clip to edit it.</InspectorNote>;
   const { clip, track } = found;
   if (track.locked) return <InspectorNote>Unlock {track.name} to edit this clip.</InspectorNote>;
+  if (clip.locked)
+    return <InspectorNote>Unlock {clip.name ?? 'this clip'} to edit it.</InspectorNote>;
   const section = { project, onEdit, onDeselect };
   const motion = { runOp, store };
   switch (clip.kind) {
@@ -1108,9 +1352,11 @@ export function WorkspaceInspector({
         />
       );
     case 'audio':
-      return <AudioClipInspector key={clip.id} {...section} clip={clip} />;
+      return <AudioClipInspector key={clip.id} {...section} clip={clip} store={store} />;
     case 'text':
       return <TextClipInspector key={clip.id} {...section} {...motion} clip={clip} />;
+    case 'nested_sequence':
+      return <NestedSequenceInspector key={clip.id} {...section} {...motion} clip={clip} />;
     case 'caption':
       return track.kind === 'caption' ? (
         <CaptionTrackInspector

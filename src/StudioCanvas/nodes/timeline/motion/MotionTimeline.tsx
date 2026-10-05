@@ -352,6 +352,11 @@ export function MotionTimeline({
       </div>
       {showGraph && selected && graphRow ? (
         <MotionGraph
+          keyframeOffsetSec={
+            project.tracks
+              .flatMap((track): EditorClip[] => track.clips)
+              .find((clip) => clip.id === selected.clipId)?.keyframeOffsetSec
+          }
           keys={graphKeys}
           durationSec={selected.durationSec}
           fallback={0}

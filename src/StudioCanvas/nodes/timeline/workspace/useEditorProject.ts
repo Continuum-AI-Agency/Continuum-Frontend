@@ -238,7 +238,14 @@ export function useEditorProject(projectId: string) {
     try {
       const next = await restore(entry.beforeRevision, `Undo ${entry.label}`);
       if (!next) return;
-      setUndoStack((stack) => stack.slice(0, -1));
+      setUndoStack((stack) => {
+        const remaining = stack.slice(0, -1);
+        const previous = remaining.at(-1);
+        // Restoring the same timeline creates a new revision and fingerprint.
+        return previous
+          ? remaining.with(-1, { ...previous, appliedFingerprint: next.fingerprint })
+          : remaining;
+      });
       setRedoStack((stack) => [...stack, { ...entry, redoFingerprint: next.fingerprint }]);
     } catch (error) {
       show({
@@ -264,7 +271,13 @@ export function useEditorProject(projectId: string) {
     try {
       const next = await restore(entry.afterRevision, `Redo ${entry.label}`);
       if (!next) return;
-      setRedoStack((stack) => stack.slice(0, -1));
+      setRedoStack((stack) => {
+        const remaining = stack.slice(0, -1);
+        const previous = remaining.at(-1);
+        return previous
+          ? remaining.with(-1, { ...previous, redoFingerprint: next.fingerprint })
+          : remaining;
+      });
       setUndoStack((stack) => [...stack, { ...entry, appliedFingerprint: next.fingerprint }]);
     } catch (error) {
       show({
@@ -278,18 +291,19 @@ export function useEditorProject(projectId: string) {
   const runOp = useCallback<RunVideoEditorOp>(
     async (op, input) => {
       setBusy(op);
+      const spec = VIDEO_EDITOR_OPS[op as VideoEditorOpName];
+      // Draft jobs commit later; their completion path refreshes the project.
+      const deferred = spec.group === 'draft';
       // Claimed before the request: Realtime can deliver the op's own revision before the
       // response does, and it must not read as someone else's edit.
-      const claimed = VIDEO_EDITOR_OPS[op as VideoEditorOpName].commits
-        ? (projectRef.current?.revision ?? -1) + 1
-        : null;
+      const claimed = spec.commits && !deferred ? (projectRef.current?.revision ?? -1) + 1 : null;
       if (claimed !== null) ownRevisions.current.add(claimed);
       const beforeRevision = projectRef.current?.revision;
       try {
         const output = await runVideoEditorOp(projectId, op, input);
         const commit = (output as { commit?: { revision?: number; fingerprint?: string } }).commit;
         if (typeof commit?.revision === 'number') ownRevisions.current.add(commit.revision);
-        if (VIDEO_EDITOR_OPS[op as VideoEditorOpName].access === 'operate') await refresh();
+        if (spec.access === 'operate' && !deferred) await refresh();
         // An op this page ran is undoable like any other edit made here — except `undo`
         // itself, whose own caller (the first-cut toast) owns what it restored.
         if (

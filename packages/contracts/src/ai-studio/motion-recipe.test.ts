@@ -49,3 +49,26 @@ describe('motion recipes', () => {
     expect(placed.keyframes[0]?.timeSec).toBe(2);
   });
 });
+
+test('motion Elements retain full outside endpoints and the original clock', () => {
+  const saved = motionRecipeFromClip({
+    durationSec: 1,
+    keyframeOffsetSec: 2,
+    keyframes: [
+      { ...key, timeSec: 0 },
+      { ...key, id: 'end', timeSec: 4 },
+    ],
+  });
+  const recipe = parseMotionRecipe(saved);
+  expect(recipe?.keyframeOffsetSec).toBe(2);
+  const placed = applyMotionRecipe({ id: 'other', durationSec: 2, keyframeOffsetSec: 99 }, recipe!);
+  expect(placed.keyframeOffsetSec).toBe(4);
+  expect(placed.keyframes.map((key) => key.timeSec)).toEqual([0, 8]);
+  expect(
+    'keyframeOffsetSec' in
+      applyMotionRecipe(
+        { id: 'other', durationSec: 2, keyframeOffsetSec: 99 },
+        { durationSec: 1, keyframes: [key] },
+      ),
+  ).toBe(false);
+});

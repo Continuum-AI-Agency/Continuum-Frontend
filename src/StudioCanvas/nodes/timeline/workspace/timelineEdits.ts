@@ -16,6 +16,8 @@ import {
   type EditorProjectV2,
   type EditorTrack,
   type EditorVideoClip,
+  mergeSpeech,
+  resolveNestedSequence,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import {
@@ -34,22 +36,44 @@ export type TimelineEdit = { label: string; forward: EditorCommandDraft[] };
 export type EditBuild = TimelineEdit | null | ((current: EditorProjectV2) => TimelineEdit | null);
 export type ClipRef = { track: EditorTrack; clip: EditorClip };
 type VideoTrack = Extract<EditorTrack, { kind: 'video' }>;
-export type LaneKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio';
+export type LaneKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio' | 'nested_sequence';
 
 const EPSILON = 0.001;
 const DEFAULT_STILL_SEC = 3;
 const LANE_ORDER: Record<LaneKind, number> = {
-  overlay: 0,
-  video: 1,
-  text: 2,
-  caption: 3,
-  audio: 4,
+  nested_sequence: 0,
+  overlay: 1,
+  video: 2,
+  text: 3,
+  caption: 4,
+  audio: 5,
 };
 
 export const isLaneKind = (kind: EditorTrack['kind']): kind is LaneKind => kind in LANE_ORDER;
 export const clipEnd = (clip: EditorClip): number => clip.timelineStartSec + clip.durationSec;
+/** Keep simultaneous clips reachable without changing their authored tracks or timing. */
+export function clipRows(clips: readonly EditorClip[]): {
+  rows: Map<string, number>;
+  count: number;
+} {
+  const ends: number[] = [],
+    rows = new Map<string, number>();
+  for (const clip of clips.toSorted((a, b) => a.timelineStartSec - b.timelineStartSec)) {
+    // ponytail: scan visible rows; use an end-time heap if dense tracks make this measurable.
+    const reusable = ends.findIndex((end) => end <= clip.timelineStartSec);
+    const row = reusable < 0 ? ends.length : reusable;
+    ends[row] = clipEnd(clip);
+    rows.set(clip.id, row);
+  }
+  return { rows, count: Math.max(1, ends.length) };
+}
+
 const rateOf = (clip: EditorClip): number =>
   'playbackRate' in clip && clip.playbackRate > 0 ? clip.playbackRate : 1;
+const onFrame = (project: EditorProjectV2, sec: number): number => {
+  const fps = project.frameRate.numerator / project.frameRate.denominator;
+  return Math.round(sec * fps) / fps;
+};
 const newId = (): string => crypto.randomUUID();
 
 /**
@@ -66,7 +90,7 @@ export function mainVideoTrack(project: EditorProjectV2): VideoTrack | undefined
 export const mainEndSec = (project: EditorProjectV2): number =>
   orderedVideoClips(mainVideoTrack(project)).reduce((end, clip) => Math.max(end, clipEnd(clip)), 0);
 
-/** Lanes top to bottom: overlays, video (V2 above V1), text, captions, audio. */
+/** Lanes top to bottom: groups, overlays, video (V2 above V1), text, captions, audio. */
 export function laneTracks(project: EditorProjectV2): EditorTrack[] {
   return project.tracks
     .filter((track) => isLaneKind(track.kind))
@@ -226,6 +250,7 @@ function followMainTrack(
 // ── Tracks ────────────────────────────────────────────────────────────────────────────
 
 const TRACK_NAMES: Record<LaneKind, string> = {
+  nested_sequence: 'Group',
   video: 'V',
   overlay: 'Overlay',
   text: 'Text',
@@ -414,7 +439,7 @@ export function moveClipEdit(
     return null;
   }
   const main = mainVideoTrack(project);
-  const at = Math.max(0, startSec);
+  const at = Math.max(0, onFrame(project, startSec));
   const forward: EditorCommandDraft[] = [];
   const fromMain = found.track.id === main?.id;
   const toMain = target.id === main?.id;
@@ -475,7 +500,10 @@ export function nudgeClipsEdit(
       Boolean(ref && !ref.track.locked && ref.track.id !== main?.id),
     );
   if (refs.length === 0 || Math.abs(deltaSec) < EPSILON) return null;
-  const shift = Math.max(deltaSec, -Math.min(...refs.map((ref) => ref.clip.timelineStartSec)));
+  const shift = Math.max(
+    onFrame(project, deltaSec),
+    -Math.min(...refs.map((ref) => ref.clip.timelineStartSec)),
+  );
   return {
     label: `Move ${refs.length} clips`,
     forward: refs.map((ref) => ({
@@ -506,13 +534,25 @@ export function trimEdit(
   const { clip, track } = found;
   const rate = rateOf(clip);
   const sourceIn = 'sourceInSec' in clip ? (clip.sourceInSec ?? 0) : 0;
-  const hasMedia = 'source' in clip && !(clip.kind === 'overlay' && clip.mediaKind === 'image');
+  const hasMedia =
+    clip.kind === 'nested_sequence' ||
+    ('source' in clip && !(clip.kind === 'overlay' && clip.mediaKind === 'image'));
+  const sourceDuration =
+    clip.kind === 'nested_sequence'
+      ? resolveNestedSequence(project, clip)?.durationSec
+      : sourceDurationSec;
   const start = clip.timelineStartSec;
   const end = clipEnd(clip);
+  const fps = project.frameRate.numerator / project.frameRate.denominator;
+  const minimumSec = Math.ceil(MIN_ASSEMBLY_CLIP_SEC * fps) / fps;
+  toSec = onFrame(project, toSec);
   let draft: EditorCommandDraft;
   if (edge === 'start') {
     const earliest = hasMedia ? start - sourceIn / rate : 0;
-    const nextStart = Math.max(Math.max(0, earliest), Math.min(toSec, end - MIN_ASSEMBLY_CLIP_SEC));
+    const nextStart = Math.max(
+      Math.max(0, Math.ceil(earliest * fps) / fps),
+      Math.min(toSec, Math.floor((end - minimumSec) * fps + 1e-9) / fps),
+    );
     if (Math.abs(nextStart - start) < EPSILON) return null;
     draft = {
       commandType: 'trim_clip',
@@ -527,10 +567,13 @@ export function trimEdit(
   } else {
     const latest = !hasMedia
       ? Number.POSITIVE_INFINITY
-      : sourceDurationSec
-        ? start + (sourceDurationSec - sourceIn) / rate
+      : sourceDuration
+        ? start + (sourceDuration - sourceIn) / rate
         : end;
-    const nextEnd = Math.min(latest, Math.max(toSec, start + MIN_ASSEMBLY_CLIP_SEC));
+    const nextEnd = Math.min(
+      Math.floor(latest * fps + 1e-9) / fps,
+      Math.max(toSec, Math.ceil((start + minimumSec) * fps - 1e-9) / fps),
+    );
     if (Math.abs(nextEnd - end) < EPSILON) return null;
     draft = {
       commandType: 'trim_clip',
@@ -590,6 +633,7 @@ export function splitEdit(
   clipIds: readonly string[],
   atSec: number,
 ): TimelineEdit | null {
+  atSec = onFrame(project, atSec);
   const targets = clipsUnder(project, atSec, clipIds);
   if (targets.length === 0) return null;
   return {
@@ -647,53 +691,49 @@ export function deleteClipsEdit(
     clipId: ref.clip.id,
   }));
   const main = mainVideoTrack(project);
-  if (ripple) {
-    for (const track of new Set(refs.map((ref) => ref.track))) {
-      if (track.id === main?.id) continue;
-      const removed = track.clips.filter((clip) => removing.has(clip.id));
-      for (const clip of track.clips) {
-        if (removing.has(clip.id)) continue;
-        const shift = removed
-          .filter((gone) => gone.timelineStartSec < clip.timelineStartSec)
-          .reduce((sum, gone) => sum + gone.durationSec, 0);
-        if (shift > EPSILON) {
-          forward.push({
-            commandType: 'move_clip',
-            clipId: clip.id,
-            fromTrackId: track.id,
-            toTrackId: track.id,
-            timelineStartSec: Math.max(0, clip.timelineStartSec - shift),
-          });
-        }
-      }
-    }
-  }
-  if (main && refs.some((ref) => ref.track.id === main.id)) {
+  const removedMain = main
+    ? orderedVideoClips(main)
+        .filter((clip) => removing.has(clip.id))
+        .map((clip) => ({ startSec: clip.timelineStartSec, endSec: clipEnd(clip) }))
+    : [];
+  if (main && removedMain.length > 0) {
     const transitions = project.transitions.filter(
       (transition) => !removing.has(transition.fromClipId) && !removing.has(transition.toClipId),
     );
     const order = orderedVideoClips(main).filter((clip) => !removing.has(clip.id));
-    forward.push(...repackMain(transitions, main.id, order));
-    const removed = orderedVideoClips(main)
-      .filter((clip) => removing.has(clip.id))
-      .map((clip) => ({ startSec: clip.timelineStartSec, endSec: clipEnd(clip) }));
-    const laneShifts = followMainTrack(project, { removed }, removing);
-    // A clip already rippled on its own lane moves by both amounts.
-    for (const shift of laneShifts) {
-      if (shift.commandType !== 'move_clip') continue;
-      const own = forward.find(
-        (draft): draft is Extract<EditorCommandDraft, { commandType: 'move_clip' }> =>
-          draft.commandType === 'move_clip' && draft.clipId === shift.clipId,
-      );
-      if (!own) {
-        forward.push(shift);
-        continue;
+    forward.push(
+      ...repackMain(transitions, main.id, order).map((command) =>
+        command.commandType === 'move_clip' ? { ...command, preserveParentMotion: true } : command,
+      ),
+    );
+  }
+  for (const track of project.tracks) {
+    if (track.id === main?.id || track.locked || !isLaneKind(track.kind)) continue;
+    // Matching cuts on picture and another lane remove the same time only once.
+    const removed = mergeSpeech(
+      [
+        ...removedMain,
+        ...(ripple
+          ? track.clips
+              .filter((clip) => removing.has(clip.id))
+              .map((clip) => ({ startSec: clip.timelineStartSec, endSec: clipEnd(clip) }))
+          : []),
+      ],
+      0,
+    );
+    for (const clip of track.clips) {
+      if (removing.has(clip.id)) continue;
+      const shift = measureBefore(removed, clip.timelineStartSec);
+      if (shift > EPSILON) {
+        forward.push({
+          commandType: 'move_clip',
+          clipId: clip.id,
+          fromTrackId: track.id,
+          toTrackId: track.id,
+          timelineStartSec: Math.max(0, clip.timelineStartSec - shift),
+          preserveParentMotion: true,
+        });
       }
-      const original = findClip(project, shift.clipId)?.clip.timelineStartSec ?? 0;
-      own.timelineStartSec = Math.max(
-        0,
-        own.timelineStartSec - (original - shift.timelineStartSec),
-      );
     }
   }
   return {
@@ -780,12 +820,12 @@ export function snapTimes(
 export const beatTimes = (project: EditorProjectV2): number[] =>
   project.markers.filter((marker) => marker.kind === 'beat').map((marker) => marker.timeSec);
 
-export const addMarkerEdit = (atSec: number): TimelineEdit => ({
+export const addMarkerEdit = (project: EditorProjectV2, atSec: number): TimelineEdit => ({
   label: 'Add marker',
   forward: [
     {
       commandType: 'upsert_marker',
-      marker: { id: newId(), kind: 'timeline', timeSec: atSec, label: 'Marker' },
+      marker: { id: newId(), kind: 'timeline', timeSec: onFrame(project, atSec), label: 'Marker' },
     },
   ],
 });
@@ -848,7 +888,7 @@ export function replaceClipEdit(
   label = 'Edit clip',
 ): TimelineEdit | null {
   const found = findClip(project, clip.id);
-  if (!found || found.track.locked) return null;
+  if (!found || found.track.locked || found.clip.locked) return null;
   const forward: EditorCommandDraft[] = [
     { commandType: 'upsert_clip', trackId: found.track.id, clip },
   ];

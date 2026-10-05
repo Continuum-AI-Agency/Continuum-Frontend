@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'bun:test';
-import { computePeaks } from './mediaThumbs';
+import { addWaveformChunk, computePeaks } from './mediaThumbs';
+
+it('clips decoded chunks to the source window and preserves gaps and exclusive ends', () => {
+  const peaks = [0, 0, 0, 0];
+  addWaveformChunk(peaks, new Float32Array([9, 0.2, -0.4]), 2, 0, 0.5, 2.5);
+  addWaveformChunk(peaks, new Float32Array([-0.8, 9]), 2, 2, 0.5, 2.5);
+  expect(peaks[0]).toBeCloseTo(0.2);
+  expect(peaks[1]).toBeCloseTo(0.4);
+  expect(peaks[2]).toBe(0);
+  expect(peaks[3]).toBeCloseTo(0.8);
+  addWaveformChunk(peaks, new Float32Array([1]), 0, 0, 0.5, 2.5);
+  expect(peaks[0]).toBeCloseTo(0.2);
+});
 
 describe('computePeaks', () => {
   it('returns the max absolute amplitude per bucket, clamped to 0..1', () => {

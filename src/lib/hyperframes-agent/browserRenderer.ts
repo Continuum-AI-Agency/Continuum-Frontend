@@ -21,6 +21,7 @@ import {
   motionStrip,
   reviewPlan,
 } from '@continuum/contracts/ai-studio/hyperframes-runtime/review';
+import { calibratedAacConfig, trimAacPadding } from '@/StudioCanvas/utils/splice/aacTiming';
 import {
   AUDIO_CHANNELS,
   AUDIO_SAMPLE_RATE,
@@ -543,43 +544,40 @@ export async function renderHyperframesVideo(params: {
   const inputs: InstanceType<typeof mb.Input>[] = [];
   let audioSource: InstanceType<typeof mb.AudioSampleSource> | null = null;
   const audioPlan: AudioPlanItem[] = [];
-  if (capabilities.aac) {
-    for (const element of audioElements(rawHtml)) {
-      const asset = params.composition.assets.find(
-        (candidate) => candidate.assetId === element.assetId,
-      );
-      if (!asset || asset.kind === 'image') continue;
-      const input = new mb.Input({
-        formats: mb.ALL_FORMATS,
-        source: new mb.UrlSource(asset.url),
-      });
-      inputs.push(input);
-      audioPlan.push({
-        input,
-        sourceStartSec: element.sourceStart,
-        sourceEndSec: element.sourceStart + element.duration,
-        speed: 1,
-        outputStartSec: element.start,
-        gain: element.gain,
-        fadeInSec: 0,
-        fadeOutSec: 0,
-      });
-    }
-    if (audioPlan.length > 0) {
-      audioSource = new mb.AudioSampleSource({
-        codec: 'aac',
-        bitrate: 128_000,
-      });
-      output.addAudioTrack(audioSource);
-    }
-  }
-
-  const frameCount = Math.max(
-    1,
-    Math.round(params.composition.durationSeconds * params.composition.fps),
-  );
-  const frameDuration = 1 / params.composition.fps;
   try {
+    if (capabilities.aac) {
+      for (const element of audioElements(rawHtml)) {
+        const asset = params.composition.assets.find(
+          (candidate) => candidate.assetId === element.assetId,
+        );
+        if (!asset || asset.kind === 'image') continue;
+        const input = new mb.Input({
+          formats: mb.ALL_FORMATS,
+          source: new mb.UrlSource(asset.url),
+        });
+        inputs.push(input);
+        audioPlan.push({
+          input,
+          sourceStartSec: element.sourceStart,
+          sourceEndSec: element.sourceStart + element.duration,
+          speed: 1,
+          outputStartSec: element.start,
+          gain: element.gain,
+          fadeInSec: 0,
+          fadeOutSec: 0,
+        });
+      }
+      if (audioPlan.length > 0) {
+        audioSource = new mb.AudioSampleSource(await calibratedAacConfig(mb, 128_000));
+        output.addAudioTrack(audioSource);
+      }
+    }
+
+    const frameCount = Math.max(
+      1,
+      Math.round(params.composition.durationSeconds * params.composition.fps),
+    );
+    const frameDuration = 1 / params.composition.fps;
     const mixdown =
       audioSource && audioPlan.length > 0
         ? await mixdownTimelineAudio(
@@ -603,7 +601,17 @@ export async function renderHyperframesVideo(params: {
     await output.finalize();
     if (!output.target.buffer) throw new Error('Mediabunny produced no MP4 buffer.');
     return {
-      blob: new Blob([output.target.buffer], { type: 'video/mp4' }),
+      blob: new Blob(
+        [
+          await trimAacPadding(
+            mb,
+            output.target.buffer,
+            params.composition.durationSeconds,
+            params.signal,
+          ),
+        ],
+        { type: 'video/mp4' },
+      ),
       width: params.composition.width,
       height: params.composition.height,
       durationSeconds: params.composition.durationSeconds,

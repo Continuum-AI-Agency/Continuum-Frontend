@@ -9,6 +9,8 @@ import {
   editorRenderProgressSchema,
   editorRenderRequestSchema,
   editorRenderResultSchema,
+  editorVideoClipSchema,
+  fingerprintEditorProject,
   timelineAuthoringDocumentSchema,
 } from './index';
 
@@ -211,6 +213,26 @@ function projectFixture() {
 }
 
 describe('EditorProjectV2', () => {
+  test('optional video audio controls preserve old fingerprints and reject invalid gain/fades', () => {
+    const project = editorProjectV2Schema.parse(projectFixture());
+    const clip = project.tracks[0]!.clips[0]!;
+    expect(clip.kind).toBe('video');
+    expect('volume' in clip).toBe(false);
+    expect('fadeInSec' in clip).toBe(false);
+    expect('fadeOutSec' in clip).toBe(false);
+    expect(fingerprintEditorProject(editorProjectV2Schema.parse(project))).toBe(
+      fingerprintEditorProject(project),
+    );
+    expect(
+      editorVideoClipSchema.parse({ ...clip, volume: 0.65, fadeInSec: 0.5, fadeOutSec: 1 }),
+    ).toMatchObject({ volume: 0.65, fadeInSec: 0.5, fadeOutSec: 1 });
+    expect(editorVideoClipSchema.safeParse({ ...clip, volume: -0.1 }).success).toBe(false);
+    expect(editorVideoClipSchema.safeParse({ ...clip, volume: 4.1 }).success).toBe(false);
+    expect(
+      editorVideoClipSchema.safeParse({ ...clip, fadeInSec: clip.durationSec + 1 }).success,
+    ).toBe(false);
+  });
+
   test('parses every typed track and materializes deterministic defaults', () => {
     const parsed = editorProjectV2Schema.parse(projectFixture());
 

@@ -2,9 +2,15 @@ import {
   CANVAS_MEDIA_SIGN_MAX_ITEMS,
   CANVAS_MEDIA_SIGN_ROUTE,
   type CanvasMediaSignResponse,
+  type EditorCaptionClip,
+  type EditorOverlayClip,
+  type EditorParentMotionBinding,
   type EditorProjectV2,
   type EditorTextClip,
   type EditorTransition,
+  type EditorVideoClip,
+  parentPositionTracks,
+  resolveNestedSequence,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import { captionAnimationFromEditorId } from '@/lib/clips/captionAnimation';
@@ -18,6 +24,7 @@ import {
   type CaptionStyleOverride,
   DEFAULT_CAPTION_STYLE,
 } from '@/lib/clips/clipCaptionStyle';
+import { viewProjectForSequence } from '@/StudioCanvas/nodes/timeline/editorProjectV2AssemblyModel';
 import { persistTimelineRender } from '@/StudioCanvas/utils/persistTimelineRender';
 import type {
   ClipEffectSpec,
@@ -27,7 +34,12 @@ import type {
 import type { ClipTransition } from '@/StudioCanvas/utils/render/transitions';
 import { overlapInSecFor } from '@/StudioCanvas/utils/render/transitions';
 import { type CaptionCue, wordsForCaptionText } from '@/StudioCanvas/utils/splice/captionCues';
-import { volumeKeyframesOf } from '@/StudioCanvas/utils/splice/timelineAudioEnvelope';
+import type { TimelineNestedRenderGroup } from '@/StudioCanvas/utils/splice/composeTimeline';
+import {
+  editorAudioTracks,
+  nestedAudioClips,
+  volumeKeyframesOf,
+} from '@/StudioCanvas/utils/splice/timelineAudioEnvelope';
 import { runTimelineInWorker } from '@/StudioCanvas/workers/spliceWorkerClient';
 import type {
   TimelineAudioWorkerItem,
@@ -37,8 +49,10 @@ import type {
 import type { ClientRenderExecutor } from '../executorRegistry';
 
 type RenderPlan = {
+  backgroundColor: string;
   items: TimelineWorkerItem[];
   overlays: TimelineOverlayWorkerItem[];
+  groups: TimelineNestedRenderGroup[];
   audioTracks: TimelineAudioWorkerItem[];
   captionCues: CaptionCue[];
   captionStyle: CaptionStyle;
@@ -81,7 +95,15 @@ const transformKeyframesFor = (clip: {
 }): NonNullable<ClipEffectSpec['keyframes']> | undefined => {
   const grouped = new Map<number, NonNullable<ClipEffectSpec['keyframes']>[number]['transform']>();
   for (const keyframe of clip.keyframes ?? []) {
-    if (!keyframe.property.startsWith('transform.')) continue;
+    if (
+      ![
+        'transform.position',
+        'transform.scaleX',
+        'transform.scaleY',
+        'transform.rotationDeg',
+      ].includes(keyframe.property)
+    )
+      continue;
     // V2 keyframe times are local to their clip (split commands shift the right
     // clip's stops back to zero), while the worker consumes normalized clip time.
     const at = Math.max(0, Math.min(1, keyframe.timeSec / clip.durationSec));
@@ -129,6 +151,7 @@ type EditorClipKeyframe = {
   interpolation?: ClipPropertyStop['interpolation'];
   easing?: ClipPropertyStop['easing'];
   spring?: ClipPropertyStop['spring'];
+  expression?: string;
 };
 
 const toStop = (
@@ -136,11 +159,12 @@ const toStop = (
   durationSec: number,
   value: number,
 ): ClipPropertyStop => ({
-  t: Math.max(0, Math.min(1, keyframe.timeSec / durationSec)),
+  t: keyframe.timeSec / durationSec,
   value,
   interpolation: keyframe.interpolation ?? 'linear',
   ...(keyframe.easing ? { easing: keyframe.easing } : {}),
   ...(keyframe.spring ? { spring: keyframe.spring } : {}),
+  ...(keyframe.expression ? { expression: keyframe.expression } : {}),
 });
 
 const numericStopsFor = (
@@ -210,48 +234,66 @@ const motionChannelsFor = (clip: {
  * instances, this reads them; changing one without the other reopens the gap where
  * `chroma_key` sat in the schema for a whole release and never moved a pixel.
  */
-export const clipEffectSpecFromEditorClip = (clip: {
-  timelineStartSec: number;
-  durationSec: number;
-  playbackRate?: number;
-  transform?: {
-    position: { x: number; y: number };
-    scaleX: number;
-    scaleY: number;
-    rotationDeg: number;
-    rotateXDeg?: number;
-    rotateYDeg?: number;
-    perspective?: number;
-    opacity: number;
-  };
-  crop?: ClipEffectSpec['crop'];
-  blendMode?: ClipEffectSpec['blendMode'];
-  effects?: Array<{
-    enabled: boolean;
-    effectType: string;
-    effectId: string;
-    mix?: number;
-    parameters: Record<string, unknown>;
-  }>;
-  keyframes?: EditorClipKeyframe[];
-}): ClipEffectSpec => ({
+export const clipEffectSpecFromEditorClip = (
+  clip: {
+    id?: string;
+    parentClipId?: string;
+    parentMotionBinding?: EditorParentMotionBinding;
+    timelineStartSec: number;
+    durationSec: number;
+    playbackRate?: number;
+    transform?: {
+      position: { x: number; y: number };
+      scaleX: number;
+      scaleY: number;
+      rotationDeg: number;
+      rotateXDeg?: number;
+      rotateYDeg?: number;
+      perspective?: number;
+      opacity: number;
+      anchorX?: number;
+      anchorY?: number;
+    };
+    crop?: ClipEffectSpec['crop'];
+    blendMode?: ClipEffectSpec['blendMode'];
+    effects?: Array<{
+      enabled: boolean;
+      effectType: string;
+      effectId: string;
+      mix?: number;
+      parameters: Record<string, unknown>;
+    }>;
+    keyframes?: EditorClipKeyframe[];
+    keyframeOffsetSec?: number;
+  },
+  project?: EditorProjectV2,
+): ClipEffectSpec => ({
+  ...(project && clip.id && (clip.parentClipId || clip.parentMotionBinding)
+    ? {
+        parentPositionTracks: parentPositionTracks(project, clip.id),
+        motionDurationSec: clip.durationSec,
+      }
+    : {}),
+  ...(clip.keyframes?.length
+    ? { motionDurationSec: clip.durationSec, keyframeOffsetSec: clip.keyframeOffsetSec }
+    : {}),
   ...(clip.playbackRate && clip.playbackRate !== 1 ? { speed: clip.playbackRate } : {}),
   ...(clip.transform
     ? {
         opacity: clip.transform.opacity,
         transform: {
           scale: Math.max(Math.abs(clip.transform.scaleX), Math.abs(clip.transform.scaleY)),
-          scaleX: Math.abs(clip.transform.scaleX),
-          scaleY: Math.abs(clip.transform.scaleY),
+          scaleX: clip.transform.scaleX,
+          scaleY: clip.transform.scaleY,
           offsetX: clip.transform.position.x - 0.5,
           offsetY: clip.transform.position.y - 0.5,
           rotate: clip.transform.rotationDeg,
           rotateX: clip.transform.rotateXDeg ?? 0,
           rotateY: clip.transform.rotateYDeg ?? 0,
           perspective: clip.transform.perspective ?? 0,
+          anchorX: clip.transform.anchorX,
+          anchorY: clip.transform.anchorY,
         },
-        flipH: clip.transform.scaleX < 0,
-        flipV: clip.transform.scaleY < 0,
       }
     : {}),
   ...(clip.crop && Object.values(clip.crop).some((value) => value !== 0)
@@ -342,11 +384,15 @@ export const clipEffectSpecFromEditorClip = (clip: {
     })();
     const vignette = amountFor('vignette');
     const filmGrain = amountFor('film_grain');
+    const dust = amountFor('dust');
+    const lightLeaks = amountFor('light_leaks');
     const chromaticAberration = amountFor('chromatic_aberration');
     const vhs = amountFor('vhs');
     return {
       ...(vignette !== undefined && vignette > 0 ? { vignette: { amount: vignette } } : {}),
       ...(filmGrain !== undefined && filmGrain > 0 ? { filmGrain: { amount: filmGrain } } : {}),
+      ...(dust !== undefined && dust > 0 ? { dust: { amount: dust } } : {}),
+      ...(lightLeaks !== undefined && lightLeaks > 0 ? { lightLeaks: { amount: lightLeaks } } : {}),
       ...(blockPx !== undefined && blockPx >= 2 ? { pixelate: { blockPx } } : {}),
       ...(chromaticAberration !== undefined && chromaticAberration > 0
         ? { chromaticAberration: { amount: chromaticAberration } }
@@ -400,12 +446,23 @@ const transitionFor = (transition: EditorTransition | undefined): ClipTransition
 };
 
 /** The part of a clip's render spec that moves a text clip: transform, opacity, keyframes. */
-const textMotionFor = (clip: Parameters<typeof clipEffectSpecFromEditorClip>[0]) => {
-  const { transform, opacity, motionChannels } = clipEffectSpecFromEditorClip(clip);
+const textMotionFor = (
+  clip: Parameters<typeof clipEffectSpecFromEditorClip>[0],
+  project?: EditorProjectV2,
+) => {
+  const {
+    transform,
+    opacity,
+    motionChannels,
+    motionDurationSec,
+    keyframeOffsetSec,
+    parentPositionTracks,
+  } = clipEffectSpecFromEditorClip(clip, project);
   return {
     ...(transform ? { transform } : {}),
     ...(opacity !== undefined ? { opacity } : {}),
-    ...(motionChannels ? { motionChannels } : {}),
+    ...(motionChannels ? { motionChannels, motionDurationSec, keyframeOffsetSec } : {}),
+    ...(parentPositionTracks?.length ? { parentPositionTracks, motionDurationSec } : {}),
   };
 };
 
@@ -464,19 +521,48 @@ const TEXT_SHADOW_OFFSET_FRAC = 0.06;
  * its transform and keyframes, which move the whole line as they move a video clip. The one
  * mapping — the export plan and the workspace stage both draw text through it.
  */
-export function textCueFor(clip: EditorTextClip, canvasHeight: number): CaptionCue {
+export function textCueFor(
+  clip: EditorTextClip,
+  canvasHeight: number,
+  project?: EditorProjectV2,
+): CaptionCue {
   const endSec = clip.timelineStartSec + clip.durationSec;
   return {
     id: clip.id,
     startSec: clip.timelineStartSec,
     endSec,
     words: wordsForCaptionText(clip.text, clip.timelineStartSec, endSec),
+    ...(clip.textAnimationClock ? { animationClock: clip.textAnimationClock } : {}),
     style: {
       ...captionStyleFor(clip, canvasHeight),
       animation: captionAnimationFromEditorId(clip.animationIn),
       exitAnimation: captionAnimationFromEditorId(clip.animationOut),
     },
-    motion: textMotionFor(clip),
+    motion: textMotionFor(clip, project),
+  };
+}
+
+/** Clip-relative speech words and motion, shared by the native stage and burn-in. */
+export function captionCueFor(
+  clip: EditorCaptionClip,
+  canvasHeight: number,
+  project?: EditorProjectV2,
+): CaptionCue {
+  const endSec = clip.timelineStartSec + clip.durationSec;
+  return {
+    id: clip.id,
+    startSec: clip.timelineStartSec,
+    endSec,
+    words: clip.words.length
+      ? clip.words.map((word) => ({
+          text: word.text,
+          startSec: clip.timelineStartSec + word.startSec,
+          endSec: clip.timelineStartSec + word.endSec,
+          ...(word.emphasis ? { emphasis: true } : {}),
+        }))
+      : wordsForCaptionText(clip.text, clip.timelineStartSec, endSec),
+    style: captionStyleFor(clip, canvasHeight),
+    motion: textMotionFor(clip, project),
   };
 }
 
@@ -608,13 +694,12 @@ export async function buildTimelineEditorRenderPlan(input: {
     .filter((track) => track.enabled)
     .sort((left, right) => left.order - right.order);
   const primary = videoTracks[0];
-  if (!primary) throw new Error('The editor project has no enabled video track.');
   const incomingTransitionByClip = new Map(
     input.project.transitions
-      .filter((transition) => transition.trackId === primary.id)
+      .filter((transition) => transition.trackId === primary?.id)
       .map((transition) => [transition.toClipId, transition] as const),
   );
-  const primaryClips = primary.clips
+  const primaryClips = (primary?.clips ?? [])
     .filter((clip) => clip.enabled)
     .sort((left, right) => left.timelineStartSec - right.timelineStartSec);
   let expectedStartSec = 0;
@@ -628,11 +713,12 @@ export async function buildTimelineEditorRenderPlan(input: {
     }
     expectedStartSec += clip.durationSec;
   }
-  if (Math.abs(input.project.durationSec - expectedStartSec) > 0.001) {
+  if (primaryClips.length > 0 && Math.abs(input.project.durationSec - expectedStartSec) > 0.001) {
     throw new Error(
       `Project duration ${input.project.durationSec}s does not match the canonical sequence duration ${expectedStartSec}s.`,
     );
   }
+  const audibleTracks = new Set(editorAudioTracks(input.project).map((track) => track.id));
   const items: TimelineWorkerItem[] = await Promise.all(
     primaryClips.map(async (clip) => ({
       itemId: clip.id,
@@ -641,75 +727,70 @@ export async function buildTimelineEditorRenderPlan(input: {
       trimStartSec: clip.sourceInSec,
       trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
       durationSec: clip.durationSec,
-      muteAudio: !clip.audioEnabled || primary.muted,
-      effects: effectsFor(clip),
+      muteAudio: !clip.audioEnabled || !audibleTracks.has(primary!.id),
+      volume: clip.volume,
+      audioFadeClock: clip.audioFadeClock,
+      audioFadeInSec: clip.fadeInSec,
+      audioFadeOutSec: clip.fadeOutSec,
+      volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+      keyframeOffsetSec: clip.keyframeOffsetSec,
+      effects: effectsFor(clip, input.project),
       transition: transitionFor(incomingTransitionByClip.get(clip.id)),
     })),
   );
 
-  const nestedOverlayClips = input.project.tracks
-    .filter((track) => track.kind === 'nested_sequence' && track.enabled && !track.muted)
-    .flatMap((track) =>
-      track.clips.flatMap((instance) => {
-        if (instance.kind !== 'nested_sequence' || !instance.enabled) return [];
-        const nested = input.project.nestedSequences.find(
-          (sequence) => sequence.id === instance.sequenceId,
-        );
-        if (!nested) return [];
-        const rate = instance.playbackRate > 0 ? instance.playbackRate : 1;
-        return nested.tracks
-          .filter(isOverlayTrack)
-          .filter((childTrack) => childTrack.enabled && !childTrack.muted)
-          .flatMap((childTrack) =>
-            childTrack.clips
-              .filter((clip) => clip.enabled)
-              .map((clip) => ({
-                ...clip,
-                timelineStartSec:
-                  instance.timelineStartSec +
-                  Math.max(0, clip.timelineStartSec - instance.sourceInSec) / rate,
-                durationSec: Math.min(instance.durationSec, clip.durationSec / rate),
-              })),
-          );
-      }),
-    );
+  if (items.length === 0) {
+    if (input.project.durationSec <= 0) throw new Error('The timeline is empty.');
+    // Overlay-only edits still render over their authored canvas for the full sequence.
+    const canvas = new OffscreenCanvas(1, 1);
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Timeline background canvas unavailable.');
+    context.fillStyle = input.project.canvas.backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    items.push({
+      itemId: 'canvas-background',
+      kind: 'image',
+      blob: await canvas.convertToBlob({ type: 'image/png' }),
+      durationSec: input.project.durationSec,
+      muteAudio: true,
+    });
+  }
+
   const overlayClips = [
     ...input.project.tracks
       .filter(isOverlayTrack)
       .filter((track) => track.enabled && !track.muted)
       .flatMap((track) => track.clips),
-    ...nestedOverlayClips,
     ...videoTracks
       .slice(1)
       .flatMap((track) => track.clips.map((clip) => ({ ...clip, mediaKind: 'video' as const }))),
   ];
-  const overlays: TimelineOverlayWorkerItem[] = await Promise.all(
-    overlayClips
-      .filter((clip) => clip.enabled)
-      .map(async (clip) => ({
-        itemId: clip.id,
-        kind: clip.mediaKind === 'image' ? ('image' as const) : ('video' as const),
-        blob: await blobFor(clip.id),
-        startSec: clip.timelineStartSec,
-        trimStartSec: clip.sourceInSec,
-        ...(clip.mediaKind === 'video'
-          ? {
-              trimEndSec:
-                (clip.sourceInSec ?? 0) +
-                clip.durationSec *
-                  ('playbackRate' in clip && typeof clip.playbackRate === 'number'
-                    ? clip.playbackRate
-                    : 1),
-            }
-          : {}),
-        durationSec: clip.durationSec,
-        muteAudio: true,
-        effects: effectsFor(clip),
-      })),
+  const overlayFor = async (
+    clip: EditorOverlayClip | EditorVideoClip,
+    space: EditorProjectV2,
+  ): Promise<TimelineOverlayWorkerItem> => ({
+    itemId: clip.id,
+    kind: clip.kind === 'overlay' && clip.mediaKind === 'image' ? 'image' : 'video',
+    blob: await blobFor(clip.id),
+    startSec: clip.timelineStartSec,
+    trimStartSec: clip.sourceInSec,
+    ...(clip.kind === 'video' || clip.mediaKind === 'video'
+      ? {
+          trimEndSec:
+            (clip.sourceInSec ?? 0) +
+            clip.durationSec * (clip.kind === 'video' ? clip.playbackRate : 1),
+        }
+      : {}),
+    durationSec: clip.durationSec,
+    muteAudio: true,
+    effects: effectsFor(clip, space),
+  });
+  const overlays = await Promise.all(
+    overlayClips.filter((clip) => clip.enabled).map((clip) => overlayFor(clip, input.project)),
   );
 
   const audioTracks: TimelineAudioWorkerItem[] = await Promise.all(
-    input.project.tracks
+    editorAudioTracks(input.project)
       .filter(isAudioTrack)
       .filter((track) => track.enabled && !track.muted)
       .flatMap((track) => track.clips)
@@ -724,11 +805,38 @@ export async function buildTimelineEditorRenderPlan(input: {
           trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
           speed: clip.playbackRate,
           volume: clip.volume,
+          audioFadeClock: clip.audioFadeClock,
           fadeInSec: clip.fadeInSec,
           fadeOutSec: clip.fadeOutSec,
-          ...(volumeKeyframes.length > 0 ? { volumeKeyframes } : {}),
+          ...(volumeKeyframes.length > 0
+            ? { volumeKeyframes, keyframeOffsetSec: clip.keyframeOffsetSec }
+            : {}),
         };
       }),
+  );
+
+  audioTracks.push(
+    ...(await Promise.all(
+      nestedAudioClips(input.project).map(async (item) => {
+        const clip = item.clock;
+        return {
+          itemId: item.id,
+          blob: await blobFor(item.sourceClipId),
+          startSec: item.outputStartSec,
+          trimStartSec: item.sourceStartSec,
+          trimEndSec: item.sourceEndSec,
+          speed: item.playbackRate,
+          volume: clip.volume,
+          audioFadeClock: clip.audioFadeClock,
+          fadeInSec: clip.fadeInSec,
+          fadeOutSec: clip.fadeOutSec,
+          volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+          keyframeOffsetSec: clip.keyframeOffsetSec,
+          groupVolumeKeyframes: item.groupVolumeKeyframes,
+          groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+        };
+      }),
+    )),
   );
 
   const captionCues: CaptionCue[] = [];
@@ -736,47 +844,98 @@ export async function buildTimelineEditorRenderPlan(input: {
     for (const track of input.project.tracks.filter(isCaptionTrack)) {
       if (!track.enabled || track.muted) continue;
       for (const clip of track.clips.filter((candidate) => candidate.enabled)) {
-        captionCues.push({
-          id: clip.id,
-          startSec: clip.timelineStartSec,
-          endSec: clip.timelineStartSec + clip.durationSec,
-          // Word times are seconds from the clip's start (editorCaptionWordSchema).
-          words:
-            clip.words.length > 0
-              ? clip.words.map((word) => ({
-                  text: word.text,
-                  startSec: clip.timelineStartSec + word.startSec,
-                  endSec: clip.timelineStartSec + word.endSec,
-                }))
-              : wordsForCaptionText(
-                  clip.text,
-                  clip.timelineStartSec,
-                  clip.timelineStartSec + clip.durationSec,
-                ),
-          style: captionStyleFor(clip, input.project.canvas.height),
-        });
+        captionCues.push(captionCueFor(clip, input.project.canvas.height, input.project));
       }
     }
   }
   for (const track of input.project.tracks.filter(isTextTrack)) {
     if (!track.enabled || track.muted) continue;
     for (const clip of track.clips.filter((candidate) => candidate.enabled)) {
-      captionCues.push(textCueFor(clip, input.project.canvas.height));
+      captionCues.push(textCueFor(clip, input.project.canvas.height, input.project));
     }
   }
   captionCues.sort((left, right) => left.startSec - right.startSec);
+  const fontCues = [...captionCues];
+  const groups: TimelineNestedRenderGroup[] = [];
+  for (const track of input.project.tracks) {
+    if (track.kind !== 'nested_sequence' || !track.enabled) continue;
+    for (const instance of track.clips) {
+      if (!instance.enabled) continue;
+      const nested = resolveNestedSequence(input.project, instance);
+      if (!nested)
+        throw new Error(`Nested instance "${instance.id}" has no available local sequence.`);
+      if (nested.tracks.some((lane) => lane.kind === 'nested_sequence'))
+        throw new Error(
+          `Nested sequence "${nested.id}": another nested sequence is not supported.`,
+        );
+      const child = viewProjectForSequence(input.project, nested.id);
+      if (nested.transitions.length)
+        throw new Error(`Nested sequence "${nested.id}": child transitions are not supported yet.`);
+      if (
+        child.tracks.some(
+          (lane) =>
+            lane.kind === 'effect' &&
+            lane.enabled &&
+            !lane.muted &&
+            lane.clips.some((clip) => clip.enabled),
+        )
+      )
+        throw new Error(`Nested sequence "${nested.id}": effect tracks are not supported yet.`);
+      const visible = child.tracks
+        .filter((lane) => lane.enabled && (lane.kind === 'video' || !lane.muted))
+        .toSorted((left, right) => left.order - right.order);
+      const childOverlays = await Promise.all(
+        visible
+          .flatMap((lane) =>
+            lane.kind === 'overlay' || lane.kind === 'video'
+              ? lane.clips.filter((clip) => clip.enabled)
+              : [],
+          )
+          .map((clip) => overlayFor(clip, child)),
+      );
+      const cues = visible
+        .flatMap((lane) =>
+          lane.kind === 'text'
+            ? lane.clips
+                .filter((clip) => clip.enabled)
+                .map((clip) => textCueFor(clip, nested.canvas.height, child))
+            : lane.kind === 'caption' && input.project.exportSettings.captionMode === 'burn_in'
+              ? lane.clips
+                  .filter((clip) => clip.enabled)
+                  .map((clip) => captionCueFor(clip, nested.canvas.height, child))
+              : [],
+        )
+        .sort((left, right) => left.startSec - right.startSec);
+      fontCues.push(...cues);
+      groups.push({
+        itemId: instance.id,
+        startSec: instance.timelineStartSec,
+        durationSec: instance.durationSec,
+        sourceInSec: instance.sourceInSec,
+        playbackRate: instance.playbackRate,
+        childDurationSec: nested.durationSec,
+        width: nested.canvas.width,
+        height: nested.canvas.height,
+        effects: effectsFor(instance, input.project),
+        overlays: childOverlays,
+        captionCues: cues,
+      });
+    }
+  }
   // The export draws text in the faces the preview does. Without their bytes the worker
   // (or Render's headless Chrome) falls back to whatever the platform has, and the type
   // metrics change between the browser and the server. A face that will not load fails
   // the export rather than silently burning in a substitute.
   const captionFonts = await loadCaptionFonts(
-    captionCues.flatMap((cue) =>
+    fontCues.flatMap((cue) =>
       isRegistrableCaptionFont(cue.style?.fontFamily) ? [cue.style?.fontFamily ?? ''] : [],
     ),
   );
   return {
+    backgroundColor: input.project.canvas.backgroundColor,
     items,
     overlays,
+    groups,
     audioTracks,
     captionCues,
     captionStyle: DEFAULT_CAPTION_STYLE,

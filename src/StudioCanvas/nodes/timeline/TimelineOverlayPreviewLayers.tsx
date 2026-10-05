@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { StageTextCanvas } from '@/components/video-studio/motion/StageTextCanvas';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
-import { hasShaderStack } from '../../utils/render/shaderStack';
 import type { NestedPreviewGroup } from './nestedSequencePreview';
 import type { OverlayPreviewLayer } from './overlayPreview';
-import { TimelineShaderPreview } from './TimelineShaderPreview';
+import { needsCanvasPreview, TimelineShaderPreview } from './TimelineShaderPreview';
 
 function TextOverlays({ overlays }: { overlays: ResolvedTextOverlay[] }) {
   return overlays.map((overlay) => (
@@ -30,28 +30,43 @@ function TextOverlays({ overlays }: { overlays: ResolvedTextOverlay[] }) {
   ));
 }
 
-function VideoLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlaying: boolean }) {
+function VideoLayer({
+  layer,
+  isPlaying,
+  canvasSize,
+}: {
+  layer: OverlayPreviewLayer;
+  isPlaying: boolean;
+  canvasSize?: { width: number; height: number };
+}) {
   const ref = useRef<HTMLVideoElement>(null);
-  const shaderEnabled = hasShaderStack(layer.effects);
+  const shaderEnabled = needsCanvasPreview(layer.effects);
 
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    video.playbackRate = layer.playbackRate;
-    video.volume = layer.volume;
-    video.muted = layer.muted;
-    if (Math.abs(video.currentTime - layer.sourceSec) > 0.12) {
-      video.currentTime = Math.max(0, layer.sourceSec);
-    }
-    if (isPlaying) void video.play().catch(() => undefined);
-    else video.pause();
-  }, [isPlaying, layer.muted, layer.playbackRate, layer.sourceSec, layer.volume]);
+    const sync = () => {
+      video.playbackRate = layer.playbackRate;
+      video.volume = layer.volume;
+      video.muted = layer.muted;
+      if (video.readyState >= 1 && Math.abs(video.currentTime - layer.sourceSec) > 0.12) {
+        video.currentTime = Math.max(0, layer.sourceSec);
+      }
+      if (isPlaying) void video.play().catch(() => undefined);
+      else video.pause();
+    };
+    // Browsers can discard a seek issued before the source metadata arrives.
+    video.addEventListener('loadedmetadata', sync);
+    sync();
+    return () => video.removeEventListener('loadedmetadata', sync);
+  }, [isPlaying, layer.muted, layer.playbackRate, layer.sourceSec, layer.url, layer.volume]);
 
   return (
     <>
       {/* biome-ignore lint/a11y/useMediaCaption: the editor previews authored media; captions are composited separately. */}
       <video
         ref={ref}
+        crossOrigin="anonymous"
         src={layer.url}
         playsInline
         preload="metadata"
@@ -61,6 +76,7 @@ function VideoLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlayin
       <TimelineShaderPreview
         videoRef={ref}
         effects={layer.effects}
+        canvasSize={canvasSize}
         timeSec={layer.effectTimeSec}
         style={layer.mediaStyle}
       />
@@ -68,9 +84,15 @@ function VideoLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlayin
   );
 }
 
-function ImageLayer({ layer }: { layer: OverlayPreviewLayer }) {
+function ImageLayer({
+  layer,
+  canvasSize,
+}: {
+  layer: OverlayPreviewLayer;
+  canvasSize?: { width: number; height: number };
+}) {
   const emptyVideoRef = useRef<HTMLVideoElement>(null);
-  const shaderEnabled = hasShaderStack(layer.effects);
+  const shaderEnabled = needsCanvasPreview(layer.effects);
   return (
     <>
       {!shaderEnabled ? (
@@ -86,6 +108,7 @@ function ImageLayer({ layer }: { layer: OverlayPreviewLayer }) {
         videoRef={emptyVideoRef}
         imageUrl={layer.url}
         effects={layer.effects}
+        canvasSize={canvasSize}
         timeSec={layer.effectTimeSec}
         style={layer.mediaStyle}
       />
@@ -93,13 +116,21 @@ function ImageLayer({ layer }: { layer: OverlayPreviewLayer }) {
   );
 }
 
-function OverlayLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlaying: boolean }) {
+function OverlayLayer({
+  layer,
+  isPlaying,
+  canvasSize,
+}: {
+  layer: OverlayPreviewLayer;
+  isPlaying: boolean;
+  canvasSize?: { width: number; height: number };
+}) {
   return (
     <div className="pointer-events-none absolute inset-0">
       {layer.kind === 'video' ? (
-        <VideoLayer layer={layer} isPlaying={isPlaying} />
+        <VideoLayer layer={layer} isPlaying={isPlaying} canvasSize={canvasSize} />
       ) : (
-        <ImageLayer layer={layer} />
+        <ImageLayer layer={layer} canvasSize={canvasSize} />
       )}
       <TextOverlays overlays={layer.textOverlays} />
     </div>
@@ -110,15 +141,17 @@ export function TimelineOverlayPreviewLayers({
   layers,
   groups,
   isPlaying,
+  canvasSize,
 }: {
   layers: OverlayPreviewLayer[];
   groups?: NestedPreviewGroup[];
+  canvasSize?: { width: number; height: number };
   isPlaying: boolean;
 }) {
   return (
     <>
       {layers.map((layer) => (
-        <OverlayLayer key={layer.id} layer={layer} isPlaying={isPlaying} />
+        <OverlayLayer key={layer.id} layer={layer} isPlaying={isPlaying} canvasSize={canvasSize} />
       ))}
       {(groups ?? []).map((group) => (
         <div
@@ -127,9 +160,20 @@ export function TimelineOverlayPreviewLayers({
           data-testid={`nested-preview-${group.id}`}
           style={group.style}
         >
-          {group.layers.map((layer) => (
-            <OverlayLayer key={layer.id} layer={layer} isPlaying={isPlaying} />
-          ))}
+          <div className="absolute overflow-hidden" style={group.frameStyle}>
+            <TimelineOverlayPreviewLayers
+              layers={group.layers}
+              isPlaying={isPlaying}
+              canvasSize={group.project.canvas}
+            />
+            <StageTextCanvas
+              clips={group.textClips}
+              project={group.project}
+              sec={group.childTimeSec}
+              width={group.project.canvas.width}
+              height={group.project.canvas.height}
+            />
+          </div>
         </div>
       ))}
     </>

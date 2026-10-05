@@ -8,7 +8,6 @@ import {
   type EditorTrack,
   type EditorVideoClip,
   motionRecipeFromClip,
-  parentPositionDelta,
   parseMotionRecipe,
 } from '@continuum/contracts';
 import {
@@ -28,7 +27,11 @@ import { useElementMutations, useElements } from '@/lib/ai-studio/elements';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
 import type { TimelineInputSource, TimelineItem } from '../../types';
-import { clipEffectsToCss, type ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import {
+  clipEffectsToCss,
+  type ResolvedTextOverlay,
+  resolveTransformAt,
+} from '../../utils/render/effectSpec';
 import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import { MediaOverlayEditor } from './assembly/MediaOverlayEditor';
@@ -201,7 +204,7 @@ export function EditorProjectV2Assembly({
   const activeEffectTimeSec = active ? Math.max(0, playback.playheadSec - active.startSec) : 0;
   const activeEffects = activeVideoClip
     ? mergeClipShaderEffects(
-        clipEffectSpecFromEditorClip(activeVideoClip),
+        clipEffectSpecFromEditorClip(activeVideoClip, viewProject),
         poolSourceForClip(activeVideoClip, pool)?.shaderStack,
       )
     : undefined;
@@ -223,16 +226,22 @@ export function EditorProjectV2Assembly({
         exit: captionAnimationFromEditorId(clip.animationOut),
         cueStartSec: clip.timelineStartSec,
         cueEndSec: clip.timelineStartSec + clip.durationSec,
+        cueAnimationClock: clip.textAnimationClock,
         wordStartSec: clip.timelineStartSec,
         wordEndSec: clip.timelineStartSec + clip.durationSec,
         outputTimeSec: playback.playheadSec,
         fontPx: clip.style.fontSizePx,
       });
+      const spec = clipEffectSpecFromEditorClip(clip, viewProject);
+      const at = resolveTransformAt(
+        spec,
+        (playback.playheadSec - clip.timelineStartSec) / clip.durationSec,
+      );
       return {
         id: clip.id,
         text: clip.text,
-        xFrac: clip.transform.position.x,
-        yFrac: clip.transform.position.y,
+        xFrac: 0.5 + at.offsetX,
+        yFrac: 0.5 + at.offsetY,
         sizeFrac: clip.style.fontSizePx / project.canvas.height,
         color: clip.style.color,
         background: clip.style.backgroundColor,
@@ -246,7 +255,7 @@ export function EditorProjectV2Assembly({
     (track): track is OverlayTrack => track.kind === 'overlay',
   );
   const overlayLayerAt = (
-    clip: EditorOverlayClip,
+    clip: EditorOverlayClip | EditorVideoClip,
     playheadSec: number,
     space: EditorProjectV2,
   ): OverlayPreviewLayer | null => {
@@ -260,31 +269,26 @@ export function EditorProjectV2Assembly({
       return null;
     const effectTimeSec = playheadSec - clip.timelineStartSec;
     const effects = mergeClipShaderEffects(
-      clipEffectSpecFromEditorClip(clip),
+      clipEffectSpecFromEditorClip(clip, space),
       poolSourceForClip(clip, pool)?.shaderStack,
     );
     const css = clipEffectsToCss(
       effects,
       clip.durationSec > 0 ? effectTimeSec / clip.durationSec : 0,
     );
-    const parentDelta = parentPositionDelta(space, clip.id, playheadSec);
-    const parentTranslate =
-      parentDelta.x || parentDelta.y
-        ? `translate(${parentDelta.x * 100}%, ${parentDelta.y * 100}%)`
-        : '';
     return {
       id: clip.id,
-      kind: clip.mediaKind === 'video' ? 'video' : 'image',
+      kind: clip.kind === 'video' || clip.mediaKind === 'video' ? 'video' : 'image',
       url,
-      sourceSec: (clip.sourceInSec ?? 0) + playheadSec - clip.timelineStartSec,
-      playbackRate: 1,
+      sourceSec:
+        (clip.sourceInSec ?? 0) + effectTimeSec * (clip.kind === 'video' ? clip.playbackRate : 1),
+      playbackRate: clip.kind === 'video' ? clip.playbackRate : 1,
       muted: true,
       volume: 0,
       effects,
       effectTimeSec,
       mediaStyle: {
         ...css,
-        transform: [parentTranslate, css.transform].filter(Boolean).join(' ') || undefined,
         transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
       },
       textOverlays: [],
@@ -299,7 +303,7 @@ export function EditorProjectV2Assembly({
     : nestedPreviewGroups({
         project,
         playheadSec: playback.playheadSec,
-        overlayLayerFor: (clip, timeSec) => overlayLayerAt(clip, timeSec, project),
+        overlayLayerFor: overlayLayerAt,
       });
 
   const audioTracks = project.tracks.filter(
@@ -524,6 +528,7 @@ export function EditorProjectV2Assembly({
 
         <div className="grid min-w-0 grid-rows-[minmax(280px,1fr)_220px_auto_110px] gap-3 lg:min-h-0">
           <TimelinePreview
+            frameSize={project.canvas}
             videoRef={playback.videoRef}
             showVideo={Boolean(active)}
             isEmpty={!clips.length}

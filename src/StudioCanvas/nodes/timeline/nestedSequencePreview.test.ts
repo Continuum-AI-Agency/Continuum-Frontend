@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
-import { nestedChildTimeForClip, nestedInstanceStyle } from './nestedSequencePreview';
+import {
+  nestedChildTimeForClip,
+  nestedInstanceStyle,
+  nestedPreviewGroups,
+} from './nestedSequencePreview';
 
 const transform = {
   position: { x: 0.5, y: 0.5, unit: 'normalized' as const },
@@ -54,7 +58,24 @@ describe('nestedInstanceStyle', () => {
           name: 'Child',
           durationSec: 2,
           canvas: { width: 1080, height: 1080 },
-          tracks: [],
+          tracks: [
+            {
+              id: 'child-picture',
+              name: 'Child picture',
+              kind: 'overlay',
+              order: 0,
+              clips: [
+                {
+                  id: 'child-overlay',
+                  kind: 'overlay',
+                  mediaKind: 'image',
+                  timelineStartSec: 0,
+                  durationSec: 2,
+                  source: { sourceType: 'library_asset', assetId: 'asset', renditionId: 'version' },
+                },
+              ],
+            },
+          ],
         },
       ],
       tracks: [
@@ -70,8 +91,8 @@ describe('nestedInstanceStyle', () => {
               sequenceId: 'child',
               timelineStartSec: 0,
               durationSec: 2,
-              sourceInSec: 0,
-              playbackRate: 1,
+              sourceInSec: 0.25,
+              playbackRate: 2,
               audioEnabled: true,
               transform: { ...transform, opacity: 0.5 },
               keyframes: [],
@@ -86,5 +107,19 @@ describe('nestedInstanceStyle', () => {
     const clip = project.tracks[0]?.clips[0];
     if (!clip || clip.kind !== 'nested_sequence') throw new Error('expected nest');
     expect(nestedInstanceStyle(project, clip, 0.5).opacity).toBe(0.5);
+    let childTime = 0;
+    let childTrack = '';
+    const groups = nestedPreviewGroups({
+      project,
+      playheadSec: 0.5,
+      overlayLayerFor: (_clip, sec, space) => {
+        childTime = sec;
+        childTrack = space.tracks[0]?.id ?? '';
+        return null;
+      },
+    });
+    expect(childTime).toBe(1.25);
+    expect(childTrack).toBe('child-picture');
+    expect(groups[0]?.project.tracks).toBe(project.nestedSequences[0]?.tracks);
   });
 });

@@ -1,21 +1,18 @@
 'use client';
 
-import {
-  type EditorCaptionClip,
-  type EditorClip,
-  type EditorOverlayClip,
-  type EditorProjectV2,
-  type EditorVideoClip,
-  parentPositionDelta,
+import type {
+  EditorClip,
+  EditorOverlayClip,
+  EditorProjectV2,
+  EditorVideoClip,
 } from '@continuum/contracts';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StageTextCanvas } from '@/components/video-studio/motion/StageTextCanvas';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
-import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineItem } from '../../../types';
 import { clipEffectsToCss } from '../../../utils/render/effectSpec';
-import type { CaptionCue } from '../../../utils/splice/captionCues';
 import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
+import { nestedPreviewGroups } from '../nestedSequencePreview';
 import type { OverlayPreviewLayer } from '../overlayPreview';
 import { TimelinePreview } from '../TimelinePreview';
 import { useEditorProjectV2AudioPreview } from '../useEditorProjectV2AudioPreview';
@@ -23,13 +20,8 @@ import { type ClipMedia, usePlayheadPlayback } from '../usePlayheadPlayback';
 import type { TimelineLayout } from '../useTimelineEditorModel';
 import type { PlayheadStore } from './playheadStore';
 import { StageTransformHandles } from './StageTransformHandles';
-import {
-  clipEnd,
-  type EditBuild,
-  findClip,
-  mainVideoTrack,
-  replaceClipEdit,
-} from './timelineEdits';
+import { stageTransformAt, stageTransformEdit } from './stageTransform';
+import { clipEnd, type EditBuild, findClip, mainVideoTrack } from './timelineEdits';
 
 const CONTROLS_PX = 44;
 
@@ -67,14 +59,11 @@ function layerFor(
   if (!url || !activeAt(clip, sec)) return null;
   const effectTimeSec = sec - clip.timelineStartSec;
   const rate = clip.kind === 'video' ? clip.playbackRate : 1;
-  const effects = clipEffectSpecFromEditorClip(clip);
+  const effects = clipEffectSpecFromEditorClip(clip, project);
   const css = clipEffectsToCss(
     effects,
     clip.durationSec > 0 ? effectTimeSec / clip.durationSec : 0,
   );
-  const parent = parentPositionDelta(project, clip.id, sec);
-  const parentTranslate =
-    parent.x || parent.y ? `translate(${parent.x * 100}%, ${parent.y * 100}%)` : '';
   return {
     id: clip.id,
     kind: clip.kind === 'overlay' && clip.mediaKind === 'image' ? 'image' : 'video',
@@ -87,45 +76,8 @@ function layerFor(
     effectTimeSec,
     mediaStyle: {
       ...css,
-      transform: [parentTranslate, css.transform].filter(Boolean).join(' ') || undefined,
-      transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
     },
     textOverlays: [],
-  };
-}
-
-/** Caption clips carry timeline-time words — the same reading the burn-in makes. */
-function captionFor(
-  clip: EditorCaptionClip,
-  canvasHeight: number,
-): { cue: CaptionCue; style: CaptionStyle } {
-  const words =
-    clip.words.length > 0
-      ? // Words count from the clip's start; the preview, like the burn-in, adds it.
-        clip.words.map((word) => ({
-          text: word.text,
-          startSec: clip.timelineStartSec + word.startSec,
-          endSec: clip.timelineStartSec + word.endSec,
-          ...(word.emphasis ? { emphasis: true } : {}),
-        }))
-      : [{ text: clip.text, startSec: clip.timelineStartSec, endSec: clipEnd(clip) }];
-  return {
-    cue: { id: clip.id, startSec: clip.timelineStartSec, endSec: clipEnd(clip), words },
-    style: {
-      textColor: clip.style.color,
-      highlightColor:
-        clip.highlightMode === 'none' ? clip.style.color : (clip.highlightColor ?? '#ffd400'),
-      outlineColor: clip.style.outlineColor ?? '#000000',
-      fontFamily: clip.style.fontFamily,
-      fontWeight: clip.style.fontWeight,
-      fontSizeFrac: clip.style.fontSizePx / canvasHeight,
-      outlineWidthFrac:
-        clip.style.fontSizePx > 0 ? clip.style.outlineWidthPx / clip.style.fontSizePx : 0,
-      position: { xFrac: clip.transform.position.x, yFrac: clip.transform.position.y },
-      ...(clip.style.backgroundColor
-        ? { backgroundColor: clip.style.backgroundColor, backgroundMode: 'line' as const }
-        : {}),
-    },
   };
 }
 
@@ -195,7 +147,7 @@ export const EditStage = memo(function EditStage({
   useEffect(() => store.publish(playback.playheadSec, playback.isPlaying));
   const sec = playback.playheadSec;
   const active = orderedVideoClips(main).find((clip) => activeAt(clip, sec));
-  const activeEffects = active ? clipEffectSpecFromEditorClip(active) : undefined;
+  const activeEffects = active ? clipEffectSpecFromEditorClip(active, project) : undefined;
   const activeT = active
     ? Math.max(0, Math.min(1, (sec - active.timelineStartSec) / active.durationSec))
     : 0;
@@ -216,16 +168,22 @@ export const EditStage = memo(function EditStage({
   const textClips = visible.flatMap((track) =>
     track.kind === 'text' ? track.clips.filter((clip) => clip.enabled) : [],
   );
-  const captionClip = visible
-    .flatMap((track) => (track.kind === 'caption' ? track.clips : []))
-    .find((clip) => activeAt(clip, sec));
-  const caption = captionClip ? captionFor(captionClip, canvasHeight) : undefined;
+  const captionClips = visible.flatMap((track) =>
+    track.kind === 'caption' ? track.clips.filter((clip) => clip.enabled) : [],
+  );
 
-  const selected = selectedClipId ? findClip(project, selectedClipId)?.clip : undefined;
+  const selection = selectedClipId ? findClip(project, selectedClipId) : undefined;
+  const selected = selection?.clip;
   const handlesFor =
     selected &&
     activeAt(selected, sec) &&
-    (selected.kind === 'video' || selected.kind === 'overlay' || selected.kind === 'text')
+    !selected.locked &&
+    !selection?.track.locked &&
+    visible.some((track) => track.id === selection?.track.id) &&
+    (selected.kind === 'video' ||
+      selected.kind === 'overlay' ||
+      selected.kind === 'text' ||
+      selected.kind === 'nested_sequence')
       ? selected
       : undefined;
   const baseSize =
@@ -256,16 +214,21 @@ export const EditStage = memo(function EditStage({
           playheadSec={sec}
           totalSec={project.durationSec}
           mediaStyle={clipEffectsToCss(activeEffects, activeT)}
+          frameSize={project.canvas}
           shaderEffects={activeEffects}
           shaderTimeSec={active ? sec - active.timelineStartSec : 0}
           overlayLayers={overlayLayers}
-          caption={caption?.cue}
-          captionStyle={caption?.style}
+          nestedGroups={nestedPreviewGroups({
+            project,
+            playheadSec: sec,
+            overlayLayerFor: (clip, time, space) => layerFor(space, clip, urls.get(clip.id), time),
+          })}
           mediaMuted={audioPreview.active || !active?.audioEnabled || Boolean(main?.muted)}
           motionPath={
             <>
               <StageTextCanvas
-                clips={textClips}
+                clips={[...captionClips, ...textClips]}
+                project={project}
                 sec={sec}
                 width={canvasWidth}
                 height={canvasHeight}
@@ -273,24 +236,15 @@ export const EditStage = memo(function EditStage({
               {handlesFor ? (
                 <StageTransformHandles
                   key={handlesFor.id}
-                  transform={handlesFor.transform}
+                  transform={stageTransformAt(project, handlesFor, sec)}
+                  timeSec={sec}
+                  onBegin={playback.pause}
                   baseSize={baseSize}
-                  onCommit={(transform) =>
-                    // Built on the project at apply time, and only the geometry the handles
-                    // own: an opacity or crop change still in flight is not undone.
-                    onEdit((current) => {
-                      const clip = findClip(current, handlesFor.id)?.clip;
-                      if (!clip || !('transform' in clip)) return null;
-                      const { position, scaleX, scaleY, rotationDeg } = transform;
-                      return replaceClipEdit(
-                        current,
-                        {
-                          ...clip,
-                          transform: { ...clip.transform, position, scaleX, scaleY, rotationDeg },
-                        } as EditorClip,
-                        'Transform clip',
-                      );
-                    })
+                  frameAspect={canvasWidth / canvasHeight}
+                  onCommit={(transform, gesture, timeSec) =>
+                    onEdit((current) =>
+                      stageTransformEdit(current, handlesFor.id, transform, gesture, timeSec),
+                    )
                   }
                 />
               ) : null}

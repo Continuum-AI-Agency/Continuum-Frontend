@@ -1,8 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   type EditorClip,
   type EditorProjectV2,
   HEADLESS_CONCEPTS,
+  registerGeneratedAssetResponseSchema,
   type VideoEditorOpInput,
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
@@ -10,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
-import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import { objectsFor, removeAssets, removeProjects } from './video-editor-workspace/ledger';
 
@@ -36,9 +40,25 @@ import { objectsFor, removeAssets, removeProjects } from './video-editor-workspa
 
 test.describe.configure({ timeout: 1_200_000 });
 
+const LIBRARY_JOURNEY = process.env.VIDEO_EDITOR_LIBRARY_JOURNEY === '1';
+const NATIVE_EXPORT_URL = process.env.VIDEO_EDITOR_LIBRARY_EXPORT_URL;
+if (
+  NATIVE_EXPORT_URL &&
+  (!LIBRARY_JOURNEY || !['127.0.0.1', 'localhost'].includes(new URL(NATIVE_EXPORT_URL).hostname))
+) {
+  throw new Error(
+    'Native Library export requires explicit loopback Library and Render dependencies.',
+  );
+}
 const BENCH = 'videoeditor:generate:e2e:bench';
-const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
-const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
+const BRAND =
+  process.env.CONTINUUM_TEST_BRAND_ID ??
+  (LIBRARY_JOURNEY
+    ? '00000000-0000-4000-8000-0000000000b2'
+    : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
+const OWNER_EMAIL = LIBRARY_JOURNEY
+  ? 'local@continuum.test'
+  : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** Where the Backend keeps transcripts per version (its AI_STUDIO_BUCKET default). */
 const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip on the bench brand, spoken. */
@@ -50,12 +70,14 @@ const JOB_MS = 360_000;
 const STEP_MS = 20_000;
 const RUN = randomUUID().slice(0, 8);
 
-const { url: supabaseUrl, serviceRoleKey } = loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } = LIBRARY_JOURNEY
+  ? loadLocalSupabaseEnv()
+  : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const media = admin.schema('media');
 const rec = new Recorder(BENCH);
-const results: { step: string; grade: 'PASS' | 'FAIL'; detail?: string }[] = [];
+const results: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
 const notes: string[] = [];
 const startedAt = new Date().toISOString();
 const startedMs = Date.now();
@@ -180,6 +202,7 @@ async function settled(page: Page, jobId: string) {
 }
 
 test(BENCH, async ({ browser }) => {
+  test.skip(LIBRARY_JOURNEY, 'Explicit local Library import case does not call paid generators.');
   const servers: Server[] = [];
   const createdProjects: string[] = [];
   const jobIds: string[] = [];
@@ -591,4 +614,618 @@ test(BENCH, async ({ browser }) => {
   note(`run ${RUN}`);
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
+});
+
+test('Library native: recorded images and audio on appropriate tracks', async ({ browser }) => {
+  test.skip(!LIBRARY_JOURNEY, 'Set VIDEO_EDITOR_LIBRARY_JOURNEY=1 for loopback Library imports.');
+  const folder = process.env.VIDEO_EDITOR_LIBRARY_OUTPUT ?? `/tmp/video-library-${RUN}`;
+  mkdirSync(folder, { recursive: true });
+  const servers: Server[] = [],
+    projectIds: string[] = [];
+  const owned: Array<{
+    assetId?: string;
+    versionId?: string;
+    path: string;
+    kind: 'image' | 'audio';
+    file: string;
+    durationSec?: number;
+  }> = [];
+  const timings: Array<{ case: number; kind: string; durationMs: number }> = [];
+  let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | undefined;
+  let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+  let previousBrand: string | null | undefined,
+    changedBrand = false;
+  try {
+    if (!/^[a-f0-9-]{36}$/.test(BRAND)) throw new Error('Invalid fixture brand');
+    const file = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+    if (!file) throw new Error('Library journey requires actual recorded source.');
+    const sourceBytes = readFileSync(file);
+    note(`f03 recorded source SHA256: ${createHash('sha256').update(sourceBytes).digest('hex')}`);
+    const skip = `f03 paid generation, STT, upload/recording, GCS, ${NATIVE_EXPORT_URL ? 'full browser-export feature certification' : 'native Export'} and current production`;
+    rec.record(skip, 'SKIP', 'Actual stored Library image/audio picker imports on loopback only.');
+    results.push({
+      step: skip,
+      grade: 'SKIP',
+      detail: 'Actual stored Library image/audio picker imports on loopback only.',
+    });
+    const port = await freePort(),
+      backend = await bootBackend(
+        `http://localhost:${port}`,
+        NATIVE_EXPORT_URL ? { CONTINUUM_RENDER_SERVICE_URL: NATIVE_EXPORT_URL } : {},
+      );
+    servers.push(backend);
+    const frontend = await bootFrontend(port, backend.url, '.next/video-generate-e2e');
+    servers.push(frontend);
+    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    session = await mintSessionBundleForEmail(OWNER_EMAIL);
+    const api: Api = { base: backend.url, token: session.accessToken };
+    const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
+    const { data: pref, error: prefError } = await prefs
+      .select('active_brand_id')
+      .eq('user_id', session.userId)
+      .maybeSingle();
+    if (prefError) throw prefError;
+    previousBrand = pref ? pref.active_brand_id : undefined;
+    const { error: setError } = await prefs.upsert(
+      { user_id: session.userId, active_brand_id: BRAND, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+    if (setError) throw setError;
+    changedBrand = true;
+    writeFileSync(
+      join(folder, 'cleanup-identity.json'),
+      JSON.stringify(
+        {
+          userId: session.userId,
+          previousBrand,
+          sessionId: JSON.parse(
+            Buffer.from(session.accessToken.split('.')[1]!, 'base64url').toString(),
+          ).session_id,
+        },
+        null,
+        2,
+      ),
+    );
+    const { buildRegisterGeneratedAssetOperation } = await import(
+      '../../Continuum-Backend/App/media/registerGeneratedAsset'
+    );
+    for (let i = 0; i < 3; i += 1) {
+      for (const kind of ['image', 'audio'] as const) {
+        const ext = kind === 'image' ? 'png' : 'wav',
+          fileName = `library-${RUN}-${i}.${ext}`;
+        const derived = join(folder, fileName),
+          durationSec = 3 + i;
+        execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-y',
+          '-ss',
+          String(kind === 'image' ? i * 2 : 0),
+          '-i',
+          file,
+          ...(kind === 'image'
+            ? ['-frames:v', '1']
+            : ['-vn', '-t', String(durationSec), '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le']),
+          derived,
+        ]);
+        const bytes = readFileSync(derived),
+          path = `${BRAND}/video-library-bench/${RUN}/${fileName}`;
+        const item = { path, kind, file: derived, ...(kind === 'audio' ? { durationSec } : {}) };
+        owned.push(item);
+        const mime = kind === 'image' ? 'image/png' : 'audio/wav';
+        const { error: uploadError } = await admin.storage
+          .from('media-library')
+          .upload(path, bytes, { contentType: mime });
+        if (uploadError) throw uploadError;
+        const operation = buildRegisterGeneratedAssetOperation({
+          brandId: BRAND,
+          kind,
+          bucket: 'media-library',
+          storagePath: path,
+          fileName,
+          mimeType: mime,
+          createdBy: session.userId,
+          ...(kind === 'image' ? { width: 800, height: 450 } : { durationMs: durationSec * 1000 }),
+          sizeBytes: bytes.length,
+          checksum: createHash('sha256').update(bytes).digest('hex'),
+          source: 'canvas',
+          operation: 'video_editor_library_fixture',
+          originRef: { bench: BENCH, recordedSource: true },
+        });
+        const { data, error } = await media.rpc('library_execute_operation', {
+          p_action: operation.action,
+          p_payload: { ...operation, actor: session.userId },
+        });
+        if (error) throw error;
+        const receipt = registerGeneratedAssetResponseSchema.parse(data);
+        Object.assign(item, { assetId: receipt.assetId, versionId: receipt.versionId });
+        check(
+          `f03 case${i} ${kind}: actual recorded bytes registered`,
+          receipt.status === 'created',
+        );
+      }
+    }
+    writeFileSync(
+      join(folder, 'sources.json'),
+      JSON.stringify(
+        owned.map((x) => ({
+          ...x,
+          sha256: createHash('sha256').update(readFileSync(x.file)).digest('hex'),
+        })),
+        null,
+        2,
+      ),
+    );
+    context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1600, height: 1000 },
+    });
+    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    await context.addInitScript(() => {
+      const starts: Array<{ sampleRate: number; offset: number; whenSec: number; pcm: number[] }> =
+        [];
+      Object.assign(window, { __libraryAudioStarts: starts });
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
+        const offset = args[1] ?? 0;
+        if (this.buffer)
+          starts.push({
+            sampleRate: this.buffer.sampleRate,
+            whenSec: args[0] ?? 0,
+            offset,
+            pcm: Array.from(
+              this.buffer
+                .getChannelData(0)
+                .slice(
+                  Math.round(offset * this.buffer.sampleRate),
+                  Math.round(offset * this.buffer.sampleRate) + 4096,
+                ),
+            ),
+          });
+        return Reflect.apply(start, this, args);
+      };
+    });
+    const page = await context.newPage(),
+      errors: string[] = [];
+    page.setDefaultTimeout(15000);
+    page.on('pageerror', (e) => errors.push(e.message));
+    for (let i = 0; i < 3; i += 1) {
+      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300000 });
+      await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180000 });
+      const id = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+      if (!id) throw new Error('Missing native project');
+      projectIds.push(id);
+      await page.locator('[data-testid="video-studio-edit"]').waitFor({ timeout: 180000 });
+      const initial = await getProject(api, id);
+      for (const kind of ['image', 'audio'] as const) {
+        const asset = owned[i * 2 + (kind === 'image' ? 0 : 1)]!;
+        const before = await getProject(api, id);
+        const start = await page.evaluate(() => performance.now());
+        await page.getByRole('button', { name: 'Add media', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Add media from the Library' });
+        const tile = dialog.locator(`[data-asset-id="${asset.assetId}"]`);
+        await tile.waitFor({ timeout: 10000 });
+        const loaded = await page.evaluate(() => performance.now());
+        await tile.click();
+        const selected = await page.evaluate(() => performance.now());
+        const responsePromise = page.waitForResponse(
+          (r) =>
+            r.url().endsWith(`/video-projects/${id}/ops/add_clip`) &&
+            r.request().method() === 'POST',
+        );
+        await dialog.getByRole('button', { name: 'Add 1', exact: true }).click();
+        const response = await responsePromise,
+          output = await response.json();
+        check(
+          `f03 case${i} ${kind}: native picker operation succeeds`,
+          response.ok(),
+          `HTTP${response.status()}`,
+        );
+        if (!response.ok()) throw new Error(JSON.stringify(output));
+        const saved = await page.evaluate(() => performance.now());
+        await page.locator(`[data-clip-id="${output.clipId}"]:visible`).waitFor();
+        if (kind === 'image')
+          await page.waitForFunction(
+            (path) =>
+              Array.from(
+                document.querySelectorAll<HTMLImageElement>('[data-testid="edit-stage"] img'),
+              ).some(
+                (img) => img.currentSrc.includes(path) && img.complete && img.naturalWidth === 800,
+              ),
+            asset.path,
+          );
+        const end = await page.evaluate(() => performance.now()),
+          after = await getProject(api, id);
+        timings.push({ case: i, kind, durationMs: end - start });
+        const timingComponents = {
+          libraryLoadMs: loaded - start,
+          selectionMs: selected - loaded,
+          confirmAndCommitMs: saved - selected,
+          refreshAndPreviewMs: end - saved,
+        };
+        const track = after.tracks.find((t) => t.id === output.trackId),
+          clip = track?.clips.find((c) => c.id === output.clipId);
+        check(
+          `f03 case${i} ${kind}: immutable source on appropriate track`,
+          track?.kind === (kind === 'image' ? 'overlay' : 'audio') &&
+            clip?.kind === (kind === 'image' ? 'overlay' : 'audio') &&
+            'source' in clip &&
+            clip.source.sourceType === 'library_asset' &&
+            clip.source.assetId === asset.assetId &&
+            clip.source.renditionId === asset.versionId,
+        );
+        check(
+          `f03 case${i} ${kind}: exactly one persisted revision`,
+          after.revision === before.revision + 1 && output.commit.revision === after.revision,
+        );
+        check(
+          `f03 case${i} ${kind}: real source duration`,
+          Boolean(
+            clip &&
+              Math.abs(clip.durationSec - (kind === 'image' ? 3 : asset.durationSec!)) < 0.001,
+          ),
+        );
+        writeFileSync(
+          join(folder, `${i}-${kind}-readback.json`),
+          JSON.stringify(
+            { before, after, output, timing: timings.at(-1), timingComponents },
+            null,
+            2,
+          ),
+        );
+      }
+      const offer = page.locator('[data-testid="brief-dialog"]:visible');
+      if (await offer.count()) {
+        await page.keyboard.press('Escape');
+        await expect(offer).toHaveCount(0);
+      }
+      await page.screenshot({ path: join(folder, `${i}-native.png`) });
+      check(
+        `f03 case${i}: image-only sequence has no empty-video prompt`,
+        (await page
+          .getByText('Drag clips from the media bin onto the timeline', { exact: true })
+          .count()) === 0,
+      );
+      const play = page.getByRole('button', { name: 'Play preview', exact: true });
+      const enabled = await play.isEnabled();
+      check(`f03 case${i}: image/audio sequence permits native playback`, enabled);
+      if (enabled) {
+        await play.click();
+        await expect
+          .poll(() =>
+            page.evaluate(
+              () =>
+                (window as unknown as { __libraryAudioStarts: unknown[] }).__libraryAudioStarts
+                  .length,
+            ),
+          )
+          .toBeGreaterThan(0);
+        await page.getByRole('button', { name: 'Pause preview', exact: true }).click();
+        const started = await page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __libraryAudioStarts: Array<{
+                  sampleRate: number;
+                  offset: number;
+                  whenSec: number;
+                  pcm: number[];
+                }>;
+              }
+            ).__libraryAudioStarts,
+        );
+        const observed = {
+          ...started[0]!,
+          pcm: started.flatMap((chunk) => chunk.pcm).slice(0, 4096),
+        };
+        const contiguous =
+          started.length >= 2 &&
+          Math.abs(
+            started[1]!.whenSec -
+              started[0]!.whenSec -
+              started[0]!.pcm.length / observed.sampleRate,
+          ) < 0.000001;
+        const expected = execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          owned[i * 2 + 1]!.file,
+          '-f',
+          'f32le',
+          '-ac',
+          '1',
+          '-ar',
+          String(observed.sampleRate),
+          'pipe:1',
+        ]);
+        let error = 0,
+          energy = 0;
+        for (let n = 0; n < observed.pcm.length; n += 1) {
+          const value = expected.readFloatLE(
+            (n + Math.round(observed.offset * observed.sampleRate)) * 4,
+          );
+          energy += value * value;
+          error += (observed.pcm[n]! - value) ** 2;
+        }
+        check(
+          `f03 case${i}: native scheduled audio matches independent recorded PCM`,
+          contiguous &&
+            observed.sampleRate > 0 &&
+            observed.pcm.length === 4096 &&
+            energy > 0.000001 &&
+            error / energy <= 0.001,
+          JSON.stringify({ energy, relativeSquaredError: error / energy }),
+        );
+        writeFileSync(
+          join(folder, `${i}-audio-playback.json`),
+          JSON.stringify(
+            {
+              observed,
+              firstChunks: started.slice(0, 2),
+              energy,
+              relativeSquaredError: error / energy,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+      const added = await getProject(api, id);
+      await page.getByRole('button', { name: 'Undo', exact: true }).click();
+      await expect
+        .poll(
+          async () =>
+            (await getProject(api, id)).tracks
+              .filter((t) => t.kind === 'audio')
+              .flatMap((t) => t.clips).length,
+        )
+        .toBe(0);
+      const undoneAudio = await getProject(api, id);
+      writeFileSync(
+        join(folder, `${i}-first-undo.json`),
+        JSON.stringify(
+          {
+            undoneAudio,
+            priorImage: JSON.parse(readFileSync(join(folder, `${i}-image-readback.json`), 'utf8'))
+              .after,
+          },
+          null,
+          2,
+        ),
+      );
+      await page.getByRole('button', { name: 'Undo', exact: true }).click();
+      await expect
+        .poll(async () => JSON.stringify((await getProject(api, id)).tracks))
+        .toBe(JSON.stringify(initial.tracks));
+      check(`f03 case${i}: native undo restores exact blank tracks`, true);
+      for (let redo = 0; redo < 2; redo += 1) {
+        await page.getByRole('button', { name: 'Redo', exact: true }).click();
+        await expect.poll(async () => clips(await getProject(api, id)).length).toBe(redo + 1);
+      }
+      await page.reload();
+      await page.locator('[data-testid="video-studio-edit"]').waitFor({ timeout: 180000 });
+      const reopened = await getProject(api, id);
+      check(
+        `f03 case${i}: both appropriate tracks survive reload`,
+        JSON.stringify(reopened.tracks) === JSON.stringify(added.tracks),
+      );
+      if (NATIVE_EXPORT_URL) {
+        const button = page.getByRole('button', { name: 'Export', exact: true });
+        const enabled = await button.isEnabled();
+        check(`native export case${i}: real image/audio sequence can export`, enabled);
+        await page.screenshot({ path: join(folder, `${i}-export-ready.png`) });
+        if (!enabled) continue;
+        await button.click();
+        const dialog = page.locator('[data-testid="video-studio-export-dialog"]');
+        await dialog.locator('[data-testid="export-preset-youtube"]').click();
+        await dialog.getByRole('button', { name: 'Fit (letterbox)', exact: true }).click();
+        const exported = page.waitForResponse(
+          (response) =>
+            response.url().endsWith(`/video-projects/${id}/ops/export`) &&
+            response.request().method() === 'POST',
+        );
+        const start = performance.now();
+        await dialog.locator('[data-testid="export-start"]').click();
+        const response = await exported,
+          output = await response.json();
+        check(
+          `native export case${i}: actual export operation succeeds`,
+          response.ok(),
+          `HTTP${response.status()}`,
+        );
+        writeFileSync(join(folder, `${i}-export-operation.json`), JSON.stringify(output, null, 2));
+        if (!response.ok()) continue;
+        const terminal = await until(
+          async () => {
+            const status = await postOp(api, id, 'export_status', { jobId: output.jobId });
+            if (status.status !== 200) throw new Error(status.text);
+            return JSON.parse(status.text) as { state: string; error?: string };
+          },
+          (status) => ['completed', 'failed'].includes(status.state),
+          180000,
+        );
+        writeFileSync(join(folder, `${i}-export-terminal.json`), JSON.stringify(terminal, null, 2));
+        if (terminal.state !== 'completed')
+          throw new Error(
+            `Native export ${terminal.state}: ${terminal.error ?? 'no terminal result'}`,
+          );
+        await dialog.locator('[data-testid="export-complete"]').waitFor();
+        const downloadPromise = page.waitForEvent('download');
+        await dialog.getByRole('link', { name: 'Download MP4', exact: true }).click();
+        const download = await downloadPromise,
+          path = join(folder, `${i}-native-export.mp4`);
+        await download.saveAs(path);
+        const durationMs = performance.now() - start;
+        const metadata = JSON.parse(
+          execFileSync(
+            'ffprobe',
+            ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', path],
+            { encoding: 'utf8' },
+          ),
+        ) as {
+          streams: Array<{ codec_type: string; width?: number; height?: number }>;
+          format: { duration: string };
+        };
+        const picture = metadata.streams.find((stream) => stream.codec_type === 'video');
+        const project = await getProject(api, id);
+        check(
+          `native export case${i}: downloaded MP4 has actual picture audio and duration`,
+          picture?.width === 1920 &&
+            picture.height === 1080 &&
+            metadata.streams.some((stream) => stream.codec_type === 'audio') &&
+            Math.abs(Number(metadata.format.duration) - project.durationSec) <= 1 / 30,
+        );
+        check(
+          `native export case${i}: complete native export and download within120000ms`,
+          durationMs > 0 && durationMs <= 120000,
+        );
+        writeFileSync(
+          join(folder, `${i}-export-readback.json`),
+          JSON.stringify(
+            {
+              project,
+              output,
+              durationMs,
+              metadata,
+              sha256: createHash('sha256').update(readFileSync(path)).digest('hex'),
+              downloadFailure: await download.failure(),
+            },
+            null,
+            2,
+          ),
+        );
+        await page.screenshot({ path: join(folder, `${i}-export-complete.png`) });
+        await page.keyboard.press('Escape');
+      }
+    }
+    check('f03 no uncaught native page errors', errors.length === 0, errors.join(' | '));
+    check(
+      'f03 all six full Library load/select/add samples pass1000ms',
+      timings.length === 6 && timings.every((t) => t.durationMs > 0 && t.durationMs <= 1000),
+    );
+  } catch (e) {
+    check('f03 actual native journey completes', false, e instanceof Error ? e.message : String(e));
+  } finally {
+    writeFileSync(join(folder, 'save-timings.json'), JSON.stringify(timings, null, 2));
+    note(`speed samples: ${JSON.stringify({ library_import: timings.map((t) => t.durationMs) })}`);
+    await context?.close();
+    try {
+      await (async () => {
+        if (NATIVE_EXPORT_URL && projectIds.length) {
+          const { data: jobs, error: jobError } = await media
+            .from('client_render_jobs')
+            .select('id,state,result_asset_ids')
+            .eq('brand_id', BRAND)
+            .in('source_id', projectIds);
+          if (jobError) throw jobError;
+          writeFileSync(join(folder, 'export-cleanup-jobs.json'), JSON.stringify(jobs, null, 2));
+          if (
+            (jobs ?? []).some((job) => !['completed', 'failed', 'superseded'].includes(job.state))
+          )
+            throw new Error('Owned export remains live; retain exact fixtures for recovery.');
+          for (const assetId of (jobs ?? []).flatMap((job) => job.result_asset_ids as string[])) {
+            const { data: versions, error: versionError } = await media
+              .from('asset_versions')
+              .select('bucket,storage_path')
+              .eq('asset_id', assetId)
+              .eq('brand_id', BRAND);
+            if (versionError) throw versionError;
+            for (const version of versions ?? []) {
+              const { error } = await admin.storage
+                .from(version.bucket)
+                .remove([version.storage_path]);
+              if (error) throw error;
+            }
+            const { error } = await media
+              .from('assets')
+              .delete()
+              .eq('id', assetId)
+              .eq('brand_id', BRAND);
+            if (error) throw error;
+            execFileSync('docker', [
+              'exec',
+              '-i',
+              'supabase_db_continuum',
+              'psql',
+              '-U',
+              'postgres',
+              '-d',
+              'postgres',
+              '-v',
+              'ON_ERROR_STOP=1',
+              '-At',
+              '-c',
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId'='${assetId}';`,
+            ]);
+          }
+          const { error } = await media
+            .from('client_render_jobs')
+            .delete()
+            .eq('brand_id', BRAND)
+            .in('source_id', projectIds);
+          if (error) throw error;
+          check('native export owned jobs and output assets removed', true);
+        }
+      })();
+      await removeProjects(admin, BRAND, projectIds);
+      const { count, error } = await media
+        .from('editor_projects')
+        .select('id', { count: 'exact', head: true })
+        .in('id', projectIds);
+      check('f03 owned projects removed', !error && count === 0);
+      for (const asset of owned) {
+        const { error: storageError } = await admin.storage
+          .from('media-library')
+          .remove([asset.path]);
+        const { error: assetError } = asset.assetId
+          ? await media.from('assets').delete().eq('id', asset.assetId).eq('brand_id', BRAND)
+          : { error: null };
+        check(`f03 owned ${asset.kind} media removed`, !storageError && !assetError);
+        if (asset.assetId)
+          execFileSync(
+            'docker',
+            [
+              'exec',
+              '-i',
+              'supabase_db_continuum',
+              'psql',
+              '-U',
+              'postgres',
+              '-d',
+              'postgres',
+              '-v',
+              'ON_ERROR_STOP=1',
+              '-At',
+              '-c',
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId'='${asset.assetId}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId'='${asset.assetId}';`,
+            ],
+            { encoding: 'utf8' },
+          );
+      }
+      if (session && changedBrand) {
+        const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
+        const { error } =
+          previousBrand === undefined
+            ? await prefs.delete().eq('user_id', session.userId)
+            : await prefs.upsert(
+                {
+                  user_id: session.userId,
+                  active_brand_id: previousBrand,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: 'user_id' },
+              );
+        check('f03 prior brand preference restored', !error);
+      }
+      if (session) {
+        const { error } = await admin.auth.admin.signOut(session.accessToken, 'local');
+        check('f03 own session revoked', !error);
+      }
+    } catch (e) {
+      check('f03 owned cleanup completes', false, e instanceof Error ? e.message : String(e));
+    }
+    for (const server of servers.reverse()) server.stop();
+  }
+  writeFileSync(join(folder, 'summary.json'), JSON.stringify({ results, notes }, null, 2));
+  expect(printEnvelope(), 'graded FAIL steps').toBe(0);
 });

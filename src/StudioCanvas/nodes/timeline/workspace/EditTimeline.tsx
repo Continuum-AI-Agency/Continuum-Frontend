@@ -60,6 +60,7 @@ import { type ClipMenuActions, formatSec, TimelineClipView } from './TimelineCli
 import { TimelineRuler } from './TimelineRuler';
 import {
   clipEnd,
+  clipRows,
   type EditBuild,
   findClip,
   type LaneKind,
@@ -73,6 +74,7 @@ import {
 
 const HEADER_PX = 132;
 const LANE_PX: Record<string, number> = {
+  nested_sequence: 44,
   video: 52,
   overlay: 44,
   text: 36,
@@ -125,6 +127,7 @@ type Drag =
   | { mode: 'scrub'; pointerId: number };
 
 const TRACK_ICONS: Record<LaneKind, typeof Film> = {
+  nested_sequence: Film,
   video: Film,
   overlay: ImageIcon,
   text: Type,
@@ -236,6 +239,16 @@ export const EditTimeline = memo(function EditTimeline({
 
   const lanes = laneTracks(project);
   const main = mainVideoTrack(project);
+  const clipLayouts = new Map(
+    lanes.map((track) => [
+      track.id,
+      track.id === main?.id
+        ? { rows: new Map(track.clips.map((clip) => [clip.id, 0])), count: 1 }
+        : clipRows(track.clips),
+    ]),
+  );
+  const laneHeight = (track: EditorTrack) =>
+    LANE_PX[track.kind] * (clipLayouts.get(track.id)?.count ?? 1);
   const mainOrder = orderedVideoClips(main);
   const nextOnMain = new Map(
     mainOrder.slice(0, -1).map((clip, index) => [clip.id, mainOrder[index + 1]] as const),
@@ -579,7 +592,7 @@ export const EditTimeline = memo(function EditTimeline({
                         <div
                           data-track-header={track.id}
                           className="flex items-center gap-1 border-b border-border/40 px-2 text-2xs"
-                          style={{ height: LANE_PX[track.kind] }}
+                          style={{ height: laneHeight(track) }}
                         />
                       }
                     >
@@ -633,7 +646,13 @@ export const EditTimeline = memo(function EditTimeline({
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem onClick={() => onAddTrack(track.kind as LaneKind)}>
-                        <Plus /> Add {track.kind === 'caption' ? 'captions' : track.kind} track
+                        <Plus /> Add{' '}
+                        {track.kind === 'nested_sequence'
+                          ? 'group'
+                          : track.kind === 'caption'
+                            ? 'captions'
+                            : track.kind}{' '}
+                        track
                       </ContextMenuItem>
                       <ContextMenuItem variant="destructive" onClick={() => onRemoveTrack(track)}>
                         <Trash2 /> Delete track
@@ -693,7 +712,7 @@ export const EditTimeline = memo(function EditTimeline({
                     track.id === main?.id ? 'bg-sky-500/5' : 'bg-muted/10',
                     !track.enabled && 'opacity-50',
                   )}
-                  style={{ height: LANE_PX[track.kind] }}
+                  style={{ height: laneHeight(track) }}
                 >
                   {track.clips.map((clip) => {
                     const dragging =
@@ -716,6 +735,12 @@ export const EditTimeline = memo(function EditTimeline({
                       <div key={clip.id} className={movingAway ? 'opacity-30' : undefined}>
                         <TimelineClipView
                           clip={clip}
+                          topPx={
+                            4 +
+                            (clipLayouts.get(track.id)?.rows.get(clip.id) ?? 0) *
+                              LANE_PX[track.kind]
+                          }
+                          heightPx={LANE_PX[track.kind] - 8}
                           isMain={track.id === main?.id}
                           leftPx={start * pxPerSec}
                           widthPx={(end - start) * pxPerSec}
@@ -737,6 +762,12 @@ export const EditTimeline = memo(function EditTimeline({
                         return found ? (
                           <TimelineClipView
                             clip={found.clip}
+                            topPx={
+                              4 +
+                              (clipLayouts.get(track.id)?.rows.get(found.clip.id) ?? 0) *
+                                LANE_PX[track.kind]
+                            }
+                            heightPx={LANE_PX[track.kind] - 8}
                             isMain={track.id === main?.id}
                             leftPx={drag.startSec * pxPerSec}
                             widthPx={found.clip.durationSec * pxPerSec}

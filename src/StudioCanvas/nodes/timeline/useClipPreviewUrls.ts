@@ -12,11 +12,11 @@ import { exactVersionPreviewUrl } from './editorProjectV2AssemblyModel';
 // ponytail: signed URLs live ~1h in this cache; evict on expiry if sessions run longer.
 const resolvedPreviewUrls = new Map<string, string>();
 
-const previewUrlKey = (assetId: string, versionId: string) => `${assetId}:${versionId}`;
+export const libraryVersionKey = (assetId: string, versionId: string) => `${assetId}:${versionId}`;
 
 /** Seeds the exact-version cache so a just-uploaded clip previews without a round trip. */
 export function rememberPreviewUrl(assetId: string, versionId: string, url: string): void {
-  resolvedPreviewUrls.set(previewUrlKey(assetId, versionId), url);
+  resolvedPreviewUrls.set(libraryVersionKey(assetId, versionId), url);
 }
 
 function sourceCoordinates(clip: EditorVideoClip | EditorAudioClip | EditorOverlayClip) {
@@ -74,7 +74,7 @@ export function useExactPreviewUrls(
       );
       if (source?.previewUrl) poolUrls.set(coordinate.clipId, source.previewUrl);
       const cached = resolvedPreviewUrls.get(
-        previewUrlKey(coordinate.assetId, coordinate.versionId),
+        libraryVersionKey(coordinate.assetId, coordinate.versionId),
       );
       if (cached) poolUrls.set(coordinate.clipId, cached);
     }
@@ -82,7 +82,7 @@ export function useExactPreviewUrls(
 
     const unresolved = coordinates.filter(
       (coordinate) =>
-        !resolvedPreviewUrls.has(previewUrlKey(coordinate.assetId, coordinate.versionId)),
+        !resolvedPreviewUrls.has(libraryVersionKey(coordinate.assetId, coordinate.versionId)),
     );
     const assets = [...new Set(unresolved.map((coordinate) => coordinate.assetId))];
     if (assets.length) {

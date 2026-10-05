@@ -15,6 +15,7 @@ interface Renderer {
   input: Texture;
   targets: [Target, Target];
   outputCanvas: OffscreenCanvas;
+  videoCanvas?: OffscreenCanvas;
   output: Surface;
   shader: Effect;
   sampler: GPUSampler;
@@ -30,6 +31,8 @@ export interface RenderShaderStackFrameOptions {
   stack: ShaderStackV1;
   /** Seconds on the source timeline, used by effect keyframes and temporal noise. */
   timeSec?: number;
+  /** Source-pixel crop exposed by the frame; edge exposure follows this visible region. */
+  viewport?: { x: number; y: number; width: number; height: number };
 }
 
 const EFFECT_KIND: Record<ShaderEffectV1['effectId'], number> = {
@@ -40,6 +43,8 @@ const EFFECT_KIND: Record<ShaderEffectV1['effectId'], number> = {
   pixelate: 5,
   chromatic_aberration: 6,
   vhs: 7,
+  dust: 8,
+  light_leaks: 9,
 };
 
 let rendererPromise: Promise<Renderer> | undefined;
@@ -97,31 +102,42 @@ function rgba(hex: string | undefined): [number, number, number] {
   ];
 }
 
-function uniformsFor(effect: ShaderEffectV1, width: number, height: number, timeSec: number) {
+function uniformsFor(
+  effect: ShaderEffectV1,
+  width: number,
+  height: number,
+  timeSec: number,
+  viewport?: RenderShaderStackFrameOptions['viewport'],
+) {
   const amount = Number(resolveShaderParameter(effect, 'amount', timeSec) ?? 0);
   const color = rgba(effect.parameters.color);
+  const common = {
+    size: [width, height],
+    viewport: [
+      viewport?.x ?? 0,
+      viewport?.y ?? 0,
+      viewport?.width ?? width,
+      viewport?.height ?? height,
+    ],
+    time: timeSec,
+    kind: EFFECT_KIND[effect.effectId],
+  };
   if (effect.effectId === 'chroma_key') {
     return {
-      size: [width, height],
-      time: timeSec,
-      kind: EFFECT_KIND[effect.effectId],
+      ...common,
       primary: [...color, Number(resolveShaderParameter(effect, 'tolerance', timeSec) ?? 0)],
       secondary: [Number(resolveShaderParameter(effect, 'softness', timeSec) ?? 0), 0, 0, 0],
     };
   }
   if (effect.effectId === 'tint') {
     return {
-      size: [width, height],
-      time: timeSec,
-      kind: EFFECT_KIND[effect.effectId],
+      ...common,
       primary: [...color, amount],
       secondary: [0, 0, 0, 0],
     };
   }
   return {
-    size: [width, height],
-    time: timeSec,
-    kind: EFFECT_KIND[effect.effectId],
+    ...common,
     primary: [
       effect.effectId === 'pixelate'
         ? Number(resolveShaderParameter(effect, 'blockPx', timeSec) ?? 2)
@@ -171,6 +187,7 @@ async function createRenderer(width: number, height: number): Promise<Renderer> 
       srcSampler: sampler,
       params: {
         size: [width, height],
+        viewport: [0, 0, width, height],
         time: 0,
         kind: 0,
         primary: [0, 0, 0, 0],
@@ -223,8 +240,19 @@ async function render(options: RenderShaderStackFrameOptions): Promise<ImageBitm
   if (enabled.length === 0) return createImageBitmap(options.source);
   const renderer = await acquireRenderer(width, height);
   renderer.asyncError = undefined;
+  let uploadSource = options.source;
+  if (typeof HTMLVideoElement !== 'undefined' && options.source instanceof HTMLVideoElement) {
+    // Direct video upload can interpret its transfer profile differently from Canvas 2D.
+    // Normalize once to the same browser RGB pixels used by native crop and export.
+    renderer.videoCanvas ??= new OffscreenCanvas(width, height);
+    const context = renderer.videoCanvas.getContext('2d');
+    if (!context) throw new Error('Could not normalize the video shader source.');
+    context.clearRect(0, 0, width, height);
+    context.drawImage(options.source, 0, 0, width, height);
+    uploadSource = renderer.videoCanvas;
+  }
   renderer.gpu.gpu.queue.copyExternalImageToTexture(
-    { source: options.source as GPUCopyExternalImageSource },
+    { source: uploadSource as GPUCopyExternalImageSource },
     { texture: renderer.input.gpu },
     [width, height],
   );
@@ -236,7 +264,7 @@ async function render(options: RenderShaderStackFrameOptions): Promise<ImageBitm
     renderer.shader.set({
       src: source,
       srcSampler: renderer.sampler,
-      params: uniformsFor(effect, width, height, options.timeSec ?? 0),
+      params: uniformsFor(effect, width, height, options.timeSec ?? 0, options.viewport),
     });
     if (final) {
       renderer.api.frame(renderer.gpu, (currentFrame) =>

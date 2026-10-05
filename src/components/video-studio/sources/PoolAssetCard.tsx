@@ -25,11 +25,15 @@ export const formatDuration = (sec: number): string =>
     : `${sec.toFixed(1)}s`;
 
 /** Playable bytes for the hover preview, signed only when someone actually hovers. */
-export async function signAsset(brandId: string, assetId: string): Promise<string | null> {
+export async function signAsset(
+  brandId: string,
+  assetId: string,
+  versionId?: string,
+): Promise<string | null> {
   const response = await fetch('/api/library/sign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandId, assetId }),
+    body: JSON.stringify({ brandId, assetId, ...(versionId ? { versionId } : {}) }),
   });
   if (!response.ok) return null;
   const body = (await response.json()) as { signedUrl?: unknown };
@@ -60,7 +64,7 @@ export function PoolAssetCard({
         openDelay={400}
         onOpenChange={(open) => {
           if (open && asset.kind !== 'image' && !mediaUrl) {
-            void signAsset(studio.brandId, asset.assetId).then(setMediaUrl);
+            void signAsset(studio.brandId, asset.assetId, asset.versionId).then(setMediaUrl);
           }
         }}
       >
@@ -72,6 +76,7 @@ export function PoolAssetCard({
                 <div
                   draggable
                   data-pool-asset={asset.assetId}
+                  data-pool-version={asset.versionId}
                   data-pool-origin={asset.origin}
                   className="group relative flex aspect-video cursor-grab flex-col justify-end overflow-hidden rounded-md border border-border/60 bg-muted/40 active:cursor-grabbing"
                   onDragStart={(event) => {

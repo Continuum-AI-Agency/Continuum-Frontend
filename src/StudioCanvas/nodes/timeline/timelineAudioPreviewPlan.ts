@@ -1,4 +1,4 @@
-import type { NumericKeyframe } from '@continuum/contracts';
+import type { EditorAudioFadeClock, NumericKeyframe } from '@continuum/contracts';
 import type { TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
 import { speedFor } from '../../utils/render/effectSpec';
 import { headFadeFor, tailFadeFor } from '../../utils/render/transitions';
@@ -28,10 +28,16 @@ export interface TimelinePreviewAudioEvent {
   sourceEndSec: number;
   playbackRate: number;
   gain: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  transitionFadeInSec?: number;
+  transitionFadeOutSec?: number;
   fadeInSec: number;
   fadeOutSec: number;
   /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain. */
   volumeKeyframes?: readonly NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: readonly NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 }
 
 export interface TimelinePreviewAudioPlan {

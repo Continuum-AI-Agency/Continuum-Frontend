@@ -72,7 +72,7 @@ import { cn } from '@/lib/utils';
 import type { TimelineInputSource } from '../../../types';
 import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
 import { probeAudioDuration, probeVideoDuration } from '../mediaProbe';
-import { useExactPreviewUrls } from '../useClipPreviewUrls';
+import { libraryVersionKey, useExactPreviewUrls } from '../useClipPreviewUrls';
 import {
   TIMELINE_SHORTCUT_KEYS,
   type TimelineShortcut,
@@ -220,19 +220,23 @@ export function EditWorkspace({
         if (!('source' in clip) || clip.source.sourceType !== 'library_asset') continue;
         if (clip.kind === 'overlay' && clip.mediaKind === 'image') continue;
         const assetId = clip.source.assetId;
+        const versionId = clip.source.renditionId ?? '';
+        const key = libraryVersionKey(assetId, versionId);
         const url = urls.get(clip.id);
-        if (!url || sourceDurations.has(assetId)) continue;
-        const known = imported.find((asset) => asset.assetId === assetId)?.durationSec;
+        if (!url || sourceDurations.has(key)) continue;
+        const known = imported.find(
+          (asset) => asset.assetId === assetId && asset.versionId === versionId,
+        )?.durationSec;
         const probe = known
           ? Promise.resolve(known)
           : (clip.kind === 'audio' ? probeAudioDuration(url) : probeVideoDuration(url)).catch(
               () => 0,
             );
         void probe.then((seconds) => {
-          if (seconds > 0) setSourceDurations((current) => new Map(current).set(assetId, seconds));
+          if (seconds > 0) setSourceDurations((current) => new Map(current).set(key, seconds));
         });
         setSourceDurations((current) =>
-          current.has(assetId) ? current : new Map(current).set(assetId, 0),
+          current.has(key) ? current : new Map(current).set(key, 0),
         );
       }
     }
@@ -243,7 +247,11 @@ export function EditWorkspace({
       if (!clip || !('source' in clip) || clip.source.sourceType !== 'library_asset') {
         return undefined;
       }
-      return sourceDurations.get(clip.source.assetId) || undefined;
+      return (
+        sourceDurations.get(
+          libraryVersionKey(clip.source.assetId, clip.source.renditionId ?? ''),
+        ) || undefined
+      );
     },
     [sourceDurations],
   );
@@ -283,6 +291,7 @@ export function EditWorkspace({
         try {
           const output = await runOp('add_clip', {
             assetId: asset.assetId,
+            ...(asset.versionId ? { versionId: asset.versionId } : {}),
             atSec: Math.max(0, at?.atSec ?? store.getSec()),
             ...(lane && lane.kind === laneKindForAsset(asset) ? { trackId: lane.id } : {}),
             ...(at?.newTrack ? { newTrack: true } : {}),
@@ -411,11 +420,20 @@ export function EditWorkspace({
     () => quickOp('Auto-captions', () => runOp('set_captions', {})),
     [quickOp, runOp],
   );
-  const cutOnBeat = useCallback(
-    () =>
-      quickOp('Quick cuts', () => runOp('beat_cut', { mode: 'switch_shots', everyNBeats: 0.5 })),
-    [quickOp, runOp],
-  );
+  const cutOnBeat = useCallback(() => {
+    const primary = projectRef.current.tracks
+      .filter((track) => track.kind === 'video' && track.enabled)
+      .sort((a, b) => a.order - b.order)[0];
+    const selected = primary?.clips.filter((clip) => selectionRef.current.includes(clip.id)) ?? [];
+    const sources = selected.length ? selected : (primary?.clips ?? []);
+    return quickOp('Quick cuts', () =>
+      runOp('beat_cut', {
+        mode: sources.length === 1 ? 'jump_cuts' : 'switch_shots',
+        everyNBeats: 0.5,
+        clipIds: sources.map((clip) => clip.id),
+      }),
+    );
+  }, [quickOp, runOp]);
   const setFormat = useCallback(
     (preset: PlatformExportPresetId) =>
       quickOp(`Format: ${PLATFORM_EXPORT_PRESETS[preset].label}`, () =>
@@ -467,7 +485,7 @@ export function EditWorkspace({
         void apply((current) => pasteClipsEdit(current, clipboard.current, store.getSec())),
       duplicate: () => void apply((current) => duplicateClipsEdit(current, selectionRef.current)),
       palette: () => setPaletteOpen(true),
-      marker: () => void apply(addMarkerEdit(store.getSec())),
+      marker: () => void apply((current) => addMarkerEdit(current, store.getSec())),
       deselect: () => setSelection([]),
     }),
     [apply, deleteClips, redo, store, undo],
@@ -579,7 +597,8 @@ export function EditWorkspace({
           (candidate) =>
             'source' in candidate &&
             candidate.source.sourceType === 'library_asset' &&
-            candidate.source.assetId === asset.assetId,
+            candidate.source.assetId === asset.assetId &&
+            (!asset.versionId || candidate.source.renditionId === asset.versionId),
         );
       return clip ? urls.get(clip.id) : undefined;
     },

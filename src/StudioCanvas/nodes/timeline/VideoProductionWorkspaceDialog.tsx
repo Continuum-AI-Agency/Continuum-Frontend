@@ -268,7 +268,7 @@ function ProductionStages({
   // A plain edit renders from pinned Library versions only; the server refuses anything else.
   const hasPinnedPicture = project.tracks.some(
     (track) =>
-      track.kind === 'video' &&
+      (track.kind === 'video' || (track.kind === 'overlay' && !track.muted)) &&
       track.enabled &&
       track.clips.some(
         (clip) =>
@@ -281,7 +281,7 @@ function ProductionStages({
   const renderBlockers = [
     ...editorRenderBlockers(project),
     ...(counts.shots === 0 && !hasPinnedPicture
-      ? ['Add pinned Library video clips before rendering.']
+      ? ['Add pinned Library picture before rendering.']
       : []),
   ];
 

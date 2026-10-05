@@ -11,6 +11,7 @@ import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawEffectFrame } from './frameDraw';
+import { drawCanvasBackground } from './letterbox';
 
 // Renders the overlap window of an OVERLAP transition (crossDissolve, slide, wipe,
 // zoom, spin): the outgoing clip's tail and the incoming clip's head composited on
@@ -125,6 +126,7 @@ export async function appendOverlapTransition(params: {
   videoSource: MbCanvasSource;
   targetWidth: number;
   targetHeight: number;
+  backgroundColor?: string;
   type: ClipTransitionType;
   outgoing: CrossDissolveClip;
   incoming: CrossDissolveClip;
@@ -191,11 +193,7 @@ export async function appendOverlapTransition(params: {
     const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
     await drawFrameComposition({
       drawBase: async () => {
-        ctx.filter = 'none';
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        drawCanvasBackground(ctx, targetWidth, targetHeight, params.backgroundColor);
         if (outFrame) {
           await drawOverlapLayer(
             ctx,

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE } from '@/components/video-studio/types';
+import { libraryVersionKey } from '../useClipPreviewUrls';
 import { IMPORTABLE_MEDIA, poolAssetFromLibrary } from './importMedia';
 import { RecordMenu } from './RecordMenu';
 
@@ -26,12 +27,17 @@ export function projectSources(
   project: EditorProjectV2,
   imported: readonly VideoEditorPoolAsset[],
 ): VideoEditorPoolAsset[] {
-  const byAsset = new Map(imported.map((asset) => [asset.assetId, asset] as const));
+  const byVersion = new Map(
+    imported.map(
+      (asset) => [libraryVersionKey(asset.assetId, asset.versionId ?? ''), asset] as const,
+    ),
+  );
   for (const track of project.tracks) {
     for (const clip of track.clips) {
       if (!('source' in clip) || clip.source.sourceType !== 'library_asset') continue;
-      if (byAsset.has(clip.source.assetId)) continue;
-      byAsset.set(clip.source.assetId, {
+      const key = libraryVersionKey(clip.source.assetId, clip.source.renditionId ?? '');
+      if (byVersion.has(key)) continue;
+      byVersion.set(key, {
         assetId: clip.source.assetId,
         ...(clip.source.renditionId ? { versionId: clip.source.renditionId } : {}),
         kind:
@@ -45,7 +51,7 @@ export function projectSources(
       });
     }
   }
-  return [...byAsset.values()];
+  return [...byVersion.values()];
 }
 
 function AssetPreview({ asset, url }: { asset: VideoEditorPoolAsset; url?: string }) {
@@ -145,7 +151,7 @@ export function MediaPanel({
           const Icon = KIND_ICON[asset.kind];
           const url = previewUrlFor(asset);
           return (
-            <ContextMenu key={asset.assetId}>
+            <ContextMenu key={libraryVersionKey(asset.assetId, asset.versionId ?? '')}>
               <HoverCard openDelay={500}>
                 <ContextMenuTrigger
                   render={
@@ -155,6 +161,7 @@ export function MediaPanel({
                         <div
                           draggable
                           data-bin-asset={asset.assetId}
+                          data-bin-version={asset.versionId}
                           className="group relative flex aspect-video cursor-grab flex-col justify-end overflow-hidden rounded-md border border-border/60 bg-muted/40"
                           onDragStart={(event) => {
                             event.dataTransfer.setData(

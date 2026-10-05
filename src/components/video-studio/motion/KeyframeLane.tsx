@@ -17,6 +17,7 @@ import {
   AT_PLAYHEAD_SEC,
   addKeyEdit,
   channelKeys,
+  channelsFor,
   easeKeyEdit,
   type KeyedClip,
   keyNear,
@@ -132,10 +133,12 @@ function KeyValueFields({
   channelId,
   keyframes,
   onValue,
+  onCommit,
 }: {
   channelId: LaneChannelId;
   keyframes: EditorKeyframe[];
   onValue: (value: EditorKeyframe['value']) => void;
+  onCommit: () => void;
 }) {
   const stored = keyframes[0]?.value;
   const [draft, setDraft] = useState<EditorKeyframe['value'] | undefined>(undefined);
@@ -158,6 +161,7 @@ function KeyValueFields({
             max={2}
             step={0.01}
             onChange={(next) => set({ ...value, [axis]: next })}
+            onCommit={onCommit}
           />
         ))}
       </div>
@@ -169,13 +173,24 @@ function KeyValueFields({
       ? { min: -720, max: 720, step: 1, suffix: '°' }
       : channelId === 'opacity'
         ? { min: 0, max: 1, step: 0.01 }
-        : { min: 0, max: 10, step: 0.01, suffix: '×' };
+        : channelId === 'volume'
+          ? { min: 0, max: 2, step: 0.01, suffix: '×' }
+          : { min: 0, max: 10, step: 0.01, suffix: '×' };
   return (
     <NumberScrubField
-      label={channelId === 'scale' ? 'Scale' : channelId === 'rotation' ? 'Rotation' : 'Opacity'}
+      label={
+        channelId === 'scale'
+          ? 'Scale'
+          : channelId === 'rotation'
+            ? 'Rotation'
+            : channelId === 'volume'
+              ? 'Volume'
+              : 'Opacity'
+      }
       value={numeric}
       {...range}
       onChange={set}
+      onCommit={onCommit}
     />
   );
 }
@@ -191,8 +206,10 @@ export function KeyframeLane({
   store,
   onEdit,
   onSettle,
+  audio = true,
 }: {
   clip: KeyedClip;
+  audio?: boolean;
   store: PlayheadStore;
   /** Applies at once, after anything still settling. */
   onEdit: (build: Build) => void;
@@ -237,57 +254,59 @@ export function KeyframeLane({
           {inside ? `${localSec.toFixed(2)} s` : 'playhead off clip'}
         </span>
       </div>
-      {LANE_CHANNELS.map((channel) => {
-        const keys = channelKeys(clip, channel.id);
-        const atPlayhead = inside ? keyNear(keys, localSec, AT_PLAYHEAD_SEC) : undefined;
-        return (
-          <div key={channel.id} className="flex items-center gap-1" data-channel={channel.id}>
-            <span className="w-14 shrink-0 truncate text-2xs text-muted-foreground">
-              {channel.label}
-            </span>
-            <KeyframeDiamond
-              labeled={channel.label}
-              keyed={Boolean(atPlayhead)}
-              disabled={!inside}
-              onToggle={() =>
-                atPlayhead
-                  ? setSelected({ channelId: channel.id, timeSec: atPlayhead.timeSec })
-                  : add(channel.id)
-              }
-            />
-            <div
-              className="relative mx-1.5 h-6 flex-1 rounded-sm bg-muted/60"
-              data-keyframe-track={channel.id}
-            >
-              {inside ? (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-y-0 w-px bg-red-500"
-                  style={{ left: pct(localSec, clip.durationSec) }}
-                />
-              ) : null}
-              {keys.map((key) => (
-                <KeyButton
-                  key={key.keyframes[0]?.id ?? key.timeSec}
-                  channelLabel={channel.label}
-                  laneKey={key}
-                  durationSec={clip.durationSec}
-                  selected={
-                    selected?.channelId === channel.id &&
-                    Math.abs(selected.timeSec - key.timeSec) <= 0.002
-                  }
-                  onSelect={() => {
-                    setSelected({ channelId: channel.id, timeSec: key.timeSec });
-                    store.seek(clip.timelineStartSec + key.timeSec);
-                  }}
-                  onMove={(toSec) => move(channel.id, key.timeSec, toSec)}
-                  onDelete={() => remove(channel.id, key.timeSec)}
-                />
-              ))}
+      {channelsFor(clip)
+        .filter((channel) => audio || channel.id !== 'volume')
+        .map((channel) => {
+          const keys = channelKeys(clip, channel.id);
+          const atPlayhead = inside ? keyNear(keys, localSec, AT_PLAYHEAD_SEC) : undefined;
+          return (
+            <div key={channel.id} className="flex items-center gap-1" data-channel={channel.id}>
+              <span className="w-14 shrink-0 truncate text-2xs text-muted-foreground">
+                {channel.label}
+              </span>
+              <KeyframeDiamond
+                labeled={channel.label}
+                keyed={Boolean(atPlayhead)}
+                disabled={!inside}
+                onToggle={() =>
+                  atPlayhead
+                    ? setSelected({ channelId: channel.id, timeSec: atPlayhead.timeSec })
+                    : add(channel.id)
+                }
+              />
+              <div
+                className="relative mx-1.5 h-6 flex-1 rounded-sm bg-muted/60"
+                data-keyframe-track={channel.id}
+              >
+                {inside ? (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 w-px bg-red-500"
+                    style={{ left: pct(localSec, clip.durationSec) }}
+                  />
+                ) : null}
+                {keys.map((key) => (
+                  <KeyButton
+                    key={key.keyframes[0]?.id ?? key.timeSec}
+                    channelLabel={channel.label}
+                    laneKey={key}
+                    durationSec={clip.durationSec}
+                    selected={
+                      selected?.channelId === channel.id &&
+                      Math.abs(selected.timeSec - key.timeSec) <= 0.002
+                    }
+                    onSelect={() => {
+                      setSelected({ channelId: channel.id, timeSec: key.timeSec });
+                      store.seek(clip.timelineStartSec + key.timeSec);
+                    }}
+                    onMove={(toSec) => move(channel.id, key.timeSec, toSec)}
+                    onDelete={() => remove(channel.id, key.timeSec)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
       {selected && selectedKey ? (
         <div
           className="mt-1 flex flex-col gap-2 border-t border-border/60 pt-2"
@@ -312,6 +331,8 @@ export function KeyframeLane({
             key={`${selected.channelId}:${selectedKey.timeSec}`}
             channelId={selected.channelId}
             keyframes={selectedKey.keyframes}
+            // A null build flushes pending values without adding a second value edit.
+            onCommit={() => onEdit(() => null)}
             onValue={(value) =>
               onSettle(`keyframe-value:${selected.channelId}`, (latest) =>
                 valueKeyEdit(latest, clipId, selected.channelId, selectedKey.timeSec, value),

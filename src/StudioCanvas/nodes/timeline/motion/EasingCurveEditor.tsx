@@ -42,9 +42,7 @@ function pathFor(choice: EasingChoice): string {
     const t = index / 24;
     const y =
       choice.interpolation === 'hold'
-        ? t === 0
-          ? 0
-          : 1
+        ? 1
         : choice.interpolation === 'bezier'
           ? cubicBezierProgress(t, choice.easing)
           : choice.interpolation === 'spring'

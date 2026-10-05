@@ -1,3 +1,5 @@
+import type { EditorTextAnimationClock } from '@continuum/contracts';
+
 // Per-word caption motion, as closed-form functions of a word's AGE.
 //
 // The one law this module exists to enforce: a transform is a pure function of
@@ -143,7 +145,12 @@ const DEFAULTS: Record<CaptionAnimationKind, { durationSec: number; amplitude: n
 /** How long one word takes to pop inside a wordPop build. */
 const WORD_POP_SEC = 0.2;
 /** Slides travel toward their named direction on the way OUT, not back the way they came. */
-const SLIDE_KINDS = new Set<CaptionAnimationKind>(['slideUp', 'slideDown', 'slideLeft', 'slideRight']);
+const SLIDE_KINDS = new Set<CaptionAnimationKind>([
+  'slideUp',
+  'slideDown',
+  'slideLeft',
+  'slideRight',
+]);
 
 export function captionAnimationDefaults(kind: CaptionAnimationKind): {
   durationSec: number;
@@ -295,19 +302,24 @@ export function captionMotionTransform(input: {
   exit?: CaptionAnimation;
   cueStartSec: number;
   cueEndSec: number;
+  cueAnimationClock?: EditorTextAnimationClock;
   wordStartSec: number;
   wordEndSec: number;
   outputTimeSec: number;
   fontPx: number;
   sequence?: CaptionWordSequence;
 }): CaptionWordTransform {
+  const cueStartSec = input.cueStartSec - (input.cueAnimationClock?.offsetSec ?? 0);
+  const cueEndSec = input.cueAnimationClock
+    ? cueStartSec + input.cueAnimationClock.durationSec
+    : input.cueEndSec;
   const entry = captionWordTransform(
     input.entry,
-    input.outputTimeSec - captionAnchorSec(input.entry, input.cueStartSec, input.wordStartSec),
+    input.outputTimeSec - captionAnchorSec(input.entry, cueStartSec, input.wordStartSec),
     input.fontPx,
     input.sequence,
   );
-  const exitEndSec = input.exit?.anchor === 'cue' ? input.cueEndSec : input.wordEndSec;
+  const exitEndSec = input.exit?.anchor === 'cue' ? cueEndSec : input.wordEndSec;
   const exiting = captionWordTransform(
     input.exit,
     exitEndSec - input.outputTimeSec,

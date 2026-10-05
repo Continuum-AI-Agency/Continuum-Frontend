@@ -18,9 +18,11 @@
 // compositor bundled into the Render image (timeline-editor.js), which the owner rebuilds.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { editorProjectV2Schema, type LookEffectId, lookEffectInstance } from '@continuum/contracts';
 import { expect, test } from '@playwright/test';
 import { createBenchRecorder } from './support/benchRecorder';
 import type {
@@ -38,19 +40,12 @@ const GCS_PREFIX = 'gs://continuum-production-477821-creative-benchmarks/video-e
 const FONT_PX = 44;
 const WIDTH = 360;
 
-function buildBrowserBundle(): string {
+function buildBrowserBundle(entry = 'e2e/support/videoEditorMotionRenderEntry.ts'): string {
   const outfile = join(tmpdir(), `video-editor-motion-render-${Date.now()}.js`);
-  execFileSync(
-    'bun',
-    [
-      'build',
-      'e2e/support/videoEditorMotionRenderEntry.ts',
-      '--target=browser',
-      '--outfile',
-      outfile,
-    ],
-    { cwd: process.cwd(), stdio: 'pipe' },
-  );
+  execFileSync('bun', ['build', entry, '--target=browser', '--outfile', outfile], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+  });
   const code = readFileSync(outfile, 'utf8');
   rmSync(outfile, { force: true });
   return code;
@@ -73,6 +68,10 @@ const describe = (boxes: readonly TextBox[]) =>
 test('the motion vocabulary renders in the real compositor, judged per frame', async ({
   browser,
 }) => {
+  test.skip(
+    Boolean(process.env.VIDEO_EDITOR_EXPORT_MANIFEST),
+    'Explicit retained-export replay; GCS motion vocabulary is separate.',
+  );
   const rec = createBenchRecorder('videoeditor:motion:render:bench', []);
   const bundle = buildBrowserBundle();
   const context = await browser.newContext();
@@ -107,6 +106,7 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
   const entrances = (await page.evaluate(() =>
     window.__motionRenderBench.entrances(),
   )) as EntranceSample[];
+  const exits = await page.evaluate(() => window.__motionRenderBench.entrances('out'));
   const highlights = await page.evaluate(() => window.__motionRenderBench.highlights());
   const looks = await page.evaluate(() => window.__motionRenderBench.looks());
   await context.close();
@@ -281,15 +281,23 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
 
   // Every entrance id: 0.1 s in, the text is visibly mid-motion (moved, sized, partly
   // revealed or faded) against the same text once settled.
-  for (const { id, early, settled } of entrances) {
-    const moved = (['left', 'right', 'top', 'bottom'] as const).some(
-      (edge) => Math.abs(early[edge] - settled[edge]) >= 3,
-    );
-    check(
-      `entrance ${id}: animates in the compositor, then settles`,
-      settled.count > 500 && (early.count === 0 || moved || early.mass < 0.85 * settled.mass),
-      `0.1 s ${describe([early])} ‖ settled ${describe([settled])}`,
-    );
+  for (const [direction, samples] of [
+    ['entrance', entrances],
+    ['exit', exits],
+  ] as const) {
+    for (const { id, early, settled } of samples) {
+      const moved = (['left', 'right', 'top', 'bottom'] as const).some(
+        (edge) => Math.abs(early[edge] - settled[edge]) >= 3,
+      );
+      check(
+        `${direction} ${id}: animates in the compositor, then settles`,
+        settled.count > 500 &&
+          (id === 'none'
+            ? !moved && Math.abs(early.mass - settled.mass) <= settled.mass * 0.01
+            : early.count === 0 || moved || early.mass < 0.85 * settled.mass),
+        `0.1 s ${describe([early])} ‖ settled ${describe([settled])}`,
+      );
+    }
   }
 
   // Masters to GCS, never the Library.
@@ -349,6 +357,330 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
       `videoeditor:motion:render:bench — ${passed} passed, ${failed} failed, 1 not exercised`,
     ].join('\n'),
   );
+});
+
+test('recorded browser worker exports retain effects captions audio and duration', async ({
+  browser,
+}) => {
+  const manifestPath = process.env.VIDEO_EDITOR_EXPORT_MANIFEST;
+  test.skip(
+    !manifestPath,
+    'Supply retained recorded projects and pinned source bytes for export replay.',
+  );
+  const manifest = JSON.parse(readFileSync(manifestPath ?? '', 'utf8')) as {
+    output: string;
+    cases: Array<{
+      readback: string;
+      projectKey: 'project' | 'initial';
+      look: LookEffectId;
+      sources: Record<string, { file: string; assetId: string; versionId: string; sha256: string }>;
+    }>;
+  };
+  mkdirSync(manifest.output, { recursive: true });
+  const rec = createBenchRecorder('videoeditor:motion:render:bench', []);
+  let failures = 0;
+  const check = (name: string, ok: boolean, detail: string) => {
+    rec.record(name, ok ? 'PASS' : 'FAIL', detail);
+    if (!ok) failures += 1;
+    expect.soft(ok, `${name}: ${detail}`).toBe(true);
+  };
+  const bundle = buildBrowserBundle();
+  const worker = buildBrowserBundle('src/StudioCanvas/workers/splicer.worker.ts');
+  writeFileSync(join(manifest.output, 'browser-entry.js'), bundle);
+  writeFileSync(join(manifest.output, 'actual-splicer-worker.js'), worker);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const origin = 'http://127.0.0.1:4173';
+  await page.route(`${origin}/export-replay`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html>' }),
+  );
+  await page.route(`${origin}/actual-splicer-worker.js`, (route) =>
+    route.fulfill({ contentType: 'text/javascript', body: worker }),
+  );
+  await page.route(`${origin}/fonts/*`, (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: readFileSync(join(process.cwd(), 'public', new URL(route.request().url()).pathname)),
+    }),
+  );
+  const fileMap = new Map<string, string>();
+  await page.route(`${origin}/recorded-export/*`, (route) => {
+    const path = fileMap.get(new URL(route.request().url()).pathname);
+    return path ? route.fulfill({ body: readFileSync(path) }) : route.fulfill({ status: 404 });
+  });
+  const rgb = (file: string, time?: number) =>
+    execFileSync(
+      'ffmpeg',
+      [
+        '-v',
+        'error',
+        ...(time === undefined ? [] : ['-ss', String(time)]),
+        '-i',
+        file,
+        '-frames:v',
+        '1',
+        '-f',
+        'rawvideo',
+        '-pix_fmt',
+        'rgb24',
+        'pipe:1',
+      ],
+      { maxBuffer: 32_000_000 },
+    );
+  const error = (a: Buffer, b: Buffer) =>
+    a.reduce((sum, value, index) => sum + Math.abs(value - (b[index] ?? 0)), 0) / a.length;
+  const magenta = (pixels: Buffer) => {
+    let count = 0;
+    for (let i = 0; i < pixels.length; i += 3)
+      if (pixels[i] > 150 && pixels[i + 2] > 150 && pixels[i + 1] < 100) count += 1;
+    return count;
+  };
+  const timings: number[] = [];
+  try {
+    await page.goto(`${origin}/export-replay`);
+    await page.addScriptTag({ content: bundle, type: 'module' });
+    for (const [index, item] of manifest.cases.entries()) {
+      const readback = JSON.parse(readFileSync(item.readback, 'utf8')) as Record<string, unknown>;
+      const retained = editorProjectV2Schema.parse(readback[item.projectKey]);
+      const sources = Object.fromEntries(
+        Object.entries(item.sources).map(([clipId, source]) => {
+          expect(createHash('sha256').update(readFileSync(source.file)).digest('hex')).toBe(
+            source.sha256,
+          );
+          const clip = retained.tracks
+            .flatMap((track) => track.clips)
+            .find((clip) => clip.id === clipId);
+          expect(
+            clip &&
+              'source' in clip &&
+              clip.source.sourceType === 'library_asset' &&
+              clip.source.assetId === source.assetId &&
+              clip.source.renditionId === source.versionId,
+          ).toBe(true);
+          const pathname = `/recorded-export/${index}-${encodeURIComponent(clipId)}`;
+          fileMap.set(pathname, source.file);
+          return [clipId, { ...source, url: origin + pathname }];
+        }),
+      );
+      const project = editorProjectV2Schema.parse({
+        ...retained,
+        tracks: [
+          ...retained.tracks.map((track) => ({
+            ...track,
+            clips: track.clips.map((clip) =>
+              clip.kind === 'video' || clip.kind === 'overlay'
+                ? {
+                    ...clip,
+                    effects: [lookEffectInstance(item.look, { id: 'export-look', strength: 0.8 })],
+                  }
+                : clip,
+            ),
+          })),
+          {
+            id: 'export-caption-track',
+            kind: 'caption',
+            name: 'Export caption',
+            order: 10,
+            clips: [
+              {
+                id: 'export-caption',
+                kind: 'caption',
+                timelineStartSec: 0.5,
+                durationSec: 2,
+                text: 'EXPORT PROOF',
+                language: 'en',
+                words: [
+                  { text: 'EXPORT', startSec: 0, endSec: 1 },
+                  { text: 'PROOF', startSec: 1, endSec: 2 },
+                ],
+                highlightMode: 'none',
+                style: {
+                  fontFamily: 'Inter',
+                  fontSizePx: 48,
+                  fontWeight: 800,
+                  color: '#ff00ff',
+                  outlineWidthPx: 0,
+                },
+                transform: { position: { x: 0.5, y: 0.8, unit: 'normalized' } },
+              },
+            ],
+          },
+        ],
+      });
+      const input = { project, sources, workerUrl: `${origin}/actual-splicer-worker.js` };
+      const mp4 = join(manifest.output, `${index}-worker.mp4`);
+      const started = performance.now();
+      const result = await page.evaluate(
+        (payload) => window.__motionRenderBench.recordedExport(payload),
+        input,
+      );
+      writeFileSync(mp4, Buffer.from(result.base64, 'base64'));
+      timings.push(performance.now() - started);
+      writeFileSync(
+        join(manifest.output, `${index}-project.json`),
+        JSON.stringify(project, null, 2),
+      );
+      const probe = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', mp4],
+          { encoding: 'utf8' },
+        ),
+      ) as {
+        format: { duration: string };
+        streams: Array<{ codec_type: string; width?: number; height?: number; channels?: number }>;
+      };
+      check(
+        `case${index}: encoded picture audio and exact timeline duration`,
+        probe.streams.some(
+          (s) =>
+            s.codec_type === 'video' &&
+            s.width === project.exportSettings.width &&
+            s.height === project.exportSettings.height,
+        ) &&
+          probe.streams.some((s) => s.codec_type === 'audio' && s.channels === 2) &&
+          Math.abs(Number(probe.format.duration) - project.durationSec) <= 1 / 30,
+        JSON.stringify(probe),
+      );
+      for (const time of [0.25, 1.25, 2.75, project.durationSec - 0.25]) {
+        const snapshot = await page.evaluate(
+          (payload) => window.__motionRenderBench.recordedExport(payload),
+          { ...input, frameTimeSec: time },
+        );
+        const png = join(manifest.output, `${index}-${time}-snapshot.png`);
+        writeFileSync(png, Buffer.from(snapshot.base64, 'base64'));
+        const actual = rgb(mp4, time),
+          expected = rgb(png);
+        const mean = error(actual, expected);
+        check(
+          `case${index} ${time}s: worker MP4 retains composed pixels`,
+          actual.length === expected.length && mean <= 6,
+          JSON.stringify({ meanRgbError: mean }),
+        );
+        check(
+          `case${index} ${time}s: caption appears only inside its window`,
+          time >= 0.5 && time < 2.5 ? magenta(actual) > 60 : magenta(actual) < 20,
+          JSON.stringify({ magentaPixels: magenta(actual) }),
+        );
+      }
+      const plain = editorProjectV2Schema.parse({
+        ...project,
+        tracks: project.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((clip) =>
+            clip.kind === 'video' || clip.kind === 'overlay' ? { ...clip, effects: [] } : clip,
+          ),
+        })),
+      });
+      const plainFrame = await page.evaluate(
+        (payload) => window.__motionRenderBench.recordedExport(payload),
+        { ...input, project: plain },
+      );
+      const plainFile = join(manifest.output, `${index}-no-look.mp4`);
+      writeFileSync(plainFile, Buffer.from(plainFrame.base64, 'base64'));
+      const lookError = error(rgb(mp4, 0.25), rgb(plainFile, 0.25));
+      check(
+        `case${index}: ${item.look} retained versus actual no-look control`,
+        lookError > 0.1,
+        String(lookError),
+      );
+      const audioClip = project.tracks
+        .flatMap((track) => track.clips)
+        .find((clip) => clip.kind === 'audio' || (clip.kind === 'video' && clip.audioEnabled));
+      if (!audioClip || !('sourceInSec' in audioClip))
+        throw new Error('Recorded audio source missing');
+      const sourceFile = item.sources[audioClip.id]?.file;
+      if (!sourceFile) throw new Error('Pinned audio bytes missing');
+      const pcm = (file: string, start = 0, channel = 0) =>
+        execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-ss',
+            String(start),
+            '-i',
+            file,
+            '-t',
+            String(project.durationSec),
+            '-vn',
+            '-af',
+            `pan=mono|c0=c${channel}`,
+            '-ar',
+            '48000',
+            '-f',
+            'f32le',
+            'pipe:1',
+          ],
+          { maxBuffer: 32_000_000 },
+        );
+      const sourceProbe = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            '-select_streams',
+            'a:0',
+            '-show_entries',
+            'stream=channels',
+            '-of',
+            'json',
+            sourceFile,
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as { streams: Array<{ channels: number }> };
+      const sourceChannels = sourceProbe.streams[0]?.channels ?? 0;
+      if (sourceChannels !== 1 && sourceChannels !== 2)
+        throw new Error('Recorded mono/stereo source missing');
+      for (const channel of [0, 1]) {
+        const a = pcm(mp4, 0, channel),
+          b = pcm(sourceFile, audioClip.sourceInSec, Math.min(channel, sourceChannels - 1));
+        let squared = 0,
+          energy = 0;
+        for (let offset = 0; offset < b.length; offset += 4) {
+          const expected = b.readFloatLE(offset);
+          squared += (a.readFloatLE(offset) - expected) ** 2;
+          energy += expected ** 2;
+        }
+        check(
+          `case${index} channel${channel}: all recorded PCM samples survive browser export`,
+          a.length >= b.length &&
+            b.length / 4 === Math.round(project.durationSec * 48000) &&
+            energy > 1e-6 &&
+            squared / energy <= 0.01,
+          JSON.stringify({
+            samples: b.length / 4,
+            energy,
+            relativeSquaredPcmError: squared / energy,
+          }),
+        );
+      }
+      check(
+        `case${index}: complete browser export within120000ms`,
+        timings[index] <= 120000,
+        String(timings[index]),
+      );
+    }
+    check(
+      'Browser export retains effects, captions, audio and exact timeline duration.',
+      manifest.cases.length === 3 && failures === 0,
+      'Three retained recorded-source projects through actual worker; independent FFmpeg picture/PCM and no-look controls.',
+    );
+    rec.notes.push(`speed samples: ${JSON.stringify({ browser_export: timings })}`);
+    rec.record(
+      'fresh DB/native dialog, long projects, full motion vocabulary, production and adoption',
+      'SKIP',
+      'Offline browser replay of retained real-store readbacks; prior native/Storage/Render proof is separate.',
+    );
+  } catch (error) {
+    rec.record('recorded export replay completes', 'FAIL', String(error));
+    throw error;
+  } finally {
+    await context.close();
+    rec.print();
+  }
 });
 
 // ── Server export vs the client render ─────────────────────────────────────────────────
@@ -586,4 +918,120 @@ test('server export matches the client render, frame for frame', async ({ browse
       .map((entry) => `${entry.ok ? 'PASS' : 'FAIL'}  ${entry.name} — ${entry.detail}`)
       .join('\n'),
   );
+});
+
+test('retained curves preserve recorded picture and source gain through actual splits', async ({
+  browser,
+}) => {
+  const fixture = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+  test.skip(!fixture, 'Recorded media fixture not supplied; curve/media coverage unexercised.');
+  const rec = createBenchRecorder('videoeditor:motion:render:bench:retained-curves', []);
+  let failed = 0;
+  const check = (name: string, pass: boolean, detail?: string) => {
+    rec.record(name, pass ? 'PASS' : 'FAIL', detail);
+    if (!pass) failed += 1;
+  };
+  const context = await browser.newContext();
+  const scratch = mkdtempSync(join(tmpdir(), 'video-editor-retained-curves-'));
+  try {
+    const page = await context.newPage();
+    await page.route('https://recorded.bench/source.mp4', (route) =>
+      route.fulfill({ contentType: 'video/mp4', body: readFileSync(fixture!) }),
+    );
+    await page.route('**/video-editor-motion-render-bench', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body></body></html>',
+      }),
+    );
+    await page.goto('http://127.0.0.1:4173/video-editor-motion-render-bench');
+    await page.addScriptTag({ content: buildBrowserBundle(), type: 'module' });
+    await page.waitForFunction(() => Boolean(window.__motionRenderBench));
+    const runs = await rec.step('recorded curve renders through candidate compositor', () =>
+      page.evaluate(() => window.__motionRenderBench.curves('https://recorded.bench/source.mp4')),
+    );
+    for (const run of runs) {
+      check(
+        `${run.interpolation}: retained decoded frames agree with original source clock`,
+        run.frames.every((mae) => mae < 4),
+        JSON.stringify(run.frames),
+      );
+      const a = join(scratch, `${run.interpolation}-baseline.mp4`),
+        b = join(scratch, `${run.interpolation}-sliced.mp4`);
+      writeFileSync(a, Buffer.from(run.baseline, 'base64'));
+      writeFileSync(b, Buffer.from(run.actual, 'base64'));
+      const pcm = (file: string) => {
+        const bytes = execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          file,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-f',
+          'f32le',
+          'pipe:1',
+        ]);
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      };
+      const original = pcm(a),
+        sliced = pcm(b);
+      let delta = 0,
+        energy = 0;
+      for (const localSec of [0.25, 0.75, 1.25, 1.75]) {
+        const expectedSec = localSec < 1 ? localSec : localSec + 1;
+        for (let i = 0; i < 640; i++) {
+          const got = sliced[Math.round(localSec * 16000) + i] ?? 0;
+          const expected = original[Math.round(expectedSec * 16000) + i] ?? 0;
+          delta += (got - expected) ** 2;
+          energy += expected ** 2;
+        }
+      }
+      check(
+        `${run.interpolation}: independent PCM follows retained gain curve`,
+        energy > 1e-6 && delta / energy < 0.02,
+        `relative PCM error ${delta / energy}`,
+      );
+      check(
+        `${run.interpolation}: canonical schema retains full endpoints and clock`,
+        run.project.tracks[0]?.clips[1]?.keyframeOffsetSec === 2 &&
+          run.project.tracks[0]?.clips[1]?.kind === 'video' &&
+          run.project.tracks[0]?.clips[1]?.keyframes?.length === 4,
+      );
+    }
+    rec.record(
+      'hosted Render/store/UI/agent',
+      'SKIP',
+      'Candidate browser/reducer/recorded-media proof only; hosted compositor rebuild, real project persistence, native UI and agent remain unexercised.',
+    );
+    const folder = process.env.VIDEO_EDITOR_CURVES_OUTPUT;
+    if (folder) {
+      execFileSync('mkdir', ['-p', folder]);
+      for (const name of ['hold', 'linear', 'bezier', 'spring'])
+        for (const variant of ['baseline', 'sliced']) {
+          writeFileSync(
+            join(folder, `${name}-${variant}.mp4`),
+            readFileSync(join(scratch, `${name}-${variant}.mp4`)),
+          );
+        }
+      writeFileSync(
+        join(folder, 'summary.json'),
+        JSON.stringify(
+          runs.map(({ baseline, actual, ...rest }) => rest),
+          null,
+          2,
+        ),
+      );
+    }
+    expect(failed).toBe(0);
+  } finally {
+    rec.print();
+    await context.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
 });

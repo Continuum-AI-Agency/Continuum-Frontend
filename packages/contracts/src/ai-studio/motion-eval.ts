@@ -39,11 +39,21 @@ export function parseMotionExpression(source: string | undefined): ParsedMotionE
   if (!source) return null;
   const trimmed = source.trim().toLowerCase();
   if (trimmed === 'loop') return { kind: 'loop' };
-  const wiggle = trimmed.match(/^wiggle\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)$/);
+  const wiggle = trimmed.match(
+    /^wiggle\(\s*((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*,\s*((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*\)$/,
+  );
   if (wiggle) {
-    return { kind: 'wiggle', freq: Number(wiggle[1]), amp: Number(wiggle[2]) };
+    const freq = Number(wiggle[1]),
+      amp = Number(wiggle[2]);
+    if (Number.isFinite(freq) && Number.isFinite(amp)) return { kind: 'wiggle', freq, amp };
   }
   return null;
+}
+
+/** Keep expression phase aligned when the clip clock is stretched. */
+export function motionExpressionAtScale(source: string, factor: number): string {
+  const parsed = parseMotionExpression(source);
+  return parsed?.kind === 'wiggle' ? `wiggle(${parsed.freq / factor}, ${parsed.amp})` : source;
 }
 
 export function applyMotionExpression(
@@ -119,11 +129,28 @@ export function springProgress(progress: number, bounce: number): number {
 
 const KEY_TIME_EPSILON_SEC = 1e-6;
 
+/** The authored clock sampled by a looping track; expressions keep their original phase. */
+export function motionTrackTime(
+  keyframes: readonly Pick<NumericKeyframe, 'timeSec' | 'expression'>[],
+  timeSec: number,
+): number {
+  if (!keyframes.some((keyframe) => parseMotionExpression(keyframe.expression)?.kind === 'loop'))
+    return timeSec;
+  const first = Math.min(...keyframes.map((keyframe) => keyframe.timeSec));
+  const last = Math.max(...keyframes.map((keyframe) => keyframe.timeSec));
+  const period = last - first;
+  return period > KEY_TIME_EPSILON_SEC && timeSec > first
+    ? first + ((timeSec - first) % period)
+    : timeSec;
+}
+
 export function sampleNumericTrack(
   keyframes: readonly NumericKeyframe[],
   timeSec: number,
   fallback: number,
+  timeOffsetSec = 0,
 ): number {
+  timeSec += timeOffsetSec;
   if (keyframes.length === 0) return fallback;
   const sorted = keyframes
     .filter((keyframe) => Number.isFinite(keyframe.timeSec) && Number.isFinite(keyframe.value))
@@ -132,12 +159,7 @@ export function sampleNumericTrack(
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
   if (!first || !last) return fallback;
-  const loops = sorted.some((keyframe) => parseMotionExpression(keyframe.expression)?.kind === 'loop');
-  const period = last.timeSec - first.timeSec;
-  let sampleAt = timeSec;
-  if (loops && period > KEY_TIME_EPSILON_SEC && timeSec > first.timeSec) {
-    sampleAt = first.timeSec + ((timeSec - first.timeSec) % period);
-  }
+  const sampleAt = motionTrackTime(sorted, timeSec);
   let value: number;
   if (sampleAt < first.timeSec - KEY_TIME_EPSILON_SEC) value = fallback;
   else if (sampleAt >= last.timeSec - KEY_TIME_EPSILON_SEC) value = last.value;
@@ -174,23 +196,27 @@ export type PositionKeyframe = {
   interpolation: MotionInterpolation;
   easing?: MotionBezier;
   spring?: MotionSpring;
+  expression?: string;
 };
 
 export function samplePositionTrack(
   keyframes: readonly PositionKeyframe[],
   timeSec: number,
   fallback: { x: number; y: number },
+  timeOffsetSec = 0,
 ): { x: number; y: number } {
   return {
     x: sampleNumericTrack(
       keyframes.map((keyframe) => ({ ...keyframe, value: keyframe.value.x })),
       timeSec,
       fallback.x,
+      timeOffsetSec,
     ),
     y: sampleNumericTrack(
       keyframes.map((keyframe) => ({ ...keyframe, value: keyframe.value.y })),
       timeSec,
       fallback.y,
+      timeOffsetSec,
     ),
   };
 }
@@ -203,6 +229,7 @@ export function positionKeysForProperty(
     interpolation: MotionInterpolation;
     easing?: MotionBezier;
     spring?: MotionSpring;
+    expression?: string;
   }[],
   property = 'transform.position',
 ): PositionKeyframe[] {
@@ -225,6 +252,7 @@ export function positionKeysForProperty(
       interpolation: keyframe.interpolation,
       ...(keyframe.easing ? { easing: keyframe.easing } : {}),
       ...(keyframe.spring ? { spring: keyframe.spring } : {}),
+      ...(keyframe.expression ? { expression: keyframe.expression } : {}),
     });
   }
   return keys;

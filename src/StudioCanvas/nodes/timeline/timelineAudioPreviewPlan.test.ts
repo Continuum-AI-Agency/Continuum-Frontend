@@ -1,10 +1,181 @@
 import { describe, expect, it } from 'bun:test';
+import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
 import type { TimelineDocument } from './adapter';
 import { buildTimelinePreviewAudioPlan } from './timelineAudioPreviewPlan';
+import {
+  buildEditorProjectV2AudioPreviewPlan,
+  editorProjectV2AudioClipIds,
+} from './useEditorProjectV2AudioPreview';
 import { computeLayout, effectiveItemDuration } from './useTimelineEditorModel';
+import { volumeAutomation } from './webAudioPreviewEngine';
 
 const videoBlob = new Blob(['video'], { type: 'video/mp4' });
 const audioBlob = new Blob(['audio'], { type: 'audio/mpeg' });
+
+it('maps repeated nested video and audio sources, retaining independent child and group gain clocks', () => {
+  const base = createEditorProjectV2({
+    projectId: 'p',
+    title: 'Nested sound',
+    width: 320,
+    height: 180,
+  });
+  const project = editorProjectV2Schema.parse({
+    ...base,
+    durationSec: 6,
+    nestedSequences: [
+      {
+        id: 'child',
+        name: 'Child',
+        canvas: base.canvas,
+        durationSec: 8,
+        tracks: [
+          {
+            id: 'child-video',
+            kind: 'video',
+            name: 'Picture',
+            order: 0,
+            clips: [
+              {
+                id: 'v',
+                kind: 'video',
+                timelineStartSec: 1,
+                durationSec: 4,
+                source: { sourceType: 'library_asset', assetId: 'video', renditionId: 'video-v1' },
+                sourceInSec: 2,
+                playbackRate: 0.5,
+                fadeInSec: 3,
+                fadeOutSec: 3,
+                keyframes: [
+                  {
+                    id: 'v0',
+                    property: 'audio.volume',
+                    timeSec: 0,
+                    value: 0.2,
+                    interpolation: 'linear',
+                  },
+                  {
+                    id: 'v1',
+                    property: 'audio.volume',
+                    timeSec: 4,
+                    value: 0.8,
+                    interpolation: 'linear',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'child-audio',
+            kind: 'audio',
+            name: 'Bed',
+            order: 1,
+            clips: [
+              {
+                id: 'a',
+                kind: 'audio',
+                timelineStartSec: 4,
+                durationSec: 2,
+                source: { sourceType: 'library_asset', assetId: 'audio', renditionId: 'audio-v1' },
+                sourceInSec: 1,
+                playbackRate: 1.5,
+                volume: 0.25,
+                fadeOutSec: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    tracks: [
+      {
+        id: 'groups',
+        name: 'Groups',
+        kind: 'nested_sequence',
+        order: 0,
+        clips: [
+          {
+            id: 'g1',
+            kind: 'nested_sequence',
+            sequenceId: 'child',
+            timelineStartSec: 1,
+            durationSec: 2,
+            sourceInSec: 2,
+            playbackRate: 2,
+            keyframeOffsetSec: 0.25,
+            keyframes: [
+              { id: 'g0', property: 'audio.volume', timeSec: 0, value: 1, interpolation: 'linear' },
+              {
+                id: 'g1',
+                property: 'audio.volume',
+                timeSec: 2,
+                value: 0.5,
+                interpolation: 'linear',
+              },
+            ],
+          },
+          {
+            id: 'g2',
+            kind: 'nested_sequence',
+            sequenceId: 'child',
+            timelineStartSec: 4,
+            durationSec: 1,
+            sourceInSec: 2,
+            playbackRate: 2,
+          },
+        ],
+      },
+    ],
+  });
+  expect(editorProjectV2AudioClipIds(project).sort()).toEqual(['a', 'v']);
+  const input = {
+    project,
+    layout: { ...computeLayout([], effectiveItemDuration, 80), totalSec: 6 },
+    blobsByClipId: new Map([
+      ['v', videoBlob],
+      ['a', audioBlob],
+    ]),
+  };
+  const events = buildEditorProjectV2AudioPreviewPlan(input).events;
+  expect(events).toHaveLength(3);
+  expect(events[0]).toMatchObject({
+    id: 'g1:v',
+    sourceNodeId: 'v',
+    outputStartSec: 1,
+    outputEndSec: 2.5,
+    sourceStartSec: 2.5,
+    sourceEndSec: 4,
+    playbackRate: 1,
+    fadeInSec: 1.5,
+    fadeOutSec: 1.5,
+    audioFadeClock: { offsetSec: 0.5, durationSec: 2 },
+    keyframeOffsetSec: 0.5,
+    groupKeyframeOffsetSec: 0.25,
+  });
+  expect(events[1]).toMatchObject({
+    id: 'g1:a',
+    outputStartSec: 2,
+    outputEndSec: 3,
+    sourceStartSec: 1,
+    sourceEndSec: 4,
+    playbackRate: 3,
+    gain: 0.25,
+  });
+  expect(events[2]).toMatchObject({ id: 'g2:v', outputStartSec: 4, outputEndSec: 5 });
+  expect(volumeAutomation(events[0]!, 1.5)[0]?.value).toBeCloseTo(0.40625, 6);
+  const childVideo = project.nestedSequences[0]!.tracks[0]!.clips[0]!;
+  const host = project.tracks[0]!.clips[0]!;
+  if (childVideo.kind !== 'video' || host.kind !== 'nested_sequence')
+    throw new Error('fixture kinds');
+  childVideo.reverse = true;
+  expect(editorProjectV2AudioClipIds(project).sort()).toEqual(['a', 'v']);
+  expect(() => buildEditorProjectV2AudioPreviewPlan(input)).toThrow('reversed or time-remapped');
+  childVideo.reverse = false;
+  childVideo.playbackRate = 20;
+  host.playbackRate = 20;
+  expect(buildEditorProjectV2AudioPreviewPlan(input).events[0]?.playbackRate).toBe(400);
+  project.tracks[0]!.muted = true;
+  expect(buildEditorProjectV2AudioPreviewPlan(input).events).toHaveLength(0);
+});
 
 describe('buildTimelinePreviewAudioPlan', () => {
   it('projects base audio and independent voiceover onto one output clock', () => {

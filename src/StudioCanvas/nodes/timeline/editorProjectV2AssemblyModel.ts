@@ -13,6 +13,10 @@ import {
   type EditorTrack,
   type EditorTransition,
   type EditorVideoClip,
+  editorClipAtSourceIn,
+  editorClipWithLocalFades,
+  editorClipWithRetainedFades,
+  editorTextWithRetainedAnimation,
   type MediaAssetVersion,
   type MotionRecipe,
 } from '@continuum/contracts';
@@ -522,6 +526,10 @@ export function upsertTextOperation(
   const clipId = input.clipId ?? crypto.randomUUID();
   const timelineStartSec = placementStart(project, input.timelineStartSec);
   const maxDuration = project.durationSec - timelineStartSec;
+  const retained =
+    existing && input.durationSec !== existing.durationSec
+      ? editorTextWithRetainedAnimation(existing)
+      : existing;
   const clip: EditorTextClip = {
     id: clipId,
     name: existing?.name ?? 'Text overlay',
@@ -571,8 +579,19 @@ export function upsertTextOperation(
       input.animationIn === 'none' ? undefined : (input.animationIn ?? existing?.animationIn),
     animationOut:
       input.animationOut === 'none' ? undefined : (input.animationOut ?? existing?.animationOut),
+    ...((input.animationIn !== undefined &&
+      (input.animationIn === 'none' ? undefined : input.animationIn) !== existing?.animationIn) ||
+    (input.animationOut !== undefined &&
+      (input.animationOut === 'none' ? undefined : input.animationOut) !== existing?.animationOut)
+      ? { textAnimationClock: undefined }
+      : retained?.textAnimationClock
+        ? { textAnimationClock: retained.textAnimationClock }
+        : {}),
     effects: existing?.effects ?? [],
     keyframes: existing?.keyframes ?? [],
+    ...(existing?.keyframeOffsetSec !== undefined
+      ? { keyframeOffsetSec: existing.keyframeOffsetSec }
+      : {}),
   };
   const forward: EditorCommandDraft[] = [];
   if (!existingTrack) {
@@ -682,6 +701,9 @@ export function upsertOverlayOperation(
     blendMode: existing?.blendMode ?? 'normal',
     effects: existing?.effects ?? [],
     keyframes: existing?.keyframes ?? [],
+    ...(existing?.keyframeOffsetSec !== undefined
+      ? { keyframeOffsetSec: existing.keyframeOffsetSec }
+      : {}),
     parentClipId: existing?.parentClipId,
   };
   const forward: EditorCommandDraft[] = [];
@@ -824,26 +846,12 @@ export function applyMotionRecipeOperation(
 ): EditorAssemblyOperation {
   const track = project.tracks.find((candidate) => candidate.id === input.trackId);
   const clip = track?.clips.find((candidate) => candidate.id === input.clipId);
-  const previous = clip && 'keyframes' in clip ? clip.keyframes : [];
-  const next = clip ? applyMotionRecipe(clip, input.recipe).keyframes : input.recipe.keyframes;
+  if (!clip || !('keyframes' in clip)) throw new Error('Clip does not support a motion Element.');
+  const next = applyMotionRecipe(clip, input.recipe);
   return {
     label: 'Place motion Element',
-    forward: [
-      {
-        commandType: 'set_keyframes',
-        trackId: input.trackId,
-        clipId: input.clipId,
-        keyframes: next,
-      },
-    ],
-    inverse: [
-      {
-        commandType: 'set_keyframes',
-        trackId: input.trackId,
-        clipId: input.clipId,
-        keyframes: previous,
-      },
-    ],
+    forward: [{ commandType: 'upsert_clip', trackId: input.trackId, clip: next }],
+    inverse: [{ commandType: 'upsert_clip', trackId: input.trackId, clip }],
   };
 }
 
@@ -861,7 +869,9 @@ export function upsertKeyframeOperation(
         commandType: 'upsert_keyframe',
         trackId: input.trackId,
         clipId: input.clipId,
-        keyframe: input.keyframe,
+        keyframe: previous.some((key) => key.id === input.keyframe.id)
+          ? input.keyframe
+          : { ...input.keyframe, timeSec: input.keyframe.timeSec + (clip?.keyframeOffsetSec ?? 0) },
       },
     ],
     inverse: [
@@ -1163,17 +1173,34 @@ export function patchAudioOperation(
     Math.min(patch.durationSec ?? current.durationSec, available),
   );
   const clip: EditorAudioClip = {
-    ...current,
+    ...editorClipAtSourceIn(
+      durationSec !== current.durationSec ? editorClipWithRetainedFades(current) : current,
+      Math.max(0, patch.sourceInSec ?? current.sourceInSec),
+    ),
     timelineStartSec: start,
     sourceInSec: Math.max(0, patch.sourceInSec ?? current.sourceInSec),
     durationSec,
     volume: Math.max(0, Math.min(4, patch.volume ?? current.volume)),
-    fadeInSec: Math.min(durationSec, Math.max(0, patch.fadeInSec ?? current.fadeInSec)),
-    fadeOutSec: Math.min(durationSec, Math.max(0, patch.fadeOutSec ?? current.fadeOutSec)),
   };
   return {
     label: 'Edit audio placement',
-    forward: [{ commandType: 'upsert_clip', trackId, clip }],
+    forward: [
+      {
+        commandType: 'upsert_clip',
+        trackId,
+        clip:
+          patch.fadeInSec !== undefined || patch.fadeOutSec !== undefined
+            ? editorClipWithLocalFades(clip, {
+                ...(patch.fadeInSec !== undefined
+                  ? { fadeInSec: Math.max(0, patch.fadeInSec) }
+                  : {}),
+                ...(patch.fadeOutSec !== undefined
+                  ? { fadeOutSec: Math.max(0, patch.fadeOutSec) }
+                  : {}),
+              })
+            : clip,
+      },
+    ],
     inverse: [{ commandType: 'upsert_clip', trackId, clip: current }],
   };
 }

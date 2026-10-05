@@ -263,7 +263,8 @@ export const editorKeyframeSchema = z
       'text.fontSize',
     ]),
     parameterName: z.string().min(1).max(200).optional(),
-    timeSec: secondsSchema,
+    // Control points may precede the retained clip clock after a start extension.
+    timeSec: z.number().finite().min(-86_400).max(86_400),
     value: editorKeyframeValueSchema,
     interpolation: z.enum(['hold', 'linear', 'bezier', 'spring']),
     easing: editorKeyframeEasingSchema.optional(),
@@ -319,6 +320,54 @@ export const editorEffectInstanceSchema = z
   .strict();
 export type EditorEffectInstance = z.infer<typeof editorEffectInstanceSchema>;
 
+export const editorClipClockSchema = z
+  .object({
+    offsetSec: z.number().finite().min(-86_400).max(86_400),
+    durationSec: positiveSecondsSchema,
+  })
+  .strict();
+export const editorAudioFadeClockSchema = editorClipClockSchema;
+export type EditorAudioFadeClock = z.infer<typeof editorAudioFadeClockSchema>;
+export const editorTextAnimationClockSchema = editorClipClockSchema;
+export type EditorTextAnimationClock = z.infer<typeof editorTextAnimationClockSchema>;
+
+const parentMotionTimeSchema = z.number().finite().min(-86_400).max(86_400);
+export const editorParentMotionBindingSchema = z
+  .object({
+    childStartSec: secondsSchema,
+    ancestors: z
+      .array(
+        z
+          .object({
+            clipId: editorIdSchema,
+            startOffsetSec: parentMotionTimeSchema,
+            keyframeOffsetSec: parentMotionTimeSchema,
+            ancestorStartSec: secondsSchema,
+            ancestorKeyframeOffsetSec: parentMotionTimeSchema,
+            // Only removed ancestors need a copy; surviving curves remain editable.
+            fallback: z
+              .object({
+                position: z.object({ x: z.number().finite(), y: z.number().finite() }).strict(),
+                keyframes: z
+                  .array(
+                    editorKeyframeSchema.refine(
+                      (key) => key.property === 'transform.position',
+                      'parent motion fallback requires position keys',
+                    ),
+                  )
+                  .max(500),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict();
+export type EditorParentMotionBinding = z.infer<typeof editorParentMotionBindingSchema>;
+
 const editorClipBaseShape = {
   id: editorIdSchema,
   name: z.string().min(1).max(500).optional(),
@@ -328,6 +377,9 @@ const editorClipBaseShape = {
   locked: z.boolean().default(false),
   tags: z.array(z.string().min(1).max(100)).max(40).default([]),
   parentClipId: editorIdSchema.optional(),
+  parentMotionBinding: editorParentMotionBindingSchema.optional(),
+  /** Retained automation stays on its original clip clock after a split or range cut. */
+  keyframeOffsetSec: z.number().finite().min(-86_400).max(86_400).optional(),
 };
 
 export const editorVideoClipSchema = z
@@ -346,10 +398,23 @@ export const editorVideoClipSchema = z
       .enum(['normal', 'multiply', 'screen', 'overlay', 'lighten', 'darken', 'difference'])
       .default('normal'),
     audioEnabled: z.boolean().default(true),
+    // Optional fields keep existing project documents and fingerprints unchanged.
+    volume: z.number().finite().min(0).max(4).optional(),
+    audioFadeClock: editorAudioFadeClockSchema.optional(),
+    fadeInSec: secondsSchema.optional(),
+    fadeOutSec: secondsSchema.optional(),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
   })
-  .strict();
+  .strict()
+  .refine(
+    (clip) =>
+      (clip.fadeInSec ?? 0) <= (clip.audioFadeClock?.durationSec ?? clip.durationSec) &&
+      (clip.fadeOutSec ?? 0) <= (clip.audioFadeClock?.durationSec ?? clip.durationSec),
+    {
+      message: 'video audio fades cannot exceed clip duration',
+    },
+  );
 export type EditorVideoClip = z.infer<typeof editorVideoClipSchema>;
 
 export const editorAudioClipSchema = z
@@ -364,6 +429,7 @@ export const editorAudioClipSchema = z
     volume: z.number().finite().min(0).max(4).default(1),
     pan: signedUnitSchema.default(0),
     muted: z.boolean().default(false),
+    audioFadeClock: editorAudioFadeClockSchema.optional(),
     fadeInSec: secondsSchema.default(0),
     fadeOutSec: secondsSchema.default(0),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
@@ -371,9 +437,14 @@ export const editorAudioClipSchema = z
     automation: z.array(editorAudioAutomationPointSchema).max(1_000).optional(),
   })
   .strict()
-  .refine((clip) => clip.fadeInSec <= clip.durationSec && clip.fadeOutSec <= clip.durationSec, {
-    message: 'audio fades cannot exceed clip duration',
-  });
+  .refine(
+    (clip) =>
+      clip.fadeInSec <= (clip.audioFadeClock?.durationSec ?? clip.durationSec) &&
+      clip.fadeOutSec <= (clip.audioFadeClock?.durationSec ?? clip.durationSec),
+    {
+      message: 'audio fades cannot exceed clip duration',
+    },
+  );
 export type EditorAudioClip = z.infer<typeof editorAudioClipSchema>;
 
 export const editorOverlayClipSchema = z
@@ -424,6 +495,7 @@ export const editorTextClipSchema = z
     transform: editorTransformSchema.default(defaultEditorTransform),
     animationIn: editorIdSchema.optional(),
     animationOut: editorIdSchema.optional(),
+    textAnimationClock: editorTextAnimationClockSchema.optional(),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
   })
@@ -1151,6 +1223,8 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       fromTrackId: editorIdSchema,
       toTrackId: editorIdSchema,
       timelineStartSec: secondsSchema,
+      /** Ripple moves retain source motion; intentional moves follow project time. */
+      preserveParentMotion: z.boolean().optional(),
     })
     .strict(),
   z

@@ -12,7 +12,7 @@ import {
 } from '@continuum/contracts';
 import { Film, Sparkles, TriangleAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -101,7 +101,8 @@ function FootageRow({
       <HoverCard
         openDelay={300}
         onOpenChange={(open) => {
-          if (open && !mediaUrl) void signAsset(brandId, asset.assetId).then(setMediaUrl);
+          if (open && !mediaUrl)
+            void signAsset(brandId, asset.assetId, asset.versionId).then(setMediaUrl);
         }}
       >
         <HoverCardTrigger
@@ -231,8 +232,9 @@ export function BriefDialog({
 
   // Each opening re-reads the brief from the seed (a redraft) or starts blank, and the
   // format from the project — unless a draft is running, which reopens on its progress.
+  // Reset before the dialog can accept typing; a delayed effect can erase the first edit.
   // biome-ignore lint/correctness/useExhaustiveDependencies: an opening is the only trigger
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || drafting) return;
     setFields(
       seed

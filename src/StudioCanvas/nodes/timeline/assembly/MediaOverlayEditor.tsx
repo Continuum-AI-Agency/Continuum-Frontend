@@ -131,14 +131,15 @@ function MediaOverlayRow({
     playheadSec >= clip.timelineStartSec && playheadSec <= clip.timelineStartSec + clip.durationSec;
   const opacityKeyed = clip.keyframes.some(
     (keyframe) =>
-      keyframe.property === 'transform.opacity' && Math.abs(keyframe.timeSec - localSec) <= 0.05,
+      keyframe.property === 'transform.opacity' &&
+      Math.abs(keyframe.timeSec - (clip.keyframeOffsetSec ?? 0) - localSec) <= 0.05,
   );
   const opacityKeys = clip.keyframes
     .filter((keyframe) => keyframe.property === 'transform.opacity')
     .toSorted((left, right) => left.timeSec - right.timeSec);
   const departingOpacity = [...opacityKeys]
     .reverse()
-    .find((keyframe) => keyframe.timeSec <= localSec + 0.001);
+    .find((keyframe) => keyframe.timeSec <= localSec + (clip.keyframeOffsetSec ?? 0) + 0.001);
   const source = clip.source;
   if (source.sourceType !== 'library_asset' || !source.renditionId) return null;
   const versionId = source.renditionId;
@@ -356,7 +357,7 @@ function MediaOverlayRow({
             keyed={clip.keyframes.some(
               (keyframe) =>
                 keyframe.property === 'transform.rotationDeg' &&
-                Math.abs(keyframe.timeSec - localSec) <= 0.05,
+                Math.abs(keyframe.timeSec - (clip.keyframeOffsetSec ?? 0) - localSec) <= 0.05,
             )}
             disabled={!playheadOnClip}
             onToggle={() =>

@@ -10,14 +10,17 @@ import {
   LOOK_EFFECTS,
   type LookEffectId,
   lookEffectInstance,
+  TEXT_ANIMATION_IDS,
 } from '@continuum/contracts';
 import {
   buildTimelineEditorRenderPlan,
   textCueFor,
 } from '../../src/lib/client-render/executors/timelineEditor';
 import { registerCaptionFonts } from '../../src/lib/clips/captionFonts';
+import { simulate } from '../../src/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
 import { drawActiveCaption } from '../../src/StudioCanvas/utils/splice/drawCaptions';
+import { runTimelineInWorker } from '../../src/StudioCanvas/workers/spliceWorkerClient';
 
 const WIDTH = 360;
 const HEIGHT = 640;
@@ -439,28 +442,13 @@ export async function runMotionRender(variant: 'control' | 'styled'): Promise<Mo
 }
 
 /** Every entrance the contract names, one after another, each on its own 1.1 s text clip. */
-const ENTRANCES = [
-  'fade',
-  'pop',
-  'scale-in',
-  'float-in',
-  'slide-up',
-  'slide-down',
-  'slide-left',
-  'slide-right',
-  'typewriter',
-  'word-pop',
-  'bounce',
-  'blur-in',
-  'zoom-out',
-  'wipe',
-] as const;
+const ENTRANCES = TEXT_ANIMATION_IDS;
 const ENTRANCE_SEC = 1.1;
 
 export type EntranceSample = { id: string; early: TextBox; settled: TextBox };
 
 /** Each entrance sampled 0.1 s in and once it has settled, on a plain blue ground. */
-export async function runEntrances(): Promise<EntranceSample[]> {
+export async function runEntrances(direction: 'in' | 'out' = 'in'): Promise<EntranceSample[]> {
   const total = ENTRANCES.length * ENTRANCE_SEC;
   const ground = await encodeSolidVideo(BLUE, total);
   const url = URL.createObjectURL(ground);
@@ -505,7 +493,7 @@ export async function runEntrances(): Promise<EntranceSample[]> {
         kind: 'text',
         clips: ENTRANCES.map((id, index) =>
           textClip(`in-${id}`, 'WORD POP', index * ENTRANCE_SEC, ENTRANCE_SEC, {
-            animationIn: id,
+            ...(direction === 'in' ? { animationIn: id } : { animationOut: id }),
           }),
         ),
       },
@@ -544,8 +532,16 @@ export async function runEntrances(): Promise<EntranceSample[]> {
         const at = (sec: number) => (Math.floor((start + sec) * 30) + 0.5) / 30;
         samples.push({
           id,
-          early: textBox(await framePixels(input, at(0.1)), TOP_BAND, at(0.1)),
-          settled: textBox(await framePixels(input, at(0.95)), TOP_BAND, at(0.95)),
+          early: textBox(
+            await framePixels(input, at(direction === 'in' ? 0.1 : 1.05)),
+            TOP_BAND,
+            at(direction === 'in' ? 0.1 : 1.05),
+          ),
+          settled: textBox(
+            await framePixels(input, at(direction === 'in' ? 0.95 : 0.1)),
+            TOP_BAND,
+            at(direction === 'in' ? 0.95 : 0.1),
+          ),
         });
       }
       return samples;
@@ -961,6 +957,203 @@ export async function runLooks() {
   }
 }
 
+export async function runRetainedCurves(sourceUrl: string) {
+  const results = [];
+  const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
+  for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    const project = editorProjectV2Schema.parse({
+      ...createEditorProjectV2({
+        projectId: 'curve-proof',
+        title: 'Recorded curve proof',
+        width: WIDTH,
+        height: HEIGHT,
+      }),
+      durationSec: 4,
+      tracks: [
+        {
+          id: 'picture',
+          kind: 'video',
+          name: 'Recorded footage',
+          order: 0,
+          clips: [
+            {
+              id: 'source',
+              kind: 'video',
+              timelineStartSec: 0,
+              durationSec: 4,
+              source: { sourceType: 'external_url', url: sourceUrl },
+              volume: 0.6,
+              keyframes: ['transform.opacity', 'audio.volume'].flatMap((property) => [
+                {
+                  id: `${property}:a`,
+                  property,
+                  timeSec: 0.5,
+                  value: 0.3,
+                  interpolation,
+                  ...(interpolation === 'bezier'
+                    ? {
+                        easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
+                        expression: 'wiggle(0.7, 0.05)',
+                      }
+                    : {}),
+                  ...(interpolation === 'spring'
+                    ? { spring: { bounce: 0.7 }, expression: 'loop' }
+                    : {}),
+                },
+                {
+                  id: `${property}:b`,
+                  property,
+                  timeSec: 3.5,
+                  value: 0.8,
+                  interpolation: 'linear',
+                },
+              ]),
+            },
+          ],
+        },
+      ],
+    });
+    const sliced = simulate(project, [
+      {
+        commandType: 'split_clip',
+        trackId: 'picture',
+        clipId: 'source',
+        splitAtSec: 1,
+        rightClipId: 'middle',
+      },
+      {
+        commandType: 'split_clip',
+        trackId: 'picture',
+        clipId: 'middle',
+        splitAtSec: 1,
+        rightClipId: 'end',
+      },
+      { commandType: 'trim_clip', trackId: 'picture', clipId: 'end', durationSec: 1 },
+      { commandType: 'remove_clip', trackId: 'picture', clipId: 'middle' },
+      {
+        commandType: 'move_clip',
+        fromTrackId: 'picture',
+        toTrackId: 'picture',
+        clipId: 'end',
+        timelineStartSec: 1,
+      },
+    ]);
+    const render = async (value: typeof project) => {
+      const plan = await buildTimelineEditorRenderPlan({
+        project: value,
+        jobInputs: value.tracks.flatMap((track) =>
+          track.clips.map((clip) => ({
+            sourceId: clip.id,
+            storage: { bucket: 'bench', path: clip.id },
+          })),
+        ),
+        signedUrls: new Map(
+          value.tracks.flatMap((track) =>
+            track.clips.map((clip) => [`bench\n${clip.id}`, sourceUrl] as const),
+          ),
+        ),
+        signal: new AbortController().signal,
+      });
+      return composeTimeline({
+        ...plan,
+        videoBitrate: 1_500_000,
+        audioBitrate: 128_000,
+        targetWidth: WIDTH,
+        targetHeight: HEIGHT,
+        frameRate: 30,
+      });
+    };
+    const baseline = await render(project);
+    const actual = await render(sliced);
+    const a = new Input({ source: new BlobSource(baseline.blob), formats: ALL_FORMATS });
+    const b = new Input({ source: new BlobSource(actual.blob), formats: ALL_FORMATS });
+    try {
+      const frames = [];
+      for (const time of [0.25, 0.75, 1.25, 1.75]) {
+        const expected = await framePixels(a, time < 1 ? time : time + 1);
+        const got = await framePixels(b, time);
+        frames.push(
+          got.reduce((sum, value, index) => sum + Math.abs(value - expected[index]), 0) /
+            got.length,
+        );
+      }
+      const encode = async (blob: Blob) => {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000)
+          binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        return btoa(binary);
+      };
+      results.push({
+        interpolation,
+        frames,
+        project: sliced,
+        baseline: await encode(baseline.blob),
+        actual: await encode(actual.blob),
+      });
+    } finally {
+      a.dispose();
+      b.dispose();
+      URL.revokeObjectURL(baseline.objectUrl);
+      URL.revokeObjectURL(actual.objectUrl);
+    }
+  }
+  return results;
+}
+
+/** Replays retained project/media through the same worker used by browser export. */
+export async function runRecordedExport(
+  input: Pick<ServerCompareInput, 'project' | 'sources'> & {
+    workerUrl: string;
+    frameTimeSec?: number;
+  },
+) {
+  const project = editorProjectV2Schema.parse(input.project);
+  const ids = Object.keys(input.sources);
+  const plan = await buildTimelineEditorRenderPlan({
+    project,
+    jobInputs: ids.map((sourceId) => ({
+      sourceId,
+      sourceAssetId: input.sources[sourceId]?.assetId,
+      sourceRevision: input.sources[sourceId]?.versionId,
+      storage: { bucket: 'bench', path: sourceId },
+    })),
+    signedUrls: new Map(ids.map((id) => [`bench\n${id}`, input.sources[id]?.url ?? ''])),
+    signal: new AbortController().signal,
+  });
+  const settings = {
+    ...plan,
+    targetWidth: project.exportSettings.width,
+    targetHeight: project.exportSettings.height,
+    frameRate:
+      project.exportSettings.frameRate.numerator / project.exportSettings.frameRate.denominator,
+    videoBitrate: project.exportSettings.videoBitrateKbps * 1_000,
+    audioBitrate: project.exportSettings.audioBitrateKbps * 1_000,
+  };
+  if (input.frameTimeSec !== undefined) await registerCaptionFonts(plan.captionFonts);
+  const result =
+    input.frameTimeSec === undefined
+      ? await runTimelineInWorker({
+          ...settings,
+          workerFactory: () => new Worker(input.workerUrl, { type: 'module' }),
+        })
+      : await composeTimeline({ ...settings, frameTimeSec: input.frameTimeSec });
+  try {
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000)
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    return {
+      base64: btoa(binary),
+      durationSec: result.durationSec,
+      width: result.width,
+      height: result.height,
+    };
+  } finally {
+    URL.revokeObjectURL(result.objectUrl);
+  }
+}
+
 declare global {
   interface Window {
     __motionRenderBench: {
@@ -969,6 +1162,8 @@ declare global {
       compare: typeof runServerCompare;
       highlights: typeof runCaptionHighlights;
       looks: typeof runLooks;
+      curves: typeof runRetainedCurves;
+      recordedExport: typeof runRecordedExport;
     };
   }
 }
@@ -979,4 +1174,6 @@ window.__motionRenderBench = {
   compare: runServerCompare,
   highlights: runCaptionHighlights,
   looks: runLooks,
+  curves: runRetainedCurves,
+  recordedExport: runRecordedExport,
 };

@@ -11,7 +11,7 @@ import {
   resolveTransformAt,
 } from '../render/effectSpec';
 import { shaderStackFromClipEffects } from '../render/shaderStack';
-import { computeLetterboxRect, drawLetterboxed } from './letterbox';
+import { computeCropRects, drawCanvasBackground, drawLetterboxed, type FitRect } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
 // draws a single letterboxed frame with the clip's effects (used for solos);
@@ -77,6 +77,13 @@ function hashNoise(x: number, y: number, seed: number): number {
   return (hashed - Math.floor(hashed)) * 2 - 1;
 }
 
+// Same integer PCG as the shared WGSL: particle positions survive GPU/backend changes.
+function pcg(value: number): number {
+  const state = (Math.imul(value, 747796405) + 2891336453) >>> 0;
+  const word = Math.imul((state >>> ((state >>> 28) + 4)) ^ state, 277803737) >>> 0;
+  return ((word >>> 22) ^ word) >>> 0;
+}
+
 const clamp01 = (value: number): number =>
   Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 
@@ -114,11 +121,18 @@ export function applyPixelEffects(
   width: number,
   height: number,
   t: number,
+  viewport: FitRect = { x: 0, y: 0, width, height },
 ): void {
   const { data } = image;
   const aberration = effects.chromaticAberration?.amount ?? 0;
   const vhs = effects.vhs?.amount ?? 0;
   const grain = effects.filmGrain?.amount ?? 0;
+  const dust = clamp01(effects.dust?.amount ?? 0);
+  const leak = clamp01(effects.lightLeaks?.amount ?? 0);
+  const cell = Math.max(8, Math.floor(Math.min(width, height) / 18));
+  const radius = Math.max(1, Math.floor(cell / 10));
+  const dustSeed = pcg(Math.floor(Math.max(0, t) * 12));
+  const phase = 1 - Math.abs(((Math.max(0, t) / 4) % 1) * 2 - 1);
   const vignette = effects.vignette?.amount ?? 0;
   const tintAmount = clamp01(effects.tint?.amount ?? 0);
   const tint = tintAmount > 0 ? hexRgb(effects.tint?.color) : undefined;
@@ -170,6 +184,31 @@ export function applyPixelEffects(
         data[i] += (tint[0] - data[i]) * tintAmount;
         data[i + 1] += (tint[1] - data[i + 1]) * tintAmount;
         data[i + 2] += (tint[2] - data[i + 2]) * tintAmount;
+      }
+
+      if (dust > 0) {
+        const h = pcg(Math.floor((x + 0.5) / cell) ^ pcg(Math.floor((y + 0.5) / cell) ^ dustSeed));
+        if (h % 5 === 0) {
+          const dx = ((x + 0.5) % cell) - (((h >>> 8) % cell) + 0.5);
+          const dy = ((y + 0.5) % cell) - (((h >>> 16) % cell) + 0.5);
+          const opacity = dust * 0.8 * clamp01(1 - (dx * dx + dy * dy) / (radius * radius));
+          const target = h % 2 === 0 ? 245 : 15;
+          for (let c = 0; c < 3; c++) data[i + c] += (target - data[i + c]) * opacity;
+        }
+      }
+      if (leak > 0) {
+        const u = (x + 0.5 - viewport.x) / viewport.width,
+          v = (y + 0.5 - viewport.y) / viewport.height;
+        const left = clamp01(
+          1 - ((u + 0.12 - phase * 0.15) / 0.5) ** 2 - ((v - 0.25 - phase * 0.5) / 0.85) ** 2,
+        );
+        const right = clamp01(
+          1 - ((u - 1.12 + phase * 0.15) / 0.5) ** 2 - ((v - 0.75 + phase * 0.5) / 0.85) ** 2,
+        );
+        const exposure = leak * 0.75 * clamp01(left * left + right * right);
+        data[i] += (255 - data[i]) * exposure;
+        data[i + 1] += (255 - data[i + 1]) * exposure * 0.32;
+        data[i + 2] += (255 - data[i + 2]) * exposure * 0.09;
       }
 
       let delta = rowNoise;
@@ -232,6 +271,12 @@ export function pixelLooks(effects: ClipEffectSpec, timeSec: number): ClipEffect
       case 'film_grain':
         looks.filmGrain ??= { amount: at('amount') };
         break;
+      case 'dust':
+        looks.dust ??= { amount: at('amount') };
+        break;
+      case 'light_leaks':
+        looks.lightLeaks ??= { amount: at('amount') };
+        break;
       case 'pixelate':
         looks.pixelate ??= { blockPx: at('blockPx') };
         break;
@@ -288,6 +333,7 @@ async function prepareSource(
   sourceHeight: number,
   effects: ClipEffectSpec | undefined,
   timeSec: number,
+  viewport: FitRect,
 ): Promise<CanvasImageSource> {
   if (sourceWidth <= 0 || sourceHeight <= 0 || !effects) return source;
   // Multiple effects in an explicit stack must keep their authored order.
@@ -302,6 +348,7 @@ async function prepareSource(
       height: sourceHeight,
       stack,
       timeSec,
+      viewport,
     });
   }
   const looks = pixelLooks(effects, timeSec);
@@ -310,6 +357,8 @@ async function prepareSource(
       looks.chromaticAberration?.amount ||
       looks.vhs?.amount ||
       looks.filmGrain?.amount ||
+      looks.dust?.amount ||
+      looks.lightLeaks?.amount ||
       looks.vignette?.amount ||
       (looks.tint?.amount ?? 0) > 0 ||
       (looks.pixelate?.blockPx ?? 0) >= 2,
@@ -322,7 +371,7 @@ async function prepareSource(
     pixelateScratch(buffer, sourceWidth, sourceHeight, looks.pixelate?.blockPx ?? 0);
   }
   const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
-  applyPixelEffects(image, looks, sourceWidth, sourceHeight, timeSec);
+  applyPixelEffects(image, looks, sourceWidth, sourceHeight, timeSec, viewport);
   buffer.putImageData(image, 0, 0);
   return scratch as OffscreenCanvas;
 }
@@ -357,12 +406,13 @@ export async function drawEffectFrame(
         v: effects.flipV,
       });
     }
-    const crop = effects?.crop;
-    const sx = sourceWidth * (crop?.left ?? 0);
-    const sy = sourceHeight * (crop?.top ?? 0);
-    const sw = sourceWidth * (1 - (crop?.left ?? 0) - (crop?.right ?? 0));
-    const sh = sourceHeight * (1 - (crop?.top ?? 0) - (crop?.bottom ?? 0));
-    const rect = computeLetterboxRect(sw, sh, targetWidth, targetHeight);
+    const { source: cropped, target: rect } = computeCropRects(
+      sourceWidth,
+      sourceHeight,
+      targetWidth,
+      targetHeight,
+      effects?.crop,
+    );
     const radiusFrac = cornerRadiusFracFor(effects);
     if (radiusFrac > 0 && typeof ctx.roundRect === 'function') {
       ctx.beginPath();
@@ -371,9 +421,25 @@ export async function drawEffectFrame(
       ]);
       ctx.clip();
     }
-    const prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
-    if (crop) ctx.drawImage(prepared, sx, sy, sw, sh, rect.x, rect.y, rect.width, rect.height);
-    else ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
+    const prepared = await prepareSource(
+      source,
+      sourceWidth,
+      sourceHeight,
+      effects,
+      timeSec,
+      cropped,
+    );
+    ctx.drawImage(
+      prepared,
+      cropped.x,
+      cropped.y,
+      cropped.width,
+      cropped.height,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+    );
   } finally {
     ctx.restore();
     ctx.filter = 'none';
@@ -384,7 +450,7 @@ export async function drawEffectFrame(
 
 /**
  * Draw one source frame with the clip's visual effects baked in. Without effects
- * this is a plain letterbox; with effects the frame is drawn over a black
+ * this is a plain letterbox; with effects the frame is drawn over the canvas
  * background under the clip's transform/filter/opacity, mirroring the CSS
  * preview.
  */
@@ -398,15 +464,21 @@ export async function drawClipFrame(
   effects: ClipEffectSpec | undefined,
   t: number,
   timeSec = t,
+  backgroundColor?: string,
 ): Promise<void> {
   if (!effects || !hasVisualEffects(effects)) {
-    drawLetterboxed(ctx, source, sourceWidth, sourceHeight, targetWidth, targetHeight);
+    drawLetterboxed(
+      ctx,
+      source,
+      sourceWidth,
+      sourceHeight,
+      targetWidth,
+      targetHeight,
+      backgroundColor,
+    );
     return;
   }
-  ctx.filter = 'none';
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  drawCanvasBackground(ctx, targetWidth, targetHeight, backgroundColor);
   await drawEffectFrame(
     ctx,
     source,

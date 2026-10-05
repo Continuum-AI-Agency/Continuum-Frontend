@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
-import { opacityFor } from '@/StudioCanvas/utils/render/effectSpec';
+import {
+  createEditorProjectV2,
+  editorProjectV2Schema,
+  numericKeysForProperty,
+  parentPositionDelta,
+  retainParentMotionForEdit,
+  sampleNumericTrack,
+} from '@continuum/contracts';
+import {
+  clipEffectsToCss,
+  opacityFor,
+  resolveTransformAt,
+} from '@/StudioCanvas/utils/render/effectSpec';
 import {
   assertSupportedTimelineEditorExport,
   buildTimelineEditorRenderPlan,
@@ -13,6 +24,60 @@ afterEach(() => {
 });
 
 describe('clipEffectSpecFromEditorClip', () => {
+  it('keeps signed nonuniform geometry and tilt when only opacity animates', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 2,
+      transform: {
+        position: { x: 0.6, y: 0.4 },
+        scaleX: -1.5,
+        scaleY: 0.75,
+        rotationDeg: 10,
+        rotateXDeg: 20,
+        rotateYDeg: -5,
+        perspective: 2,
+        opacity: 0.8,
+      },
+      keyframes: [0, 2].map((timeSec) => ({
+        property: 'transform.opacity',
+        timeSec,
+        value: timeSec / 2,
+        interpolation: 'linear' as const,
+      })),
+    });
+    expect(spec.keyframes).toBeUndefined();
+    expect(resolveTransformAt(spec, 0.5)).toMatchObject({
+      scaleX: -1.5,
+      scaleY: 0.75,
+      rotate: 10,
+      rotateX: 20,
+      rotateY: -5,
+      perspective: 2,
+    });
+    expect(clipEffectsToCss(spec, 0.5).transform).toContain('scale(-1.5, 0.75)');
+  });
+
+  it('does not flip signed animated scale a second time', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 2,
+      transform: {
+        position: { x: 0.5, y: 0.5 },
+        scaleX: -1,
+        scaleY: 0.5,
+        rotationDeg: 0,
+        opacity: 1,
+      },
+      keyframes: [0, 2].map((timeSec) => ({
+        property: 'transform.scaleX',
+        timeSec,
+        value: -1 - timeSec / 2,
+        interpolation: 'linear' as const,
+      })),
+    });
+    expect(clipEffectsToCss(spec, 0.5).transform).toContain('scale(-1.5, 0.5)');
+  });
+
   it('maps transform.opacity keys onto sampled opacityStops', () => {
     const spec = clipEffectSpecFromEditorClip({
       timelineStartSec: 0,
@@ -111,6 +176,7 @@ describe('timeline editor client render executor', () => {
     });
     const project = editorProjectV2Schema.parse({
       ...created,
+      canvas: { ...created.canvas, backgroundColor: '#17384d' },
       durationSec: 8,
       tracks: [
         {
@@ -152,6 +218,7 @@ describe('timeline editor client render executor', () => {
       ]),
       signal: new AbortController().signal,
     });
+    expect(plan.backgroundColor).toBe('#17384d');
     expect(plan.items).toHaveLength(1);
     expect(plan.items[0]).toMatchObject({
       itemId: 'master:hook',
@@ -267,6 +334,22 @@ describe('timeline editor client render executor', () => {
                 assetId: 'asset-shot',
                 renditionId: 'version-shot',
               },
+              keyframes: [
+                {
+                  id: 'parent-a',
+                  property: 'transform.position',
+                  timeSec: 0,
+                  value: { x: 0.5, y: 0.5 },
+                  interpolation: 'linear',
+                },
+                {
+                  id: 'parent-b',
+                  property: 'transform.position',
+                  timeSec: 4,
+                  value: { x: 0.7, y: 0.5 },
+                  interpolation: 'linear',
+                },
+              ],
             },
           ],
         },
@@ -281,13 +364,15 @@ describe('timeline editor client render executor', () => {
               timelineStartSec: 2,
               durationSec: 1.5,
               kind: 'caption',
+              parentClipId: 'shot',
               text: 'Late words',
               language: 'en',
               words: [
-                { text: 'Late', startSec: 0.25, endSec: 0.6 },
+                { text: 'Late', startSec: 0.25, endSec: 0.6, emphasis: true },
                 { text: 'words', startSec: 0.7, endSec: 1.2 },
               ],
               style: { fontFamily: 'Inter', fontSizePx: 64, fontWeight: 700, color: '#ffffff' },
+              transform: { opacity: 0.5 },
             },
           ],
         },
@@ -311,6 +396,10 @@ describe('timeline editor client render executor', () => {
       [2.25, 2.6],
       [2.7, 3.2],
     ]);
+    expect(plan.captionCues[0]?.words[0]?.emphasis).toBe(true);
+    expect(plan.captionCues[0]?.motion).toBeDefined();
+    expect(resolveTransformAt(plan.captionCues[0]?.motion, 0.5).offsetX).toBeCloseTo(0.1375, 8);
+    expect(opacityFor(plan.captionCues[0]?.motion, 0.5)).toBeCloseTo(0.5, 8);
   });
 
   it('preserves V2 transitions, layers, audio, captions, text, looks, and keyframes', async () => {
@@ -697,6 +786,169 @@ describe('timeline editor client render executor', () => {
     ).rejects.toThrow('canonical sequence requires 3.5s');
   });
 
+  it('keeps nested child media, parent motion and text on their own clock under one instance', async () => {
+    globalThis.fetch = (async () => new Response(new Blob(['recorded-media']))) as typeof fetch;
+    const created = createEditorProjectV2({
+      projectId: 'nested-render',
+      title: 'Nested clocks',
+      width: 360,
+      height: 640,
+    });
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: 4,
+      tracks: [
+        {
+          id: 'main',
+          name: 'Main',
+          kind: 'video',
+          order: 0,
+          clips: [
+            {
+              id: 'base',
+              kind: 'video',
+              timelineStartSec: 0,
+              durationSec: 4,
+              source: { sourceType: 'library_asset', assetId: 'asset', renditionId: 'version' },
+            },
+          ],
+        },
+        {
+          id: 'nests',
+          name: 'Nests',
+          kind: 'nested_sequence',
+          order: 1,
+          muted: true,
+          clips: [
+            {
+              id: 'instance',
+              kind: 'nested_sequence',
+              sequenceId: 'child',
+              timelineStartSec: 1,
+              durationSec: 2,
+              sourceInSec: 0.5,
+              playbackRate: 2,
+              transform: { opacity: 0.5, scaleX: 0.8, rotationDeg: 15 },
+            },
+          ],
+        },
+      ],
+      nestedSequences: [
+        {
+          id: 'child',
+          name: 'Child',
+          durationSec: 5,
+          canvas: { width: 640, height: 360 },
+          tracks: [
+            {
+              id: 'child-picture',
+              name: 'Child picture',
+              kind: 'overlay',
+              order: 0,
+              clips: [
+                {
+                  id: 'child-overlay',
+                  kind: 'overlay',
+                  mediaKind: 'video',
+                  timelineStartSec: 0.2,
+                  durationSec: 1,
+                  sourceInSec: 2,
+                  source: { sourceType: 'library_asset', assetId: 'asset', renditionId: 'version' },
+                  parentClipId: 'child-driver',
+                  transform: { position: { x: 0.4, y: 0.5, unit: 'normalized' } },
+                },
+              ],
+            },
+            {
+              id: 'child-text',
+              name: 'Child text',
+              kind: 'text',
+              order: 1,
+              clips: [
+                {
+                  id: 'child-title',
+                  kind: 'text',
+                  timelineStartSec: 0,
+                  durationSec: 5,
+                  text: 'CHILD CLOCK',
+                  style: { fontFamily: 'Arial', fontSizePx: 48, fontWeight: 700, color: '#ffffff' },
+                  parentClipId: 'child-driver',
+                },
+              ],
+            },
+            {
+              id: 'child-driver-track',
+              name: 'Driver',
+              kind: 'text',
+              order: 2,
+              enabled: false,
+              clips: [
+                {
+                  id: 'child-driver',
+                  kind: 'text',
+                  timelineStartSec: 0,
+                  durationSec: 5,
+                  text: 'DRIVER',
+                  style: { fontFamily: 'Arial', fontSizePx: 48, fontWeight: 700, color: '#ffffff' },
+                  keyframes: [
+                    {
+                      id: 'a',
+                      property: 'transform.position',
+                      timeSec: 0,
+                      value: { x: 0.5, y: 0.5 },
+                      interpolation: 'linear',
+                    },
+                    {
+                      id: 'b',
+                      property: 'transform.position',
+                      timeSec: 2,
+                      value: { x: 0.7, y: 0.6 },
+                      interpolation: 'linear',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: ['base', 'child-overlay'].map((sourceId) => ({
+        sourceId,
+        sourceAssetId: 'asset',
+        sourceRevision: 'version',
+        storage: { bucket: 'media-library', path: 'recorded.mp4' },
+      })),
+      signedUrls: new Map([['media-library\nrecorded.mp4', 'https://signed.example/recorded.mp4']]),
+      signal: new AbortController().signal,
+    });
+    expect(plan.overlays).toHaveLength(0);
+    expect(plan.groups).toHaveLength(1);
+    const group = plan.groups[0]!;
+    expect(group).toMatchObject({
+      startSec: 1,
+      durationSec: 2,
+      sourceInSec: 0.5,
+      playbackRate: 2,
+      childDurationSec: 5,
+      width: 640,
+      height: 360,
+    });
+    expect(group.overlays[0]).toMatchObject({
+      startSec: 0.2,
+      durationSec: 1,
+      trimStartSec: 2,
+      trimEndSec: 3,
+    });
+    expect(resolveTransformAt(group.overlays[0]?.effects, 0.5).offsetX).toBeCloseTo(-0.03, 8);
+    expect(group.captionCues.map((cue) => cue.id)).toEqual(['child-title']);
+    expect(group.captionCues[0]?.style?.fontSizeFrac).toBeCloseTo(48 / 360, 8);
+    expect(resolveTransformAt(group.captionCues[0]?.motion, 0.2).offsetX).toBeCloseTo(0.1, 8);
+    expect(opacityFor(group.effects, 0.5)).toBe(0.5);
+  });
+
   it('fails closed when a requested export contract cannot be honored', () => {
     const created = createEditorProjectV2({
       projectId: '00000000-0000-4000-8000-000000000555',
@@ -724,4 +976,127 @@ describe('timeline editor client render executor', () => {
       'frameRate must be 30 fps; project and export frameRate must match; format must be mp4; videoCodec must be h264; audioCodec must be aac; sampleRateHz must be 48000; project and export sampleRateHz must match; colorSpace must be rec709; alpha must be false; sidecar captions are not supported',
     );
   });
+});
+
+it('retained curve projection keeps source-clock easing, endpoints and expressions', () => {
+  for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    for (const expression of [undefined, 'loop', 'wiggle(0.7, 0.1)']) {
+      const keys = [
+        {
+          id: 'a',
+          property: 'transform.opacity' as const,
+          timeSec: 1,
+          value: 0.2,
+          interpolation,
+          ...(interpolation === 'bezier'
+            ? { easing: { x1: 0.42, y1: -0.2, x2: 0.58, y2: 1.2 } }
+            : {}),
+          ...(interpolation === 'spring' ? { spring: { bounce: 0.7 } } : {}),
+          ...(expression ? { expression } : {}),
+        },
+        {
+          id: 'b',
+          property: 'transform.opacity' as const,
+          timeSec: 8,
+          value: 0.8,
+          interpolation: 'linear' as const,
+        },
+      ];
+      const clip = { timelineStartSec: 0, durationSec: 2, keyframeOffsetSec: 3, keyframes: keys };
+      const spec = clipEffectSpecFromEditorClip(clip);
+      expect(spec.opacityStops?.map((stop) => stop.t)).toEqual([0.5, 4]);
+      for (const localSec of [0, 0.1, 0.75, 1.9]) {
+        const expected = sampleNumericTrack(
+          numericKeysForProperty(keys, 'transform.opacity'),
+          localSec + 3,
+          1,
+        );
+        expect(opacityFor(spec, localSec / 2)).toBeCloseTo(Math.max(0, Math.min(1, expected)), 10);
+      }
+    }
+  }
+});
+
+it('serializes separate parent curves into the same transform used by preview and worker', () => {
+  for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    const key = (id: string, timeSec: number, x: number, y: number) => ({
+      id,
+      property: 'transform.position',
+      timeSec,
+      value: { x, y },
+      interpolation,
+      ...(interpolation === 'bezier'
+        ? { easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 }, expression: 'wiggle(0.7, 0.02)' }
+        : {}),
+      ...(interpolation === 'spring' ? { spring: { bounce: 0.7 }, expression: 'loop' } : {}),
+    });
+    const text = {
+      kind: 'text',
+      text: 'Clock',
+      durationSec: 4,
+      style: { fontFamily: 'Arial', fontSizePx: 64, fontWeight: 700, color: '#fff' },
+    };
+    const project = editorProjectV2Schema.parse({
+      ...createEditorProjectV2({ projectId: 'p', title: 'Parents', width: 360, height: 640 }),
+      durationSec: 6,
+      tracks: [
+        {
+          id: 't',
+          name: 'T',
+          kind: 'text',
+          order: 0,
+          clips: [
+            {
+              ...text,
+              id: 'grandparent',
+              timelineStartSec: 0.5,
+              durationSec: 1,
+              keyframeOffsetSec: 0.3,
+              keyframes: [key('g0', 0, 0.5, 0.5), key('g3', 3, 0.5, 0.65)],
+            },
+            {
+              ...text,
+              id: 'parent',
+              timelineStartSec: 1,
+              parentClipId: 'grandparent',
+              keyframes: [key('p0', 0, 0.5, 0.5), key('p3', 3, 0.7, 0.5)],
+            },
+            {
+              ...text,
+              id: 'child',
+              timelineStartSec: 2,
+              parentClipId: 'parent',
+              transform: { position: { x: 0.4, y: 0.3, unit: 'normalized' } },
+            },
+          ],
+        },
+      ],
+    });
+    const child = project.tracks[0]!.clips[2]!;
+    const compiled = clipEffectSpecFromEditorClip(child, project);
+    const spec: typeof compiled = JSON.parse(JSON.stringify(compiled));
+    expect(spec.parentPositionTracks).toHaveLength(2);
+    const removedParents = retainParentMotionForEdit(
+      project,
+      {
+        ...project,
+        tracks: project.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.filter((clip) => clip.id === child.id),
+        })),
+      },
+      new Map([[child.id, { clipId: child.id, offsetSec: 0 }]]),
+    );
+    const retainedChild = removedParents.tracks[0]!.clips[0]!;
+    expect(retainedChild.parentClipId).toBeUndefined();
+    const fallbackSpec = clipEffectSpecFromEditorClip(retainedChild, removedParents);
+    expect(fallbackSpec.parentPositionTracks).toHaveLength(2);
+    for (const localSec of [0, 0.2, 1.3, 2.7]) {
+      const got = resolveTransformAt(spec, localSec / child.durationSec);
+      const delta = parentPositionDelta(project, child.id, child.timelineStartSec + localSec);
+      expect(got.offsetX).toBeCloseTo(-0.1 + delta.x, 12);
+      expect(got.offsetY).toBeCloseTo(-0.2 + delta.y, 12);
+      expect(resolveTransformAt(fallbackSpec, localSec / child.durationSec)).toEqual(got);
+    }
+  }
 });
