@@ -21,7 +21,7 @@ function readyBook(): BrandBookResponse {
     status: 'ready',
     present: true,
     refreshed_at: '2026-07-01T00:00:00.000Z',
-    assembled: { report: { readiness: { overall_score: 80, findings: [] } } },
+    assembled: { report: { readiness: { overall_score: 80, findings: [], dimensions: {} } } },
   } as unknown as BrandBookResponse;
 }
 
@@ -140,5 +140,15 @@ describe('HomeBaseDashboard', () => {
     expect(container.querySelector('[data-testid="dashboard-first-run"]')).toBeNull();
     const panel = container.querySelector('[data-dashboard-panel="organic"]');
     expect(panel?.textContent).toContain('Organic slot');
+  });
+});
+
+describe('HomeBaseDashboard overview view', () => {
+  it('lists Overview first and marks it active', () => {
+    render(<HomeBaseDashboard activeView="overview" activeViewSlot={<div>Overview slot</div>} />);
+    const buttons = screen.getAllByRole('button').map((button) => button.textContent);
+    expect(buttons[0]).toBe('Overview');
+    expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Your account this week')).toBeTruthy();
   });
 });

@@ -7830,6 +7830,39 @@ export type Database = {
           },
         ]
       }
+      home_profiles: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          objectives: Json
+          scope: string
+          source: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          objectives?: Json
+          scope?: string
+          source?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          objectives?: Json
+          scope?: string
+          source?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       integration_accounts_assets: {
         Row: {
           ad_account_id: string | null

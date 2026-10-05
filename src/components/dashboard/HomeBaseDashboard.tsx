@@ -16,7 +16,7 @@ type Props = {
   brandBookRefreshedAt?: string | null;
 };
 
-type DashboardView = 'paid' | 'organic' | 'all';
+type DashboardView = 'overview' | 'paid' | 'organic' | 'all';
 
 const DASHBOARD_VIEWS: Record<
   DashboardView,
@@ -26,6 +26,11 @@ const DASHBOARD_VIEWS: Record<
     microcopy: string;
   }
 > = {
+  overview: {
+    label: 'Overview',
+    title: 'Your account this week',
+    microcopy: 'Your goals, with paid, organic and creative results in one view.',
+  },
   organic: {
     label: 'Organic',
     title: 'Social metrics & Trend signals',
@@ -64,7 +69,7 @@ export function HomeBaseDashboard({
     (nextView: DashboardView) => {
       if (nextView === activeView) return;
       const params = new URLSearchParams(window.location.search);
-      if (nextView === 'organic') {
+      if (nextView === 'overview') {
         params.delete('view');
       } else {
         params.set('view', nextView);
@@ -78,7 +83,7 @@ export function HomeBaseDashboard({
   );
 
   React.useEffect(() => {
-    router.prefetch(activeView === 'paid' ? '/dashboard' : '/dashboard?view=paid');
+    router.prefetch(activeView === 'overview' ? '/dashboard?view=paid' : '/dashboard');
   }, [activeView, router]);
 
   return (

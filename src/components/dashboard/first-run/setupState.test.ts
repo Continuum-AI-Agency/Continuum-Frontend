@@ -18,7 +18,7 @@ function readyBook(overallScore: number): BrandBookResponse {
     refreshed_at: '2026-07-01T00:00:00.000Z',
     assembled: {
       report: {
-        readiness: { overall_score: overallScore, findings: [] },
+        readiness: { overall_score: overallScore, findings: [], dimensions: {} },
       },
     },
   } as unknown as BrandBookResponse;

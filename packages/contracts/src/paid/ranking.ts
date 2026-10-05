@@ -21,6 +21,10 @@ export const paidEntityKpiSchema = z.enum([
   "conversions_value",
   "cost_per_conversion",
   "roas",
+  "conversations",
+  "cost_per_conversation",
+  "leads",
+  "cost_per_lead",
 ]);
 export type PaidEntityKpi = z.infer<typeof paidEntityKpiSchema>;
 
@@ -50,6 +54,10 @@ export const paidEntityMetricsSchema = z
     ctr: z.number().optional(),
     cpc: z.number().optional(),
     cpm: z.number().optional(),
+    conversations: z.number().optional(),
+    costPerConversation: z.number().optional(),
+    leads: z.number().optional(),
+    costPerLead: z.number().optional(),
   })
   .catchall(z.number());
 export type PaidEntityMetrics = z.infer<typeof paidEntityMetricsSchema>;

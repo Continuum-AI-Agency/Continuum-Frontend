@@ -25,6 +25,10 @@ const paidAccountOverviewSchema = z.object({
     cpa: z.number().optional(),
     purchases: z.number().optional(),
     purchase_value: z.number().optional(),
+    conversations: z.number().optional(),
+    leads: z.number().optional(),
+    cost_per_conversation: z.number().optional(),
+    cost_per_lead: z.number().optional(),
   }),
   comparison: z.record(z.string(), metricComparisonSchema).optional(),
   trends: z
@@ -34,6 +38,11 @@ const paidAccountOverviewSchema = z.object({
         spend: z.number().optional(),
         roas: z.number().optional(),
         ctr: z.number().optional(),
+        clicks: z.number().optional(),
+        impressions: z.number().optional(),
+        purchases: z.number().optional(),
+        conversations: z.number().optional(),
+        leads: z.number().optional(),
       }),
     )
     .optional(),
