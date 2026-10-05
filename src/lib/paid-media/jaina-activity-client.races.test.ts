@@ -4,7 +4,7 @@ const filters: [string, string, unknown][] = [], trees: string[] = [];
 mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: () => ({ schema: () => ({ from: (table: string) => {
   const result = () => ({ data: table === 'paid_scaffolds' ? parents.shift() : table === 'paid_scaffold_versions' ? versions.shift() : [], error: null });
   const q = { select: () => q, eq: (field: string, value: unknown) => { filters.push([table, field, value]); return q; }, is: () => q, order: () => q,
-    maybeSingle: async () => result(), then: (yes: (value: unknown) => unknown, no: (reason: unknown) => unknown) => Promise.resolve(result()).then(yes, no) };
+    maybeSingle: async () => table === 'paid_scaffold_versions' ? { data: { content_hash: 'hash', manifest: {}, special_ad_categories: [] }, error: null } : result(), then: (yes: (value: unknown) => unknown, no: (reason: unknown) => unknown) => Promise.resolve(result()).then(yes, no) };
   return q;
 } }) }) }));
 mock.module('@/lib/library/commentAuthors', () => ({ fetchBrandAuthors: async () => [] }));

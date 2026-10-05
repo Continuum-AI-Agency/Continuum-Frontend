@@ -1,4 +1,5 @@
 import { afterEach, expect, it, mock } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { CanvasScaffoldRead, ScaffoldSummary } from '@/lib/paid-media/jaina-activity-client';
@@ -14,7 +15,11 @@ mock.module('@/lib/paid-media/jaina-activity-client', () => ({
 }));
 mock.module('@/lib/campaign-canvas/hydrate', () => ({ buildHydratedCanvasGraph: (read: CanvasScaffoldRead) => read.scaffold.id }));
 const store = { hydration: null, isDirty: false, nodes: [{}], loadHydratedGraph: (id: string) => loaded.push(id) };
-mock.module('../stores/useCampaignStore', () => ({ useCampaignStore: (select: (state: unknown) => unknown) => select(store) }));
+mock.module('../stores/useCampaignStore', () => ({
+  graphFingerprint: (nodes: unknown[], edges: unknown[]) => JSON.stringify({ nodes, edges }),
+  useCampaignStore: Object.assign((select: (state: unknown) => unknown) => select(store), { getState: () => store }),
+}));
+mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ toast: () => {} }) }));
 mock.module('@/components/ui/select', () => ({
   Select: ({ children, value, onValueChange }: { children: ReactNode; value: string; onValueChange: (v: string) => void }) => <select data-testid="picker" value={value} onChange={(e) => onValueChange(e.target.value)}><option value="" />{children}</select>,
   SelectTrigger: () => null, SelectValue: () => null, SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>, SelectItem: ({ children, value }: { children: ReactNode; value: string }) => <option value={value}>{children}</option>,
@@ -22,7 +27,8 @@ mock.module('@/components/ui/select', () => ({
 mock.module('@/components/ui/tooltip', () => ({ TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>, Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>, TooltipTrigger: ({ render: node }: { render: ReactNode }) => <>{node}</>, TooltipContent: () => null }));
 const { ScaffoldRecordBar } = await import('./ScaffoldRecordBar');
 afterEach(() => { cleanup(); pending.clear(); loaded.length = 0; accounts.length = 0; });
-const bar = (brandId = 'one', requestedScaffoldId: string | null = null) => <ScaffoldRecordBar brandId={brandId} requestedScaffoldId={requestedScaffoldId} onAdAccountChange={onAccount} onPropose={() => {}} />;
+const queryClient = new QueryClient();
+const bar = (brandId = 'one', requestedScaffoldId: string | null = null) => <QueryClientProvider client={queryClient}><ScaffoldRecordBar brandId={brandId} requestedScaffoldId={requestedScaffoldId} onAdAccountChange={onAccount} onPropose={() => {}} /></QueryClientProvider>;
 const choose = async (id: string) => { await waitFor(() => expect(screen.getByTestId('picker')).toBeTruthy()); fireEvent.change(screen.getByTestId('picker'), { target: { value: id } }); };
 const complete = async (id: string, error = false) => { await act(async () => { const d = pending.get(id)!; if (error) d.reject(new Error(`late ${id}`)); else d.resolve({ scaffold: summary(id) } as CanvasScaffoldRead); }); };
 it('a late older selection cannot overwrite the latest graph or account', async () => {

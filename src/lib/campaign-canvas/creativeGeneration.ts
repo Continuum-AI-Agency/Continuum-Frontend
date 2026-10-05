@@ -99,10 +99,12 @@ export async function buildCampaignCreativeRequest(input: {
     );
   } else {
     const audiences = input.edges
-      .filter((edge) => edge.source === adSet.id)
+      .filter((edge) => edge.source === adSet.id || edge.target === adSet.id)
       .flatMap((edge) => {
         const node = input.nodes.find(
-          (item) => item.id === edge.target && item.type === 'audience',
+          (item) =>
+            item.id === (edge.source === adSet.id ? edge.target : edge.source) &&
+            item.type === 'audience',
         );
         return node ? [node.data] : [];
       });
@@ -117,7 +119,7 @@ export async function buildCampaignCreativeRequest(input: {
       headline: ad.data.headline ?? '',
       description: ad.data.description ?? null,
       cta: ad.data.callToAction ?? 'LEARN_MORE',
-      destination_url: typeof ad.data.link === 'string' ? ad.data.link : null,
+      destination_url: typeof ad.data.linkUrl === 'string' ? ad.data.linkUrl : null,
     });
     const target = {
       brand_id: input.brandId,

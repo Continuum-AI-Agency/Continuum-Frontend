@@ -22,6 +22,14 @@ let optimizerAdAccounts: { data: Array<{ account_id: string }>; isSuccess: boole
 };
 let dynamicComponentIndex = 0;
 
+const canvasState = { nodes: [], edges: [], platform: 'meta' };
+mock.module('@/CampaignCanvas/stores/useCampaignStore', () => ({
+  useCampaignStore: Object.assign(
+    (select: (state: typeof canvasState) => unknown) => select(canvasState),
+    { getState: () => canvasState },
+  ),
+}));
+
 mock.module('next/dynamic', () => ({
   default: () => {
     const componentIndex = dynamicComponentIndex;
@@ -51,7 +59,6 @@ mock.module('next/dynamic', () => ({
 }));
 
 mock.module('next/navigation', () => ({
-  usePathname: () => '/scale',
   useRouter: () => ({ replace: routerReplaceMock }),
   usePathname: () => '/scale',
   redirect: () => {},
@@ -118,12 +125,6 @@ mock.module('@/components/ui/tabs', () => ({
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
-}));
-
-mock.module('@/CampaignCanvas/stores/useCampaignStore', () => ({
-  useCampaignStore: (
-    select: (state: { nodes: never[]; edges: never[]; platform: string }) => unknown,
-  ) => select({ nodes: [], edges: [], platform: 'meta' }),
 }));
 
 mock.module('@xyflow/react', () => ({
