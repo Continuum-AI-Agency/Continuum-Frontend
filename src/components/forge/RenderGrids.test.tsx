@@ -509,7 +509,7 @@ describe('RenderRequestsGrid', () => {
 
   // UTEC 2026-09-29: the career switch was hidden from Render and found by SQL. A layer switch
   // no row can change is offered from Add, and one click makes it a column that starts as designed.
-  test('a hidden layer switch is offered from Add and, once picked, is a column rows start as designed', async () => {
+  test('a hidden layer switch requires a saved template revision instead of mutating published bytes', async () => {
     const carrera = variable({
       key: 'show_carrera',
       label: 'Show Carrera',
@@ -520,13 +520,11 @@ describe('RenderRequestsGrid', () => {
     });
     const withSource = { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' };
     contractOverrides = { template: withSource, layerSwitchesNotAsked: [carrera] };
-    saveTemplateVariablesMock.mockImplementationOnce(async () => {
-      contractOverrides = {
-        template: withSource,
-        variables: [...VARIABLES, { ...carrera, exposed: true }],
-        layerSwitchesNotAsked: [],
-      };
+    const messages: string[] = [];
+    const unsubscribe = registerToastSink(({ title }) => {
+      messages.push(String(title));
     });
+    messages.length = 0;
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByLabelText('Headline');
     expect(screen.queryByRole('switch', { name: 'Show Carrera' })).toBeNull();
@@ -536,15 +534,12 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: /Switch a layer per row/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Show Carrera' }));
 
-    await waitFor(() =>
-      expect(saveTemplateVariablesMock).toHaveBeenCalledWith(BRAND, withSource.sourceAssetId, [
-        { slotKey: 'boolean__show-carrera', exposed: true },
-      ]),
+    expect(saveTemplateVariablesMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole('switch', { name: 'Show Carrera' })).toBeNull();
+    expect(messages).toContain(
+      'Open Edit layers to expose this field, save a template revision, then publish it.',
     );
-    const cell = (await screen.findByRole('switch', { name: 'Show Carrera' }))
-      .parentElement as HTMLElement;
-    // Existing rows never set it, so they render what the file has — and say so.
-    expect(within(cell).getByText('Shown · as designed')).toBeTruthy();
+    unsubscribe();
   });
 
   // A template is a git history: the picker says which checkpoint renders (live, found by bytes),

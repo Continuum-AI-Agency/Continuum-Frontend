@@ -98,6 +98,7 @@ export function ForgeWorkbench({
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<string | undefined>();
   // The `sharedTemplateId` of the open shared template. Keyed by id, not held as an object, so a
   // grant switched off elsewhere drops the detail back to the gallery on the next list read.
   const [selectedShared, setSelectedShared] = useState<string | null>(null);
@@ -314,7 +315,11 @@ export function ForgeWorkbench({
   }, []);
 
   const morph = useTemplateMorphSwap();
-  const open = (assetId: string | null) => morph(() => setSelected(assetId));
+  const open = (assetId: string | null, tab?: string) =>
+    morph(() => {
+      setDetailTab(tab);
+      setSelected(assetId);
+    });
   const openShared = (template: SharedTemplate | null) =>
     morph(() => setSelectedShared(template ? sharedTemplateId(template) : null));
 
@@ -412,10 +417,11 @@ export function ForgeWorkbench({
           key={current.assetId}
           brandId={brandId}
           source={current}
+          initialTab={detailTab}
           onBack={() => open(null)}
-          onOpenVariant={async (assetId) => {
+          onOpenVariant={async (assetId, tab) => {
             await refreshTemplate();
-            open(assetId);
+            open(assetId, tab);
           }}
           onRename={(title) => void rename(current.assetId, title)}
           onDeleteVariant={(variant) => {

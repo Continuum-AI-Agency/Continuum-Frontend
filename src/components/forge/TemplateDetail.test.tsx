@@ -226,8 +226,8 @@ mock.module('@/lib/library/templateSources', () => ({
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge,
   advanceTemplateForgeRun,
-  // The Versions and Source revision panels render for real, from these. Mocking the panels
-  // themselves would replace them for their own tests too: a multi-file Bun run shares mocks.
+  // The History and Source revision panels render for real, from these. Mocking the panels
+  // themselves would replace them for LineagePanel.test too: a multi-file Bun run shares mocks.
   fetchTemplateLineage: async () => ({
     connected: false,
     known: false,
@@ -750,7 +750,7 @@ describe('TemplateDetail', () => {
     renderDetail();
     const field = (await screen.findByLabelText('Headline default')) as HTMLInputElement;
     fireEvent.change(field, { target: { value: 'Unsaved copy' } });
-    fireEvent.click(screen.getByRole('tab', { name: 'Versions' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Variables' }));
     expect((screen.getByLabelText('Headline default') as HTMLInputElement).value).toBe(
       'Unsaved copy',

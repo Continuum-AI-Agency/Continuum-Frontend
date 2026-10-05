@@ -185,6 +185,7 @@ export type UploadResumeState = {
 export type UploadMediaAssetParams = {
   file: File;
   brandId: string;
+  templateVariantOf?: string;
   signal?: AbortSignal;
   resume?: UploadResumeState | null;
   onResumeState?: (state: UploadResumeState) => void;
@@ -376,6 +377,7 @@ export async function uploadMediaAsset(
     sizeBytes: file.size,
     ...(checksum ? { checksum } : {}),
     integrityState,
+    ...(params.templateVariantOf ? { templateVariantOf: params.templateVariantOf } : {}),
     ...(durationSec === null ? {} : { durationSec }),
   });
 

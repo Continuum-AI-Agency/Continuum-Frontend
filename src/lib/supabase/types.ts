@@ -22914,6 +22914,7 @@ export type Database = {
           content_json: Json | null
           content_plan_id: string | null
           created_at: string
+          group_id: string | null
           id: string
           instagram_post_id: string | null
           media_stage: string
@@ -22937,6 +22938,7 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
@@ -22960,6 +22962,7 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string

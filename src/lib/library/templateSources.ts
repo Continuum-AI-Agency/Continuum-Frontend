@@ -27,11 +27,11 @@ import {
   fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
   readFontNames,
-  type SaveTemplateLayerVariantRequest,
+  type SaveTemplateRevisionRequest,
   type TemplateFontAliasRequest,
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
-  type TemplateLayerPreviewRequest,
+  type TemplateRevisionPreviewRequest,
   type TemplateSourceEvent,
   type TemplateTextMoveRequest,
   type TemplateTextMoveResponse,
@@ -44,10 +44,10 @@ import {
   templateFontReadinessSchema,
   templateForgeBundleSchema,
   templateLayerPreviewResponseSchema,
-  templateLayerVariantResponseSchema,
-  templateLayerVariantsResponseSchema,
   templateMappingReviewSchema,
   templateRebindPreviewSchema,
+  templateRevisionSchema,
+  templateRevisionVariantsResponseSchema,
   templateSourceEventsResponseSchema,
   templateSourceSchema,
   templateSourceSummarySchema,
@@ -615,40 +615,60 @@ export async function loadWorkspaceTemplates(brandId: string): Promise<Workspace
     .catch(() => []);
 }
 
-export async function previewTemplateLayers(assetId: string, request: TemplateLayerPreviewRequest) {
-  return templateLayerPreviewResponseSchema.parse(
-    await unwrap(
-      await authorizedFetch(`/api/ai-studio/templates/${assetId}/layer-preview`, {
-        method: 'POST',
-        body: JSON.stringify(request),
-      }),
-      'Layer preview',
-    ),
-  );
-}
-
-export async function saveTemplateLayerVariant(
-  assetId: string,
-  request: SaveTemplateLayerVariantRequest,
+export async function fetchTemplateRevisionVariants(
+  brandId: string,
+  assetId?: string,
+  includeArchived = false,
 ) {
-  return templateLayerVariantResponseSchema.parse(
-    await unwrap(
-      await authorizedFetch(`/api/ai-studio/templates/${assetId}/layer-variants`, {
-        method: 'POST',
-        body: JSON.stringify(request),
-      }),
-      'Save variant',
-    ),
-  );
-}
-
-export async function fetchTemplateLayerVariants(brandId: string, assetId: string) {
-  return templateLayerVariantsResponseSchema.parse(
+  return templateRevisionVariantsResponseSchema.parse(
     await unwrap(
       await authorizedFetch(
-        `/api/ai-studio/templates/${assetId}/layer-variants?brandId=${encodeURIComponent(brandId)}`,
+        assetId
+          ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`
+          : `/api/ai-studio/templates/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`,
       ),
-      'Saved variants',
+      'Template revision variants',
     ),
+  ).items;
+}
+
+export async function previewTemplateRevision(
+  assetId: string,
+  request: TemplateRevisionPreviewRequest,
+) {
+  return templateLayerPreviewResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions/preview`,
+        { method: 'POST', body: JSON.stringify(request) },
+      ),
+      'Template revision preview',
+    ),
+  );
+}
+
+export async function saveTemplateRevision(assetId: string, request: SaveTemplateRevisionRequest) {
+  return templateRevisionSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+      'Save template revision',
+    ),
+  );
+}
+
+export async function archiveTemplateRevisionVariant(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await unwrap(
+    await authorizedFetch(
+      `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/archive`,
+      { method: 'POST', body: JSON.stringify({ brandId }) },
+    ),
+    'Archive template variant',
   );
 }
