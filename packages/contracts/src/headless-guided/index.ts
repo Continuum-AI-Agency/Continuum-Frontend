@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { headlessGrammarSchema, headlessVariationAxisSchema } from '../headless-content/index';
+import { reelTemplateIdSchema } from '../reels/templates';
 
 /**
  * How an agent (Jaina, the Organic agent) GUIDES the product's headless director instead of
@@ -79,6 +81,75 @@ export const headlessGuidanceSchema = z
       .describe(
         'Library image assets to use as visual references; role says what each image controls.',
       ),
+    unsplashPhotos: z
+      .array(
+        z
+          .object({
+            photoId: z.string().trim().min(1).max(100),
+            role: z.enum(['scene', 'style', 'pose']),
+          })
+          .strict(),
+      )
+      .max(2)
+      .optional()
+      .describe(
+        'Optional Unsplash photo ids selected from unsplash_search; source photos guide the scene, style or pose only.',
+      ),
+    grammar: headlessGrammarSchema
+      .optional()
+      .describe(
+        "Every reel's story shape: a concept id from view=guidance concepts (offer-direct, the default, is the offer in the hook). With vary=grammar, the concept to move the base to.",
+      ),
+    baseRecommendationId: z
+      .string()
+      .uuid()
+      .optional()
+      .describe(
+        "Paid: double down on this winning recommendation's creative, changing one thing (vary). Give at most one base.",
+      ),
+    baseRunId: z
+      .string()
+      .uuid()
+      .optional()
+      .describe('An accepted headless output to double down on: its run id, with baseOutputId.'),
+    baseOutputId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe('The accepted output id inside baseRunId.'),
+    vary: headlessVariationAxisSchema
+      .optional()
+      .describe(
+        "The ONE thing each variant changes against its base (hook, face, location, grammar or effect). The base is baseRecommendationId, baseRunId+baseOutputId, or else the one winning angle in angleIds. With a base and no vary, the ad's own numbers pick it.",
+      ),
+    effectId: z
+      .string()
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      .max(40)
+      .optional()
+      .describe(
+        "An effect over the footage, never the type (view=guidance effects, or the brand's approved styles). With vary=effect and a base, the effect to re-style the base's own takes in, at no generation cost.",
+      ),
+    templateId: reelTemplateIdSchema
+      .optional()
+      .describe(
+        "The reel's type and motion template (view=guidance templates); absent, the director picks.",
+      ),
+    stillLayout: z
+      .string()
+      .max(40)
+      .optional()
+      .describe("A still's layout family (view=guidance layouts); absent, the director picks."),
+    conceptVariantId: z
+      .string()
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      .max(40)
+      .optional()
+      .describe(
+        "A brand's approved concept variant (view=guidance); its base concept is the grammar.",
+      ),
     direction: z
       .string()
       .trim()
@@ -95,4 +166,5 @@ export type HeadlessGuidance = z.infer<typeof headlessGuidanceSchema>;
 export const organicHeadlessGuidanceSchema = headlessGuidanceSchema.omit({
   portfolioId: true,
   recommendationId: true,
+  baseRecommendationId: true,
 });

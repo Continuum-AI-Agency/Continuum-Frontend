@@ -1,19 +1,8 @@
 import { z } from 'zod';
 import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
+import { templateRevisionLayerEditSchema } from './template-revisions';
 
-export const templateLayerEditSchema = z
-  .object({
-    compId: z.number().int().positive(),
-    layerId: z.number().int().positive(),
-    fontSize: z.number().finite().min(1).max(1000).optional(),
-    font: z.string().trim().min(1).max(200).optional(),
-    visible: z.boolean().optional(),
-  })
-  .strict()
-  .refine(
-    (e) => e.fontSize !== undefined || e.font !== undefined || e.visible !== undefined,
-    'Choose a layer change',
-  );
+export const templateLayerEditSchema = templateRevisionLayerEditSchema;
 export type TemplateLayerEdit = z.infer<typeof templateLayerEditSchema>;
 
 export const templateLayerPreviewRequestSchema = z
@@ -63,6 +52,13 @@ export const templateEditableLayerSchema = z
     text: z.string().nullable(),
     font: z.string().nullable(),
     fontSize: z.number().finite().nullable(),
+    designLayerId: z.number().int().nullable().optional(),
+    artboardId: z.number().int().nullable().optional(),
+    x: z.number().finite().nullable().optional(),
+    y: z.number().finite().nullable().optional(),
+    width: z.number().finite().nullable().optional(),
+    height: z.number().finite().nullable().optional(),
+    geometryReason: z.string().nullable().optional(),
     slotKeys: z.array(z.string()),
     visibilitySlotKeys: z.array(z.string()),
   })

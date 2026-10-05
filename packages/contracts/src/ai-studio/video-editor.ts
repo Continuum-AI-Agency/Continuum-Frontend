@@ -736,7 +736,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Put a transition between fromClipId and the next clip on the main video track (crossfade, dip to black or white, wipe, slide, zoom); type cut removes it. blur is not available yet. all=true instead joins EVERY neighbouring pair of the main track with that type and length, leaving pairs too short for it as cuts — "crossfade between the clips" is one call with all=true.',
+      'The only way to add or remove a transition. Joins fromClipId to the next clip on the main video track (crossfade, dip to black or white, wipe, slide, zoom); type cut removes it. blur is not available yet. all=true joins EVERY neighbouring pair of the main track with that type and length, leaving pairs too short for it as cuts — "a clean transition between the clips" is one call with all=true and no fromClipId. Do not build one with apply_commands, and do not move clips to make it fit.',
     input: z
       .object({
         ...projectRef,

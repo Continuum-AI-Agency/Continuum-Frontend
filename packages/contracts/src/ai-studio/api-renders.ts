@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { mediaAssetSchema } from '../media/asset';
 import { fontLicenceScopeSchema } from '../media/fonts';
+import {
+  templateRevisionPinSchema,
+  templateRevisionRefSchema,
+} from '../media/template-revision-pin';
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
 
@@ -1124,6 +1128,7 @@ const finalField = z.boolean().optional();
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
+    requestId: z.string().uuid().optional(),
     bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
@@ -1151,6 +1156,7 @@ export const apiRenderPreflightRequestSchema = z
      * render that silently ignores the head someone picked is the failure this exists to stop.
      */
     templateRef: z.string().min(1).optional(),
+    templateRevision: templateRevisionRefSchema.optional(),
     /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
     encode: apiRenderEncodeOverrideSchema.optional(),
     /**
@@ -1254,6 +1260,7 @@ export const apiRenderBatchPreflightRequestSchema = z
      * would be found by a client.
      */
     templateRef: z.string().min(1).optional(),
+    templateRevision: templateRevisionRefSchema.optional(),
     records: z.array(apiRenderBatchRecordSchema).min(1).max(50),
     /**
      * Post each finished render to this brand Slack destination. Here, not on createBatch, so the
@@ -1343,6 +1350,7 @@ export const apiRenderJobSchema = z
     id: z.string().uuid(),
     brandId: z.string().uuid(),
     templateKey: z.string().min(1),
+    templateRevision: templateRevisionPinSchema.nullable().optional(),
     templateName: z.string().min(1),
     contractHash: z.string().min(1),
     taskUid: z.string().nullable(),
@@ -1509,6 +1517,7 @@ export const apiRenderPreflightResponseSchema = z
     template: apiRenderTemplateSummarySchema,
     target: resolvedRenderTargetSchema.nullable(),
     inputKeys: z.array(z.string()),
+    renderInput: apiRenderVariableMapSchema.optional(),
     effects: z.literal('none'),
     // Mirrors the `test` flag frozen into the signed trigger — see apiRenderJobSchema.
     test: z.boolean().default(true),

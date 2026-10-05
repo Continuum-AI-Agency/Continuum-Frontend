@@ -26,6 +26,7 @@ export * from './flash-creatives';
 export * from './flash-pipeline-template';
 export * from './insight-approval';
 export * from './jaina-card';
+// A compiled optimizer card: the pointer to a filed document, not a citation.
 export * from './jaina-hyperframe';
 // Which trailing window a portfolio's read surfaces report on, and how to recommend one.
 export * from './lookback';

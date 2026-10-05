@@ -207,6 +207,10 @@ function artifactIdentity(artifact: PipelineRunArtifact): string {
   if (artifact.kind === 'asset') {
     return `asset ${artifact.asset.asset_id.slice(0, 8)} · version ${artifact.asset.version_id.slice(0, 8)}`;
   }
+  if (artifact.kind === 'planner_draft') {
+    const count = artifact.draft.assets.length;
+    return `planner draft ${artifact.draft.draftId.slice(0, 8)} · ${count} asset${count === 1 ? '' : 's'}`;
+  }
   return `Candidate Element · ${artifact.candidate.category} · ${artifact.candidate.member_assets.length} member${artifact.candidate.member_assets.length === 1 ? '' : 's'}`;
 }
 

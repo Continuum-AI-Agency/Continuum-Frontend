@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Connector registration records surfaced by the MCP backend REST endpoints
 // (GET /mcp/connections, POST /mcp/connections/confirm|:id/revoke) and rendered
 // by the in-app "Connected to Claude" surface. Shared so the Frontend validates
 // exactly what the Backend returns.
 
-export const mcpConnectionStatusSchema = z.enum(["pending", "connected", "revoked"]);
+export const mcpConnectionStatusSchema = z.enum(['pending', 'connected', 'revoked']);
 export type McpConnectionStatus = z.infer<typeof mcpConnectionStatusSchema>;
 
 export const mcpClientRegistrationSchema = z.object({
@@ -31,3 +31,13 @@ export const mcpConfirmRequestSchema = z.object({
   brand_id: z.string().uuid().nullable().optional(),
 });
 export type McpConfirmRequest = z.infer<typeof mcpConfirmRequestSchema>;
+
+// Older consent pages can record connection metadata, never a resource grant.
+export const mcpLegacyConfirmRequestSchema = z
+  .object({
+    client_id: z.string().min(1).max(128),
+    client_name: z.string().max(255).nullable().optional(),
+    scope: z.string().max(1024).nullable().optional(),
+    brand_id: z.string().uuid().nullable().optional(),
+  })
+  .strict();

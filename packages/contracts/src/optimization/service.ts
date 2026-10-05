@@ -13,8 +13,8 @@ import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
 import { globalAngleIdSchema } from '../creative-strategy/angles';
 import { creativeSpecV1Schema } from '../creative-system/creative-spec';
 import { creativeReferenceSchema } from '../creative-system/references';
-import { conversionDescriptorSchema } from './custom-conversion';
 import { creativeOutputManifestSchema } from '../headless-content/optimizer';
+import { conversionDescriptorSchema } from './custom-conversion';
 import {
   AdSetSnapshotSchema,
   FreezeReasonSchema,
@@ -543,6 +543,20 @@ export const PortfolioAutogenSchema = z.object({
    * is a person deciding, and this was never a limit on people.
    */
   minSwapIntervalDays: z.number().min(0).max(365).optional(),
+  /**
+   * What makes the creative. Absent keeps today's arms (pipeline or one-shot image);
+   * 'headless' routes the swap to the headless reels/stills director. Stamped onto the seed at
+   * enqueue, like pipelineId, so the approved instruction is what the worker runs.
+   */
+  producer: z.enum(['image', 'headless']).optional(),
+  /** Headless formats to make. Absent follows the winner's assetType (video → reel, image → stills). */
+  headlessFormats: z
+    .array(z.enum(['reel', 'stills']))
+    .min(1)
+    .max(2)
+    .optional(),
+  /** The language the headless creative is written in. Absent follows the winner's own copy. */
+  language: z.string().min(2).max(12).optional(),
 });
 export type PortfolioAutogen = z.infer<typeof PortfolioAutogenSchema>;
 

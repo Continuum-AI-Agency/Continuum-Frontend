@@ -74,6 +74,9 @@ function LegacyPipelineContract({ manifest }: { manifest: PipelineManifest }) {
 
 function outputPromise(output: PipelineCapabilityV2['outputs'][number]): string {
   if (output.kind === 'element_candidate') return `${output.label} (Element candidate)`;
+  if (output.kind === 'planner_draft') {
+    return `${output.label} (${output.count} planner draft${output.count === 1 ? '' : 's'})`;
+  }
   const media = output.count === 1 ? output.media : `${output.count} ${output.media}s`;
   const shape = [
     media,

@@ -4,5 +4,6 @@ export * from './families';
 export * from './library';
 export * from './limits';
 export * from './plan';
+export * from './production-plan';
 export * from './references';
 export * from './vocabulary';

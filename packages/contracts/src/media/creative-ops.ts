@@ -36,7 +36,7 @@ export const CREATIVE_OPS_MAX_STEPS = 12;
  * reason a headless caller wants this catalog — has no way to be told the headline.
  */
 export const creativeOpInputRefSchema = z.union([
-  z.object({ assetId: databaseUuidSchema }).strict(),
+  z.object({ assetId: databaseUuidSchema, versionId: databaseUuidSchema.optional() }).strict(),
   z.object({ step: z.number().int().nonnegative() }).strict(),
   z.object({ text: z.string().min(1).max(5_000) }).strict(),
 ]);

@@ -66,6 +66,7 @@ export * from './template-source';
 export * from './template-source-events';
 export * from './template-source-slot';
 export * from './template-variants';
+export * from './template-revisions';
 export * from './timeline-draft';
 export * from './transcription';
 export * from './transformations';
@@ -74,3 +75,5 @@ export * from './unsplash';
 export * from './versions';
 export * from './workspace-template';
 export * from './zip-directory';
+
+export * from './template-layer-edits';

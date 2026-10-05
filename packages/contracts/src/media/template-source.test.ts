@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   normalizeTemplateFontFamily,
+  publicationCompsOfParse,
   templateFamilyForLibraryFormat,
   templateFontPushResponseSchema,
   templateFontStatuses,
@@ -10,6 +11,62 @@ import {
   templateSlotSchema,
   templateSourceSummarySchema,
 } from './template-source';
+
+it('publishes explicit render comps without a top-level text precomp', () => {
+  const comps = [
+    { name: 'Last Text Line Card 2', isDelivery: true },
+    { name: 'RENDER Card A (Pre-Match)', isDelivery: true },
+    { name: 'RENDER Card B (Halftime)', isDelivery: true },
+  ];
+  expect(publicationCompsOfParse({ comps }).map((comp) => comp.name)).toEqual([
+    'RENDER Card A (Pre-Match)',
+    'RENDER Card B (Halftime)',
+  ]);
+});
+
+it('keeps format variants of one design in one template', () => {
+  const comps = [
+    { name: 'RENDER Product 1x1', isDelivery: true },
+    { name: 'RENDER Product 9x16', isDelivery: true },
+  ];
+  expect(publicationCompsOfParse({ comps })).toEqual([]);
+  expect(
+    publicationCompsOfParse({
+      comps: [
+        { name: 'RENDER 1x1', isDelivery: true },
+        { name: 'RENDER 9x16', isDelivery: true },
+      ],
+    }),
+  ).toEqual([]);
+});
+
+it('keeps arrangements of one design — same fields, same timeline — in one template', () => {
+  const comps = [
+    { name: 'Model in front', isDelivery: true, durationSec: 0.034 },
+    { name: 'Headline in front', isDelivery: true, durationSec: 0.034 },
+  ];
+  const slots = [
+    { key: 'headline', comps: ['Model in front', 'Headline in front'] },
+    { key: 'model', comps: ['Model in front', 'Headline in front'] },
+  ];
+  expect(publicationCompsOfParse({ comps, slots })).toEqual([]);
+  // A field only one comp carries: two designs.
+  expect(
+    publicationCompsOfParse({
+      comps,
+      slots: [...slots, { key: 'kickoff', comps: ['Model in front'] }],
+    }),
+  ).toHaveLength(2);
+  // Same fields, different length (Animado vs Fijo): merging would make the still a video.
+  expect(
+    publicationCompsOfParse({
+      comps: [comps[0]!, { ...comps[1]!, durationSec: 10 }],
+      slots,
+    }),
+  ).toHaveLength(2);
+  // No parsed fields proves nothing: the name rule decides.
+  expect(publicationCompsOfParse({ comps, slots: [] })).toHaveLength(2);
+});
 
 // A trimmed real parse of ngr-base_promotopexit.AEP, produced by
 // `aep_geometry.py library` and cross-checked against translations/render/out/ngr_aep_meta.json.

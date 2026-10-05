@@ -148,8 +148,8 @@ describe('config-derived handles and enum hints', () => {
     const index = lines.findIndex((line) => line.startsWith('- apiRender —'));
     expect(lines[index + 1]).toContain('data.variableDefinitions');
     expect(lines[index + 1]).not.toContain('(none — it is a source)');
-    // It really is a terminal sink, so that half of the line stays as it was.
-    expect(lines[index + 2]).toContain('(none — it is a sink)');
+    // A Forge Render now produces Library media, so it is no longer a terminal sink.
+    expect(lines[index + 2]).toContain('out: image, video, collection');
   });
 
   it('spells out the legal values of every enum-shaped config field', () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
+import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
 import {
   uiBrandBookAppliedFrameSchema,
@@ -576,6 +577,9 @@ export const planItemSchema = z.object({
   // by the time the user approves. Loose by design — this is a payload passthrough,
   // and the job schema is the thing that narrows it.
   payloadExtras: z.record(z.string(), z.unknown()).nullish(),
+  /** The blocks a headless piece is built from (concept, effect, template, cast, scene); absent,
+   *  the item takes the classic media path. */
+  creative: headlessCreativeBlocksSchema.nullish(),
 });
 export type PlanItem = z.infer<typeof planItemSchema>;
 
