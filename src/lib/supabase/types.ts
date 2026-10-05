@@ -22218,6 +22218,16 @@ export type Database = {
       reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
+      record_template_revision_publication: {
+        Args: {
+          p_binding_id: string
+          p_brand_id: string
+          p_revision_id: string
+          p_target: Json
+          p_template_key: string
+        }
+        Returns: undefined
+      }
       record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
       record_canvas_lineage: {
         Args: {
