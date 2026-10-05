@@ -2,6 +2,7 @@ import { BarChart3, Sparkles } from 'lucide-react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   AmazonIcon,
+  GoogleAdsIcon,
   GoogleIcon,
   type IconComponent,
   InstagramIcon,
@@ -38,7 +39,7 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   tiktok: TikTokIcon,
   x: XIcon,
   linkedin: LinkedInIcon,
-  googleAds: GoogleIcon,
+  googleAds: GoogleAdsIcon,
   amazonAds: AmazonIcon,
   dv360: BarChart3,
   googleAnalytics: GoogleIcon,

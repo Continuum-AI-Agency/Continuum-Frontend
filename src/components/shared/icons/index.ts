@@ -3,6 +3,7 @@ export {
   FacebookIcon,
   FigmaIcon,
   GitHubIcon,
+  GoogleAdsIcon,
   GoogleIcon,
   type IconComponent,
   InstagramIcon,

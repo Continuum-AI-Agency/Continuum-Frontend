@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
-import { PlatformChip, platformColor } from './PlatformChip';
+import { PlatformChip, PlatformIcon, platformColor } from './PlatformChip';
 import { AD_PLATFORMS } from './platformTabsModel';
 
 afterEach(cleanup);
@@ -130,5 +130,13 @@ describe('the --platform-* tokens in globals.css', () => {
         expect(CSS).toContain(`--color${token.slice(1)}${suffix}: var(${token}${suffix});`);
       }
     }
+  });
+});
+
+describe('PlatformIcon — Google Ads mark', () => {
+  it('renders the Google Ads mark, not the Google "G", for google_ads', () => {
+    const { container } = render(<PlatformIcon platform="google_ads" />);
+    expect(container.querySelector('[title="Google Ads"]')).not.toBeNull();
+    expect(container.querySelector('[title="Google"]')).toBeNull();
   });
 });

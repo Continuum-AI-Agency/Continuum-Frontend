@@ -10,6 +10,7 @@ import {
   figma,
   github,
   google,
+  googleAds,
   instagram,
   linkedin,
   meta,
@@ -45,6 +46,7 @@ export const FacebookIcon = makeSvgIcon(facebook);
 export const FigmaIcon = makeSvgIcon(figma);
 export const GitHubIcon = makeSvgIcon(github);
 export const GoogleIcon = makeSvgIcon(google);
+export const GoogleAdsIcon = makeSvgIcon(googleAds);
 export const InstagramIcon = makeSvgIcon(instagram);
 export const LinkedInIcon = makeSvgIcon(linkedin);
 export const MetaIcon = makeSvgIcon(meta);
