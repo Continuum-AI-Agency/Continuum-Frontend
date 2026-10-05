@@ -70,3 +70,41 @@ export function migrateLegacyKey(legacyKey: string, base: string, brandId: strin
   store.removeItem(legacyKey);
   return true;
 }
+
+// Every key prefix the app uses for per-brand or per-user ephemeral UI state.
+// Server state is the source of truth for all of these; they are caches the
+// next login must not inherit on a shared browser.
+const LOGOUT_PURGE_PATTERNS = [
+  /^continuum[:.-]/,
+  /:b:/,
+  /^organic[-:]/,
+  /^approvals[-:]/,
+  /^paid-media-/,
+];
+
+function isLogoutPurgeKey(key: string): boolean {
+  return LOGOUT_PURGE_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+/**
+ * Logout purge: removes all brand-scoped and user-ephemeral client state from
+ * localStorage and sessionStorage so the next login in the same browser never
+ * inherits the previous account's project scope, drafts, flags, or caches.
+ * Supabase auth keys (`sb-*`) and unrelated keys (e.g. `theme`) are left alone;
+ * server-side session teardown still happens in `logoutAction`.
+ */
+export function purgeStorageForLogout(): void {
+  if (typeof window === 'undefined') return;
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < store.length; i += 1) {
+        const key = store.key(i);
+        if (key && isLogoutPurgeKey(key)) keysToRemove.push(key);
+      }
+      for (const key of keysToRemove) store.removeItem(key);
+    } catch {
+      // Storage may be unavailable (private mode); logout must never block on it.
+    }
+  }
+}

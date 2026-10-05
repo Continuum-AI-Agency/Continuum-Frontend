@@ -1,6 +1,5 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import type {
   CollectionViewConfig,
   CommentDeepLink,
@@ -42,6 +41,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import {
   useCallback,
@@ -840,8 +840,18 @@ export function LibraryViewer({
   );
 
   const routeUploadFiles = useCallback(
-    (fileList: FileList | File[]) => {
-      const { fonts, media } = partitionLibraryUploadFiles(fileList);
+    async (fileList: FileList | File[]) => {
+      let files = Array.from(fileList);
+      if (showTemplates) {
+        try {
+          const { expandDesignArchives } = await import('@/components/forge/designArchive');
+          files = await expandDesignArchives(files);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Could not open the ZIP');
+          return;
+        }
+      }
+      const { fonts, media } = partitionLibraryUploadFiles(files);
       if (fonts.length > 0) setFontReviewFiles(fonts);
       if (showTemplates) {
         for (const file of media)

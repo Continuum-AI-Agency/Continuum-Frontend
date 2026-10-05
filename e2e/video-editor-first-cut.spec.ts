@@ -39,6 +39,8 @@ test.describe.configure({ timeout: 1_800_000 });
 
 const BENCH = 'videoeditor:first-cut:e2e:bench';
 const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
+/** Where the Backend keeps transcripts per version (its AI_STUDIO_BUCKET default). */
+const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
 /** Six first-person Vivo 47 gym testimonials (Spanish), ~20 s each, each with its own lines. */
 const SOURCE_ASSET_IDS = (
@@ -52,7 +54,6 @@ const SOURCE_ASSET_IDS = (
     '88e1654c-c537-4cfa-bc1f-3c342d556709',
   ].join(',')
 ).split(',');
-const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 const TARGET_SEC = 30;
 const TOLERANCE = 0.15;
 const DRAFT_BUDGET_MS = 15 * 60_000;
@@ -764,7 +765,6 @@ test(BENCH, async ({ browser }) => {
       const leftKept = (keptLeft ?? []).filter((object) =>
         keptPaths.some((path) => path.endsWith(`/${object.name}`)),
       ).length;
-
       check(
         'net zero: no media.assets rows (drops, music beds), storage objects, kept transcripts, projects or draft job rows left from this run',
         (leftRows ?? 0) === 0 &&

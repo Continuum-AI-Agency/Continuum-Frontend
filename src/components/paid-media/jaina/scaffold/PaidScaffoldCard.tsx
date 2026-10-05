@@ -2,6 +2,7 @@
 
 import type {
   JainaOperatorAction,
+  JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
@@ -9,6 +10,7 @@ import type {
 import { ExternalLink, Maximize2, Network, Table2 } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { ApprovalChangeTable } from '@/components/paid-media/jaina/components/ApprovalChangeTable';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import {
@@ -24,10 +26,15 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import {
+  buildCampaignCreativeRequest,
+  scaffoldCreativeQuery,
+} from '@/lib/campaign-canvas/creativeGeneration';
 import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 import { ScaffoldAdSetTable } from './ScaffoldAdSetTable';
+import { ScaffoldCreativePreview } from './ScaffoldCreativePreview';
 import {
   ScaffoldAudiences,
   ScaffoldCreatives,
@@ -64,16 +71,15 @@ import { usePaidScaffoldTree } from './usePaidScaffoldTree';
 
 export type ScaffoldDecision = 'approve' | 'deny';
 
-/**
- * The gates a scaffold approval can be. `paid_scaffold_deploy` is the one this card opens; the
- * three older gates survive only in transcripts written before it, and are answered with the
- * label that says what approving them actually does.
- */
-const GATE_BY_TOOL_NAME: Record<string, { label: string }> = {
-  paid_scaffold_deploy: { label: 'Deploy paused' },
-  paid_scaffold_build: { label: 'Approve & create (paused)' },
-  paid_scaffold_populate: { label: 'Approve & add creatives' },
-  paid_scaffold_activate: { label: 'Approve & activate' },
+const GATE_BY_TOOL_NAME: Record<
+  string,
+  { gate: 'build' | 'populate' | 'activate' | 'deploy' | 'publish'; label: string }
+> = {
+  paid_scaffold_deploy: { gate: 'deploy', label: 'Deploy paused' },
+  paid_scaffold_publish: { gate: 'publish', label: 'Publish & auto-enroll' },
+  paid_scaffold_build: { gate: 'build', label: 'Approve & create (paused)' },
+  paid_scaffold_populate: { gate: 'populate', label: 'Approve & add creatives' },
+  paid_scaffold_activate: { gate: 'activate', label: 'Publish only' },
 };
 
 /**
@@ -90,7 +96,7 @@ const summaryLine = (scaffold: JainaScaffoldState, tree: ScaffoldTree | null): s
     `${adSets} ad set${adSets === 1 ? '' : 's'}`,
     `${ads} ad${ads === 1 ? '' : 's'}`,
   ];
-  return `${parts.join(' · ')} — everything is created paused.`;
+  return `${parts.join(' · ')} — ${scaffold.receipt?.publicationMode && scaffold.receipt.status === 'completed' ? 'live on Meta' : 'everything is created paused'}.`;
 };
 
 /**
@@ -260,6 +266,7 @@ export function PaidScaffoldCard({
   isStreaming,
   onDecide,
   onDeploy,
+  onRequestCreative,
 }: {
   scaffold: JainaScaffoldState;
   approval: JainaToolApprovalRequiredPayload | null;
@@ -267,8 +274,13 @@ export function PaidScaffoldCard({
   denial: JainaToolOutputDeniedPayload | null;
   optimisticDecision: ScaffoldDecision | null;
   isStreaming: boolean;
-  onDecide?: (approval: JainaToolApprovalRequiredPayload, decision: ScaffoldDecision) => void;
-  /** Opens the deploy gate with no model turn. Absent where no chat can carry the action. */
+  onRequestCreative?: (query: string) => void;
+  onDecide?: (
+    approval: JainaToolApprovalRequiredPayload,
+    decision: ScaffoldDecision,
+    publicationMode?: JainaPublicationMode,
+  ) => void;
+  /** Opens the deploy gate with no model turn. */
   onDeploy?: (
     action: JainaOperatorAction,
     displayText: string,
@@ -341,6 +353,44 @@ export function PaidScaffoldCard({
       }),
     [plan, scaffold.scaffoldPlan, header, tree, contentHash],
   );
+
+  const ads = tree?.adSets.flatMap((adSet) => adSet.ads) ?? [];
+  const selectedAd =
+    ads.find((ad) => ad.pathKey === selectedPathKey) ??
+    ads.find((ad) => !ad.creativeAssetId) ??
+    ads[0];
+  const requestCreative =
+    selectedAd && onRequestCreative && header?.contentHash && header.adAccountId
+      ? async (format: 'image' | 'video') => {
+          const graph = useCampaignStore.getState();
+          const node = graph.nodes.find(
+            (item) =>
+              item.type === 'creative' &&
+              item.data.provenance?.pathKey === `${selectedAd.pathKey}/creative`,
+          );
+          const query =
+            node && graph.hydration?.versionId === scaffold.scaffoldId
+              ? (
+                  await buildCampaignCreativeRequest({
+                    ...graph,
+                    nodeId: node.id,
+                    format,
+                    brandId: header.brandId,
+                    adAccountId: header.adAccountId!,
+                  })
+                ).query
+              : scaffoldCreativeQuery(
+                  {
+                    scaffold_version_id: scaffold.scaffoldId,
+                    content_hash: header.contentHash!,
+                    path_key: selectedAd.pathKey,
+                    expected_asset_id: selectedAd.creativeAssetId,
+                  },
+                  format,
+                );
+          onRequestCreative(query);
+        }
+      : undefined;
 
   const gate = approval ? GATE_BY_TOOL_NAME[approval.toolName] : undefined;
   const expired = approval?.expiresAt ? Date.parse(approval.expiresAt) < Date.now() : false;
@@ -499,6 +549,37 @@ export function PaidScaffoldCard({
             </div>
           )}
 
+          {selectedAd && header ? (
+            <>
+              <label className="mt-2 flex items-center gap-2 text-xs">
+                Creative slot
+                <select
+                  aria-label="Creative slot"
+                  className="min-w-0 rounded border bg-background p-1"
+                  value={selectedAd.pathKey}
+                  onChange={(event) => setSelectedPathKey(event.target.value)}
+                >
+                  {ads.map((ad) => (
+                    <option key={ad.pathKey} value={ad.pathKey}>
+                      {ad.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <ScaffoldCreativePreview
+                brandId={header.brandId}
+                assetId={selectedAd.creativeAssetId}
+                name={selectedAd.name}
+                onGenerate={requestCreative}
+                disabled={
+                  isStreaming ||
+                  !['proposed', 'built'].includes(header.lifecycle ?? 'proposed') ||
+                  Boolean(approval)
+                }
+              />
+            </>
+          ) : null}
+
           {denial?.reason ? (
             <p className="text-muted-foreground text-sm">Reason: {denial.reason}</p>
           ) : null}
@@ -524,7 +605,31 @@ export function PaidScaffoldCard({
           ) : null}
         </AgentCardBody>
 
-        {deployMode !== 'none' ? (
+        {liveApproval && onDecide && approval && gate?.gate === 'publish' ? (
+          <AgentActions className="flex-wrap">
+            <AgentButton
+              variant="ghost"
+              disabled={isStreaming}
+              onClick={() => onDecide?.(approval, 'deny')}
+            >
+              Deny
+            </AgentButton>
+            <AgentButton
+              variant="ghost"
+              disabled={isStreaming}
+              onClick={() => onDecide?.(approval, 'approve', 'publish_only')}
+            >
+              Publish only
+            </AgentButton>
+            <AgentButton
+              variant="primary"
+              disabled={isStreaming}
+              onClick={() => onDecide?.(approval, 'approve', 'publish_and_enroll')}
+            >
+              Publish &amp; auto-enroll
+            </AgentButton>
+          </AgentActions>
+        ) : deployMode !== 'none' ? (
           <AgentActions className="mt-0 flex-wrap justify-between gap-2 border-t px-4 py-3">
             <p className="min-w-0 max-w-[40ch] text-muted-foreground text-xs leading-snug">
               {deployRequested
@@ -606,6 +711,15 @@ function ScaffoldStatus({
   tree: ScaffoldTree | null;
 }) {
   if (receipt) {
+    if (receipt.publicationMode) {
+      return receipt.status === 'completed' ? (
+        <StatusLabel tone="done">
+          {receipt.publicationMode === 'publish_and_enroll' ? 'Published & enrolled' : 'Published'}
+        </StatusLabel>
+      ) : (
+        <StatusLabel tone="failed">Publication stopped</StatusLabel>
+      );
+    }
     const tone =
       receipt.status === 'completed' ? 'done' : receipt.status === 'partial' ? 'running' : 'failed';
     return <StatusLabel tone={tone}>{receipt.status}</StatusLabel>;

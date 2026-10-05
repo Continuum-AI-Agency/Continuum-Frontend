@@ -59,6 +59,7 @@ export * from './share';
 export * from './start-timecode';
 export * from './template-forge-lineage';
 export * from './template-forge-run';
+export * from './template-layer-edits';
 export * from './template-name';
 export * from './template-rebind';
 export * from './template-source';

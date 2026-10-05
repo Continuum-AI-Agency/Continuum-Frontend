@@ -14,6 +14,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
+import { Video } from '@/components/ui/video';
 import {
   enqueueVideoProjectRender,
   generateVideoCandidates,
@@ -79,10 +80,7 @@ function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
       <img src={url} alt="Generated frame candidate" className="aspect-video w-full object-cover" />
     );
   }
-  return (
-    // biome-ignore lint/a11y/useMediaCaption: generated silent review candidate.
-    <video src={url} controls className="aspect-video w-full bg-black object-contain" />
-  );
+  return <Video src={url} ariaLabel="Generated clip candidate" className="bg-black" />;
 }
 
 /** Assets the edit can draw on (graph wiring, project sources) as the stages' pool. */

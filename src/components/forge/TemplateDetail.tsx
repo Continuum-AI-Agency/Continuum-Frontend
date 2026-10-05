@@ -42,7 +42,6 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
-import { LineagePanel } from '@/components/forge/LineagePanel';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
@@ -51,6 +50,7 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
+import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import {
@@ -59,6 +59,7 @@ import {
   type TextMove,
   textMoveKey,
 } from '@/components/forge/TemplateTextRepairCanvas';
+import { TemplateVersionsPanel } from '@/components/forge/TemplateVersionsPanel';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { VariantsPanel } from '@/components/forge/VariantsPanel';
@@ -78,6 +79,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import { Video } from '@/components/ui/video';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
@@ -1368,14 +1370,12 @@ export function TemplateDetail({
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
                       node:
                         rendered.kind === 'video' ? (
-                          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-                          <video
+                          <Video
                             src={rendered.url}
-                            className="size-full object-contain"
-                            controls
+                            ariaLabel={`${name} · ${picked.ratio ?? picked.label}`}
                             muted
-                            playsInline
-                            preload="metadata"
+                            className="aspect-auto! size-full rounded-none border-0"
+                            videoClassName="object-contain"
                           />
                         ) : (
                           // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
@@ -1605,7 +1605,7 @@ export function TemplateDetail({
               Source revision
             </TabsTrigger>
             <TabsTrigger value="history" className="flex-none px-0 text-xs">
-              History
+              Versions
             </TabsTrigger>
             <TabsTrigger value="details" className="flex-none px-0 text-xs">
               Details
@@ -1682,7 +1682,17 @@ export function TemplateDetail({
               </div>
             </Panel>
           </TabsContent>
-          <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
+          <TabsContent value="layers" keepMounted className="space-y-6 p-[var(--card-pad)]">
+            <TemplateLayerEditor
+              key={`${assetId}:${source.versionId}`}
+              brandId={brandId}
+              assetId={assetId}
+              versionId={source.versionId}
+              name={source.displayName ?? 'Template'}
+              active={tab === 'layers'}
+              onSaved={onChanged}
+              onOpenVariant={onOpenVariant}
+            />
             <DesignLayersPanel
               brandId={brandId}
               assetId={assetId}
@@ -1751,7 +1761,22 @@ export function TemplateDetail({
             />
           </TabsContent>
           <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-            <LineagePanel brandId={brandId} assetId={assetId} />
+            {/* The template as a git history: checkpoints, forks (sizes, languages, looks), tags,
+                and the live checkpoint every render uses. It replaced a lineage view that drew
+                only the tree, which production returns empty. */}
+            <TemplateVersionsPanel
+              brandId={brandId}
+              assetId={assetId}
+              // Only when this template can actually be rendered from — a panel that offers to
+              // render a template with no key, or with nowhere to send the choice, would be the
+              // dangling affordance this whole hop exists to avoid.
+              {...(onOpenRender && templateKey
+                ? {
+                    onSelect: (ref: string | null) =>
+                      onOpenRender({ templateKey, ...(ref ? { templateRef: ref } : {}) }),
+                  }
+                : {})}
+            />
           </TabsContent>
           <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">

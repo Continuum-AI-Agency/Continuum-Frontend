@@ -217,6 +217,22 @@ async function dropFile(page: Page, target: Locator, bytes: Buffer, name: string
   await target.dispatchEvent('drop', { dataTransfer: transfer });
 }
 
+/**
+ * The first footage a page places offers the First-cut Brief (a modal). This journey is
+ * not about first cuts, so it closes the offer — and reports whether it came.
+ */
+async function dismissBriefOffer(page: Page): Promise<boolean> {
+  const brief = page.getByRole('dialog', { name: 'First cut' });
+  try {
+    await brief.waitFor({ state: 'visible', timeout: 30_000 });
+  } catch {
+    return false;
+  }
+  await page.keyboard.press('Escape');
+  await brief.waitFor({ state: 'hidden', timeout: 10_000 });
+  return true;
+}
+
 // ── net zero, by id and name ──────────────────────────────────────────────────────────
 
 async function brandAssetIds(): Promise<Set<string>> {
@@ -385,6 +401,10 @@ test(BENCH, async ({ browser }) => {
       `${projectId} · asset ${droppedAssetId} · clip ${droppedClip?.durationSec.toFixed(3)} s vs source ${sourceSec.toFixed(3)} s`,
     );
     exercised.add('drop');
+    check(
+      'the first drop offers the First-cut Brief, and it closes (this journey is not about first cuts)',
+      await dismissBriefOffer(page),
+    );
     const clock = page.locator('[data-testid="timeline-clock"]:visible');
     const clockBefore = clockSec(await clock.innerText());
 
@@ -773,7 +793,9 @@ test(BENCH, async ({ browser }) => {
       const mine = strays.filter(
         (name) =>
           createdProjects.some((id) => name.includes(id)) ||
-          createdAssets.some((asset) => name.includes(asset.id)),
+          createdAssets.some((asset) => name.includes(asset.id)) ||
+          // The transcript the agent turn kept for the dropped footage, named by its version.
+          name.includes('/video-editor/transcripts/'),
       );
       for (const bucket of new Set(mine.map((name) => name.split('/')[0] ?? ''))) {
         await admin.storage

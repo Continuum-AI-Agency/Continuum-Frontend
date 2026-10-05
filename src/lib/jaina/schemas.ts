@@ -32,6 +32,9 @@ import {
   jainaToolApprovalRequiredPayloadSchema,
   jainaToolApprovalResolvedPayloadSchema,
   jainaToolOutputDeniedPayloadSchema,
+  paidCanvasCreativeTargetSchema,
+  paidScaffoldCreativeAttachmentStatusSchema,
+  paidScaffoldCreativeTargetSchema,
   paidScaffoldProgressPayloadSchema,
   paidScaffoldProposedPayloadSchema,
   paidScaffoldReceiptPayloadSchema,
@@ -1283,6 +1286,9 @@ export const toolResultSchema = z.object({
 export type ToolResultEventData = z.infer<typeof toolResultSchema>;
 
 export const creativeArtifactSchema = z.object({
+  scaffold_target: paidScaffoldCreativeTargetSchema.optional(),
+  canvas_target: paidCanvasCreativeTargetSchema.optional(),
+  attachment_status: paidScaffoldCreativeAttachmentStatusSchema.optional(),
   id: z.string(),
   type: z.literal('creative'),
   url: z.string().url(),

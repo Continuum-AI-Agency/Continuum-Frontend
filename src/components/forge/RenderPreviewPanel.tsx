@@ -27,6 +27,7 @@ import {
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Video } from '@/components/ui/video';
 import { useDebounce } from '@/hooks/useDebounce';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -786,9 +787,12 @@ export function RenderPreviewPanel({
     notes: ['same values'],
     node:
       backdrop.file.kind === 'video' ? (
-        <video controls src={backdrop.file.url} className="size-full object-contain">
-          <track kind="captions" />
-        </video>
+        <Video
+          src={backdrop.file.url}
+          ariaLabel="Render"
+          className="aspect-auto! size-full rounded-none border-0"
+          videoClassName="object-contain"
+        />
       ) : (
         // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
         <img alt="Render" src={backdrop.file.url} className="size-full object-contain" />
@@ -898,9 +902,12 @@ export function RenderPreviewPanel({
         stale,
         node:
           own.kind === 'video' ? (
-            <video controls src={own.url} className="size-full object-contain">
-              <track kind="captions" />
-            </video>
+            <Video
+              src={own.url}
+              ariaLabel="Last render"
+              className="aspect-auto! size-full rounded-none border-0"
+              videoClassName="object-contain"
+            />
           ) : (
             // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
             <img alt="Last render" src={own.url} className="size-full object-contain" />

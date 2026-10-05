@@ -3,12 +3,7 @@
 // The client islands of Settings → Drive. App tokens are read and changed through server
 // actions (./actions); the plaintext exists only in the create response and is shown once.
 
-import {
-  type CreateAppTokenResponse,
-  createAppTokenRequestSchema,
-  type DriveWhoami,
-  driveWhoamiSchema,
-} from '@continuum/contracts';
+import { type CreateAppTokenResponse, createAppTokenRequestSchema } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Download } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -27,7 +22,6 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getApiBaseUrl } from '@/lib/api/config';
-import { http } from '@/lib/api/http';
 import { createAppTokenAction, listAppTokensAction, revokeAppTokenAction } from './actions';
 
 const APP_TOKENS_KEY = ['drive', 'app-tokens'] as const;
@@ -38,7 +32,15 @@ function formatTimestamp(value: string | null): string {
   return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
 }
 
-function CopyButton({ value, label }: { value: string; label: string }) {
+export function CopyButton({
+  value,
+  label,
+  iconOnly = false,
+}: {
+  value: string;
+  label: string;
+  iconOnly?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -56,18 +58,20 @@ function CopyButton({ value, label }: { value: string; label: string }) {
     <Button
       type="button"
       variant="ghost"
-      size="sm"
+      size={iconOnly ? 'icon-sm' : 'sm'}
       className="shrink-0 gap-1.5 text-muted-foreground"
       onClick={() => void copy()}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
     >
       {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-      <span aria-live="polite">{copied ? 'Copied' : 'Copy'}</span>
+      <span aria-live="polite" className={iconOnly ? 'sr-only' : undefined}>
+        {copied ? 'Copied' : 'Copy'}
+      </span>
     </Button>
   );
 }
 
-function CodeLine({ children }: { children: string }) {
+export function CodeLine({ children }: { children: string }) {
   return (
     <code className="block overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">
       {children}
@@ -229,51 +233,16 @@ export function DriveAppTokens() {
   );
 }
 
-export function DriveMountBrands({ email }: { email: string }) {
-  const whoami = useQuery({
-    queryKey: ['drive', 'whoami'],
-    queryFn: () =>
-      http.request<DriveWhoami>({ path: '/drive/v1/whoami', schema: driveWhoamiSchema }),
-    retry: false,
-  });
-  const apiBase = getApiBaseUrl();
-
+/** How to mount a brand drive on each OS — shown from the Brand drives "How to connect" hint. */
+export function DriveConnectSteps({ email }: { email: string }) {
   return (
     <div className="space-y-4">
-      {whoami.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your brands…</p>
-      ) : whoami.isError ? (
-        <p className="text-sm text-muted-foreground">Could not load your brands.</p>
-      ) : whoami.data.brands.length === 0 ? (
-        <p className="text-sm text-muted-foreground">You don’t belong to any brand yet.</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {whoami.data.brands.map((brand) => {
-            const mountUrl = `${apiBase}/dav/${encodeURIComponent(brand.folder)}/`;
-            return (
-              <li key={brand.brandId} className="space-y-1 rounded-lg border bg-card p-3">
-                <span className="text-sm font-medium">{brand.folder}</span>
-                <div className="flex items-center gap-2">
-                  <code
-                    data-testid="drive-mount-url"
-                    className="min-w-0 flex-1 break-all font-mono text-xs text-muted-foreground"
-                  >
-                    {mountUrl}
-                  </code>
-                  <CopyButton value={mountUrl} label="mount URL" />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
           <h3 className="text-sm font-medium">macOS</h3>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
             <li>In Finder, choose Go → Connect to Server (⌘K).</li>
-            <li>Paste the mount URL and click Connect.</li>
+            <li>Paste a brand’s mount URL (open the brand’s row to copy it) and click Connect.</li>
             <li>
               Name: <span className="text-foreground">{email}</span>. Password: an app token.
             </li>
@@ -290,7 +259,7 @@ export function DriveMountBrands({ email }: { email: string }) {
           <h3 className="text-sm font-medium">Windows</h3>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
             <li>In File Explorer, open This PC → Map network drive.</li>
-            <li>Folder: paste the mount URL.</li>
+            <li>Folder: paste a brand’s mount URL.</li>
             <li>Tick “Connect using different credentials”, then Finish.</li>
             <li>
               User name: <span className="text-foreground">{email}</span>. Password: an app token.

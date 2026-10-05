@@ -148,17 +148,21 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     expect(classes).not.toContain('w-sm');
   });
 
-  it('scrubs the composition in-node and only fetches metadata', () => {
+  it('plays the composition in the Kobra player, letterboxed inside the node', () => {
     const { container } = renderNode(
       hyperData({ generatedVideoUrl: 'https://example.com/clip.mp4', status: 'completed' }),
     );
 
-    expect(container.querySelector('media-controller')).not.toBeNull();
-    expect(container.querySelector('media-time-range')).not.toBeNull();
-    const video = container.querySelector('video') as HTMLVideoElement;
-    expect(video.getAttribute('preload')).toBe('metadata');
+    const video = container.querySelector(
+      '[data-testid="studio-node-video-preview"] video',
+    ) as HTMLVideoElement;
     expect(video.getAttribute('playsinline')).not.toBeNull();
     expect(video.className).toContain('object-contain');
+    expect(
+      container.querySelector(
+        '[data-testid="studio-node-video-preview"] button[aria-label="Play"]',
+      ),
+    ).not.toBeNull();
   });
 
   it('says a running film renders on the server, with nothing to claim in this tab', () => {

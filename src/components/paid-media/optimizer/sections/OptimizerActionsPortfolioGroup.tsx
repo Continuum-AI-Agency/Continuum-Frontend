@@ -1,4 +1,5 @@
 'use client';
+import type { CreativeOutputManifest } from '@continuum/contracts';
 
 // One portfolio's UNIFIED actionable queue. The portfolio's performance report carries
 // two kinds of work a human decides on: budget moves (cycle_items — held, approved, or a
@@ -25,16 +26,12 @@ import {
   type ConvertCboResponse,
   type CreativeSwapJobRow,
   type CycleItemRow,
-  explainFlashUnfit,
-  flashPipelineCandidate,
   GLOBAL_ANGLE_LABELS,
   type GlobalAngleId,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
-  type PipelineCapabilityV2,
   type PortfolioLevel,
   type PortfolioListItem,
-  pickFlashPipelines,
   type RecommendationRow,
 } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
@@ -55,7 +52,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { fetchPipelineCapabilities, publishPipeline } from '@/lib/ai-studio/pipelines';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
@@ -106,15 +102,7 @@ import {
 import { CostIntervalLine } from './CostIntervalLine';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
-import {
-  flashBriefFor,
-  flashPromptsFor,
-  flashWantFor,
-  type ImplementTarget,
-  implementTargets,
-  predecessorAdIn,
-  referenceAssetIdsFor,
-} from './flashCreativesModel';
+import { type ImplementTarget, implementTargets, predecessorAdIn } from './flashCreativesModel';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { isStale, rosterLine, staleLine } from './portfolioStaleness';
@@ -179,7 +167,13 @@ type EvidenceContext = {
   /** Why the last request for a row could not be placed (no workflow fits, RPC failed). */
   generateNotes: ReadonlyMap<string, string>;
   /** Put a finished variant beside the current ad of an ad set (this one or another). */
-  implementCreative: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
+  implementCreative: (
+    job: CreativeSwapJobRow,
+    assetId: string,
+    target: ImplementTarget,
+    manifest: CreativeOutputManifest,
+  ) => void;
+  retryCreative: (job: CreativeSwapJobRow) => void;
   implementingKey: string | null;
   audiences: readonly PortfolioAudienceRow[];
   /** Every enrolled ad set's live targeting, for the audience card's "qué es nuevo". */
@@ -752,55 +746,12 @@ export function OptimizerActionsPortfolioGroup({
       return next;
     });
   }, []);
-  /** Place the request on the given pipelines. When none fits, publish the simplest flow
-   *  that can (one generator, open prompt / negative / reference ports) on the brand and
-   *  run on it — the person asked for variants, not for a workflow. */
-  const placeGeneration = React.useCallback(
-    async (
-      rec: RecommendationRow,
-      name: string | null,
-      ads: readonly AdsetAd[],
-      capabilities: readonly PipelineCapabilityV2[],
-    ): Promise<void> => {
-      const want = flashWantFor(rec, ads);
-      let [fit] = pickFlashPipelines(capabilities, want);
-      if (!fit) {
-        noteFor(rec.id, 'Setting up a flash-creative flow for this brand…');
-        const { capability } = await publishPipeline(
-          flashPipelineCandidate({
-            brandProfileId: brandId,
-            withReference: want.hasReference,
-            ratio: want.ratio,
-          }),
-        );
-        flash.refreshPipelines();
-        [fit] = pickFlashPipelines([capability], want);
-        if (!fit) {
-          const why = explainFlashUnfit(capability, want) ?? 'it cannot run unattended';
-          throw new Error(`The flow was published as “${capability.name}” but ${why}.`);
-        }
-      }
-      const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
-      const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
-      const prompts = flashPromptsFor(brief);
-      await flash.request.mutateAsync({
-        recommendationId: rec.id,
-        pipelineId: fit.capability.pipeline_id,
-        prompt: prompts.positive,
-        negativePrompt: prompts.negative,
-        referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
-        count: want.count,
-      });
-      noteFor(rec.id, null);
-    },
-    [brandId, currency, flash, noteFor, snapshotById],
-  );
   const requestGeneration = React.useCallback(
-    (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => {
+    (rec: RecommendationRow, _name: string | null, _ads: readonly AdsetAd[]) => {
       setGeneratingIds((prev) => new Set(prev).add(rec.id));
       noteFor(rec.id, null);
-      fetchPipelineCapabilities(brandId)
-        .then((capabilities) => placeGeneration(rec, name, ads, capabilities))
+      flash.generate
+        .mutateAsync(rec.id)
         .catch((error: unknown) => {
           noteFor(
             rec.id,
@@ -816,10 +767,15 @@ export function OptimizerActionsPortfolioGroup({
           void swapJobsQuery.refetch();
         });
     },
-    [brandId, noteFor, placeGeneration, swapJobsQuery],
+    [flash.generate, noteFor, swapJobsQuery],
   );
   const implementCreative = React.useCallback(
-    (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => {
+    (
+      job: CreativeSwapJobRow,
+      assetId: string,
+      target: ImplementTarget,
+      manifest: CreativeOutputManifest,
+    ) => {
       const key = `${job.id}:${assetId}`;
       setImplementingKey(key);
       const run = async () => {
@@ -834,6 +790,7 @@ export function OptimizerActionsPortfolioGroup({
         await flash.implement.mutateAsync({
           jobId: job.id,
           assetId,
+          manifest,
           targetAdsetId: target.adsetId,
           predecessorAdId,
         });
@@ -851,6 +808,14 @@ export function OptimizerActionsPortfolioGroup({
         });
     },
     [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
+  );
+  const retryCreative = React.useCallback(
+    (job: CreativeSwapJobRow) => {
+      flash.retry.mutate(job.id, {
+        onError: (error) => noteFor(job.recommendation_id ?? job.id, error.message),
+      });
+    },
+    [flash.retry, noteFor],
   );
   const audienceCard = useAudienceCardActions(brandId, adAccountId, noteFor);
   const portfolioSpecs = React.useMemo(
@@ -875,6 +840,7 @@ export function OptimizerActionsPortfolioGroup({
       generatingIds,
       generateNotes,
       implementCreative,
+      retryCreative,
       implementingKey,
       audiences: audiencesQuery.data,
       portfolioSpecs,
@@ -898,6 +864,7 @@ export function OptimizerActionsPortfolioGroup({
       generatingIds,
       generateNotes,
       implementCreative,
+      retryCreative,
       implementingKey,
       audiencesQuery.data,
       portfolioSpecs,
@@ -1980,6 +1947,7 @@ function CreativeCardHost({
       kpiField={evidence.kpiField}
       onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
       onImplement={evidence.implementCreative}
+      onRetry={evidence.retryCreative}
       rec={rec}
       resultWord={evidence.resultWord}
       snapshot={snapshot}

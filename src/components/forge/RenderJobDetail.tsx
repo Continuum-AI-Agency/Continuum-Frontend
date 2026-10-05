@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Timer,
 } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckRow, CheckTable } from '@/components/forge/CheckTable';
 import { DeliveryChain } from '@/components/forge/DeliveryChain';
@@ -32,6 +32,7 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
+import { Video } from '@/components/ui/video';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { formatDuration, renderJobChecks } from './renderJobChecks';
@@ -188,9 +189,33 @@ export function TemplateVersion({
 export const imageFailed = (element: HTMLImageElement | null) =>
   element !== null && element.complete && element.naturalWidth === 0;
 
+/** The Kobra player owns the element, so a broken file is read off the video it mounts. */
+function OutputVideo({ url, onBroken }: { url: string; onBroken: () => void }) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const video = host.current?.querySelector('video');
+    if (!video) return;
+    if (video.error) onBroken();
+    const fail = () => onBroken();
+    video.addEventListener('error', fail);
+    return () => video.removeEventListener('error', fail);
+  }, [url, onBroken]);
+  return (
+    <div ref={host} className="size-full">
+      <Video
+        src={url}
+        ariaLabel="Render"
+        className="aspect-auto! size-full rounded-none border-0"
+        videoClassName="object-contain"
+      />
+    </div>
+  );
+}
+
 /** A file that will not load — an expired signed link, or a container the browser cannot play. */
 function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
   const [broken, setBroken] = useState(false);
+  const markBroken = useCallback(() => setBroken(true), []);
   if (broken) {
     return (
       <p className="m-0 flex size-full items-center justify-center bg-muted p-[var(--card-pad)] text-center text-xs text-muted-foreground">
@@ -201,18 +226,7 @@ function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
     );
   }
   return output.kind === 'video' ? (
-    // biome-ignore lint/a11y/useMediaCaption: renders carry no caption track.
-    <video
-      src={output.url}
-      controls
-      playsInline
-      className="size-full object-contain"
-      // The same race as `imageFailed`, read off the video's own error.
-      ref={(element) => {
-        if (element?.error) setBroken(true);
-      }}
-      onError={() => setBroken(true)}
-    />
+    <OutputVideo url={output.url} onBroken={markBroken} />
   ) : (
     // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
     <img
@@ -343,7 +357,10 @@ export function RenderJobDetail({
   const inLibrary = files.flatMap((output) =>
     output.assetId ? [{ fileName: output.fileName, assetId: output.assetId }] : [],
   );
-  const libraryState = useLibraryState(job.brandId, inLibrary.map((output) => output.assetId));
+  const libraryState = useLibraryState(
+    job.brandId,
+    inLibrary.map((output) => output.assetId),
+  );
 
   return (
     <div className="flex flex-col divide-y divide-border">

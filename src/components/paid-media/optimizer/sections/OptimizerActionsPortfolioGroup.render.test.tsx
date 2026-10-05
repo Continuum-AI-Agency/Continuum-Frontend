@@ -194,6 +194,8 @@ mock.module('../useOptimizerData', () => ({
   useOptimizerPortfolioAudiences: () => ({ data: [], isLoading: false }),
   useFlashCreativeMutations: () => ({
     request: { mutateAsync: async () => 'job', isPending: false },
+    generate: { mutateAsync: async () => 'job', isPending: false },
+    retry: { mutate: () => undefined, isPending: false },
     implement: { mutateAsync: async () => 'job', isPending: false },
     refreshPipelines: () => undefined,
   }),

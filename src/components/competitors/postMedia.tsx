@@ -15,6 +15,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
+import { Video } from '@/components/ui/video';
 import { cn } from '@/lib/utils';
 
 /** First playable video URL on a reel (or null when the post has no video item). */
@@ -131,13 +132,13 @@ function SlideMedia({
 }) {
   if (item.kind === 'video') {
     return (
-      <video
+      <Video
         src={item.url}
         poster={poster ?? undefined}
         muted
-        playsInline
-        controls
-        className="aspect-[4/5] w-full bg-black object-cover"
+        ariaLabel={alt}
+        className="aspect-[4/5]! w-full rounded-none border-0 bg-black"
+        videoClassName="object-cover!"
       />
     );
   }

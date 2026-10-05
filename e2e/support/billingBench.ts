@@ -23,6 +23,7 @@ const LOCAL_DB_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 export const DESKTOP = { width: 1280, height: 800 };
 export const MOBILE = { width: 390, height: 844 };
 
+/* -- the Recorder envelope (same shape as the Backend `_bench` Recorder) ---------- */
 export { type BenchRecorder, createBenchRecorder } from './benchRecorder';
 
 /* -- clients ------------------------------------------------------------------------ */

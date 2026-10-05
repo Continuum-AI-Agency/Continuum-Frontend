@@ -4,6 +4,7 @@ import { reelPresentationSchema } from '../reels/presentation';
 import { reelShotRoleSchema, reelTemplateIdSchema } from '../reels/templates';
 import { resolvedEffectSchema } from './effects';
 import { headlessGrammarSchema, headlessVariationAxisSchema } from './grammar';
+import { creativeTargetSchema, optimizerGenerationContextSchema } from './optimizer';
 
 // The JSON is the source of truth. Library media is pinned to exact versions;
 // Unsplash source photos retain their original hotlinked URL and credit.
@@ -347,7 +348,8 @@ export const elementBindingSchema = z
 export const headlessShotSchema = z
   .object({
     id: z.string().min(1),
-    characterBindingId: z.string().min(1),
+    subject: z.enum(['person', 'product', 'scene']).default('person'),
+    characterBindingId: z.string().min(1).optional(),
     sceneBindingId: z.string().min(1),
     productUses: z
       .array(
@@ -419,7 +421,27 @@ export const headlessShotSchema = z
     resolution: z.enum(['360p', '720p', '1080p']),
     takeVariant: z.number().int().nonnegative().default(0),
   })
-  .strict();
+  .strict()
+  .superRefine((shot, ctx) => {
+    if (shot.subject === 'person' && !shot.characterBindingId)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['characterBindingId'],
+        message: 'Person shots require a character binding.',
+      });
+    if (shot.subject !== 'person' && shot.characterBindingId)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['characterBindingId'],
+        message: 'Presenter-free shots cannot bind a character.',
+      });
+    if (shot.subject === 'product' && !shot.productUses.some((use) => use.mode !== 'overlay'))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['productUses'],
+        message: 'Product shots require an in-scene product.',
+      });
+  });
 export type HeadlessShot = z.infer<typeof headlessShotSchema>;
 
 export const headlessStoryboardSchema = z
@@ -545,6 +567,8 @@ export const headlessContentSpecSchema = z
     tenantId: z.string().uuid(),
     revision: z.number().int().positive(),
     schemaVersion: z.literal(1),
+    generationContext: optimizerGenerationContextSchema.optional(),
+    target: creativeTargetSchema.optional(),
     templateRef: z
       .object({ contentId: z.string().uuid(), revision: z.number().int().positive() })
       .strict()
@@ -568,3 +592,11 @@ export const headlessContentSpecSchema = z
   })
   .strict();
 export type HeadlessContentSpec = z.infer<typeof headlessContentSpecSchema>;
+
+export const headlessElementReviewStateSchema = z
+  .object({
+    revision: headlessElementRevisionSchema.nullable(),
+    preparation: preparedCharacterSchema.nullable(),
+  })
+  .strict();
+export type HeadlessElementReviewState = z.infer<typeof headlessElementReviewStateSchema>;

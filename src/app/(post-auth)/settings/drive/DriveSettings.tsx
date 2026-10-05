@@ -1,6 +1,6 @@
 import { SettingsSection } from '@/components/settings/shell/SettingsSection';
-import { DriveAppTokens, DriveCliDownloads, DriveMountBrands } from './DriveSections';
-import { DriveStorage } from './DriveStorage';
+import { DriveBrands } from './DriveBrands';
+import { DriveAppTokens, DriveCliDownloads } from './DriveSections';
 
 /** Everything Drive: rendered at /settings/drive and as the Settings → Drive section. */
 export function DriveSettings({ email }: { email: string }) {
@@ -12,19 +12,8 @@ export function DriveSettings({ email }: { email: string }) {
       >
         <DriveAppTokens />
       </SettingsSection>
-      <SettingsSection
-        title="Mount the Library"
-        description="Each brand you belong to appears as a network drive."
-      >
-        <DriveMountBrands email={email} />
-      </SettingsSection>
       <div id="storage" className="scroll-mt-4">
-        <SettingsSection
-          title="Storage"
-          description="How much of each brand's Library allowance is used. You are warned at 80%, before uploads stop."
-        >
-          <DriveStorage />
-        </SettingsSection>
+        <DriveBrands email={email} />
       </div>
       <SettingsSection
         title="Command-line transfer (continuum)"

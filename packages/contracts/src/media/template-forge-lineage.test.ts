@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 import {
   FORGE_REASONS,
+  forgeCheckpointOfBytes,
+  forgeCheckpointsOf,
   forgeLineageHasReason,
+  forgeLineageMirrorUsable,
   forgeLineageNodeSchema,
-  forgeLineageVariantOfAttachment,
   forgeLineageVariantOfRef,
   forgeLineageViewSchema,
   forgeReasonSchema,
+  forgeScopeView,
+  forgeTemplateRefs,
   forgeWorktreeSchema,
-  forgeLineageMirrorUsable,
 } from './template-forge-lineage';
 
 const ROOT = {
@@ -160,62 +163,6 @@ describe('forgeLineageVariantOfRef', () => {
   });
 });
 
-describe('forgeLineageVariantOfAttachment', () => {
-  const tree = {
-    roots: [
-      forgeLineageNodeSchema.parse({
-        ...ROOT,
-        tags: { shipped: { attachmentId: 11 } },
-        children: [
-          {
-            sha: 'c'.repeat(64),
-            id: 'd'.repeat(64),
-            refs: ['inyogo/9:16/base'],
-            tags: { shipped: { attachmentId: 42 }, state: 'accepted' },
-            children: [],
-          },
-          {
-            sha: 'from-ledger',
-            refs: ['inyogo/1:1/base'],
-            tags: { shipped: { attachmentId: 43 } },
-            children: [],
-          },
-        ],
-      }),
-    ],
-  };
-
-  it('names the variant the live attachment came from', () => {
-    expect(forgeLineageVariantOfAttachment(tree, 42)).toEqual({
-      commitSha: 'd'.repeat(64),
-      ref: 'inyogo/9:16/base',
-    });
-  });
-
-  it('prefers the commit id over the checkout blob', () => {
-    // `sha` is the bytes, `id` is the instruction set that produced them. Pinning the blob would
-    // name two different commits identically whenever a materialised AEP is byte-identical.
-    expect(forgeLineageVariantOfAttachment(tree, 42)?.commitSha).not.toBe('c'.repeat(64));
-  });
-
-  it('carries an unnamed head as a commit with no ref', () => {
-    expect(forgeLineageVariantOfAttachment(tree, 11)).toEqual({
-      commitSha: 'a'.repeat(64),
-      ref: 'ngrbigguypantsok/master',
-    });
-  });
-
-  it('refuses the ledger placeholder — it names bytes nobody has', () => {
-    expect(forgeLineageVariantOfAttachment(tree, 43)).toBeNull();
-  });
-
-  it('is UNCHECKED, not clean, when the tree has not recorded these bytes', () => {
-    expect(forgeLineageVariantOfAttachment(tree, 999)).toBeNull();
-    expect(forgeLineageVariantOfAttachment(tree, null)).toBeNull();
-    expect(forgeLineageVariantOfAttachment({ roots: [] }, 42)).toBeNull();
-  });
-});
-
 describe('forgeLineageMirrorUsable', () => {
   it('shows a mirrored tree only when both gospels are known and equal', () => {
     expect(forgeLineageMirrorUsable('a'.repeat(64), 'a'.repeat(64))).toBe(true);
@@ -234,5 +181,192 @@ describe('forgeLineageMirrorUsable', () => {
     expect(forgeLineageMirrorUsable(null, null)).toBe(false);
     expect(forgeLineageMirrorUsable(undefined, undefined)).toBe(false);
     expect(forgeLineageMirrorUsable('', 'a'.repeat(64))).toBe(false);
+  });
+});
+
+// The production shape on 2026-09-29: the tree came back empty, the one upload commit only in the
+// log, and the ref map held every template of the workspace — other tenants' included.
+const UPLOAD = '881c3036'.padEnd(64, '0');
+const OTHER = '066a6ca9'.padEnd(64, '0');
+const PROD_VIEW = forgeLineageViewSchema.parse({
+  connected: true,
+  known: true,
+  master: UPLOAD,
+  currentMaster: UPLOAD,
+  pinnedToOlderMaster: false,
+  roots: [],
+  log: [
+    {
+      at: '2026-09-30T02:54:21.182Z',
+      id: UPLOAD,
+      parent: null,
+      base: UPLOAD,
+      tool: 'intake',
+      reason: 'intake',
+      gitOp: 'commit',
+      input: { filename: 'utec-spaced-typography-254.zip' },
+      checkout: { blob: UPLOAD, path: null },
+    },
+  ],
+  worktrees: [],
+  refs: {
+    'Continuum_app/277@published': UPLOAD,
+    'Continuum_app/171@published': OTHER,
+    'Continuum_app/174@published': OTHER,
+  },
+});
+
+describe('forgeCheckpointsOf', () => {
+  it('reads a template whose tree is empty from its log, with the refs that name each commit', () => {
+    expect(forgeCheckpointsOf(PROD_VIEW)).toEqual([
+      {
+        id: UPLOAD,
+        parent: null,
+        base: UPLOAD,
+        at: '2026-09-30T02:54:21.182Z',
+        tool: 'intake',
+        reason: 'intake',
+        facet: null,
+        why: null,
+        ops: null,
+        file: 'utec-spaced-typography-254.zip',
+        blob: UPLOAD,
+        refs: ['Continuum_app/277@published'],
+        tags: {},
+      },
+    ]);
+  });
+
+  it('walks the tree parent-first and does not repeat a commit the log also lists', () => {
+    const view = forgeLineageViewSchema.parse({
+      ...PROD_VIEW,
+      roots: [ROOT],
+      log: [{ id: 'a'.repeat(64), parent: null, tool: 'intake', reason: 'intake' }],
+      refs: {},
+    });
+    const checkpoints = forgeCheckpointsOf(view);
+    expect(
+      checkpoints.map((c) => [c.id.slice(0, 1), c.parent?.slice(0, 1) ?? null, c.refs]),
+    ).toEqual([
+      ['a', null, ['ngrbigguypantsok/master']],
+      ['b', 'a', ['ngrbigguypantsok/story/base']],
+    ]);
+  });
+});
+
+describe('forgeTemplateRefs', () => {
+  it('keeps this template’s own refs and drops every other template’s', () => {
+    expect(
+      forgeTemplateRefs(PROD_VIEW, { workspace: 'Continuum_app', templateKey: '277' }),
+    ).toEqual({
+      'Continuum_app/277@published': UPLOAD,
+    });
+  });
+
+  it('keeps the branch names its own tree carries', () => {
+    const view = forgeLineageViewSchema.parse({
+      ...PROD_VIEW,
+      roots: [ROOT],
+      refs: { ...PROD_VIEW.refs, 'ngrbigguypantsok/story/base': 'b'.repeat(64) },
+    });
+    expect(
+      Object.keys(forgeTemplateRefs(view, { workspace: 'Continuum_app', templateKey: '277' })),
+    ).toEqual(['Continuum_app/277@published', 'ngrbigguypantsok/story/base']);
+  });
+
+  it('keeps a branch on its own checkpoint, drops another template’s tag on the same bytes', () => {
+    const view = forgeLineageViewSchema.parse({
+      ...PROD_VIEW,
+      refs: { ...PROD_VIEW.refs, 'Continuum_app/999@published': UPLOAD, 'utec/9:16/base': UPLOAD },
+    });
+    expect(forgeTemplateRefs(view, { workspace: 'Continuum_app', templateKey: '277' })).toEqual({
+      'Continuum_app/277@published': UPLOAD,
+      'utec/9:16/base': UPLOAD,
+    });
+  });
+
+  it('with no key to match, keeps no tags at all', () => {
+    expect(forgeTemplateRefs(PROD_VIEW, { workspace: null, templateKey: null })).toEqual({});
+  });
+});
+
+describe('forgeCheckpointOfBytes', () => {
+  const checkpoints = forgeCheckpointsOf(PROD_VIEW);
+  it('finds the checkpoint whose bytes the worker will insist on', () => {
+    expect(forgeCheckpointOfBytes(checkpoints, `sha256:${UPLOAD.toUpperCase()}`)?.id).toBe(UPLOAD);
+  });
+  it('bytes no checkpoint holds, and no digest, find nothing', () => {
+    expect(forgeCheckpointOfBytes(checkpoints, OTHER)).toBeNull();
+    expect(forgeCheckpointOfBytes(checkpoints, null)).toBeNull();
+  });
+});
+
+// The duplicate-upload case, as production has it (2026-09-30): one package published as 171/174/175
+// by brand A and as 180 by brand B. The store keeps it as ONE commit, and that commit's node, notes
+// and log row name brand A.
+describe('forgeScopeView', () => {
+  const BRAND_A = 'b17d8151-a9b9-4579-b1d2-7e8f01c2e9dc';
+  const BRAND_B = '0f4a3c4b-03e4-4ed4-8805-5516ba199ec1';
+  const uploadInput = {
+    filename: 'brand-a-card.zip',
+    library: { brandId: BRAND_A, assetId: 'a-asset' },
+  };
+  const shared = forgeLineageViewSchema.parse({
+    ...PROD_VIEW,
+    master: OTHER,
+    currentMaster: OTHER,
+    roots: [
+      {
+        sha: OTHER,
+        id: OTHER,
+        tool: 'intake',
+        reason: 'intake',
+        input: uploadInput,
+        refs: ['Continuum_app/171@published', 'Continuum_app/180@published', 'card/master'],
+        tags: {
+          state: 'published',
+          'ae-accepted': true,
+          shipped: { attachmentId: 5454, templateId: 171, draftId: 171 },
+          pointer: [{ direction: 'flip', app: 'Continuum_app', template: 171 }],
+        },
+        children: [],
+      },
+    ],
+    log: [{ id: OTHER, parent: null, tool: 'intake', reason: 'intake', input: uploadInput }],
+    worktrees: [{ id: 'w1', commit: OTHER, path: '/srv/forge/brand-a/card.aep' }],
+    refs: {
+      'Continuum_app/171@published': OTHER,
+      'Continuum_app/180@published': OTHER,
+      'card/master': OTHER,
+    },
+  });
+
+  it('brand B sees its own tag, the bytes’ facts, and nothing brand A wrote', () => {
+    const view = forgeScopeView(shared, {
+      workspace: 'Continuum_app',
+      templateKey: '180',
+      brandId: BRAND_B,
+    });
+    expect(view.refs).toEqual({ 'Continuum_app/180@published': OTHER, 'card/master': OTHER });
+    const [node] = view.roots;
+    expect(node?.refs).toEqual(['Continuum_app/180@published', 'card/master']);
+    expect(node?.tags).toEqual({ state: 'published', 'ae-accepted': true });
+    expect(node?.input).toBeNull();
+    expect(view.log[0]?.input).toBeNull();
+    expect(view.worktrees[0]).toEqual({ id: 'w1', commit: OTHER });
+    // The checkpoint is still there and still live for brand B: only the other brand's words are gone.
+    expect(forgeCheckpointsOf(view).map((c) => [c.id, c.file, c.refs])).toEqual([
+      [OTHER, null, ['Continuum_app/180@published', 'card/master']],
+    ]);
+  });
+
+  it('the brand that uploaded it keeps its own filename', () => {
+    const view = forgeScopeView(shared, {
+      workspace: 'Continuum_app',
+      templateKey: '171',
+      brandId: BRAND_A,
+    });
+    expect(view.roots[0]?.input).toEqual(uploadInput);
+    expect(Object.keys(view.refs)).toEqual(['Continuum_app/171@published', 'card/master']);
   });
 });

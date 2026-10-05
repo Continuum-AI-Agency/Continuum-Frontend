@@ -7,20 +7,25 @@
 // live from the ad set's ads (the stored poster URL is a signed Meta CDN link that expires),
 // so the card shows the creative as it is today.
 
-import type {
-  AdSetSnapshot,
-  AdsetAd,
-  CreativeSwapJobRow,
-  RecommendationRow,
+import {
+  type AdSetSnapshot,
+  type AdsetAd,
+  type CreativeOutputManifest,
+  type CreativeSwapJobRow,
+  creativeGenerationReviewSchema,
+  type RecommendationRow,
+  readCreativeOutputManifests,
+  readFlashJobResult,
 } from '@continuum/contracts';
-import { readFlashJobResult } from '@continuum/contracts';
+import { useQueries } from '@tanstack/react-query';
 import { ImageOffIcon, Loader2Icon, PencilIcon, SparklesIcon, UploadIcon } from 'lucide-react';
 import * as React from 'react';
+import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
-import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
+import { signLibraryAsset, useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
 import { formatCpa } from '../format';
 import * as typeScale from '../typeScale';
@@ -79,8 +84,14 @@ type CreativeRecommendationCardProps = {
 
   /** Where a finished variant can be implemented: this ad set first, then the same audience. */
   targets: readonly ImplementTarget[];
-  onImplement: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
+  onImplement: (
+    job: CreativeSwapJobRow,
+    assetId: string,
+    target: ImplementTarget,
+    manifest: CreativeOutputManifest,
+  ) => void;
   implementingKey: string | null;
+  onRetry?: (job: CreativeSwapJobRow) => void;
 };
 
 const FLASH_SLOTS = 3;
@@ -93,6 +104,7 @@ type FlashSlot = {
   job: CreativeSwapJobRow;
   assetId: string | null;
   roomId: string | null;
+  manifest: CreativeOutputManifest | null;
 };
 
 /** One slot per generated variant; a job still running (or failed) holds one slot alone. */
@@ -100,12 +112,30 @@ function flashSlots(jobs: readonly CreativeSwapJobRow[]): FlashSlot[] {
   const slots: FlashSlot[] = [];
   for (const job of jobs) {
     const result = readFlashJobResult(job);
+    const manifests = readCreativeOutputManifests(job.result);
+    if (manifests.length) {
+      for (const manifest of manifests)
+        slots.push({
+          key: `${job.id}:${manifest.assets.map((ref) => ref.versionId).join(':')}`,
+          job,
+          assetId: manifest.assets[0]!.assetId,
+          roomId: result.roomId,
+          manifest,
+        });
+      continue;
+    }
     if (result.assetIds.length === 0) {
-      slots.push({ key: job.id, job, assetId: null, roomId: result.roomId });
+      slots.push({ key: job.id, job, assetId: null, roomId: result.roomId, manifest: null });
       continue;
     }
     for (const assetId of result.assetIds) {
-      slots.push({ key: `${job.id}:${assetId}`, job, assetId, roomId: result.roomId });
+      slots.push({
+        key: `${job.id}:${assetId}`,
+        job,
+        assetId,
+        roomId: result.roomId,
+        manifest: null,
+      });
     }
   }
   return slots;
@@ -130,12 +160,18 @@ function ImplementMenu({
   onImplement,
   busy,
 }: {
-  slot: FlashSlot & { assetId: string };
+  slot: FlashSlot & { assetId: string; manifest: CreativeOutputManifest };
   targets: readonly ImplementTarget[];
-  onImplement: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
+  onImplement: (
+    job: CreativeSwapJobRow,
+    assetId: string,
+    target: ImplementTarget,
+    manifest: CreativeOutputManifest,
+  ) => void;
   busy: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [reviewed, setReviewed] = React.useState(false);
   const groups = (['here', 'same_audience', 'other'] as const)
     .map((relation) => ({ relation, items: targets.filter((t) => t.relation === relation) }))
     .filter((group) => group.items.length > 0);
@@ -149,7 +185,7 @@ function ImplementMenu({
             ) : (
               <UploadIcon className="size-3.5" />
             )}
-            Implement
+            Approve creative
           </Button>
         }
       />
@@ -157,6 +193,18 @@ function ImplementMenu({
         <p className="mb-2 text-muted-foreground">
           The new ad is created paused, beside the ad set's current ad. Nothing existing changes.
         </p>
+        <label className="mb-2 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={reviewed}
+            onChange={(event) => setReviewed(event.target.checked)}
+          />{' '}
+          I reviewed{' '}
+          {slot.manifest.format === 'carousel'
+            ? `all ${slot.manifest.assets.length} cards`
+            : 'the full creative'}
+          .
+        </label>
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {groups.map((group) => (
             <div key={group.relation}>
@@ -168,9 +216,10 @@ function ImplementMenu({
                   <li key={target.adsetId}>
                     <button
                       className="w-full truncate rounded px-2 py-1.5 text-left hover:bg-muted"
+                      disabled={!reviewed}
                       onClick={() => {
                         setOpen(false);
-                        onImplement(slot.job, slot.assetId, target);
+                        onImplement(slot.job, slot.assetId, target, slot.manifest);
                       }}
                       title={target.name}
                       type="button"
@@ -361,7 +410,9 @@ export function CreativeRecommendationCard({
   targets,
   onImplement,
   implementingKey,
+  onRetry,
 }: CreativeRecommendationCardProps) {
+  const [reviewElementId, setReviewElementId] = React.useState<string | null>(null);
   const copy = creativeCardCopy(rec);
   const subjects = subjectAds(rec, ads);
   const anglesQuery = useAdAngles(brandId, rec.adset_id);
@@ -379,7 +430,19 @@ export function CreativeRecommendationCard({
   const slots = flashSlots(flashCreativesFor(rec, jobs));
   const signed = useSignedAssetUrls(
     brandId,
-    slots.flatMap((slot) => (slot.assetId ? [slot.assetId] : [])),
+    slots.flatMap((slot) => (!slot.manifest && slot.assetId ? [slot.assetId] : [])),
+  );
+  const pinned = slots.flatMap((slot) => slot.manifest?.assets ?? []);
+  const previewQueries = useQueries({
+    queries: pinned.map((ref) => ({
+      queryKey: ['creative-review-url', brandId, ref.assetId, ref.versionId],
+      queryFn: () => signLibraryAsset(brandId, ref.assetId, ref.versionId),
+      staleTime: 30 * 60_000,
+      retry: false,
+    })),
+  });
+  const pinnedUrls = new Map(
+    pinned.map((ref, index) => [ref.versionId, previewQueries[index]?.data]),
   );
   const emptySlots = Math.max(0, FLASH_SLOTS - slots.length);
   const subjectBar = standing?.bars.find((bar) => bar.subject) ?? null;
@@ -496,7 +559,42 @@ export function CreativeRecommendationCard({
                   key={slot.key}
                   title={slot.job.id}
                 >
-                  {src ? (
+                  {slot.manifest ? (
+                    <div className="space-y-2">
+                      {slot.manifest.assets.map((ref, index) => {
+                        const url = pinnedUrls.get(ref.versionId);
+                        return (
+                          <div key={ref.versionId}>
+                            {slot.manifest!.format === 'carousel' ? (
+                              <p>
+                                Card {index + 1} of {slot.manifest!.assets.length}
+                              </p>
+                            ) : null}
+                            {url ? (
+                              slot.manifest!.format === 'video' ? (
+                                // biome-ignore lint/a11y/useMediaCaption: generated reels include burned-in captions; presenter-free clips have no speech.
+                                <video
+                                  controls
+                                  preload="metadata"
+                                  src={url}
+                                  className="w-full rounded"
+                                  aria-label="Full creative preview"
+                                />
+                              ) : (
+                                <img
+                                  alt={`Creative card ${index + 1}`}
+                                  src={url}
+                                  className="max-h-96 w-full rounded object-contain"
+                                />
+                              )
+                            ) : (
+                              <p>Loading exact creative version…</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : src ? (
                     // biome-ignore lint/performance/noImgElement: signed, expiring storage URL; next/image cannot proxy it.
                     <img
                       alt="Flash creative"
@@ -536,6 +634,38 @@ export function CreativeRecommendationCard({
                       {failureText(slot.job)}
                     </p>
                   ) : null}
+                  {status === 'generated' && !slot.manifest ? (
+                    <p>Regenerate this creative to review its exact version before approval.</p>
+                  ) : null}
+                  {status === 'failed' &&
+                  ['elements_need_approval', 'headless_pending'].includes(
+                    String(slot.job.error?.code),
+                  ) ? (
+                    <div className="flex gap-2">
+                      {(() => {
+                        const detail = slot.job.error?.detail;
+                        const review = creativeGenerationReviewSchema.safeParse(
+                          detail && typeof detail === 'object' && 'review' in detail
+                            ? detail.review
+                            : null,
+                        );
+                        return review.success ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReviewElementId(review.data.elementIds[0]!)}
+                          >
+                            Review Elements
+                          </Button>
+                        ) : null;
+                      })()}
+                      {onRetry ? (
+                        <Button size="sm" variant="outline" onClick={() => onRetry(slot.job)}>
+                          Resume generation
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-1">
                     {slot.roomId ? (
                       <a
@@ -550,11 +680,17 @@ export function CreativeRecommendationCard({
                         <PencilIcon className="size-3.5" /> Edit
                       </a>
                     ) : null}
-                    {ready ? (
+                    {ready &&
+                    slot.manifest &&
+                    slot.manifest.assets.every(
+                      (ref) => pinnedUrls.has(ref.versionId) && pinnedUrls.get(ref.versionId),
+                    ) ? (
                       <ImplementMenu
                         busy={busy}
                         onImplement={onImplement}
-                        slot={slot as FlashSlot & { assetId: string }}
+                        slot={
+                          slot as FlashSlot & { assetId: string; manifest: CreativeOutputManifest }
+                        }
                         targets={targets}
                       />
                     ) : null}
@@ -588,6 +724,14 @@ export function CreativeRecommendationCard({
           {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}
         </section>
       </div>
+      <ElementsPanel
+        brandId={brandId}
+        open={reviewElementId !== null}
+        initialElementId={reviewElementId ?? undefined}
+        onOpenChange={(open) => {
+          if (!open) setReviewElementId(null);
+        }}
+      />
     </div>
   );
 }

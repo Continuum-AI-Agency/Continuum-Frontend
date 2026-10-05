@@ -272,9 +272,35 @@ const saveTemplateVariablesMock = mock(
     _slots: Array<{ slotKey: string; exposed?: boolean | null }>,
   ) => {},
 );
+const UPLOAD = '881c3036'.padEnd(64, '0');
+const fetchTemplateLineageMock = mock(async (_brandId: string, _assetId: string) => ({
+  connected: true,
+  known: true,
+  master: UPLOAD,
+  currentMaster: UPLOAD,
+  pinnedToOlderMaster: false,
+  roots: [
+    {
+      sha: 'c'.repeat(64),
+      id: 'b'.repeat(64),
+      tool: 'forge ratio',
+      reason: 'geometry',
+      base: UPLOAD,
+      refs: ['utec277/9:16/base'],
+      tags: {},
+      children: [],
+    },
+  ],
+  log: [{ id: UPLOAD, parent: null, tool: 'intake', reason: 'intake', checkout: { blob: UPLOAD } }],
+  worktrees: [],
+  refs: { 'Continuum_app/277@published': UPLOAD },
+  cachedAt: null,
+  unavailable: null,
+}));
 mock.module('@/lib/library/templateSources', () => ({
   ...templateSources,
   saveTemplateVariables: saveTemplateVariablesMock,
+  fetchTemplateLineage: fetchTemplateLineageMock,
 }));
 
 // The grid reads the person's brand role from the brand provider; outside one, this file is an
@@ -519,6 +545,32 @@ describe('RenderRequestsGrid', () => {
       .parentElement as HTMLElement;
     // Existing rows never set it, so they render what the file has — and say so.
     expect(within(cell).getByText('Shown · as designed')).toBeTruthy();
+  });
+
+  // A template is a git history: the picker says which checkpoint renders (live, found by bytes),
+  // lists the forks that are not live without letting them be picked, and pins by name.
+  test('the checkpoint picker shows what renders, keeps non-live forks unpickable, and pins by name', async () => {
+    contractOverrides = {
+      template: { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' },
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const picker = await screen.findByRole('button', { name: 'Checkpoint' });
+    expect(picker.textContent).toContain('881c303600');
+    expect(picker.textContent).toContain('live');
+
+    fireEvent.click(picker);
+    const fork = await screen.findByRole('menuitem', { name: /Size · 9:16\/base/ });
+    expect(fork.getAttribute('aria-disabled') ?? fork.getAttribute('data-disabled')).not.toBeNull();
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /Pin upload/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Checkpoint' }).textContent).toContain('pinned'),
+    );
+    await waitFor(() =>
+      expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
+        templateRef: 'Continuum_app/277@published',
+      }),
+    );
   });
 
   test('a frame placement cannot settle reads "AI check after render", and says why', async () => {

@@ -11,6 +11,8 @@ import {
 import type { MagicLinkInput, PasswordSignInInput } from '@/lib/auth/schemas';
 import { buildOAuthStartUrl } from '@/lib/oauth';
 import { openCenteredPopup, waitForPopupMessage } from '@/lib/popup';
+import { purgeStorageForLogout } from '@/lib/storage/brandScopedStorage';
+import { teardownAll } from '@/lib/storage/storeRegistry';
 
 type UseAuthOptions = {
   initialError?: string;
@@ -24,6 +26,16 @@ export function useAuth(options?: UseAuthOptions) {
 
   const logout = async (): Promise<boolean> => {
     setError(null);
+
+    // Clear brand-scoped and user-ephemeral client state first so a different
+    // account logging in afterwards (same browser/tab) inherits nothing.
+    // Best-effort: storage teardown must never block the server sign-out.
+    try {
+      teardownAll();
+    } catch {}
+    try {
+      purgeStorageForLogout();
+    } catch {}
 
     return new Promise((resolve) => {
       startTransition(async () => {

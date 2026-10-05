@@ -54,8 +54,14 @@ const CLASS_BY_NAME: readonly [RegExp, FaceClass][] = [
   [/script|hand|caveat|brush|marker|pacifico|dancing|kaushan|allura|satisfy/i, 'script'],
   [/mono|code|courier/i, 'mono'],
   [/slab|arvo|rockwell|zilla/i, 'slab'],
-  [/sans|grotesk|grotesque|inter\b|helvetica|arial|roboto|archivo|manrope|söhne|suisse|graphik/i, 'grotesque-sans'],
-  [/serif|garamond|playfair|lora|merriweather|baskerville|georgia|times|canela|tiempos|publico|didot|bodoni/i, 'serif'],
+  [
+    /sans|grotesk|grotesque|inter\b|helvetica|arial|roboto|archivo|manrope|söhne|suisse|graphik/i,
+    'grotesque-sans',
+  ],
+  [
+    /serif|garamond|playfair|lora|merriweather|baskerville|georgia|times|canela|tiempos|publico|didot|bodoni/i,
+    'serif',
+  ],
 ];
 
 /**
@@ -283,6 +289,12 @@ export const reelPresentationSchema = z
       .describe(
         'Full-screen cutaways over the picture while the voice runs on: a dark-grain type card, or the packshot hero on an accent gradient.',
       ),
+    beatSync: z
+      .boolean()
+      .default(false)
+      .describe(
+        'A hard cut ends on a detected beat of the outgoing scene, never inside its last word. Overlaps stay speech-timed.',
+      ),
   })
   .strict()
   // Continuum Render refuses these at render time, after every clip is paid for; refuse them here.
@@ -357,6 +369,10 @@ export const reelAnalysisSchema = z
             cutTimesSec: z.array(z.number().nonnegative()),
             /** Momentary loudness (LUFS, 400 ms window) every 100 ms; entry k ends at (k + 1) / 10 s. */
             loudness: z.array(z.number()).max(12000).default([]),
+            /** Onsets from that loudness. Empty when the scene had no audio. */
+            beatsSec: z.array(z.number().nonnegative()).max(4000).default([]),
+            /** Median tempo of those onsets, doubled or halved into 70–180. Null under four beats. */
+            bpm: z.number().positive().nullable().default(null),
           })
           .strict(),
       )
@@ -498,6 +514,7 @@ const INTENT_SINCE_REV2 = [
   'displayStyle',
   'displayWords',
   'cards',
+  'beatSync',
 ];
 const RESOLVED_SINCE_REV2 = [
   'captionStyle',
@@ -553,7 +570,10 @@ export const reelNeedsSubjectMasks = (resolved: ReelResolvedPresentation): boole
   (resolved.displayStyle.behindSubject && resolved.displayWords.length > 0);
 export const reelAnalysisWire = (analysis: ReelAnalysis) => ({
   ...analysis,
-  scenes: analysis.scenes.map(({ loudness, ...scene }) =>
-    loudness.length ? { ...scene, loudness } : scene,
-  ),
+  scenes: analysis.scenes.map(({ loudness, beatsSec, bpm, ...scene }) => ({
+    ...scene,
+    ...(loudness.length ? { loudness } : {}),
+    ...(beatsSec.length ? { beatsSec } : {}),
+    ...(bpm !== null ? { bpm } : {}),
+  })),
 });

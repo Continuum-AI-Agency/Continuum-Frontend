@@ -33,6 +33,7 @@ import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
 import { useCanvasJaina } from '../canvasJaina';
+import { CampaignCreativeGenerateButton } from '../components/CampaignCreativeActions';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCreativeAssetPlacement } from '../hooks/useCreativeAssetPlacement';
 import { useCampaignStore } from '../stores/useCampaignStore';
@@ -314,6 +315,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 {notice}
               </p>
             ) : null}
+            <CampaignCreativeGenerateButton nodeId={id} />
             {data.provenance ? (
               <div className="px-3 pb-2">
                 <NodeProvenance data={data} />

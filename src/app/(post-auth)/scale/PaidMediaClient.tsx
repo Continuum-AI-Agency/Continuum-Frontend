@@ -6,7 +6,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
+import { CampaignCreativeActionsProvider } from '@/CampaignCanvas/components/CampaignCreativeActions';
 import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
 import { CampaignsTabSkeleton } from '@/components/paid-media/campaigns/CampaignsTabSkeleton';
 import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/usePrefetchScaleCampaigns';
@@ -24,6 +26,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSession } from '@/hooks/useSession';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import {
+  buildCampaignCreativeRequest,
+  type CampaignCreativeRequest,
+} from '@/lib/campaign-canvas/creativeGeneration';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
@@ -240,6 +247,9 @@ export default function PaidMediaClientPage({
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
     normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
+  const [creativeRequest, setCreativeRequest] = React.useState<CampaignCreativeRequest | null>(
+    null,
+  );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   // The scaffold the Jaina thread is about, shown on its companion canvas.
   const [companionScaffoldId, setCompanionScaffoldId] = React.useState<string | null>(null);
@@ -248,6 +258,38 @@ export default function PaidMediaClientPage({
     null,
   );
   const companionDeploy = useDeployRequest();
+  const canvasNodes = useCampaignStore((store) => store.nodes);
+  const canvasEdges = useCampaignStore((store) => store.edges);
+  const canvasPlatform = useCampaignStore((store) => store.platform);
+  const campaignCanvasPayload = React.useMemo(() => {
+    if (!isCanvasOpen || canvasPlatform !== 'meta') return null;
+    try {
+      return buildCampaignCanvasPayload(canvasNodes, canvasEdges, {
+        source: 'propose',
+        brandProfileId,
+        adAccountId: selectedAdAccount,
+      });
+    } catch {
+      // Match the full Canvas page: an invalid graph still permits ordinary chat.
+      return null;
+    }
+  }, [isCanvasOpen, canvasPlatform, canvasNodes, canvasEdges, brandProfileId, selectedAdAccount]);
+  const handleGenerateCreative = React.useCallback(
+    async (nodeId: string) => {
+      if (!brandProfileId || !selectedAdAccount)
+        throw new Error('Select a brand and ad account first.');
+      const request = await buildCampaignCreativeRequest({
+        ...useCampaignStore.getState(),
+        nodeId,
+        brandId: brandProfileId,
+        adAccountId: selectedAdAccount,
+      });
+      setCreativeRequest(request);
+      setActiveTab('jaina');
+      setIsCanvasOpen(true);
+    },
+    [brandProfileId, selectedAdAccount],
+  );
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
   // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
   // one must not close the other.
@@ -686,7 +728,9 @@ export default function PaidMediaClientPage({
                       </div>
                       <div className="relative min-h-0 flex-1">
                         <ReactFlowProvider>
-                          <CampaignCanvas />
+                          <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                            <CampaignCanvas />
+                          </CampaignCreativeActionsProvider>
                         </ReactFlowProvider>
                       </div>
                     </div>
@@ -743,6 +787,9 @@ export default function PaidMediaClientPage({
                   campaignId={selectedCampaign}
                   userId={user?.id ?? null}
                   initialSessionId={jainaSessionIdParam}
+                  campaignCanvasPayload={campaignCanvasPayload}
+                  requestedCreative={creativeRequest}
+                  onCreativeRequestConsumed={() => setCreativeRequest(null)}
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
                   onCanvasActionApplied={handleCanvasActionApplied}
@@ -793,14 +840,16 @@ export default function PaidMediaClientPage({
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <ScaleCompanionCanvas
-                          brandId={brandProfileId}
-                          scaffoldId={companionScaffoldId}
-                          onSend={sendCompanionTurn}
-                          onDeploy={companionDeploy.requestDeploy}
-                          deployInFlight={companionDeploy.inFlight}
-                          deployRefusal={companionDeploy.refusal}
-                        />
+                        <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                          <ScaleCompanionCanvas
+                            brandId={brandProfileId}
+                            scaffoldId={companionScaffoldId}
+                            onSend={sendCompanionTurn}
+                            onDeploy={companionDeploy.requestDeploy}
+                            deployInFlight={companionDeploy.inFlight}
+                            deployRefusal={companionDeploy.refusal}
+                          />
+                        </CampaignCreativeActionsProvider>
                       </motion.div>
                     </motion.aside>
                   </>

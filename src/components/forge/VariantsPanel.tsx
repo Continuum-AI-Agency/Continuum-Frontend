@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  type ForgeLineageNode,
-  type ForgeLineageView,
-  type TemplateVariant,
-  templateDisplayName,
-} from '@continuum/contracts';
+import { type TemplateVariant, templateDisplayName } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -19,57 +14,6 @@ import {
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 import type { ForgeRenderIntent } from './RenderRequestsGrid';
-import { variantLabel } from './templateVersion';
-
-export type VariantRow = {
-  sha: string;
-  refs: string[];
-  /** `9:16/base` out of `inyogo/9:16/base` — the repo key is tenant-scoped noise in a list. */
-  name: string;
-  state: string | null;
-  accepted: boolean;
-  shippedAs: number | null;
-  /** The last pointer move recorded for these bytes, if the store has one. */
-  lastPointer: { direction: string; at: string; attachment: number | null } | null;
-};
-
-function tagString(tags: Record<string, unknown>, key: string): string | null {
-  const value = tags[key];
-  return typeof value === 'string' ? value : null;
-}
-
-/** Every node in the forest that carries a ref, flattened, deepest last. */
-export function variantsOf(view: Pick<ForgeLineageView, 'roots'>): VariantRow[] {
-  const out: VariantRow[] = [];
-  const walk = (node: ForgeLineageNode) => {
-    if (node.refs.length) {
-      const tags = (node.tags ?? {}) as Record<string, unknown>;
-      const shipped = tags.shipped as { attachmentId?: number } | undefined;
-      const pointer = Array.isArray(tags.pointer)
-        ? (tags.pointer as Array<{ direction?: string; at?: string; attachment?: number | null }>)
-        : [];
-      const last = pointer.length ? pointer[pointer.length - 1] : null;
-      out.push({
-        sha: node.sha,
-        refs: node.refs,
-        name: variantLabel(node.refs[0]),
-        state: tagString(tags, 'state'),
-        accepted: tags['ae-accepted'] === true,
-        shippedAs: typeof shipped?.attachmentId === 'number' ? shipped.attachmentId : null,
-        lastPointer: last
-          ? {
-              direction: last.direction ?? 'moved',
-              at: last.at ?? '',
-              attachment: last.attachment ?? null,
-            }
-          : null,
-      });
-    }
-    for (const child of node.children) walk(child);
-  };
-  for (const root of view.roots) walk(root);
-  return out;
-}
 
 export function VariantsPanel({
   brandId,

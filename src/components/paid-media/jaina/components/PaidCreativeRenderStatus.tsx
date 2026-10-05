@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
 import { getClientRenderJob } from '@/lib/api/clientRenderJobs.client';
+import type { CreativeArtifact } from '@/lib/jaina/schemas';
+import { fetchPaidScaffoldTreeRows } from '@/lib/paid-media/scaffold-tree-client';
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'cancelled', 'superseded']);
 const REFRESH_MS = 3_000;
@@ -17,7 +19,13 @@ const labelFor = (state: ClientRenderJob['state'] | undefined): string => {
   return 'Queued';
 };
 
-export function PaidCreativeRenderStatus({ render }: { render: JainaPaidCreativeRenderPayload }) {
+export function PaidCreativeRenderStatus({
+  render,
+  onCreativeReady,
+}: {
+  render: JainaPaidCreativeRenderPayload;
+  onCreativeReady?: (creative: CreativeArtifact) => void;
+}) {
   const [job, setJob] = useState<ClientRenderJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signError, setSignError] = useState<string | null>(null);
@@ -68,11 +76,59 @@ export function PaidCreativeRenderStatus({ render }: { render: JainaPaidCreative
         if (!response.ok) throw new Error('Rendered media is temporarily unavailable');
         const body = (await response.json()) as { signedUrl?: string };
         if (!body.signedUrl) throw new Error('Rendered media is temporarily unavailable');
-        return { id: ref.version_id, url: body.signedUrl, kind: 'video', name: 'Rendered reel' };
+        return { id: ref.asset_id, url: body.signedUrl, kind: 'video', name: 'Rendered reel' };
       }),
     )
       .then((items) => {
-        if (!cancelled) setMedia(items.filter((item): item is ChatMedia => item !== null));
+        if (cancelled) return;
+        const visible = items.filter((item): item is ChatMedia => item !== null);
+        setMedia(visible);
+        const first = visible[0];
+        if (!first || !onCreativeReady || (!render.canvas_target && !render.scaffold_target))
+          return;
+        void (async () => {
+          if (render.scaffold_target) {
+            // Completion reconciliation may still be committing when the render job first reads completed.
+            let attached = false;
+            for (let attempt = 0; attempt < 5 && !cancelled; attempt++) {
+              const read = await fetchPaidScaffoldTreeRows({
+                scaffoldVersionId: render.scaffold_target.scaffold_version_id,
+              });
+              if (
+                read.rows.some(
+                  (row) =>
+                    row.pathKey === render.scaffold_target!.path_key &&
+                    row.creativeAssetId === first.id,
+                )
+              ) {
+                attached = true;
+                break;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+            if (!attached) {
+              if (!cancelled)
+                setSignError('Reel saved in Library; scaffold attachment needs review.');
+              return;
+            }
+          }
+          if (!cancelled)
+            onCreativeReady({
+              id: first.id,
+              asset_id: first.id,
+              type: 'creative',
+              url: first.url,
+              format: 'video',
+              scaffold_target: render.scaffold_target,
+              canvas_target: render.canvas_target,
+              ...(render.scaffold_target ? { attachment_status: 'attached' as const } : {}),
+            });
+        })().catch((cause: unknown) => {
+          if (!cancelled)
+            setSignError(
+              cause instanceof Error ? cause.message : 'Scaffold attachment unavailable.',
+            );
+        });
       })
       .catch((cause) => {
         if (!cancelled) {
@@ -82,7 +138,7 @@ export function PaidCreativeRenderStatus({ render }: { render: JainaPaidCreative
     return () => {
       cancelled = true;
     };
-  }, [job, render.brand_id]);
+  }, [job, render.brand_id, render.canvas_target, render.scaffold_target, onCreativeReady]);
 
   const state = job?.state;
   const active = state === 'claimed' || state === 'rendering' || state === 'saving';

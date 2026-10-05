@@ -1,0 +1,40 @@
+import type { GlassConfig } from './defaults.js';
+export declare class GlassRenderer {
+    readonly canvas: HTMLCanvasElement;
+    readonly gl: WebGLRenderingContext;
+    private readonly cropCanvas;
+    private readonly cropCtx;
+    private blitP;
+    private blitU;
+    private blurP;
+    private blurU;
+    private glassP;
+    private glassU;
+    private quadBuf;
+    private panelBuf;
+    private readonly fboCache;
+    private activeFBOs;
+    private bgTex;
+    width: number;
+    height: number;
+    contextLost: boolean;
+    private _onContextLost;
+    private _onContextRestored;
+    constructor();
+    private _initPrograms;
+    private _initBuffers;
+    resize(width: number, height: number): void;
+    uploadAndBlur(sourceCanvas: HTMLCanvasElement, sourceX: number, sourceY: number, width: number, height: number, blurAmount: number): void;
+    renderGlassPanel(config: GlassConfig, width: number, height: number, dpr: number): void;
+    clear(): void;
+    destroy(): void;
+    private _setActiveSize;
+    private _makeFBO;
+    private _freeFBO;
+    private _freeFBOSet;
+    private _compile;
+    private _link;
+    private _uloc;
+    private _drawQuad;
+}
+//# sourceMappingURL=GlassRenderer.d.ts.map

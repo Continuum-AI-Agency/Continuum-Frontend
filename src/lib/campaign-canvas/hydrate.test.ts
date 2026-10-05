@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import type { CanvasGate, CanvasScaffoldRead } from '@/lib/paid-media/jaina-activity-client';
-import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
 import type { PaidScaffoldPlan } from '@continuum/contracts';
 import { AUDIENCE_HANDLE_ID } from '@/CampaignCanvas/types';
+import type { CanvasGate, CanvasScaffoldRead } from '@/lib/paid-media/jaina-activity-client';
+import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
 import { buildHydratedCanvasGraph, creativeFromRow } from './hydrate';
 
 const APPROVED_BUILD: CanvasGate = {
@@ -113,15 +113,36 @@ const read = (overrides: Partial<CanvasScaffoldRead> = {}): CanvasScaffoldRead =
 });
 
 describe('buildHydratedCanvasGraph', () => {
+  it('preserves measured account currency and its minor-unit scale', () => {
+    const base = read();
+    const adSet = base.tree.rows.find((row) => row.level === 'adset')!;
+    adSet.dailyBudgetMinorUnits = 6199;
+    const graph = buildHydratedCanvasGraph({
+      ...base,
+      version: { ...base.version, budgetCurrency: 'JPY' },
+    });
+    expect(graph.nodes.find((node) => node.type === 'ad-set')?.data).toMatchObject({
+      budgetAmount: 6199,
+      budgetCurrency: 'JPY',
+    });
+  });
   it('maps a scaffold to a campaign -> ad set -> ad graph with its audience group', () => {
     const graph = buildHydratedCanvasGraph(read());
 
-    expect(graph.nodes.map((node) => node.type)).toEqual(['campaign', 'ad-set', 'audience', 'ad']);
+    expect(graph.nodes.map((node) => node.type)).toEqual([
+      'campaign',
+      'ad-set',
+      'audience',
+      'ad',
+      'creative',
+    ]);
     expect(graph.edges.map((edge) => `${edge.source}->${edge.target}`)).toEqual([
       'campaign->adset',
       'audience:audience-1->adset',
       'adset->ad',
+      'ad->ad:creative',
     ]);
+    expect(graph.nodes.find((node) => node.type === 'creative')?.data.mediaId).toBeUndefined();
     expect(graph.hydration).toMatchObject({ version: 2, lifecycle: 'built', adAccountId: 'act_1' });
   });
 
@@ -170,8 +191,9 @@ describe('buildHydratedCanvasGraph', () => {
     expect(graph.edges.some((edge) => edge.source === 'audience:audience-1')).toBe(false);
     // The ad set still targets the version it was compiled from, drawn as its own node.
     expect(
-      graph.edges.find((edge) => edge.target === 'adset' && edge.targetHandle === AUDIENCE_HANDLE_ID)
-        ?.source,
+      graph.edges.find(
+        (edge) => edge.target === 'adset' && edge.targetHandle === AUDIENCE_HANDLE_ID,
+      )?.source,
     ).toBe('audience-version:audience-version-1');
   });
 
@@ -181,8 +203,9 @@ describe('buildHydratedCanvasGraph', () => {
     const positionOf = (id: string) => graph.nodes.find((node) => node.id === id)?.position;
 
     expect(audienceEdge).toMatchObject({ target: 'adset', targetHandle: AUDIENCE_HANDLE_ID });
-    expect(graph.edges.some((edge) => edge.source === 'adset' && edge.target.startsWith('audience')))
-      .toBe(false);
+    expect(
+      graph.edges.some((edge) => edge.source === 'adset' && edge.target.startsWith('audience')),
+    ).toBe(false);
     expect(positionOf('audience:audience-1')!.x).toBeLessThan(positionOf('adset')!.x);
     expect(positionOf('audience:audience-1')!.y).toBe(positionOf('adset')!.y);
     expect(graph.nodes.find((node) => node.id === 'audience:audience-1')?.data).toMatchObject({
@@ -207,7 +230,9 @@ describe('buildHydratedCanvasGraph', () => {
 
     expect(graph.nodes.filter((node) => node.id === 'audience:audience-1')).toHaveLength(1);
     expect(
-      graph.edges.filter((edge) => edge.source === 'audience:audience-1').map((edge) => edge.target),
+      graph.edges
+        .filter((edge) => edge.source === 'audience:audience-1')
+        .map((edge) => edge.target),
     ).toEqual(['adset', 'adset-2']);
     expect(positionOf('audience:audience-1').x).toBeLessThan(positionOf('adset').x);
     // A node is 384px wide: the second block starts clear of the first ad set's ads.
@@ -373,9 +398,9 @@ describe('buildHydratedCanvasGraph', () => {
       )?.data;
     };
 
-    expect(withCreative({ link_url: 'https://a.example', link: 'https://b.example' })).toMatchObject(
-      { linkUrl: 'https://a.example' },
-    );
+    expect(
+      withCreative({ link_url: 'https://a.example', link: 'https://b.example' }),
+    ).toMatchObject({ linkUrl: 'https://a.example' });
     expect(withCreative({ link: 'https://b.example' })).toMatchObject({
       linkUrl: 'https://b.example',
     });
@@ -403,7 +428,11 @@ describe('buildHydratedCanvasGraph', () => {
       mediaId: 'asset-video',
       assetUrl: 'https://cdn.example/v.mp4',
     });
-    expect(graph.edges).toContainEqual({ id: 'ad->ad:creative', source: 'ad', target: 'ad:creative' });
+    expect(graph.edges).toContainEqual({
+      id: 'ad->ad:creative',
+      source: 'ad',
+      target: 'ad:creative',
+    });
   });
 });
 
@@ -475,6 +504,10 @@ describe('creativeFromRow', () => {
         },
         { format: 'image', cards: [{ asset_id: 'asset-1', headline: null, link: null }] },
       ),
-    ).toMatchObject({ assetType: 'image', mediaId: 'asset-1', thumbnailUrl: 'https://cdn.example/t.jpg' });
+    ).toMatchObject({
+      assetType: 'image',
+      mediaId: 'asset-1',
+      thumbnailUrl: 'https://cdn.example/t.jpg',
+    });
   });
 });

@@ -111,6 +111,7 @@ export async function fetchPaidScaffoldTreeRows(params: {
 }
 
 export type PaidScaffoldHeader = {
+  lifecycle?: string;
   /** `paid_scaffolds.id` — what the canvas record bar selects on. */
   scaffoldId: string;
   brandId: string;
@@ -140,10 +141,9 @@ export async function fetchPaidScaffoldHeader(params: {
     .schema('brand_profiles')
     .from('paid_scaffold_versions')
     // `!scaffold_id` names the FK: `paid_scaffolds.current_version_id` points back the other
-    // way, and PostgREST refuses an embed it cannot disambiguate. `manifest->plan` reads the
-    // plan alone rather than the whole manifest.
+    // way, and PostgREST refuses an embed it cannot disambiguate.
     .select(
-      'scaffold_id,brand_id,version,content_hash,plan:manifest->plan,paid_scaffolds!scaffold_id(ad_account_id,name)',
+      'scaffold_id,brand_id,version,content_hash,lifecycle,plan:manifest->plan,paid_scaffolds!scaffold_id(ad_account_id,name)',
     )
     .eq('id', params.scaffoldVersionId)
     .maybeSingle();
@@ -155,6 +155,7 @@ export async function fetchPaidScaffoldHeader(params: {
   const plan = paidScaffoldPlanSchema.safeParse(raw.plan);
   return {
     scaffoldId: String(raw.scaffold_id ?? ''),
+    lifecycle: String(raw.lifecycle ?? ''),
     brandId: String(raw.brand_id ?? ''),
     adAccountId: asNullableString(parent.ad_account_id),
     name: asNullableString(parent.name),

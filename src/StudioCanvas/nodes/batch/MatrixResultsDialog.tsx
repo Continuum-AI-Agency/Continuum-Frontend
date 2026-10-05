@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Video } from '@/components/ui/video';
 import type { NodeOutput } from '../../types/execution';
 import type { MatrixAxisEntry, MatrixCell, MatrixLayout } from '../../utils/batch/matrix';
 import { matrixCellLabel } from '../../utils/batch/matrix';
@@ -263,14 +264,14 @@ export function MatrixResultsDialog({
                     <p className="max-w-3xl text-sm leading-relaxed whitespace-pre-wrap">
                       {selectedPreview.text}
                     </p>
-                  ) : selectedPreview.kind === 'video' ? (
-                    <video
+                  ) : selectedPreview.kind === 'video' && selectedPreview.src ? (
+                    <Video
                       src={selectedPreview.src}
-                      controls
-                      className="max-h-full max-w-full rounded"
-                    >
-                      <track kind="captions" />
-                    </video>
+                      ariaLabel={matrixCellLabel(layout, selected.row, selected.col)}
+                      className="aspect-auto! h-auto max-h-full w-auto max-w-full rounded border-0 [&_video]:h-auto [&_video]:max-h-full [&_video]:w-auto [&_video]:max-w-full [&_video]:object-contain"
+                    />
+                  ) : selectedPreview.kind === 'video' ? (
+                    <span className="text-sm text-muted-foreground">Nothing to show</span>
                   ) : (
                     <img
                       src={selectedPreview.src}

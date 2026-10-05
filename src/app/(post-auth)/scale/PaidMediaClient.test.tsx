@@ -51,6 +51,7 @@ mock.module('next/dynamic', () => ({
 }));
 
 mock.module('next/navigation', () => ({
+  usePathname: () => '/scale',
   useRouter: () => ({ replace: routerReplaceMock }),
   usePathname: () => '/scale',
   redirect: () => {},
@@ -117,6 +118,12 @@ mock.module('@/components/ui/tabs', () => ({
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+}));
+
+mock.module('@/CampaignCanvas/stores/useCampaignStore', () => ({
+  useCampaignStore: (
+    select: (state: { nodes: never[]; edges: never[]; platform: string }) => unknown,
+  ) => select({ nodes: [], edges: [], platform: 'meta' }),
 }));
 
 mock.module('@xyflow/react', () => ({

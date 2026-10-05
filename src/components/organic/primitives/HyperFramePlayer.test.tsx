@@ -18,6 +18,14 @@ mock.module('@/lib/organic/hyperframeSign', () => ({
 
 const { HyperFramePlayer } = await import('./HyperFramePlayer');
 
+/** The player labels its own root; the media element is inside it. */
+function shaderPreviewVideo(): HTMLElement {
+  const player = screen.getByLabelText('Shader preview');
+  const video = player.tagName === 'VIDEO' ? player : player.querySelector('video');
+  if (!video) throw new Error('no video element inside the player');
+  return video;
+}
+
 function hyperframeDraft(
   hyperframe: NonNullable<NonNullable<OrganicCalendarDraft['mediaSuggestion']>['hyperframe']>,
 ): OrganicCalendarDraft {
@@ -76,7 +84,7 @@ describe('HyperFramePlayer shader preview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play HyperFrame: Shader preview' }));
 
     await waitFor(() => expect(screen.getByLabelText('Shader preview')).toBeTruthy());
-    const video = screen.getByLabelText('Shader preview');
+    const video = shaderPreviewVideo();
     expect(video.tagName).toBe('VIDEO');
     expect(video.getAttribute('src')).toBe(mp4Url);
     expect(document.querySelector('iframe')).toBeNull();
@@ -111,7 +119,7 @@ describe('HyperFramePlayer shader preview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play HyperFrame: Shader preview' }));
 
     await waitFor(() => expect(screen.getByLabelText('Shader preview')).toBeTruthy());
-    expect(screen.getByLabelText('Shader preview').getAttribute('src')).toBe(
+    expect(shaderPreviewVideo().getAttribute('src')).toBe(
       'https://storage.googleapis.com/hf/film.mp4?sig',
     );
     expect(signHyperframeAssetMock).toHaveBeenCalledWith({

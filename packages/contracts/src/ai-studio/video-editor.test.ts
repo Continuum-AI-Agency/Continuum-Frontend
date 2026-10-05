@@ -305,5 +305,37 @@ describe('first cuts from a brief', () => {
     const tagged = batch(project, brief);
     expect(tagged.brief).toEqual(brief);
     expect(batch(tagged, null).brief).toBeUndefined();
+
+    const restore = applyEditorCommandBatch(tagged, {
+      batchId: 'b-restore',
+      projectId: tagged.projectId,
+      sequenceId: tagged.sequenceId,
+      idempotencyKey: 'batch-restore-brief',
+      expectedRevision: tagged.revision,
+      expectedFingerprint: tagged.fingerprint,
+      atomic: true,
+      issuedAt: '2026-09-30T00:00:00.000Z',
+      actor: user,
+      commands: [
+        {
+          commandId: 'c-restore',
+          commandType: 'restore_timeline_snapshot',
+          snapshot: {
+            sourceRevision: project.revision,
+            sourceFingerprint: project.fingerprint,
+            durationSec: project.durationSec,
+            tracks: project.tracks,
+            transitions: project.transitions,
+            nestedSequences: project.nestedSequences,
+            brief: null,
+          },
+          idempotencyKey: 'restore-brief-command',
+          expectedRevision: tagged.revision,
+          issuedAt: '2026-09-30T00:00:00.000Z',
+          actor: user,
+        },
+      ],
+    } as EditorCommandBatch);
+    expect(restore.brief).toBeUndefined();
   });
 });

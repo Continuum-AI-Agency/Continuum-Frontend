@@ -13,7 +13,7 @@ import {
   paidScaffoldPlanSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { seededScaffoldState } from '@/lib/jaina/uiMessageProjection';
 import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
@@ -195,6 +195,8 @@ const renderCard = (
     plan = null as PaidScaffoldPlan | null,
     contentHash = null as string | null,
     name = 'Easy Fit | Summer' as string | null,
+    adAccountId = null as string | null,
+    lifecycle = 'proposed',
   } = {},
 ) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -205,7 +207,8 @@ const renderCard = (
     header: {
       scaffoldId: 'scaffold-1',
       brandId: '',
-      adAccountId: null,
+      adAccountId,
+      lifecycle,
       name,
       version: 2,
       contentHash,
@@ -228,6 +231,38 @@ const renderCard = (
 };
 
 describe('PaidScaffoldCard', () => {
+  it('requests the selected immutable creative slot from its preview button', async () => {
+    const requests: string[] = [];
+    renderCard(
+      { onRequestCreative: (query) => requests.push(query) },
+      {
+        adAccountId: 'act_1',
+        contentHash: 'a'.repeat(64),
+        lifecycle: 'proposed',
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Generate / Enrich' }));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]).toContain('paid_creative_generate');
+    expect(requests[0]).toContain(VERSION);
+    expect(requests[0]).toContain('c0/a0/ad0');
+    expect(requests[0]).toContain('expected_asset_id":null');
+    expect(requests[0]).toContain('generation permission gate');
+  });
+
+  it('highlights combined publication and sends either human-selected mode', () => {
+    const decisions: unknown[] = [];
+    const approval = { ...BUILD_APPROVAL, toolName: 'paid_scaffold_publish' };
+    renderCard({ approval, onDecide: (...args) => decisions.push(args) });
+    const primary = screen.getByRole('button', { name: 'Publish & auto-enroll' });
+    expect(primary.className).toContain('bg-primary');
+    fireEvent.click(primary);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish only' }));
+    expect(decisions).toEqual([
+      [approval, 'approve', 'publish_and_enroll'],
+      [approval, 'approve', 'publish_only'],
+    ]);
+  });
   it('calls a bare proposal a proposal, not a gate nobody can answer', () => {
     renderCard();
     expect(screen.getByText('Proposed — nothing on Meta yet')).toBeTruthy();
@@ -324,9 +359,14 @@ describe('PaidScaffoldCard', () => {
     );
   });
 
-  it("names a pre-wave frame from its campaign skeleton, else calls it a scaffold", () => {
+  it('names a pre-wave frame from its campaign skeleton, else calls it a scaffold', () => {
     renderCard(
-      { scaffold: { ...seededScaffoldState(VERSION), plan: { campaigns: [{ name: 'Legacy Summer' }] } } },
+      {
+        scaffold: {
+          ...seededScaffoldState(VERSION),
+          plan: { campaigns: [{ name: 'Legacy Summer' }] },
+        },
+      },
       { rows: [], name: null },
     );
     expect(screen.getByText('Legacy Summer')).toBeTruthy();
