@@ -12,6 +12,7 @@ import {
   Home,
   Images,
   type LucideIcon,
+  MessageSquare,
   Plug,
   Settings,
   ShieldCheck,
@@ -81,6 +82,12 @@ const ORGANIC_ITEMS: AppNavigationItem[] = [
     icon: CalendarDays,
     accentColor: 'text-emerald-500',
     product: 'organic_agent',
+  },
+  {
+    label: 'Comment Rules',
+    href: '/organic?tab=rules',
+    icon: MessageSquare,
+    accentColor: 'text-emerald-500',
   },
 ];
 

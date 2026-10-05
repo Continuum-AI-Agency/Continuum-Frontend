@@ -11,6 +11,7 @@ import { OrganicCalendarWorkspace } from '@/components/organic/primitives/Organi
 import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
 import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
 import { ReviewQueueLazy } from '@/components/organic/review/ReviewQueueLazy';
+import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
 import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
@@ -65,38 +66,43 @@ async function OrganicContent({
   const brandName = brandSummaries?.find((b) => b.id === activeBrandId)?.name;
 
   // These reads depend only on activeBrandId, so run them together.
-  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult, brandTimeZoneResult] =
-    await Promise.allSettled([
-      ensureOnboardingState(activeBrandId),
-      fetchBrandIntegrationSummary(activeBrandId),
-      fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
-      (async () => {
-        const supabase = await createSupabaseServerClient();
-        const { data } = await supabase
-          .schema('brand_profiles')
-          .from('brand_documents')
-          .select('id, name, kind, text_excerpt')
-          .eq('brand_id', activeBrandId)
-          .eq('progress_step', 'ready')
-          .order('created_at', { ascending: false });
-        return (data ?? []) as Array<{
-          id: string;
-          name: string;
-          kind: string | null;
-          text_excerpt: string | null;
-        }>;
-      })(),
-      (async () => {
-        const supabase = await createSupabaseServerClient();
-        const { data } = await supabase
-          .schema('brand_profiles')
-          .from('brand_profiles')
-          .select('timezone')
-          .eq('id', activeBrandId)
-          .single();
-        return data?.timezone;
-      })(),
-    ]);
+  const [
+    onboardingResult,
+    integrationSummaryResult,
+    insightsResult,
+    brandDocsResult,
+    brandTimeZoneResult,
+  ] = await Promise.allSettled([
+    ensureOnboardingState(activeBrandId),
+    fetchBrandIntegrationSummary(activeBrandId),
+    fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
+    (async () => {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase
+        .schema('brand_profiles')
+        .from('brand_documents')
+        .select('id, name, kind, text_excerpt')
+        .eq('brand_id', activeBrandId)
+        .eq('progress_step', 'ready')
+        .order('created_at', { ascending: false });
+      return (data ?? []) as Array<{
+        id: string;
+        name: string;
+        kind: string | null;
+        text_excerpt: string | null;
+      }>;
+    })(),
+    (async () => {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase
+        .schema('brand_profiles')
+        .from('brand_profiles')
+        .select('timezone')
+        .eq('id', activeBrandId)
+        .single();
+      return data?.timezone;
+    })(),
+  ]);
 
   if (onboardingResult.status === 'rejected') {
     throw onboardingResult.reason;
@@ -355,6 +361,12 @@ async function OrganicContent({
       />
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
+        rulesSlot={
+          <CommentRulesWorkspace
+            brandId={brandProfileId}
+            instagramAccountId={metricAccountsByPlatform.instagram[0]?.integrationAccountId ?? null}
+          />
+        }
         plannerSlot={
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}
@@ -369,7 +381,9 @@ async function OrganicContent({
             maxTrendSelections={5}
             brandProfileId={brandProfileId}
             brandName={brandName}
-            brandTimeZone={brandTimeZoneResult.status === 'fulfilled' ? brandTimeZoneResult.value : undefined}
+            brandTimeZone={
+              brandTimeZoneResult.status === 'fulfilled' ? brandTimeZoneResult.value : undefined
+            }
             initialSelectedDraftId={initialSelectedDraftId}
             initialWeekStart={initialWeekStart}
             initialView={initialView}
