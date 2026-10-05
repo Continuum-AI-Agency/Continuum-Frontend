@@ -46,6 +46,7 @@ export const AutopilotScopeSchema = z.enum([
   'audience_change',
   'new_audience',
   'new_creatives',
+  'budget_move',
 ]);
 export type AutopilotScope = z.infer<typeof AutopilotScopeSchema>;
 export const AutopilotScopesSchema = z.object({
@@ -54,6 +55,10 @@ export const AutopilotScopesSchema = z.object({
   audience_change: z.boolean(),
   new_audience: z.boolean(),
   new_creatives: z.boolean(),
+  /** Budget moved BETWEEN platforms (G27, decision 18). Absent reads as false — every row
+   *  written before 20261005120000 has five keys — so a move waits for a person until
+   *  someone turns this on for an autopilot portfolio. */
+  budget_move: z.boolean().optional(),
 });
 export type AutopilotScopes = z.infer<typeof AutopilotScopesSchema>;
 /** What a portfolio approves on its own before anyone ticks anything. Budget only: the
@@ -86,6 +91,10 @@ export const AUTOPILOT_SCOPE_COPY: Record<AutopilotScope, { label: string; body:
   new_creatives: {
     label: 'Flash creatives',
     body: 'Generates variants into the Library; nothing is published.',
+  },
+  budget_move: {
+    label: 'Move budget between platforms',
+    body: 'Off by default, and we recommend a person approves these. When on, autopilot moves budget from the platform that pays more per result to the one that pays less, within each platform’s caps.',
   },
 };
 

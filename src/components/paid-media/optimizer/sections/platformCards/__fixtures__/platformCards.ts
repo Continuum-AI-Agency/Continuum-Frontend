@@ -24,7 +24,7 @@ export const GOOGLE_PMAX = parse({
   variant: 'google_pmax_asset_group',
   campaign_name: 'PMax Necesidades SLP',
   asset_groups: [
-    { name: 'Cañadas', ad_strength: 'POOR', missing: ['3 vertical videos', '4 long headlines'] },
+    { name: 'Canadas', ad_strength: 'POOR', missing: ['3 vertical videos', '4 long headlines'] },
     { name: 'ITESO', ad_strength: 'EXCELLENT', missing: [] },
   ],
 });
@@ -40,7 +40,7 @@ export const GOOGLE_VIDEO = parse({
 export const TIKTOK_FATIGUE = parse({
   variant: 'tiktok_creative_fatigue',
   ad_group_name: 'Leads MX · Spark',
-  creative_name: 'Reto 21 días',
+  creative_name: '21-day challenge',
   ctr_now: 0.008,
   ctr_before: 0.021,
   days: 9,

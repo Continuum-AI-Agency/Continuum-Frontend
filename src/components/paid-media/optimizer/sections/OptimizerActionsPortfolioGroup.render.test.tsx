@@ -212,6 +212,7 @@ mock.module('../useOptimizerData', () => ({
     refresh: () => undefined,
   }),
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
+  useRevertApply: () => ({ mutateAsync: async () => ({ ok: true }), isPending: false }),
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
@@ -233,6 +234,11 @@ mock.module('@/components/ui/alert-dialog', () => ({
     dialogOnOpenChange = onOpenChange ?? (() => {});
     return open ? children : null;
   },
+  AlertDialogTrigger: ({ children }: { children: ReactNode }) => (
+    <button onClick={() => dialogOnOpenChange(true)} type="button">
+      {children}
+    </button>
+  ),
   AlertDialogContent: ({ children }: { children: ReactNode }) => (
     <div role="alertdialog">{children}</div>
   ),
@@ -269,8 +275,14 @@ mock.module('./RecommendationInsight', () => ({
   RecommendationInsight: ({ kind }: { kind: string }) => <span>{kind}</span>,
 }));
 
-const { OptimizerActionsPortfolioGroup, buildActionQueue, isSelectableRow, selectionLabel } =
-  await import('./OptimizerActionsPortfolioGroup');
+const {
+  OptimizerActionsPortfolioGroup,
+  buildActionQueue,
+  buildMoveQueue,
+  isSelectableRow,
+  selectionLabel,
+} = await import('./OptimizerActionsPortfolioGroup');
+const { moveRec, feedRow, MOVE_ID } = await import('./crossPlatformMove/moveFixtures');
 
 afterEach(() => {
   cleanup();
@@ -1234,5 +1246,107 @@ describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', ()
       />,
     );
     expect(container.querySelectorAll(`li[data-row-key="rec:${CARRIED_REC_ID}"]`)).toHaveLength(1);
+  });
+});
+
+// Decisions 17 and 18: a cross-platform move is ONE row in the queue with every leg under it,
+// and a person decides it with one of three buttons.
+describe('a cross-platform budget move in the queue', () => {
+  const MOVE_REC_ID = '99999999-9999-4999-8999-999999999999';
+  const withMove = (status = 'pending') => ({
+    ...report,
+    recommendations: [...report.recommendations, moveRec({ id: MOVE_REC_ID, status })],
+  });
+
+  it('renders as ONE row, never as a fatigue row, with every leg and the three buttons', () => {
+    activeReport = withMove();
+    renderGroup();
+    const rows = screen.getAllByTestId('budget-move-row');
+    expect(rows).toHaveLength(1);
+    expect(screen.getAllByTestId('budget-move-leg')).toHaveLength(4);
+    expect(
+      screen.getByText('We recommend a person approves moves between platforms.'),
+    ).toBeTruthy();
+    for (const name of ['Approve the move', 'Approve the decrease only', 'Dismiss']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+    expect(
+      buildActionQueue(withMove() as never).some((row) => row.key === `rec:${MOVE_REC_ID}`),
+    ).toBe(false);
+  });
+
+  it('Approve the move records the approval, and holds the row while it is in flight', () => {
+    activeReport = withMove();
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve the move' }));
+    expect(setStatusMutate.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
+      { recommendation_id: MOVE_REC_ID, status: 'approved' },
+    ]);
+    expect(screen.getByRole('button', { name: 'Dismiss' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('Dismiss rejects it', () => {
+    activeReport = withMove();
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(setStatusMutate.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
+      { recommendation_id: MOVE_REC_ID, status: 'rejected' },
+    ]);
+  });
+
+  it('a portfolio whose only work is a move still shows its queue', () => {
+    activeReport = { ...report, latest_items: [], recommendations: [moveRec({ id: MOVE_REC_ID })] };
+    renderGroup();
+    expect(screen.getByTestId('budget-move-row')).toBeTruthy();
+  });
+
+  it('observe mode blocks the move as it blocks every write', () => {
+    activeReport = withMove();
+    renderGroup({ apply_mode: 'observe' });
+    expect(screen.getByRole('button', { name: 'Approve the move' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  it('buildMoveQueue keeps pending and approved moves, drops decided ones and unparseable ones', () => {
+    const parsed = (recs: unknown[]) =>
+      buildMoveQueue({ ...report, recommendations: recs } as never).map((row) => row.rec.id);
+    expect(
+      parsed([
+        moveRec({ id: 'a', status: 'approved' }),
+        moveRec({ id: 'b' }),
+        moveRec({ id: 'c', status: 'rejected' }),
+        moveRec({ id: 'd', action: { kind: 'budget_move' } }),
+      ]),
+    ).toEqual(['b', 'a']);
+  });
+
+  it('Recently applied folds a move into one decision with its legs', () => {
+    recentActions = [
+      feedRow({
+        id: 'leg-1',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        move_id: MOVE_ID,
+        leg: 1,
+        platform: 'google_ads',
+        before: { minor: 70_000 },
+        after: { minor: 80_000 },
+      }),
+      feedRow({
+        id: 'leg-0',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        move_id: MOVE_ID,
+        leg: 0,
+        platform: 'tiktok_ads',
+        before: { minor: 100_000 },
+        after: { minor: 90_000 },
+      }),
+    ];
+    renderGroup();
+    expect(screen.getAllByTestId('move-decision')).toHaveLength(1);
+    expect(screen.getAllByTestId('move-decision-leg')).toHaveLength(2);
+    // Undo both itself is covered by MoveDecisionCard.render.test (this suite mocks the dialog).
+    expect(screen.getByTestId('move-state').textContent).toBe('applied');
+    expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
   });
 });

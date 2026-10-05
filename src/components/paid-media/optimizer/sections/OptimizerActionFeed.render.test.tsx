@@ -496,3 +496,82 @@ describe('ActionRow — platform chip and receipt', () => {
     );
   });
 });
+
+// A yen budget is whole yen: the old hard-coded /100 printed it a hundred times too small.
+describe('money is divided by the currency’s own minor unit', () => {
+  it('JPY prints the ledger figure whole; MXN divides by 100', () => {
+    actionsState = {
+      data: [action({ before: { minor: 5000 }, after: { minor: 6000 } })],
+      isLoading: false,
+    };
+    const { container, unmount } = render(<OptimizerActionFeed brandId="brand-1" currency="JPY" />);
+    expect(container.textContent).toContain('5,000 JPY');
+    expect(container.textContent).toContain('6,000 JPY');
+    unmount();
+    render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
+    expect(screen.getAllByText(/50\.00 MXN/).length).toBeGreaterThan(0);
+  });
+
+  it('the dense ActionRow uses the same division', async () => {
+    const { ActionRow } = await import('./OptimizerActionFeed');
+    render(
+      <ul>
+        <ActionRow
+          row={action({ before: { minor: 5000 }, after: { minor: 6000 } })}
+          brandId="brand-1"
+          currency="JPY"
+        />
+      </ul>,
+    );
+    expect(screen.getByText('5,000 JPY')).toBeTruthy();
+  });
+});
+
+// Decision 6/17: a cross-platform move is ONE decision in Activity, its legs as sub-rows.
+describe('a cross-platform move in the action feed', () => {
+  const MOVE = '7b0e3a52-5d1f-4b8e-9a51-0c3c1d2e4f60';
+  const legRow = (over: Record<string, unknown>) =>
+    action({ move_id: MOVE, outcome: 'applied', ...over } as Partial<OptimizerActionFeedRow>);
+
+  it('folds the legs into one Decision card beside the single writes', () => {
+    actionsState = {
+      data: [
+        action({ id: 'single-1', entity_id: '120251303880680999' }),
+        legRow({
+          id: 'leg-1',
+          leg: 1,
+          platform: 'google_ads',
+          entity_id: '24274603133',
+          before: { minor: 40_000 },
+          after: { minor: 52_000 },
+          receipt: { requestId: '0c1-req' },
+        }),
+        legRow({
+          id: 'leg-0',
+          leg: 0,
+          platform: 'meta',
+          before: { minor: 24_400 },
+          after: { minor: 12_400 },
+          receipt: { fbtrace_id: '8f2-trace' },
+        }),
+      ],
+      isLoading: false,
+    };
+    render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
+    const cards = screen.getAllByTestId('move-decision');
+    expect(cards).toHaveLength(1);
+    const card = cards[0] as HTMLElement;
+    expect(card.textContent).toContain('Move 120.00 MXN/day from Meta to Google');
+    const legs = within(card).getAllByTestId('move-decision-leg');
+    expect(legs.map((leg) => leg.getAttribute('data-platform'))).toEqual(['meta', 'google_ads']);
+    expect(
+      within(card)
+        .getAllByTestId('receipt-token')
+        .map((t) => t.textContent),
+    ).toEqual([expect.stringContaining('8f2-trace'), expect.stringContaining('0c1-req')]);
+    // The single write still renders as its own card, and no leg leaks out as one.
+    expect(
+      screen.queryByText('24274603133', { selector: '[data-testid="action-grid"] *' }),
+    ).toBeNull();
+  });
+});

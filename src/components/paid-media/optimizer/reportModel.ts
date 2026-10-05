@@ -557,6 +557,7 @@ const SCOPE_WORDS: Record<keyof AutopilotScopes, string> = {
   audience_change: 'audience replacements',
   new_audience: 'new audiences',
   new_creatives: 'flash creatives',
+  budget_move: 'moves between platforms',
 };
 
 /** "budget moves, creative rotation" — the ON scopes, in the panel's order. */

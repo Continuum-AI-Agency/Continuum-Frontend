@@ -34,10 +34,29 @@ export function formatCurrency(
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(Math.abs(value));
-  // The sign stays outside the unit: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
-  const sign = value < 0 ? '-' : '';
+  return withUnit(value < 0 ? '-' : '', body, code);
+}
+
+// The sign stays outside the unit: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
+function withUnit(sign: string, body: string, code: string | null): string {
   if (!code) return `${sign}${body}`;
   return code === 'USD' ? `${sign}$${body}` : `${sign}${body} ${code}`;
+}
+
+/** Money to an exact number of decimals, for an amount that has to read to the minor unit —
+ *  a cross-platform move takes off exactly what it puts on, so 957.68 never prints as 958.
+ *  Same unit rule as `formatCurrency`: an unknown code prints the bare figure. */
+export function formatCurrencyExact(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+  fractionDigits: number,
+): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const body = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Math.abs(value));
+  return withUnit(value < 0 ? '-' : '', body, normalizeCurrency(currency));
 }
 
 /** Cost per result, in the account's own currency. The digit rule owns the precision — a

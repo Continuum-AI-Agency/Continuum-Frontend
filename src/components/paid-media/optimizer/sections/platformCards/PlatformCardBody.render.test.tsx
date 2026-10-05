@@ -51,7 +51,7 @@ describe('PMax asset group', () => {
     );
     const groups = getByTestId('platform-card-asset-groups').textContent ?? '';
     expect(groups).toContain(
-      'Cañadas · ad strength Poor · missing 3 vertical videos, 4 long headlines',
+      'Canadas · ad strength Poor · missing 3 vertical videos, 4 long headlines',
     );
     expect(groups).toContain('ITESO · ad strength Excellent · nothing missing');
     expect(container.textContent).toContain('Google does not report conversions per asset group');
@@ -83,7 +83,7 @@ describe('TikTok creative fatigue', () => {
   it('states the CTR before and now, the frequency and the replacement', () => {
     const { getByRole, getByTestId } = render(<PlatformCardBody card={TIKTOK_FATIGUE} />);
     expect(getByRole('heading').textContent).toBe(
-      '"Reto 21 días" fell from 2.1% to 0.8% CTR in 9 days with frequency 4.3',
+      '"21-day challenge" fell from 2.1% to 0.8% CTR in 9 days with frequency 4.3',
     );
     expect(getByTestId('platform-card-fatigue').textContent).toContain(
       '"Post 22/09" runs at 3.4% CTR.',

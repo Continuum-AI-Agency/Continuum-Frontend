@@ -87,8 +87,8 @@ import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
-import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
+import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { applyModeExplainer, freezeLabel, parseReport } from '../reportModel';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../suggestInput';
@@ -101,8 +101,8 @@ import {
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
-import { AttributionSection } from './attribution/AttributionSection';
 import { AutopilotScopesField } from './AutopilotScopesField';
+import { AttributionSection } from './attribution/AttributionSection';
 import type { HeroSetting } from './detail/heroHeaderModel';
 import { OBJECTIVES } from './suggestionModel';
 import {
@@ -1210,10 +1210,14 @@ export function PortfolioManagePanel({
               }
               onChange={(scope, enabled) => {
                 setSavingScope(scope);
-                update.mutate(
-                  { portfolio_id: portfolio.id, patch: { autopilot_scopes: { [scope]: enabled } } },
-                  { onSettled: () => setSavingScope(null) },
-                );
+                // The promise goes back to the field so it can tell a key the database does
+                // not accept yet from an ordinary failure.
+                return update
+                  .mutateAsync({
+                    portfolio_id: portfolio.id,
+                    patch: { autopilot_scopes: { [scope]: enabled } },
+                  })
+                  .finally(() => setSavingScope(null));
               }}
               portfolioId={portfolio.id}
               savingScope={savingScope}

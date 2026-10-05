@@ -25,6 +25,7 @@ import {
   type ActionChange,
   actionPlatform,
   actorLabel,
+  minorToMajor,
   readActionChange,
   readReceiptTrace,
   revertScopeOf,
@@ -78,7 +79,7 @@ export function printChangeValue(
 ): string {
   if (value == null) return '—';
   if (change.unit === 'money' && typeof value === 'number') {
-    return formatCurrency(value / 100, currency);
+    return formatCurrency(minorToMajor(value, currency), currency);
   }
   return String(value);
 }

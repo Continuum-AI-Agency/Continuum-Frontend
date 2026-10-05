@@ -33,11 +33,14 @@ import {
   type ActionChange,
   actionPlatform,
   actorLabel,
+  minorToMajor,
   readActionChange,
   readReceiptTrace,
   revertScopeOf,
   revertState,
 } from './actionRows';
+import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
+import { groupActionFeed, type MoveDecision } from './crossPlatformMove/moveDecisionModel';
 import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
@@ -74,7 +77,7 @@ function ChangeLine({ change, currency }: { change: ActionChange; currency: stri
   const print = (value: string | number | null): string => {
     if (value == null) return '—';
     if (change.unit === 'money' && typeof value === 'number') {
-      return formatCurrency(value / 100, currency);
+      return formatCurrency(minorToMajor(value, currency), currency);
     }
     return String(value);
   };
@@ -250,16 +253,30 @@ function ActionFeedCards({
   currency: string | null;
 }) {
   const entityNames = useActionEntityNames(rows);
-  const { featured, rest } = splitFeaturedAction(rows);
-  if (!featured) return null;
+  // A cross-platform move is ONE decision, however many writes it took: its legs fold into a
+  // single card ahead of the single writes, which keep the featured + grid layout.
+  const items = groupActionFeed(rows);
+  const moves: MoveDecision[] = items.flatMap((item) => (item.kind === 'move' ? [item.move] : []));
+  const singles = items.flatMap((item) => (item.kind === 'single' ? [item.row] : []));
+  const { featured, rest } = splitFeaturedAction(singles);
+  if (!featured && moves.length === 0) return null;
   return (
     <div className="space-y-3">
-      <ActionFeaturedCard
-        row={featured}
-        brandId={brandId}
-        currency={currency}
-        entityNames={entityNames}
-      />
+      {moves.length > 0 ? (
+        <ul className="space-y-3" data-testid="move-decisions">
+          {moves.map((move) => (
+            <MoveDecisionCard brandId={brandId} currency={currency} key={move.moveId} move={move} />
+          ))}
+        </ul>
+      ) : null}
+      {featured ? (
+        <ActionFeaturedCard
+          row={featured}
+          brandId={brandId}
+          currency={currency}
+          entityNames={entityNames}
+        />
+      ) : null}
       {rest.length > 0 ? (
         <ul
           className={`grid items-stretch gap-3 ${GRID_COLUMNS[rest.length] ?? GRID_COLUMNS_FULL}`}

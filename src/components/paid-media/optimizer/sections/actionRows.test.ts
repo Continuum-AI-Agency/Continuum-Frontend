@@ -3,6 +3,7 @@ import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   actionPlatform,
   actorLabel,
+  minorToMajor,
   readActionChange,
   readReceiptTrace,
   revertScopeOf,
@@ -172,5 +173,22 @@ describe('revertScopeOf', () => {
   it('switches the dialog to unpause copy on a status write only', () => {
     expect(revertScopeOf(action({ op: 'status' }))).toBe('adset_status');
     expect(revertScopeOf(action({ op: 'budget' }))).toBeNull();
+  });
+});
+
+describe("minorToMajor divides by the currency's own minor unit (ISO 4217)", () => {
+  it('two decimals for MXN and USD', () => {
+    expect(minorToMajor(95_768, 'MXN')).toBe(957.68);
+    expect(minorToMajor(5_341, 'usd')).toBe(53.41);
+  });
+
+  it('zero decimals for JPY, three for KWD', () => {
+    expect(minorToMajor(5_000, 'JPY')).toBe(5_000);
+    expect(minorToMajor(12_345, 'KWD')).toBe(12.345);
+  });
+
+  it('an unrecorded or malformed currency keeps the two-decimal reading', () => {
+    expect(minorToMajor(5_341, null)).toBe(53.41);
+    expect(minorToMajor(5_341, 'pesos')).toBe(53.41);
   });
 });

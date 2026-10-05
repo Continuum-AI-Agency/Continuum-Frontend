@@ -49,7 +49,7 @@ function sourceRow(
   return {
     kind,
     source_id: kind === 'platform' ? null : '7a1c6f0e-3b0f-4a55-9b1e-2a5f3b9e0c11',
-    label: kind === 'platform' ? 'Plataforma' : 'Hoja del cliente',
+    label: kind === 'platform' ? 'Each platform' : 'Client sheet',
     conversions,
     conversion_value: null,
     coverage_pct: coverage,

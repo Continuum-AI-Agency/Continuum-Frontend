@@ -9,6 +9,7 @@
 // this is a DB-derived read model, so an op the contract has not caught up with (today,
 // 'convert') must still render as something honest rather than crash the page.
 
+import { currencyMinorOffset } from '@continuum/contracts';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   type AdPlatform,
@@ -25,6 +26,19 @@ export type ActionChange = {
   before: string | number | null;
   after: string | number | null;
 };
+
+/** MINOR → MAJOR by the currency's ISO 4217 exponent: 100 for MXN and USD, 1 for JPY, 1000
+ *  for KWD. A hard-coded /100 printed a yen budget a hundred times too small. A currency
+ *  nobody recorded (or a malformed code) keeps the two-decimal reading the ledger was written
+ *  in for every account this app has served. */
+export function minorToMajor(minor: number, currency: string | null): number {
+  if (!currency) return minor / 100;
+  try {
+    return minor / currencyMinorOffset(currency);
+  } catch {
+    return minor / 100;
+  }
+}
 
 function readMinor(value: Record<string, unknown> | null | undefined): number | null {
   const minor = value?.minor;

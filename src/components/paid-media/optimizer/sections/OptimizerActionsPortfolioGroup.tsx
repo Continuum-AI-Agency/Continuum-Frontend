@@ -102,6 +102,14 @@ import {
 import { CostIntervalLine } from './CostIntervalLine';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
+import { BudgetMoveQueueRow } from './crossPlatformMove/BudgetMoveQueueRow';
+import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
+import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
+import {
+  isBudgetMoveRecommendation,
+  type QueuedMove,
+  readQueuedMove,
+} from './crossPlatformMove/queuedMoveModel';
 import { type ImplementTarget, implementTargets, predecessorAdIn } from './flashCreativesModel';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
@@ -276,6 +284,8 @@ export function buildActionQueue(
   }
 
   for (const rec of report?.recommendations ?? []) {
+    // A cross-platform move is its own row with its own three buttons (buildMoveQueue).
+    if (isBudgetMoveRecommendation(rec)) continue;
     // Budget is never a recommendation route (budget moves are cycle_items), so the rec route
     // is one of pause | fatigue | hidden — narrow it so the row's union type is exact.
     const route = actionRoute(rec.kind);
@@ -302,6 +312,7 @@ export function buildActionQueue(
   // is not duplicated.
   const present = new Set(rows.map((row) => row.key));
   for (const rec of carried) {
+    if (isBudgetMoveRecommendation(rec)) continue;
     const key = `rec:${rec.id}`;
     if (present.has(key)) continue;
     present.add(key);
@@ -320,6 +331,25 @@ export function buildActionQueue(
   // $500/day and the other $20/day.
   return rows.sort(
     (a, b) => queueRank(a) - queueRank(b) || rowImpactPerDay(b) - rowImpactPerDay(a),
+  );
+}
+
+/** A cross-platform move waiting on a person (pending) or on its write (approved). */
+export type MoveQueueRow = { key: string; rec: RecommendationRow; move: QueuedMove };
+
+/** The portfolio's cross-platform moves, biggest first. A row whose action does not parse
+ *  against the contract is left out rather than shown with legs it cannot vouch for. */
+export function buildMoveQueue(report: ParsedCycleRunReport | null): MoveQueueRow[] {
+  const rows: MoveQueueRow[] = [];
+  for (const rec of report?.recommendations ?? []) {
+    if (rec.status !== 'pending' && rec.status !== 'approved') continue;
+    const move = readQueuedMove(rec);
+    if (move) rows.push({ key: `rec:${rec.id}`, rec, move });
+  }
+  return rows.sort(
+    (a, b) =>
+      Number(a.rec.status === 'approved') - Number(b.rec.status === 'approved') ||
+      b.move.amountMinor - a.move.amountMinor,
   );
 }
 
@@ -619,6 +649,15 @@ export function OptimizerActionsPortfolioGroup({
     () => buildActionQueue(report, nameById, carriedRecs),
     [report, nameById, carriedRecs],
   );
+  const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
+  const [decidingMove, setDecidingMove] = React.useState<string | null>(null);
+  const decideMove = (rec: RecommendationRow, status: 'approved' | 'rejected') => {
+    setDecidingMove(rec.id);
+    setStatus.mutate(
+      { recommendation_id: rec.id, status },
+      { onSettled: () => setDecidingMove(null) },
+    );
+  };
   // A CTA's row, in two steps. First, the moment the key arrives: clear whatever narrows the
   // list and open the row. Then — only once the row is actually in the queue and painted —
   // bring it into view and hand the key back. Consuming before the row exists (the queue may
@@ -631,7 +670,10 @@ export function OptimizerActionsPortfolioGroup({
     setRouteFilters(new Set());
     setExpanded(focusRowKey);
   }, [focusRowKey]);
-  const focusRowPresent = focusRowKey != null && rows.some((row) => row.key === focusRowKey);
+  const focusRowPresent =
+    focusRowKey != null &&
+    (rows.some((row) => row.key === focusRowKey) ||
+      moveRows.some((row) => row.key === focusRowKey));
   // A key with no row for a while is a pressed button that did nothing, and silence there is
   // the dead end the read rows exist to close, wearing another hat. After the delay the queue
   // says so in words, and keeps saying it until the row arrives (a build's row lands with the
@@ -902,7 +944,7 @@ export function OptimizerActionsPortfolioGroup({
       />
     );
   }
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && moveRows.length === 0) return null;
 
   const clearTransient = () => {
     setSelected(new Set());
@@ -1049,7 +1091,7 @@ export function OptimizerActionsPortfolioGroup({
         <h3 className="flex items-center gap-2.5 text-base font-semibold tracking-tight">
           {portfolio.name}
           <Badge variant="secondary" className="text-xs">
-            {selectableVisible.length || rows.length}
+            {(selectableVisible.length || rows.length) + moveRows.length}
           </Badge>
         </h3>
         <Input
@@ -1174,6 +1216,23 @@ export function OptimizerActionsPortfolioGroup({
           with the cycle's next read.
         </p>
       ) : null}
+      {/* Cross-platform moves lead the queue: the biggest decision, and the one a person
+          should take even when autopilot could (decision 18). */}
+      {moveRows.length > 0 ? (
+        <ul className="space-y-2" data-testid="budget-move-queue">
+          {moveRows.map(({ key, rec, move }) => (
+            <BudgetMoveQueueRow
+              busy={decidingMove === rec.id}
+              key={key}
+              move={move}
+              onApproveMove={() => decideMove(rec, 'approved')}
+              onDismiss={() => decideMove(rec, 'rejected')}
+              rec={rec}
+              writesBlocked={writesBlocked}
+            />
+          ))}
+        </ul>
+      ) : null}
       <ul className="space-y-2">
         {visibleRows.map((row, index) => (
           <React.Fragment key={row.key}>
@@ -1281,9 +1340,10 @@ function PortfolioRecentActions({
   const actionsQuery = useOptimizerActions(brandId);
   // A failed or empty action read must not push an error into the queue — the queue's own work
   // is unaffected by it. The full feed reports its own outage in Activity → Actions.
-  const recent = actionsQuery.data
-    .filter((row) => row.portfolio_id === portfolioId && row.family === 'money')
-    .slice(0, RECENT_ACTION_LIMIT);
+  // Grouped before the cut, so a move's legs never split across the limit.
+  const recent = groupActionFeed(
+    actionsQuery.data.filter((row) => row.portfolio_id === portfolioId && row.family === 'money'),
+  ).slice(0, RECENT_ACTION_LIMIT);
 
   if (recent.length === 0) return null;
 
@@ -1291,9 +1351,18 @@ function PortfolioRecentActions({
     <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-4 py-3">
       <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Recently applied</p>
       <ul className="space-y-2">
-        {recent.map((row) => (
-          <ActionRow key={row.id} row={row} brandId={brandId} currency={currency} />
-        ))}
+        {recent.map((item) =>
+          item.kind === 'move' ? (
+            <MoveDecisionCard
+              brandId={brandId}
+              currency={currency}
+              key={item.key}
+              move={item.move}
+            />
+          ) : (
+            <ActionRow key={item.row.id} row={item.row} brandId={brandId} currency={currency} />
+          ),
+        )}
       </ul>
     </div>
   );
