@@ -15,8 +15,11 @@
 // account read; the read's own narrative, its footnotes and its charts are not shown.
 //
 // Above all of it sits the platform tab row (All · Meta · Google · TikTok, kept in ?platform=,
-// docs/optimizer-multiplatform/frontend.html §2). "All" and "Meta" are the O1 above, with a
-// platform chip on every card and row; Google and TikTok are their own screens in ./platforms.
+// docs/optimizer-multiplatform/frontend.html §2). "All" is the MP1 frame: its sentence and
+// tiles come from ONE producer, public.optimizer_get_account_platform_metrics, so they span the
+// three platforms without adding two currencies or two result kinds together. "Meta" is the O1
+// above, unchanged. Google and TikTok lead with their own rows of the same producer. Until that
+// RPC is deployed every tab says so plainly, and "All" falls back to today's Meta O1.
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
@@ -63,14 +66,27 @@ import { JainaEntryChips } from './JainaEntryChips';
 import { jainaAccountEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 import { underManagement } from './portfolioStaleness';
+import {
+  AllPlatformsHeadline,
+  AllPlatformsSubline,
+  AllPlatformsTiles,
+  PlatformMetricsSection,
+} from './platforms/AccountPlatformsOverview';
+import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
+import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
 import { PlatformTabs } from './platforms/PlatformTabs';
 import {
+  type AdPlatform,
   connectedPlatforms,
   OPTIMIZER_MANAGED_PLATFORM,
   rendersManagedOverview,
 } from './platforms/platformTabsModel';
 import { TikTokAdsTab } from './platforms/TikTokAdsTab';
+import {
+  type AccountPlatformMetricsState,
+  useAccountPlatformMetrics,
+} from './platforms/useAccountPlatformMetrics';
 
 /** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
 const MAX_KIND_TILES = 3;
@@ -141,12 +157,21 @@ export function OptimizerOverview({
   const requestRead = useRequestAccountRead(brandId, adAccountId);
   const { platform: platformTab, setPlatform } = useOptimizerUrlState();
   const adAccounts = useOptimizerAdAccounts(brandId);
+  const platformMetrics = useAccountPlatformMetrics(brandId);
   const connected = useMemo(() => {
     const granted = connectedPlatforms(adAccounts.data);
-    // The selected account is a Meta account the brand already reads: Meta is connected even
-    // while the account list is still loading or failed.
-    return { ...granted, meta: granted.meta || adAccountId != null };
-  }, [adAccounts.data, adAccountId]);
+    // The producer knows TikTok too; the grant list does not. Either one saying "connected"
+    // is enough — a tab never says "Connect" for an account the page is already reading.
+    const read =
+      platformMetrics.status === 'ready' ? connectedFromMetrics(platformMetrics.metrics) : null;
+    return {
+      // The selected account is a Meta account the brand already reads: Meta is connected even
+      // while the account list is still loading or failed.
+      meta: granted.meta || adAccountId != null || Boolean(read?.meta),
+      google_ads: granted.google_ads || Boolean(read?.google_ads),
+      tiktok_ads: granted.tiktok_ads || Boolean(read?.tiktok_ads),
+    };
+  }, [adAccounts.data, adAccountId, platformMetrics]);
 
   const windows = useMemo(() => {
     const byId = new Map<string, PortfolioWindow>();
@@ -218,10 +243,14 @@ export function OptimizerOverview({
     return (
       <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
         {tabs}
-        {platformTab === 'google_ads' ? <GoogleAdsTab brandId={brandId} /> : <TikTokAdsTab />}
+        <PlatformTab brandId={brandId} metrics={platformMetrics} platform={platformTab} />
       </div>
     );
   }
+
+  // "All" reads the producer; "Meta" is today's O1 whatever the producer says.
+  const allFrame = platformTab === 'all' ? platformMetrics : null;
+  const multiplatform = allFrame?.status === 'ready' ? allFrame.metrics : null;
 
   return (
     <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
@@ -274,9 +303,32 @@ export function OptimizerOverview({
         </div>
       </div>
 
+      {allFrame?.status === 'unavailable' ? (
+        <MultiPlatformUnavailable detail="The figures below are Meta's, as today." />
+      ) : null}
+      {allFrame?.status === 'error' ? (
+        <p
+          className="px-1 text-muted-foreground text-xs"
+          data-testid="multiplatform-error"
+          role="status"
+        >
+          {allFrame.message} The figures below are Meta's.
+        </p>
+      ) : null}
+
       {/* 1 — the sentence. Every figure in it is one of the tiles below, said in a row. */}
       <section className="space-y-1 px-1" data-testid="overview-hero">
-        {efficiency.failed > 0 && !efficiency.pending ? (
+        {multiplatform ? (
+          <AllPlatformsHeadline metrics={multiplatform} />
+        ) : allFrame?.status === 'loading' ? (
+          <p
+            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            data-pending="true"
+            data-testid="overview-headline"
+          >
+            Reading the account across platforms…
+          </p>
+        ) : efficiency.failed > 0 && !efficiency.pending ? (
           <p
             className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
             data-incomplete="true"
@@ -367,8 +419,14 @@ export function OptimizerOverview({
           className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
           data-testid="overview-subline"
         >
-          {window ? <span data-testid="overview-window">{window}</span> : null}
-          {window && accountRead.data ? <span aria-hidden="true">·</span> : null}
+          {multiplatform ? (
+            <AllPlatformsSubline metrics={multiplatform} />
+          ) : window ? (
+            <span data-testid="overview-window">{window}</span>
+          ) : null}
+          {(multiplatform || window) && accountRead.data ? (
+            <span aria-hidden="true">·</span>
+          ) : null}
           {accountRead.data ? (
             <AccountReadFreshness
               error={requestRead.error instanceof Error ? requestRead.error.message : null}
@@ -386,6 +444,9 @@ export function OptimizerOverview({
       <JainaEntryChips entries={jainaEntries} label="Ask Jaina" />
 
       {/* 4 — the radiography: four to six tiles, each with a state on its top border. */}
+      {multiplatform ? (
+        <AllPlatformsTiles metrics={multiplatform} onOpenActions={onOpenActions} />
+      ) : allFrame?.status === 'loading' ? null : (
       <div
         className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6"
         data-testid="account-tiles"
@@ -446,6 +507,7 @@ export function OptimizerOverview({
           value={`${autopilot.autopilot} of ${autopilot.total}`}
         />
       </div>
+      )}
 
       {/* 5 — the recommendation cards, in impact order, the lead marked. */}
       {shown ? (
@@ -527,4 +589,53 @@ export function OptimizerOverview({
       </section>
     </div>
   );
+}
+
+/** A platform's own tab: its rows of the producer first, then what only that platform's
+ *  edge read holds (Google's campaign types). Before the producer is deployed, the tab says
+ *  so and shows today's screen for that platform. */
+function PlatformTab({
+  brandId,
+  metrics,
+  platform,
+}: {
+  brandId: string;
+  metrics: AccountPlatformMetricsState;
+  platform: Exclude<AdPlatform, 'meta'>;
+}) {
+  const fallback =
+    platform === 'google_ads' ? <GoogleAdsTab brandId={brandId} /> : <TikTokAdsTab />;
+  if (metrics.status === 'unavailable') {
+    return (
+      <>
+        <MultiPlatformUnavailable
+          detail={
+            platform === 'google_ads'
+              ? "Below is Google's own read of the account."
+              : undefined
+          }
+        />
+        {fallback}
+      </>
+    );
+  }
+  if (metrics.status === 'ready' && platformTotals(metrics.metrics, platform)?.connected) {
+    return (
+      <>
+        <PlatformMetricsSection metrics={metrics.metrics} platform={platform} />
+        {platform === 'google_ads' ? <GoogleAdsTab brandId={brandId} mode="breakdown" /> : null}
+      </>
+    );
+  }
+  if (metrics.status === 'error') {
+    return (
+      <>
+        <p className="px-1 text-muted-foreground text-xs" data-testid="multiplatform-error" role="status">
+          {metrics.message}
+        </p>
+        {fallback}
+      </>
+    );
+  }
+  return fallback;
 }

@@ -91,6 +91,26 @@ mock.module('../useOptimizerData', () => ({
   }),
 }));
 
+// The Attribution section reads optimizer_get_portfolio_metrics. Spread the real module for the
+// same reason as above; each test sets the state it needs.
+let portfolioMetricsState: import('./detail/usePortfolioMetrics').PortfolioMetricsState = {
+  status: 'unavailable',
+};
+const realPortfolioMetrics = await import('./detail/usePortfolioMetrics');
+mock.module('./detail/usePortfolioMetrics', () => ({
+  ...realPortfolioMetrics,
+  usePortfolioMetrics: () => portfolioMetricsState,
+  useInvalidatePortfolioMetrics: () => () => {},
+}));
+
+// The picker's Google half reads paid-media-metrics; this suite is about the Meta form, so the
+// brand has no Google account here (the Google group has its own suite under picker/).
+const realGoogleInventory = await import('../picker/useGooglePickerInventory');
+mock.module('../picker/useGooglePickerInventory', () => ({
+  ...realGoogleInventory,
+  useGooglePickerInventory: () => ({ status: 'none' }),
+}));
+
 // The picker is a heavy virtualized tree; stub it so this suite is only about the config form.
 mock.module('../picker/CampaignAdsetPicker', () => ({
   CampaignAdsetPicker: ({
@@ -129,6 +149,7 @@ beforeEach(() => {
   performanceData = null;
   cyclePreviewOutcome = undefined;
   cyclePreviewMutate.mockClear();
+  portfolioMetricsState = { status: 'unavailable' };
 });
 afterEach(cleanup);
 
@@ -518,5 +539,34 @@ describe('the custom conversion an advertiser names', () => {
     };
     expect(sent.patch.conversion_descriptor?.result_label).toBe('Demos held');
     expect(sent.patch.conversion_descriptor?.analog).toBe('lead');
+  });
+});
+
+describe('PortfolioManagePanel — Attribution', () => {
+  it('shows the three source cards, the default in use, and says the read is not available yet', () => {
+    renderPanel();
+    expect(screen.getByText('Attribution')).toBeDefined();
+    const cards = screen.getAllByTestId('attribution-card');
+    expect(cards.map((card) => card.dataset.kind)).toEqual(['platform', 'ga4', 'spreadsheet']);
+    expect(cards[0]?.dataset.inUse).toBe('true');
+    expect(cards[0]?.textContent).toContain('default');
+    expect(screen.getByTestId('multiplatform-unavailable')).toBeDefined();
+  });
+
+  it('marks a spreadsheet in use with its last read and coverage', async () => {
+    const { portfolioMetricsFixture } = await import(
+      './attribution/__fixtures__/portfolioMetricsFixture'
+    );
+    portfolioMetricsState = {
+      status: 'ready',
+      metrics: portfolioMetricsFixture({ used: 'spreadsheet' }),
+    };
+    renderPanel();
+    const sheet = screen
+      .getAllByTestId('attribution-card')
+      .find((card) => card.dataset.kind === 'spreadsheet');
+    expect(sheet?.dataset.inUse).toBe('true');
+    expect(screen.getByTestId('sheet-status').textContent).toContain('92% covered');
+    expect(screen.getByRole('button', { name: 'Re-read now' })).toBeDefined();
   });
 });

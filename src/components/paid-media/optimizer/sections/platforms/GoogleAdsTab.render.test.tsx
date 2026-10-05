@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
 import { cleanup, render } from '@testing-library/react';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
-import { GoogleAdsTabView } from './GoogleAdsTab';
+import { GoogleAdsTabView, GoogleCampaignTypeBreakdown } from './GoogleAdsTab';
 import {
   buildGoogleOverview,
   GoogleAccountOverviewSchema,
@@ -124,5 +124,29 @@ describe('GoogleAdsTabView — when it cannot read', () => {
     expect(empty.textContent).toContain('Google Ads could not be read for Vivo 47');
     expect(empty.textContent).toContain('USER_PERMISSION_DENIED');
     expect(queryAllByTestId('figure')).toHaveLength(0);
+  });
+});
+
+describe('GoogleCampaignTypeBreakdown — under the multi-platform frame', () => {
+  it('adds only the split by campaign type, without a second headline', () => {
+    const { getByTestId, getAllByTestId, queryByTestId } = render(
+      <GoogleCampaignTypeBreakdown state={{ status: 'ready', account: VIVO_47, overview }} />,
+    );
+    expect(getByTestId('google-breakdown').textContent).toContain('By campaign type');
+    expect(getAllByTestId('google-tile-group').length).toBe(
+      Math.min(overview.groups.length, 4),
+    );
+    expect(queryByTestId('google-headline')).toBeNull();
+    expect(queryByTestId('google-tile-spend')).toBeNull();
+  });
+
+  it('says why the split is missing when the read fails, and nothing when there is no grant', () => {
+    const failed = render(
+      <GoogleCampaignTypeBreakdown state={{ status: 'error', account: VIVO_47, message: 'quota' }} />,
+    );
+    expect(failed.getByTestId('google-breakdown-error').textContent).toContain('quota');
+    failed.unmount();
+    const none = render(<GoogleCampaignTypeBreakdown state={{ status: 'no-grant' }} />);
+    expect(none.container.textContent).toBe('');
   });
 });

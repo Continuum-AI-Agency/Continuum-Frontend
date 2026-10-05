@@ -49,3 +49,10 @@ export * from './stored-account-read';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';
+// Optimizer multiplatform (vendored from the monorepo): actions, neutral snapshot, metrics, sheet attribution.
+export * from './action';
+export * from './multiplatform-snapshot';
+export * from './portfolio-metrics';
+export * from './attribution-sheet';
+export * from './account-platform-metrics';
+export * from './platform-card';

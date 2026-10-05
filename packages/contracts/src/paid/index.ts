@@ -19,3 +19,7 @@ export * from './scaffold-plan';
 // Meta ad-set targeting -> the audience axis (cold/warm, and the normalized columns
 // paid_media.adset_targeting_snapshots indexes on).
 export * from './targeting';
+// Multi-platform vocabulary, Google Ads v25 and TikTok v1.3 wire shapes (vendored from the monorepo, Optimizer multiplatform).
+export * from './platform';
+export * from './google-ads';
+export * from './tiktok-ads';

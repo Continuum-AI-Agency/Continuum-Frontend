@@ -21,6 +21,7 @@ import type { OptimizationObjective } from './engine-contracts';
 // Keep the direction: a value import both ways would deadlock module init.
 import { insightStateSchema } from './insight-approval';
 import { normalizeCurrencyCode } from './money';
+import { PlatformCardSchema } from './platform-card';
 import {
   type ActionVerb,
   formatMoneyCode,
@@ -470,6 +471,13 @@ export const accountCandidateSchema = z.object({
    * autopilot, sees nothing happen, and stops trusting the switch.
    */
   state_lowered: z.boolean().default(false),
+  /**
+   * The platform-specific card this candidate renders as — Google budget-limited, a PMax
+   * asset group, a read-only Video campaign, TikTok fatigue or a scheduled decrease, a move
+   * between platforms (platform-card.ts). Absent on every row written before it and on every
+   * Meta detector: the card is then the generic one, unchanged.
+   */
+  platform_card: PlatformCardSchema.nullable().optional(),
   /** Where the card sends a person. */
   cta: z
     .object({

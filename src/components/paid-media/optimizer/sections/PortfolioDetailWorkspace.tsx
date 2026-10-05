@@ -84,6 +84,7 @@ import { carriedRecommendation, portfolioSpecsFrom } from './audienceCardModel';
 import { AskedProposalPanel } from './detail/AskedProposalPanel';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
 import { buildBeforeAfter } from './detail/beforeAfterModel';
+import { ByPlatform } from './detail/ByPlatform';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
@@ -684,6 +685,9 @@ export function PortfolioDetailWorkspace({
             portfolioId={portfolio.id}
             view={heroView}
           />
+
+          {/* One text row per platform, with the attribution source named once (frontend.html §3). */}
+          <ByPlatform portfolioId={portfolio.id} />
 
           {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
               distance to the target is read off the bottom half of this table. */}

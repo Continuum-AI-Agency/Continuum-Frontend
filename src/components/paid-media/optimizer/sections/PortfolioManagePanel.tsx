@@ -87,6 +87,7 @@ import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
+import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { applyModeExplainer, freezeLabel, parseReport } from '../reportModel';
@@ -100,6 +101,7 @@ import {
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import { AttributionSection } from './attribution/AttributionSection';
 import { AutopilotScopesField } from './AutopilotScopesField';
 import type { HeroSetting } from './detail/heroHeaderModel';
 import { OBJECTIVES } from './suggestionModel';
@@ -1153,6 +1155,13 @@ export function PortfolioManagePanel({
         </div>
       </Section>
 
+      <Section
+        description="What this portfolio counts its results with. The source is named once, in the portfolio's header, and every cost carries it."
+        title="Attribution"
+      >
+        <AttributionSection brandId={brandId} portfolioId={portfolio.id} />
+      </Section>
+
       {guardrailsRelevant ? (
         <Section
           title="Autopilot guardrails"
@@ -1388,35 +1397,41 @@ export function PortfolioManagePanel({
 
       <div className="space-y-1.5 outline-none" id={`manage-roster-${portfolio.id}`} tabIndex={-1}>
         <Label>{level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}</Label>
-        <CampaignAdsetPicker
-          entities={pickerEntities}
-          selectedAdsetIds={selectedAdsetIds}
-          onChange={setSelection}
+        <MultiPlatformPicker
           brandId={brandId}
-          accountId={adAccountId}
-          currency={currency}
-          disabled={saving}
-          isLoading={
-            snapshotsRead.isLoading ||
-            enrolledRead.isLoading ||
-            (level === 'adset' && inventoryRead.isLoading)
-          }
-          isError={snapshotsRead.isError}
-          mode={level}
-          inventoryFreshness={
-            level === 'adset'
-              ? {
-                  fetchedAt: inventoryRead.fetchedAt,
-                  refresh: inventoryRead.refresh,
-                  canRefresh: inventoryRead.canRefresh,
-                  isRefreshing: inventoryRead.isRefreshing,
-                  partial: inventoryRead.partial,
-                  truncated: inventoryRead.truncated,
-                  isError: inventoryRead.isError,
-                }
-              : undefined
-          }
-        />
+          metaAccount={adAccountId}
+          portfolioCurrency={currency ?? null}
+        >
+          <CampaignAdsetPicker
+            entities={pickerEntities}
+            selectedAdsetIds={selectedAdsetIds}
+            onChange={setSelection}
+            brandId={brandId}
+            accountId={adAccountId}
+            currency={currency}
+            disabled={saving}
+            isLoading={
+              snapshotsRead.isLoading ||
+              enrolledRead.isLoading ||
+              (level === 'adset' && inventoryRead.isLoading)
+            }
+            isError={snapshotsRead.isError}
+            mode={level}
+            inventoryFreshness={
+              level === 'adset'
+                ? {
+                    fetchedAt: inventoryRead.fetchedAt,
+                    refresh: inventoryRead.refresh,
+                    canRefresh: inventoryRead.canRefresh,
+                    isRefreshing: inventoryRead.isRefreshing,
+                    partial: inventoryRead.partial,
+                    truncated: inventoryRead.truncated,
+                    isError: inventoryRead.isError,
+                  }
+                : undefined
+            }
+          />
+        </MultiPlatformPicker>
         {toAdd.length > 0 || toRemove.length > 0 ? (
           <p className="text-xs text-muted-foreground">
             {toAdd.length > 0 ? `+${toAdd.length} to add` : ''}

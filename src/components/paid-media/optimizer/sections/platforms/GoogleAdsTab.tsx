@@ -287,6 +287,70 @@ export function GoogleAdsTabView({ state }: { state: GoogleAdsOverviewState }) {
   }
 }
 
-export function GoogleAdsTab({ brandId }: { brandId: string }) {
-  return <GoogleAdsTabView state={useGoogleAdsOverview(brandId)} />;
+/**
+ * The Google tab under the multi-platform frame: the producer already said what Google spent
+ * and bought, so this adds only what it does not hold — the split by campaign type, as the
+ * edge reads it from Google. Silent when Google cannot be read; the frame above says why.
+ */
+export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOverviewState }) {
+  if (state.status === 'loading') {
+    return (
+      <p className="px-1 text-muted-foreground text-xs" data-testid="google-breakdown-loading">
+        Reading Google's campaign types…
+      </p>
+    );
+  }
+  if (state.status === 'error') {
+    return (
+      <p className="px-1 text-muted-foreground text-xs" data-testid="google-breakdown-error">
+        The split by campaign type could not be read: {state.message}
+      </p>
+    );
+  }
+  if (state.status !== 'ready') return null;
+  const { account, overview } = state;
+  const window = figureWindowOf(overview.days);
+  const groups = overview.groups.slice(0, MAX_GROUP_TILES);
+  if (groups.length === 0) return null;
+  return (
+    <section className="space-y-2" data-testid="google-breakdown">
+      <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
+        By campaign type · {windowRangeLabel(overview.since, overview.until)} · what Google reports
+      </p>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {groups.map((group) => (
+          <KpiTile
+            figure={figureProps(
+              `google.tiles.group.${group.key}`,
+              group.conversions,
+              null,
+              window,
+              'count',
+            )}
+            key={group.key}
+            label={groupLabel(group, overview.byType)}
+            sub={costComparison(group, overview, account.currency)}
+            testId="google-tile-group"
+            value={`${formatConversions(group.conversions)} conv.`}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function GoogleAdsTab({
+  brandId,
+  mode = 'full',
+}: {
+  brandId: string;
+  /** 'breakdown' when the multi-platform frame already leads the tab. */
+  mode?: 'full' | 'breakdown';
+}) {
+  const state = useGoogleAdsOverview(brandId);
+  return mode === 'breakdown' ? (
+    <GoogleCampaignTypeBreakdown state={state} />
+  ) : (
+    <GoogleAdsTabView state={state} />
+  );
 }

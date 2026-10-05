@@ -42,6 +42,14 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
 import { formatPerPeriod } from '../../format';
+import { PlatformCardBody } from '../platformCards/PlatformCardBody';
+import {
+  isReadOnly,
+  PLATFORM_CARD_TYPE,
+  platformCardOf,
+  platformCardTitle,
+  platformsOf,
+} from '../platformCards/platformCardModel';
 import { PlatformChip } from '../platforms/PlatformChip';
 import type { AdPlatform } from '../platforms/platformTabsModel';
 import * as typeScale from '../../typeScale';
@@ -140,7 +148,14 @@ function RecommendationCard({
   const tier = impactTier(candidate.impact_per_day, dailySpend);
   const title = candidate.title ?? accountCandidateTitle(candidate, currency);
   const action = candidate.action ?? accountCandidateAction(candidate, currency);
-  const titleLine = title ? titleText(title) : meta.label;
+  // A Google or TikTok subject renders its own variant; absent, the generic card is unchanged.
+  const platformCard = platformCardOf(candidate);
+  const titleLine = platformCard
+    ? platformCardTitle(platformCard)
+    : title
+      ? titleText(title)
+      : meta.label;
+  const chips = platformCard ? platformsOf(platformCard) : platform ? [platform] : [];
   const names = portfolioNamesOf(candidate, portfolioNames);
   const target = candidate.cta.kind === 'portfolio' ? candidate.cta.target_id : null;
   const figureKey = `card.${candidate.detector}`;
@@ -153,11 +168,14 @@ function RecommendationCard({
       )}
       data-detector={candidate.detector}
       data-lead={lead ? 'true' : 'false'}
+      data-variant={platformCard?.variant ?? 'generic'}
       data-testid="account-card"
     >
       <CalmRule play={lead} testId="account-card-rule" />
       <div className="flex flex-wrap items-center gap-1.5">
-        {platform ? <PlatformChip platform={platform} /> : null}
+        {chips.map((chip) => (
+          <PlatformChip key={chip} platform={chip} />
+        ))}
         {lead ? (
           <Badge className="text-xs" variant="violet">
             Lead
@@ -167,12 +185,16 @@ function RecommendationCard({
           {TIER_LABEL[tier]}
         </Badge>
         <Badge className="text-xs" variant="muted">
-          {ACTION_VERB_LABEL[action.verb]}
+          {platformCard ? PLATFORM_CARD_TYPE[platformCard.variant] : ACTION_VERB_LABEL[action.verb]}
         </Badge>
         {doubted ? <span className="text-warning text-xs">affected by the guard</span> : null}
       </div>
-      <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>{titleLine}</h3>
-      {title ? null : (
+      {platformCard ? (
+        <PlatformCardBody card={platformCard} />
+      ) : (
+        <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>{titleLine}</h3>
+      )}
+      {title || platformCard ? null : (
         <HeadlineFigure
           candidate={candidate}
           currency={currency}
@@ -190,7 +212,7 @@ function RecommendationCard({
             {names.join(' · ')}
           </p>
         ) : null}
-        {target && onOpenPortfolio ? (
+        {target && onOpenPortfolio && !(platformCard && isReadOnly(platformCard)) ? (
           <Button
             data-testid="account-card-action"
             onClick={() => onOpenPortfolio(target)}

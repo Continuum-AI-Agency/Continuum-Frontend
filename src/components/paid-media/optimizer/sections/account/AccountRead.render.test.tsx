@@ -33,6 +33,12 @@ import {
   DETECTOR_ACTION_FAMILY,
   titleText,
 } from '@continuum/contracts';
+import {
+  CROSS_PLATFORM_MOVE,
+  EVERY_CARD,
+  GOOGLE_BUDGET_LIMITED,
+  GOOGLE_VIDEO,
+} from '../platformCards/__fixtures__/platformCards';
 import { AccountRead } from './AccountRead';
 
 afterEach(cleanup);
@@ -362,5 +368,104 @@ describe('AccountRead — the platform chip', () => {
   it('shows no chip when the caller does not say the platform', () => {
     const { queryByTestId } = view([reallocation]);
     expect(queryByTestId('platform-chip')).toBeNull();
+  });
+});
+
+describe('AccountRead — platform-specific cards', () => {
+  it('renders the variant the row names, with its own platform chip and type', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ platform_card: GOOGLE_BUDGET_LIMITED })]}
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        platform="meta"
+        portfolioNames={portfolioNames}
+      />,
+    );
+    const card = getByTestId('account-card');
+    expect(card.getAttribute('data-variant')).toBe('google_budget_limited');
+    const chips = [...card.querySelectorAll('[data-testid="platform-chip"]')].map((chip) =>
+      chip.getAttribute('data-platform'),
+    );
+    expect(chips).toEqual(['google_ads']);
+    expect(card.textContent).toContain('Budget');
+    expect(card.textContent).toContain('VIVO 47-EKATAR loses 28% of impressions to budget');
+    expect(getByTestId('account-card-action')).toBeTruthy();
+    expect(getByTestId('account-card-jaina').getAttribute('href')).toContain('VIVO%2047-EKATAR');
+  });
+
+  it('renders every variant from its row', () => {
+    const { getAllByTestId, getByText } = render(
+      <AccountRead
+        candidates={EVERY_CARD.map((card, index) =>
+          candidate({ id: `dead_tail:v${index}`, impact_per_day: 100 - index, platform_card: card }),
+        )}
+        currency="MXN"
+        dailySpend={1000}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    fireEvent.click(getByText(/2 more/));
+    expect(getAllByTestId('platform-card').map((node) => node.getAttribute('data-variant'))).toEqual(
+      EVERY_CARD.map((card) => card.variant),
+    );
+  });
+
+  it('offers no action button on a read-only Video card, only "Open in Google Ads"', () => {
+    const { queryByTestId, getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ platform_card: GOOGLE_VIDEO })]}
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    expect(queryByTestId('account-card-action')).toBeNull();
+    expect(getByTestId('platform-card-open-google').textContent).toBe('Open in Google Ads');
+  });
+
+  it('chips both sides of a move between platforms, giver first', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ platform_card: CROSS_PLATFORM_MOVE })]}
+        currency="MXN"
+        dailySpend={1000}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    const header = getByTestId('account-card').querySelector('div');
+    const chips = [...(header?.querySelectorAll('[data-testid="platform-chip"]') ?? [])].map(
+      (chip) => chip.getAttribute('data-platform'),
+    );
+    expect(chips).toEqual(['tiktok_ads', 'meta']);
+    expect(getByTestId('platform-card-approval-note')).toBeTruthy();
+  });
+
+  it('falls back to the generic card when the field is absent or malformed', () => {
+    const { getAllByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({ id: 'dead_tail:none' }),
+          // A row the contract would refuse, as a stored read could still carry it.
+          {
+            ...candidate({ id: 'dead_tail:bad', impact_per_day: 50 }),
+            platform_card: { variant: 'google_budget_limited' } as never,
+          },
+        ]}
+        currency="MXN"
+        dailySpend={1000}
+        platform="meta"
+        portfolioNames={portfolioNames}
+      />,
+    );
+    const cards = getAllByTestId('account-card');
+    expect(cards.map((card) => card.getAttribute('data-variant'))).toEqual(['generic', 'generic']);
+    for (const card of cards) {
+      expect(card.querySelector('[data-testid="platform-chip"]')?.getAttribute('data-platform')).toBe(
+        'meta',
+      );
+    }
   });
 });

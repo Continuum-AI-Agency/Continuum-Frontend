@@ -72,7 +72,10 @@ export function connectedPlatforms(accounts: readonly AdAccount[]): Record<AdPla
   };
 }
 
-/** "All" and "Meta" both render today's O1: the managed book is all Meta. */
-export function rendersManagedOverview(tab: PlatformTab): boolean {
+/** "All" and "Meta" share the O1 layout (cards, portfolio rows); "All" leads with the multi-platform
+ *  producer, "Meta" with today's O1 figures. Google and TikTok are their own screens. */
+export function rendersManagedOverview(
+  tab: PlatformTab,
+): tab is 'all' | 'meta' {
   return tab === 'all' || tab === OPTIMIZER_MANAGED_PLATFORM;
 }

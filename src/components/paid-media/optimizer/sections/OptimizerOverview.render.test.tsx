@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
+import type { AccountPlatformMetricsState } from './platforms/useAccountPlatformMetrics';
 import type { GoogleAdsOverviewState } from './platforms/useGoogleAdsOverview';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 
@@ -38,6 +39,15 @@ mock.module('./platforms/useGoogleAdsOverview', () => ({
   ...realGoogleOverview,
   useGoogleAdsOverview: () => googleState,
 }));
+
+// The multi-platform producer. Its RPC is not deployed yet, so 'unavailable' is the default.
+let metricsState: AccountPlatformMetricsState = { status: 'unavailable' };
+const realMetrics = await import('./platforms/useAccountPlatformMetrics');
+mock.module('./platforms/useAccountPlatformMetrics', () => ({
+  ...realMetrics,
+  useAccountPlatformMetrics: () => metricsState,
+}));
+const { EASY_FIT_MP1, META_ONLY } = await import('./platforms/__fixtures__/accountPlatformMetrics');
 
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
@@ -194,6 +204,7 @@ afterEach(() => {
     { platform: 'meta_ads', account_id: 'act_easyfit', name: 'Easy Fit', status: 'active', currency: 'MXN' },
   ];
   googleState = { status: 'no-connection' };
+  metricsState = { status: 'unavailable' };
   accountReadData = null;
   approvalMaps = { families: {}, insights: {} };
   efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
@@ -698,5 +709,116 @@ describe('OptimizerOverview — the platform tabs', () => {
     expect(getByTestId('tiktok-empty').textContent).toContain("TikTok Ads isn't connected yet");
     expect(queryAllByTestId('figure')).toHaveLength(0);
     expect(getByTestId('tiktok-empty').textContent).not.toMatch(/\d/);
+  });
+});
+
+describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
+  const metaO1 = () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { getByTestId, unmount } = mount();
+    const snapshot = {
+      headline: getByTestId('overview-headline').textContent,
+      tiles: getByTestId('account-tiles').textContent,
+    };
+    unmount();
+    return snapshot;
+  };
+
+  it('leads All with the producer: the account across platforms, its tiles, no Meta-only sum', () => {
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const { getByTestId, queryByTestId } = mount();
+    const headline = getByTestId('overview-headline');
+    expect(headline.getAttribute('data-source')).toBe('account-platform-metrics');
+    expect(headline.textContent).toStartWith('The account spent 38,411 MXN in 7 days across three platforms');
+    const tiles = getByTestId('account-tiles');
+    expect(tiles.getAttribute('data-source')).toBe('account-platform-metrics');
+    expect(tiles.textContent).toContain('Meta 62% · Google 29% · TikTok 9%');
+    expect(tiles.textContent).toContain('Google cheapest at 31.40 MXN');
+    expect(getByTestId('overview-subline').textContent).toContain('Meta takes 62% of the spend');
+    expect(queryByTestId('multiplatform-unavailable')).toBeNull();
+    // The cards and the rows stay: they are the O1 below the frame.
+    expect(getByTestId('portfolio-rows')).toBeTruthy();
+  });
+
+  it('marks TikTok connected when the producer reads it, and keeps Connect on what it does not', () => {
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const first = mount();
+    expect(first.getByTestId('platform-tab-tiktok_ads').getAttribute('data-connected')).toBe('true');
+    first.unmount();
+    metricsState = { status: 'ready', metrics: META_ONLY };
+    const second = mount();
+    expect(second.getByTestId('platform-tab-tiktok_ads').textContent).toContain('Connect');
+    expect(second.getByTestId('platform-tab-google_ads').textContent).toContain('Connect');
+  });
+
+  it("says the numbers aren't available yet, and shows today's Meta O1 beneath, before the RPC exists", () => {
+    const { getByTestId } = mount();
+    expect(getByTestId('multiplatform-unavailable').textContent).toContain(
+      "Multi-platform numbers aren't available yet.",
+    );
+    expect(getByTestId('overview-headline').getAttribute('data-source')).toBeNull();
+    expect(getByTestId('overview-headline').textContent).toStartWith('The account spent 23,911 MXN');
+  });
+
+  it('says it is reading across platforms while the producer loads, with no figure', () => {
+    metricsState = { status: 'loading' };
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('overview-headline').textContent).toBe('Reading the account across platforms…');
+    expect(queryByTestId('account-tiles')).toBeNull();
+  });
+
+  it('names a failed read and falls back to the Meta figures', () => {
+    metricsState = { status: 'error', message: 'Could not read the multi-platform numbers.' };
+    const { getByTestId } = mount();
+    expect(getByTestId('multiplatform-error').textContent).toContain('The figures below are Meta');
+    expect(getByTestId('overview-headline').textContent).toStartWith('The account spent 23,911 MXN');
+  });
+
+  it("keeps Meta's tab exactly today's O1, whatever the producer says", () => {
+    const before = metaO1();
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const after = metaO1();
+    expect(after).toEqual(before);
+    metricsState = { status: 'loading' };
+    expect(metaO1()).toEqual(before);
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    metricsState = { status: 'unavailable' };
+    const { queryByTestId } = mount();
+    expect(queryByTestId('multiplatform-unavailable')).toBeNull();
+  });
+
+  it("leads Google's tab with its producer row, then the split by campaign type", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('platform-headline').textContent).toStartWith('Google spent 11,200 MXN');
+    expect(getByTestId('platform-tiles-google_ads').textContent).toContain('118');
+    // The edge read is the breakdown here, not a second headline.
+    expect(queryByTestId('google-headline')).toBeNull();
+  });
+
+  it("falls back to Google's own edge read when the producer is not deployed", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('multiplatform-unavailable')).toBeTruthy();
+    expect(getByTestId('google-empty-no-connection')).toBeTruthy();
+    expect(queryByTestId('platform-headline')).toBeNull();
+  });
+
+  it("shows TikTok's tiles when the producer reads it, and Connect when it does not", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=tiktok_ads');
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const connected = mount();
+    expect(connected.getByTestId('platform-headline').textContent).toStartWith('TikTok spent 3,300 MXN');
+    expect(connected.queryByTestId('tiktok-empty')).toBeNull();
+    connected.unmount();
+    metricsState = { status: 'ready', metrics: META_ONLY };
+    const missing = mount();
+    expect(missing.getByTestId('tiktok-empty').textContent).toContain('Connect');
+    missing.unmount();
+    metricsState = { status: 'unavailable' };
+    const unavailable = mount();
+    expect(unavailable.getByTestId('multiplatform-unavailable')).toBeTruthy();
+    expect(unavailable.getByTestId('tiktok-empty')).toBeTruthy();
   });
 });
