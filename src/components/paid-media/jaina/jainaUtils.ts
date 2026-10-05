@@ -91,7 +91,6 @@ export type RenderableContentSources = {
   reportV2?: JainaChatMessage['reportV2'] | null;
   latestCheckpointSummary?: string;
   checkpointSummarySource?: 'synthesis' | 'tool_fallback' | 'default_unavailable' | null;
-  plan?: JainaChatMessage['plan'] | null;
 };
 
 /**
@@ -101,10 +100,11 @@ export type RenderableContentSources = {
  * the concatenated text parts alone — that renders as an empty bubble under a report card. This
  * ladder is what fills it, and it is a pure function of one message's own fields.
  *
- * Every rung is something the turn SAID. Thinking and the conversation title are not: as the last
- * rungs they printed a thought (once, the planner's whole markdown plan) or an earlier turn's title
- * as the reply, whenever a turn had produced nothing else yet. Empty is correct then — the
- * thinking window already shows the turn is working.
+ * Every rung is something the turn SAID. Thinking, the conversation title and the plan's title are
+ * not: as the last rungs they printed a thought (once, the planner's whole markdown plan), an
+ * earlier turn's title, or the user's own question back at them — the plan title is the chat title,
+ * written from the question — as the reply, whenever a turn had produced nothing else yet. Empty is
+ * correct then — the thinking window already shows the turn is working.
  */
 export function pickRenderableContent(sources: RenderableContentSources): string {
   const clarification = sources.pendingClarification?.question?.trim();
@@ -125,9 +125,7 @@ export function pickRenderableContent(sources: RenderableContentSources): string
     sources.checkpointSummarySource !== 'default_unavailable'
       ? (sources.latestCheckpointSummary ?? '').trim()
       : '';
-  if (checkpointSummary) return checkpointSummary;
-
-  return sources.plan?.title?.trim() ?? '';
+  return checkpointSummary;
 }
 
 export const getReportSummary = (report: ReportPayload | null) => {

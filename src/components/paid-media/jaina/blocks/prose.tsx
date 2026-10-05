@@ -29,6 +29,7 @@ import type { ReactNode } from 'react';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import type { Severity } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { type AnswerLanguage, readsAsSpanish, windowLabel } from '../answerLanguage';
 import { JUDGEMENT_TEXT, judgeValue } from '../reading';
 import {
   type BlockCitation,
@@ -50,10 +51,15 @@ const MARK_TEXT: Record<ProseMarkTone, string> = {
   window: 'text-muted-foreground',
 };
 
-export function ProseMark({ tone, children }: { tone: ProseMarkTone; children: ReactNode }) {
+/** The language a run of prose is written in, so a window mark's words can follow it. */
+const proseLanguage = (text: string): AnswerLanguage => (readsAsSpanish(text) ? 'es' : 'en');
+
+type ProseMarkProps = { tone: ProseMarkTone; value: string; language: AnswerLanguage };
+
+export function ProseMark({ tone, value, language }: ProseMarkProps) {
   return (
     <span className={MARK_TEXT[tone]} data-prose-mark={tone}>
-      {children}
+      {tone === 'window' ? windowLabel(value, language) : value}
     </span>
   );
 }
@@ -104,13 +110,17 @@ type InlineProseProps = {
 
 export function InlineProse({ text, highlight, severity }: InlineProseProps) {
   const nodes: ReactNode[] = [];
+  const language = proseLanguage(text);
   let pending = highlight?.trim() || null;
   parseProseMarks(text).forEach((segment, index) => {
     if (segment.kind === 'mark') {
       nodes.push(
-        <ProseMark key={`m${index}`} tone={segment.tone}>
-          {segment.value}
-        </ProseMark>,
+        <ProseMark
+          key={`m${index}`}
+          tone={segment.tone}
+          value={segment.value}
+          language={language}
+        />,
       );
       return;
     }
@@ -155,6 +165,33 @@ function segmentParagraph(
 // Streamdown's root is a block `div` holding a `p`. Both must flow inline for a mark or a
 // chip to sit INSIDE the sentence rather than start a new line after it.
 const INLINE_RUNS = '[&>div]:inline [&_p]:m-0 [&_p]:inline';
+
+const EDGE_SPACE = /^(\s*)([\s\S]*?)(\s*)$/u;
+
+/**
+ * One text run between marks. Markdown trims a block's edges, so the space that joins
+ * "un costo de " to the mark after it never reached the page and the sentence printed
+ * "de1386.70 MXN"; the edges are set here as plain spaces, outside the markdown pass.
+ */
+function TextRun({
+  value,
+  mode,
+  isAnimating,
+}: {
+  value: string;
+  mode: 'streaming' | 'static';
+  isAnimating?: boolean;
+}) {
+  const [, lead = '', body = '', trail = ''] = EDGE_SPACE.exec(value) ?? [];
+  return (
+    <>
+      {lead ? ' ' : null}
+      <SafeMarkdown content={body} mode={mode} isAnimating={isAnimating} />
+      {body && trail ? ' ' : null}
+    </>
+  );
+}
+
 const ENTITY_INK = '[&_[data-streamdown=strong]]:text-foreground';
 
 type JainaProseProps = {
@@ -174,6 +211,7 @@ export function JainaProse({
   citations,
 }: JainaProseProps) {
   if (!content.trim()) return null;
+  const language = proseLanguage(content);
   const paragraphs = content
     .split(/\n{2,}/)
     .map((paragraph) => segmentParagraph(paragraph, citations));
@@ -206,10 +244,10 @@ export function JainaProse({
           {runs.map((run, runIndex) => {
             if (run.kind === 'text') {
               return (
-                <SafeMarkdown
+                <TextRun
                   // biome-ignore lint/suspicious/noArrayIndexKey: positional prose runs
                   key={`t${runIndex}`}
-                  content={run.value}
+                  value={run.value}
                   mode={mode}
                   isAnimating={isAnimating}
                 />
@@ -217,10 +255,13 @@ export function JainaProse({
             }
             if (run.kind === 'mark') {
               return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: positional prose runs
-                <ProseMark key={`m${runIndex}`} tone={run.tone}>
-                  {run.value}
-                </ProseMark>
+                <ProseMark
+                  // biome-ignore lint/suspicious/noArrayIndexKey: positional prose runs
+                  key={`m${runIndex}`}
+                  tone={run.tone}
+                  value={run.value}
+                  language={language}
+                />
               );
             }
             return <CitationChip key={run.key} resolved={run.resolved} />;

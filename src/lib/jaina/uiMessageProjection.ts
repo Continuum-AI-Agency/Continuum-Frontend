@@ -788,7 +788,6 @@ export const toJainaChatMessage = (
             checkpointSummarySource: checkpointSummary.source,
           }
         : {}),
-      plan: plan ?? null,
     }),
     ...(status === 'error' ? { title: 'Jaina error' } : {}),
     renderAsReport,

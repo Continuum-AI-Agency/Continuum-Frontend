@@ -3,6 +3,7 @@ import {
   answerLanguage,
   METRIC_READ_LABEL,
   readsAsSpanish,
+  windowLabel,
   SECTION_LABELS,
 } from './answerLanguage';
 
@@ -104,5 +105,36 @@ describe('METRIC_READ_LABEL — the read word follows the answer', () => {
       'So what',
       'Now what',
     ]);
+  });
+});
+
+describe('windowLabel — a copied date preset becomes words', () => {
+  it('translates known presets into the answer language', () => {
+    expect(windowLabel('this_year', 'es')).toBe('este año');
+    expect(windowLabel('this_year', 'en')).toBe('this year');
+    expect(windowLabel('last_month', 'es')).toBe('el mes pasado');
+    expect(windowLabel('yesterday', 'es')).toBe('ayer');
+  });
+
+  it('reads a last-N-days token as days', () => {
+    expect(windowLabel('last_30d', 'en')).toBe('last 30 days');
+    expect(windowLabel('last_7_days', 'es')).toBe('últimos 7 días');
+  });
+
+  it('translates an English preset phrase written into a Spanish answer', () => {
+    expect(windowLabel('this year', 'es')).toBe('este año');
+    expect(windowLabel('Last 30 days', 'es')).toBe('últimos 30 días');
+    expect(windowLabel('last 3 months', 'es')).toBe('last 3 months');
+  });
+
+  it("leaves the model's own wording untouched", () => {
+    expect(windowLabel('últimos 30 días', 'es')).toBe('últimos 30 días');
+    expect(windowLabel('last 30 days', 'en')).toBe('last 30 days');
+    expect(windowLabel('this year', 'en')).toBe('this year');
+    expect(windowLabel('2026-09-14 to 2026-09-20', 'en')).toBe('2026-09-14 to 2026-09-20');
+  });
+
+  it('falls back to spaces for an unknown snake_case token', () => {
+    expect(windowLabel('last_3_months', 'en')).toBe('last 3 months');
   });
 });

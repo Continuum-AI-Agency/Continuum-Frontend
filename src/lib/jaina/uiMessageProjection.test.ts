@@ -503,16 +503,17 @@ describe('the plan part', () => {
     ).toBeUndefined();
   });
 
-  // The screenshot this pins: before the answer arrived, the last thought was the whole markdown
-  // plan, and the content ladder printed it as the reply.
-  it('headlines a streaming turn with the plan title, never a thought', () => {
+  // Two screenshots this pins: before the answer arrived, the last thought was the whole markdown
+  // plan, and the content ladder printed it as the reply; later the plan title — the chat title,
+  // written from the user's question — printed the question back at them over "Thinking…".
+  it('leaves a streaming turn with only a plan and thoughts without prose', () => {
     const projected = toJainaChatMessage(
       uiMessage([planPart(objectivePlan), reasoning('Reading the account now.')]),
       { isStreaming: true },
     );
 
     expect(projected.plan?.title).toBe('Scale the winners');
-    expect(projected.content).toBe('Scale the winners');
+    expect(projected.content).toBe('');
   });
 });
 

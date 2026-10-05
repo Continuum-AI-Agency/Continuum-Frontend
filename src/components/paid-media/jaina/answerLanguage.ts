@@ -111,3 +111,64 @@ export function answerLanguage(report: {
   if (declared && !ENGLISH_TAG.test(declared)) return 'en';
   return readsAsSpanish(report.executive_summary ?? '') ? 'es' : 'en';
 }
+
+// A `[window: …]` mark is meant to hold words in the answer's language ("últimos 30 días"),
+// but the model sometimes copies the API's date preset into it, or writes the English phrase
+// inside a Spanish answer: `this_year` reached the reader verbatim, and a live bench run printed
+// "registradas en this year". A value that names a preset — as a token or as English words — is
+// translated; anything else is the model's own wording and passes untouched.
+const PRESET_TOKEN = /^[a-z0-9]+(?:_[a-z0-9]+)+$|^(?:today|yesterday|maximum|lifetime)$/u;
+const LAST_N_DAYS = /^last_(\d+)_?d(?:ays)?$/u;
+
+const WINDOW_PRESET_LABEL: Record<AnswerLanguage, Record<string, string>> = {
+  es: {
+    today: 'hoy',
+    yesterday: 'ayer',
+    this_week: 'esta semana',
+    last_week: 'la semana pasada',
+    this_week_mon_today: 'esta semana',
+    this_week_sun_today: 'esta semana',
+    last_week_mon_sun: 'la semana pasada',
+    last_week_sun_sat: 'la semana pasada',
+    this_month: 'este mes',
+    last_month: 'el mes pasado',
+    this_quarter: 'este trimestre',
+    last_quarter: 'el trimestre pasado',
+    this_year: 'este año',
+    last_year: 'el año pasado',
+    maximum: 'todo el historial',
+    data_maximum: 'todo el historial',
+    lifetime: 'todo el historial',
+  },
+  en: {
+    today: 'today',
+    yesterday: 'yesterday',
+    this_week: 'this week',
+    last_week: 'last week',
+    this_week_mon_today: 'this week',
+    this_week_sun_today: 'this week',
+    last_week_mon_sun: 'last week',
+    last_week_sun_sat: 'last week',
+    this_month: 'this month',
+    last_month: 'last month',
+    this_quarter: 'this quarter',
+    last_quarter: 'last quarter',
+    this_year: 'this year',
+    last_year: 'last year',
+    maximum: 'all time',
+    data_maximum: 'all time',
+    lifetime: 'all time',
+  },
+};
+
+/** A window mark's value as words in the answer's language. */
+export function windowLabel(value: string, language: AnswerLanguage): string {
+  const token = value.trim().toLowerCase().replace(/\s+/gu, '_');
+  if (!PRESET_TOKEN.test(token)) return value;
+  const known = WINDOW_PRESET_LABEL[language][token];
+  if (known) return known;
+  const days = LAST_N_DAYS.exec(token)?.[1];
+  if (days) return language === 'es' ? `últimos ${days} días` : `last ${days} days`;
+  // English words with no known preset behind them ("last 3 months") are the model's own.
+  return token === value.trim() ? token.replaceAll('_', ' ') : value;
+}
