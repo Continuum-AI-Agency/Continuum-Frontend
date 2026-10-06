@@ -40,7 +40,9 @@ import {
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
   templateForgeBundleSchema,
+  templateLayerInventoryResponseSchema,
   templateLayerPreviewResponseSchema,
+  templateLayerSceneSchema,
   templateLayerVariantResponseSchema,
   templateLayerVariantsResponseSchema,
   templateMappingReviewSchema,
@@ -485,25 +487,40 @@ export async function saveTemplateVariables(
 }
 
 /** Every layer a design-import template's source file stacks, and the arrangements saved on it. */
+/** A design import's own stack and arrangements; null for a template not imported from a design. */
 export async function fetchDesignLayers(
   brandId: string,
   assetId: string,
-): Promise<DesignLayersResponse> {
+): Promise<DesignLayersResponse | null> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${assetId}/design-layers?brandId=${encodeURIComponent(brandId)}`,
   );
+  if (response.status === 422) {
+    const body = (await response
+      .clone()
+      .json()
+      .catch(() => ({}))) as { error?: string };
+    if (body.error === 'not_a_design_import') return null;
+  }
   return designLayersResponseSchema.parse(await unwrap(response, 'Layers'));
 }
 
-/** The whole approved set; the server re-authors the template as its next revision. */
+/**
+ * The whole approved set. On the golden import it lands as a new variant named `name`; on an
+ * arrangement variant `this_variant` writes that variant's next revision.
+ */
 export async function saveDesignArrangements(
   brandId: string,
   assetId: string,
-  arrangements: DesignArrangement[],
+  save: {
+    arrangements: DesignArrangement[];
+    saveTo: 'new_variant' | 'this_variant';
+    name?: string;
+  },
 ): Promise<DesignArrangementsResponse> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${assetId}/design-arrangements`,
-    { method: 'PUT', body: JSON.stringify({ brandId, arrangements }) },
+    { method: 'PUT', body: JSON.stringify({ brandId, ...save }) },
   );
   return designArrangementsResponseSchema.parse(await unwrap(response, 'Saving arrangements'));
 }
@@ -607,6 +624,41 @@ export async function saveTemplateLayerVariant(
         body: JSON.stringify(request),
       }),
       'Save variant',
+    ),
+  );
+}
+
+/** The Layers tab's unedited layer list, stored per source version (only a first open computes it). */
+export async function fetchTemplateLayerInventory(
+  brandId: string,
+  assetId: string,
+  versionId: string,
+) {
+  const query = new URLSearchParams({ brandId, versionId });
+  return templateLayerInventoryResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${assetId}/layers?${query}`),
+      'Layers',
+    ),
+  );
+}
+
+/** One comp's unedited layout preview; the template's default comp when none is named. */
+export async function fetchTemplateLayerScene(
+  brandId: string,
+  assetId: string,
+  versionId: string,
+  compId: number | null,
+) {
+  const query = new URLSearchParams({
+    brandId,
+    versionId,
+    ...(compId ? { compId: String(compId) } : {}),
+  });
+  return templateLayerSceneSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${assetId}/layer-scene?${query}`),
+      'Layout preview',
     ),
   );
 }

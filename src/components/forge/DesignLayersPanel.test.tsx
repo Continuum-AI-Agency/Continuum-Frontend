@@ -12,13 +12,18 @@ const LAYERS: DesignLayersResponse = {
   ],
   arrangements: [],
 };
-let read: () => Promise<DesignLayersResponse> = async () => LAYERS;
+let read: () => Promise<DesignLayersResponse | null> = async () => LAYERS;
 const saved = mock(
-  async (_brandId: string, _assetId: string, arrangements: DesignArrangement[]) => ({
+  async (
+    _brandId: string,
+    _assetId: string,
+    save: { arrangements: DesignArrangement[]; saveTo: string; name?: string },
+  ) => ({
+    assetId: save.saveTo === 'new_variant' ? 'child' : 'a',
     versionId: 'v2',
     parseState: 'parsed',
-    comps: ['PAUTAS-15', ...arrangements.map((arrangement) => arrangement.name)],
-    arrangements,
+    comps: ['PAUTAS-15', ...save.arrangements.map((arrangement) => arrangement.name)],
+    arrangements: save.arrangements,
   }),
 );
 const sources = { ...(await import('@/lib/library/templateSources')) };
@@ -29,7 +34,8 @@ mock.module('@/lib/library/templateSources', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { DesignLayersPanel, moveLayer } from './DesignLayersPanel';
+import type { ComponentProps } from 'react';
+import { DesignLayersPanel } from './DesignLayersPanel';
 
 afterEach(() => {
   cleanup();
@@ -37,38 +43,35 @@ afterEach(() => {
   read = async () => LAYERS;
 });
 
+const panel = (props: Partial<ComponentProps<typeof DesignLayersPanel>> = {}) => (
+  <DesignLayersPanel brandId="b" assetId="a" onVariant={false} onSaved={() => {}} {...props} />
+);
 const names = (list: HTMLElement) =>
   within(list)
     .getAllByRole('listitem')
     .map((item) => item.textContent?.trim());
-
-describe('moveLayer', () => {
-  test('one step toward the viewer or away, never past either end', () => {
-    expect(moveLayer([1, 2, 3], 1, 1)).toEqual([2, 1, 3]);
-    expect(moveLayer([1, 2, 3], 3, 1)).toEqual([1, 2, 3]);
-    expect(moveLayer([1, 2, 3], 1, -1)).toEqual([1, 2, 3]);
-    expect(moveLayer([1, 2, 3], 9, 1)).toEqual([1, 2, 3]);
-  });
-});
+const open = async () =>
+  fireEvent.click(await screen.findByRole('button', { name: /Arrangements · extra formats/ }));
 
 describe('DesignLayersPanel', () => {
-  test('reads nothing until the tab is shown', async () => {
+  test('reads the design file only when the section is expanded', async () => {
     const reads = mock(async () => LAYERS);
     read = reads;
-    const { rerender } = render(
-      <DesignLayersPanel brandId="b" assetId="a" active={false} onSaved={() => {}} />,
-    );
+    render(panel());
     expect(reads).not.toHaveBeenCalled();
-    rerender(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    await open();
     await waitFor(() => expect(reads).toHaveBeenCalledTimes(1));
   });
 
-  test('a new arrangement re-stacks the file’s layers and saves the exact order, bottom first', async () => {
+  test('on the golden import an arrangement saves as a NEW named variant, bottom first', async () => {
     const onSaved = mock(() => {});
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={onSaved} />);
-    const [file] = await screen.findAllByRole('list');
-    // Front first, the way a layers panel reads.
-    expect(names(file!)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
+    const onOpenVariant = mock((_id: string) => {});
+    render(panel({ onSaved, onOpenVariant }));
+    await open();
+    const file = await screen.findByRole('list', { name: 'PAUTAS-15 as the file stacks it' });
+    // Front first, the way a layers panel reads; the file's own stack cannot be dragged.
+    expect(names(file)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
+    expect(within(file).queryByRole('button', { name: /Drag/ })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /New arrangement/ }));
     fireEvent.change(screen.getByLabelText('Arrangement name'), {
@@ -76,27 +79,54 @@ describe('DesignLayersPanel', () => {
     });
     const arrangement = screen.getByRole('region', { name: 'Arrangement Oferta detrás' });
     // Send the offer back twice: behind the logo, then behind the photo.
-    fireEvent.click(
-      within(arrangement).getByRole('button', { name: 'Send DE DESCUENTO backward' }),
-    );
-    fireEvent.click(
-      within(arrangement).getByRole('button', { name: 'Send DE DESCUENTO backward' }),
-    );
+    for (let i = 0; i < 2; i++)
+      fireEvent.click(
+        within(arrangement).getByRole('button', { name: 'Send DE DESCUENTO backward' }),
+      );
     expect(names(within(arrangement).getByRole('list'))).toEqual([
       'LOGO VIVO',
       '<Rectángulo>',
       'DE DESCUENTO',
     ]);
-    // The file's own stack is untouched.
-    expect(names(file!)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
+    expect(names(file)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save arrangements' }));
+    // The golden source has no save-in-place, and a new variant needs a name.
+    expect(screen.queryByRole('button', { name: 'Save arrangements' })).toBeNull();
+    const fork = screen.getByRole('button', { name: 'Save as new variant' });
+    expect(fork.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByLabelText('Arrangement variant name'), {
+      target: { value: 'Promo stacks' },
+    });
+    fireEvent.click(fork);
     await waitFor(() =>
-      expect(saved).toHaveBeenCalledWith('b', 'a', [
-        { name: 'Oferta detrás', artboardId: null, order: [17, 22, 5] },
-      ]),
+      expect(saved).toHaveBeenCalledWith('b', 'a', {
+        arrangements: [{ name: 'Oferta detrás', artboardId: null, order: [17, 22, 5] }],
+        saveTo: 'new_variant',
+        name: 'Promo stacks',
+      }),
     );
-    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    await waitFor(() => expect(onOpenVariant).toHaveBeenCalledWith('child'));
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  test('on an arrangement variant, Save writes that variant', async () => {
+    read = async () => ({
+      ...LAYERS,
+      arrangements: [{ name: 'Alt', artboardId: null, order: [22, 5, 17] }],
+    });
+    render(panel({ onVariant: true }));
+    await open();
+    const arrangement = await screen.findByRole('region', { name: 'Arrangement Alt' });
+    fireEvent.click(
+      within(arrangement).getByRole('button', { name: 'Bring <Rectángulo> forward' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Save arrangements' }));
+    await waitFor(() =>
+      expect(saved).toHaveBeenCalledWith('b', 'a', {
+        arrangements: [{ name: 'Alt', artboardId: null, order: [5, 22, 17] }],
+        saveTo: 'this_variant',
+      }),
+    );
   });
 
   test('Reset returns an arrangement to the file’s order', async () => {
@@ -104,9 +134,10 @@ describe('DesignLayersPanel', () => {
       ...LAYERS,
       arrangements: [{ name: 'Alt', artboardId: null, order: [17, 22, 5] }],
     });
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    render(panel());
+    await open();
     const arrangement = await screen.findByRole('region', { name: 'Arrangement Alt' });
-    fireEvent.click(within(arrangement).getByRole('button', { name: /Reset to the file’s order/ }));
+    fireEvent.click(within(arrangement).getByRole('button', { name: 'Reset to the file’s order' }));
     expect(names(within(arrangement).getByRole('list'))).toEqual([
       'DE DESCUENTO',
       'LOGO VIVO',
@@ -114,13 +145,10 @@ describe('DesignLayersPanel', () => {
     ]);
   });
 
-  test('a template not imported from a design file says why there is nothing to order', async () => {
-    read = async () => {
-      throw new Error(
-        'layer order can be changed on templates imported from a Photoshop or Illustrator file',
-      );
-    };
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
-    expect(await screen.findByText(/imported from a Photoshop or Illustrator file/)).toBeTruthy();
+  test('a template with no design stack says so instead of an empty editor', async () => {
+    read = async () => null;
+    render(panel());
+    await open();
+    expect(await screen.findByText('This template has no design arrangements.')).toBeTruthy();
   });
 });

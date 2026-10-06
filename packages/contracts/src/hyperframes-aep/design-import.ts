@@ -209,15 +209,30 @@ export const designLayersResponseSchema = z
   .strict();
 export type DesignLayersResponse = z.infer<typeof designLayersResponseSchema>;
 
-/** `PUT /api/ai-studio/templates/:assetId/design-arrangements` — the whole approved set. */
+/**
+ * `PUT /api/ai-studio/templates/:assetId/design-arrangements` — the whole approved set. On a golden
+ * source it always lands as a NEW variant (`name`); on an arrangement variant `this_variant` writes
+ * that variant's next revision. The original upload is never re-authored.
+ */
 export const designArrangementsRequestSchema = z
-  .object({ brandId: z.uuid(), arrangements: z.array(designArrangementSchema).max(12) })
-  .strict();
+  .object({
+    brandId: z.uuid(),
+    arrangements: z.array(designArrangementSchema).max(12),
+    saveTo: z.enum(['new_variant', 'this_variant']).default('new_variant'),
+    name: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict()
+  .refine((r) => r.saveTo === 'this_variant' || r.name !== undefined, {
+    message: 'Name your variant',
+    path: ['name'],
+  });
 export type DesignArrangementsRequest = z.infer<typeof designArrangementsRequestSchema>;
 
 export const designArrangementsResponseSchema = z
   .object({
-    /** The template's new source revision: the file re-authored with one comp per arrangement. */
+    /** The template the arrangements landed in: a new variant, or the open variant. */
+    assetId: z.string().min(1),
+    /** That template's new source revision: the file re-authored with one comp per arrangement. */
     versionId: z.string().min(1),
     parseState: z.string().min(1),
     /** Every delivery comp the revision carries — the file's own, then each arrangement. */

@@ -34,8 +34,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
-import { DesignLayersPanel } from '@/components/forge/DesignLayersPanel';
-import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { FactList } from '@/components/forge/FactList';
 import {
   type FontSubstitutionChoice,
@@ -52,6 +50,7 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
+import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import {
@@ -1676,15 +1675,10 @@ export function TemplateDetail({
             assetId={assetId}
             versionId={source.versionId}
             name={source.displayName ?? 'Template'}
+            parse={source.parse}
             active={tab === 'layers'}
             onSaved={onChanged}
             onOpenVariant={onOpenVariant}
-          />
-          <DesignLayersPanel
-            brandId={brandId}
-            assetId={assetId}
-            active={tab === 'layers'}
-            onSaved={() => Promise.all([onChanged(), loadVariables()])}
           />
         </TabsContent>
         <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
