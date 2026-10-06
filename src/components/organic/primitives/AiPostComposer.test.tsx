@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import * as oneShotPost from '@/lib/organic/oneShotPost';
 
 import type { Trend } from '@/lib/organic/trends';
 
@@ -81,5 +83,30 @@ describe('AiPostComposer trend seeding', () => {
     renderComposer();
     const chip = screen.getByRole('button', { name: 'Durable Trend With Real Id' });
     expect(chip.getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe('AiPostComposer format', () => {
+  afterEach(() => {
+    cleanup();
+    mock.restore();
+  });
+
+  it('sends the Story the user picked, which the agent would never choose on its own', async () => {
+    // A spy, not mock.module: the module mock is process-wide and would leak into
+    // oneShotPost's own tests.
+    const create = spyOn(oneShotPost, 'createOneShotPost').mockResolvedValue(
+      {} as Awaited<ReturnType<typeof oneShotPost.createOneShotPost>>,
+    );
+    renderComposer();
+
+    fireEvent.change(screen.getByLabelText('Direction'), {
+      target: { value: 'Behind the scenes' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Story' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create post' }));
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0][0].format).toBe('story');
   });
 });

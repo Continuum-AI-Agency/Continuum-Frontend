@@ -82,6 +82,9 @@ export function PublishOptionsPanel({
   const label = POST_PLATFORMS[platform].label;
   const saved = publishOptions?.[platform] ?? {};
   const isVideo = format === 'REEL';
+  // A story has no comment thread to post into, on any platform.
+  const isStory = format === 'STORY';
+  const canComment = can.firstComment && !isStory;
 
   const save = (block: PublishOptions, mode: 'typing' | 'discrete') =>
     onChange(withPlatformOptions(publishOptions, platform, block), mode);
@@ -98,14 +101,14 @@ export function PublishOptionsPanel({
       <Section
         title="First comment"
         aside={
-          can.firstComment ? (
+          canComment ? (
             <span className="text-2xs tabular-nums text-muted-foreground">
               {comment.length}/{FIRST_COMMENT_MAX}
             </span>
           ) : undefined
         }
       >
-        {can.firstComment ? (
+        {canComment ? (
           <>
             <textarea
               aria-label="First comment"
@@ -126,7 +129,9 @@ export function PublishOptionsPanel({
           </>
         ) : (
           <Unsupported>
-            {label} does not accept a first comment through its API, so none is posted.
+            {isStory
+              ? 'A story has no comments, so none is posted.'
+              : `${label} does not accept a first comment through its API, so none is posted.`}
           </Unsupported>
         )}
       </Section>
@@ -174,10 +179,11 @@ export function PublishOptionsPanel({
   );
 }
 
-const GRADUATION_LABEL: Record<NonNullable<PublishOptions['trial']>['graduationStrategy'], string> = {
-  MANUAL: 'I share it to followers myself',
-  SS_PERFORMANCE: 'Instagram shares it if it performs',
-};
+const GRADUATION_LABEL: Record<NonNullable<PublishOptions['trial']>['graduationStrategy'], string> =
+  {
+    MANUAL: 'I share it to followers myself',
+    SS_PERFORMANCE: 'Instagram shares it if it performs',
+  };
 
 function TrialReelToggle({
   trial,
