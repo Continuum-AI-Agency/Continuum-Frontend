@@ -51,9 +51,9 @@ export const clientRenderJobInputSchema = z
   .strict();
 export type ClientRenderJobInput = z.infer<typeof clientRenderJobInputSchema>;
 
+// Empty is a real manifest: a text-only edit fetches nothing and draws on its background.
 export const clientRenderJobInputManifestSchema = z
   .array(clientRenderJobInputSchema)
-  .min(1)
   .max(100)
   .superRefine((inputs, context) => {
     const positions = new Set<number>();
