@@ -1,0 +1,609 @@
+{
+ "id": "3b67e691-ecfd-4c47-93ec-7535187ae139",
+ "read": {
+  "deck": {
+   "muted": [],
+   "total": 26,
+   "applies": 26
+  },
+  "model": "gemini-2.5-flash",
+  "guards": [],
+  "starved": [
+   {
+    "missing": "no creative-level rows",
+    "detector": "creative_supply"
+   },
+   {
+    "missing": "no portfolio runs a flight with a period budget",
+    "detector": "account_pacing"
+   },
+   {
+    "missing": "no portfolio has a target to be under",
+    "detector": "scale_readiness"
+   },
+   {
+    "missing": "Citas Agosto - check leads — its ad sets are gone from Meta, read from its last snapshot · Reporte Agosto - Citas y Mensajes — no cycle in 59 days, read from its last snapshot — unjudged",
+    "detector": "dead_tail"
+   },
+   {
+    "missing": "Citas Agosto - check leads — its ad sets are gone from Meta, read from its last snapshot · Reporte Agosto - Citas y Mensajes — no cycle in 59 days, read from its last snapshot — unjudged",
+    "detector": "delivery_collapse"
+   },
+   {
+    "missing": "campaign-level event counts are not loaded",
+    "detector": "measurement_integrity"
+   },
+   {
+    "missing": "ad sets carry no targeting fingerprint to group by",
+    "detector": "structure_consolidation"
+   },
+   {
+    "missing": "no funnel-stage breakdown",
+    "detector": "funnel_coverage"
+   },
+   {
+    "missing": "no split by optimisation event",
+    "detector": "optimization_event"
+   },
+   {
+    "missing": "no targeting fingerprints",
+    "detector": "audience_overlap"
+   },
+   {
+    "missing": "no ad set on this account reports a bid strategy",
+    "detector": "bid_strategy"
+   },
+   {
+    "missing": "attribution cutoffs are not retained per day",
+    "detector": "decision_window"
+   },
+   {
+    "missing": "no spend split by placement",
+    "detector": "placement_mix"
+   },
+   {
+    "missing": "creatives are not labelled by format",
+    "detector": "format_gap"
+   },
+   {
+    "missing": "no regional breakdown",
+    "detector": "market_allocation"
+   },
+   {
+    "missing": "no ad set on this account reports reach, and impressions alone cannot say",
+    "detector": "account_saturation"
+   },
+   {
+    "missing": "nothing tells a new customer from a returning one",
+    "detector": "new_vs_returning"
+   },
+   {
+    "missing": "creatives are not labelled by angle",
+    "detector": "angle_concentration"
+   },
+   {
+    "missing": "no record of which cycles the guardrails decided",
+    "detector": "guardrail_bottleneck"
+   }
+  ],
+  "version": 1,
+  "currency": "MXN",
+  "conflicts": [],
+  "narrative": "The account is experiencing increased auction pressure, with cost per thousand up 23% to 47.71 MXN from 38.66 MXN, while the click rate remained stable. This indicates the auction environment has become more expensive, impacting daily spend by 233 MXN. The first step should be to investigate the competitive landscape and bidding strategies to mitigate the rising costs.",
+  "candidates": [
+   {
+    "id": "auction_pressure:act_521903353286118",
+    "cta": {
+     "kind": "none",
+     "target_id": null
+    },
+    "chart": {
+     "unit": "currency",
+     "shape": "rates",
+     "points": [
+      {
+       "a": 38.66,
+       "b": 4.58,
+       "t": "prior 7d"
+      },
+      {
+       "a": 47.71,
+       "b": 4.3,
+       "t": "last 7d"
+      }
+     ],
+     "a_label": "cost per thousand",
+     "b_label": "click rate ×1000",
+     "gap_per_day": null,
+     "projected_from": null
+    },
+    "state": "recommend",
+    "title": {
+     "unit": "% más por cada mil impresiones",
+     "entity": "Cuenta",
+     "figure": 23,
+     "window": "d7",
+     "comparator": "38.66 MXN de CPM antes frente a 47.71 MXN ahora"
+    },
+    "action": {
+     "verb": "review",
+     "sizing": {
+      "to": null,
+      "from": null,
+      "perDay": 233,
+      "currency": "MXN"
+     }
+    },
+    "detector": "auction_pressure",
+    "evidence": {
+     "sample": "775 of 180150 impressions clicked this week · 1126 of 245802 impressions clicked the week before",
+     "cpm_now": 47.71,
+     "sample_k": 775,
+     "sample_n": 180150,
+     "cpm_prior": 38.66,
+     "ctr_now_pct": 0.43,
+     "sample_kind": "rate",
+     "ctr_prior_pct": 0.46,
+     "spend_per_day": 1227.84,
+     "cpm_change_pct": 23
+    },
+    "headline": {
+     "to": 47.71,
+     "from": 38.66,
+     "kind": "drift",
+     "unit": "percent",
+     "label": "more per thousand shown",
+     "value": 23
+    },
+    "capped_by": null,
+    "confidence": 0.335,
+    "impact_basis": "cost per thousand up 23% while the click rate held, so the auction moved and the ads did not",
+    "impact_class": "deferred",
+    "result_label": "conversations",
+    "portfolio_ids": [],
+    "state_lowered": false,
+    "impact_per_day": 233
+   },
+   {
+    "id": "platform_signal:099715be-19c7-4c04-9cac-1e416391498a",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e3"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "scale_readiness",
+    "evidence": {
+     "rule": "G03",
+     "severity": "medium"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": {
+     "action": {
+      "ref": {
+       "id": "20775796216",
+       "name": "VIVO 47-EKATAR",
+       "level": "campaign",
+       "platform": "google_ads",
+       "accountId": "3710693645",
+       "nativeLevel": "campaign"
+      },
+      "kind": "set_budget",
+      "budget": {
+       "kind": "daily",
+       "minor": 117900,
+       "shared": false,
+       "currency": "MXN",
+       "ownerRef": {
+        "id": "20775796216",
+        "name": "VIVO 47-EKATAR",
+        "level": "campaign",
+        "platform": "google_ads",
+        "accountId": "3710693645",
+        "nativeLevel": "campaign"
+       },
+       "nativeBudgetId": "13134103565"
+      },
+      "targetMinor": 147375,
+      "expectedMinor": 117900
+     },
+     "portfolio_id": "7a7a7a7a-0000-4000-8000-0000000000e3",
+     "recommendation_id": "099715be-19c7-4c04-9cac-1e416391498a"
+    },
+    "impact_basis": "VIVO 47-EKATAR loses 28% of impressions to budget with results at 772.98 MXN, 14% under target. Raise to 1473.75 MXN/day.",
+    "impact_class": "deferred",
+    "result_label": "leads",
+    "platform_card": {
+     "variant": "google_budget_limited",
+     "currency": "MXN",
+     "projection": null,
+     "days_limited": null,
+     "result_label": "leads",
+     "campaign_name": "VIVO 47-EKATAR",
+     "budget_per_day": 1179,
+     "cost_per_result": 772.9756571888496,
+     "proposed_budget_per_day": 1473.75,
+     "budget_lost_impression_share": 0.2802764224591953
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e3"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 0
+   },
+   {
+    "id": "platform_signal:12235422-392f-41c7-9cfe-00b7ff3abe17",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e3"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "scale_readiness",
+    "evidence": {
+     "rule": "G05_promote",
+     "severity": "low"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": {
+     "action": {
+      "ref": {
+       "id": "155765678139",
+       "name": "Vivo 47",
+       "level": "group",
+       "platform": "google_ads",
+       "accountId": "3710693645",
+       "nativeLevel": "ad_group"
+      },
+      "kind": "add_keyword",
+      "keyword": {
+       "text": "vivo 47 valle real",
+       "matchType": "EXACT"
+      }
+     },
+     "portfolio_id": "7a7a7a7a-0000-4000-8000-0000000000e3",
+     "recommendation_id": "12235422-392f-41c7-9cfe-00b7ff3abe17"
+    },
+    "impact_basis": "\"vivo 47 valle real\" brought 4 conversions in 30 days at 282.74 MXN each, at or under the 900.00 MXN target, and is not a keyword yet. Add it as an exact keyword to Vivo 47.",
+    "impact_class": "better_price",
+    "result_label": "results",
+    "platform_card": {
+     "term": "vivo 47 valle real",
+     "variant": "google_promote_term",
+     "currency": "MXN",
+     "conversions": 4,
+     "window_days": 30,
+     "ad_group_name": "Vivo 47",
+     "campaign_name": "VIVO 47-EKATAR",
+     "cost_per_result": 282.74,
+     "matched_keyword": "Vivo 47"
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e3"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 0
+   },
+   {
+    "id": "platform_signal:655b7c7e-0027-4036-8f21-970ef088a470",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e3"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "dead_tail",
+    "evidence": {
+     "rule": "G05",
+     "severity": "medium"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": {
+     "action": {
+      "ref": {
+       "id": "20775796216",
+       "name": "VIVO 47-EKATAR",
+       "level": "campaign",
+       "platform": "google_ads",
+       "accountId": "3710693645",
+       "nativeLevel": "campaign"
+      },
+      "kind": "add_negatives",
+      "scope": "campaign",
+      "terms": [
+       {
+        "text": "vivo 47 center",
+        "matchType": "EXACT"
+       },
+       {
+        "text": "vivo 47 la estancia",
+        "matchType": "EXACT"
+       }
+      ]
+     },
+     "portfolio_id": "7a7a7a7a-0000-4000-8000-0000000000e3",
+     "recommendation_id": "655b7c7e-0027-4036-8f21-970ef088a470"
+    },
+    "impact_basis": "2 search terms in VIVO 47-EKATAR each cost more than the 900.00 MXN target in 30 days with no conversions, 2171.87 MXN together: \"vivo 47 center\" (1206.34 MXN), \"vivo 47 la estancia\" (965.53 MXN). Add them as exact negatives.",
+    "impact_class": "recoverable",
+    "result_label": "results",
+    "platform_card": {
+     "terms": [
+      {
+       "term": "vivo 47 center",
+       "spend": 1206.34,
+       "clicks": 36,
+       "conversions": 0
+      },
+      {
+       "term": "vivo 47 la estancia",
+       "spend": 965.53,
+       "clicks": 38,
+       "conversions": 0
+      }
+     ],
+     "variant": "google_negative_terms",
+     "currency": "MXN",
+     "match_type": "EXACT",
+     "window_days": 30,
+     "campaign_name": "VIVO 47-EKATAR",
+     "savings_per_day": 72.4
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e3"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 72.4
+   },
+   {
+    "id": "platform_signal:8253de9f-55e6-4961-b537-db114f55b939",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e3"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "scale_readiness",
+    "evidence": {
+     "rule": "G05_promote",
+     "severity": "low"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": {
+     "action": {
+      "ref": {
+       "id": "155765678139",
+       "name": "Vivo 47",
+       "level": "group",
+       "platform": "google_ads",
+       "accountId": "3710693645",
+       "nativeLevel": "ad_group"
+      },
+      "kind": "add_keyword",
+      "keyword": {
+       "text": "vivo 47 naciones unidas",
+       "matchType": "EXACT"
+      }
+     },
+     "portfolio_id": "7a7a7a7a-0000-4000-8000-0000000000e3",
+     "recommendation_id": "8253de9f-55e6-4961-b537-db114f55b939"
+    },
+    "impact_basis": "\"vivo 47 naciones unidas\" brought 4 conversions in 30 days at 379.19 MXN each, at or under the 900.00 MXN target, and is not a keyword yet. Add it as an exact keyword to Vivo 47.",
+    "impact_class": "better_price",
+    "result_label": "results",
+    "platform_card": {
+     "term": "vivo 47 naciones unidas",
+     "variant": "google_promote_term",
+     "currency": "MXN",
+     "conversions": 4,
+     "window_days": 30,
+     "ad_group_name": "Vivo 47",
+     "campaign_name": "VIVO 47-EKATAR",
+     "cost_per_result": 379.19,
+     "matched_keyword": "Vivo 47"
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e3"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 0
+   },
+   {
+    "id": "platform_signal:2785bb1b-963a-4b7b-8e5f-faf97dc764d9",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e4"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "dead_tail",
+    "evidence": {
+     "rule": "G05",
+     "severity": "medium"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": {
+     "action": {
+      "ref": {
+       "id": "22574767866",
+       "name": "Landing-Goto",
+       "level": "campaign",
+       "platform": "google_ads",
+       "accountId": "9343596627",
+       "nativeLevel": "campaign"
+      },
+      "kind": "add_negatives",
+      "scope": "campaign",
+      "terms": [
+       {
+        "text": "tangassi tequis",
+        "matchType": "EXACT"
+       }
+      ]
+     },
+     "portfolio_id": "7a7a7a7a-0000-4000-8000-0000000000e4",
+     "recommendation_id": "2785bb1b-963a-4b7b-8e5f-faf97dc764d9"
+    },
+    "impact_basis": "The search term \"tangassi tequis\" (240.07 MXN) in Landing-Goto cost more than the 150.00 MXN target in 30 days with no conversions. Add it as an exact negative.",
+    "impact_class": "recoverable",
+    "result_label": "results",
+    "platform_card": {
+     "terms": [
+      {
+       "term": "tangassi tequis",
+       "spend": 240.07,
+       "clicks": 51,
+       "conversions": 0
+      }
+     ],
+     "variant": "google_negative_terms",
+     "currency": "MXN",
+     "match_type": "EXACT",
+     "window_days": 30,
+     "campaign_name": "Landing-Goto",
+     "savings_per_day": 8
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e4"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 8
+   },
+   {
+    "id": "platform_signal:3827618f-9a45-4ad1-b0b8-2c3a75cf563c",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e4"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "creative_supply",
+    "evidence": {
+     "rule": "G18_pmax_coverage",
+     "severity": "low"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": null,
+    "impact_basis": "TANGASSI in Necesidades SLP has AVERAGE ad strength and is missing 3 square marketing images, 1 youtube video, 3 headlines, 1 description, 6 sitelinks.",
+    "impact_class": "deferred",
+    "result_label": "results",
+    "platform_card": {
+     "variant": "google_pmax_asset_group",
+     "asset_groups": [
+      {
+       "name": "TANGASSI",
+       "missing": [
+        "3 square marketing images",
+        "1 youtube video",
+        "3 headlines",
+        "1 description",
+        "6 sitelinks"
+       ],
+       "ad_strength": "AVERAGE"
+      }
+     ],
+     "campaign_name": "Necesidades SLP"
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e4"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 0
+   },
+   {
+    "id": "platform_signal:b1db4c5c-c04a-4f14-a0cf-18be09fe497e",
+    "cta": {
+     "kind": "portfolio",
+     "target_id": "7a7a7a7a-0000-4000-8000-0000000000e4"
+    },
+    "chart": null,
+    "state": null,
+    "title": null,
+    "action": null,
+    "detector": "delivery_collapse",
+    "evidence": {
+     "rule": "G12",
+     "severity": "high"
+    },
+    "headline": null,
+    "capped_by": null,
+    "confidence": 1,
+    "card_action": null,
+    "impact_basis": "This account has 2 campaigns that should be serving, with 170.00 MXN/day of budget, and none showed an ad in the last 4 days. Google says: SERVING_STATUS_SUSPENDED, BUDGET_CONSTRAINED, HAS_ASSET_GROUPS_LIMITED_BY_POLICY. One cause for the w",
+    "impact_class": "deferred",
+    "result_label": "results",
+    "platform_card": {
+     "reasons": [
+      "SERVING_STATUS_SUSPENDED",
+      "BUDGET_CONSTRAINED",
+      "HAS_ASSET_GROUPS_LIMITED_BY_POLICY"
+     ],
+     "variant": "google_delivery_issue",
+     "currency": "MXN",
+     "dark_days": 4,
+     "account_wide": true,
+     "campaign_name": "Necesidades SLP",
+     "budget_per_day": 170,
+     "disapproved_ads": 0
+    },
+    "portfolio_ids": [
+     "7a7a7a7a-0000-4000-8000-0000000000e4"
+    ],
+    "state_lowered": false,
+    "impact_per_day": 0
+   }
+  ],
+  "assumptions": [],
+  "lead_reason": "The auction moved, not the ad, causing an increase in cost per thousand by 23% while the click rate held. This finding represents a potential impact of 233 MXN per day.",
+  "generated_at": "2026-10-05T00:02:06.028Z",
+  "scale_per_day": 1695.4871428571428,
+  "prompt_version": "v1",
+  "ceiling_defaults": {
+   "budget": "recommend",
+   "structure": "recommend",
+   "new_audience": "recommend",
+   "creative_swap": "recommend",
+   "new_creatives": "recommend",
+   "audience_change": "recommend"
+  },
+  "lead_candidate_id": "auction_pressure:act_521903353286118",
+  "justification_if_not_max": null
+ },
+ "model": "gemini-2.5-flash",
+ "refresh": {
+  "state": "none",
+  "reason": null,
+  "can_request": true,
+  "retry_after": null,
+  "requested_at": null,
+  "requests_left": 3,
+  "requests_used": 0
+ },
+ "utc_day": "2026-10-05",
+ "ready_at": "2026-10-04T18:02:12.900468-06:00",
+ "prompt_version": "v1"
+}

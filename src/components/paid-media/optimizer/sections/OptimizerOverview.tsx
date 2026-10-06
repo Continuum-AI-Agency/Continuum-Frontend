@@ -24,7 +24,7 @@
 // Meta O1. Under its tiles "All" may show the platforms side by side (MP3), which a viewer can
 // hide; each portfolio row carries one chip per platform it holds members on.
 
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
 import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, FileTextIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -68,6 +68,7 @@ import {
 import { JainaEntryChips } from './JainaEntryChips';
 import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import { PortfolioRowCard } from './PortfolioRowCard';
+import type { PlatformCardAction } from './platformCards/platformCardActionModel';
 import {
   AllPlatformsHeadline,
   AllPlatformsSubline,
@@ -134,6 +135,25 @@ export function autopilotTileSub(summary: ReturnType<typeof autopilotSummary>): 
   if (summary.recommending.length <= 2)
     return `${summary.recommending.join(' and ')} ${summary.recommending.length === 1 ? 'recommends, does not apply' : 'recommend, do not apply'}`;
   return `${summary.recommending.length} recommend, do not apply`;
+}
+
+/** Candidate id → the action its platform card hands a person, exactly as the read carries it
+ *  (`card_action`: the pending recommendation, its portfolio and the engine's action). A card
+ *  without one shows no control of its own. */
+export function cardActionsOf(
+  candidates: readonly AccountCandidate[],
+): ReadonlyMap<string, PlatformCardAction> {
+  const actions = new Map<string, PlatformCardAction>();
+  for (const candidate of candidates) {
+    const target = candidate.card_action;
+    if (!target) continue;
+    actions.set(candidate.id, {
+      portfolioId: target.portfolio_id,
+      action: target.action,
+      recommendationId: target.recommendation_id,
+    });
+  }
+  return actions;
 }
 
 function capitalise(word: string): string {
@@ -220,6 +240,7 @@ export function OptimizerOverview({
       guards: applyApprovals(read.guards, { ...maps, defaults }),
     };
   }, [read, approvalMaps.data]);
+  const cardActions = useMemo(() => cardActionsOf(shown?.candidates ?? []), [shown]);
 
   const jainaEntries = useMemo(() => {
     let worst: { name: string; pct: number } | null = null;
@@ -530,6 +551,7 @@ export function OptimizerOverview({
           </p>
           <AccountRead
             candidates={[...shown.candidates, ...shown.guards]}
+            cardActions={cardActions}
             currency={shown.currency ?? currency ?? null}
             dailySpend={shown.scale_per_day ?? dailyTotal}
             onOpenPortfolio={onSelectPortfolio}

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
@@ -105,9 +107,16 @@ mock.module('../useOptimizerData', () => ({
   useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
   useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
   useOptimizerPortfolioEfficiency: () => efficiency,
+  // A card's own control asks the service through this; nothing here confirms a write.
+  useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
 }));
 
-const { OptimizerOverview, kindTileSub, autopilotTileSub } = await import('./OptimizerOverview');
+const { OptimizerOverview, kindTileSub, autopilotTileSub, cardActionsOf } = await import(
+  './OptimizerOverview'
+);
+const { cardActionAvailability, cardActionLabel, cardWriteOf } = await import(
+  './platformCards/platformCardActionModel'
+);
 const { AccountReadEnvelopeSchema } = await import('../useOptimizerData');
 const { autopilotSummary, resultKinds, portfolioWindow, spendState } = await import(
   './account/overviewModel'
@@ -675,6 +684,61 @@ describe('OptimizerOverview — the cards', () => {
     approvalMaps = { families: {}, insights: { dead_tail: 'autopilot' } };
     const { container } = mount();
     expect(container.textContent).toContain('Acts on its own');
+  });
+});
+
+// optimizer:multiplatform:signals:bench runs recorded Google signals through the real ingest,
+// persist and optimizer_get_account_read on Postgres 16, then runs this block on the RPC's very
+// answer (OPTIMIZER_ACCOUNT_READ_DOC). The committed copy is that answer from its last --record.
+describe('OptimizerOverview — platform cards from the bench document', () => {
+  const docPath =
+    process.env.OPTIMIZER_ACCOUNT_READ_DOC ??
+    join(import.meta.dir, 'platformCards/__fixtures__/accountReadPlatformCards.json');
+  const document = AccountReadEnvelopeSchema.parse(JSON.parse(readFileSync(docPath, 'utf8')));
+  const candidates = document?.read?.candidates ?? [];
+  const platformCandidates = candidates.filter((c) => c.platform_card);
+
+  it('the bench document: cardActionsOf keys exactly the candidates that carry a card_action', () => {
+    const actions = cardActionsOf(candidates);
+    const carrying = candidates.filter((c) => c.card_action);
+    expect(carrying.length).toBeGreaterThan(0);
+    expect([...actions.keys()].sort()).toEqual(carrying.map((c) => c.id).sort());
+    for (const c of carrying) {
+      expect(actions.get(c.id)).toEqual({
+        portfolioId: c.card_action?.portfolio_id,
+        action: c.card_action?.action,
+        recommendationId: c.card_action?.recommendation_id,
+      });
+    }
+  });
+
+  it('the bench document: every card renders its platform variant, and each ready card_action is the control platformCardActionModel words', () => {
+    accountReadData = document;
+    const { getByTestId, queryAllByTestId, queryByRole } = mount();
+    const more = queryByRole('button', { name: / more · / });
+    if (more) fireEvent.click(more);
+    const variants = [
+      ...getByTestId('account-cards').querySelectorAll('[data-testid="account-card"]'),
+    ]
+      .map((card) => card.getAttribute('data-variant'))
+      .filter((variant) => variant !== 'generic')
+      .sort();
+    expect(variants).toEqual(platformCandidates.map((c) => c.platform_card?.variant ?? '').sort());
+
+    const actions = cardActionsOf(candidates);
+    const expected = platformCandidates.flatMap((c) => {
+      const target = actions.get(c.id);
+      const write = cardWriteOf(target);
+      return c.platform_card && write && cardActionAvailability(c.platform_card, target) === 'ready'
+        ? [cardActionLabel(write)]
+        : [];
+    });
+    expect(expected.length).toBeGreaterThan(0);
+    expect(
+      queryAllByTestId('platform-card-action')
+        .map((b) => b.textContent)
+        .sort(),
+    ).toEqual(expected.sort());
   });
 });
 
