@@ -52,6 +52,7 @@ export const NativeLevelSchema = z.enum([
   'asset_group',
   'ad',
   'asset',
+  'keyword',
 ]);
 export type NativeLevel = z.infer<typeof NativeLevelSchema>;
 
@@ -60,7 +61,13 @@ const NATIVE_LEVELS: Readonly<
 > = {
   meta: { campaign: ['campaign'], group: ['adset'], ad: ['ad'] },
   // A PMax campaign has asset groups where Search has ad groups, and assets where it has ads.
-  google_ads: { campaign: ['campaign'], group: ['ad_group', 'asset_group'], ad: ['ad', 'asset'] },
+  // A Search keyword (ad_group_criterion) sits beside the ads of its ad group: its id is
+  // Google's criterion resource id, `<ad_group_id>~<criterion_id>` (G11 pauses one).
+  google_ads: {
+    campaign: ['campaign'],
+    group: ['ad_group', 'asset_group'],
+    ad: ['ad', 'asset', 'keyword'],
+  },
   tiktok_ads: { campaign: ['campaign'], group: ['ad_group'], ad: ['ad'] },
 };
 
