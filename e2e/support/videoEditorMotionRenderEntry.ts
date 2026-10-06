@@ -825,6 +825,109 @@ async function runCaptionHighlights() {
   }
 }
 
+/**
+ * One composed frame at 0.5 s: a solid ground video under an image overlay carrying at most
+ * one look. `amount` overrides the look's amount parameter after it is built from `strength`.
+ */
+async function renderLookFrame(
+  imageUrl: string,
+  groundUrl: string,
+  effect?: LookEffectId,
+  strength = 1,
+  amount?: number,
+) {
+  const started = performance.now();
+  const instance = effect ? lookEffectInstance(effect, { id: 'look', strength }) : undefined;
+  if (instance && amount !== undefined) instance.parameters.amount = amount;
+  const project = editorProjectV2Schema.parse({
+    ...createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000779',
+      title: 'Look vocabulary proof',
+      width: WIDTH,
+      height: HEIGHT,
+      now: '2026-10-01T12:00:00.000Z',
+    }),
+    durationSec: 1,
+    tracks: [
+      {
+        id: 'ground',
+        name: 'Ground',
+        kind: 'video',
+        order: 0,
+        clips: [
+          {
+            id: 'ground',
+            kind: 'video',
+            timelineStartSec: 0,
+            durationSec: 1,
+            source: source('ground'),
+            audioEnabled: false,
+          },
+        ],
+      },
+      {
+        id: 'image',
+        name: 'Image',
+        kind: 'overlay',
+        order: 1,
+        clips: [
+          {
+            id: 'image',
+            kind: 'overlay',
+            mediaKind: 'image',
+            timelineStartSec: 0,
+            durationSec: 1,
+            source: source('image'),
+            effects: instance ? [instance] : [],
+          },
+        ],
+      },
+    ],
+  });
+  const plan = await buildTimelineEditorRenderPlan({
+    project,
+    jobInputs: [
+      {
+        sourceId: 'ground',
+        sourceAssetId: 'asset-ground',
+        sourceRevision: 'version-ground',
+        storage: { bucket: 'bench', path: 'ground' },
+      },
+      {
+        sourceId: 'image',
+        sourceAssetId: 'asset-image',
+        sourceRevision: 'version-image',
+        storage: { bucket: 'bench', path: 'image.png' },
+      },
+    ],
+    signedUrls: new Map([
+      ['bench\nimage.png', imageUrl],
+      ['bench\nground', groundUrl],
+    ]),
+    signal: new AbortController().signal,
+  });
+  const rendered = await composeTimeline({
+    ...plan,
+    targetWidth: WIDTH,
+    targetHeight: HEIGHT,
+    frameTimeSec: 0.5,
+  });
+  const bitmap = await createImageBitmap(rendered.blob);
+  try {
+    const frame = new OffscreenCanvas(WIDTH, HEIGHT);
+    const ctx = frame.getContext('2d');
+    if (!ctx) throw new Error('No looks readback canvas.');
+    ctx.drawImage(bitmap, 0, 0);
+    return {
+      pixels: ctx.getImageData(0, 0, WIDTH, HEIGHT).data,
+      durationMs: performance.now() - started,
+    };
+  } finally {
+    bitmap.close();
+    URL.revokeObjectURL(rendered.objectUrl);
+  }
+}
+
 export async function runLooks() {
   const image = new OffscreenCanvas(WIDTH, HEIGHT);
   const brush = image.getContext('2d');
@@ -838,97 +941,8 @@ export async function runLooks() {
     }
   const url = URL.createObjectURL(await image.convertToBlob({ type: 'image/png' }));
   const groundUrl = URL.createObjectURL(await encodeSolidVideo(BLUE, 1));
-  const base = createEditorProjectV2({
-    projectId: '00000000-0000-4000-8000-000000000779',
-    title: 'Look vocabulary proof',
-    width: WIDTH,
-    height: HEIGHT,
-    now: '2026-10-01T12:00:00.000Z',
-  });
-  const render = async (effect?: LookEffectId, strength = 1) => {
-    const started = performance.now();
-    const project = editorProjectV2Schema.parse({
-      ...base,
-      durationSec: 1,
-      tracks: [
-        {
-          id: 'ground',
-          name: 'Ground',
-          kind: 'video',
-          order: 0,
-          clips: [
-            {
-              id: 'ground',
-              kind: 'video',
-              timelineStartSec: 0,
-              durationSec: 1,
-              source: source('ground'),
-              audioEnabled: false,
-            },
-          ],
-        },
-        {
-          id: 'image',
-          name: 'Image',
-          kind: 'overlay',
-          order: 1,
-          clips: [
-            {
-              id: 'image',
-              kind: 'overlay',
-              mediaKind: 'image',
-              timelineStartSec: 0,
-              durationSec: 1,
-              source: source('image'),
-              effects: effect ? [lookEffectInstance(effect, { id: 'look', strength })] : [],
-            },
-          ],
-        },
-      ],
-    });
-    const plan = await buildTimelineEditorRenderPlan({
-      project,
-      jobInputs: [
-        {
-          sourceId: 'ground',
-          sourceAssetId: 'asset-ground',
-          sourceRevision: 'version-ground',
-          storage: { bucket: 'bench', path: 'ground' },
-        },
-        {
-          sourceId: 'image',
-          sourceAssetId: 'asset-image',
-          sourceRevision: 'version-image',
-          storage: { bucket: 'bench', path: 'image.png' },
-        },
-      ],
-      signedUrls: new Map([
-        ['bench\nimage.png', url],
-        ['bench\nground', groundUrl],
-      ]),
-      signal: new AbortController().signal,
-    });
-    const rendered = await composeTimeline({
-      ...plan,
-      targetWidth: WIDTH,
-      targetHeight: HEIGHT,
-      frameTimeSec: 0.5,
-    });
-    const bitmap = await createImageBitmap(rendered.blob);
-    try {
-      const frame = new OffscreenCanvas(WIDTH, HEIGHT);
-      const ctx = frame.getContext('2d');
-      if (!ctx) throw new Error('No looks readback canvas.');
-      ctx.drawImage(bitmap, 0, 0);
-      return {
-        pixels: ctx.getImageData(0, 0, WIDTH, HEIGHT).data,
-        durationMs: performance.now() - started,
-      };
-    } finally {
-      bitmap.close();
-      URL.revokeObjectURL(rendered.objectUrl);
-    }
-  };
+  const render = (effect?: LookEffectId, strength = 1) =>
+    renderLookFrame(url, groundUrl, effect, strength);
   try {
     const control = await render();
     const difference = (pixels: Uint8ClampedArray) =>
@@ -953,6 +967,40 @@ export async function runLooks() {
     return results;
   } finally {
     URL.revokeObjectURL(url);
+    URL.revokeObjectURL(groundUrl);
+  }
+}
+
+/**
+ * Dust density on a real recorded frame. A pixel counts as changed when its RGB moves by more
+ * than 3 in total against a control that runs the same pixel pass at amount 1e-10, which removes
+ * bitmap-resize differences: the definition the vintage-looks proof used for its density bound.
+ */
+export async function runDustDensity(frameUrl: string) {
+  const groundUrl = URL.createObjectURL(await encodeSolidVideo(BLUE, 1));
+  try {
+    const control = (await renderLookFrame(frameUrl, groundUrl, 'dust', 1, 1e-10)).pixels;
+    const changedFraction = (pixels: Uint8ClampedArray) => {
+      let changed = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const delta =
+          Math.abs(pixels[i] - control[i]) +
+          Math.abs(pixels[i + 1] - control[i + 1]) +
+          Math.abs(pixels[i + 2] - control[i + 2]);
+        if (delta > 3) changed++;
+      }
+      return changed / (pixels.length / 4);
+    };
+    const full = await renderLookFrame(frameUrl, groundUrl, 'dust', 1);
+    return {
+      full: changedFraction(full.pixels),
+      zeroAmount: changedFraction(
+        (await renderLookFrame(frameUrl, groundUrl, 'dust', 1, 0)).pixels,
+      ),
+      bare: changedFraction((await renderLookFrame(frameUrl, groundUrl)).pixels),
+      durationMs: full.durationMs,
+    };
+  } finally {
     URL.revokeObjectURL(groundUrl);
   }
 }
@@ -1162,6 +1210,7 @@ declare global {
       compare: typeof runServerCompare;
       highlights: typeof runCaptionHighlights;
       looks: typeof runLooks;
+      dust: typeof runDustDensity;
       curves: typeof runRetainedCurves;
       recordedExport: typeof runRecordedExport;
     };
@@ -1174,6 +1223,7 @@ window.__motionRenderBench = {
   compare: runServerCompare,
   highlights: runCaptionHighlights,
   looks: runLooks,
+  dust: runDustDensity,
   curves: runRetainedCurves,
   recordedExport: runRecordedExport,
 };
