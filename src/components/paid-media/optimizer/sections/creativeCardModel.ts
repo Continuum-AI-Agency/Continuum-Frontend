@@ -6,9 +6,10 @@ import type {
   AdSetSnapshot,
   AdsetAd,
   CreativeSwapJobRow,
+  PlatformCard,
   RecommendationRow,
 } from '@continuum/contracts';
-import { GLOBAL_ANGLE_LABELS, type GlobalAngleId } from '@continuum/contracts';
+import { GLOBAL_ANGLE_LABELS, type GlobalAngleId, PlatformCardSchema } from '@continuum/contracts';
 import { z } from 'zod';
 import type { EvidenceSeries } from './recQueueModel';
 
@@ -34,6 +35,20 @@ type Seed = {
 
 const seedOf = (rec: Pick<RecommendationRow, 'seed'>): Seed =>
   (rec.seed && typeof rec.seed === 'object' ? (rec.seed as Seed) : {}) ?? {};
+
+type MetaFatigueCard = Extract<PlatformCard, { variant: 'meta_creative_fatigue' }>;
+
+/** The fatigue card the engine's F1 carries as `evidence.platformCard` (frontend.html §7
+ *  feature 18). Parsed at the read, like `evidence.winner`: evidence is loose, and a card that
+ *  is absent, malformed or another variant is null, so the row renders as it always has. */
+export function metaFatigueCardOf(
+  rec: Pick<RecommendationRow, 'evidence'>,
+): MetaFatigueCard | null {
+  const evidence = rec.evidence as { platformCard?: unknown } | null | undefined;
+  if (evidence?.platformCard == null) return null;
+  const parsed = PlatformCardSchema.safeParse(evidence.platformCard);
+  return parsed.success && parsed.data.variant === 'meta_creative_fatigue' ? parsed.data : null;
+}
 
 /** The ad the recommendation is about: its own ad_id, else the seed's winner. */
 export function subjectAdId(rec: Pick<RecommendationRow, 'ad_id' | 'seed'>): string | null {

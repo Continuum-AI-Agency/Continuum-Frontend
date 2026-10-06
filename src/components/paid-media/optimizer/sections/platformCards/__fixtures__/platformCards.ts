@@ -48,6 +48,18 @@ export const TIKTOK_FATIGUE = parse({
   replacement: { name: 'Post 22/09', ctr: 0.034 },
 });
 
+/** Feature 18: the same fatigue card for a Meta ad set. */
+export const META_FATIGUE = parse({
+  variant: 'meta_creative_fatigue',
+  ad_set_name: 'EF | Leads | Intereses fitness',
+  creative_name: 'Before-and-after reel',
+  ctr_now: 0.009,
+  ctr_before: 0.018,
+  days: 14,
+  frequency: 2.6,
+  replacement: { name: 'Testimonials carousel', ctr: 0.015 },
+});
+
 /** Escenario 09: TikTok spent 986 today, floor 1,035.30, the decrease lands at midnight. */
 export const TIKTOK_SCHEDULED = parse({
   variant: 'tiktok_scheduled_decrease',
@@ -229,6 +241,7 @@ export const EVERY_CARD = [
   GOOGLE_PMAX,
   GOOGLE_VIDEO,
   TIKTOK_FATIGUE,
+  META_FATIGUE,
   TIKTOK_SCHEDULED,
   CROSS_PLATFORM_MOVE,
   GOOGLE_NEGATIVE_TERMS,

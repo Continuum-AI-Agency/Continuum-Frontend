@@ -38,6 +38,8 @@ export function platformsOf(card: PlatformCard): AdPlatform[] {
     case 'tiktok_attribution_window':
     case 'tiktok_delivery_issue':
       return ['tiktok_ads'];
+    case 'meta_creative_fatigue':
+      return ['meta'];
     case 'cross_platform_move': {
       const ordered = [...givingLegs(card.legs), ...takingLegs(card.legs)].map(
         (leg) => leg.platform,
@@ -53,6 +55,7 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
   google_pmax_asset_group: 'Asset group',
   google_video_readonly: 'Read-only',
   tiktok_creative_fatigue: 'Creative',
+  meta_creative_fatigue: 'Creative',
   tiktok_scheduled_decrease: 'Scheduled budget',
   cross_platform_move: 'Move budget',
   google_negative_terms: 'Negatives',
@@ -68,8 +71,10 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
 };
 
 /** The variants whose body carries the platform's mark beside the title. The wave-6/7
- *  variants predate the mark and keep the chip alone. */
+ *  variants predate the mark and keep the chip alone; Meta's fatigue card carries it because
+ *  it renders inside the Meta creative card, where no chip says whose ad set it is. */
 const MARKED_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
+  'meta_creative_fatigue',
   'google_negative_terms',
   'google_promote_term',
   'google_bid_target',
@@ -338,7 +343,8 @@ export function platformCardTitle(card: PlatformCard): string {
     }
     case 'google_video_readonly':
       return `${card.campaign_name} is a Video campaign, read-only here`;
-    case 'tiktok_creative_fatigue': {
+    case 'tiktok_creative_fatigue':
+    case 'meta_creative_fatigue': {
       const frequency =
         card.frequency != null ? ` with frequency ${card.frequency.toFixed(1)}` : '';
       return `"${card.creative_name}" fell from ${percentLabel(card.ctr_before)} to ${percentLabel(card.ctr_now)} CTR in ${card.days} days${frequency}`;

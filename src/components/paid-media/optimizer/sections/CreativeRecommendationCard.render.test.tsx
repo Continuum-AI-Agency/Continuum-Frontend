@@ -249,3 +249,51 @@ describe('CreativeRecommendationCard — layout A', () => {
     expect(screen.queryByTestId('subject-ad-placeholder')).toBeNull();
   });
 });
+
+describe('CreativeRecommendationCard — the Meta fatigue card', () => {
+  const metaFatigue = {
+    variant: 'meta_creative_fatigue',
+    ad_set_name: 'AV CAMACHO // AGOSTO - LKL - Mensajes',
+    creative_name: 'Ad 0236',
+    ctr_now: 0.0032,
+    ctr_before: 0.0051,
+    days: 14,
+    frequency: 2.1,
+    replacement: { name: 'Ad 6023', ctr: 0.006 },
+  };
+
+  const withEvidence = (extra: Record<string, unknown>) =>
+    ({
+      ...(fatigueRec as { evidence: object }),
+      evidence: { ...(fatigueRec as { evidence: object }).evidence, ...extra },
+    }) as never;
+
+  it('states the fatigue as the TikTok card does, under the Meta mark', () => {
+    renderCard(easyFit, {
+      rec: withEvidence({ platformCard: metaFatigue }),
+    });
+    const problem = screen.getByTestId('creative-card-problem');
+    const card = within(problem).getByTestId('platform-card');
+    expect(card.getAttribute('data-variant')).toBe('meta_creative_fatigue');
+    expect(within(card).getByRole('heading').textContent).toBe(
+      '"Ad 0236" fell from 0.5% to 0.3% CTR in 14 days with frequency 2.1',
+    );
+    expect(within(card).getByTestId('platform-card-fatigue').textContent).toBe(
+      'Ad set "AV CAMACHO // AGOSTO - LKL - Mensajes": the same people keep seeing the same creative. "Ad 6023" runs at 0.6% CTR.',
+    );
+    expect(within(card).getByTestId('platform-card-mark').getAttribute('data-platform')).toBe(
+      'meta',
+    );
+    expect(within(problem).queryByText('Engagement is decaying while cost rises.')).toBeNull();
+  });
+
+  it('renders the card it always rendered when the row carries no platform card', () => {
+    const without = renderCard(easyFit).container.innerHTML;
+    cleanup();
+    const malformed = renderCard(easyFit, {
+      rec: withEvidence({ platformCard: { variant: 'meta_creative_fatigue' } }),
+    }).container.innerHTML;
+    expect(malformed).toBe(without);
+    expect(screen.queryByTestId('platform-card')).toBeNull();
+  });
+});

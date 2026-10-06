@@ -96,6 +96,21 @@ export const TikTokCreativeFatigueCardSchema = z.object({
   replacement: z.object({ name: z.string().min(1), ctr: share }).nullable(),
 });
 
+/** The same fatigue card for a Meta ad set (frontend.html §7 feature 18), so a fatigued
+ *  creative reads alike on every platform. Figures are the producer's: CTR before and now,
+ *  the days the fall took, frequency, and the ad set's best other creative when it has one. */
+export const MetaCreativeFatigueCardSchema = z.object({
+  variant: z.literal('meta_creative_fatigue'),
+  ad_set_name: z.string().min(1),
+  creative_name: z.string().min(1),
+  /** CTR as a fraction: 0.008 is 0.8%. */
+  ctr_now: share,
+  ctr_before: share,
+  days: z.number().int().positive(),
+  frequency: z.number().positive().nullable(),
+  replacement: z.object({ name: z.string().min(1), ctr: share }).nullable(),
+});
+
 /** TikTok refuses a budget under 105% of today's spend (escenario 09), so a decrease is
  *  scheduled for the advertiser's next midnight instead of written now. */
 export const TikTokScheduledDecreaseCardSchema = z
@@ -322,6 +337,7 @@ export const PlatformCardSchema = z.union([
   GooglePmaxAssetGroupCardSchema,
   GoogleVideoReadOnlyCardSchema,
   TikTokCreativeFatigueCardSchema,
+  MetaCreativeFatigueCardSchema,
   TikTokScheduledDecreaseCardSchema,
   CrossPlatformMoveCardSchema,
   GoogleNegativeTermsCardSchema,

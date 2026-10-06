@@ -38,6 +38,7 @@ import {
   cardAngles,
   creativeCardCopy,
   flashCreativesFor,
+  metaFatigueCardOf,
   type ResolvedAngle,
   type StandingChart,
   SWAP_STATUS_LABEL,
@@ -48,6 +49,7 @@ import {
   wearOutMetricTitle,
 } from './creativeCardModel';
 import type { ImplementTarget } from './flashCreativesModel';
+import { PlatformCardBody } from './platformCards/PlatformCardBody';
 import {
   evidenceLine,
   evidenceSeries,
@@ -414,6 +416,7 @@ export function CreativeRecommendationCard({
 }: CreativeRecommendationCardProps) {
   const [reviewElementId, setReviewElementId] = React.useState<string | null>(null);
   const copy = creativeCardCopy(rec);
+  const fatigueCard = metaFatigueCardOf(rec);
   const subjects = subjectAds(rec, ads);
   const anglesQuery = useAdAngles(brandId, rec.adset_id);
   const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId });
@@ -460,11 +463,18 @@ export function CreativeRecommendationCard({
           <p className={`${typeScale.label} text-muted-foreground`}>
             {copy.because === 'winner' ? 'What’s working' : 'What’s wearing out'}
           </p>
-          <p className="text-foreground text-sm">
-            <span className="font-semibold">{copy.problem}.</span>
-            {reason ? <span className="text-muted-foreground"> {reason}</span> : null}
-            {money ? <span className="text-muted-foreground"> · {money}</span> : null}
-          </p>
+          {fatigueCard ? (
+            <>
+              <PlatformCardBody card={fatigueCard} />
+              {money ? <p className="text-muted-foreground text-sm">{money}</p> : null}
+            </>
+          ) : (
+            <p className="text-foreground text-sm">
+              <span className="font-semibold">{copy.problem}.</span>
+              {reason ? <span className="text-muted-foreground"> {reason}</span> : null}
+              {money ? <span className="text-muted-foreground"> · {money}</span> : null}
+            </p>
+          )}
           {wearOut ? <WearOutBars chart={wearOut} currency={currency} /> : null}
           {adsLoading && subjects.length === 0 ? (
             <div className="size-20 animate-pulse rounded-lg bg-muted/40" />

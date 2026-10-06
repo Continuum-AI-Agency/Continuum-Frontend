@@ -336,6 +336,15 @@ function VariantEvidence({
             : ''}
         </Evidence>
       );
+    case 'meta_creative_fatigue':
+      return (
+        <Evidence testId="platform-card-fatigue">
+          Ad set "{card.ad_set_name}": the same people keep seeing the same creative.
+          {card.replacement
+            ? ` "${card.replacement.name}" runs at ${percentLabel(card.replacement.ctr)} CTR.`
+            : ''}
+        </Evidence>
+      );
     case 'tiktok_scheduled_decrease':
       return (
         <Evidence testId="platform-card-scheduled">

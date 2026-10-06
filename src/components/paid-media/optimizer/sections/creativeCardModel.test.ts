@@ -10,6 +10,7 @@ import {
   creativeCardCopy,
   flashCreativesFor,
   isCreativeRecommendation,
+  metaFatigueCardOf,
   parseCardAdAngles,
   resolveAdAngle,
   standingChart,
@@ -375,5 +376,46 @@ describe('creativeCardCopy — problem and instruction', () => {
       seed: { rebuildCraft: true },
     });
     expect(rebuild.instruction).toBe('Keep the angle, rebuild the execution');
+  });
+});
+
+describe('the Meta fatigue card a row carries', () => {
+  const EVIDENCE = {
+    metric: 'ctr',
+    value: 0.009,
+    comparator: 'down 50% vs 14d',
+    threshold: 0.018,
+    window: 'd3' as const,
+    estImpactPerDay: 12,
+    source: 'engine',
+  };
+  const card = {
+    variant: 'meta_creative_fatigue',
+    ad_set_name: 'EF | Leads | Intereses fitness',
+    creative_name: 'Before-and-after reel',
+    ctr_now: 0.009,
+    ctr_before: 0.018,
+    days: 14,
+    frequency: 2.6,
+    replacement: null,
+  };
+
+  it('reads the card the engine carries in the evidence', () => {
+    expect(metaFatigueCardOf({ evidence: { ...EVIDENCE, platformCard: card } })).toEqual(
+      card as never,
+    );
+  });
+
+  it('is null without one, with a malformed one, or with another variant', () => {
+    expect(metaFatigueCardOf({ evidence: null })).toBeNull();
+    expect(metaFatigueCardOf({ evidence: EVIDENCE })).toBeNull();
+    expect(
+      metaFatigueCardOf({ evidence: { ...EVIDENCE, platformCard: { ...card, ctr_now: 4 } } }),
+    ).toBeNull();
+    expect(
+      metaFatigueCardOf({
+        evidence: { ...EVIDENCE, platformCard: { ...card, variant: 'tiktok_creative_fatigue' } },
+      }),
+    ).toBeNull();
   });
 });

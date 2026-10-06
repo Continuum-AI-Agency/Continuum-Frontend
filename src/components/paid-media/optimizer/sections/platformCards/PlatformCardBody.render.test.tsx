@@ -13,6 +13,7 @@ import {
   GOOGLE_PMAX,
   GOOGLE_PROMOTE_TERM,
   GOOGLE_VIDEO,
+  META_FATIGUE,
   TIKTOK_ATTRIBUTION_WINDOW,
   TIKTOK_BUDGET_BELOW_LEARNING,
   TIKTOK_DELIVERY,
@@ -135,6 +136,35 @@ describe('TikTok creative fatigue', () => {
     );
     expect(getByTestId('platform-card-fatigue').textContent).toContain(
       '"Post 22/09" runs at 3.4% CTR.',
+    );
+  });
+});
+
+describe('Meta creative fatigue', () => {
+  it('reads like the TikTok fatigue card, about an ad set, under the Meta mark', () => {
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={META_FATIGUE} />);
+    expect(getByRole('heading').textContent).toBe(
+      '"Before-and-after reel" fell from 1.8% to 0.9% CTR in 14 days with frequency 2.6',
+    );
+    expect(getByTestId('platform-card-fatigue').textContent).toBe(
+      'Ad set "EF | Leads | Intereses fitness": the same people keep seeing the same creative. "Testimonials carousel" runs at 1.5% CTR.',
+    );
+    expect(getByTestId('platform-card-mark').getAttribute('data-platform')).toBe('meta');
+    expect(platformsOf(META_FATIGUE)).toEqual(['meta']);
+    expect(PLATFORM_CARD_TYPE.meta_creative_fatigue).toBe(
+      PLATFORM_CARD_TYPE.tiktok_creative_fatigue,
+    );
+    expect(platformCardActionLabel(META_FATIGUE)).toBeNull();
+  });
+
+  it('says nothing of a replacement or a frequency it was not given', () => {
+    const card = { ...META_FATIGUE, frequency: null, replacement: null };
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={card} />);
+    expect(getByRole('heading').textContent).toBe(
+      '"Before-and-after reel" fell from 1.8% to 0.9% CTR in 14 days',
+    );
+    expect(getByTestId('platform-card-fatigue').textContent).toBe(
+      'Ad set "EF | Leads | Intereses fitness": the same people keep seeing the same creative.',
     );
   });
 });
@@ -400,6 +430,7 @@ describe('every variant', () => {
       (card) => card.variant,
     );
     expect(marked).toEqual([
+      'meta_creative_fatigue',
       'google_negative_terms',
       'google_promote_term',
       'google_bid_target',
