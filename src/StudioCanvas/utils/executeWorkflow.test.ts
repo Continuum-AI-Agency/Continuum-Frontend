@@ -2996,6 +2996,49 @@ describe('an edge that exists is never reported as missing', () => {
     ).toEqual(['a blue car', 'a red car']);
   });
 
+  // A Batch run with no credits said "This batch produced nothing for any item" with only
+  // Dismiss, while a single node said "Out of Canvas credits" with Buy credits. The card
+  // is keyed on errorCode, which the fan-out dropped.
+  it('stamps the refusal code on a batch generator whose every item was refused', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'bat',
+        position: { x: 0, y: 0 },
+        type: 'batch',
+        data: {
+          itemType: 'text',
+          combine: 'zip',
+          items: [
+            { id: 'a', kind: 'text', value: 'a red car' },
+            { id: 'b', kind: 'text', value: 'a blue car' },
+          ],
+        },
+      },
+      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+    ] as unknown as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        {
+          id: 'e1',
+          source: 'bat',
+          target: 'gen',
+          sourceHandle: 'collection',
+          targetHandle: 'prompt',
+        },
+      ]);
+
+    const c = controls();
+    c.executeGeneration.mockImplementation(async () => ({
+      success: false,
+      error: 'Out of Canvas credits',
+      errorCode: 'credits_exhausted',
+    }));
+    await executeWorkflow(c as never, { targetNodeId: 'gen' });
+
+    expect(nodeById('gen')?.data.errorCode).toBe('credits_exhausted');
+  });
+
   // Bug #301: a Router with a Text Block wired in showed the badge `Unset` and the
   // body `Connect a source`. `lockedType` was stamped only by a RUN, so a connected
   // router that had never been run described itself as unconnected.

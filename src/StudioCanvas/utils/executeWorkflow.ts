@@ -3159,6 +3159,9 @@ export async function executeWorkflow(
           });
         }
 
+        // The first item's refusal code, so an all-failed batch shows the same card a
+        // single run does ("Out of Canvas credits" + Buy credits), not a generic failure.
+        let firstErrorCode: string | undefined;
         const fanned = await runGenerationFanOut(node, plan, resolvedOutputs, {
           // The GENERATOR's modality, never the batch's `itemType`: a batch of text
           // prompts fanned through nanoGen produces images.
@@ -3169,8 +3172,11 @@ export async function executeWorkflow(
               : buildNanoGenPayload(target, perItem, nodes, edges, brandId);
             return built ? toBackendPayload(built) : null;
           },
-          executeGeneration: (executionId, itemPayload) =>
-            executeGeneration(executionId, itemPayload),
+          executeGeneration: async (executionId, itemPayload) => {
+            const result = await executeGeneration(executionId, itemPayload);
+            firstErrorCode ??= result.errorCode;
+            return result;
+          },
           // Progress is written as it lands so the matrix fills in during the run and
           // survives a reload — the axis headers and result urls only, never base64.
           onProgress: (record) => {
@@ -3183,7 +3189,12 @@ export async function executeWorkflow(
         });
 
         if (!fanned) {
-          updateNodeStatus(nodeId, 'failed', 'This batch produced nothing for any item');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'This batch produced nothing for any item',
+            firstErrorCode,
+          );
           return false;
         }
         if (fanned.record.failed > 0) {
