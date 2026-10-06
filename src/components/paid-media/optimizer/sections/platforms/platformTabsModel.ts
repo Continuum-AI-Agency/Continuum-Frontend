@@ -4,6 +4,7 @@
 // (`meta | google_ads | tiktok_ads`), so this vocabulary never adds a fifth spelling of Google.
 
 import type { AdAccount } from '@continuum/contracts';
+import { PAID_SETUP_CONNECT_HREF } from '../../../paid-setup-diagnostics';
 
 export const AD_PLATFORMS = ['meta', 'google_ads', 'tiktok_ads'] as const;
 export type AdPlatform = (typeof AD_PLATFORMS)[number];
@@ -15,6 +16,21 @@ export const PLATFORM_NAMES: Record<AdPlatform, string> = {
   meta: 'Meta',
   google_ads: 'Google',
   tiktok_ads: 'TikTok',
+};
+
+/** Where a person connects each platform: the integration settings, where every ad login is
+ *  connected and its accounts granted to the brand. */
+export const PLATFORM_CONNECT_HREF: Record<AdPlatform, string> = {
+  meta: PAID_SETUP_CONNECT_HREF,
+  google_ads: PAID_SETUP_CONNECT_HREF,
+  tiktok_ads: PAID_SETUP_CONNECT_HREF,
+};
+
+/** "Connect Google Ads" — the product's own name, so the button says what it connects. */
+export const PLATFORM_CONNECT_LABEL: Record<AdPlatform, string> = {
+  meta: 'Connect Meta Ads',
+  google_ads: 'Connect Google Ads',
+  tiktok_ads: 'Connect TikTok Ads',
 };
 
 const TAB_LABELS: Record<PlatformTab, string> = { all: 'All', ...PLATFORM_NAMES };

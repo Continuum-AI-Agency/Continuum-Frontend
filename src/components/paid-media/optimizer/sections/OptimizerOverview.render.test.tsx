@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
+import recordedGoogle from './platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
 import type { AccountPlatformMetricsState } from './platforms/useAccountPlatformMetrics';
 import type { GoogleAdsOverviewState } from './platforms/useGoogleAdsOverview';
 import type { TikTokAdsOverviewState } from './platforms/useTikTokAdsOverview';
@@ -89,6 +90,9 @@ mock.module('./platforms/useTikTokAdsOverview', () => ({
     return advertiserId ? tiktokState : { status: 'not-connected' };
   },
 }));
+const { buildGoogleOverview, GoogleAccountOverviewSchema, GoogleTopCampaignsSchema } = await import(
+  './platforms/googleAdsOverviewModel'
+);
 const { TIKTOK_DOC_SHAPED_ENVELOPE } = await import('./platforms/__fixtures__/tiktokSnapshots');
 const { buildTikTokOverview, TikTokSnapshotsEnvelopeSchema } = await import(
   './platforms/tiktokAdsOverviewModel'
@@ -805,6 +809,19 @@ describe('OptimizerOverview — the header', () => {
   });
 });
 
+// Vivo 47's recorded Google Ads read, as the Google tab's own test builds it.
+const VIVO_47 = {
+  platform: 'google_ads',
+  account_id: '3710693645',
+  name: 'Vivo 47',
+  status: null,
+  currency: 'MXN',
+};
+const VIVO_47_OVERVIEW = buildGoogleOverview(
+  GoogleAccountOverviewSchema.parse(recordedGoogle.account_overview),
+  GoogleTopCampaignsSchema.parse(recordedGoogle.top_campaigns),
+);
+
 const grantGoogle = () => {
   adAccounts = [
     ...adAccounts,
@@ -844,20 +861,60 @@ describe('OptimizerOverview — the platform tabs', () => {
     expect(getByTestId('platform-tab-tiktok_ads').textContent).toBe('TikTok· Connect');
   });
 
-  it('shows a brand on Meta alone no tabs and no note: the O1 opens on the header line', () => {
+  it('shows a brand on Meta alone all four tabs, and no note: tabs, then the header line', () => {
     const { getByTestId, queryByTestId } = mount();
-    expect(queryByTestId('platform-tabs')).toBeNull();
+    const tabs = getByTestId('platform-tabs');
+    expect(
+      [...tabs.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute('data-tab')),
+    ).toEqual(['all', 'meta', 'google_ads', 'tiktok_ads']);
+    expect(getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe('false');
+    expect(getByTestId('platform-tab-tiktok_ads').getAttribute('data-connected')).toBe('false');
     expect(queryByTestId('multiplatform-unavailable')).toBeNull();
-    expect(overviewChildren(getByTestId('optimizer-overview')).slice(0, 2)).toEqual([
+    expect(overviewChildren(getByTestId('optimizer-overview')).slice(0, 3)).toEqual([
+      'platform-tabs',
       '(div)',
       'overview-hero',
     ]);
   });
 
-  it('keeps the row when the URL names a platform, so a Meta-only brand can get back to All', () => {
-    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+  it("offers a Meta-only brand Connect Google Ads on Google's tab, to the integration settings", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    const { getByTestId, queryByTestId } = mount();
+    const connect = getByTestId('platform-connect-google_ads');
+    expect(connect.textContent).toBe('Connect Google Ads');
+    expect(connect.getAttribute('href')).toBe('/settings?section=integrations');
+    expect(getByTestId('google-empty-no-connection').textContent).toContain(
+      "Google Ads isn't connected.",
+    );
+    expect(queryByTestId('google-tab')).toBeNull();
+  });
+
+  it("offers a Meta-only brand Connect TikTok Ads on TikTok's tab, to the integration settings", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=tiktok_ads');
     const { getByTestId } = mount();
-    expect(getByTestId('platform-tabs')).toBeTruthy();
+    const connect = getByTestId('platform-connect-tiktok_ads');
+    expect(connect.textContent).toBe('Connect TikTok Ads');
+    expect(connect.getAttribute('href')).toBe('/settings?section=integrations');
+    expect(getByTestId('tiktok-empty').textContent).toContain("TikTok Ads isn't connected yet");
+  });
+
+  it('shows a brand with Google connected its Google read on the tab, and no Connect', () => {
+    grantGoogle();
+    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('google-headline').textContent).toStartWith('Google spent 55,205 MXN');
+    expect(getByTestId('google-tiles')).toBeTruthy();
+    expect(queryByTestId('platform-connect-google_ads')).toBeNull();
+    expect(getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe('true');
+  });
+
+  it("keeps All exactly today's O1 for a Meta-only brand once the tabs sit above it", () => {
+    const { getByTestId } = mount();
+    expect(getByTestId('overview-headline').textContent).toStartWith(
+      'The account spent 23,911 MXN',
+    );
+    expect(getByTestId('portfolio-rows')).toBeTruthy();
   });
 
   it('drops Connect from Google once a Google Ads account is granted to the brand', () => {

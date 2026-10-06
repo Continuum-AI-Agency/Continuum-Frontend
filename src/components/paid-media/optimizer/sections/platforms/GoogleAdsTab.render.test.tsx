@@ -99,7 +99,7 @@ describe('GoogleAdsTabView — when it cannot read', () => {
     );
     const empty = getByTestId('google-empty-no-connection');
     expect(empty.textContent).toContain('No Google connection');
-    expect(empty.querySelector('a')?.textContent).toBe('Connect');
+    expect(empty.querySelector('a')?.textContent).toBe('Connect Google Ads');
     expect(queryByTestId('google-tiles')).toBeNull();
   });
 
@@ -133,16 +133,16 @@ describe('GoogleCampaignTypeBreakdown — under the multi-platform frame', () =>
       <GoogleCampaignTypeBreakdown state={{ status: 'ready', account: VIVO_47, overview }} />,
     );
     expect(getByTestId('google-breakdown').textContent).toContain('By campaign type');
-    expect(getAllByTestId('google-tile-group').length).toBe(
-      Math.min(overview.groups.length, 4),
-    );
+    expect(getAllByTestId('google-tile-group').length).toBe(Math.min(overview.groups.length, 4));
     expect(queryByTestId('google-headline')).toBeNull();
     expect(queryByTestId('google-tile-spend')).toBeNull();
   });
 
   it('says why the split is missing when the read fails, and nothing when there is no grant', () => {
     const failed = render(
-      <GoogleCampaignTypeBreakdown state={{ status: 'error', account: VIVO_47, message: 'quota' }} />,
+      <GoogleCampaignTypeBreakdown
+        state={{ status: 'error', account: VIVO_47, message: 'quota' }}
+      />,
     );
     expect(failed.getByTestId('google-breakdown-error').textContent).toContain('quota');
     failed.unmount();

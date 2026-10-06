@@ -9,11 +9,7 @@
 //
 // When the read cannot happen, the empty state names the reason and the one thing that fixes it.
 
-import { PlugZapIcon } from 'lucide-react';
-import Link from 'next/link';
-import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PAID_SETUP_CONNECT_HREF } from '../../../paid-setup-diagnostics';
 import { KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
@@ -29,6 +25,7 @@ import {
   windowRangeLabel,
 } from './googleAdsOverviewModel';
 import { PlatformChip } from './PlatformChip';
+import { PlatformConnectLink } from './PlatformConnectLink';
 import { type GoogleAdsOverviewState, useGoogleAdsOverview } from './useGoogleAdsOverview';
 
 function signedPct(pct: number): string {
@@ -201,18 +198,7 @@ function EmptyState({
         <p className={cn(typeScale.body, 'font-semibold text-foreground')}>{title}</p>
       </div>
       <p className="text-muted-foreground text-sm">{body}</p>
-      {connect ? (
-        <Link
-          className={cn(
-            buttonVariants({ size: 'sm', variant: 'outline' }),
-            'h-7 gap-1.5 px-2 text-xs',
-          )}
-          href={PAID_SETUP_CONNECT_HREF}
-        >
-          <PlugZapIcon aria-hidden="true" className="size-3.5" />
-          Connect
-        </Link>
-      ) : null}
+      {connect ? <PlatformConnectLink platform="google_ads" /> : null}
     </section>
   );
 }

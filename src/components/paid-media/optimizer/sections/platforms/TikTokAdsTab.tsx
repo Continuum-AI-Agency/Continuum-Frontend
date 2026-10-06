@@ -7,17 +7,14 @@
 // "not connected" state and shows no numbers: a mock figure here would be the first thing a
 // client quotes back.
 
-import { PlugZapIcon } from 'lucide-react';
-import Link from 'next/link';
-import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PAID_SETUP_CONNECT_HREF } from '../../../paid-setup-diagnostics';
 import { KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
 import { capitalise, formatResults, kindWords } from './accountPlatformMetricsModel';
 import { windowRangeLabel } from './googleAdsOverviewModel';
 import { PlatformChip } from './PlatformChip';
+import { PlatformConnectLink } from './PlatformConnectLink';
 import {
   shortAdvertiserId,
   type TikTokAdGroupRow,
@@ -44,16 +41,7 @@ export function TikTokAdsEmpty() {
         Once a TikTok Ads advertiser is connected and granted to this brand, its spend, results and
         decisions appear here beside Meta and Google.
       </p>
-      <Link
-        className={cn(
-          buttonVariants({ size: 'sm', variant: 'outline' }),
-          'h-7 gap-1.5 px-2 text-xs',
-        )}
-        href={PAID_SETUP_CONNECT_HREF}
-      >
-        <PlugZapIcon aria-hidden="true" className="size-3.5" />
-        Connect
-      </Link>
+      <PlatformConnectLink platform="tiktok_ads" />
     </section>
   );
 }

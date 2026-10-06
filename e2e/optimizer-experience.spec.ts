@@ -72,9 +72,8 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //   Production moves under this bench: on 2026-10-05 the agency Easy Fit row owned no
 //   portfolios at all, "Prueba" was gone and the Easyfit account carried a Google sibling.
 //   So the browse brand, its account, its Recommend portfolio and its empty sibling account
-//   (`resolveBrowsePremise`), the brand's platforms (`brandPlatforms`), the portfolio whose
-//   asked-for row opened an audience proposal and the one whose card offers the creative
-//   recommendation (`resolveLedgerCtaPremise`) are all resolved in beforeAll, as the bench
+//   (`resolveBrowsePremise`), the portfolio whose asked-for row opened an audience proposal
+//   and the one whose card offers the creative recommendation (`resolveLedgerCtaPremise`) are all resolved in beforeAll, as the bench
 //   user, from the same reads the page makes. A drift fails with the reads it saw.
 //
 // Usage: cd Continuum-Frontend && bun run optimizer:e2e:bench
@@ -428,12 +427,6 @@ async function listBrandAccounts(brandId: string): Promise<BrandAccount[]> {
     .rpc('list_brand_ad_accounts', { p_brand_id: brandId });
   if (error) throw new Error(`[optimizer-bench] list_brand_ad_accounts: ${error.message}`);
   return (data ?? []) as BrandAccount[];
-}
-
-/** The platforms a brand holds an ad account on — what decides whether the Overview shows
- *  its row of platform tabs (a brand on Meta alone shows none). */
-async function brandPlatforms(brandId: string): Promise<string[]> {
-  return [...new Set((await listBrandAccounts(brandId)).map((row) => row.platform))].sort();
 }
 
 /** What the browse tests stand on: a brand with an account holding a Recommend portfolio
@@ -1660,14 +1653,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
       });
       console.log(`[optimizer-bench] Overview O1: ${JSON.stringify(report)}`);
 
-      // In this order and nothing else: the platform tabs (only for a brand on more than one
-      // platform, read live from the picker's own list), the header line, the sentence block,
-      // the band, the tiles, the cards (when a read has landed), the rows. Nothing — the
-      // "not available yet" note included — sits between the tabs and the hero.
-      const platforms = await brandPlatforms(EASYFIT_LEDGER_BRAND_ID);
-      console.log(`[optimizer-bench] ledger brand platforms: ${platforms.join(', ')}`);
+      // In this order and nothing else: the platform tabs (every brand, Meta-only included — a
+      // platform it has not connected stays in the row and says Connect), the header line, the
+      // sentence block, the band, the tiles, the cards (when a read has landed), the rows.
+      // Nothing — the "not available yet" note included — sits between the tabs and the hero.
       const expectedIds = [
-        ...(platforms.length > 1 ? ['platform-tabs'] : []),
+        'platform-tabs',
         '(div)',
         'overview-hero',
         'jaina-entry-chips',

@@ -270,13 +270,9 @@ export function OptimizerOverview({
 
   const portfolioNoun = portfolios.length === 1 ? 'portfolio' : 'portfolios';
 
-  // A brand on Meta alone keeps today's O1 with no row of tabs above it. A URL that already
-  // names a platform keeps the row, so the viewer can always get back to All.
-  const multiPlatform = connected.google_ads || connected.tiktok_ads;
-  const tabs =
-    multiPlatform || platformTab !== 'all' ? (
-      <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />
-    ) : null;
+  // Every brand gets the four tabs: a missing Google or TikTok tab reads as "we don't do
+  // Google", where a tab that says Connect reads as "you haven't connected it yet".
+  const tabs = <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />;
   if (!rendersManagedOverview(platformTab)) {
     return (
       <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
