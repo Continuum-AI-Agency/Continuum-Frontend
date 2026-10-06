@@ -1,12 +1,20 @@
 'use client';
 
 import { type CSSProperties, type RefObject, useEffect, useRef, useState } from 'react';
-import type { ClipEffectSpec } from '../../utils/render/effectSpec';
+import {
+  type ClipEffectSpec,
+  filterString,
+  resolveAdjustments,
+} from '../../utils/render/effectSpec';
 import { hasShaderStack, shaderStackFromClipEffects } from '../../utils/render/shaderStack';
 import { computeCropRects } from '../../utils/splice/letterbox';
 
+// A filtered picture is drawn through the canvas as well: a <video> element shows the browser's
+// display decode, which drifts from the Canvas/WebCodecs decode the export draws (8–13 RGB on
+// recorded footage), and a filter's contrast widens the gap. The CSS filter stays on the style.
 export const needsCanvasPreview = (effects?: ClipEffectSpec): boolean =>
   hasShaderStack(effects) ||
+  Boolean(effects && filterString(resolveAdjustments(effects))) ||
   Boolean(effects?.crop && Object.values(effects.crop).some((value) => value !== 0));
 
 export function TimelineShaderPreview({
