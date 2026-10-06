@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { jainaAccountEntryPrompts, jainaAskPrompt, jainaEntryPrompts } from './jainaEntryModel';
+import {
+  jainaAccountEntryPrompts,
+  jainaAskPrompt,
+  jainaEntryPrompts,
+  jainaTabEntryPrompts,
+} from './jainaEntryModel';
 
 describe('jainaEntryPrompts', () => {
   const entries = jainaEntryPrompts({ id: 'p', name: 'Leads MX', objective: 'lead' });
@@ -115,5 +120,69 @@ describe('jainaAccountEntryPrompts', () => {
     });
     expect(anonymous[0].prompt).toContain('the active account');
     expect(anonymous[0].prompt).toContain('none active');
+  });
+});
+
+describe('jainaTabEntryPrompts', () => {
+  const account = {
+    accountLabel: 'act_easyfit',
+    portfolios: [{ name: 'Leads MX', objective: 'lead' }],
+    worstOverTarget: null,
+    noResults: null,
+  };
+
+  it('asks across platforms on All, naming the portfolios and all three platforms', () => {
+    const entries = jainaTabEntryPrompts('all', account);
+    expect(entries.map((e) => e.label)).toEqual([
+      'Which platform buys leads cheapest?',
+      'Where should budget move?',
+      "What's going wrong on any platform?",
+      'Summary for the client',
+    ]);
+    for (const entry of entries) {
+      expect(entry.prompt).toContain('across Meta, Google Ads and TikTok');
+      expect(entry.prompt).toContain('"Leads MX" (objective: Lead)');
+    }
+  });
+
+  it("keeps today's account questions on Meta", () => {
+    expect(jainaTabEntryPrompts('meta', account)).toEqual(jainaAccountEntryPrompts(account));
+  });
+
+  it('asks what only Google can answer on Google Ads', () => {
+    const entries = jainaTabEntryPrompts('google_ads', account);
+    expect(entries.map((e) => e.label)).toEqual([
+      'Which search terms bring leads?',
+      'Is Search limited by budget?',
+      'Which asset group is missing assets?',
+      'Is any campaign not serving?',
+    ]);
+    for (const entry of entries) {
+      expect(entry.prompt).toStartWith(
+        `For the Google Ads account of the brand behind "act_easyfit": ${entry.label.charAt(0).toLowerCase()}${entry.label.slice(1)}`,
+      );
+    }
+  });
+
+  it('asks what only TikTok can answer on TikTok, and falls back to the active account', () => {
+    const entries = jainaTabEntryPrompts('tiktok_ads', { ...account, accountLabel: null });
+    expect(entries.map((e) => e.label)).toEqual([
+      'Which video is fatiguing?',
+      'Which opening loses viewers?',
+      'Is any ad group stuck in learning?',
+      'Which post should be a Spark Ad?',
+    ]);
+    for (const entry of entries) {
+      expect(entry.prompt).toStartWith(
+        'For the TikTok Ads account of the brand behind the active account: ',
+      );
+    }
+  });
+
+  it('gives every tab its own keys, unique within the tab', () => {
+    for (const tab of ['all', 'meta', 'google_ads', 'tiktok_ads'] as const) {
+      const keys = jainaTabEntryPrompts(tab, account).map((e) => e.key);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
   });
 });

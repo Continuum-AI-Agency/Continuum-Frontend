@@ -6,6 +6,9 @@
 // together). One button takes the suggestion into the wizard; "Explore" opens the full
 // ad-set and creative view for anyone who wants to look first. Starting from scratch is
 // the same size card, not a footnote.
+//
+// A cross-platform suggestion ("Leads // All platforms") says which platforms it spans and how
+// many members each one brings, chip by chip; a Meta-only card reads exactly as before.
 
 import type {
   AdSetSnapshot,
@@ -22,8 +25,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { deriveEfficiency, formatCpa, formatCurrency, humanize } from '../../format';
 import * as typeScale from '../../typeScale';
+import { PlatformChip } from '../platforms/PlatformChip';
 import { SuggestionExplorer } from '../SuggestionExplorer';
 import { CONVERSION_OBJECTIVES } from '../suggestionModel';
+import { suggestionPlatformCounts } from './wizardModel';
 
 export type SuggestionOverride = { objective: OptimizationObjective; mode: OptimizationModeDto };
 
@@ -117,6 +122,7 @@ function SuggestionCard({
   const dots = useMemo(() => costDots(suggestion, snapshotById), [suggestion, snapshotById]);
   const noConversions =
     CONVERSION_OBJECTIVES.has(suggestion.objective) && suggestion.summary.conv14 === 0;
+  const platformCounts = suggestionPlatformCounts(suggestion);
 
   return (
     <article
@@ -140,9 +146,27 @@ function SuggestionCard({
         <SparklesIcon aria-hidden className="size-4 shrink-0 text-primary" />
       </div>
 
+      {platformCounts ? (
+        <ul className="flex flex-wrap items-center gap-1.5" data-testid="suggestion-platforms">
+          {platformCounts.map((entry) => (
+            <li
+              className="inline-flex items-center gap-1 text-xs"
+              data-platform={entry.platform}
+              data-testid="suggestion-platform-count"
+              key={entry.platform}
+            >
+              <PlatformChip platform={entry.platform} />
+              <span className="text-muted-foreground tabular-nums">{entry.label}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       <dl className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-md bg-muted/40 px-2 py-1.5">
-          <dt className={`${typeScale.label} text-muted-foreground`}>Ad sets</dt>
+          <dt className={`${typeScale.label} text-muted-foreground`}>
+            {platformCounts ? 'Members' : 'Ad sets'}
+          </dt>
           <dd className="font-semibold text-sm tabular-nums">{suggestion.summary.adsets}</dd>
         </div>
         <div className="rounded-md bg-muted/40 px-2 py-1.5">

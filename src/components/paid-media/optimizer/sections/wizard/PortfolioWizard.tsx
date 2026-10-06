@@ -261,7 +261,10 @@ export function PortfolioWizard({
               objective={draft.objective}
               onAssetModeChange={(assetMode) => patch({ assetMode })}
               onChangeCampaigns={(campaignIds) => patch({ campaignIds })}
+              memberKeys={draft.memberKeys}
+              onChangeMembers={(memberKeys) => patch({ memberKeys })}
               onChangeSelection={(adsetIds) => patch({ adsetIds })}
+              proposedMembers={draft.proposedMembers}
               selectedIds={draft.adsetIds}
               warnings={{ inactiveCount, blockedCount, moves }}
             />

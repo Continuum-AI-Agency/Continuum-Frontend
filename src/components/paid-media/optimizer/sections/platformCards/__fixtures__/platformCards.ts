@@ -185,6 +185,45 @@ export const TIKTOK_ATTRIBUTION_WINDOW = parse({
   compared_to: { platform: 'meta', click_window_days: 7, view_window_days: 1 },
 });
 
+/** Easy Fit 2026: every enabled campaign dark for 6 days with ads disapproved — one cause. */
+export const GOOGLE_DELIVERY_ACCOUNT_WIDE = parse({
+  variant: 'google_delivery_issue',
+  campaign_name: 'Search | Leads MX',
+  reasons: ['HAS_ADS_DISAPPROVED', 'BUDGET_CONSTRAINED'],
+  dark_days: 6,
+  currency: 'MXN',
+  budget_per_day: 500,
+  disapproved_ads: 3,
+  account_wide: true,
+});
+
+/** One campaign dark for a reason Google has not named to us before. */
+export const GOOGLE_DELIVERY_ONE_CAMPAIGN = parse({
+  variant: 'google_delivery_issue',
+  campaign_name: 'PMax Necesidades SLP',
+  reasons: ['NO_ASSET_GROUPS', 'SOME_NEW_REASON'],
+  dark_days: 1,
+  currency: null,
+  budget_per_day: null,
+  disapproved_ads: 0,
+  account_wide: false,
+});
+
+/** A TikTok ad group rejected in review, with TikTok's own reasons and suggestion. */
+export const TIKTOK_DELIVERY = parse({
+  variant: 'tiktok_delivery_issue',
+  ad_group_name: 'EF | Leads | Intereses fitness',
+  secondary_status: 'ADGROUP_STATUS_AUDIT_DENY',
+  dark_days: 3,
+  rejected_ads: [
+    {
+      reasons: ['Exaggerated or misleading claims', 'Before-and-after imagery'],
+      suggestion: 'Remove the before-and-after frames and resubmit the ad.',
+    },
+    { reasons: ['Unclear landing page'], suggestion: null },
+  ],
+});
+
 export const EVERY_CARD = [
   GOOGLE_BUDGET_LIMITED,
   GOOGLE_PMAX,
@@ -200,4 +239,6 @@ export const EVERY_CARD = [
   TIKTOK_SPARK_CANDIDATE,
   TIKTOK_BUDGET_BELOW_LEARNING,
   TIKTOK_ATTRIBUTION_WINDOW,
+  GOOGLE_DELIVERY_ACCOUNT_WIDE,
+  TIKTOK_DELIVERY,
 ] as const;

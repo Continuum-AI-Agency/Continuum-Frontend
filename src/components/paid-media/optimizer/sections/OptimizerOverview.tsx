@@ -63,9 +63,8 @@ import {
   windowLabel,
 } from './account/overviewModel';
 import { JainaEntryChips } from './JainaEntryChips';
-import { jainaAccountEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
+import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import { PortfolioRowCard } from './PortfolioRowCard';
-import { underManagement } from './portfolioStaleness';
 import {
   AllPlatformsHeadline,
   AllPlatformsSubline,
@@ -87,6 +86,7 @@ import {
   type AccountPlatformMetricsState,
   useAccountPlatformMetrics,
 } from './platforms/useAccountPlatformMetrics';
+import { underManagement } from './portfolioStaleness';
 
 /** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
 const MAX_KIND_TILES = 3;
@@ -225,7 +225,7 @@ export function OptimizerOverview({
         worst = { name: portfolio.name, pct: row.vsTargetPct };
       if (silent == null && row.spend > 0 && row.results === 0) silent = portfolio.name;
     }
-    return jainaAccountEntryPrompts({
+    return jainaTabEntryPrompts(platformTab, {
       accountLabel: adAccountId,
       portfolios: portfolios.map((portfolio) => ({
         name: portfolio.name,
@@ -234,7 +234,12 @@ export function OptimizerOverview({
       worstOverTarget: worst?.name ?? null,
       noResults: silent,
     });
-  }, [portfolios, windows, adAccountId]);
+  }, [platformTab, portfolios, windows, adAccountId]);
+  // "All" spans every platform, so its questions carry none; a platform's tab carries its own.
+  const jainaPlatform = platformTab === 'all' ? null : platformTab;
+  const jainaBand = (
+    <JainaEntryChips entries={jainaEntries} label="Ask Jaina" platform={jainaPlatform} />
+  );
 
   const portfolioNoun = portfolios.length === 1 ? 'portfolio' : 'portfolios';
 
@@ -243,6 +248,7 @@ export function OptimizerOverview({
     return (
       <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
         {tabs}
+        {jainaBand}
         <PlatformTab brandId={brandId} metrics={platformMetrics} platform={platformTab} />
       </div>
     );
@@ -424,9 +430,7 @@ export function OptimizerOverview({
           ) : window ? (
             <span data-testid="overview-window">{window}</span>
           ) : null}
-          {(multiplatform || window) && accountRead.data ? (
-            <span aria-hidden="true">·</span>
-          ) : null}
+          {(multiplatform || window) && accountRead.data ? <span aria-hidden="true">·</span> : null}
           {accountRead.data ? (
             <AccountReadFreshness
               error={requestRead.error instanceof Error ? requestRead.error.message : null}
@@ -440,73 +444,73 @@ export function OptimizerOverview({
         </div>
       </section>
 
-      {/* 3 — the band that asks Jaina, with the account's own questions. */}
-      <JainaEntryChips entries={jainaEntries} label="Ask Jaina" />
+      {/* 3 — the band that asks Jaina, with the questions of the tab a person is on. */}
+      {jainaBand}
 
       {/* 4 — the radiography: four to six tiles, each with a state on its top border. */}
       {multiplatform ? (
         <AllPlatformsTiles metrics={multiplatform} onOpenActions={onOpenActions} />
       ) : allFrame?.status === 'loading' ? null : (
-      <div
-        className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6"
-        data-testid="account-tiles"
-      >
-        <KpiTile
-          figure={figureProps('tiles.spend', spend?.spend ?? null, currency, 'd7')}
-          label={`Spend · ${WINDOW_DAYS} days`}
-          state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
-          sub={
-            !complete
-              ? `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
-              : spend
-                ? `${formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan ${formatCurrency(dailyTotal, currency)}`
-                : `plan ${formatCurrency(dailyTotal, currency)} per day`
-          }
-          testId="tile-spend"
-          value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
-        />
-        {kinds.slice(0, MAX_KIND_TILES).map((kind) => (
+        <div
+          className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6"
+          data-testid="account-tiles"
+        >
           <KpiTile
-            figure={figureProps(`tiles.kind.${kind.kind}`, kind.results, null, 'd7', 'count')}
-            key={kind.kind}
-            label={capitalise(kind.words.many)}
-            state={kind.state}
-            sub={kindTileSub(kind, currency)}
-            testId={`tile-kind-${kind.kind}`}
-            value={kind.results.toLocaleString('en-US')}
+            figure={figureProps('tiles.spend', spend?.spend ?? null, currency, 'd7')}
+            label={`Spend · ${WINDOW_DAYS} days`}
+            state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
+            sub={
+              !complete
+                ? `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
+                : spend
+                  ? `${formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan ${formatCurrency(dailyTotal, currency)}`
+                  : `plan ${formatCurrency(dailyTotal, currency)} per day`
+            }
+            testId="tile-spend"
+            value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
           />
-        ))}
-        <KpiTile
-          action={
-            pendingCount > 0 ? (
-              <button
-                className="text-xs text-primary hover:underline"
-                onClick={onOpenActions}
-                type="button"
-              >
-                Review
-              </button>
-            ) : null
-          }
-          figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
-          label="Decisions"
-          sub={
-            pendingCount > 0
-              ? `in ${portfoliosWithDecisions} ${portfoliosWithDecisions === 1 ? 'portfolio' : 'portfolios'}`
-              : 'nothing waits for your decision'
-          }
-          testId="tile-decisions"
-          value={String(pendingCount)}
-        />
-        <KpiTile
-          figure={figureProps('tiles.on-autopilot', autopilot.autopilot, null, 'none', 'count')}
-          label="Autopilot"
-          state={autopilot.paused > 0 ? 'warn' : 'none'}
-          sub={autopilotTileSub(autopilot)}
-          testId="tile-autopilot"
-          value={`${autopilot.autopilot} of ${autopilot.total}`}
-        />
-      </div>
+          {kinds.slice(0, MAX_KIND_TILES).map((kind) => (
+            <KpiTile
+              figure={figureProps(`tiles.kind.${kind.kind}`, kind.results, null, 'd7', 'count')}
+              key={kind.kind}
+              label={capitalise(kind.words.many)}
+              state={kind.state}
+              sub={kindTileSub(kind, currency)}
+              testId={`tile-kind-${kind.kind}`}
+              value={kind.results.toLocaleString('en-US')}
+            />
+          ))}
+          <KpiTile
+            action={
+              pendingCount > 0 ? (
+                <button
+                  className="text-xs text-primary hover:underline"
+                  onClick={onOpenActions}
+                  type="button"
+                >
+                  Review
+                </button>
+              ) : null
+            }
+            figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
+            label="Decisions"
+            sub={
+              pendingCount > 0
+                ? `in ${portfoliosWithDecisions} ${portfoliosWithDecisions === 1 ? 'portfolio' : 'portfolios'}`
+                : 'nothing waits for your decision'
+            }
+            testId="tile-decisions"
+            value={String(pendingCount)}
+          />
+          <KpiTile
+            figure={figureProps('tiles.on-autopilot', autopilot.autopilot, null, 'none', 'count')}
+            label="Autopilot"
+            state={autopilot.paused > 0 ? 'warn' : 'none'}
+            sub={autopilotTileSub(autopilot)}
+            testId="tile-autopilot"
+            value={`${autopilot.autopilot} of ${autopilot.total}`}
+          />
+        </div>
       )}
 
       {/* 5 — the recommendation cards, in impact order, the lead marked. */}
@@ -610,9 +614,7 @@ function PlatformTab({
       <>
         <MultiPlatformUnavailable
           detail={
-            platform === 'google_ads'
-              ? "Below is Google's own read of the account."
-              : undefined
+            platform === 'google_ads' ? "Below is Google's own read of the account." : undefined
           }
         />
         {fallback}
@@ -630,7 +632,11 @@ function PlatformTab({
   if (metrics.status === 'error') {
     return (
       <>
-        <p className="px-1 text-muted-foreground text-xs" data-testid="multiplatform-error" role="status">
+        <p
+          className="px-1 text-muted-foreground text-xs"
+          data-testid="multiplatform-error"
+          role="status"
+        >
           {metrics.message}
         </p>
         {fallback}

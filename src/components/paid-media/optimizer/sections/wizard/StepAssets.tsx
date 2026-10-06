@@ -4,8 +4,12 @@
 // name or ID, eligibility, who already holds each one). By campaign: one row per campaign,
 // ticking it takes every eligible ad set in it — and the enroll goes by campaign id, so the
 // server picks the ad sets rather than the browser guessing.
+//
+// A cross-platform suggestion also proposes campaigns on the brand's other platforms. They
+// arrive ticked, under their platform's header, and can be unticked one by one. Nothing
+// enrolls a Google campaign yet, so the section says that rather than implying Create will.
 
-import type { OptimizationObjective, PortfolioLevel } from '@continuum/contracts';
+import type { OptimizationObjective, PortfolioLevel, SuggestionMember } from '@continuum/contracts';
 import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -18,7 +22,9 @@ import {
   type PortfolioPickerSource,
   sectionEligibleIds,
 } from '../../picker/campaignGroups';
-import type { AssetMode } from './wizardModel';
+import { PlatformGroupHeader } from '../../picker/MultiPlatformPicker';
+import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
+import { type AssetMode, memberKey, membersByAccount } from './wizardModel';
 
 type InventoryFreshness = React.ComponentProps<typeof CampaignAdsetPicker>['inventoryFreshness'];
 
@@ -39,6 +45,10 @@ type StepAssetsProps = {
   isError: boolean;
   inventoryFreshness?: InventoryFreshness;
   disabled?: boolean;
+  /** Other-platform members a cross-platform suggestion proposed; empty otherwise. */
+  proposedMembers?: SuggestionMember[];
+  memberKeys?: string[];
+  onChangeMembers?: (keys: string[]) => void;
   warnings: {
     inactiveCount: number;
     blockedCount: number;
@@ -63,6 +73,9 @@ export function StepAssets({
   isError,
   inventoryFreshness,
   disabled,
+  proposedMembers = [],
+  memberKeys = [],
+  onChangeMembers,
   warnings,
 }: StepAssetsProps) {
   const level: PortfolioLevel = 'adset';
@@ -173,6 +186,15 @@ export function StepAssets({
         </ul>
       )}
 
+      {proposedMembers.length > 0 ? (
+        <OtherPlatformMembers
+          disabled={disabled}
+          members={proposedMembers}
+          onChange={(keys) => onChangeMembers?.(keys)}
+          selectedKeys={memberKeys}
+        />
+      ) : null}
+
       {warnings.inactiveCount > 0 ? (
         <p className="text-xs text-warning">
           {warnings.inactiveCount} selected inactive{' '}
@@ -200,5 +222,74 @@ export function StepAssets({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function OtherPlatformMembers({
+  members,
+  selectedKeys,
+  onChange,
+  disabled,
+}: {
+  members: SuggestionMember[];
+  selectedKeys: string[];
+  onChange: (keys: string[]) => void;
+  disabled?: boolean;
+}) {
+  const selected = new Set(selectedKeys);
+  const groups = membersByAccount(members);
+  const names = [...new Set(groups.map((group) => PLATFORM_NAMES[group.platform]))].join(' and ');
+
+  function toggle(key: string) {
+    onChange(selected.has(key) ? selectedKeys.filter((k) => k !== key) : [...selectedKeys, key]);
+  }
+
+  return (
+    <section
+      aria-label="Members on other platforms"
+      className="space-y-2 rounded-lg border border-border/70 bg-card p-3"
+      data-testid="wizard-other-platform-members"
+    >
+      <p className="text-xs text-muted-foreground">
+        The suggestion also proposed these {names} campaigns, which buy the same result in the same
+        currency. Adding {names} campaigns to a portfolio isn&rsquo;t available yet: they stay
+        selected here, and Create enrolls the Meta ad sets only.
+      </p>
+      {groups.map((group) => (
+        <div className="space-y-1" key={`${group.platform}:${group.accountId}`}>
+          <PlatformGroupHeader
+            account={group.accountId}
+            hierarchy="Campaigns proposed"
+            platform={group.platform}
+          />
+          <ul className="divide-y divide-border/60 pl-2">
+            {group.members.map((member) => {
+              const key = memberKey(member);
+              const id = `wizard-member-${key}`;
+              const label = member.name ?? member.entity_id;
+              return (
+                <li
+                  className="flex items-center gap-2 py-1.5"
+                  data-platform={member.platform}
+                  data-testid="wizard-other-platform-member"
+                  key={key}
+                >
+                  <Checkbox
+                    aria-label={`Select ${PLATFORM_NAMES[member.platform]} campaign ${label}`}
+                    checked={selected.has(key)}
+                    disabled={disabled}
+                    id={id}
+                    onCheckedChange={() => toggle(key)}
+                  />
+                  <Label className="min-w-0 flex-1 cursor-pointer font-normal" htmlFor={id}>
+                    <span className="block truncate text-xs">{label}</span>
+                  </Label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </section>
   );
 }

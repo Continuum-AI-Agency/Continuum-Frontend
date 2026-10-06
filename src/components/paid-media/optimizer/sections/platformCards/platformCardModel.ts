@@ -28,6 +28,7 @@ export function platformsOf(card: PlatformCard): AdPlatform[] {
     case 'google_promote_term':
     case 'google_bid_target':
     case 'google_low_quality_keyword':
+    case 'google_delivery_issue':
       return ['google_ads'];
     case 'tiktok_creative_fatigue':
     case 'tiktok_scheduled_decrease':
@@ -35,6 +36,7 @@ export function platformsOf(card: PlatformCard): AdPlatform[] {
     case 'tiktok_spark_candidate':
     case 'tiktok_budget_below_learning':
     case 'tiktok_attribution_window':
+    case 'tiktok_delivery_issue':
       return ['tiktok_ads'];
     case 'cross_platform_move': {
       const ordered = [...givingLegs(card.legs), ...takingLegs(card.legs)].map(
@@ -61,6 +63,8 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
   tiktok_spark_candidate: 'Spark Ad',
   tiktok_budget_below_learning: 'Learning',
   tiktok_attribution_window: 'Attribution',
+  google_delivery_issue: 'Delivery',
+  tiktok_delivery_issue: 'Delivery',
 };
 
 /** The variants whose body carries the platform's mark beside the title. The wave-6/7
@@ -74,6 +78,8 @@ const MARKED_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'tiktok_spark_candidate',
   'tiktok_budget_below_learning',
   'tiktok_attribution_window',
+  'google_delivery_issue',
+  'tiktok_delivery_issue',
 ]);
 
 export function markedPlatformOf(card: PlatformCard): AdPlatform | null {
@@ -82,9 +88,18 @@ export function markedPlatformOf(card: PlatformCard): AdPlatform | null {
 
 /** Whether the card may carry an action button. A Video campaign cannot be written through
  *  Google's API, so its card sends a person to Google Ads and offers nothing to approve; an
- *  attribution-window card explains why platforms are not compared and has nothing to apply. */
+ *  attribution-window card explains why platforms are not compared and has nothing to apply; a
+ *  delivery problem is fixed where the platform names it (a policy, billing, a review), never
+ *  by a write of ours. */
+const READ_ONLY_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
+  'google_video_readonly',
+  'tiktok_attribution_window',
+  'google_delivery_issue',
+  'tiktok_delivery_issue',
+]);
+
 export function isReadOnly(card: PlatformCard): boolean {
-  return card.variant === 'google_video_readonly' || card.variant === 'tiktok_attribution_window';
+  return READ_ONLY_VARIANTS.has(card.variant);
 }
 
 /** The negatives card holds its own buttons, because which terms it adds is chosen inside it. */
@@ -163,6 +178,79 @@ function windowLabel(click: number, view: number): string {
 
 export function googleAdsCampaignHref(campaignId: string): string {
   return `https://ads.google.com/aw/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
+}
+
+/** Where a delivery problem is fixed: the policy manager when ads are disapproved, the
+ *  campaigns list otherwise. The card carries no campaign id, so it never deep-links one. */
+export function googleDeliveryHref(disapprovedAds: number): string {
+  return disapprovedAds > 0
+    ? 'https://ads.google.com/aw/policymanager'
+    : 'https://ads.google.com/aw/campaigns';
+}
+
+/** Google's campaign primary_status_reasons in a person's words. A code Google adds later
+ *  still reads, lower-cased, rather than disappearing. */
+const GOOGLE_REASON_WORDS: Readonly<Record<string, string>> = {
+  HAS_ADS_DISAPPROVED: 'ads disapproved by policy',
+  HAS_ADS_LIMITED_BY_POLICY: 'ads limited by policy',
+  MOST_ADS_UNDER_REVIEW: 'most ads still under review',
+  HAS_ASSET_GROUPS_DISAPPROVED: 'asset groups disapproved by policy',
+  HAS_ASSET_GROUPS_LIMITED_BY_POLICY: 'asset groups limited by policy',
+  MOST_ASSET_GROUPS_UNDER_REVIEW: 'most asset groups still under review',
+  BUDGET_CONSTRAINED: 'limited by budget',
+  BUDGET_MISCONFIGURED: 'the budget is set up wrong',
+  BIDDING_STRATEGY_MISCONFIGURED: 'the bid strategy is set up wrong',
+  BIDDING_STRATEGY_LIMITED: 'the bid strategy is limited',
+  BIDDING_STRATEGY_CONSTRAINED: 'the bid target is too tight',
+  BIDDING_STRATEGY_LEARNING: 'the bid strategy is still learning',
+  SEARCH_VOLUME_LIMITED: 'too few searches for its keywords',
+  NO_AD_GROUPS: 'no ad groups',
+  AD_GROUPS_PAUSED: 'every ad group paused',
+  NO_AD_GROUP_ADS: 'no ads',
+  AD_GROUP_ADS_PAUSED: 'every ad paused',
+  NO_KEYWORDS: 'no keywords',
+  KEYWORDS_PAUSED: 'every keyword paused',
+  NO_ASSET_GROUPS: 'no asset groups',
+  ASSET_GROUPS_PAUSED: 'every asset group paused',
+  CAMPAIGN_PENDING: 'not started yet',
+  CAMPAIGN_ENDED: 'its end date has passed',
+  CAMPAIGN_PAUSED: 'paused',
+  CAMPAIGN_GROUP_PAUSED: 'its campaign group is paused',
+  MISSING_LEAD_FORM_EXTENSION: 'the lead form is missing',
+  LEAD_FORM_EXTENSION_DISAPPROVED: 'the lead form was disapproved',
+  LEAD_FORM_EXTENSION_UNDER_REVIEW: 'the lead form is under review',
+};
+
+function codeInWords(code: string): string {
+  return code.toLowerCase().replace(/_+/g, ' ').trim();
+}
+
+export function googleReasonInWords(code: string): string {
+  return GOOGLE_REASON_WORDS[code] ?? codeInWords(code);
+}
+
+/** TikTok's ad group secondary_status in a person's words; the ADGROUP_STATUS_ prefix is TikTok's
+ *  namespace, not part of what it says. */
+const TIKTOK_STATUS_WORDS: Readonly<Record<string, string>> = {
+  ADGROUP_STATUS_AUDIT_DENY: 'rejected in review',
+  ADGROUP_STATUS_AUDIT: 'still in review',
+  ADGROUP_STATUS_REAUDIT: 'back in review after an edit',
+  ADGROUP_STATUS_NOT_DELIVER: 'not delivering',
+  ADGROUP_STATUS_BALANCE_EXCEED: 'out of account balance',
+  ADGROUP_STATUS_BUDGET_EXCEED: 'out of budget',
+  ADGROUP_STATUS_CAMPAIGN_EXCEED: 'its campaign is out of budget',
+  ADGROUP_STATUS_CAMPAIGN_DISABLE: 'its campaign is paused',
+  ADGROUP_STATUS_DISABLE: 'paused',
+  ADGROUP_STATUS_TIME_DONE: 'its schedule has ended',
+  ADGROUP_STATUS_NOT_START: 'not started yet',
+};
+
+export function tiktokStatusInWords(status: string): string {
+  return TIKTOK_STATUS_WORDS[status] ?? codeInWords(status.replace(/^ADGROUP_STATUS_/, ''));
+}
+
+function darkFor(days: number): string {
+  return days === 0 ? 'is not serving' : `has not served for ${plural(days, 'day', 'days')}`;
 }
 
 /** Fractions to whole percent ("41%"), one decimal under 10 ("0.8%"). */
@@ -282,6 +370,15 @@ export function platformCardTitle(card: PlatformCard): string {
       return `${card.ad_group_name}: budget ${formatCurrency(card.budget_per_day, card.currency)}/day, under the ${formatCurrency(card.required_budget_per_day, card.currency)}/day learning needs`;
     case 'tiktok_attribution_window':
       return `${card.ad_group_name} counts ${windowLabel(card.click_window_days, card.view_window_days)}, ${PLATFORM_NAMES[card.compared_to.platform]} counts ${windowLabel(card.compared_to.click_window_days, card.compared_to.view_window_days)}`;
+    case 'google_delivery_issue':
+      return card.account_wide
+        ? `No campaign in the account ${card.dark_days === 0 ? 'is serving' : `has served for ${plural(card.dark_days, 'day', 'days')}`}: one cause for the whole account`
+        : `${card.campaign_name} ${darkFor(card.dark_days)}`;
+    case 'tiktok_delivery_issue': {
+      const status =
+        card.secondary_status != null ? `: ${tiktokStatusInWords(card.secondary_status)}` : '';
+      return `${card.ad_group_name} ${darkFor(card.dark_days)}${status}`;
+    }
   }
 }
 

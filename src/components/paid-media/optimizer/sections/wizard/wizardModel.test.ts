@@ -5,9 +5,12 @@ import {
   draftFromSuggestion,
   effectiveTargetMetric,
   emptyDraft,
+  memberKey,
+  membersByAccount,
   planReadout,
   stepIssues,
   suggestedGuardrails,
+  suggestionPlatformCounts,
 } from './wizardModel';
 
 const suggestion: PortfolioSuggestion = {
@@ -228,5 +231,89 @@ describe('a custom conversion, named at creation', () => {
   it('never sends a descriptor for an objective that is not custom', () => {
     const config = buildCreateConfig({ ...described, objective: 'purchase' }, createCtx);
     expect(config.conversion_descriptor).toBeUndefined();
+  });
+});
+
+/** The shape optimizer-suggest returns for Easy Fit: Meta ad sets and Google campaigns that
+ *  all buy leads, in one currency. */
+const crossPlatform: PortfolioSuggestion = {
+  objective: 'lead',
+  name: 'Leads // All platforms',
+  level: 'adset',
+  mode: 'efficiency',
+  daily_total: 2100,
+  cpa_target: 40,
+  adset_ids: ['as-1', 'as-2'],
+  members: [
+    { platform: 'meta', account_id: 'act_521903353286118', entity_id: 'as-1', level: 'adset' },
+    { platform: 'meta', account_id: 'act_521903353286118', entity_id: 'as-2', level: 'adset' },
+    {
+      platform: 'google_ads',
+      account_id: '5251780631',
+      entity_id: 'g-1',
+      level: 'campaign',
+      name: 'Search · Leads GDL',
+    },
+  ],
+  by_platform: [
+    {
+      platform: 'meta',
+      account_id: 'act_521903353286118',
+      members: 2,
+      daily_total: 1600,
+      spend14: 4200,
+      conv14: 60,
+    },
+    {
+      platform: 'google_ads',
+      account_id: '5251780631',
+      members: 1,
+      daily_total: 500,
+      spend14: 1400,
+      conv14: 45,
+    },
+  ],
+  currency: 'MXN',
+  summary: { adsets: 3, spend14: 5600, conv14: 105 },
+  reason: '2 ad sets on Meta and 1 campaign on Google Ads, all buying Leads',
+};
+
+describe('a cross-platform suggestion', () => {
+  it('pre-selects its members on every platform: Meta as ad sets, the rest as members', () => {
+    const draft = draftFromSuggestion(crossPlatform);
+    expect(draft.adsetIds).toEqual(['as-1', 'as-2']);
+    expect(draft.proposedMembers.map((m) => m.entity_id)).toEqual(['g-1']);
+    expect(draft.memberKeys).toEqual(['google_ads:5251780631:g-1']);
+  });
+
+  it('leaves a Meta-only suggestion with no other-platform members', () => {
+    const draft = draftFromSuggestion(suggestion);
+    expect(draft.proposedMembers).toEqual([]);
+    expect(draft.memberKeys).toEqual([]);
+    expect(suggestionPlatformCounts(suggestion)).toBeNull();
+  });
+
+  it("counts members per platform in each platform's own unit", () => {
+    expect(suggestionPlatformCounts(crossPlatform)).toEqual([
+      { platform: 'meta', count: 2, label: '2 ad sets' },
+      { platform: 'google_ads', count: 1, label: '1 campaign' },
+    ]);
+    expect(suggestionPlatformCounts({ ...crossPlatform, level: 'campaign' })?.[0]?.label).toBe(
+      '2 campaigns',
+    );
+  });
+
+  it('groups proposed members by account and keys them per platform', () => {
+    const groups = membersByAccount(draftFromSuggestion(crossPlatform).proposedMembers);
+    expect(groups.map((g) => [g.platform, g.accountId, g.members.length])).toEqual([
+      ['google_ads', '5251780631', 1],
+    ]);
+    expect(memberKey({ platform: 'meta', account_id: 'a', entity_id: '1' })).not.toBe(
+      memberKey({ platform: 'google_ads', account_id: 'a', entity_id: '1' }),
+    );
+  });
+
+  it('starts from scratch with nothing proposed', () => {
+    expect(emptyDraft().proposedMembers).toEqual([]);
   });
 });

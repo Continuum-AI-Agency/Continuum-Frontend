@@ -149,4 +149,54 @@ describe('buildJainaChatStreamRequest', () => {
       ),
     ).toThrow();
   });
+
+  it('scopes the account to the platform it lives on, and keeps Meta the default', () => {
+    const cases = [
+      { platform: 'google_ads' as const, expected: 'google_ads' },
+      { platform: 'tiktok_ads' as const, expected: 'tiktok' },
+    ];
+    for (const { platform, expected } of cases) {
+      const request = buildJainaChatStreamRequest(
+        {
+          query: 'Which search terms bring leads?',
+          adAccountId: '6619636193',
+          brandId: 'b',
+          platform,
+        },
+        'UTC',
+      );
+      expect(request.context.dataScope).toEqual({
+        schemaVersion: 1,
+        accounts: [{ platform: expected, accountId: '6619636193' }],
+      });
+      expect(request.context.adAccountIds).toEqual(['6619636193']);
+    }
+
+    const meta = buildJainaChatStreamRequest(
+      { query: 'Summarize', adAccountId: 'act_1', brandId: 'b', platform: 'meta' },
+      'UTC',
+    );
+    expect(meta.context.dataScope).toBeUndefined();
+
+    const several = buildJainaChatStreamRequest(
+      { query: 'Compare', adAccountId: 'act_1', adAccountIds: ['act_1', 'act_2'], brandId: 'b' },
+      'UTC',
+    );
+    expect(several.context.dataScope?.accounts.map((account) => account.platform)).toEqual([
+      'meta',
+      'meta',
+    ]);
+  });
+
+  it('lets explicit accounts keep their own platforms over the stated one', () => {
+    const accounts = [
+      { platform: 'meta' as const, accountId: 'act_1' },
+      { platform: 'google_ads' as const, accountId: '6619636193' },
+    ];
+    const request = buildJainaChatStreamRequest(
+      { query: 'Compare', adAccountId: 'act_1', accounts, platform: 'tiktok_ads', brandId: 'b' },
+      'UTC',
+    );
+    expect(request.context.dataScope?.accounts).toEqual(accounts);
+  });
 });

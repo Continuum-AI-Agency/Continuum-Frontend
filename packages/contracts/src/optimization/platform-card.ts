@@ -275,6 +275,32 @@ export const TikTokAttributionWindowCardSchema = z.object({
   }),
 });
 
+/** A Google campaign that is not serving for a reason Google names (policy, billing, no
+ *  eligible ads): the card quotes Google's reason and sends a person to fix it there. */
+export const GoogleDeliveryIssueCardSchema = z.object({
+  variant: z.literal('google_delivery_issue'),
+  campaign_name: z.string().min(1),
+  /** Google's own reason codes, e.g. HAS_ADS_DISAPPROVED, BUDGET_CONSTRAINED. */
+  reasons: z.array(z.string().min(1)).min(1),
+  dark_days: z.number().int().nonnegative(),
+  currency: CurrencyCodeSchema.nullable(),
+  budget_per_day: money.nullable(),
+  disapproved_ads: z.number().int().nonnegative(),
+  /** True when every enabled campaign of the account is dark: one cause, one card. */
+  account_wide: z.boolean(),
+});
+
+/** A TikTok ad group that is not delivering, with TikTok's own status and review reasons. */
+export const TikTokDeliveryIssueCardSchema = z.object({
+  variant: z.literal('tiktok_delivery_issue'),
+  ad_group_name: z.string().min(1),
+  secondary_status: z.string().min(1).nullable(),
+  dark_days: z.number().int().nonnegative(),
+  rejected_ads: z.array(
+    z.object({ reasons: z.array(z.string().min(1)), suggestion: z.string().min(1).nullable() }),
+  ),
+});
+
 export const PlatformCardSchema = z.union([
   GoogleBudgetLimitedCardSchema,
   GooglePmaxAssetGroupCardSchema,
@@ -290,6 +316,8 @@ export const PlatformCardSchema = z.union([
   TikTokSparkCandidateCardSchema,
   TikTokBudgetBelowLearningCardSchema,
   TikTokAttributionWindowCardSchema,
+  GoogleDeliveryIssueCardSchema,
+  TikTokDeliveryIssueCardSchema,
 ]);
 export type PlatformCard = z.infer<typeof PlatformCardSchema>;
 export type PlatformCardVariant = PlatformCard['variant'];

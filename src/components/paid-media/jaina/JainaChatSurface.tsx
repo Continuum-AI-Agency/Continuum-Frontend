@@ -37,6 +37,7 @@ import type {
   JainaToolApprovalRequiredPayload,
   JainaUIMessage,
   PaidScaffoldGate,
+  PlatformId,
 } from '@continuum/contracts';
 import {
   AGENT_RUN_QUEUED,
@@ -159,7 +160,7 @@ const SCAFFOLD_GATE_BY_TOOL_NAME: Record<string, PaidScaffoldGate> = {
 };
 
 import type { PlanStatus } from '@/components/ai-elements/plan';
-import { jainaAccountOptions } from './accountOptions';
+import { jainaAccountForPlatform, jainaAccountOptions, jainaTurnAccounts } from './accountOptions';
 import type { PlanFeedbackPayload } from './components/PlanSection';
 import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
 import { getReportSummary, hasReportContent } from './jainaUtils';
@@ -224,6 +225,9 @@ type JainaChatSurfaceProps = {
   onCreativeRequestConsumed?: () => void;
   initialPrompt?: string | null;
   onInitialPromptConsumed?: () => void;
+  /** The platform a deep link was asked from (the Optimizer's Google or TikTok tab): the turn
+   *  is scoped to the brand's account there when it has one. */
+  platform?: PlatformId | null;
   /**
    * A gated call a button OUTSIDE the transcript opened — the canvas's "Deploy paused". It is
    * posted once as an `operator_action` (no model turn) and its approval card lands in this
@@ -723,6 +727,7 @@ export function JainaChatSurface({
   onCreativeRequestConsumed,
   initialPrompt,
   onInitialPromptConsumed,
+  platform = null,
   operatorActionRequest = null,
   onOperatorActionConsumed,
   onOperatorActionSettled,
@@ -769,9 +774,11 @@ export function JainaChatSurface({
   const [selectedAdAccountIds, setSelectedAdAccountIds] = React.useState<string[]>(() =>
     adAccountId ? [adAccountId] : [],
   );
+  const platformAccountId = jainaAccountForPlatform(accountScopeOptions, platform)?.id ?? null;
   React.useEffect(() => {
-    setSelectedAdAccountIds(adAccountId ? [adAccountId] : []);
-  }, [adAccountId]);
+    const scoped = platformAccountId ?? adAccountId;
+    setSelectedAdAccountIds(scoped ? [scoped] : []);
+  }, [adAccountId, platformAccountId]);
 
   const [isJainaProMode, setIsJainaProMode] = React.useState(false);
   const { isCollapsed: isSidebarCollapsed, toggle: toggleSidebarCollapsed } =
@@ -1973,6 +1980,7 @@ export function JainaChatSurface({
         })
         .catch(() => {});
 
+      const turnAccounts = jainaTurnAccounts(accountScopeOptions, selectedAdAccountIds);
       void sendTurn({
         query: wireQuery,
         // The transcript shows the sentence the reader typed, never the canvas block folded into
@@ -1989,17 +1997,8 @@ export function JainaChatSurface({
           : {}),
         canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
-        ...(selectedAdAccountIds.length > 1 ||
-        accountScopeOptions.some(
-          (option) => option.id === adAccountId && option.platform === 'google_ads',
-        )
-          ? {
-              adAccountIds: selectedAdAccountIds,
-              accounts: accountScopeOptions
-                .filter((option) => selectedAdAccountIds.includes(option.id))
-                .map((option) => ({ platform: option.platform, accountId: option.id })),
-            }
-          : {}),
+        platform: accountScopeOptions.find((option) => option.id === adAccountId)?.platform,
+        ...(turnAccounts ? { adAccountIds: selectedAdAccountIds, accounts: turnAccounts } : {}),
         brandId: brandProfileId,
         projectId: activeProjectId,
         sessionId: activeSessionId,

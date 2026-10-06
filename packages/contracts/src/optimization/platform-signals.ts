@@ -111,6 +111,43 @@ export const TikTokOrganicPostSignalSchema = z.object({
   promoted: z.boolean(),
 });
 
+/** Why a Google campaign or ad is not serving: primary_status + reasons, and ad policy. */
+export const GoogleDeliverySignalSchema = z.object({
+  campaign_id: z.string().min(1),
+  campaign_name: z.string().min(1),
+  /** campaign.primary_status: ELIGIBLE, LIMITED, NOT_ELIGIBLE, PAUSED, LEARNING, … */
+  primary_status: z.string().min(1),
+  primary_status_reasons: z.array(z.string().min(1)),
+  budget_per_day: amount.nullable(),
+  /** Days in the window with zero impressions while ENABLED with budget. */
+  dark_days: count,
+  disapproved_ads: z.array(
+    z.object({
+      ad_id: z.string().min(1),
+      /** policy_summary.approval_status: DISAPPROVED, APPROVED_LIMITED, … */
+      approval_status: z.string().min(1),
+      topics: z.array(z.string().min(1)),
+    }),
+  ),
+});
+
+/** Why a TikTok ad group or ad is not delivering: secondary_status and review results. */
+export const TikTokDeliverySignalSchema = z.object({
+  ad_group_id: z.string().min(1),
+  ad_group_name: z.string().min(1),
+  /** ADGROUP_STATUS_* secondary status as TikTok returns it. */
+  secondary_status: z.string().min(1).nullable(),
+  budget_per_day: amount.nullable(),
+  dark_days: count,
+  rejected_ads: z.array(
+    z.object({
+      ad_id: z.string().min(1),
+      reasons: z.array(z.string().min(1)),
+      suggestion: z.string().min(1).nullable(),
+    }),
+  ),
+});
+
 export const PlatformSignalsSchema = z.object({
   account_id: z.string().min(1),
   currency: CurrencyCodeSchema.nullable(),
@@ -121,6 +158,8 @@ export const PlatformSignalsSchema = z.object({
       keywords: z.array(GoogleKeywordSignalSchema),
       bid_targets: z.array(GoogleBidTargetSignalSchema),
       asset_groups: z.array(GoogleAssetGroupSignalSchema),
+      /** Absent on signals recorded before wave 9. */
+      delivery: z.array(GoogleDeliverySignalSchema).optional(),
     })
     .nullable(),
   tiktok: z
@@ -128,6 +167,8 @@ export const PlatformSignalsSchema = z.object({
       creatives: z.array(TikTokCreativeSignalSchema),
       ad_groups: z.array(TikTokAdGroupSignalSchema),
       organic_posts: z.array(TikTokOrganicPostSignalSchema),
+      /** Absent on signals recorded before wave 9. */
+      delivery: z.array(TikTokDeliverySignalSchema).optional(),
     })
     .nullable(),
 });

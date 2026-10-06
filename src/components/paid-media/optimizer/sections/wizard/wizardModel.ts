@@ -12,8 +12,10 @@ import type {
   BudgetGranularity,
   OptimizationModeDto,
   OptimizationObjective,
+  PlatformId,
   PortfolioConfig,
   PortfolioSuggestion,
+  SuggestionMember,
   TargetMetric,
 } from '@continuum/contracts';
 import {
@@ -60,6 +62,14 @@ export type WizardDraft = {
   adsetIds: string[];
   /** Whole campaigns chosen in campaign mode (their ad sets also land in adsetIds). */
   campaignIds: string[];
+  /**
+   * The members on other platforms a cross-platform suggestion proposed ("Leads // All
+   * platforms"), as it proposed them — the Assets step lists every one, ticked or not.
+   * Empty for a Meta-only suggestion and for a portfolio built from scratch.
+   */
+  proposedMembers: SuggestionMember[];
+  /** Which of `proposedMembers` are selected, by memberKey. All of them, until unticked. */
+  memberKeys: string[];
   /** Typed daily total; blank = match the selection's live sum. */
   dailyTotal: string;
   flightFrom: string | null;
@@ -110,6 +120,8 @@ export function emptyDraft(): WizardDraft {
     assetMode: 'adset',
     adsetIds: [],
     campaignIds: [],
+    proposedMembers: [],
+    memberKeys: [],
     dailyTotal: '',
     flightFrom: null,
     flightTo: null,
@@ -148,8 +160,62 @@ export function draftFromSuggestion(suggestion: PortfolioSuggestion): WizardDraf
     assetMode: suggestion.level === 'campaign' ? 'campaign' : 'adset',
     adsetIds: suggestion.level === 'campaign' ? [] : [...suggestion.adset_ids],
     campaignIds: suggestion.level === 'campaign' ? [...suggestion.adset_ids] : [],
+    // Meta members are adset_ids above; the other platforms' are pre-selected here.
+    proposedMembers: otherPlatformMembers(suggestion),
+    memberKeys: otherPlatformMembers(suggestion).map(memberKey),
     dailyTotal: '',
   };
+}
+
+/** One member's identity across platforms: the same id can exist on two of them. */
+export function memberKey(member: Pick<SuggestionMember, 'platform' | 'account_id' | 'entity_id'>) {
+  return `${member.platform}:${member.account_id}:${member.entity_id}`;
+}
+
+/** A suggestion's members that live outside Meta. */
+export function otherPlatformMembers(suggestion: PortfolioSuggestion): SuggestionMember[] {
+  return (suggestion.members ?? []).filter((member) => member.platform !== 'meta');
+}
+
+/** `proposedMembers` grouped by platform account, in the order the suggestion gave them. */
+export function membersByAccount(members: readonly SuggestionMember[]): {
+  platform: PlatformId;
+  accountId: string;
+  members: SuggestionMember[];
+}[] {
+  const groups: { platform: PlatformId; accountId: string; members: SuggestionMember[] }[] = [];
+  for (const member of members) {
+    const group = groups.find(
+      (entry) => entry.platform === member.platform && entry.accountId === member.account_id,
+    );
+    if (group) group.members.push(member);
+    else
+      groups.push({ platform: member.platform, accountId: member.account_id, members: [member] });
+  }
+  return groups;
+}
+
+/** What a cross-platform suggestion card counts per platform ("Meta · 9 ad sets"), or null for
+ *  a Meta-only suggestion — whose card is unchanged. */
+export function suggestionPlatformCounts(
+  suggestion: PortfolioSuggestion,
+): { platform: PlatformId; count: number; label: string }[] | null {
+  if (!suggestion.by_platform || suggestion.by_platform.length === 0) return null;
+  const counts = new Map<PlatformId, number>();
+  for (const entry of suggestion.by_platform) {
+    counts.set(entry.platform, (counts.get(entry.platform) ?? 0) + entry.members);
+  }
+  return [...counts.entries()].map(([platform, count]) => {
+    const adsets = platform === 'meta' && suggestion.level !== 'campaign';
+    const noun = adsets
+      ? count === 1
+        ? 'ad set'
+        : 'ad sets'
+      : count === 1
+        ? 'campaign'
+        : 'campaigns';
+    return { platform, count, label: `${count} ${noun}` };
+  });
 }
 
 /** The objective's own metric unless a still-allowed alternative was chosen. */

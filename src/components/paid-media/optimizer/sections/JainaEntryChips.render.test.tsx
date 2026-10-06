@@ -127,3 +127,19 @@ describe('JainaEntryChips (account variant)', () => {
     });
   });
 });
+
+describe('JainaEntryChips (platform)', () => {
+  it('carries the platform into every deep link and onto the band', () => {
+    const entries = [
+      { key: 'search_terms', label: 'Which search terms bring leads?', prompt: 'Q' },
+    ];
+    const { getByTestId } = render(
+      <JainaEntryChips entries={entries} label="Ask Jaina" platform="google_ads" />,
+    );
+    const band = getByTestId('jaina-entry-chips');
+    expect(band.getAttribute('data-platform')).toBe('google_ads');
+    expect(band.querySelector('a')?.getAttribute('href')).toBe(
+      '/scale?tab=jaina&platform=google_ads&prompt=Q',
+    );
+  });
+});

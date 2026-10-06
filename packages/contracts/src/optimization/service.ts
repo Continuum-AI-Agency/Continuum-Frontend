@@ -14,6 +14,7 @@ import { globalAngleIdSchema } from '../creative-strategy/angles';
 import { creativeSpecV1Schema } from '../creative-system/creative-spec';
 import { creativeReferenceSchema } from '../creative-system/references';
 import { creativeOutputManifestSchema } from '../headless-content/optimizer';
+import { PlatformIdSchema } from '../paid/platform';
 import { conversionDescriptorSchema } from './custom-conversion';
 import {
   AdSetSnapshotSchema,
@@ -1264,6 +1265,28 @@ export type AdAccount = z.infer<typeof AdAccountSchema>;
 /** A suggested portfolio during onboarding (account ad sets grouped by objective).
  *  Today produced client-side; the canonical home is a future server RPC
  *  optimizer_suggest_portfolios — this schema is the shared contract for both. */
+/** One entity a cross-platform suggestion proposes, on whichever platform it lives. Meta
+ *  members are the suggestion's `adset_ids` again; the others exist only here. */
+export const SuggestionMemberSchema = z.object({
+  platform: PlatformIdSchema,
+  account_id: z.string(),
+  entity_id: z.string(),
+  level: z.enum(['adset', 'campaign']),
+  name: z.string().optional(),
+});
+export type SuggestionMember = z.infer<typeof SuggestionMemberSchema>;
+
+/** A cross-platform suggestion's figures for one account: what the card's chips count. */
+export const SuggestionPlatformSummarySchema = z.object({
+  platform: PlatformIdSchema,
+  account_id: z.string(),
+  members: z.number().int().nonnegative(),
+  daily_total: z.number(),
+  spend14: z.number(),
+  conv14: z.number(),
+});
+export type SuggestionPlatformSummary = z.infer<typeof SuggestionPlatformSummarySchema>;
+
 export const PortfolioSuggestionSchema = z.object({
   objective: OptimizationObjectiveSchema,
   name: z.string(),
@@ -1282,6 +1305,13 @@ export const PortfolioSuggestionSchema = z.object({
    *  nameless rows and the dashboard rendered raw Meta ids until a backfill healed them.
    *  Optional because an older deployed suggest edge does not send it. */
   adset_names: z.record(z.string(), z.string()).optional(),
+  /** Cross-platform suggestions only ("Leads // All platforms", optimizer-suggest): every
+   *  member on every platform, the per-account figures, and the one currency they all bill
+   *  in. Absent on a Meta-only suggestion, whose shape is unchanged. `summary.adsets` then
+   *  counts every member. */
+  members: z.array(SuggestionMemberSchema).optional(),
+  by_platform: z.array(SuggestionPlatformSummarySchema).optional(),
+  currency: z.string().optional(),
   summary: z.object({
     adsets: z.number().int().nonnegative(),
     spend14: z.number(),
@@ -1767,6 +1797,25 @@ export const SuggestResultSchema = z.object({
   reason: SuggestReasonSchema.optional(),
   truncated: z.boolean().optional(),
   diagnostics: IngestDiagnosticsSchema.nullable().optional(),
+  /** Each of the brand's other ad accounts and whether it joined a cross-platform suggestion
+   *  — and if not, why (a different currency, no shared objective, a failed read). Absent for
+   *  a brand with Meta only. */
+  platform_accounts: z
+    .array(
+      z.object({
+        platform: PlatformIdSchema,
+        account_id: z.string(),
+        currency: z.string().nullable(),
+        status: z.enum([
+          'joined',
+          'no_shared_objective',
+          'currency_mismatch',
+          'currency_unknown',
+          'read_failed',
+        ]),
+      }),
+    )
+    .optional(),
 });
 export type SuggestResult = z.infer<typeof SuggestResultSchema>;
 

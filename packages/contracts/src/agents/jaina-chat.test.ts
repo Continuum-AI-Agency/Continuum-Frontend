@@ -103,6 +103,25 @@ describe('jainaChatContextSchema', () => {
       ),
     ).toThrow(/paid account platforms/);
   });
+
+  it('carries a TikTok pick to the Backend, which states it has no data yet', () => {
+    const parsed = jainaChatRequestSchema.parse(
+      baseRequest({
+        adAccountId: 'act_1',
+        dataScope: {
+          schemaVersion: 1,
+          accounts: [
+            { platform: 'meta', accountId: 'act_1' },
+            { platform: 'tiktok', accountId: '7012345678901234567' },
+          ],
+        },
+      }),
+    );
+    expect(parsed.context.dataScope?.accounts.map(({ platform }) => platform)).toEqual([
+      'meta',
+      'tiktok',
+    ]);
+  });
 });
 
 describe('resolveJainaAdAccountIds', () => {

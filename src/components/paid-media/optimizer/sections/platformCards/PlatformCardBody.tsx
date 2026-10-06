@@ -20,6 +20,8 @@ import {
   countLabel,
   givingLegs,
   googleAdsCampaignHref,
+  googleDeliveryHref,
+  googleReasonInWords,
   legChangeLabel,
   markedPlatformOf,
   negativesLabel,
@@ -33,6 +35,8 @@ import {
 } from './platformCardModel';
 
 type NegativeTermsCard = Extract<PlatformCard, { variant: 'google_negative_terms' }>;
+type GoogleDeliveryCard = Extract<PlatformCard, { variant: 'google_delivery_issue' }>;
+type TikTokDeliveryCard = Extract<PlatformCard, { variant: 'tiktok_delivery_issue' }>;
 
 /** Approving negatives hands the caller the terms a person kept; absent, the card only reads. */
 export type AddNegatives = (terms: string[]) => void;
@@ -51,6 +55,77 @@ function Evidence({ children, testId }: { children: React.ReactNode; testId: str
     <p className="text-muted-foreground text-sm" data-testid={testId}>
       {children}
     </p>
+  );
+}
+
+function OpenInGoogleAds({ href }: { href: string }) {
+  return (
+    <a
+      className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'gap-1.5')}
+      data-testid="platform-card-open-google"
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      Open in Google Ads
+      <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+    </a>
+  );
+}
+
+function GoogleDeliveryEvidence({ card }: { card: GoogleDeliveryCard }) {
+  const budget =
+    card.budget_per_day != null
+      ? ` Budget ${formatCurrency(card.budget_per_day, card.currency)}/day.`
+      : '';
+  const disapproved =
+    card.disapproved_ads > 0
+      ? ` ${countLabel(card.disapproved_ads)} ${card.disapproved_ads === 1 ? 'ad' : 'ads'} disapproved.`
+      : '';
+  return (
+    <div className="space-y-2">
+      <Evidence testId="platform-card-delivery">
+        Google says: {card.reasons.map(googleReasonInWords).join('; ')}.{disapproved}
+        {budget}
+      </Evidence>
+      {card.account_wide ? (
+        <p className="text-muted-foreground text-xs" data-testid="platform-card-account-wide">
+          Every enabled campaign is dark, so this is one cause for the whole account, not a problem
+          in {card.campaign_name} alone.
+        </p>
+      ) : null}
+      <OpenInGoogleAds href={googleDeliveryHref(card.disapproved_ads)} />
+    </div>
+  );
+}
+
+function TikTokDeliveryEvidence({ card }: { card: TikTokDeliveryCard }) {
+  if (card.rejected_ads.length === 0) {
+    return (
+      <Evidence testId="platform-card-delivery">
+        TikTok gives no review reason for it. Check the ad group in TikTok Ads Manager.
+      </Evidence>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <ul className="space-y-1 text-sm" data-testid="platform-card-rejections">
+        {card.rejected_ads.map((ad, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a rejection carries no id and never reorders
+          <li className="text-foreground" data-testid="platform-card-rejection" key={index}>
+            TikTok's review:{' '}
+            {ad.reasons.length > 0
+              ? ad.reasons.map((reason) => `"${reason}"`).join(', ')
+              : 'no reason given'}
+            .
+            {ad.suggestion ? (
+              <span className="text-muted-foreground"> Its suggestion: "{ad.suggestion}"</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <p className="text-muted-foreground text-xs">Fix it in TikTok Ads Manager.</p>
+    </div>
   );
 }
 
@@ -177,16 +252,7 @@ function VariantEvidence({
       return (
         <div className="space-y-2">
           <Evidence testId="platform-card-readonly">{VIDEO_READONLY_NOTE}</Evidence>
-          <a
-            className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'gap-1.5')}
-            data-testid="platform-card-open-google"
-            href={googleAdsCampaignHref(card.campaign_id)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Open in Google Ads
-            <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
-          </a>
+          <OpenInGoogleAds href={googleAdsCampaignHref(card.campaign_id)} />
         </div>
       );
     case 'tiktok_creative_fatigue':
@@ -328,6 +394,10 @@ function VariantEvidence({
           </p>
         </div>
       );
+    case 'google_delivery_issue':
+      return <GoogleDeliveryEvidence card={card} />;
+    case 'tiktok_delivery_issue':
+      return <TikTokDeliveryEvidence card={card} />;
   }
 }
 

@@ -1,4 +1,8 @@
-import { normalizeAdAccountId } from '@continuum/contracts';
+import {
+  type ConversationDataAccount,
+  normalizeAdAccountId,
+  type PlatformId,
+} from '@continuum/contracts';
 import { resolveAssetLabel } from '@/lib/integrations/assetLabel';
 import type { BrandIntegrationAccountSummary } from '@/lib/integrations/brandProfile';
 
@@ -53,4 +57,28 @@ export function jainaAccountOptions(
     primary ?? { id: primaryId, label: primaryId, platform: 'meta' },
     ...options.filter((option) => option !== primary),
   ];
+}
+
+/**
+ * The accounts a turn is scoped to, each with its own platform. Null keeps the legacy request —
+ * one Meta account, said by `adAccountId` alone; a Google account, or more than one, has to be
+ * said, or the Backend reads every id as Meta.
+ */
+export function jainaTurnAccounts(
+  options: readonly JainaAccountOption[],
+  selectedIds: readonly string[],
+): ConversationDataAccount[] | null {
+  const selected = options.filter((option) => selectedIds.includes(option.id));
+  if (selected.length <= 1 && selected.every((option) => option.platform === 'meta')) return null;
+  return selected.map((option) => ({ platform: option.platform, accountId: option.id }));
+}
+
+/** The brand's account on the platform a deep link names; null when it has none there (TikTok
+ *  has no connector yet) or the link names Meta, whose account is already the primary. */
+export function jainaAccountForPlatform(
+  options: readonly JainaAccountOption[],
+  platform: PlatformId | null,
+): JainaAccountOption | null {
+  if (platform == null || platform === 'meta') return null;
+  return options.find((option) => option.platform === platform) ?? null;
 }

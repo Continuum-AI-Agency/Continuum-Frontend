@@ -88,13 +88,17 @@ export const jainaChatContextSchema = z
     documentScopeKey: z.string().min(1).max(200).optional(),
   })
   .superRefine((value, ctx) => {
+    // TikTok is a paid platform Jaina has no data for yet: the Backend states it to the model
+    // rather than reading it, which is only possible if the pick reaches the Backend at all.
     if (
-      value.dataScope?.accounts.some(({ platform }) => !['meta', 'google_ads'].includes(platform))
+      value.dataScope?.accounts.some(
+        ({ platform }) => !['meta', 'google_ads', 'tiktok'].includes(platform),
+      )
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['dataScope', 'accounts'],
-        message: 'Jaina dataScope accepts only paid account platforms: meta and google_ads',
+        message: 'Jaina dataScope accepts only paid account platforms: meta, google_ads and tiktok',
       });
     }
     if (!value.adAccountIds) return;

@@ -33,6 +33,7 @@ import {
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
+import { jainaPlatformParam } from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
@@ -189,6 +190,9 @@ export default function PaidMediaClientPage({
     jainaPromptParam && jainaPromptParam.trim().length > 0 && !jainaPromptParam.startsWith('/')
       ? jainaPromptParam
       : null;
+  // The platform a question was asked from (the Optimizer's Google or TikTok tab): the turn is
+  // scoped to the brand's account there.
+  const jainaPlatform = jainaPlatformParam(searchParams.get('platform'));
   const clearJainaPrompt = React.useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     if (!params.has('prompt')) return;
@@ -792,6 +796,7 @@ export default function PaidMediaClientPage({
                   onCreativeRequestConsumed={() => setCreativeRequest(null)}
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
+                  platform={jainaPlatform}
                   onCanvasActionApplied={handleCanvasActionApplied}
                   onScaffoldFocus={handleScaffoldFocus}
                   autoSendPrompt={companionTurn}

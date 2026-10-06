@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { AccountPlatformMetricsState } from './platforms/useAccountPlatformMetrics';
 import type { GoogleAdsOverviewState } from './platforms/useGoogleAdsOverview';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 
 // The apply-mode pill needs a tooltip provider ancestor and is not what these tests are
 // about. `mock.module` replaces it for the whole PROCESS, so this file runs on its own.
@@ -30,8 +30,20 @@ mock.module('next/navigation', () => ({
 }));
 const replaceState = spyOn(window.history, 'replaceState').mockImplementation(() => undefined);
 
-let adAccounts: { platform: string; account_id: string; name: string | null; status: string | null; currency: string | null }[] = [
-  { platform: 'meta_ads', account_id: 'act_easyfit', name: 'Easy Fit', status: 'active', currency: 'MXN' },
+let adAccounts: {
+  platform: string;
+  account_id: string;
+  name: string | null;
+  status: string | null;
+  currency: string | null;
+}[] = [
+  {
+    platform: 'meta_ads',
+    account_id: 'act_easyfit',
+    name: 'Easy Fit',
+    status: 'active',
+    currency: 'MXN',
+  },
 ];
 let googleState: GoogleAdsOverviewState = { status: 'no-connection' };
 const realGoogleOverview = await import('./platforms/useGoogleAdsOverview');
@@ -52,7 +64,12 @@ const { EASY_FIT_MP1, META_ONLY } = await import('./platforms/__fixtures__/accou
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
-  useOptimizerAdAccounts: () => ({ data: adAccounts, isLoading: false, isError: false, isSuccess: true }),
+  useOptimizerAdAccounts: () => ({
+    data: adAccounts,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+  }),
   useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
   useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
   useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
@@ -201,7 +218,13 @@ afterEach(() => {
   navigation.params = new URLSearchParams('tab=performance');
   replaceState.mockClear();
   adAccounts = [
-    { platform: 'meta_ads', account_id: 'act_easyfit', name: 'Easy Fit', status: 'active', currency: 'MXN' },
+    {
+      platform: 'meta_ads',
+      account_id: 'act_easyfit',
+      name: 'Easy Fit',
+      status: 'active',
+      currency: 'MXN',
+    },
   ];
   googleState = { status: 'no-connection' };
   metricsState = { status: 'unavailable' };
@@ -495,6 +518,63 @@ describe('OptimizerOverview — the Jaina band', () => {
   });
 });
 
+describe('OptimizerOverview — the Jaina band follows the platform tab', () => {
+  const bandOn = (params: string) => {
+    navigation.params = new URLSearchParams(params);
+    const { getByTestId } = mount();
+    const band = getByTestId('jaina-entry-chips');
+    const links = [...band.querySelectorAll('a')];
+    return {
+      band,
+      labels: links.map((link) => link.textContent),
+      hrefs: links.map((link) => link.getAttribute('href') ?? ''),
+    };
+  };
+
+  it('asks across platforms on All, and its links carry no platform', () => {
+    const { band, labels, hrefs } = bandOn('tab=performance');
+    expect(labels).toContain('Which platform buys leads cheapest?');
+    expect(band.getAttribute('data-platform')).toBeNull();
+    for (const href of hrefs) expect(href).toStartWith('/scale?tab=jaina&prompt=');
+  });
+
+  it("keeps today's account questions on Meta, carrying meta", () => {
+    const { labels, hrefs } = bandOn('tab=performance&platform=meta');
+    expect(labels).toEqual([
+      'Why is MENSAJES // TODOS expensive?',
+      'What to pause this week?',
+      'How is Septiembre - Tours Programados doing?',
+      "Where's the budget?",
+      'Summary for the client',
+    ]);
+    for (const href of hrefs) expect(href).toStartWith('/scale?tab=jaina&platform=meta&prompt=');
+  });
+
+  it("asks Google's questions on the Google tab, carrying google_ads", () => {
+    const { labels, hrefs } = bandOn('platform=google_ads');
+    expect(labels).toEqual([
+      'Which search terms bring leads?',
+      'Is Search limited by budget?',
+      'Which asset group is missing assets?',
+      'Is any campaign not serving?',
+    ]);
+    for (const href of hrefs) {
+      expect(href).toStartWith('/scale?tab=jaina&platform=google_ads&prompt=');
+      expect(decodeURIComponent(href.split('prompt=')[1] ?? '')).toContain('Google Ads account');
+    }
+  });
+
+  it("asks TikTok's questions on the TikTok tab, carrying tiktok_ads", () => {
+    const { labels, hrefs } = bandOn('platform=tiktok_ads');
+    expect(labels[0]).toBe('Which video is fatiguing?');
+    expect(labels).toHaveLength(4);
+    for (const href of hrefs) {
+      expect(href).toStartWith('/scale?tab=jaina&platform=tiktok_ads&prompt=');
+      expect(decodeURIComponent(href.split('prompt=')[1] ?? '')).toContain('TikTok Ads account');
+    }
+  });
+});
+
 describe('OptimizerOverview — the weekly report', () => {
   it('opens Jaina with the weekly-report ask for the selected ad account', () => {
     const { getByRole } = mount();
@@ -647,7 +727,13 @@ describe('OptimizerOverview — the platform tabs', () => {
   it('drops Connect from Google once a Google Ads account is granted to the brand', () => {
     adAccounts = [
       ...adAccounts,
-      { platform: 'google_ads', account_id: '3710693645', name: 'Vivo 47', status: null, currency: 'MXN' },
+      {
+        platform: 'google_ads',
+        account_id: '3710693645',
+        name: 'Vivo 47',
+        status: null,
+        currency: 'MXN',
+      },
     ];
     const { getByTestId } = mount();
     expect(getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe('true');
@@ -658,7 +744,11 @@ describe('OptimizerOverview — the platform tabs', () => {
     navigation.params = new URLSearchParams('tab=performance&platform=meta');
     const { getByTestId } = mount();
     fireEvent.click(getByTestId('platform-tab-google_ads'));
-    expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance&platform=google_ads');
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      '',
+      '/scale?tab=performance&platform=google_ads',
+    );
     fireEvent.click(getByTestId('platform-tab-all'));
     expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance');
   });
@@ -729,7 +819,9 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     const { getByTestId, queryByTestId } = mount();
     const headline = getByTestId('overview-headline');
     expect(headline.getAttribute('data-source')).toBe('account-platform-metrics');
-    expect(headline.textContent).toStartWith('The account spent 38,411 MXN in 7 days across three platforms');
+    expect(headline.textContent).toStartWith(
+      'The account spent 38,411 MXN in 7 days across three platforms',
+    );
     const tiles = getByTestId('account-tiles');
     expect(tiles.getAttribute('data-source')).toBe('account-platform-metrics');
     expect(tiles.textContent).toContain('Meta 62% · Google 29% · TikTok 9%');
@@ -743,7 +835,9 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   it('marks TikTok connected when the producer reads it, and keeps Connect on what it does not', () => {
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     const first = mount();
-    expect(first.getByTestId('platform-tab-tiktok_ads').getAttribute('data-connected')).toBe('true');
+    expect(first.getByTestId('platform-tab-tiktok_ads').getAttribute('data-connected')).toBe(
+      'true',
+    );
     first.unmount();
     metricsState = { status: 'ready', metrics: META_ONLY };
     const second = mount();
@@ -757,13 +851,17 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
       "Multi-platform numbers aren't available yet.",
     );
     expect(getByTestId('overview-headline').getAttribute('data-source')).toBeNull();
-    expect(getByTestId('overview-headline').textContent).toStartWith('The account spent 23,911 MXN');
+    expect(getByTestId('overview-headline').textContent).toStartWith(
+      'The account spent 23,911 MXN',
+    );
   });
 
   it('says it is reading across platforms while the producer loads, with no figure', () => {
     metricsState = { status: 'loading' };
     const { getByTestId, queryByTestId } = mount();
-    expect(getByTestId('overview-headline').textContent).toBe('Reading the account across platforms…');
+    expect(getByTestId('overview-headline').textContent).toBe(
+      'Reading the account across platforms…',
+    );
     expect(queryByTestId('account-tiles')).toBeNull();
   });
 
@@ -771,7 +869,9 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     metricsState = { status: 'error', message: 'Could not read the multi-platform numbers.' };
     const { getByTestId } = mount();
     expect(getByTestId('multiplatform-error').textContent).toContain('The figures below are Meta');
-    expect(getByTestId('overview-headline').textContent).toStartWith('The account spent 23,911 MXN');
+    expect(getByTestId('overview-headline').textContent).toStartWith(
+      'The account spent 23,911 MXN',
+    );
   });
 
   it("keeps Meta's tab exactly today's O1, whatever the producer says", () => {
@@ -809,7 +909,9 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     navigation.params = new URLSearchParams('tab=performance&platform=tiktok_ads');
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     const connected = mount();
-    expect(connected.getByTestId('platform-headline').textContent).toStartWith('TikTok spent 3,300 MXN');
+    expect(connected.getByTestId('platform-headline').textContent).toStartWith(
+      'TikTok spent 3,300 MXN',
+    );
     expect(connected.queryByTestId('tiktok-empty')).toBeNull();
     connected.unmount();
     metricsState = { status: 'ready', metrics: META_ONLY };

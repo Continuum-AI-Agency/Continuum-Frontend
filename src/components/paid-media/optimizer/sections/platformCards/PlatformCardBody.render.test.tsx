@@ -6,6 +6,8 @@ import {
   EVERY_CARD,
   GOOGLE_BID_TARGET,
   GOOGLE_BUDGET_LIMITED,
+  GOOGLE_DELIVERY_ACCOUNT_WIDE,
+  GOOGLE_DELIVERY_ONE_CAMPAIGN,
   GOOGLE_LOW_QUALITY_KEYWORD,
   GOOGLE_NEGATIVE_TERMS,
   GOOGLE_PMAX,
@@ -13,6 +15,7 @@ import {
   GOOGLE_VIDEO,
   TIKTOK_ATTRIBUTION_WINDOW,
   TIKTOK_BUDGET_BELOW_LEARNING,
+  TIKTOK_DELIVERY,
   TIKTOK_FATIGUE,
   TIKTOK_HOOK_RETENTION,
   TIKTOK_SCHEDULED,
@@ -21,6 +24,7 @@ import {
 import { PlatformCardBody } from './PlatformCardBody';
 import {
   bidCooldownNote,
+  googleReasonInWords,
   isReadOnly,
   legChangeLabel,
   markedPlatformOf,
@@ -31,6 +35,7 @@ import {
   platformCardTitle,
   platformsOf,
   scheduledLabel,
+  tiktokStatusInWords,
 } from './platformCardModel';
 
 afterEach(cleanup);
@@ -88,7 +93,12 @@ describe('YouTube read-only', () => {
       'Google does not let the API pause or change budgets on Video campaigns',
     );
     expect(isReadOnly(GOOGLE_VIDEO)).toBe(true);
-    expect(EVERY_CARD.filter(isReadOnly)).toEqual([GOOGLE_VIDEO, TIKTOK_ATTRIBUTION_WINDOW]);
+    expect(EVERY_CARD.filter(isReadOnly)).toEqual([
+      GOOGLE_VIDEO,
+      TIKTOK_ATTRIBUTION_WINDOW,
+      GOOGLE_DELIVERY_ACCOUNT_WIDE,
+      TIKTOK_DELIVERY,
+    ]);
   });
 });
 
@@ -373,6 +383,86 @@ describe('every variant', () => {
       'tiktok_spark_candidate',
       'tiktok_budget_below_learning',
       'tiktok_attribution_window',
+      'google_delivery_issue',
+      'tiktok_delivery_issue',
     ]);
+  });
+});
+
+describe('Google delivery issue', () => {
+  it("quotes Google's reasons in plain words and names one cause for the whole account", () => {
+    const { getByRole, getByTestId, queryByRole } = render(
+      <PlatformCardBody card={GOOGLE_DELIVERY_ACCOUNT_WIDE} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'No campaign in the account has served for 6 days: one cause for the whole account',
+    );
+    expect(getByTestId('platform-card-delivery').textContent).toBe(
+      'Google says: ads disapproved by policy; limited by budget. 3 ads disapproved. Budget 500 MXN/day.',
+    );
+    expect(getByTestId('platform-card-account-wide').textContent).toContain(
+      'one cause for the whole account',
+    );
+    const link = getByTestId('platform-card-open-google');
+    expect(link.textContent).toBe('Open in Google Ads');
+    expect(link.getAttribute('href')).toBe('https://ads.google.com/aw/policymanager');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(queryByRole('button')).toBeNull();
+    expect(isReadOnly(GOOGLE_DELIVERY_ACCOUNT_WIDE)).toBe(true);
+    expect(platformCardActionLabel(GOOGLE_DELIVERY_ACCOUNT_WIDE)).toBeNull();
+    expect(platformsOf(GOOGLE_DELIVERY_ACCOUNT_WIDE)).toEqual(['google_ads']);
+  });
+
+  it('names the one campaign when the account is not dark, and reads a code it does not know', () => {
+    const { getByRole, getByTestId, queryByTestId } = render(
+      <PlatformCardBody card={GOOGLE_DELIVERY_ONE_CAMPAIGN} />,
+    );
+    expect(getByRole('heading').textContent).toBe('PMax Necesidades SLP has not served for 1 day');
+    expect(getByTestId('platform-card-delivery').textContent).toBe(
+      'Google says: no asset groups; some new reason.',
+    );
+    expect(queryByTestId('platform-card-account-wide')).toBeNull();
+    expect(getByTestId('platform-card-open-google').getAttribute('href')).toBe(
+      'https://ads.google.com/aw/campaigns',
+    );
+    expect(googleReasonInWords('BUDGET_CONSTRAINED')).toBe('limited by budget');
+    expect(googleReasonInWords('HAS_ADS_DISAPPROVED')).not.toContain('_');
+  });
+});
+
+describe('TikTok delivery issue', () => {
+  it("quotes TikTok's review reasons and its suggestion, and offers nothing to apply", () => {
+    const { getByRole, getAllByTestId, queryByRole } = render(
+      <PlatformCardBody card={TIKTOK_DELIVERY} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'EF | Leads | Intereses fitness has not served for 3 days: rejected in review',
+    );
+    const rows = getAllByTestId('platform-card-rejection').map((row) => row.textContent);
+    expect(rows).toEqual([
+      'TikTok\'s review: "Exaggerated or misleading claims", "Before-and-after imagery". Its suggestion: "Remove the before-and-after frames and resubmit the ad."',
+      'TikTok\'s review: "Unclear landing page".',
+    ]);
+    expect(queryByRole('button')).toBeNull();
+    expect(isReadOnly(TIKTOK_DELIVERY)).toBe(true);
+    expect(platformsOf(TIKTOK_DELIVERY)).toEqual(['tiktok_ads']);
+    expect(PLATFORM_CARD_TYPE.tiktok_delivery_issue).toBe('Delivery');
+  });
+
+  it('says TikTok gave no reason when there is no rejection, and reads an unknown status', () => {
+    const card = PlatformCardSchema.parse({
+      ...TIKTOK_DELIVERY,
+      secondary_status: 'ADGROUP_STATUS_SOMETHING_NEW',
+      dark_days: 0,
+      rejected_ads: [],
+    });
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={card} />);
+    expect(getByRole('heading').textContent).toBe(
+      'EF | Leads | Intereses fitness is not serving: something new',
+    );
+    expect(getByTestId('platform-card-delivery').textContent).toContain(
+      'TikTok gives no review reason',
+    );
+    expect(tiktokStatusInWords('ADGROUP_STATUS_BUDGET_EXCEED')).toBe('out of budget');
   });
 });

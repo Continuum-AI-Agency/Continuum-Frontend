@@ -10,7 +10,7 @@
 // `frame={false}` and `layout="row"`, and the label, its field and the questions share one
 // wrapping row. Colours come from theme tokens only.
 
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { PlatformId, PortfolioListItem } from '@continuum/contracts';
 import { SparklesIcon } from 'lucide-react';
 import type * as React from 'react';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
@@ -28,12 +28,14 @@ export type JainaEntryChipsProps = (
   layout?: 'stack' | 'row';
   /** False when the caller already draws the band's surface. */
   frame?: boolean;
+  /** The platform the questions are about; every link carries it into Jaina. */
+  platform?: PlatformId | null;
 };
 
 export function JainaEntryChips(props: JainaEntryChipsProps) {
   const label = 'portfolio' in props ? 'Ask Jaina' : props.label;
   const entries = 'portfolio' in props ? jainaEntryPrompts(props.portfolio) : props.entries;
-  const { layout = 'stack', frame = true } = props;
+  const { layout = 'stack', frame = true, platform = null } = props;
   const title = (
     <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary text-sm">
       <SparklesIcon aria-hidden className="size-3.5" /> {label}
@@ -42,7 +44,7 @@ export function JainaEntryChips(props: JainaEntryChipsProps) {
   const questions = entries.map((entry) => (
     <a
       className="rounded-full border border-primary/40 bg-background px-3 py-1 text-foreground text-sm transition-colors hover:border-primary hover:text-primary"
-      href={jainaPromptHref(entry.prompt)}
+      href={jainaPromptHref(entry.prompt, platform)}
       key={entry.key}
     >
       {entry.label}
@@ -55,6 +57,7 @@ export function JainaEntryChips(props: JainaEntryChipsProps) {
         frame && 'rounded-lg border border-primary bg-primary/10 px-3 py-2',
       )}
       data-layout={layout}
+      data-platform={platform ?? undefined}
       data-testid="jaina-entry-chips"
     >
       {layout === 'row' ? (
