@@ -110,6 +110,27 @@ describe('actionPlatform', () => {
     expect(actionPlatform(action())).toBe('meta');
     expect(actionPlatform(action({ platform: 'snapchat' }))).toBe('meta');
   });
+  // optimizer_list_actions sends no platform column; every Google and TikTok applier stamps
+  // its receipt with one, so the receipt is where the row's platform is read from.
+  it('reads the platform from the audit receipt when the row carries none', () => {
+    expect(
+      actionPlatform(
+        action({ receipt: { platform: 'google_ads', requestId: 'g-1', resourceNames: [] } }),
+      ),
+    ).toBe('google_ads');
+    expect(
+      actionPlatform(
+        action({ receipt: { platform: 'tiktok_ads', requestId: 't-1', scheduled: 'next_day' } }),
+      ),
+    ).toBe('tiktok_ads');
+  });
+
+  it('reads Meta for a Meta receipt and for a receipt that names no known platform', () => {
+    expect(actionPlatform(action({ receipt: { fbtrace_id: 'AbC1' } }))).toBe('meta');
+    expect(actionPlatform(action({ receipt: { platform: 42, requestId: 'x' } }))).toBe('meta');
+    expect(actionPlatform(action({ receipt: { platform: 'snapchat' } }))).toBe('meta');
+    expect(actionPlatform(action({ receipt: null }))).toBe('meta');
+  });
 });
 
 describe('readReceiptTrace', () => {
@@ -129,6 +150,15 @@ describe('readReceiptTrace', () => {
     expect(
       readReceiptTrace(action({ platform: 'google_ads', receipt: { fbtrace_id: 'AbC1' } })),
     ).toBeNull();
+  });
+
+  it('reads a Google or TikTok request id when only the receipt names the platform', () => {
+    expect(
+      readReceiptTrace(action({ receipt: { platform: 'google_ads', requestId: 'g-2', id: 'x' } })),
+    ).toBe('g-2');
+    expect(
+      readReceiptTrace(action({ receipt: { platform: 'tiktok_ads', requestId: 't-2' } })),
+    ).toBe('t-2');
   });
 
   it('is null when there is no receipt', () => {

@@ -2,8 +2,8 @@
 
 // Inline management for one portfolio, organized into slot-in sections: Identity (name +
 // objective), Strategy (mode + autonomy tier + daily budget), Reporting period, Guardrails
-// (autopilot caps + kill-switch), an Advanced disclosure (target + period budget + velocity
-// cap), and the enrolled campaign→ad-set picker.
+// (autopilot caps + kill-switch), a daily limit per platform (./platformCaps), an Advanced
+// disclosure (target + period budget + velocity cap), and the enrolled campaign→ad-set picker.
 //
 // This is the screen an operator arms AUTOPILOT from, so two things are load-bearing:
 //
@@ -117,6 +117,7 @@ export { buildConversionDescriptor } from './wizard/conversionDescriptor';
 
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
 import { TierCards } from './fields/TierCards';
+import { PlatformCapsField } from './platformCaps/PlatformCapsField';
 import {
   buildPatch,
   createPortfolioFormSchema,
@@ -1267,6 +1268,13 @@ export function PortfolioManagePanel({
           ) : null}
         </Section>
       ) : null}
+
+      <Section
+        title="Daily limit per platform"
+        description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound Meta, Google and TikTok writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
+      >
+        <PlatformCapsField portfolioId={portfolio.id} />
+      </Section>
 
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <CollapsibleTrigger

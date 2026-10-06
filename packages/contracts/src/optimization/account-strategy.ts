@@ -21,6 +21,7 @@ import type { OptimizationObjective } from './engine-contracts';
 // Keep the direction: a value import both ways would deadlock module init.
 import { insightStateSchema } from './insight-approval';
 import { normalizeCurrencyCode } from './money';
+import { OptimizerActionSchema } from './action';
 import { PlatformCardSchema } from './platform-card';
 import {
   type ActionVerb,
@@ -478,6 +479,20 @@ export const accountCandidateSchema = z.object({
    * Meta detector: the card is then the generic one, unchanged.
    */
   platform_card: PlatformCardSchema.nullable().optional(),
+  /**
+   * The action a platform card hands to a person (frontend.html §7, feature 09): the pending
+   * optimizer.recommendations row it came from, its portfolio, and the contract-valid action
+   * the service runs on approval. Absent on Meta detectors and on every read-only card
+   * (video, delivery, policy, PMax asset group): the card then shows no control.
+   */
+  card_action: z
+    .object({
+      recommendation_id: z.string().uuid(),
+      portfolio_id: z.string().uuid(),
+      action: OptimizerActionSchema,
+    })
+    .nullable()
+    .optional(),
   /** Where the card sends a person. */
   cta: z
     .object({

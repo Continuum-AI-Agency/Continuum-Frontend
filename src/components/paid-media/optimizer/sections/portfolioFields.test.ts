@@ -3,6 +3,9 @@ import {
   buildPatch,
   createPortfolioFormSchema,
   type PortfolioCurrentValues,
+  parsePlatformCapInput,
+  platformCapLabel,
+  platformCapToInput,
   toFormValues,
   toInput,
   toStored,
@@ -218,5 +221,46 @@ describe('scale plan descriptors', () => {
       target_metric: 'link_clicks',
       budget_granularity: 'total',
     });
+  });
+});
+
+// optimizer.portfolio_platforms.daily_cap_minor is MINOR units of that platform account's own
+// currency — Meta's table for Meta, ISO 4217 for Google and TikTok (the unit each applier
+// writes delta_minor in). The two disagree on HUF (Meta 1, ISO 100) and KWD (Meta 100, ISO
+// 1000), which is where a shared conversion would write a 100x cap.
+describe('per-platform daily cap', () => {
+  it('names the platform the limit is on', () => {
+    expect(platformCapLabel('meta')).toBe('Daily limit on Meta');
+    expect(platformCapLabel('google_ads')).toBe('Daily limit on Google');
+    expect(platformCapLabel('tiktok_ads')).toBe('Daily limit on TikTok');
+  });
+
+  it('shows the stored minor cap as the major amount in that platform currency', () => {
+    expect(platformCapToInput(50000, 'meta', 'MXN')).toBe('500');
+    expect(platformCapToInput(50000, 'google_ads', 'MXN')).toBe('500');
+    expect(platformCapToInput(1000, 'meta', 'HUF')).toBe('1000');
+    expect(platformCapToInput(100000, 'google_ads', 'HUF')).toBe('1000');
+    expect(platformCapToInput(25000, 'tiktok_ads', 'KWD')).toBe('25');
+    expect(platformCapToInput(null, 'meta', 'MXN')).toBe('');
+  });
+
+  it('turns the typed major amount into minor units of the platform currency', () => {
+    expect(parsePlatformCapInput('500', 'meta', 'MXN')).toEqual({ ok: true, minor: 50000 });
+    expect(parsePlatformCapInput('1000', 'meta', 'HUF')).toEqual({ ok: true, minor: 1000 });
+    expect(parsePlatformCapInput('1000', 'google_ads', 'HUF')).toEqual({ ok: true, minor: 100000 });
+    expect(parsePlatformCapInput('25', 'tiktok_ads', 'KWD')).toEqual({ ok: true, minor: 25000 });
+    expect(parsePlatformCapInput('12.345', 'google_ads', 'USD')).toEqual({ ok: true, minor: 1235 });
+  });
+
+  it('reads a blank field as clearing the cap', () => {
+    expect(parsePlatformCapInput('  ', 'google_ads', 'MXN')).toEqual({ ok: true, minor: null });
+  });
+
+  it('refuses text, a negative amount and a platform with no single currency', () => {
+    expect(parsePlatformCapInput('abc', 'meta', 'MXN').ok).toBe(false);
+    expect(parsePlatformCapInput('-5', 'meta', 'MXN').ok).toBe(false);
+    expect(parsePlatformCapInput('500', 'google_ads', null).ok).toBe(false);
+    expect(parsePlatformCapInput('500', 'google_ads', 'XX').ok).toBe(false);
+    expect(platformCapToInput(50000, 'google_ads', null)).toBe('');
   });
 });

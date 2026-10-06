@@ -117,19 +117,26 @@ export function actorLabel(row: OptimizerActionFeedRow): string {
   }
 }
 
-/** Which platform the write landed on. The RPC does not send `platform` yet (every applier
- *  today is Meta's), so a row without one — or with a spelling the contract does not know —
- *  reads as Meta; the row schema is loose, so the field is read the day the RPC adds it. */
+/** Which platform the write landed on. The receipt says it first: every Google and TikTok
+ *  applier stamps `receipt.platform`, and optimizer_list_actions sends no platform column, so
+ *  the receipt is the one place a non-Meta row is told apart without a migration. A row whose
+ *  receipt names no known platform falls back to its own `platform` (read the day the RPC adds
+ *  it), and only then to Meta — Meta's fbtrace receipt carries no platform key. */
 export function actionPlatform(row: OptimizerActionFeedRow): AdPlatform {
-  return readAdPlatform(row.platform) ?? OPTIMIZER_MANAGED_PLATFORM;
+  return (
+    readAdPlatform(row.receipt?.['platform']) ??
+    readAdPlatform(row.platform) ??
+    OPTIMIZER_MANAGED_PLATFORM
+  );
 }
 
 /** Where each platform's applier puts the id its support desk asks for: Meta's fbtrace, the
- *  Google Ads `request-id` header, TikTok's `request_id`. */
+ *  Google Ads `request-id` header, TikTok's `request_id`. The Optimizer's appliers store both
+ *  of the latter as `requestId` (PlatformReceipt). */
 const RECEIPT_KEYS: Record<AdPlatform, readonly string[]> = {
   meta: ['fbtrace_id', 'fbtraceId', 'trace_id', 'id'],
   google_ads: ['requestId', 'request_id'],
-  tiktok_ads: ['request_id'],
+  tiktok_ads: ['requestId', 'request_id'],
 };
 
 /** The write's receipt id, when it carried one. The receipt jsonb is the raw audit receipt,
