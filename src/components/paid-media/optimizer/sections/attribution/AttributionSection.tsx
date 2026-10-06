@@ -15,6 +15,10 @@ import {
   useInvalidatePortfolioMetrics,
   usePortfolioMetrics,
 } from '../detail/usePortfolioMetrics';
+import {
+  capsHoldNonMetaMember,
+  usePortfolioPlatformCaps,
+} from '../platformCaps/usePortfolioPlatformCaps';
 import { MultiPlatformUnavailable } from '../platforms/MultiPlatformUnavailable';
 import {
   attributionSourceName,
@@ -80,6 +84,7 @@ export function AttributionSectionView({
   api,
   now,
   onSourceChanged,
+  nonMetaMember = false,
 }: {
   brandId: string;
   portfolioId: string;
@@ -87,6 +92,8 @@ export function AttributionSectionView({
   api: SheetAttributionApi;
   now: Date;
   onSourceChanged: () => void;
+  /** Known, from another read, to hold a member off Meta. A Meta-only portfolio gets no note. */
+  nonMetaMember?: boolean;
 }) {
   const [settingUp, setSettingUp] = useState(false);
   const [resync, setResync] = useState<ResyncState>({ status: 'idle' });
@@ -110,7 +117,7 @@ export function AttributionSectionView({
 
   return (
     <div className="space-y-2" data-testid="attribution-section">
-      {metricsState.status === 'unavailable' ? (
+      {metricsState.status === 'unavailable' && nonMetaMember ? (
         <MultiPlatformUnavailable detail="The source in use can't be read yet; results use each platform's own count." />
       ) : null}
       <div className="grid gap-2 sm:grid-cols-3">
@@ -206,11 +213,13 @@ export function AttributionSection({
 }) {
   const metricsState = usePortfolioMetrics(portfolioId);
   const invalidate = useInvalidatePortfolioMetrics(portfolioId);
+  const caps = usePortfolioPlatformCaps(portfolioId);
   return (
     <AttributionSectionView
       api={sheetAttributionApi}
       brandId={brandId}
       metricsState={metricsState}
+      nonMetaMember={capsHoldNonMetaMember(caps)}
       now={new Date()}
       onSourceChanged={invalidate}
       portfolioId={portfolioId}

@@ -559,13 +559,25 @@ describe('the custom conversion an advertiser names', () => {
 });
 
 describe('PortfolioManagePanel — Attribution', () => {
-  it('shows the three source cards, the default in use, and says the read is not available yet', () => {
+  it('shows the three source cards, the default in use, and no note on a Meta-only portfolio', () => {
     renderPanel();
     expect(screen.getByText('Attribution')).toBeDefined();
     const cards = screen.getAllByTestId('attribution-card');
     expect(cards.map((card) => card.dataset.kind)).toEqual(['platform', 'ga4', 'spreadsheet']);
     expect(cards[0]?.dataset.inUse).toBe('true');
     expect(cards[0]?.textContent).toContain('default');
+    expect(screen.queryByTestId('multiplatform-unavailable')).toBeNull();
+  });
+
+  it('says the read is not available yet on a portfolio that holds a member off Meta', () => {
+    platformCapsState = {
+      status: 'ready',
+      caps: [
+        { platform: 'meta', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
+        { platform: 'google_ads', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
+      ],
+    };
+    renderPanel();
     expect(screen.getByTestId('multiplatform-unavailable')).toBeDefined();
   });
 

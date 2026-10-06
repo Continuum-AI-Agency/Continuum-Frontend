@@ -97,12 +97,14 @@ function renderSection(
     metrics: portfolioMetricsFixture(),
   },
   onSourceChanged = () => {},
+  nonMetaMember = false,
 ) {
   return render(
     <AttributionSectionView
       api={api}
       brandId="b1"
       metricsState={state}
+      nonMetaMember={nonMetaMember}
       now={FIXTURE_NOW}
       onSourceChanged={onSourceChanged}
       portfolioId={PORTFOLIO}
@@ -171,9 +173,15 @@ describe('Attribution — source cards', () => {
     );
   });
 
-  it('keeps the cards and says not available yet when the metrics RPC is missing', () => {
-    renderSection(fakeApi().api, { status: 'unavailable' });
+  it('keeps the cards and says not available yet when the metrics RPC is missing on a portfolio off Meta', () => {
+    renderSection(fakeApi().api, { status: 'unavailable' }, () => {}, true);
     expect(screen.getByTestId('multiplatform-unavailable')).toBeDefined();
+    expect(screen.getAllByTestId('attribution-card')).toHaveLength(3);
+  });
+
+  it('keeps a Meta-only portfolio as before the multi-platform read: the cards, and no note', () => {
+    renderSection(fakeApi().api, { status: 'unavailable' });
+    expect(screen.queryByTestId('multiplatform-unavailable')).toBeNull();
     expect(screen.getAllByTestId('attribution-card')).toHaveLength(3);
   });
 });

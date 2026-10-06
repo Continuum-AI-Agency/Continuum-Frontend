@@ -805,8 +805,28 @@ describe('OptimizerOverview — the header', () => {
   });
 });
 
+const grantGoogle = () => {
+  adAccounts = [
+    ...adAccounts,
+    {
+      platform: 'google_ads',
+      account_id: '3710693645',
+      name: 'Vivo 47',
+      status: null,
+      currency: 'MXN',
+    },
+  ];
+};
+
+/** The Overview's own children, by test id — the order the O1 bench grades. */
+const overviewChildren = (root: HTMLElement) =>
+  [...root.children].map(
+    (child) => child.getAttribute('data-testid') ?? `(${child.tagName.toLowerCase()})`,
+  );
+
 describe('OptimizerOverview — the platform tabs', () => {
   it('puts All · Meta · Google · TikTok above the headline, All selected by default', () => {
+    grantGoogle();
     const { getByTestId } = mount();
     const tabs = getByTestId('platform-tabs');
     expect(
@@ -817,10 +837,27 @@ describe('OptimizerOverview — the platform tabs', () => {
   });
 
   it('keeps a platform with no connection in the row with Connect', () => {
+    grantGoogle();
     const { getByTestId } = mount();
     expect(getByTestId('platform-tab-meta').textContent).toBe('Meta');
-    expect(getByTestId('platform-tab-google_ads').textContent).toBe('Google· Connect');
+    expect(getByTestId('platform-tab-google_ads').textContent).toBe('Google');
     expect(getByTestId('platform-tab-tiktok_ads').textContent).toBe('TikTok· Connect');
+  });
+
+  it('shows a brand on Meta alone no tabs and no note: the O1 opens on the header line', () => {
+    const { getByTestId, queryByTestId } = mount();
+    expect(queryByTestId('platform-tabs')).toBeNull();
+    expect(queryByTestId('multiplatform-unavailable')).toBeNull();
+    expect(overviewChildren(getByTestId('optimizer-overview')).slice(0, 2)).toEqual([
+      '(div)',
+      'overview-hero',
+    ]);
+  });
+
+  it('keeps the row when the URL names a platform, so a Meta-only brand can get back to All', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { getByTestId } = mount();
+    expect(getByTestId('platform-tabs')).toBeTruthy();
   });
 
   it('drops Connect from Google once a Google Ads account is granted to the brand', () => {
@@ -939,16 +976,23 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     );
     first.unmount();
     metricsState = { status: 'ready', metrics: META_ONLY };
+    grantGoogle();
     const second = mount();
     expect(second.getByTestId('platform-tab-tiktok_ads').textContent).toContain('Connect');
-    expect(second.getByTestId('platform-tab-google_ads').textContent).toContain('Connect');
+    expect(second.getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe(
+      'true',
+    );
   });
 
-  it("says the numbers aren't available yet, and shows today's Meta O1 beneath, before the RPC exists", () => {
-    const { getByTestId } = mount();
-    expect(getByTestId('multiplatform-unavailable').textContent).toContain(
-      "Multi-platform numbers aren't available yet.",
-    );
+  it("never puts the not-available note above the hero on All: tabs, header line, then today's Meta O1", () => {
+    grantGoogle();
+    const { getByTestId, queryByTestId } = mount();
+    expect(queryByTestId('multiplatform-unavailable')).toBeNull();
+    expect(overviewChildren(getByTestId('optimizer-overview')).slice(0, 3)).toEqual([
+      'platform-tabs',
+      '(div)',
+      'overview-hero',
+    ]);
     expect(getByTestId('overview-headline').getAttribute('data-source')).toBeNull();
     expect(getByTestId('overview-headline').textContent).toStartWith(
       'The account spent 23,911 MXN',

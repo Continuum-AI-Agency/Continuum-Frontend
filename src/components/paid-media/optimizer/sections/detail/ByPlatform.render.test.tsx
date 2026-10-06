@@ -114,19 +114,29 @@ describe('ByPlatformView', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('says "not available yet" when the RPC is not deployed', () => {
-    render(<ByPlatformView now={FIXTURE_NOW} state={{ status: 'unavailable' }} />);
+  it('says "not available yet" only for a portfolio known to hold a member off Meta', () => {
+    render(
+      <ByPlatformView nonMetaMember now={FIXTURE_NOW} state={{ status: 'unavailable' }} />,
+    );
     expect(screen.getByTestId('multiplatform-unavailable').textContent).toContain(
       "aren't available yet",
     );
   });
 
+  it('keeps a Meta-only portfolio on today’s screens while the RPC is missing or failing: renders nothing', () => {
+    for (const status of ['unavailable', 'error'] as const) {
+      const { container } = render(<ByPlatformView now={FIXTURE_NOW} state={{ status }} />);
+      expect(container.innerHTML).toBe('');
+      cleanup();
+    }
+  });
+
   it('says the read failed on an error, and renders nothing while loading', () => {
-    render(<ByPlatformView now={FIXTURE_NOW} state={{ status: 'error' }} />);
+    render(<ByPlatformView nonMetaMember now={FIXTURE_NOW} state={{ status: 'error' }} />);
     expect(screen.getByTestId('by-platform-error').textContent).toContain('failed');
     cleanup();
     const { container } = render(
-      <ByPlatformView now={FIXTURE_NOW} state={{ status: 'loading' }} />,
+      <ByPlatformView nonMetaMember now={FIXTURE_NOW} state={{ status: 'loading' }} />,
     );
     expect(container.innerHTML).toBe('');
   });

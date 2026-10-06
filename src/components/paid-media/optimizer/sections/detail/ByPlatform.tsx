@@ -3,11 +3,17 @@
 // "By platform": one text row per platform from optimizer_get_portfolio_metrics, no chart
 // (frontend.html §3). The source is named once, in this block's header; under GA4 or a
 // spreadsheet every cost says "· GA4" and the platform's own count sits beside it in grey.
-// A Meta-only portfolio renders nothing here and keeps today's screens.
+// A Meta-only portfolio renders nothing here and keeps today's screens — including while the
+// RPC is missing or failing: the "not available yet" note is owed only to a portfolio known to
+// hold a member off Meta, so the ad-set ranking stays the first block of a Meta body.
 
 import { cn } from '@/lib/utils';
 import { formatCpa, formatCurrency } from '../../format';
 import { attributionHeader, attributionSourceName } from '../attribution/attributionModel';
+import {
+  capsHoldNonMetaMember,
+  usePortfolioPlatformCaps,
+} from '../platformCaps/usePortfolioPlatformCaps';
 import { MultiPlatformUnavailable } from '../platforms/MultiPlatformUnavailable';
 import { PlatformChip } from '../platforms/PlatformChip';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
@@ -88,8 +94,18 @@ function PlatformRowLine({
   );
 }
 
-export function ByPlatformView({ state, now }: { state: PortfolioMetricsState; now: Date }) {
+export function ByPlatformView({
+  state,
+  now,
+  nonMetaMember = false,
+}: {
+  state: PortfolioMetricsState;
+  now: Date;
+  /** Known, from another read, to hold a member off Meta. Unknown reads as Meta. */
+  nonMetaMember?: boolean;
+}) {
   if (state.status === 'loading') return null;
+  if (state.status !== 'ready' && !nonMetaMember) return null;
   if (state.status === 'unavailable') {
     return <MultiPlatformUnavailable detail="The figures below are Meta's, as today." />;
   }
@@ -140,5 +156,12 @@ export function ByPlatformView({ state, now }: { state: PortfolioMetricsState; n
 
 export function ByPlatform({ portfolioId }: { portfolioId: string }) {
   const state = usePortfolioMetrics(portfolioId);
-  return <ByPlatformView now={new Date()} state={state} />;
+  const caps = usePortfolioPlatformCaps(portfolioId);
+  return (
+    <ByPlatformView
+      nonMetaMember={capsHoldNonMetaMember(caps)}
+      now={new Date()}
+      state={state}
+    />
+  );
 }

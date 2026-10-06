@@ -68,6 +68,15 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //     exposed-schema allowlist, so that read silently returns a null count and would
 //     make the money assertion incapable of failing.
 //
+// ── PREMISES are read live at run start, never pinned ──
+//   Production moves under this bench: on 2026-10-05 the agency Easy Fit row owned no
+//   portfolios at all, "Prueba" was gone and the Easyfit account carried a Google sibling.
+//   So the browse brand, its account, its Recommend portfolio and its empty sibling account
+//   (`resolveBrowsePremise`), the brand's platforms (`brandPlatforms`), the portfolio whose
+//   asked-for row opened an audience proposal and the one whose card offers the creative
+//   recommendation (`resolveLedgerCtaPremise`) are all resolved in beforeAll, as the bench
+//   user, from the same reads the page makes. A drift fails with the reads it saw.
+//
 // Usage: cd Continuum-Frontend && bun run optimizer:e2e:bench
 // ---------------------------------------------------------------------------
 
@@ -97,11 +106,8 @@ const CBO_BRAND_ID = 'd666c706-8ffd-4ade-a1b1-cb9f71b25831';
  *  so the Activity test runs here; every other test stays on the agency row. */
 const EASYFIT_LEDGER_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 
-/** Owns both live portfolios and 64 live ad sets. */
-const PORTFOLIO_ACCOUNT_ID = '521903353286118';
-const PORTFOLIO_ACCOUNT_LABEL = 'Easyfit';
-/** Assigned to the same brand, owns NO portfolios — the cross-account notice's trigger. */
-const EMPTY_ACCOUNT_ID = '1296885445611472';
+/** The ledger brand's account: every portfolio it owns lives here. */
+const LEDGER_ACCOUNT_ID = '521903353286118';
 /** The CBO premise on VIVO 47 Center: most of its ad sets are held `unsupported_budget` (their budget
  *  lives on the campaign), which is the threshold that turns Signal readiness to `nothing
  *  movable`. Read from production on 2026-09-29: 24 of 45 ad sets held across 16 CBO campaigns.
@@ -110,15 +116,22 @@ const EMPTY_ACCOUNT_ID = '1296885445611472';
  *  `readCboPremise` and a drift fails loudly with the counts, never as a picker timeout. */
 const CBO_ACCOUNT_ID = '941792232690867';
 
-// Pinned by NAME, so they go stale when the account's portfolios are renamed or replaced —
-// which is what happened to the previous pair ('Mensajes Julio 2026' / 'Leads test'). Verify
-// against optimizer.portfolios for brand 148583e0… before assuming a failure here is a
-// regression: ENROLLED must be the one with active portfolio_adsets, EMPTY the one without.
-const ENROLLED_PORTFOLIO_NAME = 'Citas Agosto - check leads';
-const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
+/** The two VIVO47 rows that own portfolios. Both offer Google beside Meta. */
+const VIVO47_BRAND_ID = '61b80f51-709a-4408-9f11-04142a286baa';
+const VIVO47_GOOGLE_BRAND_ID = '6a49e1a8-0ee8-4101-bed7-1bdc8fd5e088';
 
-// Two portfolios on the LEDGER brand whose read rows carry a CTA, read from production on
-// 2026-09-29. Both premises are checked against optimizer.adhoc_suggestions /
+/** Where the browse tests look for their premise, in order. The names used to be pinned
+ *  ('Citas Agosto - check leads' on the agency row) and went stale twice when portfolios were
+ *  renamed or archived; the agency row owned none on 2026-10-05. */
+const BROWSE_BRAND_CANDIDATES = [
+  AGENCY_BRAND_ID,
+  EASYFIT_LEDGER_BRAND_ID,
+  VIVO47_BRAND_ID,
+  VIVO47_GOOGLE_BRAND_ID,
+];
+
+// Two portfolios on the LEDGER brand whose read rows carry a CTA. Both are RESOLVED at run
+// start by `resolveLedgerCtaPremise`; the notes below are what production held on 2026-09-29. Both premises are checked against optimizer.adhoc_suggestions /
 // optimizer.audience_proposals / optimizer.recommendations before assuming a failure here
 // is a regression:
 //   MENSAJES — an asked-for audience row (ad-hoc suggestion 1f2426b1, adopted 19:08 UTC)
@@ -127,10 +140,9 @@ const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
 //     row must wear the proposal's state — whichever state the proposal is in when the
 //     bench runs, since a person may ask again — with a human reason and no raw dump, and
 //     "Open the audience proposal" must open the proposal on the row itself.
-//   PRUEBA — a pending C2 variate_creative recommendation (e4093df7) the brief lists as a
-//     secondary candidate, so its insight card offers "Open the creative recommendation".
-const MENSAJES_PORTFOLIO_NAME = 'MENSAJES // TODOS';
-const PRUEBA_PORTFOLIO_NAME = 'Prueba';
+//   CREATIVE — a portfolio whose brief carries a creative candidate pointing at a PENDING
+//   recommendation, so its card offers "Open the creative recommendation". It was 'Prueba'
+//   (C2 e4093df7); on 2026-10-05 Prueba was gone and MENSAJES itself led with F1 715816f6.
 /** The state badge an asked-for row wears once its proposal exists, in the card's words. */
 const PROPOSAL_STATE =
   /^(Queued|Jaina is reading|Ready|Blocked|Failed|Closed|Approved|Creating the ad set|Created in Meta|Activating|Undoing|Undone)$/;
@@ -153,6 +165,8 @@ let benchUserId: string;
 let memberAccessToken: string;
 let originalActiveBrandId: string | null = null;
 let moneyEventsBefore = 0;
+let browse: BrowsePremise;
+let ledgerCta: { mensajes: string; creative: string };
 
 /** The `sub` claim of a real GoTrue access token — the bench user's id, read from the
  *  token the auth server actually issued rather than looked up by email. */
@@ -193,9 +207,9 @@ const WATCHED_BRAND_IDS = [
   AGENCY_BRAND_ID,
   CBO_BRAND_ID,
   EASYFIT_LEDGER_BRAND_ID,
-  // The VIVO47 row the CBO tests used to select. No test selects it now; it stays watched so
-  // moving the CBO tests could only ever widen the money net, never narrow it.
-  '61b80f51-709a-4408-9f11-04142a286baa',
+  // Both VIVO47 rows that own portfolios: either can be the browse premise.
+  VIVO47_BRAND_ID,
+  VIVO47_GOOGLE_BRAND_ID,
 ];
 
 async function totalMoneyEvents(): Promise<number> {
@@ -319,20 +333,38 @@ async function readCboPremise(
   return { adsets: snapshots.length, held, movable: snapshots.length - held, cboCampaigns };
 }
 
-/** Fails with the live counts when the CBO account no longer carries the premise. */
-async function expectCboPremise(): Promise<void> {
+/** Fails with the live counts when the CBO account no longer carries a CBO campaign — the one
+ *  thing the projection cards are built from. */
+async function expectCboCampaigns(): Promise<void> {
   const premise = await readCboPremise(CBO_BRAND_ID, CBO_ACCOUNT_ID);
   console.log(`[optimizer-bench] CBO premise on ${CBO_ACCOUNT_ID}: ${JSON.stringify(premise)}`);
   expect(
-    premise.held,
-    `PREMISE DRIFT: ${CBO_ACCOUNT_ID} must hold most of its ad sets at the campaign for the ` +
-      `verdict to be \`nothing movable\` — read ${JSON.stringify(premise)}. Find a new CBO account ` +
-      'the bench user can pick (plugin_mcp.list_brand_ad_accounts ∩ the picker) before calling this a regression.',
-  ).toBeGreaterThan(premise.movable);
-  expect(
     premise.cboCampaigns,
-    'the CBO account must carry at least one CBO campaign',
+    `PREMISE DRIFT: ${CBO_ACCOUNT_ID} must carry at least one CBO campaign for the projection ` +
+      `cards — read ${JSON.stringify(premise)}.`,
   ).toBeGreaterThan(0);
+}
+
+/** A Meta account, on a watched brand, that holds MOST of its ad sets at the campaign — the
+ *  threshold that turns Signal readiness to `nothing movable`. Every account the bench user can
+ *  pick is scanned at run start; null (with the counts read) when none qualifies. */
+async function resolveMajorityCboAccount(): Promise<{
+  found: { brandId: string; accountId: string } | null;
+  seen: string[];
+}> {
+  const seen: string[] = [];
+  const scanned = new Set<string>();
+  for (const brandId of WATCHED_BRAND_IDS) {
+    for (const account of await listBrandAccounts(brandId)) {
+      const accountId = bareAccountId(account.account_id);
+      if (account.platform !== 'meta_ads' || scanned.has(accountId)) continue;
+      scanned.add(accountId);
+      const premise = await readCboPremise(brandId, accountId);
+      seen.push(`${accountId} held ${premise.held}/${premise.adsets}`);
+      if (premise.held > premise.movable) return { found: { brandId, accountId }, seen };
+    }
+  }
+  return { found: null, seen };
 }
 
 /** The Activity sub-view's page size (OPTIMIZER_FEED_PAGE_SIZE in useOptimizerData) and its
@@ -364,6 +396,144 @@ async function readActionFeed(brandId: string): Promise<OptimizerActionFeedRow[]
     before = page.next_before ?? null;
   } while (before && pages.length < 20);
   return pages;
+}
+
+type PortfolioListRow = {
+  id: string;
+  name: string;
+  ad_account_id: string | null;
+  adset_count: number | null;
+  apply_mode: string | null;
+  budget_granularity: string | null;
+  daily_total: number | null;
+};
+
+const bareAccountId = (id: string | null | undefined) => (id ?? '').replace(/^act_/, '');
+
+/** The brand's portfolios exactly as the page lists them (optimizer_list_portfolios). */
+async function listPortfolios(brandId: string): Promise<PortfolioListRow[]> {
+  const { data, error } = await memberClient().rpc('optimizer_list_portfolios', {
+    p_brand_id: brandId,
+  });
+  if (error) throw new Error(`[optimizer-bench] optimizer_list_portfolios: ${error.message}`);
+  return (data ?? []) as PortfolioListRow[];
+}
+
+type BrandAccount = { platform: string; account_id: string; name: string | null };
+
+/** The brand's ad accounts exactly as the picker lists them. */
+async function listBrandAccounts(brandId: string): Promise<BrandAccount[]> {
+  const { data, error } = await memberClient()
+    .schema('plugin_mcp')
+    .rpc('list_brand_ad_accounts', { p_brand_id: brandId });
+  if (error) throw new Error(`[optimizer-bench] list_brand_ad_accounts: ${error.message}`);
+  return (data ?? []) as BrandAccount[];
+}
+
+/** The platforms a brand holds an ad account on — what decides whether the Overview shows
+ *  its row of platform tabs (a brand on Meta alone shows none). */
+async function brandPlatforms(brandId: string): Promise<string[]> {
+  return [...new Set((await listBrandAccounts(brandId)).map((row) => row.platform))].sort();
+}
+
+/** What the browse tests stand on: a brand with an account holding a Recommend portfolio
+ *  with ad sets and at least one sibling portfolio, plus a Meta account of the same brand
+ *  that holds none — the cross-account notice's trigger. */
+type BrowsePremise = {
+  brandId: string;
+  accountId: string;
+  accountLabel: string;
+  enrolled: PortfolioListRow;
+  sibling: PortfolioListRow;
+  emptyAccountId: string;
+};
+
+async function resolveBrowsePremise(): Promise<BrowsePremise> {
+  const seen: string[] = [];
+  for (const brandId of BROWSE_BRAND_CANDIDATES) {
+    const [portfolios, accounts] = await Promise.all([
+      listPortfolios(brandId),
+      listBrandAccounts(brandId),
+    ]);
+    seen.push(
+      `${brandId.slice(0, 8)}: ${
+        portfolios.map((p) => `${p.name} [${p.apply_mode}, ${p.adset_count}]`).join('; ') ||
+        'no portfolios'
+      }`,
+    );
+    const owning = new Set(portfolios.map((p) => bareAccountId(p.ad_account_id)));
+    const empty = accounts.find(
+      (row) => row.platform === 'meta_ads' && !owning.has(bareAccountId(row.account_id)),
+    );
+    if (!empty) continue;
+    for (const accountId of owning) {
+      const onAccount = portfolios.filter((p) => bareAccountId(p.ad_account_id) === accountId);
+      const enrolled = onAccount
+        .filter((p) => p.apply_mode === 'recommend' && (p.adset_count ?? 0) > 0)
+        .sort((a, b) => (b.adset_count ?? 0) - (a.adset_count ?? 0))[0];
+      const sibling = onAccount.find((p) => p.id !== enrolled?.id);
+      if (!enrolled || !sibling) continue;
+      return {
+        brandId,
+        accountId,
+        accountLabel:
+          accounts.find((row) => bareAccountId(row.account_id) === accountId)?.name ?? accountId,
+        enrolled,
+        sibling,
+        emptyAccountId: bareAccountId(empty.account_id),
+      };
+    }
+  }
+  throw new Error(
+    'PREMISE DRIFT: no watched brand holds a Recommend portfolio with ad sets beside a sibling ' +
+      `portfolio and an empty Meta account. Read: ${seen.join(' | ')}`,
+  );
+}
+
+type StatusReport = {
+  recommendations?: Array<{ id: string; status: string }>;
+  hero_brief?: { brief?: { candidates?: Array<{ module: string; cta?: { target_id?: string } }> } };
+} | null;
+type AskedRows = { rows?: Array<{ handoff?: { proposal_id?: string | null } | null }> } | null;
+
+/** The ledger brand's two CTA premises, from the reads the portfolio page makes: the
+ *  per-portfolio report (optimizer-status) and its asked-for rows
+ *  (optimizer_get_adhoc_suggestions). */
+async function resolveLedgerCtaPremise(): Promise<{ mensajes: string; creative: string }> {
+  const client = memberClient();
+  let mensajes: string | null = null;
+  let creative: string | null = null;
+  const seen: string[] = [];
+  for (const portfolio of await listPortfolios(EASYFIT_LEDGER_BRAND_ID)) {
+    const [{ data: report }, { data: asked }] = await Promise.all([
+      client.functions.invoke('optimizer-status', { body: { portfolio_id: portfolio.id } }),
+      client.rpc('optimizer_get_adhoc_suggestions', { p_portfolio_id: portfolio.id }),
+    ]);
+    const pending = new Set(
+      ((report as StatusReport)?.recommendations ?? [])
+        .filter((rec) => rec.status === 'pending')
+        .map((rec) => `rec:${rec.id}`),
+    );
+    const candidates = (report as StatusReport)?.hero_brief?.brief?.candidates ?? [];
+    const opensCreative = candidates.some(
+      (c) => c.module === 'creative' && pending.has(c.cta?.target_id ?? ''),
+    );
+    const opensProposal = ((asked as AskedRows)?.rows ?? []).some((row) =>
+      Boolean(row.handoff?.proposal_id),
+    );
+    seen.push(`${portfolio.name}: creative=${opensCreative} proposal=${opensProposal}`);
+    if (portfolio.apply_mode === 'observe') continue;
+    if (opensProposal && !mensajes) mensajes = portfolio.name;
+    if (opensCreative && !creative) creative = portfolio.name;
+  }
+  if (!mensajes || !creative) {
+    throw new Error(
+      'PREMISE DRIFT: the ledger brand needs a portfolio whose asked-for row opened an audience ' +
+        'proposal and one whose card opens a pending creative recommendation. ' +
+        `Read: ${seen.join(' | ')}`,
+    );
+  }
+  return { mensajes, creative };
 }
 
 /** The onboarding surface's heading (OptimizerOnboarding). It used to read "Set up the
@@ -408,6 +578,13 @@ test.describe('Paid Media Optimizer — live experience', () => {
       `[optimizer-bench] money-family actions BEFORE (watched brands): ${moneyEventsBefore}`,
     );
     console.log(`[optimizer-bench] active brand before: ${originalActiveBrandId ?? '(none)'}`);
+
+    browse = await resolveBrowsePremise();
+    ledgerCta = await resolveLedgerCtaPremise();
+    console.log(
+      `[optimizer-bench] browse premise: brand ${browse.brandId} account ${browse.accountId} (${browse.accountLabel}), enrolled "${browse.enrolled.name}", sibling "${browse.sibling.name}", empty account ${browse.emptyAccountId}`,
+    );
+    console.log(`[optimizer-bench] ledger CTA premise: ${JSON.stringify(ledgerCta)}`);
   });
 
   test.afterAll(async () => {
@@ -417,20 +594,20 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('portfolio browsing — the owning account lists its portfolios and opens one', async ({
     browser,
   }) => {
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context, hosts } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, browse.accountId);
 
       // The tabbed optimizer surface — NOT onboarding, NOT the offline state.
       await expect(page.getByRole('tab', { name: 'Portfolios' })).toBeVisible();
       await expect(page.getByText(ONBOARDING_HEADING)).toHaveCount(0);
-      await expect(page.getByText(ENROLLED_PORTFOLIO_NAME).first()).toBeVisible({
+      await expect(page.getByText(browse.enrolled.name).first()).toBeVisible({
         timeout: 120_000,
       });
-      await expect(page.getByText(EMPTY_PORTFOLIO_NAME).first()).toBeVisible();
+      await expect(page.getByText(browse.sibling.name).first()).toBeVisible();
       await shoot(page, '01-portfolio-list');
 
       // Runtime proof the browser is on PROD, not the local stack .env.local pins.
@@ -440,13 +617,13 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect([...hosts].filter((host) => host.includes('127.0.0.1'))).toHaveLength(0);
 
       // Open the enrolled portfolio's detail workspace (read-only navigation).
-      await page.getByRole('button').filter({ hasText: ENROLLED_PORTFOLIO_NAME }).first().click();
+      await page.getByRole('button').filter({ hasText: browse.enrolled.name }).first().click();
 
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
       await expect(
-        page.getByRole('heading', { level: 2 }).filter({ hasText: ENROLLED_PORTFOLIO_NAME }),
+        page.getByRole('heading', { level: 2 }).filter({ hasText: browse.enrolled.name }),
       ).toBeVisible();
       // Its cycle data, rendered: the headline sentence with its figures, the four tiles,
       // and the disclosure the reallocation now waits behind.
@@ -465,12 +642,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('cross-account path — the notice names the owning account and reaches its portfolios', async ({
     browser,
   }) => {
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, EMPTY_ACCOUNT_ID);
+      await openOptimizationTab(page, browse.emptyAccountId);
 
       // The exact distinction this surface exists to make: an empty account view whose
       // brand DOES own portfolios must NOT claim the optimizer is unconfigured.
@@ -485,7 +662,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         page.getByText(/This brand has \d+ portfolios on\s+another ad account/),
       ).toBeVisible();
       // …and it names the account that owns them, with the one-click switch.
-      await expect(page.getByText(PORTFOLIO_ACCOUNT_LABEL, { exact: true })).toBeVisible();
+      await expect(page.getByText(browse.accountLabel, { exact: true })).toBeVisible();
       // exact: the sidebar's own "Switch brand" button matches a substring 'Switch' too.
       await expect(page.getByRole('button', { name: 'Switch', exact: true })).toBeVisible();
       await shoot(page, '03-other-account-notice');
@@ -493,21 +670,21 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // The browse control must actually reach the portfolios (count is live — match flexibly).
       await page.getByRole('button', { name: /Browse all \d+ portfolios/ }).click();
       await expect(page.getByText('All portfolios')).toBeVisible();
-      await expect(page.getByText(ENROLLED_PORTFOLIO_NAME).first()).toBeVisible();
-      await expect(page.getByText(EMPTY_PORTFOLIO_NAME).first()).toBeVisible();
+      await expect(page.getByText(browse.enrolled.name).first()).toBeVisible();
+      await expect(page.getByText(browse.sibling.name).first()).toBeVisible();
       await shoot(page, '04-portfolio-browser');
 
       // Switch-and-open: the ad account moves AND the portfolio opens, in one action.
       await page
         .getByRole('button', {
-          name: new RegExp(`Switch ad account and open ${ENROLLED_PORTFOLIO_NAME}`),
+          name: new RegExp(`Switch ad account and open ${browse.enrolled.name}`),
         })
         .click();
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
       await expect(
-        page.getByRole('heading', { level: 2 }).filter({ hasText: ENROLLED_PORTFOLIO_NAME }),
+        page.getByRole('heading', { level: 2 }).filter({ hasText: browse.enrolled.name }),
       ).toBeVisible();
       await shoot(page, '05-switch-and-open');
     } finally {
@@ -518,13 +695,22 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('signal readiness on a majority-CBO account reads `nothing movable`, never `ready`', async ({
     browser,
   }) => {
-    await selectBrand(CBO_BRAND_ID);
+    const majority = await resolveMajorityCboAccount();
+    console.log(`[optimizer-bench] majority-CBO scan: ${majority.seen.join(', ')}`);
+    // PREMISE MISSING on 2026-10-05: no account the bench user can pick holds most of its ad
+    // sets at the campaign — the best, 941792232690867, is a 22/44 tie, and a tie reads as
+    // movable by design. The verdict cannot be graded without one, so the test says so.
+    test.skip(
+      majority.found === null,
+      `PREMISE MISSING: no majority-CBO account exists among the bench user's Meta accounts (read: ${majority.seen.join(', ')})`,
+    );
+    const cbo = majority.found as { brandId: string; accountId: string };
+    await selectBrand(cbo.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await expectCboPremise();
-      await openOptimizationTab(page, CBO_ACCOUNT_ID);
+      await openOptimizationTab(page, cbo.accountId);
       await openSetupSurface(page);
 
       const readiness = page
@@ -554,7 +740,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     const page = await context.newPage();
 
     try {
-      await expectCboPremise();
+      await expectCboCampaigns();
       await openOptimizationTab(page, CBO_ACCOUNT_ID);
       await openSetupSurface(page);
 
@@ -633,12 +819,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('sub-view nav — Overview → Portfolios swaps the sub-view and writes optimizerView to the URL', async ({
     browser,
   }) => {
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, browse.accountId);
 
       // The tabbed surface lands on Overview (no optimizerView param → the default).
       // Clicking the Portfolios tab is a shallow history push: the sub-view swaps and the
@@ -647,7 +833,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await page.getByRole('tab', { name: 'Portfolios' }).click();
       await expect(page).toHaveURL(/optimizerView=portfolios/);
       await expect(page.getByRole('heading', { name: /Portfolios \(\d+\)/ })).toBeVisible();
-      await expect(page.getByText(ENROLLED_PORTFOLIO_NAME).first()).toBeVisible();
+      await expect(page.getByText(browse.enrolled.name).first()).toBeVisible();
       await shoot(page, '09-portfolios-subview');
     } finally {
       await context.close();
@@ -657,12 +843,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('create view — the New portfolio action opens the create page state, and Back returns to Portfolios', async ({
     browser,
   }) => {
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, browse.accountId);
 
       // The Overview carries the primary "New portfolio" action → the dedicated create page
       // state (NOT a sheet overlay). Render-only: the Create/Preview controls are never clicked.
@@ -688,17 +874,17 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('workspace Manage — the inner Manage tab renders its controls and drives section=manage', async ({
     browser,
   }) => {
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, browse.accountId);
 
       // Open the enrolled portfolio through the existing browse flow, then move to its inner
       // Manage tab. The workspace replaces the whole tab body, so its [Performance | Manage |
       // Activity] tabs are the only tabs on screen.
-      await page.getByRole('button').filter({ hasText: ENROLLED_PORTFOLIO_NAME }).first().click();
+      await page.getByRole('button').filter({ hasText: browse.enrolled.name }).first().click();
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
@@ -715,8 +901,10 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // Every config field carries the portfolio's CURRENT value — the whole point of the
       // config panel, and what it did NOT do while blanks stood in for "keep current".
       // Read-only: nothing is typed here and nothing is saved.
-      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(ENROLLED_PORTFOLIO_NAME);
-      await expect(page.getByLabel(/^Daily budget/)).toHaveValue('3500');
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(browse.enrolled.name);
+      await expect(page.getByLabel(/^Daily budget/)).toHaveValue(
+        String(browse.enrolled.daily_total),
+      );
 
       // And the autopilot guardrails stay off screen until they matter: this portfolio runs
       // on Recommend, so the Autonomy tier's Autopilot button — the opt-in entry point — is
@@ -738,7 +926,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('deep-link cold loads — optimizerView=create and portfolio+section=manage render on first paint', async ({
     browser,
   }) => {
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
@@ -750,7 +938,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await page.goto('/scale?tab=performance&optimizerView=create', {
         waitUntil: 'domcontentloaded',
       });
-      await pinAdAccount(page, PORTFOLIO_ACCOUNT_ID);
+      await pinAdAccount(page, browse.accountId);
       await expect(page).toHaveURL(/optimizerView=create/);
       await expect(page.getByRole('heading', { name: 'Start from a suggestion' })).toBeVisible({
         timeout: 120_000,
@@ -759,8 +947,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
 
       // Resolve the enrolled portfolio's real id THROUGH the UI (this spec pins portfolios by
       // name, not id): open it once and read the id the redesigned nav wrote into the URL.
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
-      await page.getByRole('button').filter({ hasText: ENROLLED_PORTFOLIO_NAME }).first().click();
+      await openOptimizationTab(page, browse.accountId);
+      await page.getByRole('button').filter({ hasText: browse.enrolled.name }).first().click();
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
@@ -775,7 +963,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await page.goto(`/scale?tab=performance&portfolio=${enrolledId}&section=manage`, {
         waitUntil: 'domcontentloaded',
       });
-      await pinAdAccount(page, PORTFOLIO_ACCOUNT_ID);
+      await pinAdAccount(page, browse.accountId);
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
@@ -839,7 +1027,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
 
       await page.getByRole('tab', { name: 'Activity' }).click();
       await expect(page).toHaveURL(/optimizerView=logs/);
@@ -948,12 +1136,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .getByRole('tab', { name: 'Activity' });
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
 
       // ── MENSAJES: the asked-for row wears its proposal's state and opens it inline ──
-      await page.getByRole('button').filter({ hasText: MENSAJES_PORTFOLIO_NAME }).first().click();
+      await page.getByRole('button').filter({ hasText: ledgerCta.mensajes }).first().click();
       await expect(
-        page.getByRole('heading', { level: 2 }).filter({ hasText: MENSAJES_PORTFOLIO_NAME }),
+        page.getByRole('heading', { level: 2 }).filter({ hasText: ledgerCta.mensajes }),
       ).toBeVisible({ timeout: 120_000 });
 
       // The Jaina panel: the first block after the portfolio's name line, before the
@@ -1098,11 +1286,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
         openedRow.getByRole('button', { name: 'Open the audience proposal' }),
       ).toBeVisible();
 
-      // ── PRUEBA: the creative candidate's card → its pending recommendation row ──
+      // ── CREATIVE: the creative candidate's card → its pending recommendation row ──
       await page.getByRole('button', { name: 'Back to portfolios' }).click();
-      await page.getByRole('button').filter({ hasText: PRUEBA_PORTFOLIO_NAME }).first().click();
+      await page.getByRole('button').filter({ hasText: ledgerCta.creative }).first().click();
       await expect(
-        page.getByRole('heading', { level: 2 }).filter({ hasText: PRUEBA_PORTFOLIO_NAME }),
+        page.getByRole('heading', { level: 2 }).filter({ hasText: ledgerCta.creative }),
       ).toBeVisible({ timeout: 120_000 });
       const creativeCta = page
         .getByRole('button', { name: 'Open the creative recommendation' })
@@ -1114,7 +1302,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(expandedQueueRow()).toHaveCount(1, { timeout: 120_000 });
       const creativeKey = await expandedQueueRow().getAttribute('data-row-key');
       console.log(
-        `[optimizer-bench] Prueba "Open the creative recommendation" landed on ${creativeKey}`,
+        `[optimizer-bench] ${ledgerCta.creative} "Open the creative recommendation" landed on ${creativeKey}`,
       );
       expect(creativeKey).toMatch(/^rec:[0-9a-f-]{36}$/);
       await expect(expandedQueueRow().getByRole('button', { name: 'Hide detail' })).toBeVisible();
@@ -1145,7 +1333,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
       await page
         .getByRole('button')
         .filter({ hasText: FORMULARIOS_PORTFOLIO_NAME })
@@ -1377,7 +1565,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     });
 
     try {
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
 
       // The sentence is composed once every portfolio's efficiency series has landed; until
       // then it says it is still reading, and that state must clear on a live account. A
@@ -1472,9 +1660,19 @@ test.describe('Paid Media Optimizer — live experience', () => {
       });
       console.log(`[optimizer-bench] Overview O1: ${JSON.stringify(report)}`);
 
-      // In this order and nothing else: the header line, the sentence block, the band, the
-      // tiles, the cards (when a read has landed), the rows.
-      const expectedIds = ['(div)', 'overview-hero', 'jaina-entry-chips', 'account-tiles'];
+      // In this order and nothing else: the platform tabs (only for a brand on more than one
+      // platform, read live from the picker's own list), the header line, the sentence block,
+      // the band, the tiles, the cards (when a read has landed), the rows. Nothing — the
+      // "not available yet" note included — sits between the tabs and the hero.
+      const platforms = await brandPlatforms(EASYFIT_LEDGER_BRAND_ID);
+      console.log(`[optimizer-bench] ledger brand platforms: ${platforms.join(', ')}`);
+      const expectedIds = [
+        ...(platforms.length > 1 ? ['platform-tabs'] : []),
+        '(div)',
+        'overview-hero',
+        'jaina-entry-chips',
+        'account-tiles',
+      ];
       if (report.ids.includes('overview-recommendations'))
         expectedIds.push('overview-recommendations');
       expectedIds.push('portfolio-rows');
@@ -1545,7 +1743,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     browser,
   }) => {
     test.setTimeout(900_000);
-    await selectBrand(AGENCY_BRAND_ID);
+    await selectBrand(browse.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
@@ -1701,8 +1899,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
     try {
       // Resolve the enrolled portfolio's id once, through the UI, at desktop width.
       await page.setViewportSize({ width: 1280, height: 900 });
-      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
-      await page.getByRole('button').filter({ hasText: ENROLLED_PORTFOLIO_NAME }).first().click();
+      await openOptimizationTab(page, browse.accountId);
+      await page.getByRole('button').filter({ hasText: browse.enrolled.name }).first().click();
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
@@ -1721,7 +1919,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
         for (const [screen, url] of screens) {
           await page.goto(url, { waitUntil: 'domcontentloaded' });
-          await pinAdAccount(page, PORTFOLIO_ACCOUNT_ID);
+          await pinAdAccount(page, browse.accountId);
           if (screen === 'portfolio') {
             await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
               timeout: 120_000,

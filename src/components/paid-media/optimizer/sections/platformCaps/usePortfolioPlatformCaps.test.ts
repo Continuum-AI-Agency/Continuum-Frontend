@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { MissingRpcError } from '../platforms/multiplatformRead';
 import {
+  capsHoldNonMetaMember,
   fetchPlatformCaps,
   GET_PLATFORM_CAPS_RPC,
   SET_PLATFORM_CAP_RPC,
@@ -75,5 +76,28 @@ describe('savePlatformCap', () => {
     await expect(savePlatformCap(PORTFOLIO, 'meta', -1, rpc)).rejects.toThrow(
       'optimizer: a platform daily cap cannot be negative',
     );
+  });
+});
+
+describe('capsHoldNonMetaMember', () => {
+  const cap = (platform: 'meta' | 'google_ads' | 'tiktok_ads') => ({
+    platform,
+    currency: 'MXN',
+    dailyCapMinor: null,
+    accounts: 1,
+  });
+
+  it('holds only when the read names a member off Meta', () => {
+    expect(capsHoldNonMetaMember({ status: 'ready', caps: [cap('meta'), cap('google_ads')] })).toBe(
+      true,
+    );
+    expect(capsHoldNonMetaMember({ status: 'ready', caps: [cap('tiktok_ads')] })).toBe(true);
+    expect(capsHoldNonMetaMember({ status: 'ready', caps: [cap('meta')] })).toBe(false);
+  });
+
+  it('reads an unknown portfolio as Meta, the platform every portfolio runs on today', () => {
+    for (const status of ['loading', 'unavailable', 'error'] as const) {
+      expect(capsHoldNonMetaMember({ status })).toBe(false);
+    }
   });
 });

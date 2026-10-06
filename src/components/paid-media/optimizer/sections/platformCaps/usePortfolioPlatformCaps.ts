@@ -95,6 +95,13 @@ export type PlatformCapsState =
   | { status: 'error' }
   | { status: 'ready'; caps: PlatformCap[] };
 
+/** Whether the portfolio is known to hold a member off Meta. Until a read names its platforms
+ *  the portfolio is on Meta — the platform every portfolio the engine runs is on today — so a
+ *  missing or failed read never turns a Meta-only portfolio into a multi-platform one. */
+export function capsHoldNonMetaMember(state: PlatformCapsState): boolean {
+  return state.status === 'ready' && state.caps.some((cap) => cap.platform !== 'meta');
+}
+
 export function usePortfolioPlatformCaps(portfolioId: string): PlatformCapsState {
   const query = useQuery({
     queryKey: platformCapsQueryKey(portfolioId),
