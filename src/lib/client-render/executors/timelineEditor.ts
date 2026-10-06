@@ -713,7 +713,9 @@ export async function buildTimelineEditorRenderPlan(input: {
     }
     expectedStartSec += clip.durationSec;
   }
-  if (primaryClips.length > 0 && Math.abs(input.project.durationSec - expectedStartSec) > 0.001) {
+  // Longer lanes (an inset, a bed) may outlast the primary; a longer primary is an authoring error.
+  const tailSec = primaryClips.length > 0 ? input.project.durationSec - expectedStartSec : 0;
+  if (tailSec < -0.001) {
     throw new Error(
       `Project duration ${input.project.durationSec}s does not match the canonical sequence duration ${expectedStartSec}s.`,
     );
@@ -739,9 +741,10 @@ export async function buildTimelineEditorRenderPlan(input: {
     })),
   );
 
-  if (items.length === 0) {
+  if (items.length === 0 || tailSec > 0.001) {
     if (input.project.durationSec <= 0) throw new Error('The timeline is empty.');
-    // Overlay-only edits still render over their authored canvas for the full sequence.
+    // Overlay-only edits, and the time longer lanes run past the primary, render over the
+    // authored canvas.
     const canvas = new OffscreenCanvas(1, 1);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Timeline background canvas unavailable.');
@@ -751,7 +754,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       itemId: 'canvas-background',
       kind: 'image',
       blob: await canvas.convertToBlob({ type: 'image/png' }),
-      durationSec: input.project.durationSec,
+      durationSec: items.length === 0 ? input.project.durationSec : tailSec,
       muteAudio: true,
     });
   }

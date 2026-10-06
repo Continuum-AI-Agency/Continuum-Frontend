@@ -4,12 +4,13 @@
 export type BenchRecorder = {
   notes: string[];
   step<T>(name: string, run: () => Promise<T>): Promise<T>;
-  record(step: string, grade: 'PASS' | 'FAIL' | 'SKIP', detail?: string): void;
+  /** WARN is environmental (a contended speed sample): kept and counted, never a failure. */
+  record(step: string, grade: 'PASS' | 'WARN' | 'FAIL' | 'SKIP', detail?: string): void;
   print(): void;
 };
 
 export function createBenchRecorder(bench: string, notes: string[]): BenchRecorder {
-  const graded: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
+  const graded: { step: string; grade: 'PASS' | 'WARN' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
   const startedAt = new Date().toISOString();
   const startedMs = Date.now();
   return {
@@ -35,6 +36,7 @@ export function createBenchRecorder(bench: string, notes: string[]): BenchRecord
       const counts = { pass: 0, warn: 0, skip: 0, fail: 0 };
       for (const result of graded) {
         if (result.grade === 'PASS') counts.pass += 1;
+        else if (result.grade === 'WARN') counts.warn += 1;
         else if (result.grade === 'SKIP') counts.skip += 1;
         else counts.fail += 1;
       }

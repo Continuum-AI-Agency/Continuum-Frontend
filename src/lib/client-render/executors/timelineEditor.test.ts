@@ -729,6 +729,128 @@ describe('timeline editor client render executor', () => {
     });
   });
 
+  it('holds the authored background after the primary sequence ends under longer lanes', async () => {
+    globalThis.fetch = (async () =>
+      new Response(new Blob(['media'], { type: 'video/mp4' }), { status: 200 })) as typeof fetch;
+    // The browser's OffscreenCanvas paints the 1×1 background swatch; this runtime has none.
+    const painted: string[] = [];
+    const hadCanvas = 'OffscreenCanvas' in globalThis;
+    Object.assign(globalThis, {
+      OffscreenCanvas: class {
+        getContext() {
+          return {
+            set fillStyle(value: string) {
+              painted.push(value);
+            },
+            fillRect() {},
+          };
+        }
+        async convertToBlob() {
+          return new Blob(['png'], { type: 'image/png' });
+        }
+      },
+    });
+    const created = createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000445',
+      title: 'Longer lanes',
+      width: 1080,
+      height: 1080,
+      now: '2026-10-05T12:00:00.000Z',
+    });
+    const source = (assetId: string) => ({
+      sourceType: 'library_asset' as const,
+      assetId,
+      renditionId: `${assetId}-v1`,
+    });
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: 6,
+      tracks: [
+        {
+          id: 'main',
+          name: 'Main',
+          order: 0,
+          kind: 'video',
+          clips: [
+            {
+              id: 'interview',
+              kind: 'video',
+              timelineStartSec: 0,
+              durationSec: 4,
+              source: source('a'),
+            },
+          ],
+        },
+        {
+          id: 'pip',
+          name: 'Inset',
+          order: 1,
+          kind: 'overlay',
+          clips: [
+            {
+              id: 'photo',
+              kind: 'overlay',
+              mediaKind: 'image',
+              timelineStartSec: 0,
+              durationSec: 6,
+              source: source('b'),
+            },
+          ],
+        },
+        {
+          id: 'bed',
+          name: 'Bed',
+          order: 2,
+          kind: 'audio',
+          clips: [
+            {
+              id: 'drums',
+              kind: 'audio',
+              timelineStartSec: 0,
+              durationSec: 6,
+              source: source('c'),
+            },
+          ],
+        },
+      ],
+    });
+    const input = (id: string, assetId: string) => ({
+      sourceId: id,
+      sourceAssetId: assetId,
+      sourceRevision: `${assetId}-v1`,
+      storage: { bucket: 'media-library', path: `brand/${assetId}` },
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: [input('interview', 'a'), input('photo', 'b'), input('drums', 'c')],
+      signedUrls: new Map(
+        ['a', 'b', 'c'].map((id) => [`media-library\nbrand/${id}`, `https://signed.example/${id}`]),
+      ),
+      signal: new AbortController().signal,
+    });
+    // The 4 s primary plays, then the background holds for the 2 s the longer lanes still run.
+    expect(plan.items.map((item) => [item.itemId, item.kind, item.durationSec])).toEqual([
+      ['interview', 'video', 4],
+      ['canvas-background', 'image', 2],
+    ]);
+    expect(plan.items[1]?.muteAudio).toBe(true);
+    expect(plan.overlays.map((overlay) => [overlay.itemId, overlay.startSec])).toEqual([
+      ['photo', 0],
+    ]);
+    expect(plan.audioTracks.map((track) => [track.itemId, track.startSec])).toEqual([['drums', 0]]);
+    // A primary sequence longer than the project is still an authoring error.
+    await expect(
+      buildTimelineEditorRenderPlan({
+        project: { ...project, durationSec: 3 },
+        jobInputs: [input('interview', 'a'), input('photo', 'b'), input('drums', 'c')],
+        signedUrls: new Map(),
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow('does not match the canonical sequence duration 4s');
+    expect(painted).toEqual([project.canvas.backgroundColor]);
+    if (!hadCanvas) Reflect.deleteProperty(globalThis, 'OffscreenCanvas');
+  });
+
   it('fails visibly instead of rendering timeline geometry that disagrees with its transition', async () => {
     const created = createEditorProjectV2({
       projectId: '00000000-0000-4000-8000-000000000444',

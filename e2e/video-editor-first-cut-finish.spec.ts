@@ -1093,7 +1093,7 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
     page.on('pageerror', (e) => pageErrors.push(e.message));
     page.setDefaultTimeout(30000);
     const viewed = variants[1]!;
-    await page.goto(`${frontend.url}${videoStudioEditorPath(viewed.id)}`);
+    await page.goto(`${frontend.url}${videoStudioEditorPath(viewed.id)}`, { timeout: 300_000 });
     await page.getByTestId('video-studio-edit').waitFor({ timeout: 180000 });
     const offer = page.locator('[data-testid="brief-dialog"]:visible');
     if (await offer.count()) await page.keyboard.press('Escape');
@@ -1157,10 +1157,13 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
         libraryHref: string | null;
       }> = [];
       for (const v of variants) {
-        const event = page.waitForEvent('download', { timeout: 60000 });
-        await dialog.getByRole('link', { name: `Download ${v.label}`, exact: true }).click();
-        const download = await event,
-          path = join(folder, `${caseId}-${v.label}.mp4`);
+        // Awaited together: a failed click must not leave the download wait to reject after the
+        // context closes, which fails the test before its exact-ID cleanup runs.
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 60000 }),
+          dialog.getByRole('link', { name: `Download ${v.label}`, exact: true }).click(),
+        ]);
+        const path = join(folder, `${caseId}-${v.label}.mp4`);
         await download.saveAs(path);
         downloads.push({
           label: v.label,

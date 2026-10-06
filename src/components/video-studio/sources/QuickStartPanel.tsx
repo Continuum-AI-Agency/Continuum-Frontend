@@ -48,6 +48,8 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { findClip } from '@/StudioCanvas/nodes/timeline/workspace/timelineEdits';
+import { isPermanentError } from '../export/variantExports';
 import type { VideoStudioContext } from '../types';
 import { useEditorPool } from './GraphPoolPanel';
 import { formatDuration, POOL_CHANGED_EVENT, PoolAssetCard } from './PoolAssetCard';
@@ -80,6 +82,7 @@ const POLL_MS = 3_000;
 /** A job still running past this is reported lost here; the Backend says the same at 15 min. */
 const GIVE_UP_MS = 16 * 60_000;
 const NONE = 'none';
+const NO_MEDIA = 'The generation finished without returning media.';
 const PROJECT_FORMAT = 'project';
 
 type Status = VideoEditorOpOutput<'generate_status'>;
@@ -90,7 +93,6 @@ type Job = {
   state: Status['state'];
   asset?: VideoEditorPoolAsset;
   clipId?: string;
-  placedAtSec?: number;
   error?: string;
 };
 
@@ -131,14 +133,25 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
         void runOp
           .current('generate_status', { jobId: job.jobId })
           .then((status) =>
-            settle({
-              state: status.state,
-              ...(status.asset ? { asset: status.asset } : {}),
-              ...(status.clipId ? { clipId: status.clipId } : {}),
-              ...(status.error ? { error: status.error } : {}),
-            }),
+            settle(
+              status.state === 'completed' && !status.asset && !status.clipId
+                ? { state: 'failed', error: NO_MEDIA }
+                : {
+                    state: status.state,
+                    ...(status.asset ? { asset: status.asset } : {}),
+                    ...(status.clipId ? { clipId: status.clipId } : {}),
+                    ...(status.error ? { error: status.error } : {}),
+                  },
+            ),
           )
-          .catch(() => undefined); // a dropped poll is retried on the next tick
+          // A dropped poll is retried on the next tick; a refusal will not get better.
+          .catch((error: unknown) => {
+            if (isPermanentError(error))
+              settle({
+                state: 'failed',
+                error: error instanceof Error ? error.message : String(error),
+              });
+          });
       }
     }, POLL_MS);
     return () => {
@@ -189,43 +202,49 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
           <h3 className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
             Results
           </h3>
-          {jobs.map((job) => (
-            <div
-              key={job.jobId}
-              className="space-y-1.5 rounded-md border border-border/60 p-2"
-              data-generation-job={job.jobId}
-              data-state={job.state}
-            >
-              <div className="flex items-center gap-2 text-2xs">
-                {isActive(job) ? <Spinner className="size-3" /> : null}
-                {job.state === 'failed' ? (
-                  <TriangleAlert className="size-3 text-destructive" />
+          {jobs.map((job) => {
+            // Where the clip actually sits on this timeline, never where it was asked to go.
+            const placedAtSec = job.clipId
+              ? findClip(studio.project, job.clipId)?.clip.timelineStartSec
+              : undefined;
+            return (
+              <div
+                key={job.jobId}
+                className="space-y-1.5 rounded-md border border-border/60 p-2"
+                data-generation-job={job.jobId}
+                data-state={job.state}
+              >
+                <div className="flex items-center gap-2 text-2xs">
+                  {isActive(job) ? <Spinner className="size-3" /> : null}
+                  {job.state === 'failed' ? (
+                    <TriangleAlert className="size-3 text-destructive" />
+                  ) : null}
+                  <span className="flex-1 truncate font-medium">{job.card.label}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {isActive(job)
+                      ? `${job.state === 'queued' ? 'Queued' : 'Generating'} · ${formatDuration((now - job.startedAt) / 1_000)}`
+                      : job.state === 'completed'
+                        ? placedAtSec !== undefined
+                          ? `Placed at ${formatDuration(placedAtSec)}`
+                          : 'In the pool'
+                        : 'Failed'}
+                  </span>
+                </div>
+                {job.asset ? <PoolAssetCard asset={job.asset} studio={studio} /> : null}
+                {job.error ? (
+                  <p
+                    className={
+                      job.state === 'failed'
+                        ? 'text-2xs text-destructive'
+                        : 'text-2xs text-muted-foreground'
+                    }
+                  >
+                    {job.error}
+                  </p>
                 ) : null}
-                <span className="flex-1 truncate font-medium">{job.card.label}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {isActive(job)
-                    ? `${job.state === 'queued' ? 'Queued' : 'Generating'} · ${formatDuration((now - job.startedAt) / 1_000)}`
-                    : job.state === 'completed'
-                      ? job.clipId && job.placedAtSec !== undefined
-                        ? `Placed at ${formatDuration(job.placedAtSec)}`
-                        : 'In the pool'
-                      : 'Failed'}
-                </span>
               </div>
-              {job.asset ? <PoolAssetCard asset={job.asset} studio={studio} /> : null}
-              {job.error ? (
-                <p
-                  className={
-                    job.state === 'failed'
-                      ? 'text-2xs text-destructive'
-                      : 'text-2xs text-muted-foreground'
-                  }
-                >
-                  {job.error}
-                </p>
-              ) : null}
-            </div>
-          ))}
+            );
+          })}
         </section>
       ) : null}
 
@@ -236,7 +255,7 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
           studio={studio}
           pool={pool.assets ?? []}
           onClose={() => setActive(null)}
-          onStart={async (input, placedAtSec) => {
+          onStart={async (input) => {
             const started = await runOp.current('generate', input);
             setJobs((current) => [
               {
@@ -244,7 +263,6 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
                 card: active,
                 startedAt: Date.now(),
                 state: started.state,
-                ...(placedAtSec === null ? {} : { placedAtSec }),
               },
               ...current,
             ]);
@@ -269,7 +287,6 @@ function QuickStartDialog({
   onClose: () => void;
   onStart: (
     input: Extract<ReturnType<typeof generateRequest>, { ok: true }>['input'],
-    placedAtSec: number | null,
   ) => Promise<void>;
 }): React.ReactNode {
   const stills = referenceImages(pool);
@@ -332,7 +349,7 @@ function QuickStartDialog({
     }
     setBusy(true);
     setError(null);
-    onStart(request.input, placeAtSec).catch((cause: unknown) => {
+    onStart(request.input).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'Could not start the generation.');
       setBusy(false);
     });

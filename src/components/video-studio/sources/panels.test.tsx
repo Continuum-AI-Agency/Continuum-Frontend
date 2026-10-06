@@ -5,6 +5,7 @@ import {
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { ApiError } from '@/lib/api/errors';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE, type VideoStudioContext } from '../types';
 import { GraphPoolPanel } from './GraphPoolPanel';
 import { QuickStartPanel } from './QuickStartPanel';
@@ -174,6 +175,110 @@ describe('QuickStartPanel', () => {
         quickStart: 'music_bed',
         durationSec: 20,
       });
+    },
+    TIMEOUT_MS,
+  );
+
+  const startCreateImage = async (view: ReturnType<typeof render>) => {
+    fireEvent.click(
+      view.container.querySelector('[data-quick-start="create_image"]') as HTMLElement,
+    );
+    fireEvent.change(await view.findByLabelText('Prompt'), { target: { value: 'a front desk' } });
+    fireEvent.click(view.getByRole('button', { name: 'Generate' }));
+  };
+  const jobRow = (view: ReturnType<typeof render>, jobId: string) =>
+    view.container.querySelector(`[data-generation-job="${jobId}"]`);
+
+  it(
+    'a status refused for good settles the job as failed instead of generating on',
+    async () => {
+      const { studio, calls } = fakeStudio({
+        get_pool: () => ({ assets: pool }),
+        generate: () => ({ jobId: 'job_gone', state: 'running' }),
+        generate_status: () => {
+          throw new ApiError('Generation job not found', 404);
+        },
+      });
+      const view = render(<QuickStartPanel studio={studio} />);
+      await startCreateImage(view);
+      await waitFor(
+        () => expect(jobRow(view, 'job_gone')?.getAttribute('data-state')).toBe('failed'),
+        { timeout: 8_000 },
+      );
+      expect(jobRow(view, 'job_gone')?.textContent).toContain('Generation job not found');
+      const polls = calls.filter((call) => call.op === 'generate_status').length;
+      await new Promise((resolve) => setTimeout(resolve, 3_500));
+      expect(calls.filter((call) => call.op === 'generate_status').length).toBe(polls);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    'a completed job that returned no media is reported, not shown as in the pool',
+    async () => {
+      const { studio } = fakeStudio({
+        get_pool: () => ({ assets: pool }),
+        generate: () => ({ jobId: 'job_empty', state: 'running' }),
+        generate_status: () => ({ jobId: 'job_empty', state: 'completed' }),
+      });
+      const view = render(<QuickStartPanel studio={studio} />);
+      await startCreateImage(view);
+      await waitFor(
+        () => expect(jobRow(view, 'job_empty')?.getAttribute('data-state')).toBe('failed'),
+        { timeout: 8_000 },
+      );
+      expect(jobRow(view, 'job_empty')?.textContent).toContain('without returning media');
+      expect(jobRow(view, 'job_empty')?.textContent).not.toContain('In the pool');
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    'a placement is read from the timeline, never assumed from the request',
+    async () => {
+      const made: VideoEditorPoolAsset = {
+        assetId: 'placed-still',
+        kind: 'image',
+        title: 'Placed still',
+        origin: 'generated',
+      };
+      const { studio } = fakeStudio({
+        get_pool: () => ({ assets: pool }),
+        generate: () => ({ jobId: 'job_placed', state: 'running' }),
+        generate_status: () => ({
+          jobId: 'job_placed',
+          state: 'completed',
+          asset: made,
+          clipId: 'generated-placed',
+        }),
+      });
+      const view = render(<QuickStartPanel studio={studio} />);
+      await startCreateImage(view);
+      await waitFor(
+        () => expect(jobRow(view, 'job_placed')?.getAttribute('data-state')).toBe('completed'),
+        { timeout: 8_000 },
+      );
+      // The clip is not on this timeline (yet): requested 0:02 must not be claimed.
+      expect(jobRow(view, 'job_placed')?.textContent).not.toContain('Placed at');
+      expect(jobRow(view, 'job_placed')?.textContent).toContain('In the pool');
+      const placed = {
+        ...studio.project,
+        tracks: [
+          {
+            id: 'generated',
+            name: 'Generated',
+            kind: 'overlay' as const,
+            order: 1,
+            enabled: true,
+            locked: false,
+            muted: false,
+            solo: false,
+            clips: [{ id: 'generated-placed', timelineStartSec: 4.5, durationSec: 3 }],
+          },
+        ],
+      } as unknown as VideoStudioContext['project'];
+      view.rerender(<QuickStartPanel studio={{ ...studio, project: placed }} />);
+      expect(jobRow(view, 'job_placed')?.textContent).toContain('Placed at 4.5s');
     },
     TIMEOUT_MS,
   );

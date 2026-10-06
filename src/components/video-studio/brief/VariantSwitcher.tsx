@@ -36,27 +36,32 @@ export function VariantSwitcher({
   const router = useRouter();
   const { brief, projectId, durationSec } = studio.project;
   const [variants, setVariants] = useState<Variant[]>([]);
-  // Redraft counts the tabs: before list_variants answers, the only tab is this project.
+  // Redraft counts the tabs: until list_variants answers, the only tab is this project, so
+  // a failed read keeps the family actions off rather than redrafting one variant of three.
   const [answeredFor, setAnsweredFor] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the re-read trigger
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey and attempt are re-read triggers
   useEffect(() => {
     if (!brief) return;
     let cancelled = false;
+    setReadError(null);
     // A read: straight to the op, so it never shows as the workspace being busy.
     runVideoEditorOp(projectId, 'list_variants', {})
       .then((result) => {
-        if (!cancelled) setVariants(result.variants);
+        if (cancelled) return;
+        setVariants(result.variants);
+        setAnsweredFor(projectId);
       })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setAnsweredFor(projectId);
+      .catch((error: unknown) => {
+        if (!cancelled) setReadError(error instanceof Error ? error.message : String(error));
       });
     return () => {
       cancelled = true;
     };
-  }, [brief?.briefId, projectId, reloadKey]);
+  }, [brief?.briefId, projectId, reloadKey, attempt]);
 
   if (!brief) return null;
   // Until the siblings are read, the project's own brief names its tab.
@@ -127,6 +132,19 @@ export function VariantSwitcher({
       >
         <Download className="size-3.5" /> Export all variants
       </Button>
+      {readError ? (
+        <span role="alert" className="flex items-center gap-1 text-xs text-destructive">
+          {readError}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => setAttempt((count) => count + 1)}
+          >
+            Retry
+          </Button>
+        </span>
+      ) : null}
       <ExportDialog studio={studio} open={exportOpen} onOpenChange={setExportOpen} allVariants />
     </div>
   );

@@ -119,6 +119,48 @@ describe('editorRenderBlockers', () => {
     ).toEqual(['The timeline is empty.']);
   });
 
+  test('a text-only edit renders on its background; a hidden text track does not count', () => {
+    const project = blank();
+    const text = editorProjectV2Schema.parse({
+      ...project,
+      durationSec: 4,
+      tracks: [
+        {
+          id: 'titles',
+          name: 'Text',
+          kind: 'text',
+          order: 0,
+          enabled: true,
+          locked: false,
+          muted: false,
+          solo: false,
+          clips: [
+            {
+              id: 'title',
+              kind: 'text',
+              text: 'Book a demo',
+              timelineStartSec: 0,
+              durationSec: 4,
+              style: {
+                fontFamily: 'Inter',
+                fontSizePx: 96,
+                fontWeight: 800,
+                color: '#ffffff',
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(editorRenderBlockers(text)).toEqual([]);
+    expect(
+      editorRenderBlockers({
+        ...text,
+        tracks: text.tracks.map((track) => ({ ...track, enabled: false })),
+      }),
+    ).toEqual(['The timeline is empty.']);
+  });
+
   test('a production project still answers to its approval gates', () => {
     const project = withFootage(blank());
     const production = editorProjectV2Schema.parse({
