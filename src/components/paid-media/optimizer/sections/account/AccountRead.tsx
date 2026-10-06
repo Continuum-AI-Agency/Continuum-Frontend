@@ -42,17 +42,19 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
 import { formatPerPeriod } from '../../format';
+import * as typeScale from '../../typeScale';
 import { PlatformCardBody } from '../platformCards/PlatformCardBody';
 import {
   isReadOnly,
+  ownsItsActions,
   PLATFORM_CARD_TYPE,
+  platformCardActionLabel,
   platformCardOf,
   platformCardTitle,
   platformsOf,
 } from '../platformCards/platformCardModel';
 import { PlatformChip } from '../platforms/PlatformChip';
 import type { AdPlatform } from '../platforms/platformTabsModel';
-import * as typeScale from '../../typeScale';
 import { CalmRule, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy } from './guardScope';
 
@@ -190,7 +192,10 @@ function RecommendationCard({
         {doubted ? <span className="text-warning text-xs">affected by the guard</span> : null}
       </div>
       {platformCard ? (
-        <PlatformCardBody card={platformCard} />
+        <PlatformCardBody
+          card={platformCard}
+          onAddNegatives={target && onOpenPortfolio ? () => onOpenPortfolio(target) : undefined}
+        />
       ) : (
         <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>{titleLine}</h3>
       )}
@@ -212,7 +217,9 @@ function RecommendationCard({
             {names.join(' · ')}
           </p>
         ) : null}
-        {target && onOpenPortfolio && !(platformCard && isReadOnly(platformCard)) ? (
+        {target &&
+        onOpenPortfolio &&
+        !(platformCard && (isReadOnly(platformCard) || ownsItsActions(platformCard))) ? (
           <Button
             data-testid="account-card-action"
             onClick={() => onOpenPortfolio(target)}
@@ -220,7 +227,7 @@ function RecommendationCard({
             type="button"
             variant="secondary"
           >
-            {actionLabel(action)}
+            {(platformCard && platformCardActionLabel(platformCard)) ?? actionLabel(action)}
           </Button>
         ) : null}
         <a

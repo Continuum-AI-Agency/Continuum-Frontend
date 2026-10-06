@@ -37,7 +37,10 @@ import {
   CROSS_PLATFORM_MOVE,
   EVERY_CARD,
   GOOGLE_BUDGET_LIMITED,
+  GOOGLE_NEGATIVE_TERMS,
+  GOOGLE_PROMOTE_TERM,
   GOOGLE_VIDEO,
+  TIKTOK_ATTRIBUTION_WINDOW,
 } from '../platformCards/__fixtures__/platformCards';
 import { AccountRead } from './AccountRead';
 
@@ -399,17 +402,21 @@ describe('AccountRead — platform-specific cards', () => {
     const { getAllByTestId, getByText } = render(
       <AccountRead
         candidates={EVERY_CARD.map((card, index) =>
-          candidate({ id: `dead_tail:v${index}`, impact_per_day: 100 - index, platform_card: card }),
+          candidate({
+            id: `dead_tail:v${index}`,
+            impact_per_day: 100 - index,
+            platform_card: card,
+          }),
         )}
         currency="MXN"
         dailySpend={1000}
         portfolioNames={portfolioNames}
       />,
     );
-    fireEvent.click(getByText(/2 more/));
-    expect(getAllByTestId('platform-card').map((node) => node.getAttribute('data-variant'))).toEqual(
-      EVERY_CARD.map((card) => card.variant),
-    );
+    fireEvent.click(getByText(new RegExp(`${EVERY_CARD.length - 4} more`)));
+    expect(
+      getAllByTestId('platform-card').map((node) => node.getAttribute('data-variant')),
+    ).toEqual(EVERY_CARD.map((card) => card.variant));
   });
 
   it('offers no action button on a read-only Video card, only "Open in Google Ads"', () => {
@@ -424,6 +431,48 @@ describe('AccountRead — platform-specific cards', () => {
     );
     expect(queryByTestId('account-card-action')).toBeNull();
     expect(getByTestId('platform-card-open-google').textContent).toBe('Open in Google Ads');
+  });
+
+  it('names the new variants by their own action, and hands negatives to the card', () => {
+    const opened: string[] = [];
+    const { getAllByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({
+            id: 'dead_tail:promote',
+            impact_per_day: 90,
+            platform_card: GOOGLE_PROMOTE_TERM,
+          }),
+          candidate({
+            id: 'dead_tail:negatives',
+            impact_per_day: 80,
+            platform_card: GOOGLE_NEGATIVE_TERMS,
+          }),
+          candidate({
+            id: 'dead_tail:window',
+            impact_per_day: 70,
+            platform_card: TIKTOK_ATTRIBUTION_WINDOW,
+          }),
+        ]}
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={(id) => opened.push(id)}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    const [promote, negatives, window] = getAllByTestId('account-card');
+    expect(promote?.querySelector('[data-testid="account-card-action"]')?.textContent).toBe(
+      'Add as exact keyword',
+    );
+    expect(negatives?.querySelector('[data-testid="account-card-action"]')).toBeNull();
+    const add = negatives?.querySelector<HTMLButtonElement>(
+      '[data-testid="platform-card-add-negatives"]',
+    );
+    expect(add?.textContent).toBe('Add 3 negatives');
+    if (add) fireEvent.click(add);
+    expect(opened).toHaveLength(1);
+    expect(window?.querySelector('[data-testid="account-card-action"]')).toBeNull();
+    expect(window?.textContent).toContain('Attribution');
   });
 
   it('chips both sides of a move between platforms, giver first', () => {
@@ -463,9 +512,9 @@ describe('AccountRead — platform-specific cards', () => {
     const cards = getAllByTestId('account-card');
     expect(cards.map((card) => card.getAttribute('data-variant'))).toEqual(['generic', 'generic']);
     for (const card of cards) {
-      expect(card.querySelector('[data-testid="platform-chip"]')?.getAttribute('data-platform')).toBe(
-        'meta',
-      );
+      expect(
+        card.querySelector('[data-testid="platform-chip"]')?.getAttribute('data-platform'),
+      ).toBe('meta');
     }
   });
 });

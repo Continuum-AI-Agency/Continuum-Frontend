@@ -1,21 +1,34 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { CrossPlatformMoveCardSchema, PlatformCardSchema } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import {
   CROSS_PLATFORM_MOVE,
   EVERY_CARD,
+  GOOGLE_BID_TARGET,
   GOOGLE_BUDGET_LIMITED,
+  GOOGLE_LOW_QUALITY_KEYWORD,
+  GOOGLE_NEGATIVE_TERMS,
   GOOGLE_PMAX,
+  GOOGLE_PROMOTE_TERM,
   GOOGLE_VIDEO,
+  TIKTOK_ATTRIBUTION_WINDOW,
+  TIKTOK_BUDGET_BELOW_LEARNING,
   TIKTOK_FATIGUE,
+  TIKTOK_HOOK_RETENTION,
   TIKTOK_SCHEDULED,
+  TIKTOK_SPARK_CANDIDATE,
 } from './__fixtures__/platformCards';
 import { PlatformCardBody } from './PlatformCardBody';
 import {
+  bidCooldownNote,
   isReadOnly,
   legChangeLabel,
+  markedPlatformOf,
   movedPerDay,
+  PLATFORM_CARD_TYPE,
+  platformCardActionLabel,
   platformCardOf,
+  platformCardTitle,
   platformsOf,
   scheduledLabel,
 } from './platformCardModel';
@@ -75,7 +88,7 @@ describe('YouTube read-only', () => {
       'Google does not let the API pause or change budgets on Video campaigns',
     );
     expect(isReadOnly(GOOGLE_VIDEO)).toBe(true);
-    expect(EVERY_CARD.filter(isReadOnly)).toEqual([GOOGLE_VIDEO]);
+    expect(EVERY_CARD.filter(isReadOnly)).toEqual([GOOGLE_VIDEO, TIKTOK_ATTRIBUTION_WINDOW]);
   });
 });
 
@@ -159,5 +172,207 @@ describe('platformCardOf', () => {
     for (const card of EVERY_CARD) {
       expect(platformCardOf(candidate(card))?.variant).toBe(card.variant);
     }
+  });
+});
+
+describe('Google negative terms', () => {
+  it('lists each term with spend, clicks and conversions, and what the negatives stop', () => {
+    const { getByRole, getAllByTestId, getByTestId } = render(
+      <PlatformCardBody card={GOOGLE_NEGATIVE_TERMS} onAddNegatives={() => {}} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      '3 search terms in Search | Leads MX spent 478 MXN in 14 days without a conversion',
+    );
+    const rows = getAllByTestId('platform-card-term').map((row) => row.textContent);
+    expect(rows).toEqual([
+      '"free gym"214 MXN380',
+      '"gym jobs"168 MXN290',
+      '"gym near me cheap"96.00 MXN170',
+    ]);
+    expect(getByTestId('platform-card-negatives').textContent).toBe(
+      'Adding them as exact negatives stops about 34.14 MXN/day.',
+    );
+    expect(getByTestId('platform-card-mark').getAttribute('data-platform')).toBe('google_ads');
+  });
+
+  it('adds every term at once, or the ones chosen in the review step', () => {
+    const added: string[][] = [];
+    const { getByTestId, getAllByTestId, queryByTestId } = render(
+      <PlatformCardBody
+        card={GOOGLE_NEGATIVE_TERMS}
+        onAddNegatives={(terms) => added.push(terms)}
+      />,
+    );
+    expect(getByTestId('platform-card-add-negatives').textContent).toBe('Add 3 negatives');
+    fireEvent.click(getByTestId('platform-card-add-negatives'));
+    expect(added).toEqual([['free gym', 'gym jobs', 'gym near me cheap']]);
+
+    fireEvent.click(getByTestId('platform-card-choose-terms'));
+    expect(queryByTestId('platform-card-add-negatives')).toBeNull();
+    fireEvent.click(getAllByTestId('negative-terms-review-checkbox')[1] as HTMLElement);
+    expect(getByTestId('negative-terms-review-confirm').textContent).toBe('Add 2 negatives');
+    fireEvent.click(getByTestId('negative-terms-review-confirm'));
+    expect(added[1]).toEqual(['free gym', 'gym near me cheap']);
+    expect(queryByTestId('negative-terms-review')).toBeNull();
+  });
+
+  it('offers no buttons when the caller has nowhere to approve them', () => {
+    const { queryByTestId } = render(<PlatformCardBody card={GOOGLE_NEGATIVE_TERMS} />);
+    expect(queryByTestId('platform-card-add-negatives')).toBeNull();
+    expect(queryByTestId('platform-card-choose-terms')).toBeNull();
+  });
+});
+
+describe('Google promote term', () => {
+  it('says what the term brought and the keyword it comes in through', () => {
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_PROMOTE_TERM} />);
+    expect(getByRole('heading').textContent).toBe(
+      '"24 hour gym guadalajara" brought 19 conversions at 22.10 MXN in 14 days and is not a keyword yet',
+    );
+    expect(getByTestId('platform-card-promote').textContent).toBe(
+      'It comes in through "gym guadalajara". As an exact keyword in "Locations" it gets its own bid and its own ad.',
+    );
+    expect(platformCardActionLabel(GOOGLE_PROMOTE_TERM)).toBe('Add as exact keyword');
+  });
+});
+
+describe('Google bid target', () => {
+  it('shows the current target, the actual cost and the proposal, with the cooldown in words', () => {
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_BID_TARGET} />);
+    expect(getByRole('heading').textContent).toBe(
+      'Search | Leads MX: target CPA 35.00 MXN, actual 31.40 MXN over 14 days',
+    );
+    expect(getByTestId('platform-card-bid').textContent).toBe(
+      'Current target35.00 MXNActual, 14 days31.40 MXNProposed32.00 MXN',
+    );
+    expect(getByTestId('platform-card-cooldown').textContent).toBe(
+      'The target last changed 3 days ago. Google is still relearning, so wait 4 more days before changing it again.',
+    );
+    expect(platformCardActionLabel(GOOGLE_BID_TARGET)).toBe('Lower the target CPA to 32.00 MXN');
+  });
+
+  it('reads a target ROAS as a percentage and says when the cooldown is over', () => {
+    const roas = PlatformCardSchema.parse({
+      ...GOOGLE_BID_TARGET,
+      strategy: 'target_roas',
+      current_target: 3,
+      actual: 3.6,
+      proposed_target: 3.4,
+      days_since_last_change: 12,
+    });
+    expect(platformCardTitle(roas)).toBe(
+      'Search | Leads MX: target ROAS 300%, actual 360% over 14 days',
+    );
+    expect(platformCardActionLabel(roas)).toBe('Raise the target ROAS to 340%');
+    expect(bidCooldownNote(12)).toBe(
+      "The target last changed 12 days ago, past Google's 7-day relearning period.",
+    );
+    expect(bidCooldownNote(null)).toStartWith('No recent bid change on record.');
+  });
+});
+
+describe('Google low-quality keyword', () => {
+  it('shows the Quality Score as n/10 and what the keyword spent', () => {
+    const { getByRole, getByTestId } = render(
+      <PlatformCardBody card={GOOGLE_LOW_QUALITY_KEYWORD} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      '"fitness classes" has Quality Score 3/10 and spent 412 MXN in 14 days with 0 conversions',
+    );
+    expect(getByTestId('platform-card-quality').textContent).toContain(
+      'Phrase match in ad group "Generic" · Quality Score 3/10.',
+    );
+    expect(platformCardActionLabel(GOOGLE_LOW_QUALITY_KEYWORD)).toBe('Pause keyword');
+  });
+});
+
+describe('TikTok hook retention', () => {
+  it('compares the 2-second hold against the portfolio', () => {
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={TIKTOK_HOOK_RETENTION} />);
+    expect(getByRole('heading').textContent).toBe(
+      '"Studio tour" holds 18% of viewers past 2 seconds, against 34% across the portfolio',
+    );
+    expect(getByTestId('platform-card-hook').textContent).toContain(
+      '2-second hold 18% against 34% for the portfolio, over 42,100 impressions in 6 days',
+    );
+    expect(getByTestId('platform-card-mark').getAttribute('data-platform')).toBe('tiktok_ads');
+    expect(platformCardActionLabel(TIKTOK_HOOK_RETENTION)).toBe('Request a new opening');
+  });
+});
+
+describe('TikTok Spark candidate', () => {
+  it("shows the post's views and engagement and asks for the creator's code", () => {
+    const { getByRole, getByTestId, container } = render(
+      <PlatformCardBody card={TIKTOK_SPARK_CANDIDATE} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'An organic post has 48,000 views and 3.4% engagement, and is not promoted',
+    );
+    expect(getByTestId('platform-card-spark').textContent).toBe(
+      '"Morning class in 30 seconds" · 48,000 views · 3.4% engagement · better than 92% of the account\'s posts · would run in "Leads MX · Spark"',
+    );
+    expect(container.textContent).toContain("creator's authorization code");
+    expect(platformCardActionLabel(TIKTOK_SPARK_CANDIDATE)).toBe('Request the Spark code');
+  });
+});
+
+describe('TikTok budget below learning', () => {
+  it('states the documented multiple and the budget it implies', () => {
+    const { getByRole, getByTestId } = render(
+      <PlatformCardBody card={TIKTOK_BUDGET_BELOW_LEARNING} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'Leads MX · Broad: budget 300 MXN/day, under the 900 MXN/day learning needs',
+    );
+    expect(getByTestId('platform-card-learning').textContent).toBe(
+      'TikTok documents a daily budget of 20× the cost per result for this goal; at 45.00 MXN per result that is 900 MXN/day. 4 results so far.',
+    );
+    expect(platformCardActionLabel(TIKTOK_BUDGET_BELOW_LEARNING)).toBe(
+      'Raise the budget to 900 MXN/day',
+    );
+  });
+});
+
+describe('TikTok attribution window', () => {
+  it('says why the platforms are not compared and offers nothing to apply', () => {
+    const { getByRole, getByTestId } = render(
+      <PlatformCardBody card={TIKTOK_ATTRIBUTION_WINDOW} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'Leads MX · Spark counts 28-day click / 1-day view, Meta counts 7-day click / 1-day view',
+    );
+    expect(getByTestId('platform-card-attribution').textContent).toContain(
+      'so we do not compare these platforms until the windows match',
+    );
+    expect(platformCardActionLabel(TIKTOK_ATTRIBUTION_WINDOW)).toBeNull();
+    expect(isReadOnly(TIKTOK_ATTRIBUTION_WINDOW)).toBe(true);
+  });
+});
+
+describe('every variant', () => {
+  it('has a platform, a type label, and no chart', () => {
+    for (const card of EVERY_CARD) {
+      expect(platformsOf(card).length).toBeGreaterThan(0);
+      expect(PLATFORM_CARD_TYPE[card.variant]).toBeTruthy();
+      const { container, unmount } = render(<PlatformCardBody card={card} />);
+      expect(container.querySelector('svg.recharts-surface, canvas')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('marks only the new variants with the platform mark', () => {
+    const marked = EVERY_CARD.filter((card) => markedPlatformOf(card) !== null).map(
+      (card) => card.variant,
+    );
+    expect(marked).toEqual([
+      'google_negative_terms',
+      'google_promote_term',
+      'google_bid_target',
+      'google_low_quality_keyword',
+      'tiktok_hook_retention',
+      'tiktok_spark_candidate',
+      'tiktok_budget_below_learning',
+      'tiktok_attribution_window',
+    ]);
   });
 });

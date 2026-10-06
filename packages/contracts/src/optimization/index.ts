@@ -56,3 +56,5 @@ export * from './portfolio-metrics';
 export * from './attribution-sheet';
 export * from './account-platform-metrics';
 export * from './platform-card';
+// Platform-only signals the Google and TikTok rules read (search terms, keywords, bids, assets, creatives).
+export * from './platform-signals';

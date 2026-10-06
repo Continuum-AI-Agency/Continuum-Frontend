@@ -4,23 +4,38 @@
 
 import type { PlatformCard } from '@continuum/contracts';
 import { ExternalLinkIcon } from 'lucide-react';
-import { buttonVariants } from '@/components/ui/button';
+import { useState } from 'react';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
-import { PlatformChip } from '../platforms/PlatformChip';
+import { PlatformChip, PlatformIcon } from '../platforms/PlatformChip';
+import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
+import { NegativeTermsReview } from '../searchActions/NegativeTermsReview';
 import {
+  ATTRIBUTION_WINDOW_NOTE,
+  bidCooldownNote,
+  bidTargetLabel,
   CROSS_PLATFORM_APPROVAL_NOTE,
+  countLabel,
   givingLegs,
   googleAdsCampaignHref,
   legChangeLabel,
+  markedPlatformOf,
+  negativesLabel,
   PMAX_NOTE,
   percentLabel,
   platformCardTitle,
+  SPARK_NOTE,
   scheduledLabel,
   takingLegs,
   VIDEO_READONLY_NOTE,
 } from './platformCardModel';
+
+type NegativeTermsCard = Extract<PlatformCard, { variant: 'google_negative_terms' }>;
+
+/** Approving negatives hands the caller the terms a person kept; absent, the card only reads. */
+export type AddNegatives = (terms: string[]) => void;
 
 const AD_STRENGTH_LABEL = {
   POOR: 'Poor',
@@ -39,7 +54,88 @@ function Evidence({ children, testId }: { children: React.ReactNode; testId: str
   );
 }
 
-function VariantEvidence({ card }: { card: PlatformCard }) {
+function NegativeTermsEvidence({
+  card,
+  onAddNegatives,
+}: {
+  card: NegativeTermsCard;
+  onAddNegatives?: AddNegatives;
+}) {
+  const [reviewing, setReviewing] = useState(false);
+  const every = card.terms.map((row) => row.term);
+  return (
+    <div className="space-y-2">
+      <table className="w-full text-sm" data-testid="platform-card-terms">
+        <thead>
+          <tr className="text-left text-muted-foreground text-xs">
+            <th className="font-normal">Search term</th>
+            <th className="text-right font-normal">Spend</th>
+            <th className="text-right font-normal">Clicks</th>
+            <th className="text-right font-normal">Conversions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {card.terms.map((row) => (
+            <tr data-testid="platform-card-term" key={row.term}>
+              <td className="text-foreground">"{row.term}"</td>
+              <td className="text-right tabular-nums">
+                {formatCurrency(row.spend, card.currency)}
+              </td>
+              <td className="text-right tabular-nums">{countLabel(row.clicks)}</td>
+              <td className="text-right tabular-nums">{countLabel(row.conversions)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Evidence testId="platform-card-negatives">
+        Adding them as {card.match_type === 'EXACT' ? 'exact' : 'phrase'} negatives stops about{' '}
+        {formatCurrency(card.savings_per_day, card.currency)}/day.
+      </Evidence>
+      {onAddNegatives && reviewing ? (
+        <NegativeTermsReview
+          currency={card.currency}
+          onCancel={() => setReviewing(false)}
+          onConfirm={(terms) => {
+            setReviewing(false);
+            onAddNegatives(terms);
+          }}
+          terms={card.terms}
+          windowDays={card.window_days}
+        />
+      ) : null}
+      {onAddNegatives && !reviewing ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            data-testid="platform-card-add-negatives"
+            onClick={() => onAddNegatives(every)}
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
+            {negativesLabel(every.length)}
+          </Button>
+          <Button
+            data-testid="platform-card-choose-terms"
+            onClick={() => setReviewing(true)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Choose terms
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function VariantEvidence({
+  card,
+  onAddNegatives,
+}: {
+  card: PlatformCard;
+  onAddNegatives?: AddNegatives;
+}) {
   switch (card.variant) {
     case 'google_budget_limited':
       return (
@@ -142,16 +238,124 @@ function VariantEvidence({ card }: { card: PlatformCard }) {
           </p>
         </div>
       );
+    case 'google_negative_terms':
+      return <NegativeTermsEvidence card={card} onAddNegatives={onAddNegatives} />;
+    case 'google_promote_term':
+      return (
+        <Evidence testId="platform-card-promote">
+          {card.matched_keyword
+            ? `It comes in through "${card.matched_keyword}". `
+            : 'It comes in through a broader keyword. '}
+          As an exact keyword in "{card.ad_group_name}" it gets its own bid and its own ad.
+        </Evidence>
+      );
+    case 'google_bid_target': {
+      const label = (value: number) => bidTargetLabel(value, card.strategy, card.currency);
+      return (
+        <div className="space-y-1">
+          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-testid="platform-card-bid">
+            <div className="flex gap-1">
+              <dt className="text-muted-foreground">Current target</dt>
+              <dd className="font-medium tabular-nums">{label(card.current_target)}</dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-muted-foreground">Actual, {card.window_days} days</dt>
+              <dd className="font-medium tabular-nums">
+                {card.actual != null ? label(card.actual) : 'not enough data'}
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-muted-foreground">Proposed</dt>
+              <dd className="font-medium tabular-nums">{label(card.proposed_target)}</dd>
+            </div>
+          </dl>
+          <p className="text-muted-foreground text-xs" data-testid="platform-card-cooldown">
+            {bidCooldownNote(card.days_since_last_change)}
+          </p>
+        </div>
+      );
+    }
+    case 'google_low_quality_keyword':
+      return (
+        <Evidence testId="platform-card-quality">
+          {card.match_type.charAt(0) + card.match_type.slice(1).toLowerCase()} match in ad group "
+          {card.ad_group_name}" · Quality Score {card.quality_score}/10. A keyword this low pays
+          more per click and shows less often.
+        </Evidence>
+      );
+    case 'tiktok_hook_retention':
+      return (
+        <Evidence testId="platform-card-hook">
+          2-second hold {percentLabel(card.hold_2s)} against {percentLabel(card.portfolio_hold_2s)}{' '}
+          for the portfolio, over {countLabel(card.impressions)} impressions in {card.days_live}{' '}
+          {card.days_live === 1 ? 'day' : 'days'} in "{card.ad_group_name}". The opening loses
+          people before the message lands.
+        </Evidence>
+      );
+    case 'tiktok_spark_candidate':
+      return (
+        <div className="space-y-1">
+          <Evidence testId="platform-card-spark">
+            "{card.post_caption}" · {countLabel(card.views)} views ·{' '}
+            {percentLabel(card.engagement_rate)} engagement
+            {card.account_percentile != null
+              ? ` · better than ${Math.round(card.account_percentile)}% of the account's posts`
+              : ''}
+            {card.target_ad_group_name ? ` · would run in "${card.target_ad_group_name}"` : ''}
+          </Evidence>
+          <p className="text-muted-foreground text-xs">{SPARK_NOTE}</p>
+        </div>
+      );
+    case 'tiktok_budget_below_learning':
+      return (
+        <Evidence testId="platform-card-learning">
+          TikTok documents a daily budget of {card.required_multiple}× the cost per result for this
+          goal
+          {card.cost_per_result != null
+            ? `; at ${formatCurrency(card.cost_per_result, card.currency)} per result that is ${formatCurrency(card.required_budget_per_day, card.currency)}/day`
+            : `: ${formatCurrency(card.required_budget_per_day, card.currency)}/day`}
+          . {countLabel(card.results_so_far)} {card.results_so_far === 1 ? 'result' : 'results'} so
+          far.
+        </Evidence>
+      );
+    case 'tiktok_attribution_window':
+      return (
+        <div className="space-y-1">
+          <Evidence testId="platform-card-attribution">{ATTRIBUTION_WINDOW_NOTE}</Evidence>
+          <p className="text-muted-foreground text-xs">
+            Match the windows in TikTok Ads Manager or in{' '}
+            {PLATFORM_NAMES[card.compared_to.platform]} and the comparison comes back.
+          </p>
+        </div>
+      );
   }
 }
 
-export function PlatformCardBody({ card }: { card: PlatformCard }) {
+export function PlatformCardBody({
+  card,
+  onAddNegatives,
+}: {
+  card: PlatformCard;
+  onAddNegatives?: AddNegatives;
+}) {
+  const mark = markedPlatformOf(card);
   return (
     <div className="space-y-2" data-testid="platform-card" data-variant={card.variant}>
-      <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>
-        {platformCardTitle(card)}
+      <h3
+        className={cn(
+          typeScale.bodyLg,
+          'font-semibold text-foreground',
+          mark && 'flex items-start gap-1.5',
+        )}
+      >
+        {mark ? (
+          <span className="mt-1" data-platform={mark} data-testid="platform-card-mark">
+            <PlatformIcon platform={mark} />
+          </span>
+        ) : null}
+        {mark ? <span>{platformCardTitle(card)}</span> : platformCardTitle(card)}
       </h3>
-      <VariantEvidence card={card} />
+      <VariantEvidence card={card} onAddNegatives={onAddNegatives} />
     </div>
   );
 }

@@ -159,6 +159,122 @@ export const CrossPlatformMoveCardSchema = z
     }
   });
 
+/** Search terms that spend without a result (G05, escenario 08's neighbour): the card lists the
+ *  terms, what they cost, and the list they would join. Never terms that are also keywords. */
+export const GoogleNegativeTermsCardSchema = z.object({
+  variant: z.literal('google_negative_terms'),
+  campaign_name: z.string().min(1),
+  currency: CurrencyCodeSchema.nullable(),
+  window_days: z.number().int().positive(),
+  terms: z
+    .array(
+      z.object({
+        term: z.string().min(1),
+        spend: money,
+        clicks: z.number().int().nonnegative(),
+        conversions: z.number().nonnegative(),
+      }),
+    )
+    .min(1),
+  /** Spend per day the negatives would stop, from the producer. */
+  savings_per_day: money,
+  match_type: z.enum(['EXACT', 'PHRASE']),
+});
+
+/** A search term that converts but is not a keyword yet: promote it to an exact keyword. */
+export const GooglePromoteTermCardSchema = z.object({
+  variant: z.literal('google_promote_term'),
+  campaign_name: z.string().min(1),
+  ad_group_name: z.string().min(1),
+  term: z.string().min(1),
+  currency: CurrencyCodeSchema.nullable(),
+  window_days: z.number().int().positive(),
+  conversions: z.number().positive(),
+  cost_per_result: z.number().positive().nullable(),
+  /** The keyword it currently matches through, when Google reports it. */
+  matched_keyword: z.string().min(1).nullable(),
+});
+
+/** Target CPA adjustment (G07): the target, the real cost over the window, the proposal, and
+ *  the cooldown since the last bid change (Smart Bidding relearns). */
+export const GoogleBidTargetCardSchema = z.object({
+  variant: z.literal('google_bid_target'),
+  campaign_name: z.string().min(1),
+  currency: CurrencyCodeSchema.nullable(),
+  strategy: z.enum(['target_cpa', 'target_roas']),
+  current_target: z.number().positive(),
+  actual: z.number().positive().nullable(),
+  proposed_target: z.number().positive(),
+  window_days: z.number().int().positive(),
+  days_since_last_change: z.number().int().nonnegative().nullable(),
+});
+
+/** A keyword with a very low Quality Score that spends without results (G11). */
+export const GoogleLowQualityKeywordCardSchema = z.object({
+  variant: z.literal('google_low_quality_keyword'),
+  campaign_name: z.string().min(1),
+  ad_group_name: z.string().min(1),
+  keyword: z.string().min(1),
+  match_type: z.enum(['EXACT', 'PHRASE', 'BROAD']),
+  quality_score: z.number().int().min(1).max(10),
+  currency: CurrencyCodeSchema.nullable(),
+  spend: money,
+  conversions: z.number().nonnegative(),
+  window_days: z.number().int().positive(),
+});
+
+/** TikTok weak hook (T1): the share of viewers who stay past 2 seconds, against the portfolio. */
+export const TikTokHookRetentionCardSchema = z.object({
+  variant: z.literal('tiktok_hook_retention'),
+  ad_group_name: z.string().min(1),
+  creative_name: z.string().min(1),
+  /** video_watched_2s / impressions, 0..1. */
+  hold_2s: share,
+  portfolio_hold_2s: share,
+  impressions: z.number().int().positive(),
+  days_live: z.number().int().nonnegative(),
+});
+
+/** TikTok organic post worth a Spark Ad (T5): views and CTR of the organic post, and when the
+ *  creator's authorization would have to be requested. */
+export const TikTokSparkCandidateCardSchema = z.object({
+  variant: z.literal('tiktok_spark_candidate'),
+  post_caption: z.string().min(1),
+  post_id: z.string().min(1),
+  views: z.number().int().nonnegative(),
+  /** Profile CTR or engagement rate as a fraction, from the organic read. */
+  engagement_rate: share,
+  account_percentile: z.number().min(0).max(100).nullable(),
+  target_ad_group_name: z.string().min(1).nullable(),
+});
+
+/** TikTok budget under what the learning phase needs (T7): the multiple TikTok documents. */
+export const TikTokBudgetBelowLearningCardSchema = z.object({
+  variant: z.literal('tiktok_budget_below_learning'),
+  ad_group_name: z.string().min(1),
+  currency: CurrencyCodeSchema.nullable(),
+  budget_per_day: money,
+  cost_per_result: z.number().positive().nullable(),
+  /** The multiple of CPA TikTok documents for this optimization goal (10, 20 or 50). */
+  required_multiple: z.number().positive(),
+  required_budget_per_day: money,
+  results_so_far: z.number().nonnegative(),
+});
+
+/** A TikTok ad group whose attribution window differs from Meta's 7-day click / 1-day view
+ *  (T12, escenario 27): platforms are not compared until the windows match. */
+export const TikTokAttributionWindowCardSchema = z.object({
+  variant: z.literal('tiktok_attribution_window'),
+  ad_group_name: z.string().min(1),
+  click_window_days: z.number().int().nonnegative(),
+  view_window_days: z.number().int().nonnegative(),
+  compared_to: z.object({
+    platform: PlatformIdSchema,
+    click_window_days: z.number().int(),
+    view_window_days: z.number().int(),
+  }),
+});
+
 export const PlatformCardSchema = z.union([
   GoogleBudgetLimitedCardSchema,
   GooglePmaxAssetGroupCardSchema,
@@ -166,6 +282,14 @@ export const PlatformCardSchema = z.union([
   TikTokCreativeFatigueCardSchema,
   TikTokScheduledDecreaseCardSchema,
   CrossPlatformMoveCardSchema,
+  GoogleNegativeTermsCardSchema,
+  GooglePromoteTermCardSchema,
+  GoogleBidTargetCardSchema,
+  GoogleLowQualityKeywordCardSchema,
+  TikTokHookRetentionCardSchema,
+  TikTokSparkCandidateCardSchema,
+  TikTokBudgetBelowLearningCardSchema,
+  TikTokAttributionWindowCardSchema,
 ]);
 export type PlatformCard = z.infer<typeof PlatformCardSchema>;
 export type PlatformCardVariant = PlatformCard['variant'];

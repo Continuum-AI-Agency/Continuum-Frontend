@@ -78,6 +78,15 @@ export const AddNegativesActionSchema = z.object({
 });
 export type AddNegativesAction = z.infer<typeof AddNegativesActionSchema>;
 
+/** Promote a converting search term to a keyword of its ad group (EXACT by default). */
+export const AddKeywordActionSchema = z.object({
+  kind: z.literal('add_keyword'),
+  /** The ad group the keyword joins. */
+  ref: EntityRefSchema,
+  keyword: NegativeTermSchema,
+});
+export type AddKeywordAction = z.infer<typeof AddKeywordActionSchema>;
+
 const budgetDelta = (leg: SetBudgetAction): number => leg.targetMinor - leg.expectedMinor;
 
 /** Every leg moves money: no zero-delta legs, all decreases before any increase. */
@@ -117,6 +126,7 @@ export const OptimizerActionSchema = z.discriminatedUnion('kind', [
   SetBudgetActionSchema,
   SetBidTargetActionSchema,
   AddNegativesActionSchema,
+  AddKeywordActionSchema,
   BudgetMoveActionSchema,
 ]);
 export type OptimizerAction = z.infer<typeof OptimizerActionSchema>;
