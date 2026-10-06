@@ -45,6 +45,10 @@ import { formatPerPeriod } from '../../format';
 import * as typeScale from '../../typeScale';
 import { PlatformCardBody } from '../platformCards/PlatformCardBody';
 import {
+  cardActionAvailability,
+  type PlatformCardAction,
+} from '../platformCards/platformCardActionModel';
+import {
   isReadOnly,
   ownsItsActions,
   PLATFORM_CARD_TYPE,
@@ -84,6 +88,10 @@ export type AccountReadProps = {
   onOpenPortfolio?: (portfolioId: string) => void;
   /** The platform the cards are about; each card names it in a chip. */
   platform?: AdPlatform;
+  /** Candidate id → the engine's executable action for its platform card. A card with one shows
+   *  its own control (the approval flow) in place of the generic button. Absent, nothing
+   *  changes. */
+  cardActions?: ReadonlyMap<string, PlatformCardAction>;
 };
 
 function StateNote({ candidate }: { candidate: AccountCandidate }) {
@@ -136,6 +144,7 @@ function RecommendationCard({
   portfolioNames,
   onOpenPortfolio,
   platform,
+  cardAction,
 }: {
   candidate: AccountCandidate;
   currency: string | null;
@@ -145,6 +154,7 @@ function RecommendationCard({
   portfolioNames: ReadonlyMap<string, string>;
   onOpenPortfolio?: (portfolioId: string) => void;
   platform?: AdPlatform;
+  cardAction?: PlatformCardAction;
 }) {
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
   const tier = impactTier(candidate.impact_per_day, dailySpend);
@@ -158,6 +168,8 @@ function RecommendationCard({
       ? titleText(title)
       : meta.label;
   const chips = platformCard ? platformsOf(platformCard) : platform ? [platform] : [];
+  const cardHoldsAction =
+    platformCard != null && cardActionAvailability(platformCard, cardAction) !== 'none';
   const names = portfolioNamesOf(candidate, portfolioNames);
   const target = candidate.cta.kind === 'portfolio' ? candidate.cta.target_id : null;
   const figureKey = `card.${candidate.detector}`;
@@ -193,6 +205,7 @@ function RecommendationCard({
       </div>
       {platformCard ? (
         <PlatformCardBody
+          action={cardAction}
           card={platformCard}
           onAddNegatives={target && onOpenPortfolio ? () => onOpenPortfolio(target) : undefined}
         />
@@ -219,6 +232,7 @@ function RecommendationCard({
         ) : null}
         {target &&
         onOpenPortfolio &&
+        !cardHoldsAction &&
         !(platformCard && (isReadOnly(platformCard) || ownsItsActions(platformCard))) ? (
           <Button
             data-testid="account-card-action"
@@ -250,6 +264,7 @@ export function AccountRead({
   portfolioNames,
   onOpenPortfolio,
   platform,
+  cardActions,
 }: AccountReadProps) {
   const [showRest, setShowRest] = useState(false);
   const guards = accountGuards(candidates);
@@ -289,6 +304,7 @@ export function AccountRead({
           {visible.map((candidate, index) => (
             <RecommendationCard
               candidate={candidate}
+              cardAction={cardActions?.get(candidate.id)}
               currency={currency}
               dailySpend={dailySpend}
               doubted={doubted.has(candidate.detector)}

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
 import type { AccountPlatformMetricsState } from './platforms/useAccountPlatformMetrics';
 import type { GoogleAdsOverviewState } from './platforms/useGoogleAdsOverview';
+import type { TikTokAdsOverviewState } from './platforms/useTikTokAdsOverview';
 
 // The apply-mode pill needs a tooltip provider ancestor and is not what these tests are
 // about. `mock.module` replaces it for the whole PROCESS, so this file runs on its own.
@@ -60,6 +62,35 @@ mock.module('./platforms/useAccountPlatformMetrics', () => ({
   useAccountPlatformMetrics: () => metricsState,
 }));
 const { EASY_FIT_MP1, META_ONLY } = await import('./platforms/__fixtures__/accountPlatformMetrics');
+
+// Each portfolio's member platforms, read as the detail's By platform reads them. The RPC is
+// not deployed yet, so every portfolio starts 'unavailable' and keeps the managed platform.
+let memberStates = new Map<string, PortfolioMetricsState>();
+const realPortfolioPlatforms = await import('./platforms/portfolioPlatforms');
+mock.module('./platforms/portfolioPlatforms', () => ({
+  ...realPortfolioPlatforms,
+  usePortfolioMemberStates: (ids: readonly string[]) =>
+    new Map(ids.map((id) => [id, memberStates.get(id) ?? { status: 'unavailable' }])),
+}));
+const { portfolioMetricsFixture } = await import(
+  './attribution/__fixtures__/portfolioMetricsFixture'
+);
+
+// The TikTok tab's own snapshots read, for the advertiser the producer names.
+let tiktokState: TikTokAdsOverviewState = { status: 'loading' };
+const tiktokAsked: (string | null)[] = [];
+const realTikTokOverview = await import('./platforms/useTikTokAdsOverview');
+mock.module('./platforms/useTikTokAdsOverview', () => ({
+  ...realTikTokOverview,
+  useTikTokAdsOverview: (_brandId: string, advertiserId: string | null) => {
+    tiktokAsked.push(advertiserId);
+    return advertiserId ? tiktokState : { status: 'not-connected' };
+  },
+}));
+const { TIKTOK_DOC_SHAPED_ENVELOPE } = await import('./platforms/__fixtures__/tiktokSnapshots');
+const { buildTikTokOverview, TikTokSnapshotsEnvelopeSchema } = await import(
+  './platforms/tiktokAdsOverviewModel'
+);
 
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
@@ -228,6 +259,10 @@ afterEach(() => {
   ];
   googleState = { status: 'no-connection' };
   metricsState = { status: 'unavailable' };
+  memberStates = new Map();
+  tiktokState = { status: 'loading' };
+  tiktokAsked.length = 0;
+  window.localStorage.clear();
   accountReadData = null;
   approvalMaps = { families: {}, insights: {} };
   efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
@@ -922,5 +957,102 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     const unavailable = mount();
     expect(unavailable.getByTestId('multiplatform-unavailable')).toBeTruthy();
     expect(unavailable.getByTestId('tiktok-empty')).toBeTruthy();
+  });
+});
+
+describe('OptimizerOverview — the TikTok tab reads its snapshots (feature 06)', () => {
+  it("reads the producer's TikTok advertiser and shows its spend, results, cost and top ad groups", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=tiktok_ads');
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    tiktokState = {
+      status: 'ready',
+      overview: buildTikTokOverview(
+        TikTokSnapshotsEnvelopeSchema.parse(TIKTOK_DOC_SHAPED_ENVELOPE),
+      ),
+    };
+    const { getByTestId, getAllByTestId, queryByTestId } = mount();
+    expect(tiktokAsked).toContain('7000000000000000001');
+    expect(getByTestId('tiktok-read').getAttribute('data-source')).toBe('tiktok-snapshots');
+    expect(getByTestId('tiktok-tile-spend').textContent).toContain('8,542 MXN');
+    expect(getByTestId('tiktok-tile-results').textContent).toContain('101');
+    expect(getByTestId('tiktok-tile-cost').textContent).toContain('64.83 MXN');
+    expect(getAllByTestId('tiktok-adgroup-row')).toHaveLength(3);
+    expect(queryByTestId('tiktok-empty')).toBeNull();
+  });
+
+  it('keeps the not-connected state, and asks for no advertiser, when the producer has none', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=tiktok_ads');
+    metricsState = { status: 'ready', metrics: META_ONLY };
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('tiktok-empty')).toBeTruthy();
+    expect(queryByTestId('tiktok-read')).toBeNull();
+    expect(tiktokAsked.every((id) => id === null)).toBe(true);
+  });
+});
+
+describe('OptimizerOverview — the platforms side by side (feature 23)', () => {
+  it('shows the comparison row under the All tiles, from the producer', () => {
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const { getByTestId } = mount();
+    const row = getByTestId('platform-comparison');
+    expect(follows(getByTestId('account-tiles'), row)).toBe(true);
+    expect(follows(row, getByTestId('portfolio-rows'))).toBe(true);
+    expect(getByTestId('comparison-sentence').textContent).toStartWith(
+      'Google buys leads cheapest',
+    );
+  });
+
+  it('is not on the Meta tab, nor on All before the producer is deployed', () => {
+    const fallback = mount();
+    expect(fallback.queryByTestId('platform-comparison')).toBeNull();
+    fallback.unmount();
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const meta = mount();
+    expect(meta.queryByTestId('platform-comparison')).toBeNull();
+  });
+
+  it('stays hidden once the viewer hides it', () => {
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    const first = mount();
+    fireEvent.click(first.getByTestId('comparison-toggle'));
+    first.unmount();
+    const second = mount();
+    expect(second.queryByTestId('platform-comparison')).toBeNull();
+    expect(second.getByTestId('platform-comparison-hidden')).toBeTruthy();
+  });
+});
+
+describe('OptimizerOverview — each row names its member platforms (feature 07)', () => {
+  const rowChips = (row: Element) =>
+    [...row.querySelectorAll('[data-testid="platform-chip"]')].map((chip) =>
+      chip.getAttribute('data-platform'),
+    );
+
+  it('gives each portfolio one chip per platform it holds members on, Meta, Google, TikTok', () => {
+    memberStates = new Map<string, PortfolioMetricsState>([
+      ['formularios', { status: 'ready', metrics: portfolioMetricsFixture() }],
+      [
+        'prueba',
+        {
+          status: 'ready',
+          metrics: portfolioMetricsFixture({ platforms: ['tiktok_ads', 'google_ads'] }),
+        },
+      ],
+      ['tours', { status: 'loading' }],
+    ]);
+    const { getAllByTestId } = mount();
+    const byId = new Map(
+      getAllByTestId('portfolio-row').map((row) => [row.getAttribute('data-portfolio-id'), row]),
+    );
+    expect(rowChips(byId.get('formularios') as Element)).toEqual([
+      'meta',
+      'google_ads',
+      'tiktok_ads',
+    ]);
+    expect(rowChips(byId.get('prueba') as Element)).toEqual(['google_ads', 'tiktok_ads']);
+    // Not deployed yet: the managed platform. Still reading: no guess.
+    expect(rowChips(byId.get('mensajes') as Element)).toEqual(['meta']);
+    expect(rowChips(byId.get('tours') as Element)).toEqual([]);
   });
 });

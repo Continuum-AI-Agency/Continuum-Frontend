@@ -1,0 +1,2079 @@
+{
+  "scope": "tiktok_snapshots",
+  "platform": "tiktok_ads",
+  "accountId": "7000000000000000001",
+  "accountName": "Doc-shaped advertiser (invented)",
+  "currency": "MXN",
+  "timezone": "America/Mexico_City",
+  "range": {
+    "since": "2026-09-05",
+    "until": "2026-10-05",
+    "days": 31
+  },
+  "windows": {
+    "d3": {
+      "since": "2026-10-02",
+      "until": "2026-10-04"
+    },
+    "d7": {
+      "since": "2026-09-28",
+      "until": "2026-10-04"
+    },
+    "d14": {
+      "since": "2026-09-21",
+      "until": "2026-10-04"
+    }
+  },
+  "fetched_at": "2026-10-06T02:46:52.727Z",
+  "api_version": "v1.3",
+  "requests": 6,
+  "entities": [
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "campaign",
+        "native_level": "campaign",
+        "id": "7000000000000000101",
+        "accountId": "7000000000000000001",
+        "name": "EF | Leads | Manual",
+        "campaignId": "7000000000000000101",
+        "automation": "manual",
+        "budget": {
+          "kind": "daily",
+          "minor": 170000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "campaign",
+            "nativeLevel": "campaign",
+            "id": "7000000000000000101",
+            "accountId": "7000000000000000001",
+            "name": "EF | Leads | Manual"
+          }
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "CAMPAIGN_STATUS_ENABLE"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 1103.9,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 540,
+            "impressions": 46030,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 17,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 17
+          },
+          "d7": {
+            "spend": 1892.46,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 936,
+            "impressions": 80090,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 25,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 25
+          },
+          "d14": {
+            "spend": 3234.5,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 1652,
+            "impressions": 139810,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 46,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 46
+          }
+        }
+      },
+      "channelType": "LEAD_GENERATION",
+      "campaignOnly": false,
+      "readonly": false,
+      "startDate": "2026-08-20",
+      "parentId": null,
+      "budgetOwner": "ad_group",
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 191.72,
+          "impressions": 8530,
+          "clicks": 101,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 191.72,
+          "impressions": 8530,
+          "clicks": 101,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 191.72,
+          "impressions": 8530,
+          "clicks": 101,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 191.72,
+          "impressions": 8530,
+          "clicks": 101,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 191.72,
+          "impressions": 8530,
+          "clicks": 101,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 191.72,
+          "impressions": 8530,
+          "clicks": 101,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 191.72,
+          "impressions": 8540,
+          "clicks": 110,
+          "conversions": 9,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 9,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 197.14,
+          "impressions": 8515,
+          "clicks": 99,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 197.14,
+          "impressions": 8515,
+          "clicks": 99,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 197.14,
+          "impressions": 8515,
+          "clicks": 99,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 197.14,
+          "impressions": 8515,
+          "clicks": 99,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 367.94,
+          "impressions": 15341,
+          "clicks": 176,
+          "conversions": 3,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 3,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 367.94,
+          "impressions": 15341,
+          "clicks": 176,
+          "conversions": 3,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 3,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 368.02,
+          "impressions": 15348,
+          "clicks": 188,
+          "conversions": 11,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 11,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-05",
+          "spend": 1408.55,
+          "impressions": 0,
+          "clicks": 0,
+          "conversions": 0,
+          "conversionsByAction": {}
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "group",
+        "native_level": "ad_group",
+        "id": "7000000000000000201",
+        "accountId": "7000000000000000001",
+        "name": "EF | Leads | Broad MX",
+        "campaignId": "7000000000000000101",
+        "automation": "manual",
+        "budget": {
+          "kind": "daily",
+          "minor": 40000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "group",
+            "nativeLevel": "ad_group",
+            "id": "7000000000000000201",
+            "accountId": "7000000000000000001",
+            "name": "EF | Leads | Broad MX"
+          }
+        },
+        "bidding": {
+          "strategyType": "BID_TYPE_NO_BID"
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "ADGROUP_STATUS_DELIVERY_OK"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 295.75,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 158,
+            "impressions": 12600,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 7,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 7
+          },
+          "d7": {
+            "spend": 690.03,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 362,
+            "impressions": 29400,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 11,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 11
+          },
+          "d14": {
+            "spend": 1361.05,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 731,
+            "impressions": 58210,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 21,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 21
+          }
+        }
+      },
+      "channelType": "LEAD_GENERATION",
+      "campaignOnly": false,
+      "readonly": false,
+      "startDate": "2026-08-20",
+      "parentId": "7000000000000000101",
+      "budgetOwner": "ad_group",
+      "attribution": {
+        "click": "SEVEN_DAYS",
+        "view": "ONE_DAY"
+      },
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 95.86,
+          "impressions": 4115,
+          "clicks": 52,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 95.86,
+          "impressions": 4115,
+          "clicks": 52,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 95.86,
+          "impressions": 4115,
+          "clicks": 52,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 95.86,
+          "impressions": 4115,
+          "clicks": 52,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 95.86,
+          "impressions": 4115,
+          "clicks": 52,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 95.86,
+          "impressions": 4115,
+          "clicks": 52,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 95.86,
+          "impressions": 4120,
+          "clicks": 57,
+          "conversions": 4,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 4,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 98.57,
+          "impressions": 4200,
+          "clicks": 51,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 98.57,
+          "impressions": 4200,
+          "clicks": 51,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 98.57,
+          "impressions": 4200,
+          "clicks": 51,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 98.57,
+          "impressions": 4200,
+          "clicks": 51,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 98.57,
+          "impressions": 4200,
+          "clicks": 51,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 98.57,
+          "impressions": 4200,
+          "clicks": 51,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 98.61,
+          "impressions": 4200,
+          "clicks": 56,
+          "conversions": 5,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 5,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-05",
+          "spend": 302.4,
+          "impressions": 0,
+          "clicks": 0,
+          "conversions": 0,
+          "conversionsByAction": {}
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "group",
+        "native_level": "ad_group",
+        "id": "7000000000000000202",
+        "accountId": "7000000000000000001",
+        "name": "EF | Leads | Intereses fitness",
+        "campaignId": "7000000000000000101",
+        "automation": "manual",
+        "budget": {
+          "kind": "daily",
+          "minor": 100000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "group",
+            "nativeLevel": "ad_group",
+            "id": "7000000000000000202",
+            "accountId": "7000000000000000001",
+            "name": "EF | Leads | Intereses fitness"
+          }
+        },
+        "bidding": {
+          "strategyType": "BID_TYPE_NO_BID"
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "ADGROUP_STATUS_DELIVERY_OK"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 295.75,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 149,
+            "impressions": 12950,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 6,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 6
+          },
+          "d7": {
+            "spend": 690.03,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 341,
+            "impressions": 30210,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 10,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 10
+          },
+          "d14": {
+            "spend": 1361.05,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 688,
+            "impressions": 61120,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 21,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 21
+          }
+        }
+      },
+      "channelType": "LEAD_GENERATION",
+      "campaignOnly": false,
+      "readonly": false,
+      "startDate": "2026-08-21",
+      "parentId": "7000000000000000101",
+      "budgetOwner": "ad_group",
+      "attribution": {
+        "click": "SEVEN_DAYS",
+        "view": "ONE_DAY"
+      },
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 95.86,
+          "impressions": 4415,
+          "clicks": 49,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 95.86,
+          "impressions": 4415,
+          "clicks": 49,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 95.86,
+          "impressions": 4415,
+          "clicks": 49,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 95.86,
+          "impressions": 4415,
+          "clicks": 49,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 95.86,
+          "impressions": 4415,
+          "clicks": 49,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 95.86,
+          "impressions": 4415,
+          "clicks": 49,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 95.86,
+          "impressions": 4420,
+          "clicks": 53,
+          "conversions": 5,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 5,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 98.57,
+          "impressions": 4315,
+          "clicks": 48,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 98.57,
+          "impressions": 4315,
+          "clicks": 48,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 98.57,
+          "impressions": 4315,
+          "clicks": 48,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 98.57,
+          "impressions": 4315,
+          "clicks": 48,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 98.57,
+          "impressions": 4315,
+          "clicks": 48,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 98.57,
+          "impressions": 4315,
+          "clicks": 48,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 98.61,
+          "impressions": 4320,
+          "clicks": 53,
+          "conversions": 4,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 4,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-05",
+          "spend": 986,
+          "impressions": 0,
+          "clicks": 0,
+          "conversions": 0,
+          "conversionsByAction": {}
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "group",
+        "native_level": "ad_group",
+        "id": "7000000000000000203",
+        "accountId": "7000000000000000001",
+        "name": "EF | Leads | LAL 2% nuevos",
+        "campaignId": "7000000000000000101",
+        "automation": "manual",
+        "budget": {
+          "kind": "daily",
+          "minor": 30000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "group",
+            "nativeLevel": "ad_group",
+            "id": "7000000000000000203",
+            "accountId": "7000000000000000001",
+            "name": "EF | Leads | LAL 2% nuevos"
+          }
+        },
+        "bidding": {
+          "strategyType": "BID_TYPE_NO_BID"
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "ADGROUP_STATUS_DELIVERY_OK"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 512.4,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 233,
+            "impressions": 20480,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 4,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 4
+          },
+          "d7": {
+            "spend": 512.4,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 233,
+            "impressions": 20480,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 4,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 4
+          },
+          "d14": {
+            "spend": 512.4,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 233,
+            "impressions": 20480,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 4,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 4
+          }
+        }
+      },
+      "channelType": "LEAD_GENERATION",
+      "campaignOnly": false,
+      "readonly": false,
+      "startDate": "2026-09-28",
+      "parentId": "7000000000000000101",
+      "budgetOwner": "ad_group",
+      "attribution": {
+        "click": "SEVEN_DAYS",
+        "view": "ONE_DAY"
+      },
+      "daily": [
+        {
+          "date": "2026-10-02",
+          "spend": 170.8,
+          "impressions": 6826,
+          "clicks": 77,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 170.8,
+          "impressions": 6826,
+          "clicks": 77,
+          "conversions": 1,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 1,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 170.8,
+          "impressions": 6828,
+          "clicks": 79,
+          "conversions": 2,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 2,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-05",
+          "spend": 120.15,
+          "impressions": 0,
+          "clicks": 0,
+          "conversions": 0,
+          "conversionsByAction": {}
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "campaign",
+        "native_level": "campaign",
+        "id": "7000000000000000102",
+        "accountId": "7000000000000000001",
+        "name": "EF | Smart+ | Leads",
+        "campaignId": "7000000000000000102",
+        "automation": "upgraded_smart_plus",
+        "budget": {
+          "kind": "daily",
+          "minor": 80000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "campaign",
+            "nativeLevel": "campaign",
+            "id": "7000000000000000102",
+            "accountId": "7000000000000000001",
+            "name": "EF | Smart+ | Leads"
+          }
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "CAMPAIGN_STATUS_ENABLE"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 1995,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 1056,
+            "impressions": 85978,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 36,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 36
+          },
+          "d7": {
+            "spend": 4655,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 2460,
+            "impressions": 200610,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 76,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 76
+          },
+          "d14": {
+            "spend": 9310,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 4911,
+            "impressions": 401230,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 151,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 151
+          }
+        }
+      },
+      "channelType": "LEAD_GENERATION",
+      "campaignOnly": true,
+      "readonly": true,
+      "readonlyReason": "allowlist_required",
+      "startDate": "2026-09-02",
+      "parentId": null,
+      "budgetOwner": "campaign",
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 351,
+          "conversions": 15,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 15,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 665,
+          "impressions": 28662,
+          "clicks": 354,
+          "conversions": 16,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 16,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "group",
+        "native_level": "ad_group",
+        "id": "7000000000000000204",
+        "accountId": "7000000000000000001",
+        "name": "EF | Smart+ | Leads (ad group)",
+        "campaignId": "7000000000000000102",
+        "automation": "upgraded_smart_plus",
+        "budget": {
+          "kind": "daily",
+          "minor": 80000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "campaign",
+            "nativeLevel": "campaign",
+            "id": "7000000000000000102",
+            "accountId": "7000000000000000001",
+            "name": "EF | Smart+ | Leads"
+          }
+        },
+        "bidding": {
+          "strategyType": "BID_TYPE_NO_BID"
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "ADGROUP_STATUS_DELIVERY_OK"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 1995,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 1056,
+            "impressions": 85978,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 36,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 36
+          },
+          "d7": {
+            "spend": 4655,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 2460,
+            "impressions": 200610,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 76,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 76
+          },
+          "d14": {
+            "spend": 9310,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 4911,
+            "impressions": 401230,
+            "conversionsByAction": {
+              "LEAD_GENERATION": {
+                "count": 151,
+                "category": "LEAD_GENERATION"
+              }
+            },
+            "leads": 151
+          }
+        }
+      },
+      "channelType": "LEAD_GENERATION",
+      "campaignOnly": true,
+      "readonly": true,
+      "readonlyReason": "allowlist_required",
+      "startDate": "2026-09-02",
+      "parentId": "7000000000000000102",
+      "budgetOwner": "campaign",
+      "attribution": {
+        "click": "SEVEN_DAYS",
+        "view": "ONE_DAY"
+      },
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 350,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 665,
+          "impressions": 28660,
+          "clicks": 351,
+          "conversions": 15,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 15,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 665,
+          "impressions": 28658,
+          "clicks": 351,
+          "conversions": 10,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 10,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 665,
+          "impressions": 28662,
+          "clicks": 354,
+          "conversions": 16,
+          "conversionsByAction": {
+            "LEAD_GENERATION": {
+              "count": 16,
+              "category": "LEAD_GENERATION"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "campaign",
+        "native_level": "campaign",
+        "id": "7000000000000000103",
+        "accountId": "7000000000000000001",
+        "name": "EF | Mensajes | Manual",
+        "campaignId": "7000000000000000103",
+        "automation": "manual",
+        "budget": {
+          "kind": "daily",
+          "minor": 35000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "campaign",
+            "nativeLevel": "campaign",
+            "id": "7000000000000000103",
+            "accountId": "7000000000000000001",
+            "name": "EF | Mensajes | Manual"
+          }
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "CAMPAIGN_STATUS_ENABLE"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 855,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 440,
+            "impressions": 44960,
+            "conversionsByAction": {
+              "CONVERSATION": {
+                "count": 14,
+                "category": "CONVERSATION"
+              }
+            },
+            "conversations": 14
+          },
+          "d7": {
+            "spend": 1995,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 1020,
+            "impressions": 104900,
+            "conversionsByAction": {
+              "CONVERSATION": {
+                "count": 30,
+                "category": "CONVERSATION"
+              }
+            },
+            "conversations": 30
+          },
+          "d14": {
+            "spend": 3990,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 2050,
+            "impressions": 210400,
+            "conversionsByAction": {
+              "CONVERSATION": {
+                "count": 61,
+                "category": "CONVERSATION"
+              }
+            },
+            "conversations": 61
+          }
+        }
+      },
+      "channelType": "ENGAGEMENT",
+      "campaignOnly": false,
+      "readonly": false,
+      "startDate": "2026-09-10",
+      "parentId": null,
+      "budgetOwner": "ad_group",
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 285,
+          "impressions": 15074,
+          "clicks": 148,
+          "conversions": 7,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 7,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 285,
+          "impressions": 14990,
+          "clicks": 150,
+          "conversions": 6,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 6,
+              "category": "CONVERSATION"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "snapshot": {
+        "platform": "tiktok_ads",
+        "level": "group",
+        "native_level": "ad_group",
+        "id": "7000000000000000205",
+        "accountId": "7000000000000000001",
+        "name": "EF | Mensajes | Broad",
+        "campaignId": "7000000000000000103",
+        "automation": "manual",
+        "budget": {
+          "kind": "daily",
+          "minor": 35000,
+          "currency": "MXN",
+          "shared": false,
+          "ownerRef": {
+            "platform": "tiktok_ads",
+            "level": "group",
+            "nativeLevel": "ad_group",
+            "id": "7000000000000000205",
+            "accountId": "7000000000000000001",
+            "name": "EF | Mensajes | Broad"
+          }
+        },
+        "bidding": {
+          "strategyType": "BID_TYPE_NO_BID"
+        },
+        "primaryStatus": "ENABLE",
+        "primaryStatusReasons": [
+          "ADGROUP_STATUS_DELIVERY_OK"
+        ],
+        "windows": {
+          "d3": {
+            "spend": 855,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 440,
+            "impressions": 44960,
+            "conversionsByAction": {
+              "CONVERSATION": {
+                "count": 14,
+                "category": "CONVERSATION"
+              }
+            },
+            "conversations": 14
+          },
+          "d7": {
+            "spend": 1995,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 1020,
+            "impressions": 104900,
+            "conversionsByAction": {
+              "CONVERSATION": {
+                "count": 30,
+                "category": "CONVERSATION"
+              }
+            },
+            "conversations": 30
+          },
+          "d14": {
+            "spend": 3990,
+            "purchases": 0,
+            "addToCarts": 0,
+            "clicks": 2050,
+            "impressions": 210400,
+            "conversionsByAction": {
+              "CONVERSATION": {
+                "count": 61,
+                "category": "CONVERSATION"
+              }
+            },
+            "conversations": 61
+          }
+        }
+      },
+      "channelType": "ENGAGEMENT",
+      "campaignOnly": false,
+      "readonly": false,
+      "startDate": "2026-09-10",
+      "parentId": "7000000000000000103",
+      "budgetOwner": "ad_group",
+      "attribution": {
+        "click": "ONE_DAY",
+        "view": "OFF"
+      },
+      "daily": [
+        {
+          "date": "2026-09-21",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-22",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-23",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-24",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-25",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-26",
+          "spend": 285,
+          "impressions": 15071,
+          "clicks": 147,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-27",
+          "spend": 285,
+          "impressions": 15074,
+          "clicks": 148,
+          "conversions": 7,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 7,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-28",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-29",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-09-30",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-01",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-02",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "spend": 285,
+          "impressions": 14985,
+          "clicks": 145,
+          "conversions": 4,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 4,
+              "category": "CONVERSATION"
+            }
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "spend": 285,
+          "impressions": 14990,
+          "clicks": 150,
+          "conversions": 6,
+          "conversionsByAction": {
+            "CONVERSATION": {
+              "count": 6,
+              "category": "CONVERSATION"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "rejected": [],
+  "reconciliation": {
+    "range": {
+      "since": "2026-09-21",
+      "until": "2026-10-04"
+    },
+    "advertiserSpend": 16534.5,
+    "adGroupSpend": 16534.5
+  }
+}

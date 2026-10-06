@@ -164,6 +164,17 @@ export function bidCooldownNote(daysSinceLastChange: number | null): string {
   return `The target last changed ${ago}, past Google's ${BID_RELEARNING_DAYS}-day relearning period.`;
 }
 
+type BudgetLimitedCard = Extract<PlatformCard, { variant: 'google_budget_limited' }>;
+
+/** What the proposed budget is expected to buy, as the producer projected it; null when there is
+ *  no projection, or nothing proposed for it to stand on. */
+export function budgetProjectionLabel(card: BudgetLimitedCard): string | null {
+  const projection = card.projection;
+  if (projection == null || card.proposed_budget_per_day == null) return null;
+  const perDay = `${card.result_label}/day`;
+  return `At ${formatCurrency(card.proposed_budget_per_day, card.currency)}/day: about ${countLabel(projection.results_per_day_low)}–${countLabel(projection.results_per_day_high)} ${perDay} (now ${countLabel(projection.results_per_day_now)}), based on ${projection.basis_days} days`;
+}
+
 export function countLabel(value: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
 }

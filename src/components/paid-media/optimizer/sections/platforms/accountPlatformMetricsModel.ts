@@ -16,7 +16,7 @@ import type {
 } from '@continuum/contracts';
 import { type FigureWindow, formatCurrency } from '../../format';
 import { resultWords } from '../account/overviewModel';
-import { type AdPlatform, PLATFORM_NAMES } from './platformTabsModel';
+import { AD_PLATFORMS, type AdPlatform, PLATFORM_NAMES } from './platformTabsModel';
 
 /** Room for six tiles on "All": spend, up to three result kinds, decisions, autopilot. */
 export const MAX_KIND_TILES = 3;
@@ -154,6 +154,16 @@ export function kindTileSub(metrics: AccountPlatformMetrics, kind: KindAcrossPla
     );
   }
   return parts.join(' · ');
+}
+
+/** A result tile's per-platform line, Meta then Google then TikTok: "Meta · 78 · Google · 118".
+ *  Null when one platform alone bought the kind — the label already names it. */
+export function kindPlatformSplit(kind: KindAcrossPlatforms): string | null {
+  if (kind.platforms.length < 2) return null;
+  return AD_PLATFORMS.flatMap((platform) => {
+    const row = kind.platforms.find((entry) => entry.platform === platform);
+    return row ? [`${platformName(platform)} · ${formatResults(row.results)}`] : [];
+  }).join(' · ');
 }
 
 /** One clause of the "All" sentence per kind: who buys it cheapest when two platforms do. */

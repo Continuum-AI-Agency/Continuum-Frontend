@@ -11,6 +11,7 @@ import {
   connectedFromMetrics,
   coverageNote,
   headlineKindClauses,
+  kindPlatformSplit,
   kindTileLabel,
   kindTileSub,
   platformCountLabel,
@@ -134,5 +135,34 @@ describe('one platform', () => {
     const leads = GOOGLE_TOTALS.results_by_kind[0];
     if (!leads) throw new Error('leads missing');
     expect(platformKindSub(leads, 'MXN')).toBe('31.40 MXN each · prev. 33.10 MXN');
+  });
+});
+
+describe("kindPlatformSplit — a result tile's per-platform line", () => {
+  const kind = (name: string) => {
+    const found = rankedKinds(EASY_FIT_MP1).find((row) => row.kind === name);
+    if (!found) throw new Error(`no kind ${name}`);
+    return found;
+  };
+
+  it('names each contributing platform and its count, Meta then Google then TikTok', () => {
+    expect(kindPlatformSplit(kind('leads'))).toBe('Meta · 78 · Google · 118 · TikTok · 18');
+  });
+
+  it('keeps the canonical order whatever order the producer listed the platforms in', () => {
+    const leads = kind('leads');
+    const reversed = { ...leads, platforms: [...leads.platforms].reverse() };
+    expect(kindPlatformSplit(reversed)).toBe('Meta · 78 · Google · 118 · TikTok · 18');
+  });
+
+  it('is omitted when only one platform contributes', () => {
+    expect(kindPlatformSplit(kind('conversations'))).toBeNull();
+    expect(kindPlatformSplit(kind('purchases'))).toBeNull();
+  });
+
+  it('counts two platforms and leaves out the one that bought none of the kind', () => {
+    const frame = buildMetrics([META_TOTALS, GOOGLE_TOTALS]);
+    const leads = rankedKinds(frame).find((row) => row.kind === 'leads');
+    expect(leads && kindPlatformSplit(leads)).toBe('Meta · 78 · Google · 118');
   });
 });

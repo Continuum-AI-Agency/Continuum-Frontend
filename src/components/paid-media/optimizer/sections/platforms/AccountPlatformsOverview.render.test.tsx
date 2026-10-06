@@ -107,6 +107,30 @@ describe('AllPlatformsTiles', () => {
   });
 });
 
+describe('AllPlatformsTiles — the per-platform second line (feature 04)', () => {
+  const breakdownOf = (container: HTMLElement, testId: string) =>
+    container.querySelector(`[data-testid="${testId}"] [data-testid="tile-breakdown"]`)
+      ?.textContent ?? null;
+
+  it('splits a result bought on several platforms by platform, under the cost line', () => {
+    const { container } = render(
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+    );
+    expect(breakdownOf(container, 'tile-kind-leads')).toBe(
+      'Meta · 78 · Google · 118 · TikTok · 18',
+    );
+  });
+
+  it('omits the line when one platform alone bought the result', () => {
+    const { container } = render(
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+    );
+    expect(breakdownOf(container, 'tile-kind-conversations')).toBeNull();
+    expect(breakdownOf(container, 'tile-kind-purchases')).toBeNull();
+    expect(breakdownOf(container, 'tile-spend')).toBeNull();
+  });
+});
+
 describe('PlatformMetricsSection', () => {
   it("renders Google's own tiles from the same producer", () => {
     const { container, getByTestId } = render(

@@ -16,7 +16,8 @@ import {
 
 export type { IconComponent };
 
-export const PLATFORM_LABELS: Record<PlatformKey, string> = {
+// `tiktokAds` is a summary key no picker lists (brandProfile.ts); the settings tabs still name it.
+export const PLATFORM_LABELS: Record<PlatformKey | 'tiktokAds', string> = {
   youtube: 'YouTube',
   instagram: 'Instagram',
   facebook: 'Facebook',
@@ -29,9 +30,10 @@ export const PLATFORM_LABELS: Record<PlatformKey, string> = {
   googleAnalytics: 'Google Analytics',
   threads: 'Threads',
   openai: 'OpenAI Ads',
+  tiktokAds: 'TikTok Ads',
 };
 
-export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
+export const PLATFORM_ICONS: Record<PlatformKey | 'tiktokAds', IconComponent> = {
   youtube: YouTubeIcon,
   instagram: InstagramIcon,
   // Settings groups Facebook under the Meta mark, matching PROVIDER_GROUP_ICONS.
@@ -47,6 +49,7 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   // A lucide glyph rather than a brand mark, the same compromise dv360 makes above:
   // @/lib/brand-icons carries no OpenAI artwork yet. Swap it in there when it does.
   openai: Sparkles,
+  tiktokAds: TikTokIcon,
 };
 
 export type ProviderGroup = 'facebook' | 'google' | 'tiktok' | 'linkedin' | 'x' | 'openai';

@@ -18,8 +18,11 @@
 // docs/optimizer-multiplatform/frontend.html §2). "All" is the MP1 frame: its sentence and
 // tiles come from ONE producer, public.optimizer_get_account_platform_metrics, so they span the
 // three platforms without adding two currencies or two result kinds together. "Meta" is the O1
-// above, unchanged. Google and TikTok lead with their own rows of the same producer. Until that
-// RPC is deployed every tab says so plainly, and "All" falls back to today's Meta O1.
+// above, unchanged. Google and TikTok lead with their own rows of the same producer, then what
+// only that platform's own read holds (Google's campaign types, TikTok's snapshots and top ad
+// groups). Until that RPC is deployed every tab says so plainly, and "All" falls back to today's
+// Meta O1. Under its tiles "All" may show the platforms side by side (MP3), which a viewer can
+// hide; each portfolio row carries one chip per platform it holds members on.
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
@@ -74,6 +77,7 @@ import {
 import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
 import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
+import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
 import { PlatformTabs } from './platforms/PlatformTabs';
 import {
   type AdPlatform,
@@ -81,6 +85,7 @@ import {
   OPTIMIZER_MANAGED_PLATFORM,
   rendersManagedOverview,
 } from './platforms/platformTabsModel';
+import { memberPlatforms, usePortfolioMemberStates } from './platforms/portfolioPlatforms';
 import { TikTokAdsTab } from './platforms/TikTokAdsTab';
 import {
   type AccountPlatformMetricsState,
@@ -150,6 +155,7 @@ export function OptimizerOverview({
   const [sortDir, setSortDir] = useState<RowSortDir>('asc');
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
+  const memberStates = usePortfolioMemberStates(portfolioIds);
   // The account read opens the cards when the worker has written one. Absent is absent:
   // no spinner, no empty shell — the sentence and the tiles stand on their own.
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
@@ -513,6 +519,9 @@ export function OptimizerOverview({
         </div>
       )}
 
+      {/* 4b — the platforms side by side (MP3): optional, hidden per viewer. */}
+      {multiplatform ? <PlatformComparisonRow metrics={multiplatform} /> : null}
+
       {/* 5 — the recommendation cards, in impact order, the lead marked. */}
       {shown ? (
         <section className="space-y-2" data-testid="overview-recommendations">
@@ -582,6 +591,10 @@ export function OptimizerOverview({
               onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
               onSelect={() => onSelectPortfolio(portfolio.id)}
               platform={OPTIMIZER_MANAGED_PLATFORM}
+              platforms={memberPlatforms(
+                memberStates.get(portfolio.id),
+                OPTIMIZER_MANAGED_PLATFORM,
+              )}
               portfolio={portfolio}
               window={windows.get(portfolio.id) ?? null}
             />
@@ -596,8 +609,9 @@ export function OptimizerOverview({
 }
 
 /** A platform's own tab: its rows of the producer first, then what only that platform's
- *  edge read holds (Google's campaign types). Before the producer is deployed, the tab says
- *  so and shows today's screen for that platform. */
+ *  edge read holds (Google's campaign types, TikTok's snapshots). Before the producer is
+ *  deployed, the tab says so and shows today's screen for that platform. TikTok's advertiser
+ *  is known only from the producer, so without it the TikTok tab stays "not connected". */
 function PlatformTab({
   brandId,
   metrics,
@@ -608,7 +622,11 @@ function PlatformTab({
   platform: Exclude<AdPlatform, 'meta'>;
 }) {
   const fallback =
-    platform === 'google_ads' ? <GoogleAdsTab brandId={brandId} /> : <TikTokAdsTab />;
+    platform === 'google_ads' ? (
+      <GoogleAdsTab brandId={brandId} />
+    ) : (
+      <TikTokAdsTab advertiserId={null} brandId={brandId} />
+    );
   if (metrics.status === 'unavailable') {
     return (
       <>
@@ -621,11 +639,16 @@ function PlatformTab({
       </>
     );
   }
-  if (metrics.status === 'ready' && platformTotals(metrics.metrics, platform)?.connected) {
+  const row = metrics.status === 'ready' ? platformTotals(metrics.metrics, platform) : null;
+  if (metrics.status === 'ready' && row?.connected) {
     return (
       <>
         <PlatformMetricsSection metrics={metrics.metrics} platform={platform} />
-        {platform === 'google_ads' ? <GoogleAdsTab brandId={brandId} mode="breakdown" /> : null}
+        {platform === 'google_ads' ? (
+          <GoogleAdsTab brandId={brandId} mode="breakdown" />
+        ) : (
+          <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
+        )}
       </>
     );
   }

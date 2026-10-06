@@ -51,6 +51,31 @@ describe('Google budget-limited', () => {
     );
   });
 
+  it("projects what the proposed budget buys, in the card's currency", () => {
+    const card = PlatformCardSchema.parse({
+      ...GOOGLE_BUDGET_LIMITED,
+      projection: {
+        results_per_day_now: 1.5,
+        results_per_day_low: 1.7,
+        results_per_day_high: 2.25,
+        basis_days: 28,
+      },
+    });
+    const { getByTestId } = render(<PlatformCardBody card={card} />);
+    expect(getByTestId('platform-card-projection').textContent).toBe(
+      'At 1,474 MXN/day: about 1.7–2.3 leads/day (now 1.5), based on 28 days',
+    );
+  });
+
+  it('projects nothing when the projection is absent or null', () => {
+    const absent = render(<PlatformCardBody card={GOOGLE_BUDGET_LIMITED} />);
+    expect(absent.queryByTestId('platform-card-projection')).toBeNull();
+    cleanup();
+    const card = PlatformCardSchema.parse({ ...GOOGLE_BUDGET_LIMITED, projection: null });
+    const nulled = render(<PlatformCardBody card={card} />);
+    expect(nulled.queryByTestId('platform-card-projection')).toBeNull();
+  });
+
   it('says no increase is proposed when the producer proposes none', () => {
     const card = PlatformCardSchema.parse({
       ...GOOGLE_BUDGET_LIMITED,

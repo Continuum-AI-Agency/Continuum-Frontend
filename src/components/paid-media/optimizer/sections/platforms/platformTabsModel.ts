@@ -42,6 +42,12 @@ export const OPTIMIZER_MANAGED_PLATFORM: AdPlatform = 'meta';
  *  `platforms[]` (derived from its members), read it there and delete this. */
 export const OPTIMIZER_PORTFOLIO_PLATFORMS: readonly AdPlatform[] = [OPTIMIZER_MANAGED_PLATFORM];
 
+/** Meta, Google, TikTok — whatever order the platforms came in, each once. */
+export function orderPlatforms(platforms: Iterable<AdPlatform>): AdPlatform[] {
+  const held = new Set(platforms);
+  return AD_PLATFORMS.filter((platform) => held.has(platform));
+}
+
 /** A loose read-model value (a jsonb field, a row the contract has not caught up with) as one
  *  of the canonical platform ids, or null when it names none of them. */
 export function readAdPlatform(raw: unknown): AdPlatform | null {
@@ -74,8 +80,6 @@ export function connectedPlatforms(accounts: readonly AdAccount[]): Record<AdPla
 
 /** "All" and "Meta" share the O1 layout (cards, portfolio rows); "All" leads with the multi-platform
  *  producer, "Meta" with today's O1 figures. Google and TikTok are their own screens. */
-export function rendersManagedOverview(
-  tab: PlatformTab,
-): tab is 'all' | 'meta' {
+export function rendersManagedOverview(tab: PlatformTab): tab is 'all' | 'meta' {
   return tab === 'all' || tab === OPTIMIZER_MANAGED_PLATFORM;
 }

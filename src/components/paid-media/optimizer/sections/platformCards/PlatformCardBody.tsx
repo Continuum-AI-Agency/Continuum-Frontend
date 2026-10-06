@@ -12,10 +12,18 @@ import * as typeScale from '../../typeScale';
 import { PlatformChip, PlatformIcon } from '../platforms/PlatformChip';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { NegativeTermsReview } from '../searchActions/NegativeTermsReview';
+import { PlatformCardActionControl, TikTokNotConnected } from './PlatformCardActionControl';
+import {
+  cardActionAvailability,
+  cardWriteOf,
+  type PlatformCardAction,
+  withTerms,
+} from './platformCardActionModel';
 import {
   ATTRIBUTION_WINDOW_NOTE,
   bidCooldownNote,
   bidTargetLabel,
+  budgetProjectionLabel,
   CROSS_PLATFORM_APPROVAL_NOTE,
   countLabel,
   givingLegs,
@@ -40,6 +48,29 @@ type TikTokDeliveryCard = Extract<PlatformCard, { variant: 'tiktok_delivery_issu
 
 /** Approving negatives hands the caller the terms a person kept; absent, the card only reads. */
 export type AddNegatives = (terms: string[]) => void;
+
+export type { PlatformCardAction };
+
+function cardCurrency(card: PlatformCard): string | null {
+  return 'currency' in card ? card.currency : null;
+}
+
+/** The card's own action control: the approval flow for a Google write, a disabled button that
+ *  says why for a TikTok one, nothing on a read-only card or without an action. */
+function CardAction({ card, target }: { card: PlatformCard; target?: PlatformCardAction }) {
+  const write = cardWriteOf(target);
+  const availability = cardActionAvailability(card, target);
+  if (write == null || target == null || availability === 'none') return null;
+  if (availability === 'tiktok_not_connected') return <TikTokNotConnected write={write} />;
+  return (
+    <PlatformCardActionControl
+      currency={cardCurrency(card)}
+      portfolioId={target.portfolioId}
+      recommendationId={target.recommendationId}
+      write={write}
+    />
+  );
+}
 
 const AD_STRENGTH_LABEL = {
   POOR: 'Poor',
@@ -132,12 +163,22 @@ function TikTokDeliveryEvidence({ card }: { card: TikTokDeliveryCard }) {
 function NegativeTermsEvidence({
   card,
   onAddNegatives,
+  action,
 }: {
   card: NegativeTermsCard;
   onAddNegatives?: AddNegatives;
+  action?: PlatformCardAction;
 }) {
   const [reviewing, setReviewing] = useState(false);
+  const [chosen, setChosen] = useState<string[] | null>(null);
   const every = card.terms.map((row) => row.term);
+  const write = cardWriteOf(action);
+  const approvable =
+    action != null &&
+    write?.kind === 'add_negatives' &&
+    cardActionAvailability(card, action) === 'ready';
+  // With the engine's action, the card approves it here; without, it hands the caller the terms.
+  const add: AddNegatives | undefined = approvable ? (terms) => setChosen(terms) : onAddNegatives;
   return (
     <div className="space-y-2">
       <table className="w-full text-sm" data-testid="platform-card-terms">
@@ -166,29 +207,49 @@ function NegativeTermsEvidence({
         Adding them as {card.match_type === 'EXACT' ? 'exact' : 'phrase'} negatives stops about{' '}
         {formatCurrency(card.savings_per_day, card.currency)}/day.
       </Evidence>
-      {onAddNegatives && reviewing ? (
+      {add && reviewing ? (
         <NegativeTermsReview
           currency={card.currency}
           onCancel={() => setReviewing(false)}
           onConfirm={(terms) => {
             setReviewing(false);
-            onAddNegatives(terms);
+            add(terms);
           }}
           terms={card.terms}
           windowDays={card.window_days}
         />
       ) : null}
-      {onAddNegatives && !reviewing ? (
+      {approvable && write && chosen ? (
+        <PlatformCardActionControl
+          currency={card.currency}
+          key={chosen.join('\u0000')}
+          onClose={() => setChosen(null)}
+          portfolioId={action.portfolioId}
+          recommendationId={action.recommendationId}
+          startOpen
+          write={withTerms(write, chosen)}
+        />
+      ) : null}
+      {add && !reviewing ? (
         <div className="flex flex-wrap gap-2">
-          <Button
-            data-testid="platform-card-add-negatives"
-            onClick={() => onAddNegatives(every)}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            {negativesLabel(every.length)}
-          </Button>
+          {approvable && write ? (
+            <PlatformCardActionControl
+              currency={card.currency}
+              portfolioId={action.portfolioId}
+              recommendationId={action.recommendationId}
+              write={write}
+            />
+          ) : (
+            <Button
+              data-testid="platform-card-add-negatives"
+              onClick={() => add(every)}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {negativesLabel(every.length)}
+            </Button>
+          )}
           <Button
             data-testid="platform-card-choose-terms"
             onClick={() => setReviewing(true)}
@@ -207,21 +268,32 @@ function NegativeTermsEvidence({
 function VariantEvidence({
   card,
   onAddNegatives,
+  action,
 }: {
   card: PlatformCard;
   onAddNegatives?: AddNegatives;
+  action?: PlatformCardAction;
 }) {
   switch (card.variant) {
-    case 'google_budget_limited':
+    case 'google_budget_limited': {
+      const projection = budgetProjectionLabel(card);
       return (
-        <Evidence testId="platform-card-budget">
-          Campaign budget {formatCurrency(card.budget_per_day, card.currency)}/day,{' '}
-          {percentLabel(card.budget_lost_impression_share)} of impressions lost to budget.{' '}
-          {card.proposed_budget_per_day != null
-            ? `Proposed: ${formatCurrency(card.proposed_budget_per_day, card.currency)}/day.`
-            : 'No increase proposed.'}
-        </Evidence>
+        <div className="space-y-1">
+          <Evidence testId="platform-card-budget">
+            Campaign budget {formatCurrency(card.budget_per_day, card.currency)}/day,{' '}
+            {percentLabel(card.budget_lost_impression_share)} of impressions lost to budget.{' '}
+            {card.proposed_budget_per_day != null
+              ? `Proposed: ${formatCurrency(card.proposed_budget_per_day, card.currency)}/day.`
+              : 'No increase proposed.'}
+          </Evidence>
+          {projection ? (
+            <p className="text-foreground text-sm" data-testid="platform-card-projection">
+              {projection}
+            </p>
+          ) : null}
+        </div>
       );
+    }
     case 'google_pmax_asset_group':
       return (
         <div className="space-y-1">
@@ -305,7 +377,7 @@ function VariantEvidence({
         </div>
       );
     case 'google_negative_terms':
-      return <NegativeTermsEvidence card={card} onAddNegatives={onAddNegatives} />;
+      return <NegativeTermsEvidence action={action} card={card} onAddNegatives={onAddNegatives} />;
     case 'google_promote_term':
       return (
         <Evidence testId="platform-card-promote">
@@ -404,9 +476,13 @@ function VariantEvidence({
 export function PlatformCardBody({
   card,
   onAddNegatives,
+  action,
 }: {
   card: PlatformCard;
   onAddNegatives?: AddNegatives;
+  /** The engine's executable action for this card. Absent, the card shows no control of its
+   *  own and the caller's button (if any) stands. */
+  action?: PlatformCardAction;
 }) {
   const mark = markedPlatformOf(card);
   return (
@@ -425,7 +501,8 @@ export function PlatformCardBody({
         ) : null}
         {mark ? <span>{platformCardTitle(card)}</span> : platformCardTitle(card)}
       </h3>
-      <VariantEvidence card={card} onAddNegatives={onAddNegatives} />
+      <VariantEvidence action={action} card={card} onAddNegatives={onAddNegatives} />
+      {card.variant === 'google_negative_terms' ? null : <CardAction card={card} target={action} />}
     </div>
   );
 }

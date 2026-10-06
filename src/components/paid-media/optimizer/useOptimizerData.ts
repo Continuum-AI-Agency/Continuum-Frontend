@@ -1,5 +1,5 @@
 'use client';
-import type { CreativeOutputManifest } from '@continuum/contracts';
+import type { CreativeOutputManifest, OptimizerAction } from '@continuum/contracts';
 
 // Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
 // Edge read is owned by React Query: the cache has deliberate freshness windows,
@@ -2558,6 +2558,71 @@ export function useApplyApproved() {
         void queryClient.invalidateQueries({
           queryKey: optimizerQueryKeys.performance(request.portfolio_id),
         });
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+      }
+    },
+  });
+}
+
+/** One action's verdict from the service's POST /apply/actions
+ *  (Continuum-Optimizer/src/multiplatform/actions/route.ts). Read loosely on purpose: the card
+ *  needs the status and the refusal in words, and a field the service adds later must not turn
+ *  Google's verdict into a parse failure. */
+const ApplyActionResultSchema = z
+  .object({
+    status: z.string(),
+    kind: z.string().nullable(),
+    reason: z.string().optional(),
+    detail: z.string().optional(),
+    legs: z
+      .array(z.object({ status: z.string(), error: z.string().optional() }).passthrough())
+      .optional(),
+  })
+  .passthrough();
+export type ApplyActionResult = z.infer<typeof ApplyActionResultSchema>;
+
+const ApplyActionsResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    dryRun: z.boolean(),
+    results: z.array(ApplyActionResultSchema),
+  })
+  .passthrough();
+export type ApplyActionsResponse = z.infer<typeof ApplyActionsResponseSchema>;
+
+export type ApplyActionsRequest = {
+  portfolio_id: string;
+  actions: OptimizerAction[];
+  dryRun: boolean;
+  /** The recommendation the actions came from, for the ledger row. */
+  recommendation_id?: string;
+};
+
+/** A platform card's approved actions through optimizer-apply-actions → service
+ *  /apply/actions. dryRun:true asks Google's validate_only and reads the live value, writing
+ *  nothing; dryRun:false writes, attributed to the signed-in person by the route. */
+async function applyOptimizerActions(
+  request: ApplyActionsRequest,
+): Promise<ApplyActionsResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-actions', {
+    body: {
+      portfolio_id: request.portfolio_id,
+      actions: request.actions,
+      dryRun: request.dryRun,
+      ...(request.recommendation_id ? { recommendation_id: request.recommendation_id } : {}),
+    },
+  });
+  if (error) throw new Error('optimizer-apply-actions unreachable');
+  const parsed = ApplyActionsResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export function useApplyOptimizerActions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: applyOptimizerActions,
+    onSuccess: (data) => {
+      if (data && data.dryRun === false) {
         void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
       }
     },

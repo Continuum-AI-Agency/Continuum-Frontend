@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 // CalmRule — the one element that moves — comes from motion/react. A passthrough keeps the
 // variant label readable ("calm" on the principal card, "still" on the rest) and the file free
@@ -22,6 +22,23 @@ mock.module('motion/react', () => {
   };
 });
 
+// The card's own action control asks the platform through this hook; record what it sends.
+const realOptimizerData = await import('../../useOptimizerData');
+const sentActions: { portfolio_id: string; dryRun: boolean; actions: unknown[] }[] = [];
+mock.module('../../useOptimizerData', () => ({
+  ...realOptimizerData,
+  useApplyOptimizerActions: () => ({
+    mutateAsync: async (request: { portfolio_id: string; dryRun: boolean; actions: unknown[] }) => {
+      sentActions.push(request);
+      return {
+        ok: true,
+        dryRun: request.dryRun,
+        results: [{ status: 'would_apply', kind: 'set_budget' }],
+      };
+    },
+  }),
+}));
+
 import type { AccountCandidate } from '@continuum/contracts';
 import {
   ACCOUNT_DETECTOR_META,
@@ -34,6 +51,11 @@ import {
   titleText,
 } from '@continuum/contracts';
 import {
+  PAUSE_TIKTOK_AD_GROUP,
+  PORTFOLIO_ID,
+  RAISE_GOOGLE_BUDGET,
+} from '../platformCards/__fixtures__/platformCardActions';
+import {
   CROSS_PLATFORM_MOVE,
   EVERY_CARD,
   GOOGLE_BUDGET_LIMITED,
@@ -41,6 +63,7 @@ import {
   GOOGLE_PROMOTE_TERM,
   GOOGLE_VIDEO,
   TIKTOK_ATTRIBUTION_WINDOW,
+  TIKTOK_BUDGET_BELOW_LEARNING,
 } from '../platformCards/__fixtures__/platformCards';
 import { AccountRead } from './AccountRead';
 
@@ -516,5 +539,67 @@ describe('AccountRead — platform-specific cards', () => {
         card.querySelector('[data-testid="platform-chip"]')?.getAttribute('data-platform'),
       ).toBe('meta');
     }
+  });
+});
+
+describe('AccountRead — a card with an executable action', () => {
+  const actionsFor = (id: string, action: unknown) =>
+    new Map([[id, { portfolioId: PORTFOLIO_ID, action: action as typeof RAISE_GOOGLE_BUDGET }]]);
+
+  it("shows the card's own control in place of the generic button and previews first", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ id: 'google:budget', platform_card: GOOGLE_BUDGET_LIMITED })]}
+        cardActions={actionsFor('google:budget', RAISE_GOOGLE_BUDGET)}
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    expect(queryByTestId('account-card-action')).toBeNull();
+    const control = getByTestId('platform-card-action');
+    expect(control.textContent).toBe('Apply new budget');
+    sentActions.length = 0;
+    fireEvent.click(control);
+    await screen.findByTestId('platform-card-action-preview');
+    expect(sentActions).toEqual([
+      { portfolio_id: PORTFOLIO_ID, actions: [RAISE_GOOGLE_BUDGET], dryRun: true },
+    ]);
+  });
+
+  it('shows a TikTok action disabled, saying TikTok is not connected', () => {
+    const { getByTestId, queryByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({ id: 'tiktok:learning', platform_card: TIKTOK_BUDGET_BELOW_LEARNING }),
+        ]}
+        cardActions={actionsFor('tiktok:learning', PAUSE_TIKTOK_AD_GROUP)}
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    expect(queryByTestId('account-card-action')).toBeNull();
+    expect(getByTestId('platform-card-action-unavailable').textContent).toContain(
+      'TikTok is not connected',
+    );
+  });
+
+  it('gives a read-only card no control, whatever action rides along', () => {
+    const { queryByTestId, getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ id: 'google:video', platform_card: GOOGLE_VIDEO })]}
+        cardActions={actionsFor('google:video', RAISE_GOOGLE_BUDGET)}
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    expect(queryByTestId('platform-card-action')).toBeNull();
+    expect(queryByTestId('account-card-action')).toBeNull();
+    expect(getByTestId('platform-card-open-google')).toBeTruthy();
   });
 });

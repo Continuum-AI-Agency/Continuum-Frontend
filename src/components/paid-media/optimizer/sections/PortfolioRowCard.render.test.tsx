@@ -439,3 +439,46 @@ describe('PortfolioRowCard — the platform chip', () => {
     expect(queryByTestId('platform-chip')).toBeNull();
   });
 });
+
+describe('PortfolioRowCard — one chip per member platform (feature 07)', () => {
+  const chipsOf = (container: HTMLElement) =>
+    [...container.querySelectorAll('[data-testid="platform-chip"]')].map((chip) => ({
+      platform: chip.getAttribute('data-platform'),
+      text: chip.textContent,
+    }));
+
+  it('shows one chip per platform the portfolio holds, Meta then Google then TikTok', () => {
+    const { container } = render(
+      <PortfolioRowCard
+        platform="meta"
+        platforms={['tiktok_ads', 'meta', 'google_ads']}
+        portfolio={portfolio()}
+        window={null}
+      />,
+    );
+    expect(chipsOf(container)).toEqual([
+      { platform: 'meta', text: 'Meta' },
+      { platform: 'google_ads', text: 'Google' },
+      { platform: 'tiktok_ads', text: 'TikTok' },
+    ]);
+  });
+
+  it('shows only the member platforms, not the managed one, when the portfolio has no Meta member', () => {
+    const { container } = render(
+      <PortfolioRowCard
+        platform="meta"
+        platforms={['google_ads']}
+        portfolio={portfolio()}
+        window={null}
+      />,
+    );
+    expect(chipsOf(container)).toEqual([{ platform: 'google_ads', text: 'Google' }]);
+  });
+
+  it('shows no chip while the member platforms are being read', () => {
+    const { queryByTestId } = render(
+      <PortfolioRowCard platform="meta" platforms={[]} portfolio={portfolio()} window={null} />,
+    );
+    expect(queryByTestId('platform-chip')).toBeNull();
+  });
+});

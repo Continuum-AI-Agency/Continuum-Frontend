@@ -23,7 +23,7 @@ import {
   vsTargetLabel,
 } from './account/overviewModel';
 import { PlatformChip } from './platforms/PlatformChip';
-import type { AdPlatform } from './platforms/platformTabsModel';
+import { type AdPlatform, orderPlatforms } from './platforms/platformTabsModel';
 import { StalenessChips } from './StalenessChips';
 
 type PortfolioRowCardProps = {
@@ -36,8 +36,12 @@ type PortfolioRowCardProps = {
   /** This portfolio's 7-day window from `portfolioWindow()` in sections/account/overviewModel.ts.
    *  Null/absent = no cycle yet: the three figures render as '—' and the chip says 'no cycle yet'. */
   window?: PortfolioWindow | null;
-  /** The platform the portfolio buys on; the row names it in a chip before the objective. */
+  /** The platform the portfolio buys on; the row names it in a chip before the objective.
+   *  Ignored when `platforms` is given. */
   platform?: AdPlatform;
+  /** Every platform the portfolio holds members on (portfolioPlatforms.ts): one chip each,
+   *  Meta, Google, TikTok, whatever order they arrive in. Empty while they are being read. */
+  platforms?: readonly AdPlatform[];
 };
 
 /**
@@ -133,7 +137,9 @@ export function PortfolioRowCard({
   onPrefetch,
   window = null,
   platform,
+  platforms,
 }: PortfolioRowCardProps) {
+  const chips = platforms ? orderPlatforms(platforms) : platform ? [platform] : [];
   const pending = pendingWorkCount(portfolio);
   const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
   const words = resultWords(window?.kind ?? metric.kpiField, metric.resultLabel);
@@ -174,7 +180,16 @@ export function PortfolioRowCard({
             typeScale.caption,
           )}
         >
-          {platform ? <PlatformChip platform={platform} /> : null}
+          {chips.length > 0 ? (
+            <span
+              className="inline-flex flex-wrap items-center gap-1"
+              data-testid="portfolio-row-platforms"
+            >
+              {chips.map((held) => (
+                <PlatformChip key={held} platform={held} />
+              ))}
+            </span>
+          ) : null}
           <span>{humanize(portfolio.objective)}</span>
           <span aria-hidden>·</span>
           <span>

@@ -30,7 +30,15 @@ export type BrandIntegrationSummary = Record<
   {
     accounts: BrandIntegrationAccountSummary[];
   }
->;
+> & {
+  /** TikTok Marketing API advertisers. Kept apart from PLATFORM_KEYS, which drives the
+   *  onboarding and organic pickers, where an advertiser has nothing to publish to. Absent when
+   *  the brand has none. */
+  tiktokAds?: { accounts: BrandIntegrationAccountSummary[] };
+};
+
+/** Paid-only platform keys the summary RPC resolves that no picker lists. */
+const PAID_ONLY_KEY = 'tiktokAds';
 
 function createEmptySummary(): BrandIntegrationSummary {
   return PLATFORM_KEYS.reduce((acc, key) => {
@@ -59,10 +67,17 @@ async function loadBrandIntegrationSummaryFromDb(
 
   const summary = createEmptySummary();
   for (const row of (rows ?? []) as Record<string, unknown>[]) {
-    const platformKey = row.platform_key as PlatformKey | null;
-    if (!platformKey || !PLATFORM_KEYS.includes(platformKey)) continue;
+    const platformKey = row.platform_key as PlatformKey | typeof PAID_ONLY_KEY | null;
+    if (!platformKey) continue;
+    const bucket =
+      platformKey === PAID_ONLY_KEY
+        ? (summary.tiktokAds ??= { accounts: [] })
+        : PLATFORM_KEYS.includes(platformKey)
+          ? summary[platformKey]
+          : null;
+    if (!bucket) continue;
 
-    summary[platformKey].accounts.push({
+    bucket.accounts.push({
       assignmentId: row.assignment_id as string,
       integrationAccountId: row.integration_account_id as string,
       alias: (row.alias as string | null) ?? null,

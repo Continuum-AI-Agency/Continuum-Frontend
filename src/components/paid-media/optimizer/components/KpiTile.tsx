@@ -23,6 +23,8 @@ type KpiTileProps = {
   /** Provenance for the headline figure (see `figureProps` in ../format). */
   figure?: FigureProps;
   sub?: React.ReactNode;
+  /** An optional third line under `sub`: how the figure splits, e.g. by platform. */
+  breakdown?: React.ReactNode;
   chip?: React.ReactNode;
   action?: React.ReactNode;
   /** How the figure sits against what it is measured against. Defaults to `none`. */
@@ -36,6 +38,7 @@ export function KpiTile({
   value,
   figure,
   sub,
+  breakdown,
   chip,
   action,
   state = 'none',
@@ -61,6 +64,11 @@ export function KpiTile({
           {value}
         </HeroFigure>
         {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
+        {breakdown ? (
+          <p className="mt-0.5 text-xs text-muted-foreground" data-testid="tile-breakdown">
+            {breakdown}
+          </p>
+        ) : null}
       </div>
       {chip ? <div className="flex flex-wrap gap-1.5">{chip}</div> : null}
     </div>

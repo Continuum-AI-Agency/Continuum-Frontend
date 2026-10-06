@@ -29,6 +29,22 @@ export const GoogleBudgetLimitedCardSchema = z.object({
   budget_per_day: money,
   /** The budget the engine proposes; null when it proposes none (no target, cost too high). */
   proposed_budget_per_day: money.nullable(),
+  /** What the proposed budget is expected to buy (feature 14), as a range because Google does
+   *  not sell the lost impressions at today's price. Absent on cards written before it; null
+   *  when there is no proposal or too little history to project. */
+  projection: z
+    .object({
+      results_per_day_now: z.number().nonnegative(),
+      results_per_day_low: z.number().nonnegative(),
+      results_per_day_high: z.number().nonnegative(),
+      /** Days of history the projection stands on. */
+      basis_days: z.number().int().positive(),
+    })
+    .refine((p) => p.results_per_day_low <= p.results_per_day_high, {
+      message: 'results_per_day_low must not exceed results_per_day_high',
+    })
+    .nullable()
+    .optional(),
 });
 
 export const AdStrengthSchema = z.enum([

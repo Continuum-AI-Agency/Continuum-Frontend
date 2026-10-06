@@ -19,6 +19,7 @@ import {
   figureWindowOfMetrics,
   formatResults,
   headlineKindClauses,
+  kindPlatformSplit,
   kindTileLabel,
   kindTileSub,
   kindWords,
@@ -190,6 +191,7 @@ export function AllPlatformsTiles({
       />
       {kinds.map((kind) => (
         <KpiTile
+          breakdown={kindPlatformSplit(kind)}
           figure={figureProps(`tiles.kind.${kind.kind}`, kind.results, null, window, 'count')}
           key={`${kind.kind}|${kind.currency}`}
           label={kindTileLabel(metrics, kind)}
