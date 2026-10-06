@@ -87,9 +87,9 @@ function JainaSkeleton() {
 function OptimizerSurfaceSkeleton() {
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
-      <div className="flex items-center justify-between border-border/70 border-b px-4 py-3">
-        <Skeleton className="h-5 w-28 rounded-md" />
-        <Skeleton className="h-8 w-72 rounded-md" />
+      <div className="flex items-center justify-between gap-3 border-border/70 border-b px-4 py-3">
+        <Skeleton className="h-5 w-28 shrink-0 rounded-md" />
+        <Skeleton className="h-8 w-72 min-w-0 shrink rounded-md" />
       </div>
       <div className="min-h-0 space-y-3 overflow-hidden p-3">
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
