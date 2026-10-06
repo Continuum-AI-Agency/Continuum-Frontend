@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { designArrangementSchema } from '../hyperframes-aep/design-import';
-import { templateSourceSummarySchema } from './template-source';
+import { templateSourceKindSchema, templateSourceSummarySchema } from './template-source';
 
 export const templateVariantSchema = z
   .object({
@@ -9,7 +9,7 @@ export const templateVariantSchema = z
     parentAssetId: z.string().uuid().nullable(),
     parentVersionId: z.string().uuid().nullable(),
     name: z.string(),
-    sourceKind: z.enum(['photoshop', 'illustrator', 'after_effects', 'other']),
+    sourceKind: templateSourceKindSchema,
     originalAssetId: z.string().uuid(),
     originalVersionId: z.string().uuid(),
     originalFileName: z.string(),

@@ -8,6 +8,7 @@ import {
   type TemplateFontCandidatesResponse,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
+  type TemplateRevisionVariant,
   type TemplateSourceSummary,
   templateNameProblem,
   templateSourceSlotEditSchema,
@@ -194,6 +195,12 @@ function buildNameSuggestion(source: TemplateSourceSummary): string {
   return suggestion === UNTITLED_TEMPLATE_NAME || templateNameProblem(suggestion) ? '' : suggestion;
 }
 
+// A design import is changed through its layers; only an After Effects source takes an uploaded project.
+const DESIGN_SOURCE: Partial<Record<TemplateRevisionVariant['sourceKind'], string>> = {
+  photoshop: 'a Photoshop',
+  illustrator: 'an Illustrator',
+};
+
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
 
@@ -218,12 +225,15 @@ export function TemplateDetail({
   revisionFile,
   onRevisionTaken,
   initialTab,
+  initialComp,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
   onBack: () => void;
   onOpenVariant?: (assetId: string, tab?: string) => void | Promise<void>;
   initialTab?: string;
+  /** The composition Edit layers opens on; the template's first when absent. */
+  initialComp?: string;
   onDeleteVariant?: (variant: import('@continuum/contracts').TemplateVariant) => void;
   onRename: (title: string) => void;
   onRemove?: () => void;
@@ -1769,6 +1779,7 @@ export function TemplateDetail({
                 await Promise.all([onChanged(), loadVariables()]);
               }}
               onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
+              initialComp={initialComp}
             />
           </TabsContent>
           <TabsContent value="variables" keepMounted>
@@ -1796,12 +1807,19 @@ export function TemplateDetail({
             {selectedRevisionVariant ? (
               <div className="space-y-2 text-xs">
                 <p>
-                  This source belongs to an immutable template revision. To replace an After Effects
-                  project, upload an authored variant.
+                  {DESIGN_SOURCE[selectedRevisionVariant.sourceKind]
+                    ? `This template is built from ${DESIGN_SOURCE[selectedRevisionVariant.sourceKind]} file, kept as an immutable revision. To change the design, edit its layers and save them as a new variant.`
+                    : 'This source belongs to an immutable template revision. To replace an After Effects project, upload an authored variant.'}
                 </p>
-                <Button size="xs" variant="outline" onClick={() => setTab('variants')}>
-                  Open variants
-                </Button>
+                {DESIGN_SOURCE[selectedRevisionVariant.sourceKind] ? (
+                  <Button size="xs" variant="outline" onClick={() => setTab('layers')}>
+                    Edit layers
+                  </Button>
+                ) : (
+                  <Button size="xs" variant="outline" onClick={() => setTab('variants')}>
+                    Open variants
+                  </Button>
+                )}
               </div>
             ) : (
               <SourceRebindPanel
@@ -1833,6 +1851,7 @@ export function TemplateDetail({
                 await onOpenVariant?.(variant.assetId);
               }}
               onRender={onOpenRender}
+              onEditLayers={() => setTab('layers')}
             />
           </TabsContent>
           <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">

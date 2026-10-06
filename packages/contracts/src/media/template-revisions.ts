@@ -4,7 +4,7 @@ import { templateRevisionRefSchema } from './template-revision-pin';
 export * from './template-revision-pin';
 
 import { designArrangementSchema } from '../hyperframes-aep/design-import';
-import { templateSourceSummarySchema } from './template-source';
+import { templateSourceKindSchema, templateSourceSummarySchema } from './template-source';
 import { templateSourceSlotEditSchema } from './template-source-slot';
 
 export const templateRevisionLayerEditSchema = z
@@ -128,7 +128,7 @@ export const templateRevisionVariantSchema = z
     draftHeadRevisionId: z.string().uuid(),
     publishedHeadRevisionId: z.string().uuid().nullable(),
     archivedAt: z.string().nullable(),
-    sourceKind: z.enum(['photoshop', 'illustrator', 'after_effects', 'other']),
+    sourceKind: templateSourceKindSchema,
     revisions: z.array(templateRevisionSchema),
   })
   .strict();

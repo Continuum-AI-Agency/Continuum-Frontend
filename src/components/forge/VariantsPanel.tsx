@@ -4,6 +4,7 @@ import {
   type ForgeLineageNode,
   type ForgeLineageView,
   type TemplateRevision,
+  type TemplateRevisionVariant,
   type TemplateVariant,
   templateDisplayName,
 } from '@continuum/contracts';
@@ -72,6 +73,12 @@ export function variantsOf(view: Pick<ForgeLineageView, 'roots'>): VariantRow[] 
   return out;
 }
 
+// A design import's variants come from its layers; an uploaded After Effects project cannot stand in.
+const DESIGN_FILE: Partial<Record<TemplateRevisionVariant['sourceKind'], string>> = {
+  photoshop: 'a Photoshop',
+  illustrator: 'an Illustrator',
+};
+
 export function VariantsPanel({
   brandId,
   assetId,
@@ -80,10 +87,13 @@ export function VariantsPanel({
   onCreated,
   onDelete,
   onRender,
+  onEditLayers,
 }: {
   brandId: string;
   assetId: string;
   expectedVersionId: string;
+  /** Where a design import's variants are made: its layers, saved under a new name. */
+  onEditLayers?: () => void;
   onInspect?: (assetId: string) => void | Promise<void>;
   onCreated?: (variant: TemplateVariant) => void | Promise<void>;
   onDelete?: (variant: TemplateVariant) => void;
@@ -276,27 +286,41 @@ export function VariantsPanel({
           );
         })}
       </ul>
-      <fieldset className="space-y-2 border-t pt-3">
-        <legend className="text-xs">Upload an authored After Effects variant</legend>
-        <Input
-          aria-label="Uploaded variant name"
-          placeholder="Variant name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          disabled={busy}
-        />
-        <input
-          type="file"
-          aria-label="Upload After Effects variant"
-          accept=".aep,.aet,.zip"
-          disabled={busy || !selectedRevision}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = '';
-            void upload(file);
-          }}
-        />
-      </fieldset>
+      {selectedVariant && DESIGN_FILE[selectedVariant.sourceKind] ? (
+        <div className="space-y-2 border-t pt-3 text-xs">
+          <p>
+            This template is built from {DESIGN_FILE[selectedVariant.sourceKind]} file. Make a
+            variant by changing its layers and saving them as a new variant.
+          </p>
+          {onEditLayers ? (
+            <Button size="xs" variant="outline" onClick={onEditLayers}>
+              Edit layers
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <fieldset className="space-y-2 border-t pt-3">
+          <legend className="text-xs">Upload an authored After Effects variant</legend>
+          <Input
+            aria-label="Uploaded variant name"
+            placeholder="Variant name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            disabled={busy}
+          />
+          <input
+            type="file"
+            aria-label="Upload After Effects variant"
+            accept=".aep,.aet,.zip"
+            disabled={busy || !selectedRevision}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              void upload(file);
+            }}
+          />
+        </fieldset>
+      )}
       {archive ? (
         <div
           role="alertdialog"

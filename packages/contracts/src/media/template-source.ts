@@ -59,6 +59,27 @@ export const templateSourceFamilySchema = z.enum([
 ]);
 export type TemplateSourceFamily = z.infer<typeof templateSourceFamilySchema>;
 
+/** What a template was authored in, as a person sorts by it — not the package family it arrived as. */
+export const templateSourceKindSchema = z.enum([
+  'photoshop',
+  'illustrator',
+  'after_effects',
+  'figma',
+  'hyperframes',
+  'other',
+]);
+export type TemplateSourceKind = z.infer<typeof templateSourceKindSchema>;
+
+/** How a person reads each kind, in the order the Templates filter lists them. */
+export const TEMPLATE_SOURCE_KIND_LABELS: Record<TemplateSourceKind, string> = {
+  photoshop: 'Photoshop',
+  illustrator: 'Illustrator',
+  after_effects: 'After Effects',
+  figma: 'Figma',
+  hyperframes: 'HyperFrames',
+  other: 'Other',
+};
+
 export const templateParseStateSchema = z.enum([
   'pending',
   'parsed',

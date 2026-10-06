@@ -58,7 +58,12 @@ import {
 } from '@/components/forge/gridActions';
 import { useLiveFit } from '@/components/forge/livePreview';
 import { isStillsOnly } from '@/components/forge/OutputSettingsPanel';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  FORGE_STALE_MS,
+  forgeQueryKeys,
+  templateListQuery,
+  templateLoadQueries,
+} from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import { RenderReviewTray } from '@/components/forge/RenderReviewTray';
 import {
@@ -187,9 +192,7 @@ const AUTOSAVE_RETRY_MS = 5000;
  * connection, an expired session or rate limit may clear by itself.
  */
 const saveMayRecover = (error: unknown) =>
-  !(error instanceof ApiError) ||
-  error.status >= 500 ||
-  [401, 408, 429].includes(error.status);
+  !(error instanceof ApiError) || error.status >= 500 || [401, 408, 429].includes(error.status);
 /** A third of a row per arrow press, so the keyboard reaches before, inside and after a row. */
 const KEYBOARD_DROP_STEP_PX = 12;
 
@@ -588,12 +591,7 @@ export function RenderRequestsGrid({
     let cancelled = false;
     setBusy('loading');
     queryClient
-      .fetchQuery({
-        // No binding: one merged list of everything this brand may render, from every binding.
-        queryKey: forgeQueryKeys.templateList(brandId, null),
-        queryFn: () => apiRendersApi.listTemplates(brandId, null),
-        staleTime: FORGE_STALE_MS.lists,
-      })
+      .fetchQuery(templateListQuery(brandId))
       .then((response) => {
         if (cancelled) return;
         setTemplates(response.items);
@@ -720,26 +718,11 @@ export function RenderRequestsGrid({
       return;
     }
     let cancelled = false;
+    const reads = templateLoadQueries(brandId, contractBindingId, templateKey);
     Promise.all([
-      queryClient.fetchQuery({
-        queryKey: forgeQueryKeys.contract(brandId, contractBindingId, templateKey),
-        queryFn: () => apiRendersApi.getContract(brandId, templateKey, contractBindingId),
-        staleTime: FORGE_STALE_MS.contract,
-      }),
-      queryClient
-        .fetchQuery({
-          queryKey: forgeQueryKeys.inputSets(brandId, templateKey),
-          queryFn: () => apiRendersApi.listInputSets(brandId, templateKey),
-          staleTime: FORGE_STALE_MS.lists,
-        })
-        .catch(() => ({ items: [] })),
-      queryClient
-        .fetchQuery({
-          queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
-          queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
-          staleTime: FORGE_STALE_MS.lists,
-        })
-        .catch(() => ({ items: [] })),
+      queryClient.fetchQuery(reads.contract),
+      queryClient.fetchQuery(reads.inputSets).catch(() => ({ items: [] })),
+      queryClient.fetchQuery(reads.renderSets).catch(() => ({ items: [] })),
     ])
       .then(([next, sets, savedSets]) => {
         if (cancelled) return;
@@ -985,6 +968,7 @@ export function RenderRequestsGrid({
       if (Object.keys(clientErrors.get(row.id) ?? {}).length > 0) continue;
       const resolved = effectiveValues(rows, row.id);
       const encode = effectiveEncode(rows, row.id);
+      const outputIds = effectiveOutputIds(rows, row.id);
       // Both updates return `current` untouched when the row moved on: a no-op must not be a new
       // array, or every stale response re-renders the grid under the person typing in it.
       const settle = (next: RequestRow['check'], from: RequestRow['check']['state']) =>
@@ -1009,6 +993,7 @@ export function RenderRequestsGrid({
             templateKey: key,
             contractHash,
             variables: resolved,
+            ...(outputIds.length ? { outputIds } : {}),
             ...(templateRef ? { templateRef } : {}),
             ...(templateRevision ? { templateRevision } : {}),
             ...(activeSet && signatureOf(rows, contract) === savedSignature
@@ -1206,6 +1191,25 @@ export function RenderRequestsGrid({
     queryFn: () => fetchTemplateVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
+  // What each template was authored in, for the picker: the same one registry read the gallery makes.
+  const { data: brandRegistry } = useQuery({
+    queryKey: forgeQueryKeys.revisionVariants(brandId, 'all'),
+    queryFn: () => fetchTemplateRevisionVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const templateSourceKinds = useMemo(
+    () =>
+      brandRegistry
+        ? new Map(
+            brandRegistry.flatMap((variant) =>
+              variant.revisions.map(
+                (revision) => [revision.sourceAssetId, variant.sourceKind] as const,
+              ),
+            ),
+          )
+        : null,
+    [brandRegistry],
+  );
   const { data: revisionVariants } = useQuery({
     queryKey: [
       ...forgeQueryKeys.revisionVariants(brandId, contract?.template.sourceAssetId ?? ''),
@@ -2349,6 +2353,13 @@ export function RenderRequestsGrid({
             ? () => onOpenTemplate({ assetId: settingsAssetId, tab: 'layers' })
             : undefined
         }
+        templateSourceKinds={templateSourceKinds}
+        onTemplateHighlight={(template) => {
+          const reads = templateLoadQueries(brandId, template.bindingId, template.key);
+          void queryClient.prefetchQuery(reads.contract);
+          void queryClient.prefetchQuery(reads.inputSets);
+          void queryClient.prefetchQuery(reads.renderSets);
+        }}
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;

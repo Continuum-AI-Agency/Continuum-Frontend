@@ -6,10 +6,20 @@ import type {
   TemplateRevisionVariant,
   TemplateSourceSummary,
 } from '@continuum/contracts';
-import { templateDisplayName } from '@continuum/contracts';
+import { TEMPLATE_SOURCE_KIND_LABELS, templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Search, Settings2 } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
+  Pencil,
+  Search,
+  Settings2,
+} from 'lucide-react';
+import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
@@ -47,6 +57,8 @@ import {
   sourceDisplayName,
   TEMPLATE_STATUS,
   TemplateFacts,
+  TemplateHoverPreview,
+  type TemplateStatus,
   TemplateStatusPill,
   templateStatus,
 } from './TemplateCard';
@@ -71,13 +83,7 @@ const MOTIONS = [
 ] as const;
 type Motion = (typeof MOTIONS)[number]['id'];
 
-const SOURCE_TYPES = {
-  all: 'All source types',
-  photoshop: 'Photoshop',
-  illustrator: 'Illustrator',
-  after_effects: 'After Effects',
-  other: 'Other',
-} as const;
+const SOURCE_TYPES = { all: 'All source types', ...TEMPLATE_SOURCE_KIND_LABELS } as const;
 type SourceType = keyof typeof SOURCE_TYPES;
 const typeOf = (item: Item): Exclude<SourceType, 'all'> =>
   item.sourceKind
@@ -89,13 +95,16 @@ const typeOf = (item: Item): Exclude<SourceType, 'all'> =>
         : item.kind === 'shared'
           ? 'after_effects'
           : 'other';
-const SORTS = {
-  updated: 'Recently updated',
-  name: 'Name',
-  motion: 'Animated first',
-  type: 'Source type',
+// The columns a person sorts by, clicking the header. Source sorts animated before static within a
+// type, so "every animated After Effects template" reads as one run of rows.
+const SORT_COLUMNS = {
+  name: 'Template',
+  type: 'Source',
+  status: 'Status',
+  updated: 'Updated',
 } as const;
-type Sort = keyof typeof SORTS;
+type SortKey = keyof typeof SORT_COLUMNS;
+type Sort = { key: SortKey; dir: 'asc' | 'desc' };
 const MOTION_RANK: Record<Motion | 'unknown', number> = { animated: 0, static: 1, unknown: 2 };
 
 const chipClass = (active: boolean) =>
@@ -111,6 +120,135 @@ const toggled = (keys: Set<string>, key: string) => {
   if (!next.delete(key)) next.add(key);
   return next;
 };
+
+const statusOf = (item: Item): TemplateStatus =>
+  item.kind === 'source' ? item.status : item.shared.draft ? 'draft' : 'ready';
+
+/** Ties fall back to the name, so a sort never shuffles equal rows between renders. */
+function compareItems(a: Item, b: Item, { key, dir }: Sort): number {
+  const order =
+    key === 'name'
+      ? 0
+      : key === 'type'
+        ? SOURCE_TYPES[typeOf(a)].localeCompare(SOURCE_TYPES[typeOf(b)]) ||
+          MOTION_RANK[a.motion ?? 'unknown'] - MOTION_RANK[b.motion ?? 'unknown']
+        : key === 'status'
+          ? TEMPLATE_STATUS[statusOf(a)].label.localeCompare(TEMPLATE_STATUS[statusOf(b)].label)
+          : a.updatedAt.localeCompare(b.updatedAt);
+  return (dir === 'asc' ? 1 : -1) * (order || a.name.localeCompare(b.name));
+}
+
+function SortHead({
+  column,
+  sort,
+  onSort,
+  className,
+}: {
+  column: SortKey;
+  sort: Sort;
+  onSort: (column: SortKey) => void;
+  className?: string;
+}) {
+  const active = sort.key === column;
+  const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        // Its own name: the Render picker's trigger is already the page's "Template" button.
+        aria-label={`Sort by ${SORT_COLUMNS[column]}`}
+        onClick={() => onSort(column)}
+        className="inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
+      >
+        {SORT_COLUMNS[column]}
+        <Icon className={cn('size-3', !active && 'opacity-40')} aria-hidden />
+      </button>
+    </TableHead>
+  );
+}
+
+/**
+ * One variant or published build, as a row under its template: the same columns, one step in, with
+ * Edit opening it in the layer editor and its picture on hover, like the template above it.
+ */
+function SubRow({
+  name,
+  detail,
+  source,
+  ratios,
+  status,
+  updatedAt,
+  preview,
+  onOpen,
+  onEdit,
+  children,
+}: {
+  name: string;
+  detail: string;
+  source: string;
+  ratios: readonly string[];
+  status: ReactNode;
+  updatedAt: string;
+  preview: ReactNode;
+  onOpen: () => void;
+  onEdit: () => void;
+  /** Row actions before Edit. */
+  children?: ReactNode;
+}) {
+  return (
+    <TableRow data-sub-row className="bg-muted/20">
+      <TableCell className="py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 pl-7">
+          <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <HoverCard openDelay={300}>
+            <HoverCardTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-0 justify-start px-0 font-normal"
+                  aria-label={`Open ${name}`}
+                  onClick={onOpen}
+                />
+              }
+            >
+              <span className="truncate">{name}</span>
+            </HoverCardTrigger>
+            <HoverCardContent align="start" className="w-96 max-w-[calc(100vw-2rem)]">
+              {preview}
+            </HoverCardContent>
+          </HoverCard>
+          <span className="shrink-0 text-2xs text-muted-foreground">{detail}</span>
+        </div>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">{source}</TableCell>
+      <TableCell className="font-mono">{ratios.join(' · ') || '—'}</TableCell>
+      <TableCell>{status}</TableCell>
+      <TableCell className="whitespace-nowrap text-muted-foreground">
+        <time dateTime={updatedAt} title={updatedAt}>
+          {updatedAt ? new Date(updatedAt).toLocaleDateString() : '—'}
+        </time>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1">
+          {children}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={`Edit ${name}`}
+            title="Edit layers"
+            onClick={onEdit}
+          >
+            <Pencil aria-hidden />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 /**
  * Whether a template delivers video or stills, from the best fact on hand: its own parse (any
@@ -183,7 +321,8 @@ export function TemplateGallery({
   /** The `sharedTemplateId` of the shared template whose adoption is in flight. */
   adopting: string | null;
   /** `tab` names the detail tab to land on — `layers` for settings, `variants` for a variant. */
-  onOpen: (assetId: string, tab?: string) => void;
+  /** `comp` names the composition Edit layers opens on — an output row's own. */
+  onOpen: (assetId: string, tab?: string, comp?: string) => void;
   onOpenShared: (template: SharedTemplate) => void;
   onRename: (assetId: string, title: string) => void;
   onToggleShared: (template: SharedTemplate) => void;
@@ -194,7 +333,14 @@ export function TemplateGallery({
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [sort, setSort] = useState<Sort>('updated');
+  const [sort, setSort] = useState<Sort>({ key: 'updated', dir: 'desc' });
+  // The same column again flips it; a new one starts where people expect — newest first, A to Z.
+  const sortBy = (key: SortKey) =>
+    setSort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'updated' ? 'desc' : 'asc' },
+    );
   const [motion, setMotion] = useState<Motion | null>(null);
   const [sourceType, setSourceType] = useState<SourceType>('all');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -234,7 +380,7 @@ export function TemplateGallery({
     isPending: variantsPending,
     refetch: reloadVariants,
   } = useQuery({
-    queryKey: ['forge', brandId, 'revision-variants', 'all'],
+    queryKey: forgeQueryKeys.revisionVariants(brandId, 'all'),
     queryFn: () => fetchTemplateRevisionVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
@@ -254,6 +400,9 @@ export function TemplateGallery({
   const buildParentOf = (template: SharedTemplate) =>
     template.sourceAssetId ? (familyOf(template.sourceAssetId) ?? template.sourceAssetId) : null;
   const metadata = new Map(catalog?.map((item) => [item.assetId, item]));
+  const uploads = new Map(sources.map((source) => [source.assetId, source]));
+  const sourceOf = (assetId: string | null | undefined) =>
+    uploads.get(assetId ?? '') ?? metadata.get(assetId ?? '')?.source;
   const familyStatus = (source: TemplateSourceSummary) =>
     families
       .get(familyOf(source.assetId) ?? '')
@@ -360,14 +509,7 @@ export function TemplateGallery({
           (sourceType === 'all' || typeOf(item) === sourceType) &&
           (!needle || item.name.toLowerCase().includes(needle)),
       )
-      .sort(
-        (a, b) =>
-          (sort === 'type' ? SOURCE_TYPES[typeOf(a)].localeCompare(SOURCE_TYPES[typeOf(b)]) : 0) ||
-          (sort === 'motion'
-            ? MOTION_RANK[a.motion ?? 'unknown'] - MOTION_RANK[b.motion ?? 'unknown']
-            : 0) ||
-          (sort === 'name' ? a.name.localeCompare(b.name) : b.updatedAt.localeCompare(a.updatedAt)),
-      );
+      .sort((a, b) => compareItems(a, b, sort));
   }, [items, query, filter, sort, motion, sourceType]);
 
   return (
@@ -443,20 +585,6 @@ export function TemplateGallery({
             ))}
           </SelectContent>
         </Select>
-        <div className="ml-auto">
-          <Select value={sort} onValueChange={(next) => setSort(next as Sort)}>
-            <SelectTrigger className="h-8 w-44 text-xs" aria-label="Sort templates">
-              <SelectValue>{SORTS[sort]}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(SORTS) as Sort[]).map((option) => (
-                <SelectItem key={option} value={option}>
-                  {SORTS[option]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {filter !== 'shared' ? (
@@ -466,11 +594,11 @@ export function TemplateGallery({
         <Table aria-label="Templates" className="text-xs">
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-64">Template</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Formats / variants</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Updated</TableHead>
+              <SortHead column="name" sort={sort} onSort={sortBy} className="min-w-64" />
+              <SortHead column="type" sort={sort} onSort={sortBy} />
+              <TableHead>Formats</TableHead>
+              <SortHead column="status" sort={sort} onSort={sortBy} />
+              <SortHead column="updated" sort={sort} onSort={sortBy} />
               <TableHead>
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -519,9 +647,20 @@ export function TemplateGallery({
                       const branched =
                         family.length > 1 || family.some((variant) => variant.revisions.length > 1);
                       const published = builds.get(parent ?? '') ?? [];
-                      const subEntries = (branched ? family.length : 0) + published.length;
+                      // Every delivery composition is an output a render can pick — an artboard, a
+                      // ratio, an animated or still cut, an arrangement. A template's published
+                      // builds ARE those outputs when it has them, so they are listed instead.
+                      const outputs = (source?.parse?.comps ?? []).filter(
+                        (comp) => comp.isDelivery,
+                      );
+                      const listedOutputs = !published.length && outputs.length > 1 ? outputs : [];
+                      const subEntries =
+                        (branched ? family.length : 0) + published.length + listedOutputs.length;
                       const nested = subEntries > 0;
                       const open = nested && expanded.has(item.key);
+                      // A build standing in as the row renders under its own key, not its source's.
+                      const primeKey =
+                        item.kind === 'shared' ? item.shared.templateKey : item.source.templateKey;
                       return (
                         <Fragment key={item.key}>
                           <TableRow>
@@ -569,7 +708,15 @@ export function TemplateGallery({
                                     className="w-96 max-w-[calc(100vw-2rem)]"
                                   >
                                     {source ? (
-                                      <div className="flex flex-col gap-3">
+                                      <TemplateHoverPreview
+                                        brandId={brandId}
+                                        name={item.name}
+                                        templateKey={primeKey}
+                                        parse={source.parse}
+                                        ratios={source.ratios}
+                                        renders={rendersOf(primeKey)}
+                                        emptyLabel={emptyLabel}
+                                      >
                                         <TemplateFacts
                                           brandId={brandId}
                                           source={source}
@@ -602,7 +749,7 @@ export function TemplateGallery({
                                         >
                                           Inspect checks and original files
                                         </Button>
-                                      </div>
+                                      </TemplateHoverPreview>
                                     ) : item.kind === 'shared' ? (
                                       <SharedTemplateCard
                                         brandId={brandId}
@@ -617,6 +764,11 @@ export function TemplateGallery({
                                     ) : null}
                                   </HoverCardContent>
                                 </HoverCard>
+                                {nested ? (
+                                  <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
+                                    {pluralize(subEntries, 'variant')}
+                                  </span>
+                                ) : null}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -632,10 +784,7 @@ export function TemplateGallery({
                               </span>
                             </TableCell>
                             <TableCell className="font-mono">
-                              {source
-                                ? (source.ratios.join(' · ') || '—') +
-                                  ` / ${family.length || 1 + (catalog?.filter((variant) => variant.rootAssetId === (metadata.get(source.assetId)?.rootAssetId ?? source.assetId) && variant.assetId !== (metadata.get(source.assetId)?.rootAssetId ?? source.assetId)).length ?? 0)}`
-                                : '—'}
+                              {source?.ratios.join(' · ') || '—'}
                             </TableCell>
                             <TableCell>
                               {item.kind === 'source' ? (
@@ -700,105 +849,180 @@ export function TemplateGallery({
                               </div>
                             </TableCell>
                           </TableRow>
-                          {open ? (
-                            <TableRow className="hover:bg-transparent">
-                              <TableCell colSpan={6} className="bg-muted/20 py-2">
-                                <ul
-                                  aria-label={`Variants of ${item.name}`}
-                                  className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                                >
-                                  {(branched ? family : []).map((variant) => {
-                                    const draft = variant.revisions.find(
-                                      (revision) => revision.id === variant.draftHeadRevisionId,
-                                    );
-                                    if (!draft) return null;
-                                    const name = variant.original ? 'Original' : variant.name;
-                                    const status = variant.publishedHeadRevisionId
-                                      ? 'Published'
-                                      : 'Draft';
-                                    const revisions = pluralize(
-                                      variant.revisions.length,
-                                      'revision',
-                                    );
-                                    return (
-                                      <li key={variant.variantId}>
-                                        <button
-                                          type="button"
-                                          aria-label={`${name} · ${status} · Revision ${draft.number} · ${revisions}`}
-                                          onClick={() => onOpen(draft.sourceAssetId, 'variants')}
-                                          className="flex w-full flex-col gap-1 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
-                                        >
-                                          <span className="flex w-full items-center gap-2">
-                                            <strong className="min-w-0 flex-1 truncate">
-                                              {name}
-                                            </strong>
-                                            <Badge
-                                              variant={status === 'Published' ? 'success' : 'muted'}
-                                            >
-                                              {status}
-                                            </Badge>
-                                          </span>
-                                          <span className="text-muted-foreground">
-                                            Revision {draft.number} · {revisions}
-                                          </span>
-                                        </button>
-                                      </li>
-                                    );
-                                  })}
-                                  {published.map((template) => {
-                                    const name =
-                                      template.displayName ?? templateDisplayName(template.name);
-                                    return (
-                                      <li
-                                        key={sharedTemplateId(template)}
-                                        className="flex flex-col gap-1 rounded-md border bg-background px-3 py-2"
+                          {open
+                            ? (branched ? family : []).map((variant) => {
+                                const draft = variant.revisions.find(
+                                  (revision) => revision.id === variant.draftHeadRevisionId,
+                                );
+                                if (!draft) return null;
+                                const name = variant.original ? 'Original' : variant.name;
+                                const publication = variant.revisions.find(
+                                  (revision) => revision.id === variant.publishedHeadRevisionId,
+                                )?.publications[0];
+                                const key = publication?.templateKey ?? draft.source.templateKey;
+                                return (
+                                  <SubRow
+                                    key={variant.variantId}
+                                    name={name}
+                                    detail={`Revision ${draft.number} · ${pluralize(variant.revisions.length, 'revision')}`}
+                                    source={SOURCE_TYPES[variant.sourceKind]}
+                                    ratios={draft.source.ratios}
+                                    status={
+                                      <Badge
+                                        variant={
+                                          variant.publishedHeadRevisionId ? 'success' : 'muted'
+                                        }
                                       >
-                                        <button
-                                          type="button"
-                                          aria-label={`${name} · published build`}
-                                          onClick={() => onOpenShared(template)}
-                                          className="flex w-full items-center gap-2 text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
-                                        >
-                                          <strong className="min-w-0 flex-1 truncate">
-                                            {name}
-                                          </strong>
-                                          <Badge variant={template.granted ? 'success' : 'muted'}>
-                                            {template.granted ? 'In use' : 'Off'}
-                                          </Badge>
-                                        </button>
-                                        <span className="flex items-center gap-1">
-                                          {template.granted && onOpenRender ? (
-                                            <Button
-                                              size="xs"
-                                              variant="outline"
-                                              aria-label={`Render ${name}`}
-                                              onClick={() =>
-                                                onOpenRender({
-                                                  templateKey: template.templateKey,
-                                                  bindingId: template.workspaceId,
-                                                })
-                                              }
-                                            >
-                                              Render
-                                            </Button>
-                                          ) : null}
-                                          <Button
-                                            size="xs"
-                                            variant="ghost"
-                                            aria-label={`${template.granted ? 'Remove' : 'Use'} ${name} ${template.granted ? 'from' : 'in'} ${brandName ?? 'this brand'}`}
-                                            disabled={adopting === sharedTemplateId(template)}
-                                            onClick={() => onToggleShared(template)}
-                                          >
-                                            {template.granted ? 'Remove' : 'Use'}
-                                          </Button>
-                                        </span>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
+                                        {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
+                                      </Badge>
+                                    }
+                                    updatedAt={draft.createdAt}
+                                    preview={
+                                      <TemplateHoverPreview
+                                        brandId={brandId}
+                                        name={name}
+                                        templateKey={key}
+                                        parse={draft.source.parse}
+                                        ratios={draft.source.ratios}
+                                        renders={rendersOf(key)}
+                                        emptyLabel={emptyLabel}
+                                      >
+                                        <TemplateFacts
+                                          brandId={brandId}
+                                          source={draft.source}
+                                          lastRender={rendersOf(key)[0]}
+                                          emptyLabel={emptyLabel}
+                                        />
+                                      </TemplateHoverPreview>
+                                    }
+                                    onOpen={() => onOpen(draft.sourceAssetId, 'variants')}
+                                    onEdit={() => onOpen(draft.sourceAssetId, 'layers')}
+                                  />
+                                );
+                              })
+                            : null}
+                          {open && source
+                            ? listedOutputs.map((comp) => {
+                                const ratio = source.parse?.ratios.find((entry) =>
+                                  entry.comps.includes(comp.name),
+                                )?.ratio;
+                                const frames =
+                                  comp.durationSec !== undefined && comp.frameRate
+                                    ? Math.round(comp.durationSec * comp.frameRate)
+                                    : null;
+                                return (
+                                  <SubRow
+                                    key={`output:${comp.name}`}
+                                    name={comp.name}
+                                    detail={`Output · ${comp.width}×${comp.height}`}
+                                    source={SOURCE_TYPES[typeOf(item)]}
+                                    ratios={ratio ? [ratio] : []}
+                                    status={
+                                      <Badge variant="muted">
+                                        {frames === null
+                                          ? 'Output'
+                                          : frames > 1
+                                            ? `Animated · ${comp.durationSec!.toFixed(1)}s`
+                                            : 'Static'}
+                                      </Badge>
+                                    }
+                                    updatedAt={item.updatedAt}
+                                    preview={
+                                      <TemplateHoverPreview
+                                        brandId={brandId}
+                                        name={comp.name}
+                                        templateKey={primeKey}
+                                        parse={source.parse}
+                                        ratios={source.ratios}
+                                        renders={rendersOf(primeKey)}
+                                        emptyLabel={emptyLabel}
+                                        comp={comp.name}
+                                      />
+                                    }
+                                    onOpen={() => onOpen(source.assetId)}
+                                    onEdit={() => onOpen(source.assetId, 'layers', comp.name)}
+                                  />
+                                );
+                              })
+                            : null}
+                          {open
+                            ? published.map((template) => {
+                                const name =
+                                  template.displayName ?? templateDisplayName(template.name);
+                                const built = sourceOf(template.sourceAssetId);
+                                const toggle = `${template.granted ? 'Remove' : 'Use'} ${name} ${template.granted ? 'from' : 'in'} ${brandName ?? 'this brand'}`;
+                                return (
+                                  <SubRow
+                                    key={sharedTemplateId(template)}
+                                    name={name}
+                                    detail="Published build"
+                                    source={
+                                      SOURCE_TYPES[
+                                        sourceKindOf(template.sourceAssetId) ?? typeOf(item)
+                                      ]
+                                    }
+                                    ratios={built?.ratios ?? []}
+                                    status={
+                                      <Badge variant={template.granted ? 'success' : 'muted'}>
+                                        {template.granted ? 'In use' : 'Off'}
+                                      </Badge>
+                                    }
+                                    updatedAt={template.updatedAt ?? ''}
+                                    preview={
+                                      <TemplateHoverPreview
+                                        brandId={brandId}
+                                        name={name}
+                                        templateKey={template.granted ? template.templateKey : null}
+                                        parse={built?.parse ?? null}
+                                        ratios={built?.ratios ?? []}
+                                        renders={rendersOf(template.templateKey)}
+                                        emptyLabel={emptyLabel}
+                                      >
+                                        {built ? (
+                                          <TemplateFacts
+                                            brandId={brandId}
+                                            source={built}
+                                            lastRender={rendersOf(template.templateKey)[0]}
+                                            emptyLabel={emptyLabel}
+                                          />
+                                        ) : null}
+                                      </TemplateHoverPreview>
+                                    }
+                                    onOpen={() => onOpenShared(template)}
+                                    onEdit={() =>
+                                      template.sourceAssetId
+                                        ? onOpen(template.sourceAssetId, 'layers')
+                                        : onOpenShared(template)
+                                    }
+                                  >
+                                    {template.granted && onOpenRender ? (
+                                      <Button
+                                        size="xs"
+                                        variant="outline"
+                                        aria-label={`Render ${name}`}
+                                        onClick={() =>
+                                          onOpenRender({
+                                            templateKey: template.templateKey,
+                                            bindingId: template.workspaceId,
+                                          })
+                                        }
+                                      >
+                                        Render
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      size="xs"
+                                      variant="ghost"
+                                      aria-label={toggle}
+                                      disabled={adopting === sharedTemplateId(template)}
+                                      onClick={() => onToggleShared(template)}
+                                    >
+                                      {template.granted ? 'Remove' : 'Use'}
+                                    </Button>
+                                  </SubRow>
+                                );
+                              })
+                            : null}
                         </Fragment>
                       );
                     })}

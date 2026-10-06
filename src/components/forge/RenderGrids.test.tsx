@@ -414,6 +414,41 @@ const openSetName = () =>
     ?.replace(/^Open /, '');
 
 describe('RenderRequestsGrid', () => {
+  test('includes the saved output selection when checking a saved row', async () => {
+    const outputId = '77777777-7777-4777-8777-777777777771';
+    const savedRow = NEWEST.rows[0];
+    if (!savedRow) throw new Error('Missing saved row');
+    contractOverrides = {
+      outputs: [{ id: outputId, label: 'Card A', ratio: '16:9', mediaType: 'video' }],
+    };
+    listRenderSetsMock.mockImplementation(async () => ({
+      items: [
+        {
+          ...NEWEST,
+          rows: [{ ...savedRow, overrides: { headline: 'Hola mundo' }, outputIds: [outputId] }],
+        },
+      ],
+      nextCursor: null,
+    }));
+    preflightMock.mockImplementation(async (input) => {
+      if (
+        'renderSetId' in input &&
+        (!('outputIds' in input) || JSON.stringify(input.outputIds) !== JSON.stringify([outputId]))
+      ) {
+        throw new ApiError('render_set_row_snapshot_mismatch', 409);
+      }
+      return READY_RESPONSE;
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await waitFor(() => expect(preflightMock).toHaveBeenCalled());
+    expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      renderSetId: NEWEST.id,
+      renderSetRowId: savedRow.id,
+      outputIds: [outputId],
+    });
+    await screen.findByText('Ready');
+  });
+
   test('associates an authoritative guardrail refusal with its row and cell', async () => {
     preflightMock.mockImplementationOnce(async () => {
       throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
@@ -644,6 +679,7 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
     expect(preflightMock).toHaveBeenCalledTimes(1);
     expect(preflightMock.mock.calls[0]?.[0].variables).toEqual({ headline: 'Hola mundo' });
+    expect(preflightMock.mock.calls[0]?.[0]).not.toHaveProperty('outputIds');
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
   });
@@ -1092,11 +1128,10 @@ describe('RenderRequestsGrid', () => {
 
   test('choosing another template saves the edits on screen first', async () => {
     extraTemplates = [{ ...TEMPLATE, key: '134', displayName: 'Summer Promo' }];
-    // A radio item keeps its menu open, so the trigger is only pressed when the menu is closed.
+    // The picker closes on a pick, so each pick opens it again.
     const pickTemplate = async (name: RegExp) => {
-      if (!screen.queryByRole('menu'))
-        fireEvent.click(screen.getByRole('button', { name: 'Template' }));
-      fireEvent.click(await screen.findByRole('menuitemradio', { name }));
+      fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+      fireEvent.click(await screen.findByRole('option', { name }));
     };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByText('Choose a template');

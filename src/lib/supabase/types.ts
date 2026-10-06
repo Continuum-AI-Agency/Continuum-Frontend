@@ -2750,6 +2750,57 @@ export type Database = {
         }
         Relationships: []
       }
+      tiktok_advertisers: {
+        Row: {
+          advertiser_id: string
+          brand_integration_id: string
+          country: string | null
+          created_at: string
+          currency: string | null
+          display_timezone: string | null
+          id: string
+          name: string | null
+          owner_bc_id: string | null
+          raw_profile: Json
+          status: string | null
+          synced_at: string | null
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          advertiser_id: string
+          brand_integration_id: string
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          display_timezone?: string | null
+          id?: string
+          name?: string | null
+          owner_bc_id?: string | null
+          raw_profile?: Json
+          status?: string | null
+          synced_at?: string | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          advertiser_id?: string
+          brand_integration_id?: string
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          display_timezone?: string | null
+          id?: string
+          name?: string | null
+          owner_bc_id?: string | null
+          raw_profile?: Json
+          status?: string | null
+          synced_at?: string | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tiktok_users: {
         Row: {
           avatar_url: string | null
@@ -7861,7 +7912,22 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "home_profiles_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "home_profiles_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       integration_accounts_assets: {
         Row: {
@@ -29271,6 +29337,7 @@ export type Database = {
       optimizer_claim_due_portfolios: {
         Args: { p_limit?: number }
         Returns: {
+          accounts: Json
           ad_account_id: string
           apply_mode: string
           apply_mode_changed_by: string
@@ -29299,6 +29366,7 @@ export type Database = {
           period_budget: number
           period_end: string
           period_start: string
+          platform: string
           scale_cadence_days: number
           scale_growth_pct: number
           scale_max_daily: number
@@ -29425,6 +29493,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      optimizer_confirm_action_leg: {
+        Args: {
+          p_action_kind: string
+          p_audit?: Json
+          p_entity_ref: string
+          p_error?: string
+          p_platform: string
+          p_portfolio_id: string
+          p_run_id: string
+          p_status: string
+          p_utc_day: string
+        }
+        Returns: string
+      }
       optimizer_confirm_ad_status: {
         Args: {
           p_ad_id: string
@@ -29494,9 +29576,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      optimizer_conversions_daily_count: {
+        Args: { p_kind: string; p_since?: string }
+        Returns: number
+      }
       optimizer_create_portfolio: {
         Args: { p_ad_account_id: string; p_brand_id: string; p_config: Json }
         Returns: string
+      }
+      optimizer_cross_platform_move_count: {
+        Args: { p_since?: string }
+        Returns: number
       }
       optimizer_delete_bench_portfolio: {
         Args: { p_portfolio_id: string }
@@ -29531,6 +29621,10 @@ export type Database = {
         Args: { p_adsets: Json; p_portfolio_id: string }
         Returns: Json
       }
+      optimizer_entity_daily_count: {
+        Args: { p_platform: string; p_since?: string }
+        Returns: number
+      }
       optimizer_expire_stale_recommendations: {
         Args: { p_days?: number }
         Returns: number
@@ -29545,6 +29639,10 @@ export type Database = {
       }
       optimizer_get_account_business_read: {
         Args: { p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_get_account_platform_metrics: {
+        Args: { p_brand_id: string; p_window?: string }
         Returns: Json
       }
       optimizer_get_account_read: {
@@ -29578,6 +29676,15 @@ export type Database = {
           target_status: string
         }[]
       }
+      optimizer_get_approved_action_recs: {
+        Args: { p_portfolio_id: string; p_rec_ids: Json }
+        Returns: {
+          action: Json
+          reason: string
+          rec_id: string
+          trigger: string
+        }[]
+      }
       optimizer_get_approved_apply_items: {
         Args: { p_run_id: string }
         Returns: {
@@ -29597,6 +29704,14 @@ export type Database = {
           reason: string
           rec_id: string
         }[]
+      }
+      optimizer_get_attribution_match_universe: {
+        Args: { p_portfolio_id: string }
+        Returns: Json
+      }
+      optimizer_get_attribution_source: {
+        Args: { p_portfolio_id: string }
+        Returns: Json
       }
       optimizer_get_audience_proposal_context: {
         Args: { p_id: string }
@@ -29642,6 +29757,15 @@ export type Database = {
         Args: { p_portfolio_id: string }
         Returns: string[]
       }
+      optimizer_get_platform_objective_map: {
+        Args: { p_platform: string }
+        Returns: {
+          kpi_field: string
+          objective: string
+          platform_goal: string
+          qualifier: string
+        }[]
+      }
       optimizer_get_portfolio_brief: {
         Args: { p_portfolio_id: string }
         Returns: Json
@@ -29650,9 +29774,22 @@ export type Database = {
         Args: { p_portfolio_id: string }
         Returns: Json
       }
+      optimizer_get_portfolio_metrics: {
+        Args: { p_portfolio_id: string; p_window?: string }
+        Returns: Json
+      }
       optimizer_get_portfolio_performance: {
         Args: { p_limit?: number; p_portfolio_id: string }
         Returns: Json
+      }
+      optimizer_get_portfolio_platform_caps: {
+        Args: { p_portfolio_id: string }
+        Returns: {
+          accounts: number
+          currency: string
+          daily_cap_minor: number
+          platform: string
+        }[]
       }
       optimizer_get_portfolio_recommendations: {
         Args: { p_limit?: number; p_portfolio_id: string }
@@ -29860,6 +29997,10 @@ export type Database = {
           ts: string
         }[]
       }
+      optimizer_list_open_moves: {
+        Args: { p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_list_portfolio_adsets: {
         Args: { p_portfolio_id: string }
         Returns: {
@@ -29882,6 +30023,7 @@ export type Database = {
       optimizer_load_portfolio: {
         Args: { p_portfolio_id: string }
         Returns: {
+          accounts: Json
           ad_account_id: string
           apply_mode: string
           apply_mode_changed_by: string
@@ -29907,6 +30049,7 @@ export type Database = {
           period_budget: number
           period_end: string
           period_start: string
+          platform: string
           scale_cadence_days: number
           scale_growth_pct: number
           scale_max_daily: number
@@ -29916,6 +30059,10 @@ export type Database = {
       optimizer_mark_apply_results: {
         Args: { p_results: Json; p_run_id: string }
         Returns: number
+      }
+      optimizer_mark_attribution_source_error: {
+        Args: { p_error: string; p_source_id: string }
+        Returns: undefined
       }
       optimizer_mark_roster_presence: {
         Args: {
@@ -29940,6 +30087,14 @@ export type Database = {
       optimizer_patch_audience_proposal_result_owned: {
         Args: { p_id: string; p_patch: Json; p_worker_id: string }
         Returns: boolean
+      }
+      optimizer_platform_apply_count: {
+        Args: { p_platform: string; p_since?: string }
+        Returns: number
+      }
+      optimizer_platform_signal_count: {
+        Args: { p_platform: string; p_since?: string }
+        Returns: number
       }
       optimizer_put_account_business_read: {
         Args: {
@@ -29974,6 +30129,27 @@ export type Database = {
       optimizer_reject_creative_swap_publish: {
         Args: { p_job_id: string; p_reason?: string }
         Returns: undefined
+      }
+      optimizer_replace_ga4_conversions: {
+        Args: {
+          p_currency: string
+          p_report: Json
+          p_rows: Json
+          p_since: string
+          p_source_id: string
+          p_until: string
+        }
+        Returns: Json
+      }
+      optimizer_replace_sheet_conversions: {
+        Args: {
+          p_report: Json
+          p_rows: Json
+          p_since: string
+          p_source_id: string
+          p_until: string
+        }
+        Returns: Json
       }
       optimizer_request_account_read: {
         Args: { p_ad_account_id: string; p_brand_id: string }
@@ -30017,6 +30193,18 @@ export type Database = {
           p_reference_asset_ids?: string[]
         }
         Returns: string
+      }
+      optimizer_reserve_action: {
+        Args: {
+          p_dry_run?: boolean
+          p_legs: Json
+          p_move_id: string
+          p_portfolio_id: string
+          p_recommendation_id?: string
+          p_run_id: string
+          p_utc_day: string
+        }
+        Returns: Json
       }
       optimizer_reserve_ad_status: {
         Args: {
@@ -30089,6 +30277,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      optimizer_set_portfolio_platform_cap: {
+        Args: {
+          p_daily_cap_minor: number
+          p_platform: string
+          p_portfolio_id: string
+        }
+        Returns: number
+      }
       optimizer_set_recommendation_status: {
         Args: { p_rec_id: string; p_route?: string; p_status: string }
         Returns: undefined
@@ -30105,6 +30301,17 @@ export type Database = {
         Args: { p_actor?: string; p_patch: Json; p_rule_id: string }
         Returns: undefined
       }
+      optimizer_settle_action_move: {
+        Args: {
+          p_move_id: string
+          p_outcome: string
+          p_portfolio_id: string
+          p_reason: string
+          p_reverts?: Json
+          p_run_id?: string
+        }
+        Returns: Json
+      }
       optimizer_supersede_recommendations: {
         Args: { p_portfolio_id: string; p_run_id: string }
         Returns: number
@@ -30116,6 +30323,24 @@ export type Database = {
       optimizer_update_portfolio: {
         Args: { p_patch: Json; p_portfolio_id: string }
         Returns: Json
+      }
+      optimizer_upsert_entity_snapshots: {
+        Args: {
+          p_as_of: string
+          p_daily: Json
+          p_entities: Json
+          p_portfolio_id: string
+        }
+        Returns: Json
+      }
+      optimizer_upsert_ga4_attribution_source: {
+        Args: {
+          p_activate?: boolean
+          p_config: Json
+          p_label?: string
+          p_portfolio_id: string
+        }
+        Returns: string
       }
       optimizer_upsert_recommendation_insight: {
         Args: {
@@ -30135,6 +30360,15 @@ export type Database = {
       optimizer_upsert_rules: {
         Args: { p_portfolio_id: string; p_rules: Json }
         Returns: number
+      }
+      optimizer_upsert_sheet_attribution_source: {
+        Args: {
+          p_activate?: boolean
+          p_config: Json
+          p_label?: string
+          p_portfolio_id: string
+        }
+        Returns: string
       }
       optimizer_upsert_snapshots: {
         Args: { p_cycle_ts: string; p_portfolio_id: string; p_snapshots: Json }

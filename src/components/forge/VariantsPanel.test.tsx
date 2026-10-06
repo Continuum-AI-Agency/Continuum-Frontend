@@ -44,7 +44,7 @@ const variant = (id: string, parentAssetId: string | null, name: string) =>
     },
   });
 
-test('named variants retain draft and published revisions and render the exact publication', () => {
+const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
   const originals = [
     variant(root, null, 'Original'),
     variant(child, root, 'Blue'),
@@ -59,7 +59,7 @@ test('named variants retain draft and published revisions and render the exact p
     draftHeadRevisionId: item.assetId,
     publishedHeadRevisionId: index === 1 ? item.assetId : null,
     archivedAt: null,
-    sourceKind: 'illustrator',
+    sourceKind,
     revisions: [
       {
         templateId: root,
@@ -83,6 +83,11 @@ test('named variants retain draft and published revisions and render the exact p
       },
     ],
   }));
+  return items;
+};
+
+test('named variants retain draft and published revisions and render the exact publication', () => {
+  const items = registry('illustrator');
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), items);
   const onInspect = mock(() => undefined);
@@ -113,4 +118,35 @@ test('named variants retain draft and published revisions and render the exact p
   });
   fireEvent.click(screen.getAllByRole('button', { name: 'Inspect draft' })[0]!);
   expect(onInspect).toHaveBeenCalledWith(root);
+});
+
+const renderPanel = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), registry(sourceKind));
+  const onEditLayers = mock(() => undefined);
+  render(
+    <QueryClientProvider client={client}>
+      <VariantsPanel
+        brandId={brandId}
+        assetId={grandchild}
+        expectedVersionId={versionId}
+        onEditLayers={onEditLayers}
+      />
+    </QueryClientProvider>,
+  );
+  return onEditLayers;
+};
+
+test('a design import makes variants from its layers, never from an uploaded After Effects project', () => {
+  const onEditLayers = renderPanel('illustrator');
+  expect(screen.getByText(/built from an Illustrator file/)).toBeTruthy();
+  expect(screen.queryByLabelText('Upload After Effects variant')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit layers' }));
+  expect(onEditLayers).toHaveBeenCalledTimes(1);
+});
+
+test('an After Effects template still takes an authored project upload', () => {
+  renderPanel('after_effects');
+  expect(screen.getByLabelText('Upload After Effects variant')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Edit layers' })).toBeNull();
 });
