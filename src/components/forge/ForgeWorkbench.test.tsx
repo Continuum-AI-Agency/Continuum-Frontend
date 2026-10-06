@@ -239,7 +239,8 @@ describe('ForgeWorkbench', () => {
     expect(document.body.textContent).not.toMatch(/\[DRAFT|template \d+|Continuum_app/);
   });
 
-  test('published delivery compositions appear as separate template choices', async () => {
+  // Owner, 2026-10-05: one design's published builds are sub-entries of it, never rows of their own.
+  test('published delivery compositions are cards under the template they were built from', async () => {
     fetchedSources = [{ ...SOURCE, templateKey: '99' }];
     discovered = [
       workspaceTemplate({
@@ -256,9 +257,12 @@ describe('ForgeWorkbench', () => {
       }),
     ];
     renderWorkbench();
-    expect(await screen.findByRole('button', { name: 'Open Inyogo · Card A' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Open Inyogo · Card B' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Open Untitled template' })).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open Inyogo · Card A' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Untitled template' }));
+    expect(screen.getByRole('button', { name: 'Inyogo · Card A · published build' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Inyogo · Card B · published build' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Remove Inyogo · Card B from / })).toBeTruthy();
   });
 
   test('a card opens into its detail panel through a transition, and Templates goes back', async () => {

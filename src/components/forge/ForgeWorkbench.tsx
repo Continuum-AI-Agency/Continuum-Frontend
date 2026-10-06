@@ -149,10 +149,6 @@ export function ForgeWorkbench({
       ),
     [buildNames, rawSources],
   );
-  const bundledAssetIds = new Set(
-    shared.flatMap((template) => (template.sourceAssetId ? [template.sourceAssetId] : [])),
-  );
-
   useEffect(() => {
     if (sourceQuery.error)
       toast.error(
@@ -476,7 +472,7 @@ export function ForgeWorkbench({
         <TemplateGallery
           brandId={brandId}
           brandName={brandName}
-          sources={sources.filter((source) => !bundledAssetIds.has(source.assetId))}
+          sources={sources}
           shared={shared}
           adopting={adopting}
           onOpen={open}

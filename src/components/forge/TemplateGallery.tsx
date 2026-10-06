@@ -250,6 +250,9 @@ export function TemplateGallery({
   );
   const familyOf = (assetId: string | null | undefined) =>
     canonicalBySource.get(assetId ?? '')?.templateId;
+  // The template a published build belongs to: its source's family original, else that source.
+  const buildParentOf = (template: SharedTemplate) =>
+    template.sourceAssetId ? (familyOf(template.sourceAssetId) ?? template.sourceAssetId) : null;
   const metadata = new Map(catalog?.map((item) => [item.assetId, item]));
   const familyStatus = (source: TemplateSourceSummary) =>
     families
@@ -265,10 +268,12 @@ export function TemplateGallery({
   const sourceKindOf = (assetId: string | null | undefined) =>
     canonicalBySource.get(assetId ?? '')?.sourceKind ?? metadata.get(assetId ?? '')?.sourceKind;
 
-  const items = useMemo<Item[]>(() => {
+  const { items, builds } = useMemo(() => {
+    // Published builds under the template they were built from, by that template's asset id.
+    const builds = new Map<string, SharedTemplate[]>();
     // Until the registry answers nothing tells a variant's upload from an original, and a list that
     // shows every revision as its own template is worse than a moment's wait.
-    if (variantsPending) return [];
+    if (variantsPending) return { items: [] as Item[], builds };
     const originals = sources.filter((source) => {
       const family = familyOf(source.assetId);
       if (family) return family === source.assetId;
@@ -276,16 +281,26 @@ export function TemplateGallery({
       const parent = metadata.get(source.assetId)?.parentAssetId;
       return !parent || !metadata.has(parent);
     });
-    // One row per family: a shared build stands in only for an original no upload row shows.
+    // One row per template. A published build of a template on this page is a card under it, never a
+    // row: one design's artboards used to fill the gallery as "Artboard 1…6" with the design hidden.
+    // A build stands in as the row only for a template no upload row shows.
     const shown = new Set(originals.map((source) => source.assetId));
-    const sharedRows = shared.filter((template) => {
-      const family = familyOf(template.sourceAssetId);
-      if (!family) return true;
-      if (template.sourceAssetId !== family || shown.has(family)) return false;
-      shown.add(family);
-      return true;
+    // The original's own build is the one that stands in; a variant's build is a card under it.
+    const ownBuildFirst = [...shared].sort(
+      (a, b) =>
+        Number(b.sourceAssetId === buildParentOf(b)) - Number(a.sourceAssetId === buildParentOf(a)),
+    );
+    const sharedRows = ownBuildFirst.filter((template) => {
+      const parent = buildParentOf(template);
+      if (!parent) return true;
+      if (!shown.has(parent)) {
+        shown.add(parent);
+        return true;
+      }
+      builds.set(parent, [...(builds.get(parent) ?? []), template]);
+      return false;
     });
-    return [
+    const items: Item[] = [
       ...originals.map((source) => ({
         sourceKind: sourceKindOf(source.assetId),
         kind: 'source' as const,
@@ -314,6 +329,7 @@ export function TemplateGallery({
         shared: template,
       })),
     ];
+    return { items, builds };
   }, [sources, shared, rendersByTemplate, catalog, canonicalVariants, variantsPending]);
 
   const counts = useMemo(() => {
@@ -497,14 +513,14 @@ export function TemplateGallery({
                           ? item.source
                           : metadata.get(item.shared.sourceAssetId ?? '')?.source;
                       // A parent row's asset is its family's original, so the family is keyed by it.
-                      const family =
-                        families.get(
-                          item.kind === 'source'
-                            ? item.source.assetId
-                            : (item.shared.sourceAssetId ?? ''),
-                        ) ?? [];
-                      const nested =
+                      const parent =
+                        item.kind === 'source' ? item.source.assetId : buildParentOf(item.shared);
+                      const family = families.get(parent ?? '') ?? [];
+                      const branched =
                         family.length > 1 || family.some((variant) => variant.revisions.length > 1);
+                      const published = builds.get(parent ?? '') ?? [];
+                      const subEntries = (branched ? family.length : 0) + published.length;
+                      const nested = subEntries > 0;
                       const open = nested && expanded.has(item.key);
                       return (
                         <Fragment key={item.key}>
@@ -516,7 +532,7 @@ export function TemplateGallery({
                                     variant="ghost"
                                     size="icon-xs"
                                     aria-expanded={open}
-                                    aria-label={`${open ? 'Hide' : 'Show'} ${pluralize(family.length, 'variant')} of ${item.name}`}
+                                    aria-label={`${open ? 'Hide' : 'Show'} ${pluralize(subEntries, 'variant')} of ${item.name}`}
                                     onClick={() =>
                                       setExpanded((previous) => toggled(previous, item.key))
                                     }
@@ -691,7 +707,7 @@ export function TemplateGallery({
                                   aria-label={`Variants of ${item.name}`}
                                   className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                                 >
-                                  {family.map((variant) => {
+                                  {(branched ? family : []).map((variant) => {
                                     const draft = variant.revisions.find(
                                       (revision) => revision.id === variant.draftHeadRevisionId,
                                     );
@@ -726,6 +742,56 @@ export function TemplateGallery({
                                             Revision {draft.number} · {revisions}
                                           </span>
                                         </button>
+                                      </li>
+                                    );
+                                  })}
+                                  {published.map((template) => {
+                                    const name =
+                                      template.displayName ?? templateDisplayName(template.name);
+                                    return (
+                                      <li
+                                        key={sharedTemplateId(template)}
+                                        className="flex flex-col gap-1 rounded-md border bg-background px-3 py-2"
+                                      >
+                                        <button
+                                          type="button"
+                                          aria-label={`${name} · published build`}
+                                          onClick={() => onOpenShared(template)}
+                                          className="flex w-full items-center gap-2 text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
+                                        >
+                                          <strong className="min-w-0 flex-1 truncate">
+                                            {name}
+                                          </strong>
+                                          <Badge variant={template.granted ? 'success' : 'muted'}>
+                                            {template.granted ? 'In use' : 'Off'}
+                                          </Badge>
+                                        </button>
+                                        <span className="flex items-center gap-1">
+                                          {template.granted && onOpenRender ? (
+                                            <Button
+                                              size="xs"
+                                              variant="outline"
+                                              aria-label={`Render ${name}`}
+                                              onClick={() =>
+                                                onOpenRender({
+                                                  templateKey: template.templateKey,
+                                                  bindingId: template.workspaceId,
+                                                })
+                                              }
+                                            >
+                                              Render
+                                            </Button>
+                                          ) : null}
+                                          <Button
+                                            size="xs"
+                                            variant="ghost"
+                                            aria-label={`${template.granted ? 'Remove' : 'Use'} ${name} ${template.granted ? 'from' : 'in'} ${brandName ?? 'this brand'}`}
+                                            disabled={adopting === sharedTemplateId(template)}
+                                            onClick={() => onToggleShared(template)}
+                                          >
+                                            {template.granted ? 'Remove' : 'Use'}
+                                          </Button>
+                                        </span>
                                       </li>
                                     );
                                   })}
