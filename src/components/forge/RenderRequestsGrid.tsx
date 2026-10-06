@@ -968,6 +968,7 @@ export function RenderRequestsGrid({
       if (Object.keys(clientErrors.get(row.id) ?? {}).length > 0) continue;
       const resolved = effectiveValues(rows, row.id);
       const encode = effectiveEncode(rows, row.id);
+      const outputIds = effectiveOutputIds(rows, row.id);
       // Both updates return `current` untouched when the row moved on: a no-op must not be a new
       // array, or every stale response re-renders the grid under the person typing in it.
       const settle = (next: RequestRow['check'], from: RequestRow['check']['state']) =>
@@ -992,6 +993,7 @@ export function RenderRequestsGrid({
             templateKey: key,
             contractHash,
             variables: resolved,
+            ...(outputIds.length ? { outputIds } : {}),
             ...(templateRef ? { templateRef } : {}),
             ...(templateRevision ? { templateRevision } : {}),
             ...(activeSet && signatureOf(rows, contract) === savedSignature
