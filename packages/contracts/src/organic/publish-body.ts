@@ -87,7 +87,10 @@ export function unsupportedPublishOptions(
 ): Array<'firstComment' | 'thumbnail' | 'trial'> {
   const can = PLATFORM_CAPABILITIES[platform].publishOptions;
   const unsupported: Array<'firstComment' | 'thumbnail' | 'trial'> = [];
-  if (options?.firstComment && !can.firstComment) unsupported.push('firstComment');
+  // Graph has no comment edge on a story.
+  if (options?.firstComment && !(can.firstComment && format !== 'STORY')) {
+    unsupported.push('firstComment');
+  }
   if (options?.trial && !(format === 'REEL' && can.trialReel)) unsupported.push('trial');
   const thumbnail = options?.thumbnail;
   if (thumbnail) {
@@ -154,7 +157,21 @@ interface CarouselPublishBody extends PublishTarget {
   caption?: string;
 }
 
-export type PublishRequestBody = PostPublishBody | ReelPublishBody | CarouselPublishBody;
+interface StoryPublishBody extends PublishTarget {
+  postType: 'STORY';
+  placementId: string;
+  /** Exactly one of the two: video wins when both are assigned, as it does for a reel. */
+  imageUrl?: string;
+  videoUrl?: string;
+  /** A story container has no caption field. */
+  caption?: never;
+}
+
+export type PublishRequestBody =
+  | PostPublishBody
+  | ReelPublishBody
+  | CarouselPublishBody
+  | StoryPublishBody;
 
 /**
  * The format a single stored value NAMES, or null when it names none.
@@ -173,12 +190,13 @@ export function matchPublishFormat(format?: string | null): PublishFormat | null
     return 'REEL';
   }
   if (value.includes('carousel')) return 'CAROUSEL';
+  // Before the post group: "story post" is a story. "stories" does not contain "story".
+  if (value.includes('story') || value.includes('stories')) return 'STORY';
   if (
     value.includes('post') ||
     value.includes('image') ||
     value.includes('photo') ||
-    value.includes('static') ||
-    value.includes('story')
+    value.includes('static')
   ) {
     return 'POST';
   }
@@ -254,6 +272,10 @@ export function buildPublishBody(
   const postType = inferPostType(draft);
   const caption = buildFullCaption(draft, platform ?? undefined) || undefined;
   const assets = draft.publishingAssets ?? [];
+  const video = assets.find((asset) => asset.kind === 'video');
+  const image =
+    assets.find((asset) => asset.kind === 'image' && asset.role === 'primary') ??
+    assets.find((asset) => asset.kind === 'image');
 
   const target: PublishTarget = {
     ...(platform ? { platform } : {}),
@@ -263,7 +285,6 @@ export function buildPublishBody(
   };
 
   if (postType === 'REEL') {
-    const video = assets.find((asset) => asset.kind === 'video');
     const cover = assets.find((asset) => asset.role === 'cover' && asset.kind === 'image');
     return {
       postType: 'REEL',
@@ -272,6 +293,15 @@ export function buildPublishBody(
       ...(cover ? { coverUrl: cover.storageUrl } : {}),
       caption,
       shareToFeed: true,
+      ...target,
+    };
+  }
+
+  if (postType === 'STORY') {
+    return {
+      postType: 'STORY',
+      placementId: draft.id,
+      ...(video ? { videoUrl: video.storageUrl } : image ? { imageUrl: image.storageUrl } : {}),
       ...target,
     };
   }
@@ -288,9 +318,6 @@ export function buildPublishBody(
     };
   }
 
-  const image =
-    assets.find((asset) => asset.kind === 'image' && asset.role === 'primary') ??
-    assets.find((asset) => asset.kind === 'image');
   return {
     postType: 'POST',
     placementId: draft.id,

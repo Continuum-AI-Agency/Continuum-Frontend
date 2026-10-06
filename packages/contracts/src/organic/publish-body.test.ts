@@ -27,9 +27,13 @@ describe('resolvePublishFormat', () => {
     ['hyperframe', 'REEL'],
     ['FeedPost', 'POST'],
     ['static', 'POST'],
+    // Story used to sit in the post group, so a story draft went out as a feed post.
+    ['story', 'STORY'],
+    ['Story', 'STORY'],
+    ['instagram_stories', 'STORY'],
     [undefined, 'POST'],
   ])('maps %s to %s', (format, expected) => {
-    expect(resolvePublishFormat(format)).toBe(expected as 'POST' | 'REEL' | 'CAROUSEL');
+    expect(resolvePublishFormat(format)).toBe(expected as 'POST' | 'REEL' | 'CAROUSEL' | 'STORY');
   });
 });
 
@@ -153,6 +157,45 @@ describe('buildPublishBody', () => {
   });
 });
 
+describe('buildPublishBody story', () => {
+  it('builds a story with its image and no caption', () => {
+    const body = buildPublishBody(
+      draft({
+        format: 'Story',
+        publishingAssets: [{ role: 'primary', kind: 'image', storageUrl: 'https://cdn/s.jpg' }],
+      }),
+      'instagram',
+      'ig-1',
+      'brand-1',
+    );
+    expect(body).toEqual({
+      postType: 'STORY',
+      placementId: 'draft-1',
+      imageUrl: 'https://cdn/s.jpg',
+      platform: 'instagram',
+      accountId: 'ig-1',
+      brandId: 'brand-1',
+    });
+  });
+
+  it('sends only the video when a story has both', () => {
+    const body = buildPublishBody(
+      draft({
+        format: 'story',
+        publishingAssets: [
+          { role: 'primary', kind: 'image', storageUrl: 'https://cdn/s.jpg' },
+          { role: 'primary', kind: 'video', storageUrl: 'https://cdn/s.mp4' },
+        ],
+      }),
+      'instagram',
+      'ig-1',
+      'brand-1',
+    );
+    expect(body.postType === 'STORY' && body.videoUrl).toBe('https://cdn/s.mp4');
+    expect(body.postType === 'STORY' && body.imageUrl).toBeUndefined();
+  });
+});
+
 describe('buildFullCaption', () => {
   const long = `${'word '.repeat(519)}finalword`;
 
@@ -211,6 +254,12 @@ describe('unsupportedPublishOptions', () => {
     expect(
       unsupportedPublishOptions('instagram', 'POST', { thumbnail: { url: 'https://x/c.jpg' } }),
     ).toEqual(['thumbnail']);
+  });
+
+  it('refuses a first comment on a story, which Graph cannot comment on', () => {
+    const options = { firstComment: 'Link in bio' };
+    expect(unsupportedPublishOptions('instagram', 'POST', options)).toEqual([]);
+    expect(unsupportedPublishOptions('instagram', 'STORY', options)).toEqual(['firstComment']);
   });
 
   it('allows a trial only on an Instagram reel', () => {

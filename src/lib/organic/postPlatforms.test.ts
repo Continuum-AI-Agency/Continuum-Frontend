@@ -55,6 +55,11 @@ describe('postFormatOptions', () => {
     expect(postFormatOptions(['tiktok'])).toEqual(['Post', 'Carousel', 'Reel']);
   });
 
+  it('offers Story on Instagram alone, never once another platform is selected', () => {
+    expect(postFormatOptions(['instagram'])).toEqual(['Post', 'Carousel', 'Reel', 'Story']);
+    expect(postFormatOptions(['instagram', 'facebook'])).toEqual(['Post', 'Carousel', 'Reel']);
+  });
+
   it('offers only Reel on YouTube, alone or alongside another platform', () => {
     expect(postFormatOptions(['youtube'])).toEqual(['Reel']);
     expect(postFormatOptions(['instagram', 'youtube'])).toEqual(['Reel']);

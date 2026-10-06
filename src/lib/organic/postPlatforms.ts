@@ -93,6 +93,8 @@ const POST_FORMATS = [
   { option: 'Post', format: 'POST' },
   { option: 'Carousel', format: 'CAROUSEL' },
   { option: 'Reel', format: 'REEL' },
+  // Instagram only: offered only when every selected platform can take it.
+  { option: 'Story', format: 'STORY' },
 ] as const;
 
 export type PostFormatOption = (typeof POST_FORMATS)[number]['option'];

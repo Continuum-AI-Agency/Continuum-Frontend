@@ -4,18 +4,18 @@ import {
   CAPTION_MAX_ANY_PLATFORM,
   captionLimits,
   carouselLimits,
-  PLATFORM_CAPABILITIES,
-  publishEventSchema,
-  publishResultSchema,
   mediaTransportFor,
   organicPlatformSchema,
+  PLATFORM_CAPABILITIES,
+  publishEventSchema,
   publishPlatformSchema,
+  publishResultSchema,
   supportsFormat,
   toPublishPlatform,
 } from './publishing';
 
 describe('publish platform capabilities', () => {
-  it('caps carousels at each platform\'s real child limit', () => {
+  it("caps carousels at each platform's real child limit", () => {
     expect(carouselLimits('instagram')).toEqual({ min: 2, max: 10 });
     expect(carouselLimits('facebook')).toEqual({ min: 2, max: 10 });
     expect(carouselLimits('linkedin')).toEqual({ min: 2, max: 20 });
@@ -65,6 +65,13 @@ describe('publish platform capabilities', () => {
     expect(supportsFormat('youtube', 'REEL')).toBe(true);
     expect(supportsFormat('youtube', 'POST')).toBe(false);
     expect(supportsFormat('youtube', 'CAROUSEL')).toBe(false);
+  });
+
+  it('publishes a story to Instagram only', () => {
+    expect(supportsFormat('instagram', 'STORY')).toBe(true);
+    for (const platform of ['facebook', 'linkedin', 'tiktok', 'youtube'] as const) {
+      expect(supportsFormat(platform, 'STORY')).toBe(false);
+    }
   });
 });
 
