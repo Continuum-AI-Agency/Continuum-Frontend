@@ -9,6 +9,7 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   compactEncodeBlock,
+  effectiveRenderValues,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSetEncodeClear,
   type ForgeRenderSetRow,
@@ -208,11 +209,24 @@ function coerce(variable: ApiRenderVariable, raw: string): ApiRenderInputValue |
   }
 }
 
+/** A brand default saved on the Variables tab: what the render uses when a row leaves it empty. */
+export const hasSavedDefault = (variable: ApiRenderVariable): boolean =>
+  variable.defaultValue !== null && variable.defaultValue !== undefined;
+
 /**
- * A row seeded from the designer's own values, so the first render is the design as authored
- * rather than a table of blanks. Media is never seeded — a pin is a Library coordinate the
- * parse cannot supply — and reserved slots are the server's to fill.
+ * What a new root row starts with for one field: the designer's own value, typed. Media is never
+ * seeded — a pin is a Library coordinate the parse cannot supply — and reserved slots are the
+ * server's to fill.
  */
+export function seededValue(variable: ApiRenderVariable): ApiRenderInputValue | undefined {
+  if (!isEditableScalar(variable) || variable.sample === null) return undefined;
+  // A saved default is what an empty field renders; copying the file's own copy over it would
+  // render the design's text instead of the brand's default.
+  if (hasSavedDefault(variable)) return undefined;
+  return coerce(variable, variable.sample);
+}
+
+/** A row seeded from the designer's own values, so the first render is the design as authored. */
 export function seedRow(
   variables: ApiRenderVariable[],
   label = '',
@@ -220,11 +234,7 @@ export function seedRow(
 ): RequestRow {
   const values: Record<string, ApiRenderInputValue> = {};
   for (const variable of variables) {
-    if (!isEditableScalar(variable) || variable.sample === null) continue;
-    // A saved default is what an empty field renders; copying the file's own copy over it would
-    // render the design's text instead of the brand's default.
-    if (variable.defaultValue !== null && variable.defaultValue !== undefined) continue;
-    const value = coerce(variable, variable.sample);
+    const value = seededValue(variable);
     if (value !== undefined) values[variable.key] = value;
   }
   return {
@@ -402,17 +412,37 @@ export const isEmptyInput = (
     ? pinCount(value) === 0
     : value === undefined || value === '';
 
-/** Required inputs a row leaves blank. Not wrong, only not filled in yet: "Needs input". */
-export const missingInputs = (
+/**
+ * Required inputs a row leaves blank. Not wrong, only not filled in yet: "Needs input". A field
+ * a saved default fills is not blank — the render uses the default, so nothing is asked for.
+ */
+export function missingInputs(
   variables: ApiRenderVariable[],
   values: Record<string, ApiRenderInputValue>,
-): string[] =>
-  variables
+): string[] {
+  const rendered = effectiveRenderValues(variables, values).values;
+  return variables
     .filter(
       (variable) =>
-        variable.required && !variable.reserved && isEmptyInput(variable, values[variable.key]),
+        variable.required && !variable.reserved && isEmptyInput(variable, rendered[variable.key]),
     )
     .map((variable) => variable.key);
+}
+
+/**
+ * Whether a cell shows what the design or the brand supplied rather than something typed: the
+ * designer's value a row was seeded with, or nothing where a saved default renders instead. An
+ * unset switch renders as the file authored it, so that is a default too. Display only — the
+ * render resolves every value the same way whichever this says.
+ */
+export function isDefaultValue(
+  variable: ApiRenderVariable,
+  value: ApiRenderInputValue | undefined,
+): boolean {
+  if (isEmptyInput(variable, value))
+    return hasSavedDefault(variable) || (variable.kind === 'boolean' && variable.sample !== null);
+  return value === seededValue(variable);
+}
 
 /**
  * What the server would refuse, said per cell before it is asked.

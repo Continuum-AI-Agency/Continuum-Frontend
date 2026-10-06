@@ -24,6 +24,14 @@ describe('immutable template revision edits', () => {
     ).toBe(false);
   });
 
+  test('an arrangement saved before artboards were recorded reads as the canvas', () => {
+    // Prod: nine backfilled revisions carry `{ name, order }` only, and one failed a whole catalog.
+    expect(
+      templateRevisionEditsSchema.parse({ arrangement: { name: 'Original', order: [9999, 0, 1] } })
+        .arrangement,
+    ).toEqual({ name: 'Original', artboardId: null, order: [9999, 0, 1] });
+  });
+
   test('media defaults require immutable Library versions', () => {
     const assetId = '00000000-0000-4000-8000-000000000001';
     const versionId = '00000000-0000-4000-8000-000000000002';

@@ -19,6 +19,7 @@ import {
   Play,
   Plus,
   Save,
+  Settings2,
   Sparkles,
   Upload,
 } from 'lucide-react';
@@ -71,6 +72,7 @@ export function RenderToolbar({
   onVariantChange,
   templatesLoading,
   onTemplateChange,
+  onOpenTemplateSettings,
   bindingId,
   ready,
   inputSets,
@@ -106,6 +108,8 @@ export function RenderToolbar({
   templatesLoading: boolean;
   /** Called with the template REF (`bindingId:key`), never a bare key. */
   onTemplateChange: (ref: string) => void;
+  /** Open the chosen template's settings on the Templates tab; absent when its source is unknown. */
+  onOpenTemplateSettings?: () => void;
   /** The chosen template's binding, so a key held in two of them resolves to the right row. */
   bindingId: string | null;
   /** False until a template's contract is loaded; so are the controls after the picker. */
@@ -128,10 +132,14 @@ export function RenderToolbar({
   onDownloadTemplate: () => void;
   dirty: boolean;
   /**
-   * What autosave is doing: writing now, written at a time, or failed — then Save retries. Null
-   * while there is nothing saved and nothing to save.
+   * What autosave is doing: writing now, written at a time, or failed — with why, and whether it
+   * retries by itself or waits for a change or Save. Null while there is nothing saved or to save.
    */
-  saveStatus: { phase: 'saving' } | { phase: 'saved'; at: string } | { phase: 'failed' } | null;
+  saveStatus:
+    | { phase: 'saving' }
+    | { phase: 'saved'; at: string }
+    | { phase: 'failed'; reason: string; retrying: boolean }
+    | null;
   canSave: boolean;
   onSave: () => void;
   selectedCount: number;
@@ -202,6 +210,24 @@ export function RenderToolbar({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {onOpenTemplateSettings ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Template settings"
+                  onClick={onOpenTemplateSettings}
+                >
+                  <Settings2 className="size-4" aria-hidden />
+                </Button>
+              }
+            />
+            <TooltipContent>Template settings — layers, variants, revisions</TooltipContent>
+          </Tooltip>
+        ) : null}
         {ready && siblings.length > 0 ? (
           <label className="flex items-center gap-1.5 text-xs">
             Variant
@@ -357,12 +383,16 @@ export function RenderToolbar({
             <span
               role="status"
               aria-label="Save status"
-              className="text-2xs text-muted-foreground tabular-nums"
+              title={saveStatus?.phase === 'failed' ? saveStatus.reason : undefined}
+              className={cn(
+                'max-w-96 truncate text-2xs tabular-nums',
+                saveStatus?.phase === 'failed' ? 'text-destructive' : 'text-muted-foreground',
+              )}
             >
               {saveStatus?.phase === 'saving'
                 ? 'Saving…'
                 : saveStatus?.phase === 'failed'
-                  ? 'Couldn’t save. Save retries.'
+                  ? `Couldn’t save: ${saveStatus.reason}${saveStatus.retrying ? ' Retrying…' : ''}`
                   : dirty
                     ? 'Unsaved changes'
                     : saveStatus?.phase === 'saved'

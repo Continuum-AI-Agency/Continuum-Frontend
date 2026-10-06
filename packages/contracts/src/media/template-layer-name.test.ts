@@ -14,6 +14,13 @@ describe('readableLayerName', () => {
     expect(readableLayerName('Key Color')).toBe('Key Color');
   });
 
+  it('drops the Picnic marker an exposed layer carries', () => {
+    expect(readableLayerName('Picnic Person')).toBe('Person');
+    expect(readableLayerName('Picnic Legal/Vigencia')).toBe('Legal/Vigencia');
+    expect(readableLayerName('picnic_price_text')).toBe('Price text');
+    expect(readableLayerName('Picnic')).toBe('Picnic');
+  });
+
   it('never returns an empty label', () => {
     expect(readableLayerName('ref_')).toBe('ref_');
   });

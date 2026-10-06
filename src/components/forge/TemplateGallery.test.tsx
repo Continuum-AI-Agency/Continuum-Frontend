@@ -10,9 +10,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } 
 import {
   type ApiRenderJob,
   apiRenderJobSchema,
+  type TemplateRevision,
+  type TemplateRevisionVariant,
   type TemplateSource,
   type TemplateVariant,
 } from '@continuum/contracts';
+import * as templateSources from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 let jobs: ApiRenderJob[] = [];
@@ -105,19 +108,25 @@ function renderGallery(
   {
     sources = SOURCES,
     catalog = [],
+    families = [],
     shared = SHARED,
     adopting = null,
+    onOpen = () => undefined,
     onOpenShared = () => undefined,
   }: {
     sources?: TemplateSource[];
     catalog?: TemplateVariant[];
+    /** `null` leaves the registry unread, so the gallery asks for it. */
+    families?: TemplateRevisionVariant[] | null;
     shared?: SharedTemplate[];
     adopting?: string | null;
+    onOpen?: (assetId: string, tab?: string) => void;
     onOpenShared?: (template: SharedTemplate) => void;
   } = {},
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(['forge', BRAND, 'template-variants'], catalog);
+  if (families) client.setQueryData(['forge', BRAND, 'revision-variants', 'all'], families);
   render(
     <QueryClientProvider client={client}>
       <TemplateGallery
@@ -126,7 +135,7 @@ function renderGallery(
         sources={sources}
         shared={shared}
         adopting={adopting}
-        onOpen={() => undefined}
+        onOpen={onOpen}
         onOpenShared={onOpenShared}
         onRename={() => undefined}
         onToggleShared={onToggleShared}
@@ -395,4 +404,145 @@ test('the grouped table filters original design type and keeps child variants un
   fireEvent.click(publishedOption);
   await waitFor(() => expect(cardNames()).toEqual(['Published artboard']));
   expect(screen.getByText('1:1 · 9:16 / 2')).toBeTruthy();
+});
+
+describe('template families', () => {
+  const original = source({ displayName: 'Summer promo', updatedAt: '2026-09-10T00:00:00Z' });
+  const secondRevision = source({ displayName: 'Summer promo v2' });
+  const squareCrop = source({ displayName: 'Square crop' });
+  const revision = (
+    variantId: string,
+    number: number,
+    asset: TemplateSource,
+  ): TemplateRevision => ({
+    templateId: original.assetId,
+    variantId,
+    id: crypto.randomUUID(),
+    number,
+    parentRevisionId: null,
+    sourceAssetId: asset.assetId,
+    sourceVersionId: asset.versionId,
+    checksum: 'a'.repeat(64),
+    edits: { layers: [], slots: [] },
+    source: asset,
+    dependencies: null,
+    publications: [],
+    createdAt: '2026-09-10T00:00:00Z',
+    createdBy: null,
+    nativeCommitId: null,
+  });
+  const variant = (
+    variantId: string,
+    name: string,
+    revisions: TemplateRevision[],
+    publishedHeadRevisionId: string | null,
+  ): TemplateRevisionVariant => ({
+    templateId: original.assetId,
+    variantId,
+    name,
+    original: variantId === original.assetId,
+    parentRevisionId: null,
+    draftHeadRevisionId: revisions.at(-1)!.id,
+    publishedHeadRevisionId,
+    archivedAt: null,
+    sourceKind: 'after_effects',
+    revisions,
+  });
+  const originalRevisions = [
+    revision(original.assetId, 1, original),
+    revision(original.assetId, 2, secondRevision),
+  ];
+  const cropId = crypto.randomUUID();
+  const families = [
+    variant(original.assetId, 'Summer promo', originalRevisions, originalRevisions[0]!.id),
+    variant(cropId, 'Square crop', [revision(cropId, 1, squareCrop)], null),
+  ];
+
+  test('variants and revisions are cards under their original, never rows of their own', () => {
+    const onOpen = mock((_assetId: string, _tab?: string) => undefined);
+    renderGallery(undefined, {
+      sources: [original, secondRevision, squareCrop],
+      shared: [],
+      families,
+      onOpen,
+    });
+    expect(cardNames()).toEqual(['Summer promo']);
+    expect(screen.getByText('1:1 · 9:16 / 2')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Summer promo' }));
+    const cards = within(screen.getByRole('list', { name: 'Variants of Summer promo' }));
+    expect(cards.getAllByRole('button').map((card) => card.getAttribute('aria-label'))).toEqual([
+      'Original · Published · Revision 2 · 2 revisions',
+      'Square crop · Draft · Revision 1 · 1 revision',
+    ]);
+    // Search, filters and counts still count templates, not the cards under them.
+    expect(screen.getByRole('button', { name: /^All\s*1$/ })).toBeTruthy();
+
+    fireEvent.click(cards.getByRole('button', { name: /^Square crop/ }));
+    expect(onOpen).toHaveBeenLastCalledWith(squareCrop.assetId, 'variants');
+    fireEvent.click(cards.getByRole('button', { name: /^Original/ }));
+    expect(onOpen).toHaveBeenLastCalledWith(secondRevision.assetId, 'variants');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide 2 variants of Summer promo' }));
+    expect(screen.queryByRole('list', { name: 'Variants of Summer promo' })).toBeNull();
+  });
+
+  test('a template with one revision has nothing to expand, and its gear opens its settings', () => {
+    const onOpen = mock((_assetId: string, _tab?: string) => undefined);
+    renderGallery(undefined, { sources: [original], shared: [], onOpen });
+    expect(screen.queryByRole('button', { name: /variants? of Summer promo/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Template settings for Summer promo' }));
+    expect(onOpen).toHaveBeenCalledWith(original.assetId, 'layers');
+  });
+
+  test('a shared build of a variant is not a row; one of the original stands in for it', () => {
+    const build = (name: string, asset: TemplateSource): SharedTemplate => ({
+      templateKey: crypto.randomUUID(),
+      name,
+      draft: false,
+      granted: true,
+      updatedAt: null,
+      sourceAssetId: asset.assetId,
+    });
+    renderGallery(undefined, {
+      sources: [],
+      shared: [build('Square crop build', squareCrop), build('Summer promo build', original)],
+      families,
+    });
+    expect(cardNames()).toEqual(['Summer promo build']);
+  });
+
+  test('a registry that cannot be read says so, and Retry reads it again', async () => {
+    const registry = spyOn(templateSources, 'fetchTemplateRevisionVariants').mockRejectedValue(
+      new Error('offline'),
+    );
+    try {
+      renderGallery(undefined, { sources: [original], shared: [], families: null });
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain('Could not read template variants');
+      expect(cardNames()).toEqual(['Summer promo']);
+      fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+      await waitFor(() => expect(registry).toHaveBeenCalledTimes(2));
+    } finally {
+      registry.mockRestore();
+    }
+  });
+
+  test('until the registry answers, no upload is listed as a template of its own', () => {
+    const registry = spyOn(templateSources, 'fetchTemplateRevisionVariants').mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    try {
+      renderGallery(undefined, {
+        sources: [original, secondRevision, squareCrop],
+        shared: [],
+        families: null,
+      });
+      expect(cardNames()).toEqual([]);
+      expect(screen.getByText('Reading templates…')).toBeTruthy();
+    } finally {
+      registry.mockRestore();
+    }
+  });
 });

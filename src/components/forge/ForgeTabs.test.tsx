@@ -10,20 +10,29 @@ import type { RenderApproval } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { forgeQueryKeys } from './queryKeys';
-import type { ForgeRenderIntent } from './RenderRequestsGrid';
+import type { ForgeRenderIntent, ForgeTemplateIntent } from './RenderRequestsGrid';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 
 let gridMounts = 0;
 
 mock.module('@/components/forge/ForgeWorkbench', () => ({
-  ForgeWorkbench: ({ onOpenRender }: { onOpenRender?: (intent: ForgeRenderIntent) => void }) => (
-    <button
-      type="button"
-      onClick={() => onOpenRender?.({ templateKey: '133', renderSetId: 'set-1' })}
-    >
-      Open in Render
-    </button>
+  ForgeWorkbench: ({
+    onOpenRender,
+    templateIntent,
+  }: {
+    onOpenRender?: (intent: ForgeRenderIntent) => void;
+    templateIntent?: ForgeTemplateIntent;
+  }) => (
+    <>
+      <button
+        type="button"
+        onClick={() => onOpenRender?.({ templateKey: '133', renderSetId: 'set-1' })}
+      >
+        Open in Render
+      </button>
+      <p data-testid="template-intent">{JSON.stringify(templateIntent ?? null)}</p>
+    </>
   ),
 }));
 mock.module('@/components/forge/RenderRequestsGrid', () => ({
@@ -31,10 +40,12 @@ mock.module('@/components/forge/RenderRequestsGrid', () => ({
     intent,
     onIntentConsumed,
     onFired,
+    onOpenTemplate,
   }: {
     intent?: ForgeRenderIntent;
     onIntentConsumed?: () => void;
     onFired?: (jobIds: string[]) => void;
+    onOpenTemplate?: (intent: ForgeTemplateIntent) => void;
   }) => {
     useEffect(() => {
       gridMounts += 1;
@@ -47,6 +58,12 @@ mock.module('@/components/forge/RenderRequestsGrid', () => ({
         </button>
         <button type="button" onClick={() => onFired?.(['job-1'])}>
           Fire batch
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenTemplate?.({ assetId: 'asset-1', tab: 'layers' })}
+        >
+          Template settings
         </button>
       </>
     );
@@ -130,6 +147,20 @@ describe('ForgeTabs', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Take intent' }));
     expect(intentOnGrid()).toBeNull();
+  }, 30_000);
+
+  test('Template settings on the Render tab lands on Templates with that template', async () => {
+    renderTabs();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Render' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Template settings' }));
+
+    expect(screen.getByRole('tab', { name: 'Templates' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(JSON.parse(screen.getByTestId('template-intent').textContent ?? 'null')).toEqual({
+      assetId: 'asset-1',
+      tab: 'layers',
+    });
   }, 30_000);
 
   test('the Render grid stays mounted across a tab round trip', async () => {

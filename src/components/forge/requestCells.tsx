@@ -56,6 +56,8 @@ import {
   effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
+  hasSavedDefault,
+  isDefaultValue,
   isEmptyInput,
   MAX_BATCH_ROWS,
   missingInputs,
@@ -64,6 +66,7 @@ import {
   type RequestRowMedia,
   type RowDrop,
   rowBreadcrumb,
+  seededValue,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
@@ -203,11 +206,16 @@ function MediaPicker({
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
   const Kind = variable.kind === 'video' ? Video : ImageIcon;
+  // An empty slot with a saved Library default renders that default, so it says so. The default
+  // is a bare pin with no sidecar, so it shows the kind's icon rather than a thumbnail.
+  const defaulted = isDefaultValue(variable, value);
   const picked = pins.length
     ? variable.multiple
       ? `${pins.length} picked`
       : (media?.name ?? 'Picked')
-    : 'Choose';
+    : defaulted
+      ? 'Default'
+      : 'Choose';
   // A video slot plays a fixed stretch of its clip — the render keeps the layer's timing — so its
   // length rides in the field like a text budget does. A length the Library never stored is read
   // from the file's own metadata.
@@ -232,7 +240,18 @@ function MediaPicker({
           <button
             type="button"
             aria-label={`${pins.length ? 'Change' : 'Choose'} ${variable.label}`}
-            title={[pins.length ? picked : null, clipNeed].filter(Boolean).join(' · ') || undefined}
+            title={
+              [
+                pins.length
+                  ? picked
+                  : defaulted
+                    ? 'The template’s saved default — choose to replace'
+                    : null,
+                clipNeed,
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
             className="flex h-7 w-32 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-1.5 text-2xs text-muted-foreground hover:bg-muted/50"
             onClick={() => setOpen(true)}
           >
@@ -410,13 +429,32 @@ function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: 
 function InheritanceAction({
   row,
   variable,
+  value,
   actions,
 }: {
   row: RequestRow;
   variable: ApiRenderVariable;
+  value: ApiRenderInputValue | undefined;
   actions: RequestRowActions;
 }) {
-  if (!row.parentId) return null;
+  if (!row.parentId) {
+    // A root inherits nothing; its reset puts back what a new row starts with — the designer's
+    // value, or nothing where a saved default fills it. A media slot's own clear already does that.
+    const restore = seededValue(variable);
+    const canRestore = restore !== undefined || hasSavedDefault(variable);
+    if (isMedia(variable) || !canRestore || isDefaultValue(variable, value)) return null;
+    return (
+      <button
+        type="button"
+        className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+        aria-label={`Reset ${variable.label} to default`}
+        title="Reset to default"
+        onClick={() => actions.setValue(row.id, variable.key, restore)}
+      >
+        <RotateCcw className="size-3" aria-hidden />
+      </button>
+    );
+  }
   const changed = variable.key in row.values || row.clearedKeys.includes(variable.key);
   return changed ? (
     <button
@@ -441,6 +479,26 @@ function InheritanceAction({
   );
 }
 
+/** Marks a cell still holding what the design or a saved default supplied, not typed input. */
+function DefaultTag({
+  variable,
+  value,
+}: {
+  variable: ApiRenderVariable;
+  value: ApiRenderInputValue | undefined;
+}) {
+  const saved = isEmptyInput(variable, value) && hasSavedDefault(variable);
+  return (
+    <Badge
+      variant="muted"
+      title={`${saved ? 'The template’s saved default' : 'From the design'} — ${variable.kind === 'boolean' ? 'switch' : 'type'} to replace`}
+      className="shrink-0 px-1 py-0 text-2xs"
+    >
+      Default
+    </Badge>
+  );
+}
+
 /**
  * A number typed as text. The draft is the source of truth while typing, so `1.` and `-` stay
  * on screen; only a finite number (or an empty cell) is committed to the row.
@@ -450,6 +508,7 @@ function NumberInput({
   value,
   error,
   invalid,
+  muted,
   placeholder,
   onCommit,
 }: {
@@ -457,6 +516,7 @@ function NumberInput({
   value: ApiRenderInputValue | undefined;
   error: string | undefined;
   invalid: boolean;
+  muted: boolean;
   placeholder: string | undefined;
   onCommit: (value: number | undefined) => void;
 }) {
@@ -475,7 +535,11 @@ function NumberInput({
   return (
     <Input
       size={1}
-      className={cn('h-7 text-xs tabular-nums', invalid && 'border-destructive')}
+      className={cn(
+        'h-7 text-xs tabular-nums',
+        muted && 'text-muted-foreground',
+        invalid && 'border-destructive',
+      )}
       type="text"
       inputMode="decimal"
       aria-label={label}
@@ -504,7 +568,12 @@ export function VariableCell({
   const fit = liveFit.get(row.id)?.get(variable.key);
   // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
   const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
-  const inheritance = <InheritanceAction row={row} variable={variable} actions={actions} />;
+  const inheritance = (
+    <InheritanceAction row={row} variable={variable} value={value} actions={actions} />
+  );
+  // Display only: a default renders muted and tagged, so typed input stands out from it.
+  const isDefault = isDefaultValue(variable, value);
+  const defaultTag = isDefault ? <DefaultTag variable={variable} value={value} /> : null;
 
   if (variable.reserved)
     return (
@@ -554,7 +623,9 @@ export function VariableCell({
     // A row that has not set the switch renders what the file authored, so that is what it
     // shows — reading it as Off hid 253/254's career logo from anyone checking the grid.
     const authored = variable.sample === 'true' ? true : variable.sample === 'false' ? false : null;
-    const shown = typeof value === 'boolean' ? value : authored;
+    // A saved default outranks the file, as it does at render time.
+    const fallback = typeof variable.defaultValue === 'boolean' ? variable.defaultValue : authored;
+    const shown = typeof value === 'boolean' ? value : fallback;
     const [on, off] = isLayerSwitch(variable.sourceSlotKey) ? ['Shown', 'Hidden'] : ['On', 'Off'];
     return (
       <div className="flex items-center gap-1.5">
@@ -566,8 +637,8 @@ export function VariableCell({
         />
         <span className="text-2xs text-muted-foreground">
           {shown === null ? 'As designed' : shown ? on : off}
-          {typeof value !== 'boolean' && shown !== null ? ' · as designed' : ''}
         </span>
+        {defaultTag}
         {inheritance}
       </div>
     );
@@ -629,9 +700,11 @@ export function VariableCell({
           value={value}
           error={error}
           invalid={invalid}
+          muted={isDefault}
           placeholder={placeholderOf(variable)}
           onCommit={(next) => actions.setValue(row.id, variable.key, next)}
         />
+        {defaultTag}
         {inheritance}
       </div>
     );
@@ -659,6 +732,7 @@ export function VariableCell({
             rows={lineFields.length + 1}
             className={cn(
               'min-h-0 resize-none py-1 text-xs',
+              isDefault && 'text-muted-foreground',
               budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
               misfit && 'border-warning',
               invalid && 'border-destructive',
@@ -676,6 +750,7 @@ export function VariableCell({
             size={1}
             className={cn(
               'h-7 text-xs',
+              isDefault && 'text-muted-foreground',
               budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
               misfit && 'border-warning',
               invalid && 'border-destructive',
@@ -704,6 +779,7 @@ export function VariableCell({
           <TriangleAlert className="size-3.5 text-warning" aria-label="Doesn’t fit the design" />
         </Explained>
       ) : null}
+      {defaultTag}
       {inheritance}
     </div>
   );

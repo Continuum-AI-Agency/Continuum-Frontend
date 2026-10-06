@@ -180,6 +180,16 @@ const RAIL_COLLAPSED_SIZE = '2.25rem';
 /** How long an edit settles before autosave writes it; how long after a failed save it retries. */
 const AUTOSAVE_MS = 1500;
 const AUTOSAVE_RETRY_MS = 5000;
+
+/**
+ * Whether saving the same rows again could succeed. A refusal (4xx) answers the same until
+ * something changes, so autosave stops re-sending it every few seconds; an outage, a dropped
+ * connection, an expired session or rate limit may clear by itself.
+ */
+const saveMayRecover = (error: unknown) =>
+  !(error instanceof ApiError) ||
+  error.status >= 500 ||
+  [401, 408, 429].includes(error.status);
 /** A third of a row per arrow press, so the keyboard reaches before, inside and after a row. */
 const KEYBOARD_DROP_STEP_PX = 12;
 
@@ -336,6 +346,9 @@ const HIDEABLE = (columnId: string) => !['drag', 'select', 'label'].includes(col
  * "Open this in Render": which template, and optionally which saved render set, to land on — and
  * whether to open the AI draft there, where its rows will land.
  */
+/** Open a template's settings on the Templates tab: its source asset, and the detail tab to show. */
+export type ForgeTemplateIntent = { assetId: string; tab?: string };
+
 export type ForgeRenderIntent = {
   templateKey: string;
   /**
@@ -372,6 +385,7 @@ export function RenderRequestsGrid({
   onFired,
   intent,
   onIntentConsumed,
+  onOpenTemplate,
   active = true,
 }: {
   brandId: string;
@@ -391,6 +405,8 @@ export function RenderRequestsGrid({
   intent?: ForgeRenderIntent;
   /** The grid has taken `intent`; the shell drops it so a remount never replays it. */
   onIntentConsumed?: () => void;
+  /** Jump to the template behind this set on the Templates tab (the shell switches tabs). */
+  onOpenTemplate?: (intent: ForgeTemplateIntent) => void;
 }) {
   const queryClient = useQueryClient();
   // A Final is the fleet's `test: false`; the backend refuses it to anyone but an owner or admin.
@@ -452,9 +468,11 @@ export function RenderRequestsGrid({
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
   /** What opening a set saved for an earlier template trimmed off; saving it makes that final. */
   const [rebaseDrops, setRebaseDrops] = useState<string[]>([]);
-  const [saveState, setSaveState] = useState<{ phase: 'idle' | 'saving' | 'failed' }>({
-    phase: 'idle',
-  });
+  const [saveState, setSaveState] = useState<
+    | { phase: 'idle' | 'saving' }
+    // `signature` is the rows that failed: a refusal is not re-sent until they change or Save.
+    | { phase: 'failed'; reason: string; retry: boolean; signature: string }
+  >({ phase: 'idle' });
   /** Someone else's version of the open set, when it and the rows on screen changed one row two ways. */
   const [conflict, setConflict] = useState<ForgeRenderSet | null>(null);
   const [historyFor, setHistoryFor] = useState<ForgeRenderSet | null>(null);
@@ -1608,7 +1626,14 @@ export function RenderRequestsGrid({
       announce = true,
       description,
       revisionRef,
-    }: { announce?: boolean; description?: string | null; revisionRef?: TemplateRevisionRef } = {},
+      rethrow = false,
+    }: {
+      announce?: boolean;
+      description?: string | null;
+      revisionRef?: TemplateRevisionRef;
+      /** Hand a failure to the caller instead of toasting it: autosave reports in the toolbar. */
+      rethrow?: boolean;
+    } = {},
   ): Promise<ForgeRenderSet | null> => {
     if (!contract || !bindingId) return null;
     try {
@@ -1629,7 +1654,8 @@ export function RenderRequestsGrid({
       if (announce) toast.success(`Saved “${created.name}”`);
       return created;
     } catch (error) {
-      toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+      if (rethrow) throw error;
+      toast.error(describeRenderDiscoveryFailure(error));
       return null;
     }
   };
@@ -1685,8 +1711,8 @@ export function RenderRequestsGrid({
       setSaveState({ phase: 'saving' });
       try {
         if (!set) {
-          const created = await createSet('Untitled set', submitted, { announce });
-          setSaveState({ phase: created ? 'idle' : 'failed' });
+          const created = await createSet('Untitled set', submitted, { announce, rethrow: true });
+          setSaveState({ phase: 'idle' });
           return created;
         }
         const saved = await apiRendersApi.updateRenderSet(set.id, {
@@ -1710,8 +1736,14 @@ export function RenderRequestsGrid({
           setSaveState({ phase: 'idle' });
           return merged;
         }
-        setSaveState({ phase: 'failed' });
-        if (announce) toast.error(describeRenderDiscoveryFailure(message));
+        const reason = describeRenderDiscoveryFailure(error);
+        setSaveState({
+          phase: 'failed',
+          reason,
+          retry: saveMayRecover(error),
+          signature: signatureOf(submitted, contract),
+        });
+        if (announce) toast.error(reason);
         return null;
       }
     })();
@@ -1724,10 +1756,17 @@ export function RenderRequestsGrid({
     }
   };
 
-  // Autosave: a second and a half after the last edit, five after a save that failed.
+  // Autosave: a second and a half after the last edit, five after a save that may recover. A
+  // refusal waits for the rows to change or for Save, so it is reported once, not every 5 s.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the signature stands for the rows.
   useEffect(() => {
     if (!needsSave || autosaveBlocked || saveState.phase === 'saving') return;
+    if (
+      saveState.phase === 'failed' &&
+      !saveState.retry &&
+      saveState.signature === signatureOf(rows, contract)
+    )
+      return;
     const timer = setTimeout(
       () => void saveRenderSet({ announce: false }),
       saveState.phase === 'failed' ? AUTOSAVE_RETRY_MS : AUTOSAVE_MS,
@@ -2255,6 +2294,8 @@ export function RenderRequestsGrid({
 
   // --- render -----------------------------------------------------------------------------
   const ready = rows.filter((row) => row.check.state === 'ready').length;
+  // The pinned revision's own file when the set pins one, else the template's source.
+  const settingsAssetId = pinnedRevisionLabel?.revision.sourceAssetId ?? sourceAssetId;
   const previewId = previewRowId ?? (selected.length === 1 ? selected[0]!.id : null);
   return (
     // Bounded by the tab: the toolbar stays put, the rows and the review tray share the rest.
@@ -2303,6 +2344,11 @@ export function RenderRequestsGrid({
         // The picker hands back the REF, not the key: two templates can share a key and only
         // the pair says which one was clicked.
         bindingId={bindingId}
+        onOpenTemplateSettings={
+          onOpenTemplate && settingsAssetId
+            ? () => onOpenTemplate({ assetId: settingsAssetId, tab: 'layers' })
+            : undefined
+        }
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
@@ -2358,7 +2404,7 @@ export function RenderRequestsGrid({
           saveState.phase === 'saving'
             ? { phase: 'saving' }
             : saveState.phase === 'failed'
-              ? { phase: 'failed' }
+              ? { phase: 'failed', reason: saveState.reason, retrying: saveState.retry }
               : activeSet
                 ? { phase: 'saved', at: activeSet.updatedAt }
                 : null

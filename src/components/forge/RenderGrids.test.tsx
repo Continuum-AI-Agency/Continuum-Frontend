@@ -831,6 +831,34 @@ describe('RenderRequestsGrid', () => {
     }
   });
 
+  // 2026-10-05: a refused first save toasted its raw code and re-sent itself every 5 s.
+  test('a refused autosave says why in the toolbar once, without a toast or a retry loop', async () => {
+    const code = 'template_revision_selection_required';
+    createRenderSetMock.mockImplementationOnce(async () => {
+      throw new ApiError(code, 409, undefined, { error: code, detail: code });
+    });
+    const toasts: string[] = [];
+    const unregister = registerToastSink(({ title }) => {
+      toasts.push(String(title));
+    });
+    toasts.length = 0;
+    try {
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      fireEvent.change(await screen.findByDisplayValue('Hola mundo'), {
+        target: { value: 'Hola de nuevo' },
+      });
+      const status = await screen.findByRole('status', { name: 'Save status' });
+      await waitFor(() => expect(status.textContent).toContain('Choose the revision'), {
+        timeout: 4000,
+      });
+      expect(status.textContent).not.toContain(code);
+      expect(status.textContent).not.toContain('Retrying');
+      expect(toasts).toEqual([]);
+    } finally {
+      unregister();
+    }
+  });
+
   test('keeps the draft row after submitting its immutable set snapshot, saved as Untitled set', async () => {
     const onFired = mock((_jobIds: string[]) => undefined);
     render(<RenderRequestsGrid brandId={BRAND} onFired={onFired} />);

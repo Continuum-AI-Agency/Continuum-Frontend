@@ -59,6 +59,7 @@ const renameTemplateSource = mock(async (_brandId: string, _assetId: string, tit
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateSources,
   fetchTemplateVariants: async () => [],
+  fetchTemplateRevisionVariants: async () => [],
   importDesignTemplate,
   renameTemplateSource,
   fetchRenderWorkspaces,
@@ -294,6 +295,33 @@ describe('ForgeWorkbench', () => {
       transition.mockRestore();
     }
   });
+  test('a template intent from another tab opens its settings once, and is handed back', async () => {
+    const consumed = mock(() => undefined);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ForgeWorkbench
+          brandId={BRAND}
+          templateIntent={{ assetId: ASSET }}
+          onTemplateIntentConsumed={consumed}
+        />
+      </QueryClientProvider>,
+    );
+    const layers = await screen.findByRole('tab', { name: 'Edit layers' });
+    expect(layers.getAttribute('aria-selected')).toBe('true');
+    expect(consumed).toHaveBeenCalledTimes(1);
+
+    // Dropped by the shell, the intent does not come back: Templates stays on the gallery.
+    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ForgeWorkbench brandId={BRAND} onTemplateIntentConsumed={consumed} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByLabelText('Search templates')).toBeTruthy();
+    expect(consumed).toHaveBeenCalledTimes(1);
+  });
+
   describe('a link from the Library', () => {
     const SET = '77777777-7777-4777-8777-777777777777';
     const ROW = '88888888-8888-4888-8888-888888888888';

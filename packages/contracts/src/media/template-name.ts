@@ -179,24 +179,29 @@ export function layerSwitchName(
   const layer = slots.find(
     (slot) => slot.key !== slotKey && slot.key.endsWith(`__${slug}`) && slot.name?.trim(),
   );
-  return `Show ${layer?.name?.trim() || slug.replace(/-+/g, ' ')}`;
+  const name = layer?.name?.trim();
+  return `Show ${name ? readableLayerName(name) : slug.replace(/-+/g, ' ')}`;
 }
 
 const LAYER_PREFIX = /^(?:ref|txt|img|var)[_\s]+/i;
+/** The Picnic render convention marks an exposed layer `Picnic Person`; the marker is not its name. */
+const PICNIC_MARKER = /^\s*picnic[\s_-]+/i;
 
 /**
  * A variable label that is still the raw After Effects layer name, as a person reads it:
- * `ref_price_text` → `Price text`, `Ref_ precio_anterior` → `Precio anterior`. Display only —
- * never written back, never used to guess a role. A label someone already typed (no underscore)
- * is returned as it is.
+ * `ref_price_text` → `Price text`, `Ref_ precio_anterior` → `Precio anterior`,
+ * `Picnic Person` → `Person`. Display only — never written back, never used to guess a role. A
+ * label someone already typed (no underscore, no Picnic marker) is returned as it is.
  */
 export function readableLayerName(raw: string): string {
-  if (!raw.includes('_')) return raw;
-  const words = raw
+  const unmarked = raw.replace(PICNIC_MARKER, '');
+  const name = unmarked.trim() ? unmarked : raw;
+  if (!name.includes('_')) return name;
+  const words = name
     .trim()
     .replace(LAYER_PREFIX, '')
     .replace(/[_\s]+/g, ' ')
     .trim()
     .toLowerCase();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : raw;
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name;
 }

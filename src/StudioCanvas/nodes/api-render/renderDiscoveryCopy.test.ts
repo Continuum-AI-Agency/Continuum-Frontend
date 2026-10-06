@@ -24,6 +24,22 @@ describe('render discovery copy', () => {
     );
   });
 
+  test('a template revision refusal names the revision step, never the raw code', () => {
+    for (const code of [
+      'template_revision_selection_required',
+      'template_revision_output_required',
+      'template_revision_not_found',
+      'template_revision_source_missing',
+      'template_variant_archived',
+      'render_set_template_revision_changed',
+      'render_set_explicit_revision_change_required',
+    ]) {
+      const thrown = new ApiError(code, 409, undefined, { error: code, detail: code });
+      expect(describeRenderDiscoveryFailure(thrown)).not.toContain(code);
+      expect(describeRenderDiscoveryFailure(thrown)).toContain('revision');
+    }
+  });
+
   test('an unmapped code shows the server’s detail when it is a sentence, never a bare code', () => {
     const detailed = new ApiError('render_something_new', 409, undefined, {
       error: 'render_something_new',

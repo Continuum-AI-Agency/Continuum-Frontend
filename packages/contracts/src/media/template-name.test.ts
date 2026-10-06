@@ -149,12 +149,18 @@ describe('layerSwitchName', () => {
     },
     { key: 'boolean__show-layer-0', name: 'show-layer-0' },
     { key: 'boolean__dark-mode', name: 'Dark mode' },
+    { key: 'image__picnic-person', name: 'Picnic Person' },
+    { key: 'boolean__show-picnic-person', name: 'show-picnic-person' },
   ];
 
   test('a Show switch borrows its layer’s own name', () => {
     expect(
       layerSwitchName('boolean__show-carrera-de-administraci-n-y-negocios-digitales', slots),
     ).toBe('Show Carrera de Administración y Negocios Digitales');
+  });
+
+  test('a Show switch reads its layer without the Picnic marker', () => {
+    expect(layerSwitchName('boolean__show-picnic-person', slots)).toBe('Show Person');
   });
 
   test('with no layer slot beside it, the slug reads back as words', () => {

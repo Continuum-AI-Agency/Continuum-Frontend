@@ -22,6 +22,25 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
   render_delivery_ad_changed: 'That ad’s creative changed after it was picked. Pick the ad again.',
   render_set_row_snapshot_mismatch:
     'A row changed after the render set was saved. Save the set, then render again.',
+  // A set pins one saved template revision. These say which revision question needs answering.
+  render_set_template_revision_changed:
+    'This set’s template revision changed after you opened it. Open the set again, then render.',
+  render_set_explicit_revision_change_required:
+    'This set is pinned to another template revision. Use “Change set template revision” to move it, then render.',
+  render_set_revision_outputs_unresolved:
+    'Some rows use formats the chosen revision does not have. Pick their formats again, then change the revision.',
+  template_revision_selection_required:
+    'This template has more than one published revision. Choose the revision for this set, then render.',
+  template_revision_output_required:
+    'That revision is not published to this render workspace. Publish it, or choose a published revision.',
+  template_revision_not_found:
+    'That template revision no longer exists. Choose a published revision for this set.',
+  template_revision_source_missing:
+    'The file behind that revision was removed. Choose a published revision for this set.',
+  template_variant_archived:
+    'That variant was archived. Choose another revision for this set, or restore the variant.',
+  template_revision_head_conflict:
+    'Someone else saved this template at the same time. Reload it and save again.',
   // The server's catch-all: it hit an error it has no code for, and said nothing more.
   api_render_failed:
     'The render service hit an unexpected error. Try again; if it keeps failing, tell your Continuum contact.',

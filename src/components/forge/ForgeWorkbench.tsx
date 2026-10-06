@@ -15,7 +15,7 @@ import {
 } from '@/components/forge/ForgeProjectDrop';
 import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
-import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
 import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import {
   type SharedTemplate,
@@ -91,11 +91,17 @@ export function ForgeWorkbench({
   brandId,
   brandName,
   onOpenRender,
+  templateIntent,
+  onTemplateIntentConsumed,
 }: {
   brandId: string;
   brandName?: string;
   /** Jump to the Render tab with a template (and optionally a render set) loaded. */
   onOpenRender?: (intent: ForgeRenderIntent) => void;
+  /** A template to open from elsewhere on the page — its settings unless it names a tab. */
+  templateIntent?: ForgeTemplateIntent;
+  /** The workbench has taken `templateIntent`; the shell drops it so a remount never replays it. */
+  onTemplateIntentConsumed?: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<string | undefined>();
@@ -168,6 +174,8 @@ export function ForgeWorkbench({
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) }),
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templateVariants(brandId) }),
+        // The gallery nests uploads by family; a stale registry would list a new variant as a row.
+        queryClient.invalidateQueries({ queryKey: ['forge', brandId, 'revision-variants'] }),
       ]).then(() => undefined),
     [brandId, queryClient, sourceKey],
   );
@@ -322,6 +330,14 @@ export function ForgeWorkbench({
     });
   const openShared = (template: SharedTemplate | null) =>
     morph(() => setSelectedShared(template ? sharedTemplateId(template) : null));
+
+  // An intent is an event, taken once and handed back, the way the Render grid takes its own.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event.
+  useEffect(() => {
+    if (!templateIntent) return;
+    onTemplateIntentConsumed?.();
+    open(templateIntent.assetId, templateIntent.tab ?? 'layers');
+  }, [templateIntent]);
 
   const current = sources.find((source) => source.assetId === selected) ?? null;
   const currentShared = current

@@ -32,9 +32,18 @@ export const templateRevisionLayerEditSchema = z
   );
 export type TemplateRevisionLayerEdit = z.infer<typeof templateRevisionLayerEditSchema>;
 
+/**
+ * Arrangements saved before artboards were recorded carry no `artboardId`; the registry backfill
+ * copied nine of them into immutable revisions, and one such row failed every catalog read for its
+ * brand. They re-stack the canvas, which is what null means.
+ */
+const revisionArrangementSchema = designArrangementSchema.extend({
+  artboardId: z.number().int().nullable().default(null),
+});
+
 export const templateRevisionEditsSchema = z
   .object({
-    arrangement: designArrangementSchema.optional(),
+    arrangement: revisionArrangementSchema.optional(),
     layers: z.array(templateRevisionLayerEditSchema).max(64).default([]),
     slots: z.array(templateSourceSlotEditSchema).max(500).default([]),
   })

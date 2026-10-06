@@ -8,7 +8,7 @@ import {
   useRenderApprovals,
   waitingCount,
 } from '@/components/forge/PendingApprovals';
-import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -47,6 +47,12 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     setRenderIntent(intent);
     activate('render');
   };
+  // The way back: a template opened from the Render tab, held until the workbench takes it.
+  const [templateIntent, setTemplateIntent] = useState<ForgeTemplateIntent | undefined>(undefined);
+  const openTemplate = (intent: ForgeTemplateIntent) => {
+    setTemplateIntent(intent);
+    activate('templates');
+  };
   // The approval notification links to `/forge#approvals`. A hash never reaches the server, so the
   // ledger opens after mount.
   useEffect(() => {
@@ -81,6 +87,8 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
           brandId={brandId}
           brandName={brandName}
           onOpenRender={openRender}
+          templateIntent={templateIntent}
+          onTemplateIntentConsumed={() => setTemplateIntent(undefined)}
         />
       </TabsContent>
       {/* Kept mounted: unsaved rows live in the grid, and a tab round trip must not reload them. */}
@@ -93,6 +101,7 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
             intent={renderIntent}
             onIntentConsumed={() => setRenderIntent(undefined)}
             onFired={() => activate('renders')}
+            onOpenTemplate={openTemplate}
           />
         </TabsContent>
       ) : null}

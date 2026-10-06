@@ -21,6 +21,7 @@ import {
   fromRenderSetRows,
   HISTORY_LIMIT,
   IMPORT_SKIP,
+  isDefaultValue,
   keepProposed,
   mergeSetRows,
   missingInputs,
@@ -42,6 +43,7 @@ import {
   rowMediaOf,
   rowsFromMappedImport,
   rowsFromSuggestion,
+  seededValue,
   seedRow,
   toCsv,
   toPreflightDelivery,
@@ -121,6 +123,31 @@ describe('seedRow', () => {
     );
     expect(row.values).toEqual({ price: 9.99, on_sale: true });
   });
+  test('a root reset puts back exactly what a new row is seeded with', () => {
+    const row = seedRow(all);
+    for (const item of all) expect(seededValue(item)).toEqual(row.values[item.key]);
+  });
+});
+
+describe('isDefaultValue', () => {
+  const saved = variable({ key: 'cta', label: 'CTA', defaultValue: 'GO FAST', sample: 'Hola' });
+  const savedHero = { ...hero, defaultValue: { assetId: '77777777-7777-4777-8777-777777777777' } };
+  test.each([
+    ['the seeded artboard copy', headline, 'Hola', true],
+    ['the seeded artboard number, typed', price, 9.99, true],
+    ['the seeded switch', onSale, true, true],
+    ['an unset switch, which renders as authored', onSale, undefined, true],
+    ['an empty field a saved default fills', saved, undefined, true],
+    ['an empty media slot a saved default fills', savedHero, undefined, true],
+    ['text a person typed', headline, 'Adiós', false],
+    ['a flipped switch', onSale, false, false],
+    ['the artboard copy over a saved default', saved, 'Hola', false],
+    ['an empty field with only a sample, which asks for input', headline, undefined, false],
+    ['a picked image over a saved default', savedHero, { assetId: 'a' }, false],
+    ['an empty media slot with no default', hero, undefined, false],
+  ] as const)('%s → %p', (_name, item, value, expected) => {
+    expect(isDefaultValue(item, value)).toBe(expected);
+  });
 });
 
 describe('validateRow', () => {
@@ -150,6 +177,12 @@ describe('missingInputs', () => {
     const colour = variable({ key: 'c', kind: 'color', required: true });
     expect(missingInputs([colour], { c: 'magenta' })).toEqual([]);
     expect(missingInputs(all, { headline: 'Hola', hero: { assetId: 'a' } })).toEqual([]);
+  });
+  test('a field a saved default fills is never asked for', () => {
+    const defaulted = all.map((item) =>
+      item.key === 'hero' ? { ...item, defaultValue: { assetId: 'a' } } : item,
+    );
+    expect(missingInputs(defaulted, {})).toEqual(['headline']);
   });
 });
 
