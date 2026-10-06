@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { ForgeWorkbench } from '@/components/forge/ForgeWorkbench';
@@ -8,6 +9,7 @@ import {
   useRenderApprovals,
   waitingCount,
 } from '@/components/forge/PendingApprovals';
+import { templateListQuery } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,6 +38,11 @@ const PANEL = 'min-h-0 min-w-0 overflow-y-auto overscroll-contain pt-2';
 export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
   const [visited, setVisited] = useState<ReadonlySet<ForgeTab>>(() => new Set(['templates']));
+  // The Render picker's list is the slowest read on the page; start it now, not on first visit.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    void queryClient.prefetchQuery(templateListQuery(brandId));
+  }, [brandId, queryClient]);
   const activate = (next: ForgeTab) => {
     setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
     setTab(next);

@@ -29,7 +29,7 @@ afterAll(() => listJobs.mockRestore());
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { type SharedTemplate, sharedTemplateId } from './TemplateCard';
+import { type SharedTemplate, sharedTemplateId, TemplateHoverPreview } from './TemplateCard';
 import { TemplateGallery } from './TemplateGallery';
 
 afterEach(cleanup);
@@ -120,7 +120,7 @@ function renderGallery(
     families?: TemplateRevisionVariant[] | null;
     shared?: SharedTemplate[];
     adopting?: string | null;
-    onOpen?: (assetId: string, tab?: string) => void;
+    onOpen?: (assetId: string, tab?: string, comp?: string) => void;
     onOpenShared?: (template: SharedTemplate) => void;
   } = {},
 ) {
@@ -151,7 +151,18 @@ function renderGallery(
 const cardNames = () =>
   within(screen.getByRole('table', { name: 'Templates' }))
     .queryAllByRole('button', { name: /^Open / })
+    .filter((button) => !button.closest('[data-sub-row]'))
     .map((button) => button.getAttribute('aria-label')?.slice(5));
+const subRows = () => [...document.querySelectorAll<HTMLElement>('[data-sub-row]')];
+/** A sub-row's first four cells: name, source, formats, status. The date reads in local time. */
+const subRowCells = (row: HTMLElement) =>
+  within(row)
+    .getAllByRole('cell')
+    .slice(0, 4)
+    .map((cell) => cell.textContent);
+/** A column's header cell, found by its sort button — the one control a person clicks. */
+const header = (name: string) =>
+  screen.getByRole('button', { name: `Sort by ${name}` }).closest('th') as HTMLElement;
 
 describe('TemplateGallery', () => {
   test('cards are named, newest first, and search narrows them', () => {
@@ -164,6 +175,27 @@ describe('TemplateGallery', () => {
     fireEvent.change(screen.getByLabelText('Search templates'), { target: { value: 'nothing' } });
     expect(cardNames()).toEqual([]);
     expect(screen.getByText('No templates match.')).toBeTruthy();
+  });
+
+  test('a column header sorts within each group, and a second click flips it', () => {
+    renderGallery();
+    expect(header('Updated').getAttribute('aria-sort')).toBe('descending');
+
+    fireEvent.click(within(header('Template')).getByRole('button'));
+    expect(header('Template').getAttribute('aria-sort')).toBe('ascending');
+    expect(header('Updated').getAttribute('aria-sort')).toBe('none');
+    // Drafts is the one group with two rows; A to Z inside it.
+    expect(cardNames()).toEqual(['Summer promo', 'Hero offer', 'Untitled template', 'Winter sale']);
+
+    fireEvent.click(within(header('Template')).getByRole('button'));
+    expect(header('Template').getAttribute('aria-sort')).toBe('descending');
+    expect(cardNames()).toEqual(['Summer promo', 'Untitled template', 'Hero offer', 'Winter sale']);
+
+    // A new column starts oldest-last for dates; again flips it to oldest first.
+    fireEvent.click(within(header('Updated')).getByRole('button'));
+    fireEvent.click(within(header('Updated')).getByRole('button'));
+    expect(header('Updated').getAttribute('aria-sort')).toBe('ascending');
+    expect(cardNames()).toEqual(['Summer promo', 'Hero offer', 'Untitled template', 'Winter sale']);
   });
 
   test("a card shows its newest render's file for its format, read by name, from one list read", async () => {
@@ -200,6 +232,31 @@ describe('TemplateGallery', () => {
     expect(listJobs.mock.calls[0]?.slice(1)).toEqual([50, { status: 'finished' }]);
     expect(screen.getByRole('table', { name: 'Templates' })).toBeTruthy();
     expect(document.body.textContent).not.toContain('ffffffffff');
+
+    // The hover shows that same file — the 1:1 one, though the fleet listed 9:16 first.
+    cleanup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const preview = (renders: ApiRenderJob[], emptyLabel: string | null) => (
+      <QueryClientProvider client={client}>
+        <TemplateHoverPreview
+          brandId={BRAND}
+          name="Summer promo"
+          templateKey={null}
+          parse={SOURCES[0]!.parse}
+          ratios={SOURCES[0]!.ratios}
+          renders={renders}
+          emptyLabel={emptyLabel}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(preview(jobs, null));
+    expect(
+      screen.getByRole('img', { name: 'Summer promo · last render' }).getAttribute('src'),
+    ).toBe('https://cdn.test/Main_1x1_aaa.png');
+    // Never rendered: the drawing of its boxes, and a word on why.
+    rerender(preview([], 'No render yet'));
+    expect(screen.queryByRole('img', { name: 'Summer promo · last render' })).toBeNull();
+    expect(screen.getByText('No render yet')).toBeTruthy();
   });
 
   test('the status filter groups cards, and shared templates carry a Use action and a Draft pill', () => {
@@ -385,7 +442,7 @@ test('the grouped table filters original design type and keeps child variants un
   fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
   fireEvent.click(option);
   await waitFor(() => expect(cardNames()).toEqual(['Client Illustrator']));
-  expect(screen.getByText('1:1 · 9:16 / 2')).toBeTruthy();
+  expect(screen.getByText('1:1 · 9:16')).toBeTruthy();
   fireEvent.click(
     within(screen.getByRole('table', { name: 'Templates' })).getByRole('button', {
       name: 'Collapse Ready',
@@ -403,7 +460,84 @@ test('the grouped table filters original design type and keeps child variants un
   fireEvent.pointerDown(publishedOption, { pointerType: 'mouse', button: 0 });
   fireEvent.click(publishedOption);
   await waitFor(() => expect(cardNames()).toEqual(['Published artboard']));
-  expect(screen.getByText('1:1 · 9:16 / 2')).toBeTruthy();
+  expect(screen.getByText('1:1 · 9:16')).toBeTruthy();
+});
+
+test('a template with several outputs expands into a row each; Edit opens that composition', () => {
+  const comp = (
+    name: string,
+    width: number,
+    height: number,
+    durationSec: number,
+    isDelivery = true,
+  ) => ({
+    name,
+    width,
+    height,
+    frameRate: 30,
+    durationSec,
+    layerCount: 3,
+    isTop: isDelivery,
+    isDelivery,
+  });
+  const base = source({ displayName: 'Promo' });
+  const promo: TemplateSource = {
+    ...base,
+    parse: {
+      ...base.parse!,
+      comps: [
+        comp('Main 1x1', 1080, 1080, 1 / 30),
+        comp('Story 9x16', 1080, 1920, 6),
+        // A precomp is not an output a render can pick.
+        comp('Background', 1920, 1080, 15, false),
+      ],
+      ratios: [
+        { ratio: '1:1', width: 1080, height: 1080, comps: ['Main 1x1'] },
+        { ratio: '9:16', width: 1080, height: 1920, comps: ['Story 9x16'] },
+      ],
+    },
+  };
+  const onOpen = mock((_assetId: string, _tab?: string, _comp?: string) => undefined);
+  renderGallery(undefined, { sources: [promo], shared: [], onOpen });
+  fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Promo' }));
+  expect(subRows().map(subRowCells)).toEqual([
+    ['Main 1x1Output · 1080×1080', 'After Effects', '1:1', 'Static'],
+    ['Story 9x16Output · 1080×1920', 'After Effects', '9:16', 'Animated · 6.0s'],
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Story 9x16' }));
+  expect(onOpen).toHaveBeenLastCalledWith(promo.assetId, 'layers', 'Story 9x16');
+  fireEvent.click(screen.getByRole('button', { name: 'Open Main 1x1' }));
+  expect(onOpen).toHaveBeenLastCalledWith(promo.assetId);
+});
+
+test('Figma and HyperFrames are source types of their own', async () => {
+  const figma = source({ displayName: 'Figma frame', family: 'figma' });
+  const film = source({ displayName: 'HyperFrames film' });
+  // A HyperFrames export arrives as an After Effects package; only the registry knows better.
+  const kind: TemplateVariant = {
+    assetId: film.assetId,
+    rootAssetId: film.assetId,
+    parentAssetId: null,
+    parentVersionId: null,
+    name: 'HyperFrames film',
+    sourceKind: 'hyperframes',
+    originalAssetId: film.assetId,
+    originalVersionId: film.versionId,
+    originalFileName: 'film.zip',
+    source: film,
+  };
+  renderGallery(undefined, { sources: [figma, film], shared: [], catalog: [kind] });
+  const pick = async (label: string) => {
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
+    const option = await screen.findByRole('option', { name: label, exact: true });
+    fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
+    fireEvent.click(option);
+  };
+  await pick('HyperFrames');
+  await waitFor(() => expect(cardNames()).toEqual(['HyperFrames film']));
+  await pick('Figma');
+  await waitFor(() => expect(cardNames()).toEqual(['Figma frame']));
+  expect(within(screen.getByRole('table', { name: 'Templates' })).getByText('Figma')).toBeTruthy();
 });
 
 describe('template families', () => {
@@ -458,7 +592,7 @@ describe('template families', () => {
     variant(cropId, 'Square crop', [revision(cropId, 1, squareCrop)], null),
   ];
 
-  test('variants and revisions are cards under their original, never rows of their own', () => {
+  test('variants are rows under their original: Open lands on Variants, Edit on its layers', () => {
     const onOpen = mock((_assetId: string, _tab?: string) => undefined);
     renderGallery(undefined, {
       sources: [original, secondRevision, squareCrop],
@@ -467,24 +601,50 @@ describe('template families', () => {
       onOpen,
     });
     expect(cardNames()).toEqual(['Summer promo']);
-    expect(screen.getByText('1:1 · 9:16 / 2')).toBeTruthy();
+    expect(screen.getByText('2 variants')).toBeTruthy();
+    expect(subRows()).toEqual([]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Summer promo' }));
-    const cards = within(screen.getByRole('list', { name: 'Variants of Summer promo' }));
-    expect(cards.getAllByRole('button').map((card) => card.getAttribute('aria-label'))).toEqual([
-      'Original · Published · Revision 2 · 2 revisions',
-      'Square crop · Draft · Revision 1 · 1 revision',
+    expect(subRows().map(subRowCells)).toEqual([
+      ['OriginalRevision 2 · 2 revisions', 'After Effects', '1:1 · 9:16', 'Published'],
+      ['Square cropRevision 1 · 1 revision', 'After Effects', '1:1 · 9:16', 'Draft'],
     ]);
-    // Search, filters and counts still count templates, not the cards under them.
+    // Search, filters and counts still count templates, not the rows under them.
     expect(screen.getByRole('button', { name: /^All\s*1$/ })).toBeTruthy();
 
-    fireEvent.click(cards.getByRole('button', { name: /^Square crop/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Square crop' }));
+    expect(onOpen).toHaveBeenLastCalledWith(squareCrop.assetId, 'layers');
+    // A variant's head is its newest revision, so Edit opens that upload, not the first one.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Original' }));
+    expect(onOpen).toHaveBeenLastCalledWith(secondRevision.assetId, 'layers');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Square crop' }));
     expect(onOpen).toHaveBeenLastCalledWith(squareCrop.assetId, 'variants');
-    fireEvent.click(cards.getByRole('button', { name: /^Original/ }));
-    expect(onOpen).toHaveBeenLastCalledWith(secondRevision.assetId, 'variants');
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide 2 variants of Summer promo' }));
-    expect(screen.queryByRole('list', { name: 'Variants of Summer promo' })).toBeNull();
+    expect(subRows()).toEqual([]);
+  });
+
+  test('a published build is a row under its template, and Edit opens the upload it was built from', () => {
+    const onOpen = mock((_assetId: string, _tab?: string) => undefined);
+    const build: SharedTemplate = {
+      templateKey: '501',
+      name: 'Artboard 2',
+      displayName: 'Artboard 2',
+      draft: false,
+      granted: true,
+      updatedAt: null,
+      workspaceId: '77777777-7777-4777-8777-777777777777',
+      sourceAssetId: original.assetId,
+    };
+    renderGallery(undefined, { sources: [original], shared: [build], onOpen });
+    expect(cardNames()).toEqual(['Summer promo']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 variant of Summer promo' }));
+    expect(subRows().map(subRowCells)).toEqual([
+      ['Artboard 2Published build', 'After Effects', '1:1 · 9:16', 'In use'],
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Artboard 2' }));
+    expect(onOpen).toHaveBeenLastCalledWith(original.assetId, 'layers');
   });
 
   test('a template with one revision has nothing to expand, and its gear opens its settings', () => {

@@ -200,7 +200,9 @@
     ".next/drive-ui-check/types/**/*.ts",
     ".next/drive-ui-check/dev/types/**/*.ts",
     ".next/forge-folder-bench/types/**/*.ts",
-    ".next/forge-folder-bench/dev/types/**/*.ts"
+    ".next/forge-folder-bench/dev/types/**/*.ts",
+    ".next/forge-gallery-bench/types/**/*.ts",
+    ".next/forge-gallery-bench/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

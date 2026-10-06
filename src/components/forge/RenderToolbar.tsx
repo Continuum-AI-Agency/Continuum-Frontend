@@ -4,11 +4,16 @@ import {
   type ApiRenderInputSet,
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
+  motionLabel,
   readableLayerName,
+  TEMPLATE_SOURCE_KIND_LABELS,
+  type TemplateSourceKind,
   templateDisplayName,
   templateRefOf,
 } from '@continuum/contracts';
+import { defaultFilter } from 'cmdk';
 import {
+  Check,
   ChevronDown,
   ClipboardPaste,
   Download,
@@ -23,9 +28,18 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { Fragment, type ReactNode, type Ref } from 'react';
+import { Fragment, type ReactNode, type Ref, useMemo, useState } from 'react';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +54,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -53,6 +68,132 @@ import { shortSha } from './templateVersion';
 
 export const templateLabel = (template: ApiRenderTemplateSummary): string =>
   template.displayName ?? templateDisplayName(template.name);
+
+/**
+ * Which template, as a searchable list that scrolls: a brand holds dozens, and a menu of dozens has
+ * no way to the bottom. Matching reads the name and key only — the value is the REF, and a binding
+ * uuid's hex letters would otherwise match almost any search. Highlighting a row, by pointer or
+ * arrows, reports it, so its reads can start before the click lands.
+ */
+export function TemplatePicker({
+  templates,
+  currentRef,
+  placeholder,
+  onChange,
+  onHighlight,
+  sourceKinds = null,
+}: {
+  templates: ApiRenderTemplateSummary[];
+  currentRef: string;
+  /**
+   * What each template's upload was authored in, by source asset id — null until the registry
+   * answers, and until then rows carry no type rather than a guess.
+   */
+  sourceKinds?: ReadonlyMap<string, TemplateSourceKind> | null;
+  /** What the trigger says while nothing is chosen. */
+  placeholder: string;
+  /** Called with the REF (`bindingId:key`), never a bare key. */
+  onChange: (ref: string) => void;
+  onHighlight?: (template: ApiRenderTemplateSummary) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // Controlled because cmdk only reports a highlight change for a controlled value.
+  const [highlighted, setHighlighted] = useState('');
+  const byRef = useMemo(
+    () => new Map(templates.map((template) => [templateRefOf(template), template])),
+    [templates],
+  );
+  const current = byRef.get(currentRef);
+  // Grouped by what each was authored in, in the Templates filter's order. A template with no
+  // upload here came from the shared render workspace, which is a fact; one the registry does not
+  // know is Other, never After Effects by default.
+  const groups = useMemo(() => {
+    if (!sourceKinds) return [{ heading: null, templates }];
+    const order = [...Object.values(TEMPLATE_SOURCE_KIND_LABELS), 'Shared workspace'];
+    const byHeading = new Map<string, ApiRenderTemplateSummary[]>();
+    for (const template of templates) {
+      const kind = template.sourceAssetId ? sourceKinds.get(template.sourceAssetId) : undefined;
+      const heading = template.sourceAssetId
+        ? TEMPLATE_SOURCE_KIND_LABELS[kind ?? 'other']
+        : 'Shared workspace';
+      byHeading.set(heading, [...(byHeading.get(heading) ?? []), template]);
+    }
+    return [...byHeading]
+      .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+      .map(([heading, members]) => ({ heading, templates: members }));
+  }, [sourceKinds, templates]);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        disabled={templates.length === 0}
+        render={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-64 justify-between gap-1.5"
+            aria-label="Template"
+          >
+            <span className="truncate">{current ? templateLabel(current) : placeholder}</span>
+            <ChevronDown className="size-3.5 shrink-0" aria-hidden />
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-80 p-0">
+        <Command
+          filter={(_ref, search, keywords = []) => defaultFilter(keywords.join(' '), search)}
+          value={highlighted}
+          onValueChange={(ref) => {
+            setHighlighted(ref);
+            const template = byRef.get(ref);
+            if (template) onHighlight?.(template);
+          }}
+        >
+          <CommandInput placeholder="Search templates…" aria-label="Search templates" />
+          <CommandList>
+            <CommandEmpty>No template matches.</CommandEmpty>
+            {groups.map(({ heading, templates: members }) => (
+              <CommandGroup key={heading ?? 'all'} heading={heading ?? undefined}>
+                {/* Keyed and valued by the REF. Two templates can share a key — 133 exists in two
+                  sub-apps — and React silently drops the second child of a duplicated key, so a
+                  person would see one row where they hold two and render the wrong tenant's comp. */}
+                {members.map((template) => {
+                  const ref = templateRefOf(template);
+                  const facts = [template.ratios.join(' '), motionLabel(template.motion)]
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <CommandItem
+                      key={ref}
+                      value={ref}
+                      keywords={[templateLabel(template), template.key, heading ?? '']}
+                      onSelect={() => {
+                        setOpen(false);
+                        onChange(ref);
+                      }}
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate">{templateLabel(template)}</span>
+                        {facts ? (
+                          <span className="truncate text-2xs text-muted-foreground">{facts}</span>
+                        ) : null}
+                      </span>
+                      {/* Null means nobody checked, which must not read as "none missing". */}
+                      {template.fontsMissing ? (
+                        <Badge variant="warning">{template.fontsMissing} fonts missing</Badge>
+                      ) : null}
+                      {ref === currentRef ? <Check aria-hidden /> : null}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Marks one top-level control, so "at most five" is something a test can count. */
 function Control({ children, className }: { children: ReactNode; className?: string }) {
@@ -72,6 +213,8 @@ export function RenderToolbar({
   onVariantChange,
   templatesLoading,
   onTemplateChange,
+  onTemplateHighlight,
+  templateSourceKinds,
   onOpenTemplateSettings,
   bindingId,
   ready,
@@ -108,6 +251,9 @@ export function RenderToolbar({
   templatesLoading: boolean;
   /** Called with the template REF (`bindingId:key`), never a bare key. */
   onTemplateChange: (ref: string) => void;
+  /** A template the picker is pointing at, before it is chosen — so its reads can start early. */
+  onTemplateHighlight?: (template: ApiRenderTemplateSummary) => void;
+  templateSourceKinds?: ReadonlyMap<string, TemplateSourceKind> | null;
   /** Open the chosen template's settings on the Templates tab; absent when its source is unknown. */
   onOpenTemplateSettings?: () => void;
   /** The chosen template's binding, so a key held in two of them resolves to the right row. */
@@ -165,51 +311,20 @@ export function RenderToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Render">
       <Control className="max-w-full min-w-0 flex-wrap">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            disabled={templates.length === 0}
-            render={
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-64 justify-between gap-1.5"
-                aria-label="Template"
-              >
-                <span className="truncate">
-                  {current
-                    ? templateLabel(current)
-                    : templatesLoading
-                      ? 'Loading templates…'
-                      : templates.length
-                        ? 'Choose a template'
-                        : 'No renderable templates yet'}
-                </span>
-                <ChevronDown className="size-3.5 shrink-0" aria-hidden />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-72">
-            {/* Keyed and valued by the REF. Two templates can share a key — 133 exists in two
-                sub-apps — and React silently drops the second child of a duplicated key, so a
-                person would see one row where they hold two and render the wrong tenant's comp. */}
-            <DropdownMenuRadioGroup value={currentRef} onValueChange={onTemplateChange}>
-              {templates.map((template) => (
-                <DropdownMenuRadioItem
-                  key={templateRefOf(template)}
-                  value={templateRefOf(template)}
-                >
-                  <span className="truncate">{templateLabel(template)}</span>
-                  {template.ratios.length ? (
-                    <span className="ml-auto text-2xs text-muted-foreground">
-                      {template.ratios.join(' ')}
-                    </span>
-                  ) : null}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <TemplatePicker
+          templates={templates}
+          currentRef={currentRef}
+          placeholder={
+            templatesLoading
+              ? 'Loading templates…'
+              : templates.length
+                ? 'Choose a template'
+                : 'No renderable templates yet'
+          }
+          onChange={onTemplateChange}
+          onHighlight={onTemplateHighlight}
+          sourceKinds={templateSourceKinds}
+        />
         {onOpenTemplateSettings ? (
           <Tooltip>
             <TooltipTrigger

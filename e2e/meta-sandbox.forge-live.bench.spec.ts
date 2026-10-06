@@ -346,7 +346,7 @@ async function selectTemplate(page: Page, template: ApiRenderTemplateSummary): P
   if (!(await picker.textContent())?.includes(label)) {
     await picker.click();
     await page
-      .getByRole('menuitemradio', { name: new RegExp(`^${escapeRegExp(label)}`) })
+      .getByRole('option', { name: new RegExp(`^${escapeRegExp(label)}`) })
       .first()
       .click();
   }

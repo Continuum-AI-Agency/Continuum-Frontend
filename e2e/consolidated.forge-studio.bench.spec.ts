@@ -408,8 +408,8 @@ test.describe('Forge — one consolidated list', () => {
 
     // Both templates are offered, and they are TWO rows — a merge keyed on the template key
     // alone would have shown one.
-    await expect(page.getByRole('menuitemradio', { name: PROMO.title })).toBeVisible();
-    await expect(page.getByRole('menuitemradio', { name: 'Legacy product card' })).toBeVisible();
+    await expect(page.getByRole('option', { name: PROMO.title })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Legacy product card' })).toBeVisible();
 
     // The submenu that used to sit under these items is gone.
     expect(await workspaceControls(page), 'a control named for a workspace').toEqual([]);
@@ -436,7 +436,7 @@ test.describe('Forge — one consolidated list', () => {
     const picker = page.getByRole('button', { name: 'Template', exact: true });
     await expect(picker).toBeEnabled({ timeout: 30_000 });
     await picker.click();
-    await page.getByRole('menuitemradio', { name: 'Legacy product card' }).click();
+    await page.getByRole('option', { name: 'Legacy product card' }).click();
 
     // THE WHOLE POINT. Both templates are key 133; only the binding tells them apart, so a
     // contract read that carried the default binding would be reading StarCraft's promo while

@@ -270,6 +270,7 @@ export function TemplateLayerEditor({
   active,
   onSaved,
   onOpenVariant,
+  initialComp,
 }: {
   brandId: string;
   assetId: string;
@@ -278,6 +279,8 @@ export function TemplateLayerEditor({
   active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void | Promise<void>;
+  /** A composition to open on, by name — an output row's Edit in the gallery. */
+  initialComp?: string;
 }) {
   const catalog = useQuery({
     queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
@@ -290,6 +293,11 @@ export function TemplateLayerEditor({
   const revision = variant?.revisions.find(
     (item) => item.sourceAssetId === assetId && item.sourceVersionId === versionId,
   );
+  // An upload the registry never took in — its file version has no recorded checksum — has no
+  // revision to edit from, and waiting will not change that.
+  const unregistered =
+    (catalog.isSuccess && !revision) ||
+    /template_revision_source_missing/.test(String(catalog.error ?? ''));
   const [baseline, setBaseline] = useState<TemplateLayerPreviewResponse | null>(null);
   const [preview, setPreview] = useState<TemplateLayerPreviewResponse | null>(null);
   const [edits, setEdits] = useState<Record<string, TemplateLayerEdit>>({});
@@ -356,11 +364,14 @@ export function TemplateLayerEditor({
         if (ticket !== sequence.current) return;
         setBaseline(data);
         setPreview(data);
-        setCompId(data.compId);
+        const start = data.comps.find((comp) => comp.name === initialComp)?.id ?? data.compId;
+        setCompId(start);
         const first =
           data.layers.find(
-            (layer) => layer.compId === data.compId && layer.kind === 'text' && !layer.textReason,
-          ) ?? data.layers[0];
+            (layer) => layer.compId === start && layer.kind === 'text' && !layer.textReason,
+          ) ??
+          data.layers.find((layer) => layer.compId === start) ??
+          data.layers[0];
         setSelected(first ? layerKey(first) : null);
       })
       .catch((cause) => {
@@ -370,7 +381,7 @@ export function TemplateLayerEditor({
       .finally(() => {
         if (ticket === sequence.current) setBusy(false);
       });
-  }, [active, assetId, baseline, brandId, busy, error, revision]);
+  }, [active, assetId, baseline, brandId, busy, error, revision, initialComp]);
   useEffect(() => {
     if (!dirty) return;
     const guard = (event: BeforeUnloadEvent) => {
@@ -522,13 +533,17 @@ export function TemplateLayerEditor({
           Correct invalid layer values before saving, or Reset to discard them.
         </p>
       ) : null}
-      {error || catalog.error ? (
+      {error || (catalog.error && !unregistered) ? (
         <p role="alert" className="text-xs text-destructive">
           {error ?? String(catalog.error)}
         </p>
       ) : null}
       {!baseline ? (
-        <p className="text-xs text-muted-foreground">Reading editable layers…</p>
+        <p className="text-xs text-muted-foreground">
+          {unregistered
+            ? 'This upload is not registered as a template revision — its file has no recorded checksum — so its layers cannot be edited here. Upload the file again to edit them.'
+            : 'Reading editable layers…'}
+        </p>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="space-y-3">

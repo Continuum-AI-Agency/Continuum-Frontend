@@ -239,7 +239,7 @@ async function run() {
     // 1. Templates → the template → Layers.
     await openTab(page, 'Templates');
     const card = page
-      .getByRole('list', { name: 'Templates' })
+      .getByRole('table', { name: 'Templates' })
       .getByRole('button', { name: new RegExp(`^Open .*${tag}`, 'i') })
       .first();
     await card.waitFor({ timeout: 60_000 });
@@ -280,7 +280,7 @@ async function run() {
     await picker.waitFor({ timeout: 60_000 });
     await picker.click();
     await page
-      .getByRole('menuitemradio', { name: new RegExp(tag, 'i') })
+      .getByRole('option', { name: new RegExp(tag, 'i') })
       .first()
       .click({ timeout: 30_000 });
     const formats = page.getByRole('button', { name: /^Formats / }).first();

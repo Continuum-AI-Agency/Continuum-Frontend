@@ -105,6 +105,8 @@ export function ForgeWorkbench({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<string | undefined>();
+  // The composition to land on in Edit layers — an output row's Edit names its own.
+  const [detailComp, setDetailComp] = useState<string | undefined>();
   // The `sharedTemplateId` of the open shared template. Keyed by id, not held as an object, so a
   // grant switched off elsewhere drops the detail back to the gallery on the next list read.
   const [selectedShared, setSelectedShared] = useState<string | null>(null);
@@ -319,9 +321,10 @@ export function ForgeWorkbench({
   }, []);
 
   const morph = useTemplateMorphSwap();
-  const open = (assetId: string | null, tab?: string) =>
+  const open = (assetId: string | null, tab?: string, comp?: string) =>
     morph(() => {
       setDetailTab(tab);
+      setDetailComp(comp);
       setSelected(assetId);
     });
   const openShared = (template: SharedTemplate | null) =>
@@ -430,6 +433,7 @@ export function ForgeWorkbench({
           brandId={brandId}
           source={current}
           initialTab={detailTab}
+          initialComp={detailComp}
           onBack={() => open(null)}
           onOpenVariant={async (assetId, tab) => {
             await refreshTemplate();

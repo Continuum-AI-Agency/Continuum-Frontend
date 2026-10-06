@@ -762,7 +762,7 @@ test.describe('Forge Studio — fixtures', () => {
     await expect(picker).toContainText(renamed);
     await picker.click();
     await expect(
-      page.getByRole('menuitemradio', { name: new RegExp(`^${escapeRegExp(renamed)}`) }),
+      page.getByRole('option', { name: new RegExp(`^${escapeRegExp(renamed)}`) }),
     ).toBeVisible();
     await shoot(page, 'd3-render-picker');
     await page.keyboard.press('Escape');
@@ -1184,7 +1184,7 @@ async function selectLiveTemplate(page: Page): Promise<string> {
   if (!(await picker.textContent())?.includes(label)) {
     await picker.click();
     await page
-      .getByRole('menuitemradio', { name: new RegExp(`^${escapeRegExp(label)}`) })
+      .getByRole('option', { name: new RegExp(`^${escapeRegExp(label)}`) })
       .first()
       .click();
   }
@@ -1406,7 +1406,7 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     await expect(picker).toBeEnabled({ timeout: 120_000 });
     await picker.click();
     await expect(
-      page.getByRole('menuitemradio', { name: new RegExp(`^${escapeRegExp(RENAME)}`) }).first(),
+      page.getByRole('option', { name: new RegExp(`^${escapeRegExp(RENAME)}`) }).first(),
     ).toBeVisible();
     await shoot(page, 'd3-render-picker');
     await page.keyboard.press('Escape');

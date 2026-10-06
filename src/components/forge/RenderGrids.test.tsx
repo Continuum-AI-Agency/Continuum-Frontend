@@ -1092,11 +1092,10 @@ describe('RenderRequestsGrid', () => {
 
   test('choosing another template saves the edits on screen first', async () => {
     extraTemplates = [{ ...TEMPLATE, key: '134', displayName: 'Summer Promo' }];
-    // A radio item keeps its menu open, so the trigger is only pressed when the menu is closed.
+    // The picker closes on a pick, so each pick opens it again.
     const pickTemplate = async (name: RegExp) => {
-      if (!screen.queryByRole('menu'))
-        fireEvent.click(screen.getByRole('button', { name: 'Template' }));
-      fireEvent.click(await screen.findByRole('menuitemradio', { name }));
+      fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+      fireEvent.click(await screen.findByRole('option', { name }));
     };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByText('Choose a template');

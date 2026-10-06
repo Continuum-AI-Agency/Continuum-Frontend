@@ -1,3 +1,5 @@
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
+
 export const FORGE_STALE_MS = {
   active: 30_000,
   lists: 5 * 60_000,
@@ -89,3 +91,35 @@ export const forgeQueryKeys = {
   mediaAsset: (brandId: string, assetId: string) =>
     ['forge', brandId, 'media-assets', assetId] as const,
 } as const;
+
+/** Everything this brand may render, from every binding, as one list. The Forge page reads it on
+ * mount, so the picker is full by the time Render is opened. */
+export const templateListQuery = (brandId: string) => ({
+  queryKey: forgeQueryKeys.templateList(brandId, null),
+  queryFn: () => apiRendersApi.listTemplates(brandId, null),
+  staleTime: FORGE_STALE_MS.lists,
+});
+
+/** The three reads a chosen template's grid waits for. The picker starts them on highlight, so a
+ * click usually lands on all three already cached. */
+export const templateLoadQueries = (
+  brandId: string,
+  bindingId: string | null,
+  templateKey: string,
+) => ({
+  contract: {
+    queryKey: forgeQueryKeys.contract(brandId, bindingId, templateKey),
+    queryFn: () => apiRendersApi.getContract(brandId, templateKey, bindingId),
+    staleTime: FORGE_STALE_MS.contract,
+  },
+  inputSets: {
+    queryKey: forgeQueryKeys.inputSets(brandId, templateKey),
+    queryFn: () => apiRendersApi.listInputSets(brandId, templateKey),
+    staleTime: FORGE_STALE_MS.lists,
+  },
+  renderSets: {
+    queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
+    queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
+    staleTime: FORGE_STALE_MS.lists,
+  },
+});
