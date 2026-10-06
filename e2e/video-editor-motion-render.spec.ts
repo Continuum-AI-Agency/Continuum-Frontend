@@ -51,6 +51,31 @@ function buildBrowserBundle(entry = 'e2e/support/videoEditorMotionRenderEntry.ts
   return code;
 }
 
+/** A frame of the tracked NASA recording, cover-fit to the looks canvas (360x640). */
+function recordedLookFrame(): string {
+  const png = execFileSync('ffmpeg', [
+    '-v',
+    'error',
+    '-ss',
+    '60',
+    '-i',
+    join(
+      process.cwd(),
+      '../artifacts/video-studio-climb/floor-2026-10-02/caption-presets-proof/recorded-source.mp4',
+    ),
+    '-frames:v',
+    '1',
+    '-vf',
+    'scale=360:640:force_original_aspect_ratio=increase,crop=360:640',
+    '-f',
+    'image2',
+    '-c:v',
+    'png',
+    'pipe:1',
+  ]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
 const seen = (boxes: readonly TextBox[]) => boxes.filter((box) => box.count >= 40);
 const center = (box: TextBox) => (box.left + box.right) / 2;
 const nonIncreasing = (values: readonly number[], slack = 0) =>
@@ -109,6 +134,10 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
   const exits = await page.evaluate(() => window.__motionRenderBench.entrances('out'));
   const highlights = await page.evaluate(() => window.__motionRenderBench.highlights());
   const looks = await page.evaluate(() => window.__motionRenderBench.looks());
+  const dust = await page.evaluate(
+    (frame) => window.__motionRenderBench.dust(frame),
+    recordedLookFrame(),
+  );
   await context.close();
 
   const lines: string[] = [];
@@ -117,10 +146,23 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
     lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
     expect.soft(ok, `${name}: ${detail}`).toBe(true);
   };
+  // FE fa406083 added dust and light leaks: 7 filters and 11 effects. Dust's sparse flecks are
+  // also graded on a real recorded frame below, against the vintage-looks density bound.
   check(
-    'all seven filters and nine effects change the composed image pixels',
-    looks.length === 16 && looks.every((look) => look.difference > 0.1),
+    'all seven filters and eleven effects change the composed image pixels',
+    looks.length === 18 && looks.every((look) => look.difference > 0.1),
     JSON.stringify(looks),
+  );
+  const sparse = (fraction: number) => fraction > 0.0001 && fraction < 0.08;
+  check(
+    'dust at full strength flecks a real recorded frame sparsely',
+    sparse(dust.full),
+    JSON.stringify({ changedFraction: dust.full, bounds: [0.0001, 0.08] }),
+  );
+  check(
+    'dust density oracle rejects zero amount and the bare recorded frame',
+    !sparse(dust.zeroAmount) && !sparse(dust.bare),
+    JSON.stringify({ zeroAmount: dust.zeroAmount, bare: dust.bare }),
   );
   check(
     'all seven named filters are neutral at zero intensity',
