@@ -109,11 +109,15 @@ export const editorRenderBlockers = (project: EditorProjectV2): string[] => {
       blockers.push('Finish the production approval gates before rendering.');
     }
   }
-  // `muted` silences a video track; only `enabled` takes its picture away.
+  // `muted` silences a video track; only `enabled` takes its picture away. Text and a nested
+  // sequence are picture too: the render plan draws them on the canvas background.
   const hasPicture = project.tracks.some(
     (track) =>
       track.enabled &&
-      (track.kind === 'video' || (track.kind === 'overlay' && !track.muted)) &&
+      (track.kind === 'video' ||
+        track.kind === 'text' ||
+        track.kind === 'nested_sequence' ||
+        (track.kind === 'overlay' && !track.muted)) &&
       track.clips.some((clip) => clip.enabled),
   );
   if (!hasPicture) blockers.push('The timeline is empty.');
