@@ -186,6 +186,44 @@ describe('PlatformMetricsSection', () => {
   });
 });
 
+describe('PlatformMetricsSection — currency', () => {
+  it('says once that the currency is unknown when the read carries none', () => {
+    const frame = buildMetrics([
+      { ...META_TOTALS, share_of_spend: null },
+      { ...GOOGLE_TOTALS, currency: null, share_of_spend: null },
+    ]);
+    const { getByTestId } = render(
+      <PlatformMetricsSection metrics={frame} platform="google_ads" />,
+    );
+    const section = getByTestId('platform-metrics-google_ads').textContent ?? '';
+    expect(section.match(/currency not reported/g)?.length).toBe(1);
+  });
+
+  it('says nothing about the currency when the read names it', () => {
+    const frame = buildMetrics([META_TOTALS, GOOGLE_TOTALS]);
+    const { getByTestId } = render(
+      <PlatformMetricsSection metrics={frame} platform="google_ads" />,
+    );
+    expect(getByTestId('platform-metrics-google_ads').textContent).not.toContain(
+      'currency not reported',
+    );
+  });
+
+  it("says the live figures below are the platform's own read when the Optimizer has not read it", () => {
+    const frame = buildMetrics([
+      META_TOTALS,
+      { ...GOOGLE_TOTALS, spend: null, share_of_spend: null, results_by_kind: [] },
+    ]);
+    const { getByTestId, queryByTestId } = render(
+      <PlatformMetricsSection liveBelow metrics={frame} platform="google_ads" />,
+    );
+    expect(getByTestId('platform-reading-note').textContent).toBe(
+      "The live figures below come straight from Google. The Optimizer's own reading of Google starts once a portfolio holds Google campaigns.",
+    );
+    expect(queryByTestId('platform-headline')).toBeNull();
+  });
+});
+
 describe('MultiPlatformUnavailable', () => {
   it('says the numbers are not available yet, with no figure', () => {
     const { getByTestId } = render(<MultiPlatformUnavailable detail="Meta's are below." />);

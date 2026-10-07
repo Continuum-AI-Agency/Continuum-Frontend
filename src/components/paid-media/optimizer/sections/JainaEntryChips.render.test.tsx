@@ -42,8 +42,8 @@ describe('JainaEntryChips', () => {
     const { container } = mount();
     for (const link of container.querySelectorAll('a')) {
       const href = link.getAttribute('href') ?? '';
-      expect(href.startsWith('/scale?tab=jaina&prompt=')).toBe(true);
-      const prompt = decodeURIComponent(href.slice('/scale?tab=jaina&prompt='.length));
+      expect(href.startsWith('/scale?tab=jaina&new=1&prompt=')).toBe(true);
+      const prompt = decodeURIComponent(href.slice('/scale?tab=jaina&new=1&prompt='.length));
       expect(prompt).toContain('"Leads MX"');
     }
   });
@@ -122,14 +122,14 @@ describe('JainaEntryChips (account variant)', () => {
     const links = [...container.querySelectorAll('a')];
     links.forEach((link, index) => {
       expect(link.getAttribute('href')).toBe(
-        `/scale?tab=jaina&prompt=${encodeURIComponent(accountEntries[index].prompt)}`,
+        `/scale?tab=jaina&new=1&prompt=${encodeURIComponent(accountEntries[index].prompt)}`,
       );
     });
   });
 });
 
 describe('JainaEntryChips (platform)', () => {
-  it('carries the platform into every deep link and onto the band', () => {
+  it('opens a NEW conversation scoped to the platform, from every question', () => {
     const entries = [
       { key: 'search_terms', label: 'Which search terms bring leads?', prompt: 'Q' },
     ];
@@ -139,7 +139,7 @@ describe('JainaEntryChips (platform)', () => {
     const band = getByTestId('jaina-entry-chips');
     expect(band.getAttribute('data-platform')).toBe('google_ads');
     expect(band.querySelector('a')?.getAttribute('href')).toBe(
-      '/scale?tab=jaina&platform=google_ads&prompt=Q',
+      '/scale?tab=jaina&platform=google_ads&new=1&prompt=Q',
     );
   });
 });

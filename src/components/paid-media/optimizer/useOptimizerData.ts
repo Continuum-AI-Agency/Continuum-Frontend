@@ -91,6 +91,7 @@ import {
 } from '@continuum/contracts';
 import {
   type QueryClient,
+  type UseQueryOptions,
   useInfiniteQuery,
   useMutation,
   useQueries,
@@ -323,6 +324,24 @@ function scopeToAccount(
     otherAccountIds,
     droppedRowCount: dropped,
   };
+}
+
+/**
+ * The brand's portfolios already read under ANY account key, re-scoped to `adAccountId`.
+ * The RPC is brand-scoped and the account filter runs here, so when the page settles on a
+ * different account than the one it mounted with, the answer is already in hand: the surface
+ * paints from it instead of returning to its skeleton for a second identical read.
+ */
+export function cachedPortfolioScope(
+  queryClient: QueryClient,
+  brandId: string,
+  adAccountId: string | null,
+): PortfolioScope | undefined {
+  const cached = queryClient.getQueriesData<PortfolioScope>({
+    queryKey: [...optimizerQueryKeys.portfoliosRoot, brandId],
+  });
+  const hit = cached.find(([, scope]) => scope != null)?.[1];
+  return hit ? scopeToAccount(hit.brandPortfolios, adAccountId, hit.droppedRowCount) : undefined;
 }
 
 async function fetchPortfolios(
@@ -1195,6 +1214,8 @@ type OptimizerReadOptions<T> = {
   staleTime: number;
   gcTime?: number;
   refetchInterval?: number | false;
+  /** Shown while the first fetch for this key runs — never cached as the answer. */
+  placeholderData?: () => NoInfer<T> | undefined;
 };
 
 /** A small query adapter keeps the existing surface ergonomics (`data` is always
@@ -1207,6 +1228,7 @@ function useOptimizerRead<T>({
   staleTime,
   gcTime = THIRTY_MINUTES,
   refetchInterval = false,
+  placeholderData,
 }: OptimizerReadOptions<T>) {
   const query = useQuery({
     queryKey,
@@ -1216,6 +1238,7 @@ function useOptimizerRead<T>({
     gcTime,
     refetchInterval,
     retry: 1,
+    placeholderData: placeholderData as UseQueryOptions<T>['placeholderData'],
   });
 
   return { ...query, data: query.data ?? empty };
@@ -1226,12 +1249,14 @@ function useOptimizerRead<T>({
  *  "this brand has no portfolios" (onboarding) apart from "they are all on another ad
  *  account" (a notice naming that account). */
 export function useOptimizerPortfolios(brandId: string, adAccountId: string | null) {
+  const queryClient = useQueryClient();
   const query = useOptimizerRead({
     queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
     queryFn: () => fetchPortfolios(brandId, adAccountId),
     empty: EMPTY_PORTFOLIO_SCOPE,
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
+    placeholderData: () => cachedPortfolioScope(queryClient, brandId, adAccountId),
   });
 
   return {

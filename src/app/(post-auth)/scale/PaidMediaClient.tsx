@@ -34,7 +34,7 @@ import {
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
-import { jainaPlatformParam } from '@/lib/jaina/deepLink';
+import { jainaNewConversationParam, jainaPlatformParam } from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
@@ -206,10 +206,13 @@ export default function PaidMediaClientPage({
   // The platform a question was asked from (the Optimizer's Google or TikTok tab): the turn is
   // scoped to the brand's account there.
   const jainaPlatform = jainaPlatformParam(searchParams.get('platform'));
+  // An Ask-Jaina chip's question is a fresh ask (`new=1`): it opens its own conversation.
+  const jainaNewConversation = jainaNewConversationParam(searchParams.get('new'));
   const clearJainaPrompt = React.useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     if (!params.has('prompt')) return;
     params.delete('prompt');
+    params.delete('new');
     router.replace(`?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
   const { user } = useSession();
@@ -881,6 +884,7 @@ export default function PaidMediaClientPage({
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
                   platform={jainaPlatform}
+                  startNewConversation={jainaNewConversation}
                   onCanvasActionApplied={handleCanvasActionApplied}
                   onScaffoldFocus={handleScaffoldFocus}
                   autoSendPrompt={companionTurn}

@@ -13,6 +13,7 @@ import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
 import { useOptimizerAdAccounts } from '../../useOptimizerData';
 import {
   buildGoogleOverview,
+  completeDaysWindow,
   GoogleAccountOverviewSchema,
   type GoogleOverview,
   GoogleTopCampaignsSchema,
@@ -30,16 +31,28 @@ export type GoogleAdsOverviewState =
   | { status: 'error'; account: AdAccount | null; message: string }
   | { status: 'ready'; account: AdAccount; overview: GoogleOverview };
 
+/** The window a read covers, as ISO dates. */
+export type GoogleReadWindow = { since: string; until: string };
+
 export const googleAdsQueryKeys = {
-  overview: (brandId: string, customerId: string) =>
-    ['optimizer', 'google-ads-overview', brandId, customerId] as const,
+  overview: (brandId: string, customerId: string, window: GoogleReadWindow) =>
+    ['optimizer', 'google-ads-overview', brandId, customerId, window.since, window.until] as const,
   connection: () => ['optimizer', 'google-connection'] as const,
 };
 
-async function invokeGoogleMetrics(body: Record<string, unknown>): Promise<unknown> {
+async function invokeGoogleMetrics(
+  window: GoogleReadWindow,
+  body: Record<string, unknown>,
+): Promise<unknown> {
   const { data, error } = await createSupabaseBrowserClient().functions.invoke(
     'paid-media-metrics',
-    { body: { platform: 'google-ads', range: { preset: 'last_7d' }, ...body } },
+    {
+      body: {
+        platform: 'google-ads',
+        range: { preset: 'custom', since: window.since, until: window.until },
+        ...body,
+      },
+    },
   );
   if (error) {
     throw new Error(await readEdgeErrorMessage(error, 'The Google Ads read did not answer.'));
@@ -50,11 +63,17 @@ async function invokeGoogleMetrics(body: Record<string, unknown>): Promise<unkno
 export async function fetchGoogleAdsOverview(
   brandId: string,
   customerId: string,
+  window: GoogleReadWindow,
 ): Promise<GoogleOverview> {
   const base = { brandId, accountId: customerId };
   const [account, campaigns] = await Promise.all([
-    invokeGoogleMetrics({ ...base, scope: 'account_overview' }),
-    invokeGoogleMetrics({ ...base, scope: 'top_campaigns', kpi: 'spend', limit: CAMPAIGN_LIMIT }),
+    invokeGoogleMetrics(window, { ...base, scope: 'account_overview' }),
+    invokeGoogleMetrics(window, {
+      ...base,
+      scope: 'top_campaigns',
+      kpi: 'spend',
+      limit: CAMPAIGN_LIMIT,
+    }),
   ]);
   const parsedAccount = GoogleAccountOverviewSchema.safeParse(account);
   const parsedCampaigns = GoogleTopCampaignsSchema.safeParse(campaigns);
@@ -77,14 +96,23 @@ async function fetchHasGoogleLogin(): Promise<boolean> {
   return (data ?? []).length > 0;
 }
 
-export function useGoogleAdsOverview(brandId: string): GoogleAdsOverviewState {
+/**
+ * `window` is the producer's own window when the tab has it, so the header and the split by
+ * campaign type state the same dates; without it, the same 7 complete days ending yesterday.
+ */
+export function useGoogleAdsOverview(
+  brandId: string,
+  window?: GoogleReadWindow | null,
+): GoogleAdsOverviewState {
   const accounts = useOptimizerAdAccounts(brandId);
-  const account = accountsOn(accounts.data, 'google_ads')[0] ?? null;
-  const customerId = account?.account_id ?? null;
+  const granted = accountsOn(accounts.data, 'google_ads')[0] ?? null;
+  const customerId = granted?.account_id ?? null;
+  const fallbackWindow = completeDaysWindow(7);
+  const range = window ?? fallbackWindow;
 
   const overview = useQuery({
-    queryKey: googleAdsQueryKeys.overview(brandId, customerId ?? 'none'),
-    queryFn: () => fetchGoogleAdsOverview(brandId, customerId as string),
+    queryKey: googleAdsQueryKeys.overview(brandId, customerId ?? 'none', range),
+    queryFn: () => fetchGoogleAdsOverview(brandId, customerId as string, range),
     enabled: Boolean(brandId && customerId),
     staleTime: FIVE_MINUTES,
     retry: 1,
@@ -102,16 +130,22 @@ export function useGoogleAdsOverview(brandId: string): GoogleAdsOverviewState {
     return {
       status: 'error',
       account: null,
-      message: "Could not read which ad accounts this brand is granted.",
+      message: 'Could not read which ad accounts this brand is granted.',
     };
   }
-  if (!account) {
+  if (!granted) {
     if (login.isError) {
       return { status: 'error', account: null, message: 'Could not check your Google login.' };
     }
     if (login.isLoading) return { status: 'loading' };
     return login.data ? { status: 'no-grant' } : { status: 'no-connection' };
   }
+  // The grant row's currency, else the one the read itself carried: Google's customer reports
+  // money in one code, and either source names it.
+  const account: AdAccount = {
+    ...granted,
+    currency: granted.currency ?? overview.data?.currency ?? null,
+  };
   if (overview.isError) {
     const message = overview.error instanceof Error ? overview.error.message : 'Unknown error';
     return { status: 'error', account, message };

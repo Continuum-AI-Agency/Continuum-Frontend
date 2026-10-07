@@ -51,10 +51,15 @@ let adAccounts: {
   },
 ];
 let googleState: GoogleAdsOverviewState = { status: 'no-connection' };
+/** What the Google tab asked its read for: [brandId, window]. */
+const googleAsked: unknown[][] = [];
 const realGoogleOverview = await import('./platforms/useGoogleAdsOverview');
 mock.module('./platforms/useGoogleAdsOverview', () => ({
   ...realGoogleOverview,
-  useGoogleAdsOverview: () => googleState,
+  useGoogleAdsOverview: (...args: unknown[]) => {
+    googleAsked.push(args);
+    return googleState;
+  },
 }));
 
 // The multi-platform producer. Its RPC is not deployed yet, so 'unavailable' is the default.
@@ -271,6 +276,7 @@ afterEach(() => {
     },
   ];
   googleState = { status: 'no-connection' };
+  googleAsked.length = 0;
   metricsState = { status: 'unavailable' };
   memberStates = new Map();
   tiktokState = { status: 'loading' };
@@ -583,7 +589,7 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
     const { band, labels, hrefs } = bandOn('tab=performance');
     expect(labels).toContain('Which platform buys leads cheapest?');
     expect(band.getAttribute('data-platform')).toBeNull();
-    for (const href of hrefs) expect(href).toStartWith('/scale?tab=jaina&prompt=');
+    for (const href of hrefs) expect(href).toStartWith('/scale?tab=jaina&new=1&prompt=');
   });
 
   it("keeps today's account questions on Meta, carrying meta", () => {
@@ -595,7 +601,8 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
       "Where's the budget?",
       'Summary for the client',
     ]);
-    for (const href of hrefs) expect(href).toStartWith('/scale?tab=jaina&platform=meta&prompt=');
+    for (const href of hrefs)
+      expect(href).toStartWith('/scale?tab=jaina&platform=meta&new=1&prompt=');
   });
 
   it("asks Google's questions on the Google tab, carrying google_ads", () => {
@@ -607,7 +614,7 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
       'Is any campaign not serving?',
     ]);
     for (const href of hrefs) {
-      expect(href).toStartWith('/scale?tab=jaina&platform=google_ads&prompt=');
+      expect(href).toStartWith('/scale?tab=jaina&platform=google_ads&new=1&prompt=');
       expect(decodeURIComponent(href.split('prompt=')[1] ?? '')).toContain('Google Ads account');
     }
   });
@@ -617,7 +624,7 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
     expect(labels[0]).toBe('Which video is fatiguing?');
     expect(labels).toHaveLength(4);
     for (const href of hrefs) {
-      expect(href).toStartWith('/scale?tab=jaina&platform=tiktok_ads&prompt=');
+      expect(href).toStartWith('/scale?tab=jaina&platform=tiktok_ads&new=1&prompt=');
       expect(decodeURIComponent(href.split('prompt=')[1] ?? '')).toContain('TikTok Ads account');
     }
   });
@@ -1095,6 +1102,49 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     expect(getByTestId('platform-tiles-google_ads').textContent).toContain('118');
     // The edge read is the breakdown here, not a second headline.
     expect(queryByTestId('google-headline')).toBeNull();
+  });
+
+  it("reads Google's split by campaign type over the producer's own window", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
+    mount();
+    expect(googleAsked.at(-1)?.[1]).toEqual({ since: '2026-09-21', until: '2026-09-27' });
+  });
+
+  it('says what is true when Google is connected but the Optimizer has not read it: the live figures come from Google', () => {
+    grantGoogle();
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    metricsState = {
+      status: 'ready',
+      metrics: {
+        ...EASY_FIT_MP1,
+        totals_by_platform: EASY_FIT_MP1.totals_by_platform.map((row) =>
+          row.platform === 'google_ads'
+            ? {
+                ...row,
+                spend: null,
+                prior_spend: null,
+                share_of_spend: null,
+                spend_delta_pct: null,
+                unclassified_spend: null,
+                results_by_kind: [],
+              }
+            : row,
+        ),
+      },
+    };
+    const { getByTestId, queryByText } = mount();
+    expect(queryByText(/nothing has been read from it yet/)).toBeNull();
+    expect(getByTestId('platform-reading-note').textContent).toContain(
+      "The live figures below come straight from Google. The Optimizer's own reading of Google starts once a portfolio holds Google campaigns.",
+    );
+    // Google's own read stands in full beneath it, over the producer's window.
+    expect(getByTestId('google-headline').textContent).toStartWith('Google spent 55,205 MXN');
+    expect(googleAsked.at(-1)?.[1]).toEqual({ since: '2026-09-21', until: '2026-09-27' });
+    expect(getByTestId('platform-reading-note').querySelector('button')?.textContent).toBe(
+      'Create a portfolio',
+    );
   });
 
   it("falls back to Google's own edge read when the producer is not deployed", () => {
