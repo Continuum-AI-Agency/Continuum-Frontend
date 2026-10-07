@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { templateRevisionErrorCodeSchema } from '@continuum/contracts';
 import { ApiError } from '@/lib/api/errors';
 import { describeRenderDiscoveryFailure } from '../ApiRenderBlock';
+import { needsTemplateRepair } from './renderDiscoveryCopy';
 
 describe('render discovery copy', () => {
   test('an unbound brand gets a next step, not a server code', () => {
@@ -26,11 +28,11 @@ describe('render discovery copy', () => {
 
   test('a template revision refusal names the revision step, never the raw code', () => {
     for (const code of [
-      'template_revision_selection_required',
-      'template_revision_output_required',
-      'template_revision_not_found',
-      'template_revision_source_missing',
-      'template_variant_archived',
+      ...templateRevisionErrorCodeSchema.options.filter(
+        (code) =>
+          code !== 'template_revision_head_conflict' &&
+          code !== 'template_revision_target_required',
+      ),
       'render_set_template_revision_changed',
       'render_set_explicit_revision_change_required',
     ]) {
@@ -38,6 +40,35 @@ describe('render discovery copy', () => {
       expect(describeRenderDiscoveryFailure(thrown)).not.toContain(code);
       expect(describeRenderDiscoveryFailure(thrown)).toContain('revision');
     }
+  });
+
+  test('zero publications reads as unpublished, never as a choice between revisions', () => {
+    const code = 'template_revision_unpublished';
+    const copy = describeRenderDiscoveryFailure(
+      new ApiError(code, 409, undefined, { error: code, detail: code }),
+    );
+    expect(copy).toContain('no published revision');
+    expect(copy).not.toContain('more than one');
+  });
+
+  test('the exact server code wins over a shorter code it happens to contain', () => {
+    const code = 'render_template_revision_source_changed';
+    const thrown = new ApiError(code, 409, undefined, {
+      error: code,
+      detail: 'The pinned file changed before this render.',
+    });
+    expect(describeRenderDiscoveryFailure(thrown)).toBe(
+      'The pinned file changed before this render.',
+    );
+  });
+
+  test('only refusals fixed on the template offer to open it', () => {
+    const failure = (code: string) => new ApiError(code, 409, undefined, { error: code });
+    expect(needsTemplateRepair(failure('template_revision_unpublished'))).toBe(true);
+    expect(needsTemplateRepair(failure('template_revision_source_changed'))).toBe(true);
+    expect(needsTemplateRepair(failure('template_revision_head_conflict'))).toBe(false);
+    expect(needsTemplateRepair(failure('render_set_revision_conflict'))).toBe(false);
+    expect(needsTemplateRepair('template_revision_unpublished')).toBe(false);
   });
 
   test('an unmapped code shows the server’s detail when it is a sentence, never a bare code', () => {

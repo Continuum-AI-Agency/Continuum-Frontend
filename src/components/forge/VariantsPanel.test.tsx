@@ -150,3 +150,33 @@ test('an After Effects template still takes an authored project upload', () => {
   expect(screen.getByLabelText('Upload After Effects variant')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Edit layers' })).toBeNull();
 });
+
+// Inyogo Card B: one template, two After Effects files. The panel names both, never one as "the" file.
+test('a revision whose outputs run different files lists each output with its file', () => {
+  const items = registry('after_effects');
+  const published = items[1]!.revisions[0]!;
+  items[1]!.revisions[0] = {
+    ...published,
+    sources: [
+      { fileId: 11, outputs: ['Halftime'], assetId: child, versionId, checksum: 'a'.repeat(64) },
+      {
+        fileId: 12,
+        outputs: ['Ambos Equipos Anotan'],
+        assetId: root,
+        versionId: grandchild,
+        checksum: 'b'.repeat(64),
+      },
+    ],
+  };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), items);
+  render(
+    <QueryClientProvider client={client}>
+      <VariantsPanel brandId={brandId} assetId={grandchild} expectedVersionId={versionId} />
+    </QueryClientProvider>,
+  );
+  const files = screen.getByRole('list', { name: 'Blue source files' });
+  expect(files.textContent).toContain('Halftime · worker file 11');
+  expect(files.textContent).toContain('Ambos Equipos Anotan · worker file 12');
+  expect(screen.queryByRole('list', { name: 'Original source files' })).toBeNull();
+});

@@ -160,7 +160,10 @@ import {
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
-import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import {
+  describeRenderDiscoveryFailure,
+  needsTemplateRepair,
+} from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
 // Render requests as a spreadsheet.
 //
@@ -474,7 +477,7 @@ export function RenderRequestsGrid({
   const [saveState, setSaveState] = useState<
     | { phase: 'idle' | 'saving' }
     // `signature` is the rows that failed: a refusal is not re-sent until they change or Save.
-    | { phase: 'failed'; reason: string; retry: boolean; signature: string }
+    | { phase: 'failed'; reason: string; retry: boolean; repair: boolean; signature: string }
   >({ phase: 'idle' });
   /** Someone else's version of the open set, when it and the rows on screen changed one row two ways. */
   const [conflict, setConflict] = useState<ForgeRenderSet | null>(null);
@@ -1745,6 +1748,7 @@ export function RenderRequestsGrid({
           phase: 'failed',
           reason,
           retry: saveMayRecover(error),
+          repair: needsTemplateRepair(error),
           signature: signatureOf(submitted, contract),
         });
         if (announce) toast.error(reason);
@@ -2415,7 +2419,17 @@ export function RenderRequestsGrid({
           saveState.phase === 'saving'
             ? { phase: 'saving' }
             : saveState.phase === 'failed'
-              ? { phase: 'failed', reason: saveState.reason, retrying: saveState.retry }
+              ? {
+                  phase: 'failed',
+                  reason: saveState.reason,
+                  retrying: saveState.retry,
+                  // The fix is on the template (publish, replace a file). The grid stays mounted
+                  // behind the Templates tab, so the unsaved rows wait here untouched.
+                  onRepair:
+                    saveState.repair && onOpenTemplate && settingsAssetId
+                      ? () => onOpenTemplate({ assetId: settingsAssetId, tab: 'variants' })
+                      : undefined,
+                }
               : activeSet
                 ? { phase: 'saved', at: activeSet.updatedAt }
                 : null
