@@ -92,10 +92,10 @@ describe('buildPlannerPlatforms', () => {
     });
 
     expect(withoutComingSoon.some((platform) => platform.comingSoon)).toBe(false);
-    // Facebook, TikTok and YouTube are NOT here: the coming-soon list is derived from what the
-    // backend cannot publish, and all three have publishers now. Facebook sat in this list for
-    // months while having a complete, reviewed publisher, so the planner could not create a post.
-    expect(platformKeys(withComingSoon)).toEqual(['instagram', 'x']);
+    // Facebook, TikTok, YouTube and X are NOT here: the coming-soon list is derived from what the
+    // backend cannot publish, and all four have publishers now (X since 2026-10-06). Facebook sat
+    // in this list for months while having a complete, reviewed publisher.
+    expect(platformKeys(withComingSoon)).toEqual(['instagram']);
     expect(
       withComingSoon.filter((platform) => platform.comingSoon).every((platform) => platform.Icon),
     ).toBe(true);

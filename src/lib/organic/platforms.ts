@@ -6,6 +6,7 @@ export const ORGANIC_PLATFORM_KEYS = [
   'tiktok',
   'linkedin',
   'youtube',
+  'x',
 ] as const;
 
 export type OrganicPlatformKey = (typeof ORGANIC_PLATFORM_KEYS)[number];

@@ -56,6 +56,10 @@ function settledTitle(change: PendingBillingChange): string {
       return 'Canvas credits added';
     case 'overage_changed':
       return change.enabled ? 'Auto-billing is on' : 'Auto-billing is off';
+    case 'x_credits_added':
+      return 'X API credits added';
+    case 'x_overage_changed':
+      return change.enabled ? 'X auto-billing is on' : 'X auto-billing is off';
   }
 }
 

@@ -118,6 +118,14 @@ export const CREDITS_ANCHOR = 'credits';
 /** Settings → Billing at the credit-pack section. */
 export const CREDITS_HREF = `/settings?section=billing#${CREDITS_ANCHOR}`;
 
+/** The X API credits section of Settings → Billing. */
+export const X_CREDITS_ANCHOR = 'x-credits';
+
+/** Settings → Billing at the X API credits section, for the brand an X publish failed on. */
+export function xCreditsHref(brandId: string): string {
+  return `/settings?section=billing&brand=${encodeURIComponent(brandId)}#${X_CREDITS_ANCHOR}`;
+}
+
 /** `CREDITS_HREF`, remembering the page the buyer came from. */
 export function creditsHref(from?: string): string {
   return `/settings?${withFrom('section=billing', from)}#${CREDITS_ANCHOR}`;

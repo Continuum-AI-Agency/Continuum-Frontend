@@ -164,6 +164,8 @@ function normalizeFramePlatform(raw: string): FramePlatform {
     case 'youtube':
     case 'twitter':
       return raw;
+    case 'x':
+      return 'twitter';
     default:
       return 'instagram';
   }
@@ -290,6 +292,7 @@ export const platformBadgeVariants = cva(
         tiktok: 'border-zinc-500/40 bg-zinc-500/15 text-zinc-900 dark:text-zinc-100',
         youtube: 'border-red-500/40 bg-red-500/15 text-red-900 dark:text-red-100',
         twitter: 'border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100',
+        x: 'border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100',
       },
     },
     defaultVariants: {

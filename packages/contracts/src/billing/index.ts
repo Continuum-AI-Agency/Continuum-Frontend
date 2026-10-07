@@ -66,6 +66,15 @@ export const CREDIT_PACK_OFFER: CreditPackOffer = {
   maxPacks: MAX_CREDIT_PACKS,
 };
 
+/**
+ * Prepaid wallets. `canvas` is the original credit balance (packs, preloads, promo codes); `x`
+ * prepays X API calls only (`brand_credit_balance.x_balance_usd`). X packs reuse the Canvas
+ * pack numbers (1,000 credits / $10), so the webhook's amount check is one rule for both.
+ */
+export const CREDIT_WALLETS = ['canvas', 'x'] as const;
+export const creditWalletSchema = z.enum(CREDIT_WALLETS);
+export type CreditWallet = z.infer<typeof creditWalletSchema>;
+
 /** `none` = never bought, `stripe` = self-serve, `contract` = billed off-Stripe (never metered or blocked). */
 export const BILLING_MODELS = ['none', 'stripe', 'contract'] as const;
 export const billingModelSchema = z.enum(BILLING_MODELS);
@@ -169,6 +178,18 @@ export const billingCanvasUsageSchema = z
   .strict();
 export type BillingCanvasUsage = z.infer<typeof billingCanvasUsageSchema>;
 
+/** The prepaid X API wallet and its opt-in auto-billing, in USD (1 credit = $0.01). */
+export const billingXWalletSchema = z
+  .object({
+    balanceUsd: z.number().nonnegative(),
+    /** The live subscription carries the metered `X API usage` price. */
+    overageEnabled: z.boolean(),
+    /** The monthly X auto-billing ceiling; null without a live subscription. */
+    overageCapUsd: z.number().nonnegative().nullable(),
+  })
+  .strict();
+export type BillingXWallet = z.infer<typeof billingXWalletSchema>;
+
 /** `GET /billing-api/brands/:id/overview` (owner only). */
 export const billingOverviewSchema = z
   .object({
@@ -190,11 +211,14 @@ export const billingOverviewSchema = z
     subscription: billingSubscriptionViewSchema.nullable(),
     invoices: z.array(billingInvoiceViewSchema),
     canvas: billingCanvasUsageSchema,
+    /** Optional only so this Frontend reads a billing-api deployed before the X wallet. */
+    x: billingXWalletSchema.optional(),
     /** Plan cards come from `billing.plan_definitions`, never hardcoded. */
     catalog: z
       .object({
         plans: z.array(planCatalogEntrySchema),
         creditPack: creditPackOfferSchema,
+        xCreditPack: creditPackOfferSchema.optional(),
       })
       .strict(),
     /** The Stripe mode of the key billing-api runs with (sandbox locally, live in prod). */
@@ -251,11 +275,14 @@ export const billingPlanChangeResponseSchema = z
 export type BillingPlanChangeResponse = z.infer<typeof billingPlanChangeResponseSchema>;
 
 /**
- * `POST /billing-api/brands/:id/overage` — opt in/out of metered Canvas overage (owner only).
+ * `POST /billing-api/brands/:id/overage` — opt in/out of metered overage (owner only).
  * Adds or removes the metered price on the brand's live subscription; the studio bucket
- * switches to `bill` (up to the plan's cap) / `block` once Stripe's webhook lands.
+ * switches to `bill` (up to the plan's cap) / `block` once Stripe's webhook lands. `meter: 'x'`
+ * toggles X API auto-billing instead (`brand_subscriptions.x_overage_enabled`).
  */
-export const billingOverageRequestSchema = z.object({ enabled: z.boolean() }).strict();
+export const billingOverageRequestSchema = z
+  .object({ enabled: z.boolean(), meter: creditWalletSchema.optional() })
+  .strict();
 export type BillingOverageRequest = z.infer<typeof billingOverageRequestSchema>;
 
 export const billingOverageResponseSchema = z
@@ -268,10 +295,14 @@ export const billingOverageResponseSchema = z
   .strict();
 export type BillingOverageResponse = z.infer<typeof billingOverageResponseSchema>;
 
-/** `POST /billing-api/brands/:id/credits/checkout` — one-time Canvas credit packs ($10 / 1,000). */
+/**
+ * `POST /billing-api/brands/:id/credits/checkout` — one-time credit packs ($10 / 1,000) for
+ * the Canvas wallet, or the X API wallet with `wallet: 'x'`.
+ */
 export const billingCreditCheckoutRequestSchema = z
   .object({
     packs: z.number().int().min(1).max(MAX_CREDIT_PACKS),
+    wallet: creditWalletSchema.optional(),
     successUrl: returnUrlSchema,
     cancelUrl: returnUrlSchema,
   })

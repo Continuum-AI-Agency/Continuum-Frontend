@@ -42,8 +42,9 @@ describe('publish platform capabilities', () => {
     }
     expect(publishPlatformSchema.options.length).toBeLessThan(canonical.size);
     // The gap is the point: these plan but do not publish. YouTube left this list on
-    // 2026-09-07 when its publisher shipped — which is the only way a platform may leave it.
-    for (const unpublishable of ['x', 'threads'] as const) {
+    // 2026-09-07 and X on 2026-10-06 when their publishers shipped — which is the only way a
+    // platform may leave it.
+    for (const unpublishable of ['threads'] as const) {
       expect(canonical.has(unpublishable)).toBe(true);
       expect(publishPlatformSchema.safeParse(unpublishable).success).toBe(false);
     }
@@ -169,12 +170,12 @@ describe('toPublishPlatform', () => {
   });
 
   it('returns null for platforms we cannot publish to', () => {
-    // x and threads stay unpublishable: drafts and integrations carry them, but no publisher
-    // is registered, so they must not resolve to a publish platform.
-    expect(toPublishPlatform('x')).toBeNull();
+    // threads stays unpublishable: drafts and integrations carry it, but no publisher is
+    // registered, so it must not resolve to a publish platform.
     expect(toPublishPlatform('threads')).toBeNull();
-    // youtube resolves since its publisher shipped 2026-09-07.
+    // youtube resolves since its publisher shipped 2026-09-07, x since 2026-10-06.
     expect(toPublishPlatform('YouTube')).toBe('youtube');
+    expect(toPublishPlatform('X')).toBe('x');
     expect(toPublishPlatform('')).toBeNull();
     expect(toPublishPlatform(undefined)).toBeNull();
     expect(toPublishPlatform(null)).toBeNull();

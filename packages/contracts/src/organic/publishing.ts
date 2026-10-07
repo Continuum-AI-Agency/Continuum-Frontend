@@ -40,10 +40,9 @@ export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
  * creative / copywriter / hashtag / visual / audio prompt set for exactly these five, and a
  * placement on a platform with no prompt set has nothing to generate from.
  *
- * X and Threads sit outside it: a brand can CONNECT them (one X integration exists in
- * production today, which is why they stay in the canonical vocabulary and the MCP read
- * surface keeps serving them) but nothing can compose a post for them. Widen this only
- * together with a prompt set in `platformRegistry.ts`.
+ * Threads sits outside it: a brand can CONNECT it (which is why it stays in the canonical
+ * vocabulary and the MCP read surface keeps serving it) but nothing can compose a post for it.
+ * Widen this only together with a prompt set in `platformRegistry.ts`.
  */
 export const organicGeneratablePlatformSchema = organicPlatformSchema.extract([
   'instagram',
@@ -51,6 +50,7 @@ export const organicGeneratablePlatformSchema = organicPlatformSchema.extract([
   'linkedin',
   'tiktok',
   'youtube',
+  'x',
 ]);
 export type OrganicGeneratablePlatform = z.infer<typeof organicGeneratablePlatformSchema>;
 
@@ -67,8 +67,8 @@ export type OrganicGeneratablePlatform = z.infer<typeof organicGeneratablePlatfo
  *   generatable  — …and `platformRegistry.ts` can compose a post for it
  *   publishable  — …and `publisherRegistry.ts` can send that post
  *
- * X and Threads generate nothing and publish nothing; they stay canonical because live
- * integrations exist for them. Flattening these would break in one direction or the other —
+ * Threads generates nothing and publishes nothing; it stays canonical because live
+ * integrations exist for it. Flattening these would break in one direction or the other —
  * widening this enum makes an unpublishable platform look publishable, narrowing the canonical
  * one erases platforms that already hold live integrations.
  *
@@ -80,6 +80,7 @@ export const publishPlatformSchema = organicPlatformSchema.extract([
   'linkedin',
   'tiktok',
   'youtube',
+  'x',
 ]);
 export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 
@@ -97,7 +98,8 @@ export type PublishFormat = z.infer<typeof publishFormatSchema>;
  * `url`   — the platform fetches a publicly reachable URL we hand it (Instagram, Facebook,
  *           TikTok). TikTok additionally rejects URLs on domains the developer app has not
  *           verified, so ours are served through `mediaProxy.ts`.
- * `bytes` — the platform refuses URLs and requires us to upload the raw file (LinkedIn).
+ * `bytes` — the platform refuses URLs and requires us to upload the raw file (LinkedIn,
+ *           YouTube, X).
  */
 export type PublishMediaTransport = 'url' | 'bytes';
 
@@ -232,6 +234,25 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       trialReel: false,
     },
   },
+  x: {
+    // POST = text with up to 4 images; CAROUSEL = 2–4 images on one post; REEL = one video.
+    // Every X call is metered against the brand's prepaid X wallet (`x:post_create`, or
+    // `x:post_create_url` at $0.20 when the text carries a link) — see `xPublisher.ts`.
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
+    carousel: { min: 2, max: 4 },
+    // POST /2/media/upload (initialize / append / finalize): X never fetches a URL.
+    mediaTransport: 'bytes',
+    // ponytail: plain-length check; X counts a link as 23 and CJK/emoji as 2, so weight it
+    // (twitter-text) if real captions get clipped.
+    caption: { maxLength: 280, maxHashtags: 3 },
+    publishOptions: {
+      firstComment: false,
+      thumbnailUrl: false,
+      thumbnailOffset: false,
+      aiGeneratedLabel: false,
+      trialReel: false,
+    },
+  },
 };
 
 /**
@@ -340,6 +361,9 @@ export const publishErrorCodeSchema = z.enum([
   'confirmation_required',
   'confirmation_stale',
   'not_approved',
+  // The brand's prepaid X API wallet is empty and X auto-billing is off (or at its cap).
+  // Terminal for the scheduled publish: the owner buys X credits, then reschedules.
+  'credits_exhausted',
   'unknown',
 ]);
 export type PublishErrorCode = z.infer<typeof publishErrorCodeSchema>;

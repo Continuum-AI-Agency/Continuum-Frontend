@@ -232,7 +232,8 @@ export async function payWithTestCard(page: Page, email: string): Promise<void> 
   if ((await emailField.isVisible()) && !(await emailField.inputValue())) {
     await emailField.fill(email);
   }
-  if (await cardOption.count()) await cardOption.check({ force: true });
+  // A radio once, a button now (2026-10): a click selects it either way.
+  if (await cardOption.count()) await cardOption.click({ force: true });
   await page.locator('#cardNumber').fill('4242424242424242');
   await page.locator('#cardExpiry').fill('12 / 34');
   await page.locator('#cardCvc').fill('123');

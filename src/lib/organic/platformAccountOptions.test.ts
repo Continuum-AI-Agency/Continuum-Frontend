@@ -79,7 +79,7 @@ describe('deriveOrganicPlatformAccounts', () => {
   it('covers every publishable platform unless a narrower set is asked for', () => {
     expect(
       deriveOrganicPlatformAccounts({ integrationSummary: summary }).map((r) => r.platform),
-    ).toEqual(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']);
+    ).toEqual(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'x']);
     expect(
       deriveOrganicPlatformAccounts({
         integrationSummary: summary,
@@ -118,7 +118,7 @@ describe('deriveOrganicPublishAccountOptions', () => {
     ]);
   });
 
-  it('offers TikTok, which has a publisher, and never a platform without one', () => {
+  it('offers TikTok and X, which have publishers', () => {
     const options = deriveOrganicPublishAccountOptions({
       ...summary,
       tiktok: { accounts: [account({ integrationAccountId: 'tt-1', name: 'TikTok' })] },
@@ -131,6 +131,7 @@ describe('deriveOrganicPublishAccountOptions', () => {
       accountId: 'tt-1',
       label: 'TikTok',
     });
-    expect(options.map((option) => option.accountId)).not.toContain('x-1');
+    // X ships a publisher since 2026-10-06.
+    expect(options.map((option) => option.accountId)).toContain('x-1');
   });
 });

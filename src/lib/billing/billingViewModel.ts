@@ -77,6 +77,20 @@ export const AUTO_BILLING_NEEDS_PLAN =
 export const AUTO_BILLING_CONTRACT =
   'Contract brands are billed through their agreement and never metered.';
 
+/** The prepaid X API wallet: what X publishing and X analytics draw from. */
+export type XWalletView = {
+  balanceCredits: number;
+  /** Plain posts left at 2 credits each (X's $0.015 × 1.15, rounded up). */
+  postsLeft: number;
+  autoBilling: AutoBillingView;
+  creditPack: CreditPackOffer;
+};
+
+/** Credits a plain X post costs (X's $0.015 list price × 1.15, rounded up to whole credits). */
+export const X_POST_CREDITS = 2;
+/** Credits an X post carrying a link costs (X's $0.20 link rate × 1.15). */
+export const X_LINK_POST_CREDITS = 23;
+
 export type SelfServeBillingView = {
   kind: 'self_serve';
   hasLiveSubscription: boolean;
@@ -99,6 +113,8 @@ export type SelfServeBillingView = {
   paymentFailed: 'retrying' | 'lapsed' | null;
   autoBilling: AutoBillingView;
   creditPack: CreditPackOffer;
+  /** Null while billing-api predates the X wallet. */
+  x: XWalletView | null;
   invoices: InvoiceRowView[];
 };
 
@@ -251,6 +267,24 @@ export function toBillingView(
       disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
     },
     creditPack: overview.catalog.creditPack,
+    // X credits pay for X publishing, so they are sold where the brand can publish organically
+    // (a live plan, or an admin/grandfathered organic grant) — or already holds some.
+    x:
+      overview.x &&
+      (liveSubscription !== null ||
+        entitlements.products.includes('organic_agent') ||
+        overview.x.balanceUsd > 0)
+      ? {
+          balanceCredits: usdToCredits(overview.x.balanceUsd),
+          postsLeft: Math.floor(usdToCredits(overview.x.balanceUsd) / X_POST_CREDITS),
+          autoBilling: {
+            enabled: overview.x.overageEnabled,
+            capUsd: overview.x.overageCapUsd,
+            disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
+          },
+          creditPack: overview.catalog.xCreditPack ?? overview.catalog.creditPack,
+        }
+      : null,
     invoices: overview.invoices.map((invoice) => ({
       id: invoice.id,
       label: invoice.number ?? invoice.id,
@@ -275,7 +309,9 @@ export type PendingBillingChange =
   | { kind: 'plan_added'; plan: PlanCode }
   | { kind: 'plan_removed'; plan: PlanCode }
   | { kind: 'credits_added'; purchasedCreditsBefore: number }
-  | { kind: 'overage_changed'; enabled: boolean };
+  | { kind: 'overage_changed'; enabled: boolean }
+  | { kind: 'x_credits_added'; xCreditsBefore: number }
+  | { kind: 'x_overage_changed'; enabled: boolean };
 
 export type CheckoutReturn =
   | { outcome: 'cancel' }
@@ -287,10 +323,14 @@ const CHECKOUT_SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]+$/;
 type SearchParamsLike = { get(name: string): string | null };
 
 export function checkoutReturnParams(
-  change: Extract<PendingBillingChange, { kind: 'plan_added' | 'credits_added' }>,
+  change: Extract<
+    PendingBillingChange,
+    { kind: 'plan_added' | 'credits_added' | 'x_credits_added' }
+  >,
 ): { success: string; cancel: string } {
   const success = new URLSearchParams({ section: 'billing', checkout: 'success' });
   if (change.kind === 'plan_added') success.set('plan', change.plan);
+  else if (change.kind === 'x_credits_added') success.set('xbalance', String(change.xCreditsBefore));
   else success.set('balance', String(change.purchasedCreditsBefore));
   return {
     success: success.toString(),
@@ -309,6 +349,16 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
   const plan = planCodeSchema.safeParse(params.get('plan'));
   if (plan.success) {
     return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data }, sessionId };
+  }
+
+  const rawXBalance = params.get('xbalance');
+  const xBalance = Number(rawXBalance);
+  if (rawXBalance !== null && Number.isInteger(xBalance) && xBalance >= 0) {
+    return {
+      outcome: 'success',
+      change: { kind: 'x_credits_added', xCreditsBefore: xBalance },
+      sessionId,
+    };
   }
 
   const rawBalance = params.get('balance');
@@ -369,5 +419,9 @@ export function isChangeSettled(change: PendingBillingChange, overview: BillingO
         (!studio || (studio.overageAction === 'bill') === change.enabled)
       );
     }
+    case 'x_credits_added':
+      return usdToCredits(overview.x?.balanceUsd ?? 0) > change.xCreditsBefore;
+    case 'x_overage_changed':
+      return overview.x?.overageEnabled === change.enabled;
   }
 }

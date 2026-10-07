@@ -37,7 +37,8 @@ describe('isPostPlatform', () => {
   it('accepts every publishable platform and nothing else', () => {
     expect(isPostPlatform('tiktok')).toBe(true);
     expect(isPostPlatform('youtube')).toBe(true);
-    expect(isPostPlatform('x')).toBe(false);
+    expect(isPostPlatform('x')).toBe(true);
+    expect(isPostPlatform('threads')).toBe(false);
     expect(isPostPlatform('TikTok')).toBe(false);
     expect(isPostPlatform(undefined)).toBe(false);
   });

@@ -9,7 +9,7 @@
 // derived from the brand's assigned integration accounts, so the invalid
 // pairing is simply not expressible.
 
-import type { AutomationSocialPlatform } from '@continuum/contracts';
+import { type AutomationSocialPlatform, automationSocialPlatformSchema } from '@continuum/contracts';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,12 @@ import {
 import type { OrganicPublishAccountOption } from '@/lib/organic/platformAccountOptions';
 import { organicPlatformLabel } from '@/lib/organic/platforms';
 import { ORGANIC_POST_PLATFORM_KEYS } from '@/lib/organic/postPlatforms';
+
+// Automations address their own platform vocabulary (no X yet), a subset of what the planner posts to.
+const AUTOMATION_PLATFORM_KEYS = ORGANIC_POST_PLATFORM_KEYS.filter(
+  (platform): platform is AutomationSocialPlatform =>
+    automationSocialPlatformSchema.safeParse(platform).success,
+);
 import { cn } from '@/lib/utils';
 import { useOrganicPublishAccountSource } from './defaultPickerSources';
 import { isUnsetId, type PickerSource, RawIdFallbackField } from './pickerSource';
@@ -61,7 +67,7 @@ export function OrganicPublishTargetPicker({
   const accountId = isUnsetId(value.accountId) ? null : value.accountId;
 
   const groups = useMemo(() => {
-    return ORGANIC_POST_PLATFORM_KEYS.map((platform) => ({
+    return AUTOMATION_PLATFORM_KEYS.map((platform) => ({
       platform,
       label: organicPlatformLabel(platform),
       options: items.filter((item) => item.platform === platform),
@@ -94,7 +100,7 @@ export function OrganicPublishTargetPicker({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ORGANIC_POST_PLATFORM_KEYS.map((platform) => (
+              {AUTOMATION_PLATFORM_KEYS.map((platform) => (
                 <SelectItem key={platform} value={platform}>
                   {organicPlatformLabel(platform)}
                 </SelectItem>
@@ -164,7 +170,7 @@ export function OrganicPublishTargetPicker({
                         className="cursor-pointer"
                         // Platform AND account move together — that is the point.
                         onSelect={() => {
-                          onChange({ platform: option.platform, accountId: option.accountId });
+                          onChange({ platform: group.platform, accountId: option.accountId });
                           setOpen(false);
                         }}
                       >

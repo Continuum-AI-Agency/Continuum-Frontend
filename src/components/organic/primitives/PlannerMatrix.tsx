@@ -137,6 +137,7 @@ export function PlannerMatrix({
         facebook: [],
         tiktok: [],
         linkedin: [],
+        x: [],
       };
 
       day.slots.forEach((draft) => {

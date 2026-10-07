@@ -783,6 +783,101 @@ test.describe('billing:settings:e2e:bench', () => {
     }
   });
 
+  test('owner buys X API credits; they land on the X wallet, never on Canvas', async ({
+    browser,
+  }) => {
+    test.setTimeout(360_000);
+    const { data: row, error: rowError } = await db
+      .schema('billing')
+      .from('brand_subscriptions')
+      .select('stripe_customer_id')
+      .eq('brand_id', ownerBrandId)
+      .single();
+    if (rowError) throw new Error(`brand_subscriptions: ${describeError(rowError)}`);
+    const customerId = String(row.stripe_customer_id);
+    const owner = await mintSessionBundleForEmail(EMAILS.owner);
+    const context = await browser.newContext({
+      storageState: owner.state,
+      viewport: DESKTOP,
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
+    const xCredits = page.locator('#x-credits');
+    const wallets = async () => {
+      const { data, error } = await db
+        .schema('billing')
+        .from('brand_credit_balance')
+        .select('x_balance_usd, balance_usd')
+        .eq('brand_id', ownerBrandId)
+        .maybeSingle();
+      if (error) throw new Error(`brand_credit_balance: ${describeError(error)}`);
+      return {
+        x: Math.round(Number(data?.x_balance_usd ?? 0) * 100),
+        canvas: Math.round(Number(data?.balance_usd ?? 0) * 100),
+      };
+    };
+
+    try {
+      const before = await wallets();
+      const sessionId = await step('the X section sells an X pack through payment Checkout', async () => {
+        await page.goto(billingSettingsPath);
+        await expect(xCredits.getByTestId('x-credits-available')).toBeVisible();
+        await xCredits.getByTestId('top-up-pack-1').click();
+        await xCredits.getByRole('button', { name: 'Buy X credits · $10' }).click();
+        await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
+        const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
+        if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
+        const session = await stripe.checkout.sessions.retrieve(id);
+        expect(session).toMatchObject({
+          livemode: false,
+          mode: 'payment',
+          customer: customerId,
+          amount_total: 1_000,
+          metadata: {
+            continuum_brand_id: ownerBrandId,
+            continuum_credit_pack: '1',
+            continuum_credit_wallet: 'x',
+          },
+        });
+        expect(session.success_url).toContain('xbalance=');
+        return id;
+      });
+
+      await step('pay with 4242 and return to Settings → Billing', async () => {
+        await payWithTestCard(page, EMAILS.owner);
+        await page.waitForURL(/\/settings\?section=billing&checkout=success/, { timeout: 120_000 });
+        expect(new URL(page.url()).searchParams.get('session_id')).toBe(sessionId);
+      });
+
+      await step('replay ⇒ +1,000 on the X wallet only, shown in the X section', async () => {
+        let after = await wallets();
+        for (let attempt = 0; attempt < 8 && after.x <= before.x; attempt += 1) {
+          await replayUntil({
+            db,
+            stripe,
+            webhookSecret,
+            customerId,
+            brandId: ownerBrandId,
+            since,
+            settled: () => true,
+            what: 'an X pack replay',
+          });
+          after = await wallets();
+          if (after.x <= before.x) await page.waitForTimeout(3_000);
+        }
+        expect(after.x - before.x).toBe(1_000);
+        expect(after.canvas).toBe(before.canvas);
+        await page.goto(billingSettingsPath);
+        await expect(xCredits.getByTestId('x-credits-available')).toHaveText(
+          after.x.toLocaleString('en-US'),
+        );
+        notes.push(`X pack: ${before.x} → ${after.x} X credits; Canvas ${after.canvas} unchanged`);
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
   test('a client redeems the $200 promo code once, on 20 credit packs', async ({ browser }) => {
     // Two hosted Checkouts and a webhook replay.
     test.setTimeout(480_000);

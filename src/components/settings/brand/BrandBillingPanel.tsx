@@ -23,6 +23,7 @@ import {
 import {
   BuyCreditsControl,
   CanvasCreditsMeter,
+  XCreditsMeter,
 } from '@/components/settings/billing/CanvasCreditsMeter';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -36,7 +37,7 @@ import {
   type SelfServeBillingView,
   toBillingView,
 } from '@/lib/billing/billingViewModel';
-import { CREDITS_ANCHOR } from '@/lib/billing/productAccess';
+import { CREDITS_ANCHOR, X_CREDITS_ANCHOR } from '@/lib/billing/productAccess';
 import { trackBillingEvent } from '@/lib/billing/telemetry';
 import { billingReturnUrl, useBillingOverviewWithPendingChange } from '@/lib/billing/useBilling';
 import { cn } from '@/lib/utils';
@@ -209,8 +210,16 @@ function PanelRowTitle({ children }: { children: ReactNode }) {
 
 const HIGHLIGHT_MS = 2_400;
 
-/** The credit-pack section: on `#credits` it scrolls into view and highlights for a moment. */
-function CreditsRow({ children }: { children: ReactNode }) {
+/** A credit-pack section: on its anchor it scrolls into view and highlights for a moment. */
+function CreditsRow({
+  children,
+  anchor = CREDITS_ANCHOR,
+  title = 'Canvas credits',
+}: {
+  children: ReactNode;
+  anchor?: string;
+  title?: string;
+}) {
   const ref = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
   const [highlighted, setHighlighted] = useState(false);
@@ -218,7 +227,7 @@ function CreditsRow({ children }: { children: ReactNode }) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const focusIfTargeted = () => {
-      if (window.location.hash !== `#${CREDITS_ANCHOR}`) return;
+      if (window.location.hash !== `#${anchor}`) return;
       ref.current?.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
       setHighlighted(true);
       clearTimeout(timer);
@@ -230,20 +239,20 @@ function CreditsRow({ children }: { children: ReactNode }) {
       window.removeEventListener('hashchange', focusIfTargeted);
       clearTimeout(timer);
     };
-  }, [reduceMotion]);
+  }, [reduceMotion, anchor]);
 
   return (
     <section
       ref={ref}
-      id={CREDITS_ANCHOR}
-      aria-label="Canvas credits"
+      id={anchor}
+      aria-label={title}
       data-highlighted={highlighted || undefined}
       className={cn(
         'scroll-mt-4 space-y-4 rounded-md py-4 outline-2 outline-offset-4 outline-transparent transition-[outline-color] duration-500 first:pt-0 last:pb-0',
         'data-[highlighted]:outline-ring/60',
       )}
     >
-      <PanelRowTitle>Canvas credits</PanelRowTitle>
+      <PanelRowTitle>{title}</PanelRowTitle>
       {children}
     </section>
   );
@@ -310,6 +319,32 @@ function SelfServeBilling({
           />
         </div>
       </CreditsRow>
+      {view.x ? (
+        <CreditsRow anchor={X_CREDITS_ANCHOR} title="X API credits">
+          <XCreditsMeter x={view.x} />
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {formatCredits(view.x.creditPack.credits)} X API credits for{' '}
+              {formatUsd(view.x.creditPack.priceUsd)} a pack, paid once and added as soon as Stripe
+              confirms.
+            </p>
+            <BuyCreditsControl
+              brandId={brandId}
+              offer={view.x.creditPack}
+              purchasedCredits={view.x.balanceCredits}
+              wallet="x"
+            />
+          </div>
+          <div className="border-t border-border pt-4">
+            <AutoBillingControl
+              brandId={brandId}
+              autoBilling={view.x.autoBilling}
+              onChanged={onPlanChanged}
+              meter="x"
+            />
+          </div>
+        </CreditsRow>
+      ) : null}
       <PanelRow title="Payment method">
         <PaymentMethodRow brandId={brandId} view={view} />
       </PanelRow>

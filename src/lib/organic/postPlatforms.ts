@@ -76,6 +76,17 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     mediaTemplate: { width: 1080, height: 1920 },
     reelAspect: 9 / 16,
   },
+  x: {
+    label: 'X',
+    abbr: 'X',
+    color: '#0F1419',
+    gradient: ['#0F1419', '#536471'],
+    frame: 'feed',
+    mediaTemplate: { width: 1600, height: 900 },
+    reelAspect: 16 / 9,
+    // X redirects /i/status/<id> to the post under its author's handle.
+    permalink: (postId) => `https://x.com/i/status/${postId}`,
+  },
 };
 
 /** Every platform the planner can preview and post to, in canonical order. */

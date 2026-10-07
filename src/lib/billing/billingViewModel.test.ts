@@ -25,6 +25,7 @@ function overview(patch: {
   overageEnabled?: boolean;
   overageCapUsd?: number | null;
   invoices?: BillingOverview['invoices'];
+  x?: BillingOverview['x'];
 }): BillingOverview {
   return billingOverviewSchema.parse({
     brandId: BRAND_ID,
@@ -48,6 +49,7 @@ function overview(patch: {
       patch.overageCapUsd !== undefined ? patch.overageCapUsd : patch.subscription ? 100 : null,
     subscription: patch.subscription ?? null,
     invoices: patch.invoices ?? [],
+    ...(patch.x ? { x: patch.x } : {}),
     canvas: {
       studioBucket: null,
       rolloverUsd: 0,
@@ -440,6 +442,69 @@ describe('isBrandOwner', () => {
   });
   test('the owner row for this brand grants billing', () => {
     expect(isBrandOwner([{ brand_profile_id: BRAND_ID, role: 'owner' }], BRAND_ID)).toBe(true);
+  });
+});
+
+describe('toBillingView — the X API wallet', () => {
+  test('shows the X balance in credits and plain posts left, with its own auto-billing', () => {
+    const view = selfServe(
+      overview({
+        subscription: subscription(['organic_studio']),
+        x: { balanceUsd: 4.07, overageEnabled: true, overageCapUsd: 100 },
+      }),
+    );
+    expect(view.x).toEqual({
+      balanceCredits: 407,
+      postsLeft: 203,
+      autoBilling: { enabled: true, capUsd: 100, disabledReason: null },
+      creditPack: { credits: 1000, priceUsd: 10, maxPacks: 50 },
+    });
+    // Canvas auto-billing is a different switch.
+    expect(view.autoBilling.enabled).toBe(false);
+  });
+
+  test('needs a plan before X auto-billing can be turned on', () => {
+    const view = selfServe(
+      overview({
+        entitlements: { products: ['organic_agent'] },
+        x: { balanceUsd: 0, overageEnabled: false, overageCapUsd: null },
+      }),
+    );
+    expect(view.x?.autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
+  });
+
+  test('sells X credits only where the brand can publish, or already holds some', () => {
+    const none = { balanceUsd: 0, overageEnabled: false, overageCapUsd: null };
+    expect(selfServe(overview({ x: none })).x).toBeNull();
+    expect(selfServe(overview({ x: { ...none, balanceUsd: 1 } })).x?.balanceCredits).toBe(100);
+  });
+
+  test('hides the X section while billing-api predates the X wallet', () => {
+    expect(selfServe(overview({})).x).toBeNull();
+  });
+
+  test('an X pack return settles once the X balance grows, never on Canvas credits', () => {
+    const query = checkoutReturnParams({ kind: 'x_credits_added', xCreditsBefore: 120 });
+    const parsed = parseCheckoutReturn(new URLSearchParams(query.success));
+    expect(parsed).toEqual({
+      outcome: 'success',
+      change: { kind: 'x_credits_added', xCreditsBefore: 120 },
+      sessionId: null,
+    });
+    if (parsed?.outcome !== 'success') throw new Error('expected success');
+    const before = overview({
+      canvas: { purchasedBalanceUsd: 50 },
+      x: { balanceUsd: 1.2, overageEnabled: false, overageCapUsd: null },
+    });
+    const after = overview({ x: { balanceUsd: 11.2, overageEnabled: false, overageCapUsd: null } });
+    expect(isChangeSettled(parsed.change, before)).toBe(false);
+    expect(isChangeSettled(parsed.change, after)).toBe(true);
+  });
+
+  test('an X auto-billing change settles on the X switch alone', () => {
+    const on = overview({ x: { balanceUsd: 0, overageEnabled: true, overageCapUsd: 100 } });
+    expect(isChangeSettled({ kind: 'x_overage_changed', enabled: true }, on)).toBe(true);
+    expect(isChangeSettled({ kind: 'x_overage_changed', enabled: false }, on)).toBe(false);
   });
 });
 

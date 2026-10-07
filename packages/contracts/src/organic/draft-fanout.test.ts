@@ -80,7 +80,8 @@ describe('draftFanOutRequestSchema', () => {
     // youtube used to be the example and now ships a publisher, so it is accepted.
     expect(draftFanOutRequestSchema.safeParse({ platforms: ['youtube'] }).success).toBe(true);
     expect(draftFanOutRequestSchema.safeParse({ platforms: ['threads'] }).success).toBe(false);
-    expect(draftFanOutRequestSchema.safeParse({ platforms: ['x'] }).success).toBe(false);
+    // x ships a publisher since 2026-10-06.
+    expect(draftFanOutRequestSchema.safeParse({ platforms: ['x'] }).success).toBe(true);
   });
 
   it('accepts a PARTIAL accounts map — the exhaustive z.record trap', () => {
