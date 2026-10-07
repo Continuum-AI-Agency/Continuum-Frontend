@@ -64,6 +64,7 @@ mock.module('@/lib/prefetch/paid-media-cache', () => ({
 
 mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
   useOptimizerAdAccounts: () => ({ isSuccess: false, data: [] }),
+  useOptimizerPortfolios: () => ({ isSuccess: false, isError: false, brandPortfolios: [] }),
   usePrefetchOptimizerOverview: () => () => undefined,
 }));
 
@@ -78,25 +79,41 @@ mock.module('@/components/paid-media/optimizer/OptimizerTab', () => ({
 
 /** Stands in for the transcript: the chip's click, with nothing else of Jaina loaded. */
 mock.module('@/components/paid-media/jaina/JainaChatSurface', () => ({
-  JainaChatSurface: ({ onOpenAccountRead, campaignCanvasPayload }: { onOpenAccountRead?: (readId: string) => void; campaignCanvasPayload?: CampaignCanvasPayload | null }) => {
+  JainaChatSurface: ({
+    onOpenAccountRead,
+    campaignCanvasPayload,
+  }: {
+    onOpenAccountRead?: (readId: string) => void;
+    campaignCanvasPayload?: CampaignCanvasPayload | null;
+  }) => {
     latestCanvasPayload = campaignCanvasPayload;
-    return <button
-      type="button"
-      data-testid="cited-chip"
-      onClick={() => onOpenAccountRead?.('read-abc')}
-      disabled={!onOpenAccountRead}
-    >
-      open the read
-    </button>;
+    return (
+      <button
+        type="button"
+        data-testid="cited-chip"
+        onClick={() => onOpenAccountRead?.('read-abc')}
+        disabled={!onOpenAccountRead}
+      >
+        open the read
+      </button>
+    );
   },
 }));
 
-mock.module('@/CampaignCanvas/components/CampaignCanvas', () => ({ CampaignCanvas: () => <div data-testid="campaign-canvas" /> }));
+mock.module('@/CampaignCanvas/components/CampaignCanvas', () => ({
+  CampaignCanvas: () => <div data-testid="campaign-canvas" />,
+}));
 
 mock.module('@/components/providers/ActiveBrandProvider', () => ({
-  useActiveBrandContext: () => ({ activeBrandId: 'brand-1', brandSummaries: [{ id: 'brand-1', name: 'Test Brand' }], user: { id: 'user-1' } }),
+  useActiveBrandContext: () => ({
+    activeBrandId: 'brand-1',
+    brandSummaries: [{ id: 'brand-1', name: 'Test Brand' }],
+    user: { id: 'user-1' },
+  }),
 }));
-mock.module('@/CampaignCanvas/components/ScaffoldRecordBar', () => ({ ScaffoldRecordBar: () => null }));
+mock.module('@/CampaignCanvas/components/ScaffoldRecordBar', () => ({
+  ScaffoldRecordBar: () => null,
+}));
 
 const PaidMediaClientPage = (await import('./PaidMediaClient')).default;
 const CampaignFlowCanvasPage = (await import('@/CampaignCanvas')).default;
@@ -140,12 +157,15 @@ describe('a cited optimizer figure opens the account read from the Jaina tab', (
   });
 });
 
-
 describe('side Canvas edits reach the associated Jaina chat', () => {
   it('passes current labels and copy after edits, and omits the graph when closed', async () => {
     useCampaignStore.getState().resetForBrandSwitch();
-    const campaignId = useCampaignStore.getState().addNode('campaign', { label: 'Original campaign' });
-    const adId = useCampaignStore.getState().addNode('ad', { label: 'Original ad', primaryText: 'Original copy' });
+    const campaignId = useCampaignStore
+      .getState()
+      .addNode('campaign', { label: 'Original campaign' });
+    const adId = useCampaignStore
+      .getState()
+      .addNode('ad', { label: 'Original ad', primaryText: 'Original copy' });
     render(page());
     await screen.findByTestId('cited-chip');
     expect(latestCanvasPayload).toBeNull();
@@ -169,16 +189,21 @@ describe('side Canvas edits reach the associated Jaina chat', () => {
   });
 });
 
-
 describe('full Canvas edits reach its floating Jaina chat', () => {
   it('rebuilds the payload from current store data', async () => {
     useCampaignStore.getState().resetForBrandSwitch();
-    const campaignId = useCampaignStore.getState().addNode('campaign', { label: 'Original full-page campaign' });
+    const campaignId = useCampaignStore
+      .getState()
+      .addNode('campaign', { label: 'Original full-page campaign' });
     render(<CampaignFlowCanvasPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Jaina', exact: true }));
     await screen.findByTestId('cited-chip');
     expect(JSON.stringify(latestCanvasPayload)).toContain('Original full-page campaign');
-    act(() => useCampaignStore.getState().updateNodeData(campaignId, { label: 'Edited full-page campaign' }));
+    act(() =>
+      useCampaignStore
+        .getState()
+        .updateNodeData(campaignId, { label: 'Edited full-page campaign' }),
+    );
     await waitFor(() => {
       expect(JSON.stringify(latestCanvasPayload)).toContain('Edited full-page campaign');
       expect(JSON.stringify(latestCanvasPayload)).not.toContain('Original full-page campaign');

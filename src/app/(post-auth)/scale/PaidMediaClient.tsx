@@ -15,6 +15,7 @@ import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/use
 import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
   useOptimizerAdAccounts,
+  useOptimizerPortfolios,
   usePrefetchOptimizerOverview,
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import { useOptimizerUrlState } from '@/components/paid-media/optimizer/useOptimizerUrlState';
@@ -37,6 +38,14 @@ import { jainaPlatformParam } from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
+import {
+  assignedAccountsForPlatform,
+  chooseDefaultAdAccount,
+  isSameAdAccount,
+  rankPortfolioAccounts,
+  readSavedAdAccount,
+  saveAdAccount,
+} from './adAccountSelection';
 
 const PAID_MEDIA_TABS = ['dashboard', 'performance', 'campaigns', 'jaina'] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
@@ -166,7 +175,11 @@ type PaidMediaClientPageProps = {
 type PaidMediaAccountContext = {
   brandProfileId: string;
   selectedAdAccount: string | null;
+  /** The person picked this account in this brand context; defaults stop overriding it. */
+  userChosen: boolean;
 };
+
+type SavedAccountChoice = { key: string; accountId: string | null };
 
 export default function PaidMediaClientPage({
   brandProfileId,
@@ -209,20 +222,35 @@ export default function PaidMediaClientPage({
   const [accountContext, setAccountContext] = React.useState<PaidMediaAccountContext>(() => ({
     brandProfileId,
     selectedAdAccount: initialAdAccountId ?? null,
+    userChosen: false,
   }));
   const isBrandContextTransition = accountContext.brandProfileId !== brandProfileId;
   const selectedAdAccount = isBrandContextTransition ? null : accountContext.selectedAdAccount;
   const setSelectedAdAccount = React.useCallback(
-    (adAccountId: string | null) => {
+    (adAccountId: string | null, userChosen = false) => {
       setAccountContext((current) => {
         if (current.brandProfileId !== brandProfileId) return current;
-        if (current.selectedAdAccount === adAccountId) return current;
-        return { ...current, selectedAdAccount: adAccountId };
+        if (current.selectedAdAccount === adAccountId && current.userChosen === userChosen) {
+          return current;
+        }
+        return { ...current, selectedAdAccount: adAccountId, userChosen };
       });
     },
     [brandProfileId],
   );
   const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
+  // A person's pick is remembered per brand and platform; an auto-selection never is.
+  const handleUserSelectAdAccount = React.useCallback(
+    (adAccountId: string) => {
+      setSelectedAdAccount(adAccountId, true);
+      saveAdAccount(brandProfileId, platform, adAccountId);
+    },
+    [brandProfileId, platform, setSelectedAdAccount],
+  );
+  const handleAutoSelectAdAccount = React.useCallback(
+    (adAccountId: string) => setSelectedAdAccount(adAccountId),
+    [setSelectedAdAccount],
+  );
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const prefetchOptimizerOverview = usePrefetchOptimizerOverview(brandProfileId, selectedAdAccount);
   const prefetchScaleCampaigns = usePrefetchScaleCampaigns(brandProfileId, selectedAdAccount);
@@ -239,6 +267,63 @@ export default function PaidMediaClientPage({
     if (!optimizerAccounts.isSuccess) return undefined;
     return optimizerAccounts.data.map((account) => account.account_id);
   }, [platform, optimizerAccounts.isSuccess, optimizerAccounts.data]);
+  // The same assigned rows carry names, so the picker can render them without waiting on
+  // the integration summary — the request that held "Loading accounts..." on beta.
+  const knownAccounts = React.useMemo(() => {
+    if (!optimizerAccounts.isSuccess) return undefined;
+    return assignedAccountsForPlatform(optimizerAccounts.data, platform);
+  }, [platform, optimizerAccounts.isSuccess, optimizerAccounts.data]);
+
+  // Read after mount: storage is per-viewer and the server render cannot see it. The key
+  // pins the read to its brand and platform so a stale read never applies to the next one.
+  const savedChoiceKey = `${brandProfileId}:${platform}`;
+  const [savedChoice, setSavedChoice] = React.useState<SavedAccountChoice | null>(null);
+  React.useEffect(() => {
+    setSavedChoice({
+      key: savedChoiceKey,
+      accountId: readSavedAdAccount(brandProfileId, platform),
+    });
+  }, [savedChoiceKey, brandProfileId, platform]);
+  const savedAccountId = savedChoice?.key === savedChoiceKey ? savedChoice.accountId : null;
+  const savedChoiceRead = savedChoice?.key === savedChoiceKey;
+
+  const brandPortfolios = useOptimizerPortfolios(brandProfileId, null);
+  const portfoliosSettled = brandPortfolios.isSuccess || brandPortfolios.isError;
+  const portfolioAccountRank = React.useMemo(
+    () => rankPortfolioAccounts(brandPortfolios.brandPortfolios),
+    [brandPortfolios.brandPortfolios],
+  );
+  const preferredAccountId = React.useMemo(
+    () =>
+      knownAccounts
+        ? chooseDefaultAdAccount({
+            candidates: knownAccounts,
+            savedAccountId,
+            portfolioAccountRank,
+          })
+        : null,
+    [knownAccounts, savedAccountId, portfolioAccountRank],
+  );
+
+  // Until the person picks, the page sits on the preferred account rather than the server
+  // seed (the alphabetical first assigned account). A saved choice applies at once; the
+  // portfolio-holder default waits for the portfolio list so it does not flip twice.
+  React.useEffect(() => {
+    if (isBrandContextTransition || accountContext.userChosen) return;
+    if (!preferredAccountId || !savedChoiceRead) return;
+    if (!savedAccountId && !portfoliosSettled) return;
+    if (isSameAdAccount(selectedAdAccount, preferredAccountId)) return;
+    setSelectedAdAccount(preferredAccountId);
+  }, [
+    isBrandContextTransition,
+    accountContext.userChosen,
+    preferredAccountId,
+    savedChoiceRead,
+    savedAccountId,
+    portfoliosSettled,
+    selectedAdAccount,
+    setSelectedAdAccount,
+  ]);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
   const handlePlatformChange = React.useCallback(
@@ -314,15 +399,11 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setAccountContext((current) => {
       const nextAdAccount = initialAdAccountId ?? null;
-      if (
-        current.brandProfileId === brandProfileId &&
-        current.selectedAdAccount === nextAdAccount
-      ) {
-        return current;
-      }
+      if (current.brandProfileId === brandProfileId) return current;
       return {
         brandProfileId,
         selectedAdAccount: nextAdAccount,
+        userChosen: false,
       };
     });
     setSelectedCampaign(null);
@@ -560,9 +641,12 @@ export default function PaidMediaClientPage({
               brandId={brandProfileId}
               platform={activeTab === 'jaina' ? 'all' : platform}
               selectedAccountId={selectedAdAccount}
-              onSelect={setSelectedAdAccount}
+              onSelect={handleUserSelectAdAccount}
+              onAutoSelect={handleAutoSelectAdAccount}
               initialTimelineAccounts={initialAccounts}
               assignedAccountIds={assignedAccountIds}
+              knownAccounts={knownAccounts}
+              preferredAccountId={preferredAccountId}
             />
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -751,7 +835,7 @@ export default function PaidMediaClientPage({
               brandId={brandProfileId}
               adAccountId={selectedAdAccount}
               platform={platform}
-              onSelectAdAccount={setSelectedAdAccount}
+              onSelectAdAccount={handleUserSelectAdAccount}
             />
           ) : (
             renderBlockedState()
