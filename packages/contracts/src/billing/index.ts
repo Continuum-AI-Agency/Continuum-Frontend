@@ -11,7 +11,15 @@ export * from './usage';
  * `billing.apply_stripe_projection`; admins and Contract clients write it directly.
  */
 
-export const PRODUCT_CODES = ['studio', 'organic_agent', 'paid_media', 'trends', 'mcp'] as const;
+/** `listening` = brand mention monitoring, sold only as part of Trends+. */
+export const PRODUCT_CODES = [
+  'studio',
+  'organic_agent',
+  'paid_media',
+  'trends',
+  'mcp',
+  'listening',
+] as const;
 export const productCodeSchema = z.enum(PRODUCT_CODES);
 export type ProductCode = z.infer<typeof productCodeSchema>;
 
@@ -25,8 +33,11 @@ export const ADDON_CODES = [
 export const addonCodeSchema = z.enum(ADDON_CODES);
 export type AddonCode = z.infer<typeof addonCodeSchema>;
 
-/** The two plans sold self-serve. Codes are the `billing.plan_definitions` keys. */
-export const PLAN_CODES = ['organic_studio', 'paid_media'] as const;
+/**
+ * The plans sold self-serve. Codes are the `billing.plan_definitions` keys. `trends_plus`
+ * ($9.99/brand/month) is an add-on: billing-api sells it only to a brand with Organic access.
+ */
+export const PLAN_CODES = ['organic_studio', 'paid_media', 'trends_plus'] as const;
 export const planCodeSchema = z.enum(PLAN_CODES);
 export type PlanCode = z.infer<typeof planCodeSchema>;
 
@@ -394,6 +405,8 @@ export const BILLING_API_ERROR_CODES = [
   'plan_not_active',
   /** Removing the only plan — cancel from the Customer Portal instead. */
   'last_plan',
+  /** Trends+ needs Organic access (any source); Organic Plus can't be removed under Trends+. */
+  'plan_required',
   /** The session does not exist, or belongs to another brand's customer. */
   'checkout_session_not_found',
   /** No such promo code for this brand, or it is not for Canvas credits. */

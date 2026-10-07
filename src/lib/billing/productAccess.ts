@@ -76,12 +76,14 @@ export const PLAN_NAME_FOR_PRODUCT: Partial<Record<ProductCode, string>> = {
   studio: 'Organic Plus',
   organic_agent: 'Organic Plus',
   paid_media: 'Performance Plus',
+  listening: 'Trends+',
 };
 
 /** The self-serve plans' display names (`billing.plan_definitions.display_name`). */
 export const PLAN_NAME: Record<PlanCode, string> = {
   organic_studio: 'Organic Plus',
   paid_media: 'Performance Plus',
+  trends_plus: 'Trends+',
 };
 
 /**

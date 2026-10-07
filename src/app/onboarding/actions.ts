@@ -235,19 +235,8 @@ export async function approveOnboardingAndStartAnalysisAction(
     }
   });
 
-  // Approval synchronizes the canonical brand report. Trends starts only after
-  // that durable boundary; the Backend will hold it until the matching strategic
-  // analysis is complete.
-  after(async () => {
-    try {
-      const { startBrandInsightsServer } = await import('@/lib/api/brandInsights.server');
-      await startBrandInsightsServer(brandId);
-    } catch (error) {
-      log.error('[approveOnboardingAndStartAnalysisAction] trends kickoff failed', error, {
-        brandId,
-      });
-    }
-  });
+  // No trends kickoff here: the Backend starts the first trends run once the
+  // strategic analysis above settles, so it is not a report-only run.
 
   if (process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== 'false') {
     after(async () => {

@@ -224,6 +224,49 @@ describe('toBillingView — states', () => {
   });
 });
 
+describe('toBillingView — Trends+ add-on', () => {
+  const withTrendsPlus = (input: BillingOverview): BillingOverview => ({
+    ...input,
+    catalog: {
+      ...input.catalog,
+      plans: [
+        ...input.catalog.plans,
+        {
+          planCode: 'trends_plus',
+          displayName: 'Trends+',
+          monthlyPriceUsd: 9.99,
+          products: ['trends', 'listening'],
+          includedCanvasCredits: 0,
+        },
+      ],
+    },
+  });
+  const trendsPlusCard = (input: BillingOverview) =>
+    selfServe(withTrendsPlus(input)).plans.find((plan) => plan.planCode === 'trends_plus');
+
+  test('sells Trends+ alone to a brand whose Organic comes from an admin grant', () => {
+    const card = trendsPlusCard(overview({ entitlements: { products: ['organic_agent', 'studio'] } }));
+    expect(card).toMatchObject({ action: 'checkout', priceLabel: '$9.99' });
+    expect(card?.features).toContain('Brand listening: mentions of your brand and competitors');
+  });
+
+  test('asks for Organic Plus first when the brand has no Organic access', () => {
+    expect(trendsPlusCard(overview({ entitlements: { products: ['paid_media'] } }))?.action).toBe(
+      'requires_organic',
+    );
+  });
+
+  test('adds Trends+ to an Organic Plus subscription', () => {
+    const card = trendsPlusCard(
+      overview({
+        entitlements: { products: ['organic_agent', 'studio'], plans: ['organic_studio'] },
+        subscription: subscription(['organic_studio']),
+      }),
+    );
+    expect(card?.action).toBe('add');
+  });
+});
+
 describe('toBillingView — Canvas credits', () => {
   test('a fresh Organic Plus period shows 1,000 credits available, all included', () => {
     const { credits } = selfServe(

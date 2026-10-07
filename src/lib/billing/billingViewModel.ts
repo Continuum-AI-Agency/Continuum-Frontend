@@ -20,12 +20,16 @@ const PRODUCT_FEATURES: Record<ProductCode, string> = {
   paid_media: 'Jaina, Forge ad creation, approvals and optimizer',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'Brand listening: mentions of your brand and competitors',
 };
 
 /** `payment_failed`: on the subscription, but Stripe is retrying a declined renewal. */
 export type PlanStatus = 'active' | 'activating' | 'payment_failed' | 'available';
-/** `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal. */
-export type PlanAction = 'checkout' | 'add' | 'remove' | 'none';
+/**
+ * `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal.
+ * `requires_organic`: Trends+ is an add-on to Organic and the brand has no Organic access.
+ */
+export type PlanAction = 'checkout' | 'add' | 'remove' | 'none' | 'requires_organic';
 
 export type PlanCardView = {
   planCode: PlanCode;
@@ -149,7 +153,15 @@ function featuresFor(products: readonly ProductCode[], includedCanvasCredits = 0
   return features;
 }
 
-function planAction(plan: PlanCode, livePlans: readonly PlanCode[] | null): PlanAction {
+function planAction(
+  plan: PlanCode,
+  livePlans: readonly PlanCode[] | null,
+  hasOrganic: boolean,
+): PlanAction {
+  // billing-api answers 409 plan_required here; the card says so before the click.
+  if (plan === 'trends_plus' && !hasOrganic && !livePlans?.includes(plan)) {
+    return 'requires_organic';
+  }
   if (!livePlans) return 'checkout';
   if (!livePlans.includes(plan)) return 'add';
   return livePlans.length > 1 ? 'remove' : 'none';
@@ -206,6 +218,7 @@ export const NEED_LABEL: Record<ProductCode, string> = {
   paid_media: 'paid media',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'brand listening',
 };
 
 export function toBillingView(
@@ -244,7 +257,12 @@ export function toBillingView(
           : entitlements.plans.includes(plan.planCode)
             ? 'active'
             : 'activating',
-      action: planAction(plan.planCode, livePlans),
+      action: planAction(
+        plan.planCode,
+        livePlans,
+        entitlements.products.includes('organic_agent') ||
+          Boolean(livePlans?.includes('organic_studio')),
+      ),
       highlighted: need !== null && plan.products.includes(need),
     }));
 
