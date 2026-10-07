@@ -6,8 +6,9 @@
 // server picks the ad sets rather than the browser guessing.
 //
 // A cross-platform suggestion also proposes campaigns on the brand's other platforms. They
-// arrive ticked, under their platform's header, and can be unticked one by one. Nothing
-// enrolls a Google campaign yet, so the section says that rather than implying Create will.
+// arrive ticked, under their platform's header, and can be unticked one by one; Create enrolls
+// the ticked ones beside the Meta ad sets — or alone, when every Meta ad set is unticked. The
+// section says they are recommend-only, because nothing applies outside Meta.
 
 import type { OptimizationObjective, PortfolioLevel, SuggestionMember } from '@continuum/contracts';
 import { useMemo } from 'react';
@@ -252,8 +253,8 @@ function OtherPlatformMembers({
     >
       <p className="text-xs text-muted-foreground">
         The suggestion also proposed these {names} campaigns, which buy the same result in the same
-        currency. Adding {names} campaigns to a portfolio isn&rsquo;t available yet: they stay
-        selected here, and Create enrolls the Meta ad sets only.
+        currency. Create adds the ticked ones to the portfolio. The optimizer recommends moves on
+        them and you make the change in {names}: it only applies changes on Meta.
       </p>
       {groups.map((group) => (
         <div className="space-y-1" key={`${group.platform}:${group.accountId}`}>

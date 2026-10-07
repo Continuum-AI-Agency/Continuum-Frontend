@@ -5,9 +5,15 @@ import {
   draftFromSuggestion,
   effectiveTargetMetric,
   emptyDraft,
+  enrollLabel,
+  hasMetaSelection,
   memberKey,
+  memberPayload,
   membersByAccount,
   planReadout,
+  platformHost,
+  selectedMembers,
+  selectionByPlatform,
   stepIssues,
   suggestedGuardrails,
   suggestionPlatformCounts,
@@ -315,5 +321,70 @@ describe('a cross-platform suggestion', () => {
 
   it('starts from scratch with nothing proposed', () => {
     expect(emptyDraft().proposedMembers).toEqual([]);
+  });
+});
+
+describe('enrolling the members a cross-platform suggestion proposed', () => {
+  const googleOnly = () => ({
+    ...draftFromSuggestion(crossPlatform),
+    adsetIds: [] as string[],
+    dailyTotal: '500',
+  });
+
+  it('sends the ticked members only, in the RPC shape, Google at campaign level', () => {
+    const draft = draftFromSuggestion(crossPlatform);
+    expect(memberPayload(selectedMembers(draft))).toEqual([
+      {
+        platform: 'google_ads',
+        account_id: '5251780631',
+        entity_id: 'g-1',
+        level: 'campaign',
+        name: 'Search · Leads GDL',
+      },
+    ]);
+    expect(selectedMembers({ ...draft, memberKeys: [] })).toEqual([]);
+  });
+
+  it('allows a Google-only portfolio: every Meta ad set unticked, a Google campaign kept', () => {
+    const draft = googleOnly();
+    expect(hasMetaSelection(draft)).toBe(false);
+    expect(stepIssues(draft, 'assets', { selectedBudgetSum: 0, blockedCount: 0 })).toEqual([]);
+    expect(
+      stepIssues({ ...draft, memberKeys: [] }, 'assets', { selectedBudgetSum: 0, blockedCount: 0 }),
+    ).toEqual(['Select at least one ad set or campaign.']);
+    expect(platformHost(draft)).toEqual({ platform: 'google_ads', account_id: '5251780631' });
+    expect(platformHost(draftFromSuggestion(crossPlatform))).toBeNull();
+  });
+
+  it('keeps autopilot off: the default is recommend, and a Google-only portfolio refuses it', () => {
+    const mixed = draftFromSuggestion(crossPlatform);
+    expect(mixed.applyMode).toBe('recommend');
+    expect(buildCreateConfig(mixed, createCtx).apply_mode).toBe('recommend');
+    const armed = {
+      ...googleOnly(),
+      applyMode: 'autopilot' as const,
+      maxDailyApply: '600',
+      maxChangePct: '20',
+    };
+    expect(stepIssues(armed, 'plan', { selectedBudgetSum: 0, blockedCount: 0 })).toContain(
+      'Autopilot writes only to Meta: a portfolio with no Meta ad set runs on recommendations.',
+    );
+    const config = buildCreateConfig(armed, { ...createCtx, selectedBudgetSum: 0 });
+    expect(config.apply_mode).toBe('recommend');
+    expect(config.max_daily_apply_minor).toBeUndefined();
+    expect(config.level).toBe('campaign');
+    expect(config.daily_total).toBe(500);
+  });
+
+  it('counts the selection per platform and says so on the Create button', () => {
+    const mixed = draftFromSuggestion(crossPlatform);
+    expect(selectionByPlatform(mixed)).toEqual([
+      { platform: 'meta', label: '2 ad sets' },
+      { platform: 'google_ads', label: '1 campaign' },
+    ]);
+    expect(enrollLabel(mixed)).toBe('Create & enroll 2 ad sets + 1 Google campaign');
+    expect(enrollLabel(googleOnly())).toBe('Create & enroll 1 Google campaign');
+    expect(enrollLabel(draftFromSuggestion(suggestion))).toBe('Create & enroll 2 ad sets');
+    expect(selectionByPlatform(emptyDraft())).toEqual([]);
   });
 });

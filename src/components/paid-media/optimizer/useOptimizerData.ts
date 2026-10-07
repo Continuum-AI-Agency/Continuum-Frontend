@@ -1,5 +1,10 @@
 'use client';
-import type { CreativeOutputManifest, OptimizerAction } from '@continuum/contracts';
+import type {
+  CreativeOutputManifest,
+  OptimizerAction,
+  PlatformId,
+  PortfolioConfig,
+} from '@continuum/contracts';
 
 // Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
 // Edge read is owned by React Query: the cache has deliberate freshness windows,
@@ -596,6 +601,82 @@ async function createPortfolio(request: CreatePortfolioRequest): Promise<{ portf
   const parsed = z.string().uuid().safeParse(data);
   if (!parsed.success) throw new OptimizerRpcError('Malformed create-portfolio response.', null);
   return { portfolio_id: parsed.data };
+}
+
+/** A portfolio with no Meta ad set, hosted on the platform account the person chose. */
+export type CreatePlatformPortfolioRequest = {
+  brand_id: string;
+  platform: PlatformId;
+  account_id: string;
+  config: PortfolioConfig;
+};
+
+/** The members optimizer_add_portfolio_members enrolls (Google / TikTok campaigns). */
+export type AddPortfolioMembersRequest = {
+  portfolio_id: string;
+  members: {
+    platform: PlatformId;
+    account_id: string;
+    entity_id: string;
+    level: 'campaign' | 'group';
+    name?: string;
+  }[];
+};
+
+const AddPortfolioMembersResultSchema = z.object({
+  enrolled: z.number().int().nonnegative(),
+  already: z.number().int().nonnegative(),
+});
+
+/** The RPCs refuse in sentences ("optimizer: google_ads campaign 1 is already in portfolio …");
+ *  the person reads the sentence, without the schema prefix. */
+function memberRefusal(error: { message?: string }, fallback: string): string {
+  const message = (error.message ?? '').replace(/^optimizer:\s*/, '').trim();
+  return message.length > 0 ? message : fallback;
+}
+
+async function createPlatformPortfolio(
+  request: CreatePlatformPortfolioRequest,
+): Promise<{ portfolio_id: string }> {
+  const { data, error } = await getClient().rpc('optimizer_create_platform_portfolio', {
+    p_brand_id: request.brand_id,
+    p_platform: request.platform,
+    p_account_id: request.account_id,
+    p_config: request.config,
+  });
+  if (error) {
+    const code = pgErrorCode(error);
+    throw new OptimizerRpcError(
+      code === '42501'
+        ? "This account isn't assigned to this brand. Assign it in Settings → Integrations."
+        : memberRefusal(error, 'Could not create the portfolio.'),
+      code,
+    );
+  }
+  const parsed = z.string().uuid().safeParse(data);
+  if (!parsed.success) throw new OptimizerRpcError('Malformed create-portfolio response.', null);
+  return { portfolio_id: parsed.data };
+}
+
+async function addPortfolioMembers(
+  request: AddPortfolioMembersRequest,
+): Promise<z.infer<typeof AddPortfolioMembersResultSchema>> {
+  const { data, error } = await getClient().rpc('optimizer_add_portfolio_members', {
+    p_portfolio_id: request.portfolio_id,
+    p_members: request.members,
+  });
+  if (error) {
+    const code = pgErrorCode(error);
+    throw new OptimizerRpcError(
+      code === '42501'
+        ? "One of these campaigns' accounts isn't assigned to this brand. Assign it in Settings → Integrations."
+        : memberRefusal(error, 'Could not add these campaigns.'),
+      code,
+    );
+  }
+  const parsed = AddPortfolioMembersResultSchema.safeParse(data);
+  if (!parsed.success) throw new OptimizerRpcError('Malformed add-members response.', null);
+  return parsed.data;
 }
 
 async function enrollAdsets(request: EnrollRequest): Promise<EnrollResult> {
@@ -2405,6 +2486,16 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     onSuccess: invalidateOptimizer,
   });
 
+  const createPlatform = useMutation({
+    mutationFn: createPlatformPortfolio,
+    onSuccess: invalidateOptimizer,
+  });
+
+  const addMembers = useMutation({
+    mutationFn: addPortfolioMembers,
+    onSuccess: invalidateOptimizer,
+  });
+
   const update = useMutation({
     mutationFn: updatePortfolio,
     onSuccess: invalidateOptimizer,
@@ -2471,6 +2562,8 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
   return {
     create,
     enroll,
+    createPlatform,
+    addMembers,
     update,
     unenroll,
     archive,
