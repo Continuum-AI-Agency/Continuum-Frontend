@@ -834,18 +834,39 @@ describe('RenderJobsGrid', () => {
       ...MADRID,
       label: 'UTEC 4:5',
       outputs: [
-        { ...MADRID.outputs[0]!, id: 'preview', fileName: 'preview_4_5.jpg',
-          url: 'https://cdn.test/preview.jpg', assetId: null, versionId: null },
-        { ...MADRID.outputs[0]!, id: 'asset', fileName: '_crl3e9n.jpg',
-          url: 'https://cdn.test/asset.jpg' },
+        {
+          ...MADRID.outputs[0]!,
+          id: 'preview',
+          fileName: 'preview_4_5.jpg',
+          url: 'https://cdn.test/preview.jpg',
+          assetId: null,
+          versionId: null,
+        },
+        {
+          ...MADRID.outputs[0]!,
+          id: 'asset',
+          fileName: '_crl3e9n.jpg',
+          url: 'https://cdn.test/asset.jpg',
+        },
       ],
     };
     jobsFixture = [job];
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <RenderJobsGrid brandId={BRAND} formats={[{
-          id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null,
-        }]} />
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[
+            {
+              id: '4:5',
+              label: '4:5',
+              ratio: '4:5',
+              width: null,
+              height: null,
+            },
+          ]}
+        />
       </QueryClientProvider>,
     );
     fireEvent.click(await findBatchRow());
@@ -854,8 +875,7 @@ describe('RenderJobsGrid', () => {
     fireEvent.click(row);
     const preview = screen.getByRole('group', { name: 'Render preview' });
     expect(preview.querySelector('[aria-pressed="true"]')?.textContent).toContain('4:5');
-    expect(preview.querySelector('img')?.getAttribute('src'))
-      .toBe('https://cdn.test/asset.jpg');
+    expect(preview.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/asset.jpg');
   }, 30_000);
   test('a failed render reads its whole sentence, a broken thumbnail falls back to the tile, and Proof and Final are marked', async () => {
     const sentence =
@@ -934,10 +954,22 @@ describe('RenderJobsGrid', () => {
       outputs: [
         clip('Story_9_16_ab12cd.mxf', 'application/mxf'),
         clip('Story_9_16_ab12cd.mov', 'video/quicktime'),
-        clip('Story_9_16_ab12cd.mp4', 'video/mp4'),
+        {
+          ...clip('Story_9_16_ab12cd.mp4', 'video/mp4'),
+          posterUrl: 'https://cdn.test/poster.jpg',
+          libraryUrl: 'https://library.test/Story_9_16_ab12cd.mp4?download=',
+        },
       ],
     };
-    jobsFixture = [reel];
+    // A second render whose poster is not made yet.
+    const pending: ApiRenderJob = {
+      ...reel,
+      id: '11111111-1111-4111-8111-111111111142',
+      label: 'Fresh reel',
+      labelPath: ['Fresh reel'],
+      outputs: [clip('Story_9_16_ef34gh.mp4', 'video/mp4')],
+    };
+    jobsFixture = [reel, pending];
     const story = { name: 'Story 9:16', width: 1080, height: 1920 };
     const formats = [
       { id: 'story', label: 'Story', ratio: '9:16', comp: story, width: 1080, height: 1920 },
@@ -957,24 +989,32 @@ describe('RenderJobsGrid', () => {
       ),
     ).toBeTruthy();
 
-    // The ledger row shows the video's own first frame, not a generic icon: an icon says a video
-    // exists and nothing about what rendered, which is what a thumbnail is for.
-    const thumb = (screen.getByText('Reel').closest('tr') as HTMLElement).querySelector('video');
-    expect(thumb?.getAttribute('src')).toBe('https://cdn.test/Story_9_16_ab12cd.mp4#t=0.1');
-    expect(thumb?.getAttribute('preload')).toBe('metadata');
+    // The ledger row draws the video's poster still and never the video: a player per row
+    // downloaded every render to paint a thumbnail. No poster yet is a plain tile, still no video.
+    const row = screen.getByText('Reel').closest('tr') as HTMLElement;
+    expect(row.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/poster.jpg');
+    const freshRow = screen.getByText('Fresh reel').closest('tr') as HTMLElement;
+    expect(freshRow.querySelector('img')).toBeNull();
+    expect(document.querySelectorAll('tbody video')).toHaveLength(0);
 
     fireEvent.click(screen.getByText('Reel'));
     await screen.findByRole('heading', { name: 'Reel' });
     const preview = screen.getByRole('group', { name: 'Render preview' });
+    // It plays the Library copy (storage behind a CDN), not the fleet's far bucket.
     expect(preview.querySelector('video')?.getAttribute('src')).toBe(
-      'https://cdn.test/Story_9_16_ab12cd.mp4',
+      'https://library.test/Story_9_16_ab12cd.mp4?download=',
+    );
+    // Opened, the frame shows at once while the video buffers behind it.
+    expect(preview.querySelector('video')?.getAttribute('poster')).toBe(
+      'https://cdn.test/poster.jpg',
     );
     expect(
       ['MP4', 'MOV', 'MXF'].map((type) =>
         screen.getByRole('link', { name: `Download ${type}` }).getAttribute('href'),
       ),
     ).toEqual([
-      'https://cdn.test/Story_9_16_ab12cd.mp4',
+      'https://library.test/Story_9_16_ab12cd.mp4?download=',
+      // Masters stay in the fleet's bucket: no Library copy, so their own address.
       'https://cdn.test/Story_9_16_ab12cd.mov',
       'https://cdn.test/Story_9_16_ab12cd.mxf',
     ]);
@@ -1043,11 +1083,27 @@ describe('RenderJobsGrid', () => {
     };
     jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
     const formats = [
-      { id: 'format-a', label: 'RENDER Card A (Pre-Match)', ratio: null, mediaType: 'MP4 Video (RGB)', width: null, height: null },
-      { id: 'format-b', label: 'RENDER Card B (Halftime)', ratio: null, mediaType: 'MP4 Video (RGB)', width: null, height: null },
+      {
+        id: 'format-a',
+        label: 'RENDER Card A (Pre-Match)',
+        ratio: null,
+        mediaType: 'MP4 Video (RGB)',
+        width: null,
+        height: null,
+      },
+      {
+        id: 'format-b',
+        label: 'RENDER Card B (Halftime)',
+        ratio: null,
+        mediaType: 'MP4 Video (RGB)',
+        width: null,
+        height: null,
+      },
     ];
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
         <RenderJobsGrid brandId={BRAND} formats={formats} />
       </QueryClientProvider>,
     );
@@ -1056,7 +1112,9 @@ describe('RenderJobsGrid', () => {
     await screen.findByRole('heading', { name: 'Base' });
     const preview = screen.getByRole('group', { name: 'Render preview' });
     expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
-    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(
+      output.url,
+    );
     expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'RENDER Card B (Halftime)' }));
@@ -1078,12 +1136,26 @@ describe('RenderJobsGrid', () => {
     };
     jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
         <RenderJobsGrid
           brandId={BRAND}
           formats={[
-            { id: 'card-a', label: 'RENDER Card A (Pre-Match)', ratio: null, width: null, height: null },
-            { id: 'card-b', label: 'RENDER Card B (Halftime)', ratio: null, width: null, height: null },
+            {
+              id: 'card-a',
+              label: 'RENDER Card A (Pre-Match)',
+              ratio: null,
+              width: null,
+              height: null,
+            },
+            {
+              id: 'card-b',
+              label: 'RENDER Card B (Halftime)',
+              ratio: null,
+              width: null,
+              height: null,
+            },
           ]}
         />
       </QueryClientProvider>,
@@ -1092,7 +1164,9 @@ describe('RenderJobsGrid', () => {
     fireEvent.click(await screen.findByText('Base'));
     const preview = screen.getByRole('group', { name: 'Render preview' });
     expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
-    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(
+      output.url,
+    );
     expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'RENDER Card A (Pre-Match)' }));

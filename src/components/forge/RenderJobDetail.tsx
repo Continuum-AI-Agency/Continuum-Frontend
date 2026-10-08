@@ -223,7 +223,15 @@ export const imageFailed = (element: HTMLImageElement | null) =>
   element !== null && element.complete && element.naturalWidth === 0;
 
 /** The Kobra player owns the element, so a broken file is read off the video it mounts. */
-function OutputVideo({ url, onBroken }: { url: string; onBroken: () => void }) {
+function OutputVideo({
+  url,
+  poster,
+  onBroken,
+}: {
+  url: string;
+  poster?: string;
+  onBroken: () => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const video = host.current?.querySelector('video');
@@ -237,6 +245,8 @@ function OutputVideo({ url, onBroken }: { url: string; onBroken: () => void }) {
     <div ref={host} className="size-full">
       <Video
         src={url}
+        // The frame shows at once; the video itself buffers from the fleet's bucket behind it.
+        poster={poster}
         ariaLabel="Render"
         className="aspect-auto! size-full rounded-none border-0"
         videoClassName="object-contain"
@@ -259,11 +269,16 @@ function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
     );
   }
   return output.kind === 'video' ? (
-    <OutputVideo url={output.url} onBroken={markBroken} />
+    // The Library copy plays from storage behind a CDN; the fleet's bucket is one far region.
+    <OutputVideo
+      url={output.libraryUrl ?? output.url}
+      poster={output.posterUrl}
+      onBroken={markBroken}
+    />
   ) : (
     // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
     <img
-      src={output.url}
+      src={output.libraryUrl ?? output.url}
       alt={alt}
       className="size-full object-contain"
       ref={(element) => {
@@ -432,7 +447,7 @@ export function RenderJobDetail({
                         node: (
                           <OutputFile
                             // By URL: a refresh that re-signs an expired link gets a fresh try.
-                            key={output.url}
+                            key={output.libraryUrl ?? output.url}
                             output={output}
                             alt={`${name} · ${format.ratio ?? format.label}`}
                           />
@@ -464,7 +479,7 @@ export function RenderJobDetail({
               return (
                 <a
                   key={output.id}
-                  href={output.url}
+                  href={output.libraryUrl ?? output.url}
                   download={output.fileName}
                   target="_blank"
                   rel="noopener noreferrer"

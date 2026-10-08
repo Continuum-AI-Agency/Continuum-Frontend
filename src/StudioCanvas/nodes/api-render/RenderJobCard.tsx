@@ -192,14 +192,16 @@ export function RenderJobCard({
             // biome-ignore lint/a11y/useMediaCaption: a rendered ad has no caption track
             <video
               className="nodrag w-full rounded border border-border/60"
-              src={output.url}
+              // The Library copy (CDN) over the fleet's far bucket; its poster until played.
+              src={output.libraryUrl ?? output.url}
+              poster={output.posterUrl}
               controls
               preload="none"
             />
           ) : (
             <img
               className="nodrag w-full rounded border border-border/60"
-              src={output.url}
+              src={output.libraryUrl ?? output.url}
               alt={`${job.templateName} render ${output.fileName}`}
               loading="lazy"
             />
@@ -207,7 +209,7 @@ export function RenderJobCard({
           <div className="flex items-center justify-between gap-2">
             <a
               className="nodrag truncate text-brand-primary underline-offset-2 hover:underline"
-              href={output.url}
+              href={output.libraryUrl ?? output.url}
               target="_blank"
               rel="noreferrer"
             >

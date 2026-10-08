@@ -22,12 +22,8 @@ import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
-import { fileForFormat, playableFirst, type PreviewFormat } from '@/components/forge/FormatPreview';
-import {
-  ReviewStatusPill,
-  reviewSummary,
-  useLibraryState,
-} from '@/components/forge/libraryState';
+import { fileForFormat, type PreviewFormat, playableFirst } from '@/components/forge/FormatPreview';
+import { ReviewStatusPill, reviewSummary, useLibraryState } from '@/components/forge/libraryState';
 import {
   filesSummary,
   formatsNamedByJob,
@@ -120,13 +116,19 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
   );
 }
 
-/** An image that fails to load — an expired signed link, a deleted file — falls back to the tile. */
+/**
+ * An image draws itself; a video draws its poster still and NEVER the video — a <video> per row
+ * fetched every render (≈9 MB each, index at the end, from the fleet's bucket) to paint 36 px,
+ * and froze the ledger. A still that fails to load — an expired signed link, a deleted file — or
+ * a video whose poster is not made yet falls back to the tile.
+ */
 function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
   const [broken, setBroken] = useState(false);
-  if (output?.kind === 'image' && !broken) {
+  const still = output?.kind === 'image' ? (output.libraryUrl ?? output.url) : output?.posterUrl;
+  if (still && !broken) {
     return (
       <img
-        src={output.url}
+        src={still}
         alt=""
         width={36}
         height={36}
@@ -136,22 +138,6 @@ function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
         ref={(element) => {
           if (imageFailed(element)) setBroken(true);
         }}
-        onError={() => setBroken(true)}
-      />
-    );
-  }
-  // A video shows its own first frame, the same way a template card does — an icon told you a
-  // video exists but nothing about what rendered, which is the whole point of a ledger thumbnail.
-  if (output?.kind === 'video' && !broken) {
-    return (
-      // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-      <video
-        src={`${output.url}#t=0.1`}
-        aria-label="Rendered video"
-        className="size-9 rounded-sm object-contain"
-        muted
-        playsInline
-        preload="metadata"
         onError={() => setBroken(true)}
       />
     );
@@ -332,8 +318,11 @@ export function RenderJobsGrid({
           const first = firstFileOf(job);
           return (
             <ViewTransition name={jobTransitionName(job.id)}>
-              {/* Keyed by URL: a re-read that re-signs the link gets a fresh try. */}
-              <Thumbnail key={first?.url ?? 'none'} output={first} />
+              {/* Keyed by the link it draws: a re-signed or newly made still gets a fresh try. */}
+              <Thumbnail
+                key={first?.posterUrl ?? first?.libraryUrl ?? first?.url ?? 'none'}
+                output={first}
+              />
             </ViewTransition>
           );
         },
@@ -418,7 +407,7 @@ export function RenderJobsGrid({
               .map((output) => (
                 <a
                   key={output.id}
-                  href={output.url}
+                  href={output.libraryUrl ?? output.url}
                   download={output.fileName}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -529,7 +518,12 @@ export function RenderJobsGrid({
         header: '',
         cell: ({ row: { original: batch } }) => {
           const first = firstFileOf(batch.preview);
-          return <Thumbnail key={first?.url ?? 'none'} output={first} />;
+          return (
+            <Thumbnail
+              key={first?.posterUrl ?? first?.libraryUrl ?? first?.url ?? 'none'}
+              output={first}
+            />
+          );
         },
       },
       {
@@ -749,7 +743,7 @@ export function RenderJobsGrid({
             onClick={() => {
               for (const output of downloadable) {
                 const anchor = document.createElement('a');
-                anchor.href = output.url;
+                anchor.href = output.libraryUrl ?? output.url;
                 anchor.download = output.fileName;
                 anchor.rel = 'noopener';
                 anchor.click();

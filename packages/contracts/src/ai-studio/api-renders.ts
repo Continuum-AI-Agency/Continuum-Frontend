@@ -1314,6 +1314,15 @@ export const apiRenderOutputSchema = z
     // back in as the input to the next render.
     assetId: z.string().uuid().nullable().default(null),
     versionId: z.string().uuid().nullable().default(null),
+    // A video output's poster still (the Library's `poster` rendition), signed per read and
+    // never stored. Lists draw this instead of the video: a <video> per row fetched every render
+    // to paint a 36 px tile. Absent until the poster exists, and on image outputs.
+    posterUrl: z.string().url().optional(),
+    // The Library copy of this exact version, signed per read and never stored: storage behind a
+    // CDN, so it plays and downloads far faster than `url` (the fleet's bucket, one far region).
+    // Download-disposed — a <video> ignores that, an <a> saves it. Absent until the copy exists;
+    // `url` stays the fleet's address because other screens match outputs by it.
+    libraryUrl: z.string().url().optional(),
   })
   .strict();
 export type ApiRenderOutput = z.infer<typeof apiRenderOutputSchema>;
