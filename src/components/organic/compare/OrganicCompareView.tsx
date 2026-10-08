@@ -11,6 +11,7 @@ import {
   ORGANIC_METRIC_CATALOG,
   type OrganicMetricId,
   type OrganicMetricPlatform,
+  organicMetricPlatformSchema,
 } from '@continuum/contracts';
 import { Columns2 } from 'lucide-react';
 import * as React from 'react';
@@ -81,15 +82,10 @@ const PLATFORM_LABELS: Record<OrganicMetricPlatform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
   linkedin: 'LinkedIn',
+  x: 'X',
 };
 
-const PLATFORM_ORDER: OrganicMetricPlatform[] = [
-  'instagram',
-  'facebook',
-  'tiktok',
-  'youtube',
-  'linkedin',
-];
+const PLATFORM_ORDER: readonly OrganicMetricPlatform[] = organicMetricPlatformSchema.options;
 
 // What the toolbar needs to know about Compare's own selection so shared actions
 // (export, email) can act on it instead of being hidden in this view.

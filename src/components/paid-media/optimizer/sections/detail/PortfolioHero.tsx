@@ -1,53 +1,53 @@
 'use client';
 
-// What a portfolio opens on: the day's news as ONE ROW — three cards across the pane, highest
-// impact on the left — and the growth recap as the row's footer. Then the rest of the modules.
+// What a portfolio opens on: ONE module, then the cards (docs/performance-plus-redesign/
+// portafolio-unificado.html, idea D "número ancla", decided 29/09 with four tiles). The six
+// framed blocks it replaces — name line, Jaina panel, sentences, tiles, last-cycle line,
+// before/after boxes — read as six things; the module reads as one. One surface, sections
+// separated by space, never by frames inside it:
 //
-// The row is the whole layout decision. Three equal columns on a desktop pane, two on a
-// tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
+//   1. the name, the mode pill and one grey line of facts, the controls on the right
+//      (./PortfolioHeaderLine);
+//   2. the anchor number — cost per result, 44px, in the colour of the target — beside the
+//      news: the status sentence, Jaina's read when she wrote something it does not say, the
+//      opportunity, a blocker only when one exists (./PortfolioAnchor, ./PortfolioHeadline);
+//   3. four frameless tiles chosen for what the portfolio buys (./PortfolioTiles);
+//   4. the last cycle and its projection in one caption (./BeforeAfterStrip);
+//   5. Jaina's bar across the module's foot (./JainaPortfolioPanel);
+//
+// and below the module the recommendation cards, ONE ROW, highest impact on the left
+// (./news), the rest behind "N more".
+//
+// The card row is the one layout decision left here. Three equal columns on a desktop pane,
+// two on a tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
 // `NEWS_ROW` in ./news/cardShape). Every card fills its column and the cards in a row share
-// a height, so the pane holds no blank beside a card that was given less than it. The order
-// is the brief's own ranking — `buildPortfolioNews` hands the cards back sorted — and the
-// lead is not always first: when Jaina picked a lower candidate the maximum stands to its
-// left, and the lead's "chosen over the biggest number" line explains the pair.
+// a height. The order is the brief's own ranking — `buildPortfolioNews` hands the cards back
+// sorted — and the lead is not always first: when Jaina picked a lower candidate the maximum
+// stands to its left, and the lead's "chosen over the biggest number" line explains the pair.
+// A fourth card sits behind "N more" rather than wrapping into a lone card with blank beside it.
 //
-// The first row is exactly one desktop row. A fourth card (a brief lists up to three
-// secondaries when the hero is not the maximum) does not wrap into a lone card with the
-// blank beside it that this file was rewritten to remove; it sits behind "N more", which
-// says it exists and, being the lowest-impact finding by construction, can wait a click.
-//
-// The recap is the row's FOOTER when the row is full — the owner's order was "the three
-// actions first, then the rest" — and sits BESIDE the cards when it is not, taking every
-// column they left empty, so one card and its recap are still a composed row. Its verdict
-// half is already honest: `heroModel` overlays the run's pacing verdict on the stored brief
-// and strips a pace clause the verdict does not support.
-//
-// The figure the lead card carries is the recommendation's OWN (the budget that moved, the
-// spend that bought nothing). Money per day moved to a support line and is printed day AND
-// month, because "$14/day" is a figure a reader has to finish in their head. The
-// justification layouts live in ./news — three of them, picked from what a card holds.
-// Entrance is a short stagger; after that the only motion is the 5s breath on a connector.
-// Everything is static under prefers-reduced-motion.
-//
-// Whether the lead draws a chart is not decided here either: `buildPortfolioNews` hands back
-// `leadChart`, which is `view.chart` only when the chart draws the figure the lead leads
-// with. A chart that argues about a different quantity is withheld in silence.
+// Entrance is a short stagger; everything is static under prefers-reduced-motion.
 
 import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { AccountChartView } from '../account/AccountChartView';
 import { asOfLine } from '../recQueueModel';
+import { BeforeAfterStrip, type BeforeAfterStripProps } from './BeforeAfterStrip';
+import { anchorOf, type PortfolioHeadline as HeadlineModel, relevantTiles } from './headlineModel';
+import type { HeroSetting } from './heroHeaderModel';
 import type { HeroCta, HeroView } from './heroModel';
-import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE, RECAP_BESIDE_SPAN } from './news/cardShape';
+import { JainaPortfolioPanel, type JainaPortfolioPanelProps } from './JainaPortfolioPanel';
+import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE } from './news/cardShape';
 import { InsightCard } from './news/InsightCard';
-import type { NewsCardModel } from './news/justification';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
-import { buildPortfolioNews } from './news/newsModel';
+import { buildPortfolioNews, type NewsCardModel } from './news/newsModel';
+import { PortfolioAnchor } from './PortfolioAnchor';
+import { PortfolioHeaderLine, type PortfolioHeaderLineProps } from './PortfolioHeaderLine';
+import { PortfolioHeadline } from './PortfolioHeadline';
+import { PortfolioTiles } from './PortfolioTiles';
 
 const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
   high: 'destructive',
@@ -57,21 +57,12 @@ const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
-const CYCLE_DAY = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' });
-
-/**
- * The day the figures were computed, for a chart that carries no dates of its own.
- *
- * `rates` puts its window on its own x axis. `interval` cannot: the candidate supplies an
- * amount per day and nothing that says over which days it was observed, so the only date
- * that is actually known is the cycle that produced it. That one is named, and nothing is
- * inferred about the observation window — see heroChart.ts.
- */
-function cycleDay(iso: string | null): string | null {
-  if (!iso) return null;
-  const at = Date.parse(iso);
-  return Number.isNaN(at) ? null : CYCLE_DAY.format(at);
-}
+/** The module: the portfolio's one framed surface. Its children carry no frame of their own. */
+// No overflow-hidden: it would clip — and hide from the scale sweep — anything pushed past the
+// pane's edge. Jaina's bar rounds its own bottom corners instead.
+const MODULE = 'flex flex-col gap-4 rounded-lg border border-border/70 bg-card';
+/** The module's padding, on everything but Jaina's bar, which runs edge to edge at its foot. */
+const MODULE_BODY = 'flex flex-col gap-4 px-4 pt-4 md:px-5 md:pt-5';
 
 const tileVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
@@ -102,49 +93,20 @@ export type PortfolioHeroProps = {
    */
   items?: readonly CycleItemRow[];
   nextCycleAt: string | null;
+  /** True once the portfolio has missed a cycle: the dateline then calls nextCycleAt an
+   *  attempt, because the scheduler will claim the portfolio then but no cycle has landed
+   *  on it in weeks. Absent reads as fresh. */
+  stale?: boolean;
   onCta: (cta: HeroCta) => void;
   explainHref: string;
+  /** The blocks above the cards. Absent, the hero is the news alone. */
+  header?: PortfolioHeaderLineProps;
+  jaina?: JainaPortfolioPanelProps;
+  headline?: HeadlineModel;
+  beforeAfter?: BeforeAfterStripProps;
+  /** A chip or a blocker's fix opens its field in Manage. */
+  onEditSetting?: (setting: HeroSetting) => void;
 };
-
-/** The growth read: the flight's pacing pill when there is a flight, and the sentence. */
-function Recap({
-  view,
-  placement,
-  className,
-}: {
-  view: HeroView;
-  placement: 'beside' | 'footer';
-  className?: string;
-}) {
-  return (
-    <motion.p
-      className={cn(
-        'flex flex-wrap items-center gap-2 text-2xs text-muted-foreground',
-        placement === 'beside' && 'self-center',
-        className,
-      )}
-      data-placement={placement}
-      data-testid="portfolio-news-recap"
-      variants={tileVariants}
-    >
-      {view.pacingLine ? (
-        <Badge
-          className="text-3xs"
-          variant={
-            view.pacingTone === 'success'
-              ? 'success'
-              : view.pacingTone === 'warning'
-                ? 'warning'
-                : 'muted'
-          }
-        >
-          {view.pacingLine}
-        </Badge>
-      ) : null}
-      <span className="max-w-[65ch]">{view.brief.growth_sentence}</span>
-    </motion.p>
-  );
-}
 
 export function PortfolioHero({
   view,
@@ -153,8 +115,14 @@ export function PortfolioHero({
   dailyTotal,
   items = [],
   nextCycleAt,
+  stale = false,
   onCta,
   explainHref,
+  header,
+  jaina,
+  headline,
+  beforeAfter,
+  onEditSetting = () => undefined,
 }: PortfolioHeroProps) {
   const reduce = useReducedMotion();
   // Play the entrance once per portfolio, not on every refetch.
@@ -163,7 +131,6 @@ export function PortfolioHero({
   React.useEffect(() => {
     playedFor.current = portfolioId;
   }, [portfolioId]);
-  const asOfDay = cycleDay(view.asOf);
   const news = React.useMemo(
     () => buildPortfolioNews({ view, items, target: view.brief.growth.target }),
     [view, items],
@@ -179,49 +146,22 @@ export function PortfolioHero({
 
   if (view.state === 'first_cycle') {
     return (
-      <section className="grid gap-3" data-testid="portfolio-hero">
-        <div className="h-24 animate-pulse rounded-lg bg-muted/70" />
-        <div className="rounded-lg border border-border/60 border-dashed p-4 text-2xs text-muted-foreground">
-          Jaina writes your first read after the first cycle.
+      <section className={cn(NEWS_PANE, 'flex flex-col gap-3')} data-testid="portfolio-hero">
+        <div className={MODULE} data-testid="portfolio-module">
+          <div className={cn(MODULE_BODY, !jaina && 'pb-4 md:pb-5')}>
+            {header ? <PortfolioHeaderLine {...header} /> : null}
+            <div className="h-24 animate-pulse rounded-md bg-muted/70" />
+            <p className="text-muted-foreground text-xs">
+              Jaina writes her first read after the first cycle.
+            </p>
+          </div>
+          {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </div>
       </section>
     );
   }
 
-  // The chart belongs INSIDE the lead card: it is the same claim drawn, not a second panel
-  // beside it. Three outcomes, and only one of them is a box with a message in it:
-  //
-  //   the chart agrees   — drawn, with the line saying which reading it is.
-  //   no chart at all    — the window cannot be drawn honestly, and saying so is the honest
-  //                        thing to put in the space.
-  //   a chart that does
-  //   not argue THIS
-  //   card's argument    — nothing. Not a box, not an apology. The chart was about a
-  //                        different quantity, and a placeholder explaining its absence would
-  //                        only be a second thing on the card that is not the argument.
-  const chart = news.leadChart ? (
-    <div
-      className="rounded-md border border-border/50 bg-background/40 p-3"
-      data-testid="hero-chart"
-    >
-      <AccountChartView chart={news.leadChart} currency={currency} />
-      {view.chartReading ? (
-        <p className="mt-1.5 text-3xs text-muted-foreground">
-          {view.chartReading}
-          {news.leadChart.shape === 'interval' && asOfDay ? <> · as of {asOfDay}</> : null}
-        </p>
-      ) : null}
-    </div>
-  ) : view.chart ? null : (
-    <div
-      className="rounded-md border border-border/50 bg-background/40 p-3"
-      data-testid="hero-chart"
-    >
-      <p className="text-2xs text-muted-foreground">
-        Not enough priced days in this window to draw it yet.
-      </p>
-    </div>
-  );
+  const resultLabel = view.brief.growth.result_label;
 
   const cell = (card: NewsCardModel) => (
     <motion.div
@@ -232,13 +172,13 @@ export function PortfolioHero({
     >
       {card === news.lead ? (
         <NewsCard
-          asOfLine={asOfLine(view.asOf, nextCycleAt) ?? 'Awaiting the first cycle'}
+          asOfLine={asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle'}
           card={card}
-          chart={chart}
           currency={currency}
           draft={view.brief.model === 'deterministic'}
           explainHref={explainHref}
           onCta={onCta}
+          resultLabel={resultLabel}
           tier={tierOf(card.impactPerDay)}
         />
       ) : (
@@ -246,6 +186,7 @@ export function PortfolioHero({
           card={card}
           currency={currency}
           onCta={onCta}
+          resultLabel={resultLabel}
           tier={tierOf(card.impactPerDay)}
         />
       )}
@@ -254,7 +195,19 @@ export function PortfolioHero({
 
   const row = news.cards.slice(0, NEWS_ROW_SIZE);
   const more = news.cards.slice(NEWS_ROW_SIZE);
-  const recapBeside = row.length < NEWS_ROW_SIZE;
+  const anchor = headline
+    ? anchorOf({
+        growth: view.brief.growth,
+        words: headline.words,
+        currency,
+        days: headline.days,
+        beforeAfter: beforeAfter?.model ?? null,
+      })
+    : null;
+  const tiles = headline
+    ? relevantTiles({ headline, brief: view.brief, items, dailyTotal, currency })
+    : [];
+  const hasModule = Boolean(header || headline || beforeAfter || jaina);
 
   return (
     <motion.section
@@ -264,24 +217,41 @@ export function PortfolioHero({
       initial={play ? 'hidden' : false}
       variants={groupVariants}
     >
+      {hasModule ? (
+        <motion.div className={MODULE} data-testid="portfolio-module" variants={tileVariants}>
+          <div className={cn(MODULE_BODY, !jaina && 'pb-4 md:pb-5')}>
+            {header ? <PortfolioHeaderLine {...header} /> : null}
+            {headline && anchor ? (
+              <div className="grid grid-cols-1 items-start gap-4 @[40rem]/news:grid-cols-[2fr_3fr] @[40rem]/news:gap-6">
+                <PortfolioAnchor
+                  anchor={anchor}
+                  currency={currency}
+                  onEditSetting={onEditSetting}
+                  window={beforeAfter?.window ?? view.brief.growth.window}
+                />
+                <PortfolioHeadline headline={headline} onEditSetting={onEditSetting} />
+              </div>
+            ) : null}
+            {tiles.length > 0 ? (
+              <PortfolioTiles onEditSetting={onEditSetting} tiles={tiles} />
+            ) : null}
+            {beforeAfter ? (
+              // The workspace hands the strip its words in the Overview's vocabulary; the
+              // module speaks the headline's.
+              <BeforeAfterStrip {...beforeAfter} words={headline?.words ?? beforeAfter.words} />
+            ) : null}
+          </div>
+          {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
+        </motion.div>
+      ) : null}
+
       <motion.div className={NEWS_ROW} data-testid="portfolio-news-row" variants={groupVariants}>
         {row.map(cell)}
-        {recapBeside ? (
-          <Recap
-            className={
-              row.length === 1 || row.length === 2 ? RECAP_BESIDE_SPAN[row.length] : 'col-span-full'
-            }
-            placement="beside"
-            view={view}
-          />
-        ) : null}
       </motion.div>
-
-      {recapBeside ? null : <Recap placement="footer" view={view} />}
 
       {more.length > 0 ? (
         <details className="group" data-testid="portfolio-news-more">
-          <summary className="cursor-pointer list-none text-2xs text-muted-foreground hover:text-foreground">
+          <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
             <span className="group-open:hidden">
               {more.length} more finding{more.length === 1 ? '' : 's'}
             </span>

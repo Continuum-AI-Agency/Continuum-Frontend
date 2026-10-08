@@ -2,12 +2,16 @@
 
 import {
   type ApiRenderJob,
+  type FontInventoryRow,
+  publicationCompsOfParse,
   readableLayerName,
   type TemplateFontCandidatesResponse,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
+  type TemplateRevisionVariant,
   type TemplateSourceSummary,
   templateNameProblem,
+  templateSourceSlotEditSchema,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +28,7 @@ import {
   Rocket,
   Send,
   TestTube2,
+  Trash2,
   Type,
   Variable,
   Wrench,
@@ -39,6 +44,7 @@ import {
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
 import { LineagePanel } from '@/components/forge/LineagePanel';
+import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -46,7 +52,15 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
+import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
+import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
+import {
+  TEXT_REPAIR_FONT_MIME,
+  TemplateTextRepairCanvas,
+  type TextMove,
+  textMoveKey,
+} from '@/components/forge/TemplateTextRepairCanvas';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { VariantsPanel } from '@/components/forge/VariantsPanel';
@@ -66,14 +80,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
+  advanceTemplateForgeBundle,
   advanceTemplateForgeRun,
+  confirmTemplateRebind,
+  editableTemplateFonts,
   type ForgeLadderAction,
   fetchTemplateFontCandidates,
   fetchTemplateFonts,
+  fetchTemplateForgeBundle,
+  fetchTemplateMappingReview,
+  fetchTemplateRevisionVariants,
   fetchTemplateVariables,
+  fetchTemplateVariants,
   healTemplateFonts,
+  previewTemplateRebind,
   pushTemplateFonts,
+  repairTemplateText,
+  saveTemplateRevision,
   saveTemplateVariables,
   sendTemplateToForge,
   setTemplateFontAlias,
@@ -81,6 +106,7 @@ import {
   type TemplateVariable,
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
+import { uploadNewAssetVersion } from '@/lib/library/versions';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -169,6 +195,12 @@ function buildNameSuggestion(source: TemplateSourceSummary): string {
   return suggestion === UNTITLED_TEMPLATE_NAME || templateNameProblem(suggestion) ? '' : suggestion;
 }
 
+// A design import is changed through its layers; only an After Effects source takes an uploaded project.
+const DESIGN_SOURCE: Partial<Record<TemplateRevisionVariant['sourceKind'], string>> = {
+  photoshop: 'a Photoshop',
+  illustrator: 'an Illustrator',
+};
+
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
 
@@ -184,16 +216,27 @@ export function TemplateDetail({
   brandId,
   source,
   onBack,
+  onOpenVariant,
+  onDeleteVariant,
   onRename,
+  onRemove,
   onOpenRender,
   onChanged,
   revisionFile,
   onRevisionTaken,
+  initialTab,
+  initialComp,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
   onBack: () => void;
+  onOpenVariant?: (assetId: string, tab?: string) => void | Promise<void>;
+  initialTab?: string;
+  /** The composition Edit layers opens on; the template's first when absent. */
+  initialComp?: string;
+  onDeleteVariant?: (variant: import('@continuum/contracts').TemplateVariant) => void;
   onRename: (title: string) => void;
+  onRemove?: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   /** Re-read the template list after something here changed what a card shows. */
   onChanged: () => Promise<void>;
@@ -212,15 +255,53 @@ export function TemplateDetail({
     [assetId, brandId, source.versionId],
   );
   const name = sourceDisplayName(source);
+  const { data: variantCatalog } = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const { data: revisionCatalog } = useQuery({
+    queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
+    queryFn: () => fetchTemplateRevisionVariants(brandId, assetId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const selectedRevisionVariant = revisionCatalog?.find((variant) =>
+    variant.revisions.some((revision) => revision.sourceAssetId === assetId),
+  );
+  const variantRoot =
+    variantCatalog?.find((variant) => variant.assetId === assetId)?.rootAssetId ?? assetId;
+  const familyVariants =
+    variantCatalog?.filter((variant) => variant.rootAssetId === variantRoot) ?? [];
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, assetId);
+  const multiDelivery = publicationCompsOfParse(source.parse).length > 1;
+  const bundleKey = ['template-forge-bundle', brandId, assetId, source.versionId];
+  const { data: bundle, refetch: refreshBundle } = useQuery({
+    queryKey: bundleKey,
+    queryFn: () => fetchTemplateForgeBundle(brandId, assetId),
+    enabled: Boolean(source.forgeRunId && multiDelivery),
+    refetchInterval: (query) =>
+      query.state.data?.activation?.state === 'published' ? false : 5000,
+    retry: false,
+  });
+  const [bundleBusy, setBundleBusy] = useState<string | null>(null);
   // The formats the file delivers — its parse's comps, else its ratio labels — and the one on screen.
   const formats = useMemo(
     () => previewFormats({ parse: source.parse, ratios: source.ratios }),
     [source.parse, source.ratios],
   );
   const [formatId, setFormatId] = useState<string | undefined>(undefined);
+  const [editingText, setEditingText] = useState(false);
+  const [textMoves, setTextMoves] = useState<Record<string, TextMove>>({});
+  const [selectedTextKey, setSelectedTextKey] = useState<string | null>(null);
+  const [savedTextRepair, setSavedTextRepair] = useState<{
+    versionId: string;
+    error: string;
+  } | null>(null);
+  const [savedMediaRepair, setSavedMediaRepair] = useState<string | null>(null);
+  const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
-  const [firstTab] = useState(revisionFile ? 'source' : 'variables');
+  const [tab, setTab] = useState(initialTab ?? (revisionFile ? 'source' : 'checks'));
+  const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
   const boxedRatios = useMemo(
@@ -237,8 +318,122 @@ export function TemplateDetail({
     formats.find((entry) => entry.ratio && boxedRatios.has(entry.ratio)) ??
     formats[0];
   const rendered = useLatestRenderFrame(brandId, templateKey, formats, format?.id);
+  const { data: editableFonts = [] } = useQuery<FontInventoryRow[]>({
+    queryKey: ['template-editable-fonts', brandId],
+    queryFn: () => editableTemplateFonts(brandId),
+    enabled: editingText,
+  });
+  const textFrame =
+    wireframeFrames(source.parse).find((frame) => frame.comp === format?.comp?.name) ??
+    wireframeFrames(source.parse).find((frame) => frame.ratio === format?.ratio);
+  const editableTextBoxes =
+    textFrame?.boxes.filter((box) => box.kind === 'text' && box.instance) ?? [];
+  const selectedTextBox =
+    editableTextBoxes.find((box) => textMoveKey(box.instance!) === selectedTextKey) ??
+    editableTextBoxes[0];
+  const applyTextFont = (font: string) => {
+    const instance = selectedTextBox?.instance;
+    if (!instance) return;
+    const key = textMoveKey(instance);
+    setSelectedTextKey(key);
+    setTextMoves((previous) => {
+      const current = previous[key];
+      return {
+        ...previous,
+        [key]: {
+          compId: instance.compId,
+          layerId: instance.layerId,
+          dx: current?.dx ?? 0,
+          dy: current?.dy ?? 0,
+          dw: current?.dw ?? 0,
+          dh: current?.dh ?? 0,
+          ...(font ? { font } : {}),
+        },
+      };
+    });
+  };
+  const saveTextMoves = async () => {
+    if (selectedRevisionVariant) {
+      setTab('layers');
+      toast.info('Use Edit layers to save text changes in a new revision.');
+      return;
+    }
+    const moves = Object.values(textMoves).filter(
+      (move) => move.dx !== 0 || move.dy !== 0 || move.dw || move.dh || move.font,
+    );
+    if (!moves.length || savingText) return;
+    setSavingText(true);
+    let uploaded = false;
+    let applied = false;
+    let savedVersionId = '';
+    try {
+      const repaired = await repairTemplateText(assetId, {
+        brandId,
+        expectedVersionId: source.versionId,
+        moves,
+      });
+      const bytes = Uint8Array.from(atob(repaired.inlineBase64), (char) => char.charCodeAt(0));
+      const file = new File([bytes], repaired.filename, {
+        type: repaired.filename.toLowerCase().endsWith('.zip')
+          ? 'application/zip'
+          : 'application/octet-stream',
+      });
+      const registered = await uploadNewAssetVersion({
+        brandId,
+        assetId,
+        baseVersionId: source.versionId,
+        file,
+        note: `Repaired ${moves.length} text layer${moves.length === 1 ? '' : 's'} in Forge`,
+      });
+      if (!registered.versionId) throw new Error('The Library did not return the repaired version');
+      uploaded = true;
+      savedVersionId = registered.versionId;
+      const inspected = await previewTemplateRebind({
+        brandId,
+        assetId,
+        versionId: registered.versionId,
+        expectedVersionId: source.versionId,
+      });
+      if (inspected.requiresReview || inspected.slots.some((slot) => slot.status === 'missing')) {
+        throw new Error('The new AEP needs a source revision review before it can be used.');
+      }
+      await confirmTemplateRebind({
+        brandId,
+        assetId,
+        versionId: registered.versionId,
+        expectedVersionId: source.versionId,
+        expectedChecksum: inspected.checksum,
+        acceptMissing: false,
+      });
+      applied = true;
+      setTextMoves({});
+      setEditingText(false);
+      setSavedTextRepair(null);
+      await onChanged();
+      toast.success(
+        'Text layout saved to a new AEP version. Build and test render it before publishing.',
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not save text layout';
+      if (applied) {
+        toast.error(`Text repair is applied, but the view did not refresh: ${message}`);
+      } else if (uploaded) {
+        setSavedTextRepair({ versionId: savedVersionId, error: message });
+        setEditingText(false);
+        setTextMoves({});
+        setTab('source');
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setSavingText(false);
+    }
+  };
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
   const [savedDefaults, setSavedDefaults] = useState<Record<string, unknown>>({});
+  const [savedBindings, setSavedBindings] = useState<Record<string, TemplateSlotEdit['binding']>>(
+    {},
+  );
   const [parseState, setParseState] = useState<string>(source.parseState);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<ForgeLadderAction | 'submit' | null>(null);
@@ -276,6 +471,9 @@ export function TemplateDetail({
       // Saved defaults live on the edits, not on the variables — without this they never reappear.
       setSavedDefaults(
         Object.fromEntries(result.edits.map((edit) => [edit.slotKey, edit.defaultValue ?? null])),
+      );
+      setSavedBindings(
+        Object.fromEntries(result.edits.map((edit) => [edit.slotKey, edit.binding ?? null])),
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not read the variables');
@@ -373,10 +571,51 @@ export function TemplateDetail({
   }, [refreshEvents, run?.state]);
 
   const onSave = async (edits: TemplateSlotEdit[]) => {
+    if (selectedRevisionVariant) {
+      const selected = selectedRevisionVariant.revisions.find(
+        (revision) =>
+          revision.sourceAssetId === assetId && revision.sourceVersionId === source.versionId,
+      );
+      if (
+        !selected ||
+        selectedRevisionVariant.original ||
+        selected.id !== selectedRevisionVariant.draftHeadRevisionId
+      ) {
+        setTab('layers');
+        toast.info('Create a named variant in Edit layers before changing this revision.');
+        return false;
+      }
+      setSaving(true);
+      try {
+        const saved = await saveTemplateRevision(assetId, {
+          brandId,
+          parentRevisionId: selected.id,
+          variantId: selectedRevisionVariant.variantId,
+          expectedHeadRevisionId: selected.id,
+          idempotencyKey: crypto.randomUUID(),
+          edits: {
+            layers: [],
+            orders: [],
+            slots: edits.map((edit) => templateSourceSlotEditSchema.parse(edit)),
+          },
+        });
+        await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+        await onChanged();
+        await onOpenVariant?.(saved.sourceAssetId, 'variables');
+        toast.success('Saved template revision');
+        return true;
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : 'Could not save revision');
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    }
     setSaving(true);
     try {
       await saveTemplateVariables(brandId, assetId, edits);
       await queryClient.invalidateQueries({ queryKey: variablesKey, exact: true });
+      await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) });
       await loadVariables();
       toast.success('Saved');
       return true;
@@ -400,7 +639,7 @@ export function TemplateDetail({
       // sub-app. Which one that is, is our deployment topology, not a question for the person
       // naming a template.
       await sendTemplateToForge(brandId, assetId, templateName.trim());
-      await Promise.all([onChanged(), refreshRun()]);
+      await Promise.all([onChanged(), refreshRun(), refreshBundle()]);
       toast.success('Sent to the forge');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not start the run');
@@ -414,11 +653,30 @@ export function TemplateDetail({
     try {
       await advanceTemplateForgeRun(brandId, assetId, action);
       await Promise.all([refreshRun(), onChanged()]);
+      if (templateKey)
+        await queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.contract(brandId, null, templateKey),
+        });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Could not ${action}`);
     } finally {
       setBusy(null);
       void refreshEvents();
+    }
+  };
+
+  const onBundleAdvance = async (
+    action: 'smoke' | 'promotion-plan' | 'approve' | 'resume',
+    options: { confirmation?: string; runId?: string } = {},
+  ) => {
+    setBundleBusy(action);
+    try {
+      await advanceTemplateForgeBundle(brandId, assetId, action, options);
+      await Promise.all([refreshBundle(), onChanged()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Could not ${action}`);
+    } finally {
+      setBundleBusy(null);
     }
   };
 
@@ -463,6 +721,24 @@ export function TemplateDetail({
     staleTime: 60_000,
     select: (response) => response.items.filter((job) => job.templateKey === templateKey),
   });
+  const { data: publishedContract, isError: publishCheckFailed } = useQuery({
+    queryKey: forgeQueryKeys.contract(brandId, null, templateKey ?? ''),
+    queryFn: () => apiRendersApi.getContract(brandId, templateKey ?? ''),
+    enabled: Boolean(templateKey),
+    staleTime: 0,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const publishVerification = publishedContract?.publishCheck ?? null;
+  const { data: mappingReview, isError: mappingCheckFailed } = useQuery({
+    queryKey: forgeQueryKeys.mappingReview(brandId, assetId, source.versionId, run?.state ?? null),
+    queryFn: () => fetchTemplateMappingReview(brandId, assetId),
+    enabled: Boolean(source.forgeRunId && parseState === 'parsed'),
+    staleTime: FORGE_STALE_MS.active,
+    retry: false,
+  });
+  // The template is a Library asset too: its thread and versions live there.
+  const library = useLibraryState(brandId, [assetId]).get(assetId);
   const { data: setCount } = useQuery({
     queryKey: forgeQueryKeys.renderSetList(brandId, templateKey ?? undefined),
     queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey ?? undefined),
@@ -502,7 +778,10 @@ export function TemplateDetail({
   const drawnRatios = new Set(wireframeFrames(source.parse).map((frame) => frame.ratio));
 
   const ladder = ladderFor(run?.state);
+  const mappingBlocked =
+    mappingReview?.identityAvailable === true && mappingReview.state === 'needs_review';
   const ladderButton = (action: ForgeLadderAction | undefined) => {
+    if (multiDelivery) return undefined;
     const step = ladder.find((entry) => entry.action === action);
     if (!step) return undefined;
     const { Icon } = step;
@@ -512,8 +791,12 @@ export function TemplateDetail({
         size="xs"
         variant="outline"
         className="gap-1"
-        title={step.hint}
-        disabled={busy !== null}
+        title={
+          action === 'promote' && mappingBlocked
+            ? 'Review unmatched After Effects layers before publishing.'
+            : step.hint
+        }
+        disabled={busy !== null || (action === 'promote' && mappingBlocked)}
         onClick={() => void onAdvance(step.action)}
       >
         {busy === step.action ? (
@@ -535,21 +818,29 @@ export function TemplateDetail({
       if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
       // The file is read again with the faces just added, so its text is measured now rather
       // than after someone finds a Fix button that nothing else is asking them to press.
-      if (stored.length) {
+      if (stored.length && !selectedRevisionVariant) {
         await healTemplateFonts(brandId, assetId).catch((error: unknown) =>
           toast.error(
             `Fonts are stored, but the file was not read again: ${error instanceof Error ? error.message : 'unknown error'}. Press Fix to retry.`,
           ),
         );
         void refreshEvents();
+        await queryClient.invalidateQueries({ queryKey: ['template-editable-fonts', brandId] });
       }
       await Promise.all([reloadFonts(), onChanged()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add font files');
     } finally {
       setFontBusy(false);
     }
   };
 
   const applyFontSubstitutions = async (choices: FontSubstitutionChoice[]) => {
+    if (selectedRevisionVariant) {
+      setTab('layers');
+      toast.info('Choose a font face in Edit layers, then save a revision.');
+      return;
+    }
     setFontBusy(true);
     try {
       // One at a time and in order: each call returns the readiness AFTER it, and a person
@@ -585,6 +876,11 @@ export function TemplateDetail({
   // The problems every new upload hits, fixed without asking: faces from the package or Google
   // Fonts, and a build re-planned against the columns it made for itself.
   const onFix = async () => {
+    if (selectedRevisionVariant) {
+      setTab('layers');
+      toast.info('This revision is preserved. Save repairs as a new revision or variant.');
+      return;
+    }
     setFixing(true);
     try {
       // Always: besides finding missing faces, this reads the file again with every face the
@@ -663,19 +959,6 @@ export function TemplateDetail({
         {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
             zero while the panel still offers "Add the real files", and a button wired to an
             input that is no longer in the tree silently does nothing. */}
-        <input
-          ref={fontInput}
-          type="file"
-          multiple
-          accept=".ttf,.otf"
-          className="sr-only"
-          tabIndex={-1}
-          aria-label="Font files"
-          onChange={(event) => {
-            void addFontFiles(Array.from(event.target.files ?? []));
-            event.target.value = '';
-          }}
-        />
         {missingFonts > 0 ? (
           <Button
             type="button"
@@ -689,7 +972,7 @@ export function TemplateDetail({
             Add font files
           </Button>
         ) : null}
-        {fontCandidates && fontCandidates.missing.length > 0 ? (
+        {!editingText && fontCandidates && fontCandidates.missing.length > 0 ? (
           <FontSubstitutions
             candidates={fontCandidates}
             busy={fontBusy}
@@ -735,7 +1018,7 @@ export function TemplateDetail({
 
   const buildDetail = (
     <div className="flex flex-col gap-3">
-      {!run || run.state === 'failed' ? (
+      {!run || run.state === 'failed' || (multiDelivery && !bundle) ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -752,7 +1035,12 @@ export function TemplateDetail({
               type="button"
               size="sm"
               className="gap-1.5"
-              disabled={busy !== null || source.parseState !== 'parsed' || nameProblem !== null}
+              disabled={
+                busy !== null ||
+                source.parseState !== 'parsed' ||
+                nameProblem !== null ||
+                missingFootage.length > 0
+              }
               onClick={onSubmit}
             >
               {busy === 'submit' ? (
@@ -774,8 +1062,91 @@ export function TemplateDetail({
           </p>
         </div>
       ) : null}
-      {run ? <ForgeRunProgress run={run} /> : null}
-      {mappingNeeds.length ? (
+      {bundle ? (
+        <div className="rounded-md border p-3 space-y-3">
+          <p className="font-medium">Delivery templates</p>
+          <p className="text-sm text-muted-foreground">
+            Each format has its own fields and render selection.
+          </p>
+          {bundle.children.map((child) => (
+            <div
+              key={child.runId}
+              className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-sm"
+            >
+              <span>{child.compName}</span>
+              <span className="text-muted-foreground">
+                {child.state.replaceAll('_', ' ')}
+                {child.smoke && typeof child.smoke === 'object' && 'state' in child.smoke
+                  ? ` · test ${String(child.smoke.state)}`
+                  : ''}
+              </span>
+              {child.smokeFiles?.map((url, index) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
+                  View test {index + 1}
+                </a>
+              ))}
+              {child.state === 'needs_input' || child.state === 'failed' ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  disabled={bundleBusy !== null}
+                  onClick={() => void onBundleAdvance('resume', { runId: child.runId })}
+                >
+                  Retry build
+                </Button>
+              ) : null}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            {bundle.children.some((child) => child.state === 'draft_ready') ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('smoke')}
+              >
+                Test all formats
+              </Button>
+            ) : null}
+            {bundle.children.every((child) => child.state === 'review_ready') &&
+            !bundle.approval ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('promotion-plan')}
+              >
+                Review publication
+              </Button>
+            ) : null}
+            {bundle.approval && bundle.activation?.state !== 'published' ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={bundleBusy !== null}
+                onClick={() =>
+                  void onBundleAdvance('approve', { confirmation: bundle.approval?.confirmation })
+                }
+              >
+                Publish all formats
+              </Button>
+            ) : null}
+            {bundle.activation?.state === 'published' ? (
+              <span className="text-sm text-success">All formats published</span>
+            ) : null}
+          </div>
+        </div>
+      ) : !multiDelivery && run ? (
+        <ForgeRunProgress run={run} />
+      ) : null}
+      {!multiDelivery && mappingNeeds.length ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           <MappingQuestions
             key={mappingNeeds.map((need) => need.id).join('|')}
@@ -785,7 +1156,7 @@ export function TemplateDetail({
           />
         </div>
       ) : null}
-      {otherNeeds.length ? (
+      {!multiDelivery && otherNeeds.length ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           {/*
             An `asset` need is where EVERY from-scratch build lands — the table is built, the
@@ -816,6 +1187,32 @@ export function TemplateDetail({
     parse: parseDetail,
     fonts: fontsDetail,
     build: buildDetail,
+    publish: publishVerification ? (
+      <div className="flex flex-col gap-2">
+        {publishVerification.issues.length ? (
+          <ul className="list-disc pl-4">
+            {publishVerification.issues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>Worker graph and displayed contract agree.</p>
+        )}
+        {publishVerification.media.length ? (
+          <ul className="flex flex-col gap-1" aria-label="Media placement measurements">
+            {publishVerification.media.map((slot) => (
+              <li key={slot.key}>
+                {slot.label}:{' '}
+                {slot.box && slot.source
+                  ? `${slot.source[0]} × ${slot.source[1]} px source → ${Math.round(slot.box[2] - slot.box[0])} × ${Math.round(slot.box[3] - slot.box[1])} px box in ${slot.comp}`
+                  : 'placement or source size unmeasured'}
+                {slot.rigged ? ' · render-time rig' : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    ) : undefined,
   };
   const checks: CheckRow[] = templateChecks({
     parseState,
@@ -827,6 +1224,10 @@ export function TemplateDetail({
     run,
     forgeState: source.forgeState,
     templateKey,
+    publishVerification,
+    publishCheckFailed,
+    mappingReview,
+    mappingCheckFailed,
   }).map((check) => ({
     name: check.name,
     what: check.what,
@@ -839,7 +1240,14 @@ export function TemplateDetail({
       </Pill>
     )),
     detail: detailOf[check.id],
-    action: ladderButton(check.action),
+    action:
+      check.id === 'mapping' && mappingReview?.state === 'needs_review' ? (
+        <Button type="button" size="xs" variant="outline" onClick={() => setTab('mapping')}>
+          Review mapping
+        </Button>
+      ) : (
+        ladderButton(check.action)
+      ),
   }));
 
   const hasProblem = checks.some((check) => check.state === 'fail' || check.state === 'warn');
@@ -894,11 +1302,63 @@ export function TemplateDetail({
               against an unpromoted package and hand back a blank frame, which reads as success.
               Only a template key means renderable.
             */}
-            {templateKey ? 'Ready to render' : 'Not renderable yet'}
+            {templateKey
+              ? publishVerification?.state === 'pass'
+                ? 'Ready to render'
+                : 'Published · check layout'
+              : 'Not renderable yet'}
             {run && !run.done && !pushed ? ' · live updates unavailable' : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenVariant && revisionCatalog?.length ? (
+            <label className="flex items-center gap-2 text-xs">
+              Variant
+              <select
+                aria-label="Inspect template variant"
+                className="h-8 max-w-56 rounded-md border bg-background px-2 text-xs"
+                value={selectedRevisionVariant?.variantId ?? ''}
+                onChange={(event) => {
+                  const variant = revisionCatalog.find(
+                    (item) => item.variantId === event.target.value,
+                  );
+                  const head = variant?.revisions.find(
+                    (item) => item.id === variant.draftHeadRevisionId,
+                  );
+                  if (head) void onOpenVariant(head.sourceAssetId, tab);
+                }}
+              >
+                {revisionCatalog.map((variant) => (
+                  <option key={variant.variantId} value={variant.variantId}>
+                    {variant.original ? 'Original' : variant.name} ·{' '}
+                    {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <span className="inline-flex items-center gap-2 text-xs">
+            {library ? (
+              <>
+                <CommentCount count={library.commentCount} />
+                <span className="tabular-nums text-muted-foreground">
+                  {library.versionCount} {library.versionCount === 1 ? 'version' : 'versions'}
+                </span>
+              </>
+            ) : null}
+            <OpenInLibrary brandId={brandId} assetId={assetId} />
+          </span>
+          {onRemove ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-destructive"
+              onClick={onRemove}
+            >
+              <Trash2 className="size-3.5" aria-hidden /> Remove
+            </Button>
+          ) : null}
           <DraftWithAiButton templateKey={templateKey} onOpenRender={onOpenRender} />
           {templateKey ? (
             <Button
@@ -914,6 +1374,19 @@ export function TemplateDetail({
         </div>
       </header>
 
+      <input
+        ref={fontInput}
+        type="file"
+        multiple
+        accept=".ttf,.otf"
+        className="sr-only"
+        tabIndex={-1}
+        aria-label="Font files"
+        onChange={(event) => {
+          void addFontFiles(Array.from(event.target.files ?? []));
+          event.target.value = '';
+        }}
+      />
       {/* The picture on the left; the facts and then the checks on the right, the way a deployment
           reads. Stacked below lg. */}
       <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
@@ -929,6 +1402,41 @@ export function TemplateDetail({
                 onValueChange={setFormatId}
                 wellClassName="h-[min(60vh,40rem)]"
                 frame={(picked) => {
+                  if (editingText && source.parse)
+                    return {
+                      mode: 'estimate' as const,
+                      node: (
+                        <TemplateTextRepairCanvas
+                          parse={source.parse}
+                          ratio={picked.ratio}
+                          comp={picked.comp?.name ?? null}
+                          backgroundUrl={
+                            rendered?.kind === 'image' &&
+                            renderedJob?.templateSource?.versionId === source.versionId
+                              ? rendered.url
+                              : undefined
+                          }
+                          moves={textMoves}
+                          selectedKey={
+                            selectedTextBox?.instance
+                              ? textMoveKey(selectedTextBox.instance)
+                              : undefined
+                          }
+                          onSelect={setSelectedTextKey}
+                          availableFonts={editableFonts.flatMap((font) =>
+                            font.postScriptName ? [font.postScriptName] : [],
+                          )}
+                          onMove={(move) =>
+                            setTextMoves((previous) => ({
+                              ...previous,
+                              [textMoveKey(move)]: move,
+                            }))
+                          }
+                        />
+                      ),
+                      caption:
+                        'Drag text to move it, drag a corner to resize, or drop a font onto it. Arrow keys also work. Font appearance needs a test render after Save.',
+                    };
                   const estimate =
                     picked.ratio && drawnRatios.has(picked.ratio) ? (
                       <TemplateWireframe
@@ -936,6 +1444,7 @@ export function TemplateDetail({
                         templateKey={templateKey}
                         parse={source.parse}
                         ratio={picked.ratio}
+                        comp={picked.comp?.name}
                         className="size-full bg-background"
                       />
                     ) : undefined;
@@ -947,8 +1456,9 @@ export function TemplateDetail({
                         rendered.kind === 'video' ? (
                           // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
                           <video
-                            src={`${rendered.url}#t=0.1`}
+                            src={rendered.url}
                             className="size-full object-contain"
+                            controls
                             muted
                             playsInline
                             preload="metadata"
@@ -974,176 +1484,464 @@ export function TemplateDetail({
               </div>
             )}
           </TemplateMorph>
-        </div>
-
-        <div className="flex min-w-0 flex-col divide-y divide-border">
-          <FactList
-            className="p-[var(--card-pad)]"
-            facts={[
-              { icon: CircleDot, label: 'Status', value: <TemplateStatusPill status={status} /> },
-              {
-                icon: RectangleHorizontal,
-                label: 'Formats',
-                value: ratios.length ? (
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {ratios.map((ratio) => (
-                      <span
-                        key={ratio}
-                        className="inline-flex items-center gap-1 font-mono tabular-nums"
-                      >
-                        <RatioGlyph ratio={ratio} className="text-muted-foreground" />
-                        {ratio}
-                      </span>
-                    ))}
-                  </span>
-                ) : (
-                  '—'
-                ),
-              },
-              {
-                icon: Variable,
-                label: 'Variables',
-                numeric: true,
-                value: unassigned ? `${variableCount} · ${unassigned} unassigned` : variableCount,
-              },
-              { icon: Type, label: 'Fonts', numeric: true, value: fontsFact, ruleBefore: true },
-              {
-                icon: History,
-                label: 'Last render',
-                value: jobs.length ? (
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono tabular-nums">
-                      {lastFinished
-                        ? formatRelativeTime(lastFinished.finishedAt ?? lastFinished.updatedAt)
-                        : 'None finished'}
-                    </span>
-                    <TickBar ticks={jobs.map((job) => JOB_TICK[job.status]).reverse()} />
-                  </span>
-                ) : (
-                  'Never'
-                ),
-              },
-              { icon: Layers, label: 'Sets', numeric: true, value: setCount ?? '—' },
-              {
-                icon: CalendarClock,
-                label: 'Updated',
-                value: formatDate(source.updatedAt ?? source.createdAt),
-              },
-            ]}
-          />
-
-          <Panel title="Checks" bodyClassName="p-0">
-            <CheckTable rows={checks} action={footerAction} />
-            <div className="border-t border-border">
-              <TemplateActivity
-                ref={activityTrigger}
+          {missingFootage.length > 0 ? (
+            <section
+              className="rounded-md border border-destructive/50 p-3 text-xs"
+              aria-label="Missing media repair"
+            >
+              <p className="mb-2 font-semibold">
+                {missingFootage.length} missing media file{missingFootage.length === 1 ? '' : 's'} —
+                drop each replacement onto its named row.
+              </p>
+              <SourceRebindPanel
+                repairOnly
                 brandId={brandId}
                 assetId={assetId}
-                open={activityOpen}
-                onOpenChange={setActivityOpen}
+                expectedVersionId={source.versionId}
+                aepName={source.parse?.filename}
+                missingFootage={missingFootage}
+                onNeedsReview={(versionId) => {
+                  setSavedMediaRepair(versionId);
+                  setTab('source');
+                }}
+                onConfirmed={async () => {
+                  await Promise.all([onChanged(), loadVariables()]);
+                  setSavedMediaRepair(null);
+                }}
               />
-            </div>
-          </Panel>
-        </div>
-      </div>
-
-      {templateKey ? (
-        <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
-      ) : null}
-
-      {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
-      <Tabs defaultValue={firstTab} className="gap-0">
-        <TabsList
-          variant="line"
-          className="h-9 w-full justify-start gap-3 rounded-none border-b border-border px-[var(--card-pad)]"
-        >
-          <TabsTrigger value="variables" className="flex-none px-0 text-xs">
-            Variables
-          </TabsTrigger>
-          {templateKey ? (
-            <TabsTrigger value="output" className="flex-none px-0 text-xs">
-              Output
-            </TabsTrigger>
+            </section>
           ) : null}
-          <TabsTrigger value="source" className="flex-none px-0 text-xs">
-            Source revision
-          </TabsTrigger>
-          <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-            Variants
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex-none px-0 text-xs">
-            History
-          </TabsTrigger>
-          <TabsTrigger value="details" className="flex-none px-0 text-xs">
-            Details
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="variables" keepMounted>
-          <VariableEditor
-            brandId={brandId}
-            variables={variables}
-            savedDefaults={savedDefaults}
-            parseState={parseState}
-            saving={saving}
-            onSave={onSave}
-          />
-        </TabsContent>
-        {templateKey ? (
-          <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
-            {/* Renders nothing until the template's contract carries output settings. */}
-            {/* The server resolves which binding holds this key; the page never asks. */}
-            <OutputSettingsPanel brandId={brandId} templateKey={templateKey} bindingId={null} />
+          {(source.family === 'after_effects' || source.family === 'after_effects_package') &&
+          source.parseState === 'parsed' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {editingText ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      savingText ||
+                      !Object.values(textMoves).some(
+                        (move) => move.dx || move.dy || move.dw || move.dh || move.font,
+                      )
+                    }
+                    onClick={() => void saveTextMoves()}
+                  >
+                    {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+                    Save text layout
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={savingText}
+                    onClick={() => {
+                      setEditingText(false);
+                      setTextMoves({});
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    Boolean(savedTextRepair) ||
+                    !wireframeFrames(source.parse).some((frame) =>
+                      frame.boxes.some((box) => box.kind === 'text' && box.instance),
+                    )
+                  }
+                  title="Move and resize measured text layers in the uploaded AEP"
+                  onClick={() => setEditingText(true)}
+                >
+                  Repair text
+                </Button>
+              )}
+            </div>
+          ) : null}
+          {editingText ? (
+            <div className="flex flex-col gap-2 text-xs">
+              <p className="text-muted-foreground">
+                Select text on the preview, then click a font here or drag it onto any text box.
+              </p>
+              {selectedTextBox ? (
+                <label className="flex items-center gap-2">
+                  <span className="min-w-32 truncate">{selectedTextBox.label}</span>
+                  <select
+                    className="min-w-0 flex-1 rounded border border-input bg-background p-1"
+                    aria-label={`Font for ${selectedTextBox.label}`}
+                    value={textMoves[textMoveKey(selectedTextBox.instance!)]?.font ?? ''}
+                    onChange={(event) => applyTextFont(event.currentTarget.value)}
+                  >
+                    <option value="">Keep current font</option>
+                    {editableFonts.map((font) => (
+                      <option key={font.id} value={font.postScriptName ?? ''}>
+                        {font.family} · {font.style}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <fieldset
+                className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded border border-dashed border-input p-2"
+                aria-label="Fonts available to drag onto text; drop font files here to add them"
+                onDragOver={(event) => {
+                  if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  if (!event.dataTransfer.files.length) return;
+                  event.preventDefault();
+                  if (!fontBusy) void addFontFiles(Array.from(event.dataTransfer.files));
+                }}
+              >
+                {editableFonts.map((font) => (
+                  <button
+                    key={font.id}
+                    type="button"
+                    draggable
+                    className="cursor-grab rounded border border-input bg-background px-2 py-1 text-left hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:cursor-grabbing"
+                    title={`Drag onto text or click to apply to ${selectedTextBox?.label ?? 'selected text'}`}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(TEXT_REPAIR_FONT_MIME, font.postScriptName ?? '');
+                      event.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    onClick={() => applyTextFont(font.postScriptName ?? '')}
+                  >
+                    {font.family} · {font.style}
+                  </button>
+                ))}
+                {editableFonts.length === 0 ? (
+                  <span className="text-muted-foreground">
+                    Drop .ttf or .otf files here, or use Add font files.
+                  </span>
+                ) : null}
+              </fieldset>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="w-fit"
+                disabled={fontBusy}
+                onClick={() => fontInput.current?.click()}
+              >
+                Add font files
+              </Button>
+              {fontCandidates && fontCandidates.missing.length > 0 ? (
+                <FontSubstitutions
+                  candidates={fontCandidates}
+                  busy={fontBusy}
+                  onUpload={() => fontInput.current?.click()}
+                  onApply={applyFontSubstitutions}
+                />
+              ) : null}
+            </div>
+          ) : null}
+          {savedTextRepair ? (
+            <div
+              role="alert"
+              className="rounded border border-warning/40 bg-warning/10 p-3 text-xs"
+            >
+              <strong>Text repair saved, not applied yet.</strong> The active template still uses
+              the previous AEP.
+              <p className="mt-1">{savedTextRepair.error}</p>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setTab('source')}
+              >
+                Review saved version
+              </Button>
+            </div>
+          ) : null}
+          {!rendered && source.parse && drawnRatios.size > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Quick layout check is ready from the uploaded template. The full test render verifies
+              motion and effects before publishing.
+            </p>
+          ) : null}
+        </div>
+
+        <Tabs value={tab} onValueChange={setTab} className="min-w-0 gap-0">
+          <TabsList
+            variant="line"
+            className="h-auto min-h-9 w-full flex-wrap justify-start gap-x-3 gap-y-1 border-b px-[var(--card-pad)] py-2"
+          >
+            <TabsTrigger value="checks">Checks</TabsTrigger>
+            <TabsTrigger value="layers">Edit layers</TabsTrigger>
+            <TabsTrigger value="variants" className="flex-none px-0 text-xs">
+              Variants {revisionCatalog?.length ? `(${revisionCatalog.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="variables" className="flex-none px-0 text-xs">
+              Variables
+            </TabsTrigger>
+            <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
+              Mapping
+            </TabsTrigger>
+            {templateKey ? (
+              <TabsTrigger value="output" className="flex-none px-0 text-xs">
+                Output
+              </TabsTrigger>
+            ) : null}
+            <TabsTrigger value="source" className="flex-none px-0 text-xs">
+              Source revision
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex-none px-0 text-xs">
+              History
+            </TabsTrigger>
+            <TabsTrigger value="details" className="flex-none px-0 text-xs">
+              Details
+            </TabsTrigger>
+
+            {templateKey ? <TabsTrigger value="renders">Render ledger</TabsTrigger> : null}
+          </TabsList>
+          <TabsContent value="checks" keepMounted>
+            <FactList
+              className="p-[var(--card-pad)]"
+              facts={[
+                { icon: CircleDot, label: 'Status', value: <TemplateStatusPill status={status} /> },
+                {
+                  icon: RectangleHorizontal,
+                  label: 'Formats',
+                  value: ratios.length ? (
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {ratios.map((ratio) => (
+                        <span
+                          key={ratio}
+                          className="inline-flex items-center gap-1 font-mono tabular-nums"
+                        >
+                          <RatioGlyph ratio={ratio} className="text-muted-foreground" />
+                          {ratio}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    '—'
+                  ),
+                },
+                {
+                  icon: Variable,
+                  label: 'Variables',
+                  numeric: true,
+                  value: unassigned ? `${variableCount} · ${unassigned} unassigned` : variableCount,
+                },
+                { icon: Type, label: 'Fonts', numeric: true, value: fontsFact, ruleBefore: true },
+                {
+                  icon: History,
+                  label: 'Last render',
+                  value: jobs.length ? (
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono tabular-nums">
+                        {lastFinished
+                          ? formatRelativeTime(lastFinished.finishedAt ?? lastFinished.updatedAt)
+                          : 'None finished'}
+                      </span>
+                      <TickBar ticks={jobs.map((job) => JOB_TICK[job.status]).reverse()} />
+                    </span>
+                  ) : (
+                    'Never'
+                  ),
+                },
+                { icon: Layers, label: 'Sets', numeric: true, value: setCount ?? '—' },
+                {
+                  icon: CalendarClock,
+                  label: 'Updated',
+                  value: formatDate(source.updatedAt ?? source.createdAt),
+                },
+              ]}
+            />
+
+            <Panel title="Checks" bodyClassName="p-0">
+              <CheckTable rows={checks} action={footerAction} />
+              <div className="border-t border-border">
+                <TemplateActivity
+                  ref={activityTrigger}
+                  brandId={brandId}
+                  assetId={assetId}
+                  open={activityOpen}
+                  onOpenChange={setActivityOpen}
+                />
+              </div>
+            </Panel>
           </TabsContent>
-        ) : null}
-        <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
-          <SourceRebindPanel
-            brandId={brandId}
-            assetId={assetId}
-            expectedVersionId={source.versionId}
-            initialFile={revisionFile}
-            onInitialFileTaken={onRevisionTaken}
-            onConfirmed={async () => {
-              await Promise.all([onChanged(), loadVariables()]);
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
-          {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
-              the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
-          <VariantsPanel
-            brandId={brandId}
-            assetId={assetId}
-            // Only when this template can actually be rendered from — a panel that offers to
-            // render a template with no key, or with nowhere to send the choice, would be the
-            // dangling affordance this whole hop exists to avoid.
-            {...(onOpenRender && templateKey
-              ? {
-                  onSelect: (ref: string | null) =>
-                    onOpenRender({ templateKey, ...(ref ? { templateRef: ref } : {}) }),
-                }
-              : {})}
-          />
-        </TabsContent>
-        <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-          <LineagePanel brandId={brandId} assetId={assetId} />
-        </TabsContent>
-        <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
-            <dt className="text-muted-foreground">Template key</dt>
-            <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
-            {/* Where the build actually RAN, read off the run. Not a choice and not a control:
+          <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
+            <TemplateLayerEditor
+              brandId={brandId}
+              assetId={assetId}
+              active={tab === 'layers'}
+              versionId={source.versionId}
+              name={source.displayName ?? source.parse?.filename ?? 'Template'}
+              parse={source.parse}
+              onSaved={async () => {
+                await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+                await Promise.all([onChanged(), loadVariables()]);
+              }}
+              onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
+              initialComp={initialComp}
+            />
+          </TabsContent>
+          <TabsContent value="variables" keepMounted>
+            <VariableEditor
+              brandId={brandId}
+              variables={variables}
+              savedDefaults={savedDefaults}
+              savedBindings={savedBindings}
+              parseState={parseState}
+              saving={saving}
+              onSave={onSave}
+            />
+          </TabsContent>
+          <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
+            <TemplateMappingReviewPanel review={mappingReview ?? null} />
+          </TabsContent>
+          {templateKey ? (
+            <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
+              {/* Renders nothing until the template's contract carries output settings. */}
+              {/* The server resolves which binding holds this key; the page never asks. */}
+              <OutputSettingsPanel brandId={brandId} templateKey={templateKey} bindingId={null} />
+            </TabsContent>
+          ) : null}
+          <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
+            {selectedRevisionVariant ? (
+              <div className="space-y-2 text-xs">
+                <p>
+                  {DESIGN_SOURCE[selectedRevisionVariant.sourceKind]
+                    ? `This template is built from ${DESIGN_SOURCE[selectedRevisionVariant.sourceKind]} file, kept as an immutable revision. To change the design, edit its layers and save them as a new variant.`
+                    : 'This source belongs to an immutable template revision. To replace an After Effects project, upload an authored variant.'}
+                </p>
+                {DESIGN_SOURCE[selectedRevisionVariant.sourceKind] ? (
+                  <Button size="xs" variant="outline" onClick={() => setTab('layers')}>
+                    Edit layers
+                  </Button>
+                ) : (
+                  <Button size="xs" variant="outline" onClick={() => setTab('variants')}>
+                    Open variants
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <SourceRebindPanel
+                brandId={brandId}
+                assetId={assetId}
+                expectedVersionId={source.versionId}
+                suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
+                aepName={source.parse?.filename}
+                missingFootage={missingFootage}
+                initialFile={revisionFile}
+                onInitialFileTaken={onRevisionTaken}
+                onConfirmed={async () => {
+                  await Promise.all([onChanged(), loadVariables()]);
+                  setSavedTextRepair(null);
+                  setSavedMediaRepair(null);
+                }}
+              />
+            )}
+          </TabsContent>
+          <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
+            <VariantsPanel
+              brandId={brandId}
+              assetId={assetId}
+              expectedVersionId={source.versionId}
+              onInspect={(assetId) => onOpenVariant?.(assetId, 'variants')}
+              onDelete={onDeleteVariant}
+              onCreated={async (variant) => {
+                await onChanged();
+                await onOpenVariant?.(variant.assetId);
+              }}
+              onRender={onOpenRender}
+              onEditLayers={() => setTab('layers')}
+            />
+          </TabsContent>
+          <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
+            {revisionCatalog ? (
+              <ol aria-label="Template revision history" className="space-y-3">
+                {revisionCatalog
+                  .flatMap((variant) =>
+                    variant.revisions.map((revision) => ({ variant, revision })),
+                  )
+                  .sort((a, b) => b.revision.createdAt.localeCompare(a.revision.createdAt))
+                  .map(({ variant, revision }) => (
+                    <li key={revision.id} className="rounded-md border p-3 text-xs">
+                      <p className="font-medium">
+                        {variant.name} · Revision {revision.number}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {new Date(revision.createdAt).toLocaleString()} ·{' '}
+                        {revision.publications.length ? 'Published' : 'Draft'}
+                      </p>
+                      {onOpenVariant ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => void onOpenVariant(revision.sourceAssetId, 'history')}
+                        >
+                          Inspect revision
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+              </ol>
+            ) : (
+              <p className="text-xs text-muted-foreground">Reading revision history…</p>
+            )}
+          </TabsContent>
+          <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
+              <dt className="text-muted-foreground">Template key</dt>
+              <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
+              {/* Where the build actually RAN, read off the run. Not a choice and not a control:
                 the Details tab is operator plumbing, and a build has exactly one home. */}
-            <dt className="text-muted-foreground">Rendered in</dt>
-            <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
-            <dt className="text-muted-foreground">Root table</dt>
-            <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
-            <dt className="text-muted-foreground">Asset id</dt>
-            <dd className="break-all font-mono">{assetId}</dd>
-            <dt className="text-muted-foreground">Source file</dt>
-            <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
-          </dl>
-        </TabsContent>
-      </Tabs>
+              <dt className="text-muted-foreground">Rendered in</dt>
+              <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
+              <dt className="text-muted-foreground">Root table</dt>
+              <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
+              <dt className="text-muted-foreground">Asset id</dt>
+              <dd className="break-all font-mono">{assetId}</dd>
+              <dt className="text-muted-foreground">Original file</dt>
+              <dd>
+                {(() => {
+                  const original = variantCatalog?.find((variant) => variant.assetId === assetId);
+                  return original ? (
+                    <Button
+                      size="xs"
+                      variant="link"
+                      className="h-auto p-0 text-xs"
+                      onClick={() =>
+                        void downloadLibraryAsset({
+                          brandId,
+                          assetId: original.originalAssetId,
+                          versionId: original.originalVersionId,
+                          fileName: original.originalFileName,
+                        }).catch((error) => toast.error(error.message))
+                      }
+                    >
+                      {original.originalFileName}
+                    </Button>
+                  ) : (
+                    '—'
+                  );
+                })()}
+              </dd>
+              <dt className="text-muted-foreground">Uploaded</dt>
+              <dd>{new Date(source.createdAt).toLocaleString()}</dd>
+              <dt className="text-muted-foreground">Source revision</dt>
+              <dd className="break-all font-mono">{source.versionId}</dd>
+              <dt className="text-muted-foreground">Source file</dt>
+              <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
+            </dl>
+          </TabsContent>
+
+          {templateKey ? (
+            <TabsContent value="renders" keepMounted>
+              <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
+            </TabsContent>
+          ) : null}
+        </Tabs>
+      </div>
 
       <AlertDialog open={fontPlan !== null} onOpenChange={(open) => !open && setFontPlan(null)}>
         <AlertDialogContent>

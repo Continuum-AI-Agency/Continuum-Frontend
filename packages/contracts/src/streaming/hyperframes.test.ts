@@ -99,4 +99,19 @@ describe('HyperFrames composition spec', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('accepts a 90-second composition and rejects a longer one', () => {
+    const extended = {
+      ...spec,
+      duration_seconds: 90,
+      scenes: [
+        { ...spec.scenes[0], start_seconds: 75, duration_seconds: 15 },
+        ...spec.scenes.slice(1),
+      ],
+    };
+    expect(compositionSpecSchema.safeParse(extended).success).toBe(true);
+    expect(compositionSpecSchema.safeParse({ ...extended, duration_seconds: 91 }).success).toBe(
+      false,
+    );
+  });
 });

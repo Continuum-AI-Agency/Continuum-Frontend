@@ -7,6 +7,7 @@ import type {
   ApiRenderInputSet,
   ApiRenderInputValue,
   ApiRenderPreflightRequest,
+  ApiRenderTemplateContract,
   ApiRenderTemplateSummary,
   ApiRenderWorkspaceStatus,
   MediaAsset,
@@ -51,11 +52,13 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ApiRenderNodeData, StudioNode } from '../types';
 import { apiRendersApi } from './api-render/apiRendersApi';
+import { CanvasRenderPreview, type CanvasPreviewCase } from './api-render/CanvasRenderPreview';
 import { RenderFitMap } from './api-render/RenderFitMap';
 import { RenderVariableFields } from './api-render/RenderVariableFields';
 import { describeRenderDiscoveryFailure } from './api-render/renderDiscoveryCopy';
 import {
   inspectApiRenderMediaInputs,
+  resolveApiRenderVariables,
   resolveApiRenderVariations,
 } from './api-render/resolveApiRenderVariables';
 import { useApiRenderJobs } from './api-render/useApiRenderJobs';
@@ -251,26 +254,6 @@ export function ApiRenderBlock({
     };
   }, [brandId, data.templateKey]);
 
-  // The saved sets, for their NAMES only — a batch record is labelled with the preset it came
-  // from, and the inspector that owns the preset UI is not mounted when a render is submitted
-  // from the node. Losing this left every batch record labelled with a raw uuid.
-  useEffect(() => {
-    if (!brandId || !data.templateKey) {
-      setInputSets([]);
-      return;
-    }
-    let cancelled = false;
-    void apiRendersApi
-      .listInputSets(brandId, data.templateKey)
-      .then((response) => !cancelled && setInputSets(response.items))
-      .catch(() => {
-        // A missing set list must not block rendering; the label falls back to the id.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, data.templateKey]);
-
   const selectTemplate = useCallback(
     async (template: ApiRenderTemplateSummary) => {
       if (!brandId) return;
@@ -335,6 +318,52 @@ export function ApiRenderBlock({
     [data, edges, id, nodes],
   );
   const variationCount = batchIds.length || (data.inputSetId ? 1 : variations.count);
+  const previewCases: CanvasPreviewCase[] = batchIds.length
+    ? batchIds.flatMap((setId) => {
+        const set = inputSets.find((item) => item.id === setId);
+        return set ? [{ key: set.id, label: set.name, values: set.variables }] : [];
+      })
+    : data.inputSetId
+      ? inputSets.flatMap((set) =>
+          set.id === data.inputSetId
+            ? [{ key: set.id, label: set.name, values: set.variables }]
+            : [],
+        )
+      : variations.records.length
+        ? variations.records.map((record, index) => ({
+            key: String(index),
+            label: record.label,
+            values: record.variables,
+          }))
+        : [
+            {
+              key: 'current',
+              label: 'Current values',
+              values: resolveApiRenderVariables({ nodeId: id, data, nodes, edges }).variables,
+            },
+          ];
+  const syncPreviewContract = useCallback(
+    (contract: ApiRenderTemplateContract) => {
+      if (contract.template.key !== data.templateKey || contract.template.contractHash !== data.contractHash) return;
+      const next = {
+        variableDefinitions: contract.variables,
+        templateLayout: contract.layout,
+        templateFonts: contract.fonts,
+        templateRatios: contract.template.ratios,
+      };
+      if (
+        JSON.stringify(next) ===
+        JSON.stringify({
+          variableDefinitions: data.variableDefinitions,
+          templateLayout: data.templateLayout,
+          templateFonts: data.templateFonts,
+          templateRatios: data.templateRatios,
+        })
+      ) return;
+      patchData(next);
+    },
+    [data, patchData],
+  );
 
   /**
    * The placement check, run here the moment artwork is chosen.
@@ -620,7 +649,25 @@ export function ApiRenderBlock({
               {/* The layout, to scale, with the chosen artwork drawn where it lands. Only when
                   the template carries measurements — a drawing of a template nobody parsed
                   would be a picture of nothing. */}
-              <RenderFitMap layout={data.templateLayout ?? null} verdicts={fit.verdicts} />
+              {selected && brandId && data.contractHash ? (
+                <>
+                  {variations.errors.length ? (
+                    <p className="text-2xs text-warning">{variations.errors.join(' · ')}</p>
+                  ) : null}
+                  <CanvasRenderPreview
+                    key={`${data.bindingId ?? 'default'}:${data.templateKey}`}
+                    brandId={brandId}
+                    bindingId={data.bindingId ?? null}
+                    templateKey={data.templateKey}
+                    contractHash={data.contractHash}
+                    nodeId={id}
+                    cases={previewCases}
+                    onContract={syncPreviewContract}
+                  />
+                </>
+              ) : (
+                <RenderFitMap layout={data.templateLayout ?? null} verdicts={fit.verdicts} />
+              )}
               <RenderVariableFields
                 definitions={data.variableDefinitions ?? []}
                 values={data.variables}

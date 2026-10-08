@@ -1,9 +1,13 @@
 import {
+  type CustomFieldOptions,
+  type CustomFieldType,
   createCustomFieldRequestSchema,
+  customFieldChoiceOptions,
   customFieldSchema,
   deleteCustomFieldRequestSchema,
   listCustomFieldsResponseSchema,
   MAX_CUSTOM_FIELDS_PER_BRAND,
+  optionsSchemaFor,
   updateCustomFieldRequestSchema,
 } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
@@ -47,11 +51,22 @@ function isResponse(value: Session | Response): value is Response {
   return value instanceof Response;
 }
 
-// A select is defined by its options; text and date have none, and letting an
-// option list ride along on them would leave a vocabulary nothing can select.
-function optionsFor(type: string, options: unknown[] | undefined): unknown[] {
-  return type === 'single_select' || type === 'multi_select' ? (options ?? []) : [];
+// Options are stored in the one shape each type takes (the DB check enforces it):
+// the choice list for the selects and status, {max} for rating, [] for the rest.
+// The request schema already refused a shape that does not fit the type.
+function optionsFor(
+  type: CustomFieldType,
+  options: CustomFieldOptions | undefined,
+): CustomFieldOptions {
+  if (type === 'rating') return options && !Array.isArray(options) ? options : {};
+  return CHOICE_TYPES.has(type) && options ? customFieldChoiceOptions({ options }) : [];
 }
+
+const CHOICE_TYPES: ReadonlySet<CustomFieldType> = new Set([
+  'single_select',
+  'multi_select',
+  'status',
+]);
 
 // GET /api/library/custom-fields?brandId — the brand's field vocabulary, seeded
 // with the defaults on first read.
@@ -153,17 +168,23 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Field not found' }, { status: 404 });
   }
 
-  const isSelect = field.type === 'single_select' || field.type === 'multi_select';
   if (options !== undefined) {
-    if (!isSelect) {
+    if (!CHOICE_TYPES.has(field.type) && field.type !== 'rating') {
       return NextResponse.json(
         { error: `A ${field.type} field does not take options` },
         { status: 422 },
       );
     }
-    if (options.length === 0) {
+    if (!optionsSchemaFor(field.type).safeParse(options).success) {
       return NextResponse.json(
-        { error: 'A select field needs at least one option' },
+        {
+          error:
+            field.type === 'rating'
+              ? 'A rating is out of 1 to 10'
+              : field.type === 'status'
+                ? 'Every status needs a label and a #rrggbb colour'
+                : 'A select field needs at least one option',
+        },
         { status: 422 },
       );
     }

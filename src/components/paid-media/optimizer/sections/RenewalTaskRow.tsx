@@ -40,7 +40,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
         {/* A task is only on the board while its signal still fires: opened when it was
             approved, re-asserted by the latest cycle. If a cycle stops raising it, the
             engine closes the task itself. */}
-        <p className="mt-0.5 text-2xs text-muted-foreground tabular-nums">
+        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
           opened {TASK_DATE.format(new Date(task.created_at))}
           {task.last_asserted_at
             ? ` · still firing as of ${TASK_DATE.format(new Date(task.last_asserted_at))}`
@@ -68,7 +68,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           </p>
         ) : null}
         {brief ? (
-          <div className="mt-2 space-y-1 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
+          <div className="mt-2 space-y-1 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
             <p className="font-medium text-foreground">{brief.title}</p>
             <p className="leading-relaxed">{brief.brief}</p>
             {brief.groundedOn.length > 0 ? (

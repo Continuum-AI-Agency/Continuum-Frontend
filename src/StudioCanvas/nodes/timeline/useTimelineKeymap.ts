@@ -1,35 +1,65 @@
 import { useEffect, useRef } from 'react';
 
-// In-editor keyboard map for the Video Editor dialog. The canvas-level handlers
-// stand down while the editor is open (keyboardScope === 'modal'), so this owns
-// the keys instead: Delete removes the selected clip (NOT the canvas node),
-// Space toggles playback, S splits at the playhead, arrows scrub. Latest props
-// are read through a ref so the window listener is registered once per open and
-// never re-binds on every playhead tick.
+// The Video Studio's keyboard map. One window listener, registered once per mount;
+// the latest handlers are read through a ref so it never re-binds on a playhead tick.
+// Keys never fire while a text field has focus, so the inspector's inputs keep theirs.
 
 const FRAME_STEP_SEC = 1 / 30;
 const COARSE_STEP_SEC = 1;
 
-export interface TimelineKeymapParams {
-  enabled: boolean;
-  playheadSec: number;
-  totalSec: number;
-  onSeek: (sec: number) => void;
-  onTogglePlay: () => void;
-  onDeleteSelected: () => void;
-  onSplitAtPlayhead: () => void;
-  onDuplicateSelected: () => void;
-  onToggleMarker: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-}
+export type TimelineShortcut =
+  | 'togglePlay'
+  | 'shuttleBack'
+  | 'pause'
+  | 'shuttleForward'
+  | 'frameBack'
+  | 'frameForward'
+  | 'secondBack'
+  | 'secondForward'
+  | 'toStart'
+  | 'toEnd'
+  | 'split'
+  | 'trimStartToPlayhead'
+  | 'trimEndToPlayhead'
+  | 'rippleDelete'
+  | 'undo'
+  | 'redo'
+  | 'copy'
+  | 'paste'
+  | 'duplicate'
+  | 'palette'
+  | 'marker'
+  | 'deselect';
 
-type TimelineHistoryKey = Pick<
-  KeyboardEvent,
-  'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'
->;
+/** How each shortcut is written in tooltips and the ⌘K palette. */
+export const TIMELINE_SHORTCUT_KEYS: Record<TimelineShortcut, string> = {
+  togglePlay: 'Space',
+  shuttleBack: 'J',
+  pause: 'K',
+  shuttleForward: 'L',
+  frameBack: '←',
+  frameForward: '→',
+  secondBack: '⇧←',
+  secondForward: '⇧→',
+  toStart: 'Home',
+  toEnd: 'End',
+  split: 'S',
+  trimStartToPlayhead: 'Q',
+  trimEndToPlayhead: 'W',
+  rippleDelete: '⌫',
+  undo: '⌘Z',
+  redo: '⇧⌘Z',
+  copy: '⌘C',
+  paste: '⌘V',
+  duplicate: '⌘D',
+  palette: '⌘K',
+  marker: 'M',
+  deselect: 'Esc',
+};
 
-export function resolveTimelineHistoryShortcut(event: TimelineHistoryKey): 'undo' | 'redo' | null {
+type ShortcutKey = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>;
+
+export function resolveTimelineHistoryShortcut(event: ShortcutKey): 'undo' | 'redo' | null {
   if (event.altKey || (!event.metaKey && !event.ctrlKey)) return null;
   const key = event.key.toLowerCase();
   if (key === 'z') return event.shiftKey ? 'redo' : 'undo';
@@ -37,93 +67,130 @@ export function resolveTimelineHistoryShortcut(event: TimelineHistoryKey): 'undo
   return null;
 }
 
+const COMMAND_KEYS: Record<string, TimelineShortcut> = {
+  c: 'copy',
+  v: 'paste',
+  d: 'duplicate',
+  k: 'palette',
+};
+
+const PLAIN_KEYS: Record<string, TimelineShortcut> = {
+  ' ': 'togglePlay',
+  j: 'shuttleBack',
+  k: 'pause',
+  l: 'shuttleForward',
+  s: 'split',
+  q: 'trimStartToPlayhead',
+  w: 'trimEndToPlayhead',
+  m: 'marker',
+  delete: 'rippleDelete',
+  backspace: 'rippleDelete',
+  home: 'toStart',
+  end: 'toEnd',
+  escape: 'deselect',
+};
+
+export function resolveTimelineShortcut(event: ShortcutKey): TimelineShortcut | null {
+  const history = resolveTimelineHistoryShortcut(event);
+  if (history) return history;
+  const key = event.key.toLowerCase();
+  if (event.metaKey || event.ctrlKey) return event.altKey ? null : (COMMAND_KEYS[key] ?? null);
+  if (event.altKey) return null;
+  if (key === 'arrowleft') return event.shiftKey ? 'secondBack' : 'frameBack';
+  if (key === 'arrowright') return event.shiftKey ? 'secondForward' : 'frameForward';
+  return PLAIN_KEYS[key] ?? null;
+}
+
+const SEEK_STEPS: Partial<Record<TimelineShortcut, number>> = {
+  frameBack: -FRAME_STEP_SEC,
+  frameForward: FRAME_STEP_SEC,
+  secondBack: -COARSE_STEP_SEC,
+  secondForward: COARSE_STEP_SEC,
+};
+
+export interface TimelineKeymapParams {
+  enabled: boolean;
+  /** Read at key time: the playhead moves every frame and must not re-render the host. */
+  getPlayheadSec: () => number;
+  totalSec: number;
+  onSeek: (sec: number) => void;
+  /**
+   * Every shortcut except seeking. An absent handler, or one that returns `false`, leaves
+   * the key to the browser — ⌘C over selected text still copies the text.
+   */
+  handlers: Partial<Record<TimelineShortcut, () => boolean | undefined | void>>;
+}
+
+const TEXT_INPUT_TYPES = new Set([
+  '',
+  'text',
+  'search',
+  'email',
+  'url',
+  'tel',
+  'password',
+  'number',
+  'date',
+  'time',
+]);
+
 function isTextEntryTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
+  if (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+    return true;
+  }
+  return target instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(target.type);
 }
+
+/** A slider keeps its own arrow keys. */
+const isRangeTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  ((target instanceof HTMLInputElement && target.type === 'range') ||
+    target.getAttribute('role') === 'slider');
+
+/**
+ * An open modal (palette, export, Library picker, a sheet) owns the keyboard. Matched by
+ * the modal popups themselves: toasts are `role="dialog"` too, and a toast must not
+ * switch the shortcuts off.
+ */
+const MODAL_SELECTOR =
+  '[data-slot="dialog-content"],[data-slot="alert-dialog-content"],[data-slot="sheet-content"],[role="dialog"][aria-modal="true"]';
+const dialogIsOpen = (): boolean => Boolean(document.querySelector(MODAL_SELECTOR));
 
 export function useTimelineKeymap(params: TimelineKeymapParams): void {
   const paramsRef = useRef(params);
   paramsRef.current = params;
-
   const { enabled } = params;
 
   useEffect(() => {
     if (!enabled) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
       const current = paramsRef.current;
-      if (!current.enabled) return;
-      // Never hijack typing in the inspector's numeric fields.
-      if (isTextEntryTarget(event.target)) return;
-      const historyCommand = resolveTimelineHistoryShortcut(event);
-      if (historyCommand) {
+      if (!current.enabled || isTextEntryTarget(event.target) || dialogIsOpen()) return;
+      const shortcut = resolveTimelineShortcut(event);
+      if (!shortcut) return;
+      const clamp = (sec: number) => Math.max(0, Math.min(current.totalSec, sec));
+      const step = SEEK_STEPS[shortcut];
+      if (step !== undefined) {
+        if (isRangeTarget(event.target)) return;
         event.preventDefault();
-        if (historyCommand === 'undo') current.onUndo();
-        else current.onRedo();
+        current.onSeek(clamp(current.getPlayheadSec() + step));
         return;
       }
-      // Leave other OS/browser combos alone.
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-      const clamp = (sec: number) => Math.max(0, Math.min(current.totalSec, sec));
-
-      switch (event.key) {
-        case 'Delete':
-        case 'Backspace':
-          event.preventDefault();
-          current.onDeleteSelected();
-          return;
-        case ' ': {
-          // Let a focused button (Play, or a dnd-kit sortable clip which carries
-          // role="button") handle its own Space so we don't double-fire.
-          const target = event.target as HTMLElement | null;
-          if (target?.closest('button,[role="button"]')) return;
-          event.preventDefault();
-          current.onTogglePlay();
-          return;
-        }
-        case 'ArrowLeft':
-          event.preventDefault();
-          current.onSeek(
-            clamp(current.playheadSec - (event.shiftKey ? COARSE_STEP_SEC : FRAME_STEP_SEC)),
-          );
-          return;
-        case 'ArrowRight':
-          event.preventDefault();
-          current.onSeek(
-            clamp(current.playheadSec + (event.shiftKey ? COARSE_STEP_SEC : FRAME_STEP_SEC)),
-          );
-          return;
-        case 'Home':
-          event.preventDefault();
-          current.onSeek(0);
-          return;
-        case 'End':
-          event.preventDefault();
-          current.onSeek(current.totalSec);
-          return;
-        case 's':
-        case 'S':
-          event.preventDefault();
-          current.onSplitAtPlayhead();
-          return;
-        case 'd':
-        case 'D':
-          event.preventDefault();
-          current.onDuplicateSelected();
-          return;
-        case 'm':
-        case 'M':
-          event.preventDefault();
-          current.onToggleMarker();
-          return;
-        default:
-          return;
+      if (shortcut === 'toStart' || shortcut === 'toEnd') {
+        event.preventDefault();
+        current.onSeek(shortcut === 'toStart' ? 0 : current.totalSec);
+        return;
       }
+      const handler = current.handlers[shortcut];
+      if (!handler) return;
+      // Space plays; it never re-presses whichever toolbar button was clicked last.
+      if (shortcut === 'togglePlay' && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      if (handler() === false) return;
+      event.preventDefault();
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [enabled]);

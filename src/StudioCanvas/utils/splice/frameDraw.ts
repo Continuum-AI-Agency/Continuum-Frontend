@@ -1,3 +1,5 @@
+import type { ShaderEffectV1 } from '@continuum/contracts';
+import { resolveShaderParameter } from '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack';
 import { chromaKeyImageData } from '../pixel/chromaKey';
 import {
   applyCanvasFilter,
@@ -8,8 +10,8 @@ import {
   opacityFor,
   resolveTransformAt,
 } from '../render/effectSpec';
-import { hasShaderStack, shaderStackFromClipEffects } from '../render/shaderStack';
-import { computeLetterboxRect, drawLetterboxed } from './letterbox';
+import { shaderStackFromClipEffects } from '../render/shaderStack';
+import { computeCropRects, drawCanvasBackground, drawLetterboxed, type FitRect } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
 // draws a single letterboxed frame with the clip's effects (used for solos);
@@ -48,10 +50,12 @@ function scratchContext(width: number, height: number): Ctx | null {
 
 // ---- The pixel-effect primitives -------------------------------------------
 //
-// `vignette`, `filmGrain`, `pixelate`, `chromaticAberration` and `vhs` are the five
-// effect presets with no CSS `filter` equivalent, so they cannot ride `filterString`
-// and cannot appear in the DOM preview (`unpreviewableEffects` names them). Each is a
-// draw-time step here instead.
+// `vignette`, `filmGrain`, `pixelate`, `chromaticAberration`, `vhs`, `tint` and the
+// chroma key have no CSS `filter` equivalent, so they cannot ride `filterString`. Each
+// is a draw-time step here instead — and ONLY here. This is the one path a look takes in
+// an export, in the browser and on Render alike: no WebGPU (Render's headless Chrome has
+// no adapter), and no second pass over the same look (the shader stack used to re-apply
+// every one of these on a frame this pass had already drawn).
 //
 // They all share ONE `getImageData`/`putImageData` round trip with the chroma key,
 // because that round trip — not the arithmetic inside it — is the expensive part of
@@ -71,6 +75,13 @@ function scratchContext(width: number, height: number): Ctx | null {
 function hashNoise(x: number, y: number, seed: number): number {
   const hashed = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
   return (hashed - Math.floor(hashed)) * 2 - 1;
+}
+
+// Same integer PCG as the shared WGSL: particle positions survive GPU/backend changes.
+function pcg(value: number): number {
+  const state = (Math.imul(value, 747796405) + 2891336453) >>> 0;
+  const word = Math.imul((state >>> ((state >>> 28) + 4)) ^ state, 277803737) >>> 0;
+  return ((word >>> 22) ^ word) >>> 0;
 }
 
 const clamp01 = (value: number): number =>
@@ -110,12 +121,21 @@ export function applyPixelEffects(
   width: number,
   height: number,
   t: number,
+  viewport: FitRect = { x: 0, y: 0, width, height },
 ): void {
   const { data } = image;
   const aberration = effects.chromaticAberration?.amount ?? 0;
   const vhs = effects.vhs?.amount ?? 0;
   const grain = effects.filmGrain?.amount ?? 0;
+  const dust = clamp01(effects.dust?.amount ?? 0);
+  const leak = clamp01(effects.lightLeaks?.amount ?? 0);
+  const cell = Math.max(8, Math.floor(Math.min(width, height) / 18));
+  const radius = Math.max(1, Math.floor(cell / 10));
+  const dustSeed = pcg(Math.floor(Math.max(0, t) * 12));
+  const phase = 1 - Math.abs(((Math.max(0, t) / 4) % 1) * 2 - 1);
   const vignette = effects.vignette?.amount ?? 0;
+  const tintAmount = clamp01(effects.tint?.amount ?? 0);
+  const tint = tintAmount > 0 ? hexRgb(effects.tint?.color) : undefined;
 
   if (effects.chromaKey) chromaKeyImageData(image, effects.chromaKey);
 
@@ -159,6 +179,38 @@ export function applyPixelEffects(
         data[i + 2] = b;
       }
 
+      if (tint) {
+        // A colour grade over the picture: mix toward the tint, as the shader stack did.
+        data[i] += (tint[0] - data[i]) * tintAmount;
+        data[i + 1] += (tint[1] - data[i + 1]) * tintAmount;
+        data[i + 2] += (tint[2] - data[i + 2]) * tintAmount;
+      }
+
+      if (dust > 0) {
+        const h = pcg(Math.floor((x + 0.5) / cell) ^ pcg(Math.floor((y + 0.5) / cell) ^ dustSeed));
+        if (h % 5 === 0) {
+          const dx = ((x + 0.5) % cell) - (((h >>> 8) % cell) + 0.5);
+          const dy = ((y + 0.5) % cell) - (((h >>> 16) % cell) + 0.5);
+          const opacity = dust * 0.8 * clamp01(1 - (dx * dx + dy * dy) / (radius * radius));
+          const target = h % 2 === 0 ? 245 : 15;
+          for (let c = 0; c < 3; c++) data[i + c] += (target - data[i + c]) * opacity;
+        }
+      }
+      if (leak > 0) {
+        const u = (x + 0.5 - viewport.x) / viewport.width,
+          v = (y + 0.5 - viewport.y) / viewport.height;
+        const left = clamp01(
+          1 - ((u + 0.12 - phase * 0.15) / 0.5) ** 2 - ((v - 0.25 - phase * 0.5) / 0.85) ** 2,
+        );
+        const right = clamp01(
+          1 - ((u - 1.12 + phase * 0.15) / 0.5) ** 2 - ((v - 0.75 + phase * 0.5) / 0.85) ** 2,
+        );
+        const exposure = leak * 0.75 * clamp01(left * left + right * right);
+        data[i] += (255 - data[i]) * exposure;
+        data[i + 1] += (255 - data[i + 1]) * exposure * 0.32;
+        data[i + 2] += (255 - data[i + 2]) * exposure * 0.09;
+      }
+
       let delta = rowNoise;
       if (grain > 0) delta += hashNoise(x, y, frameSeed) * clamp01(grain) * 32;
 
@@ -179,6 +231,64 @@ export function applyPixelEffects(
       }
     }
   }
+}
+
+/** `#rrggbb` → 0..255 channels; anything else is black, as the shader stack read it. */
+function hexRgb(hex: string | undefined): [number, number, number] {
+  const valid = /^#[\da-f]{6}$/i.test(hex ?? '') ? (hex as string) : '#000000';
+  return [1, 3, 5].map((offset) => Number.parseInt(valid.slice(offset, offset + 2), 16)) as [
+    number,
+    number,
+    number,
+  ];
+}
+
+/**
+ * The looks to draw at `timeSec`, all as pixel-pass fields. A clip's own fields win; an
+ * explicit shader stack (a canvas shader node's deferred preset) is sampled at the frame's
+ * time — keyframes included — into the same fields, so it draws through the same pass.
+ */
+export function pixelLooks(effects: ClipEffectSpec, timeSec: number): ClipEffectSpec {
+  const stack = effects.shaderStack?.effects.filter((effect) => effect.enabled) ?? [];
+  if (stack.length === 0) return effects;
+  const looks: ClipEffectSpec = { ...effects };
+  for (const effect of stack) {
+    const at = (name: ShaderEffectV1['keyframes'][number]['parameterName']): number => {
+      const value = resolveShaderParameter(effect, name, timeSec);
+      return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    };
+    const color = effect.parameters.color ?? '#000000';
+    switch (effect.effectId) {
+      case 'chroma_key':
+        looks.chromaKey ??= { color, tolerance: at('tolerance'), softness: at('softness') };
+        break;
+      case 'tint':
+        looks.tint ??= { color, amount: at('amount') };
+        break;
+      case 'vignette':
+        looks.vignette ??= { amount: at('amount') };
+        break;
+      case 'film_grain':
+        looks.filmGrain ??= { amount: at('amount') };
+        break;
+      case 'dust':
+        looks.dust ??= { amount: at('amount') };
+        break;
+      case 'light_leaks':
+        looks.lightLeaks ??= { amount: at('amount') };
+        break;
+      case 'pixelate':
+        looks.pixelate ??= { blockPx: at('blockPx') };
+        break;
+      case 'chromatic_aberration':
+        looks.chromaticAberration ??= { amount: at('amount') };
+        break;
+      case 'vhs':
+        looks.vhs ??= { amount: at('amount') };
+        break;
+    }
+  }
+  return looks;
 }
 
 /** Mosaic the scratch in place: downscale with smoothing off, then blow it back up. */
@@ -223,42 +333,47 @@ async function prepareSource(
   sourceHeight: number,
   effects: ClipEffectSpec | undefined,
   timeSec: number,
+  viewport: FitRect,
 ): Promise<CanvasImageSource> {
-  if (sourceWidth <= 0 || sourceHeight <= 0) return source;
-  const hasPixels = Boolean(
-    effects?.chromaKey ||
-      effects?.chromaticAberration?.amount ||
-      effects?.vhs?.amount ||
-      effects?.filmGrain?.amount ||
-      effects?.vignette?.amount ||
-      effects?.pixelate?.blockPx,
-  );
-  if (!hasPixels && !hasShaderStack(effects)) return source;
-
-  let prepared = source;
-  if (hasPixels && effects) {
-    const buffer = scratchContext(sourceWidth, sourceHeight);
-    if (buffer) {
-      buffer.drawImage(source, 0, 0, sourceWidth, sourceHeight);
-      if (effects.pixelate?.blockPx) {
-        pixelateScratch(buffer, sourceWidth, sourceHeight, effects.pixelate.blockPx);
-      }
-      const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
-      applyPixelEffects(image, effects, sourceWidth, sourceHeight, timeSec);
-      buffer.putImageData(image, 0, 0);
-      prepared = scratch as OffscreenCanvas;
-    }
+  if (sourceWidth <= 0 || sourceHeight <= 0 || !effects) return source;
+  // Multiple effects in an explicit stack must keep their authored order.
+  const stack = effects.shaderStack ? shaderStackFromClipEffects(effects) : undefined;
+  if (stack && stack.effects.filter((effect) => effect.enabled).length > 1) {
+    const { renderShaderStackFrame } = await import(
+      '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+    );
+    return renderShaderStackFrame({
+      source,
+      width: sourceWidth,
+      height: sourceHeight,
+      stack,
+      timeSec,
+      viewport,
+    });
   }
-
-  if (!hasShaderStack(effects)) return prepared;
-  const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
-  return renderShaderStackFrame({
-    source: prepared,
-    width: sourceWidth,
-    height: sourceHeight,
-    stack: shaderStackFromClipEffects(effects),
-    timeSec,
-  });
+  const looks = pixelLooks(effects, timeSec);
+  const hasPixels = Boolean(
+    looks.chromaKey ||
+      looks.chromaticAberration?.amount ||
+      looks.vhs?.amount ||
+      looks.filmGrain?.amount ||
+      looks.dust?.amount ||
+      looks.lightLeaks?.amount ||
+      looks.vignette?.amount ||
+      (looks.tint?.amount ?? 0) > 0 ||
+      (looks.pixelate?.blockPx ?? 0) >= 2,
+  );
+  if (!hasPixels) return source;
+  const buffer = scratchContext(sourceWidth, sourceHeight);
+  if (!buffer) return source;
+  buffer.drawImage(source, 0, 0, sourceWidth, sourceHeight);
+  if ((looks.pixelate?.blockPx ?? 0) >= 2) {
+    pixelateScratch(buffer, sourceWidth, sourceHeight, looks.pixelate?.blockPx ?? 0);
+  }
+  const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
+  applyPixelEffects(image, looks, sourceWidth, sourceHeight, timeSec, viewport);
+  buffer.putImageData(image, 0, 0);
+  return scratch as OffscreenCanvas;
 }
 
 /**
@@ -279,7 +394,6 @@ export async function drawEffectFrame(
   timeSec = t,
 ): Promise<void> {
   ctx.save();
-  let prepared: CanvasImageSource = source;
   try {
     ctx.globalAlpha = (effects ? opacityFor(effects, t) : 1) * alphaMul;
     if (effects?.blendMode && effects.blendMode !== 'normal') {
@@ -292,7 +406,13 @@ export async function drawEffectFrame(
         v: effects.flipV,
       });
     }
-    const rect = computeLetterboxRect(sourceWidth, sourceHeight, targetWidth, targetHeight);
+    const { source: cropped, target: rect } = computeCropRects(
+      sourceWidth,
+      sourceHeight,
+      targetWidth,
+      targetHeight,
+      effects?.crop,
+    );
     const radiusFrac = cornerRadiusFracFor(effects);
     if (radiusFrac > 0 && typeof ctx.roundRect === 'function') {
       ctx.beginPath();
@@ -301,10 +421,26 @@ export async function drawEffectFrame(
       ]);
       ctx.clip();
     }
-    prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
-    ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
+    const prepared = await prepareSource(
+      source,
+      sourceWidth,
+      sourceHeight,
+      effects,
+      timeSec,
+      cropped,
+    );
+    ctx.drawImage(
+      prepared,
+      cropped.x,
+      cropped.y,
+      cropped.width,
+      cropped.height,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+    );
   } finally {
-    if (prepared !== source && prepared instanceof ImageBitmap) prepared.close();
     ctx.restore();
     ctx.filter = 'none';
     ctx.globalAlpha = 1;
@@ -314,7 +450,7 @@ export async function drawEffectFrame(
 
 /**
  * Draw one source frame with the clip's visual effects baked in. Without effects
- * this is a plain letterbox; with effects the frame is drawn over a black
+ * this is a plain letterbox; with effects the frame is drawn over the canvas
  * background under the clip's transform/filter/opacity, mirroring the CSS
  * preview.
  */
@@ -328,15 +464,21 @@ export async function drawClipFrame(
   effects: ClipEffectSpec | undefined,
   t: number,
   timeSec = t,
+  backgroundColor?: string,
 ): Promise<void> {
   if (!effects || !hasVisualEffects(effects)) {
-    drawLetterboxed(ctx, source, sourceWidth, sourceHeight, targetWidth, targetHeight);
+    drawLetterboxed(
+      ctx,
+      source,
+      sourceWidth,
+      sourceHeight,
+      targetWidth,
+      targetHeight,
+      backgroundColor,
+    );
     return;
   }
-  ctx.filter = 'none';
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  drawCanvasBackground(ctx, targetWidth, targetHeight, backgroundColor);
   await drawEffectFrame(
     ctx,
     source,

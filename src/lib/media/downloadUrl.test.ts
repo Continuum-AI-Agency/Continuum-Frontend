@@ -41,6 +41,12 @@ describe('withForcedDownload', () => {
     expect(withForcedDownload(emptyValue, 'a.mp4')).toBe(emptyValue);
   });
 
+  it('leaves a GCS signed URL alone: an unsigned param would void its signature', () => {
+    const signed =
+      'https://storage.googleapis.com/hf/b1/paid/r/film.mp4?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=ab';
+    expect(withForcedDownload(signed, 'film.mp4')).toBe(signed);
+  });
+
   it('still appends when a different param merely ends in download', () => {
     expect(withForcedDownload('https://cdn.example.com/a.mp4?nodownload=1', 'a.mp4')).toBe(
       'https://cdn.example.com/a.mp4?nodownload=1&download=a.mp4',

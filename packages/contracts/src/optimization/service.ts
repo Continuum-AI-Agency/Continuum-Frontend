@@ -11,6 +11,10 @@
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
 import { globalAngleIdSchema } from '../creative-strategy/angles';
+import { creativeSpecV1Schema } from '../creative-system/creative-spec';
+import { creativeReferenceSchema } from '../creative-system/references';
+import { creativeOutputManifestSchema } from '../headless-content/optimizer';
+import { PlatformIdSchema } from '../paid/platform';
 import { conversionDescriptorSchema } from './custom-conversion';
 import {
   AdSetSnapshotSchema,
@@ -43,6 +47,7 @@ export const AutopilotScopeSchema = z.enum([
   'audience_change',
   'new_audience',
   'new_creatives',
+  'budget_move',
 ]);
 export type AutopilotScope = z.infer<typeof AutopilotScopeSchema>;
 export const AutopilotScopesSchema = z.object({
@@ -51,6 +56,10 @@ export const AutopilotScopesSchema = z.object({
   audience_change: z.boolean(),
   new_audience: z.boolean(),
   new_creatives: z.boolean(),
+  /** Budget moved BETWEEN platforms (G27, decision 18). Absent reads as false — every row
+   *  written before 20261005120000 has five keys — so a move waits for a person until
+   *  someone turns this on for an autopilot portfolio. */
+  budget_move: z.boolean().optional(),
 });
 export type AutopilotScopes = z.infer<typeof AutopilotScopesSchema>;
 /** What a portfolio approves on its own before anyone ticks anything. Budget only: the
@@ -83,6 +92,10 @@ export const AUTOPILOT_SCOPE_COPY: Record<AutopilotScope, { label: string; body:
   new_creatives: {
     label: 'Flash creatives',
     body: 'Generates variants into the Library; nothing is published.',
+  },
+  budget_move: {
+    label: 'Move budget between platforms',
+    body: 'Off by default, and we recommend a person approves these. When on, autopilot moves budget from the platform that pays more per result to the one that pays less, within each platform’s caps.',
   },
 };
 
@@ -540,6 +553,20 @@ export const PortfolioAutogenSchema = z.object({
    * is a person deciding, and this was never a limit on people.
    */
   minSwapIntervalDays: z.number().min(0).max(365).optional(),
+  /**
+   * What makes the creative. Absent keeps today's arms (pipeline or one-shot image);
+   * 'headless' routes the swap to the headless reels/stills director. Stamped onto the seed at
+   * enqueue, like pipelineId, so the approved instruction is what the worker runs.
+   */
+  producer: z.enum(['image', 'headless']).optional(),
+  /** Headless formats to make. Absent follows the winner's assetType (video → reel, image → stills). */
+  headlessFormats: z
+    .array(z.enum(['reel', 'stills']))
+    .min(1)
+    .max(2)
+    .optional(),
+  /** The language the headless creative is written in. Absent follows the winner's own copy. */
+  language: z.string().min(2).max(12).optional(),
 });
 export type PortfolioAutogen = z.infer<typeof PortfolioAutogenSchema>;
 
@@ -782,7 +809,12 @@ export const CycleItemDiagnosticsSchema = z
       .object({
         cpa: z.number().optional(),
         lo: z.number().optional(),
-        hi: z.number().optional(),
+        /** null when the window has ZERO events: spend ÷ 0 has no upper bound. The engine's
+         *  costInterval returns exactly that (CpaInterval.hi: number | null) and every reader
+         *  has to say so — see upperBoundMissingBecause. Declared as a plain number, one
+         *  zero-conversion ad set failed the whole report and blanked the portfolio. cpa/lo
+         *  come back as 0 on that row: a sentinel, not a measured cost. */
+        hi: z.number().nullable().optional(),
         events: z.number().optional(),
       })
       .loose()
@@ -870,6 +902,37 @@ export const RecommendationEvidenceSchema = z
   })
   .loose();
 export type RecommendationEvidence = z.infer<typeof RecommendationEvidenceSchema>;
+
+/** The winning ad behind a "make variations of the winner" recommendation (engine rule C2),
+ *  carried as `evidence.winner`. The ad's OWN cost per result over the standing's window —
+ *  not the ad set's, which is what the cycle's interval bounds — so a card can place the ad
+ *  on its ad set's range without reading the prose `reason`.
+ *
+ *  Priced or absent, never zero: a winner that bought nothing has no cost per result, and
+ *  the engine omits the field rather than write a 0 a card would draw as a real figure. */
+export const RecommendationWinnerSchema = z.object({
+  ad_id: z.string().min(1),
+  ad_name: z.string().nullable(),
+  cost_per_result: z.number().finite().positive(),
+  results: z.number().finite().positive(),
+  spend: z.number().finite().positive(),
+});
+export type RecommendationWinner = z.infer<typeof RecommendationWinnerSchema>;
+
+/**
+ * The winner an evidence object carries, or null.
+ *
+ * Parsed at the read, not in `RecommendationEvidenceSchema`: evidence is `.loose()` so a new
+ * key reaches the queue with no migration, and a malformed winner must read as "no winner",
+ * never fail the whole report's parse.
+ */
+export function recommendationWinnerOf(evidence: unknown): RecommendationWinner | null {
+  if (!evidence || typeof evidence !== 'object') return null;
+  const raw = (evidence as { winner?: unknown }).winner;
+  if (raw == null) return null;
+  const parsed = RecommendationWinnerSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
 
 export const RecommendationRowSchema = z
   .object({
@@ -1059,6 +1122,11 @@ export const ParsedCycleRunReportSchema = z.object({
 });
 export type ParsedCycleRunReport = z.infer<typeof ParsedCycleRunReportSchema>;
 
+/** Where a portfolio's enrolled ad sets stand on Meta, from the missing_since stamps
+ *  optimizer_mark_roster_presence writes before the scheduler's no_snapshots return. */
+export const PortfolioRosterStateSchema = z.enum(['empty', 'present', 'partial', 'absent']);
+export type PortfolioRosterState = z.infer<typeof PortfolioRosterStateSchema>;
+
 /** One row of optimizer_list_portfolios — the Overview/Portfolios list model.
  *  DB-derived, so objective/mode/apply_mode stay loose strings (FE narrows). */
 export const PortfolioListItemSchema = z.object({
@@ -1119,6 +1187,32 @@ export const PortfolioListItemSchema = z.object({
    * fails to parse disappears from the list entirely.
    */
   conversion_descriptor: conversionDescriptorSchema.nullable().catch(null).optional(),
+  /**
+   * Staleness, from migration 20260923202000 (optimizer_list_portfolios re-authored).
+   *
+   * A portfolio dead on Meta for two months read `status: active · next cycle tomorrow`,
+   * because the claim reschedules next_realloc_at unconditionally. These five say what the
+   * schedule cannot: when a cycle last actually LANDED (max(cycle_runs.cycle_ts) — derived,
+   * so the claim cannot bump it), how many whole days the portfolio has gone past a missed
+   * cycle, and what the missing_since stamps say about its roster on Meta.
+   *
+   * Nullable AND optional, declare-or-be-stripped again: until the migration is applied the
+   * RPC returns none of them, and an undeclared key is stripped by this parse — which is why
+   * the screen could not have shown them even if the read had. Every consumer renders
+   * exactly as before when they are absent.
+   */
+  last_actual_cycle_at: z.string().nullable().optional(),
+  /** Whole days since the last actual cycle (or creation) once the gap reaches two
+   *  cycle_intervals; null while fresh. Mirrors Continuum-Optimizer/src/staleness.ts. */
+  stale_for_days: z.number().int().nonnegative().nullable().optional(),
+  /** 'empty' nothing enrolled · 'present' all on Meta · 'partial' some gone · 'absent' all
+   *  gone. `.catch(null)`: an unknown state costs the portfolio its roster read, never its
+   *  row — a row that fails to parse disappears from the list entirely. */
+  roster_state: PortfolioRosterStateSchema.nullable().catch(null).optional(),
+  /** min(missing_since) over the active roster when ALL of it is absent; null otherwise. */
+  roster_absent_since: z.string().nullable().optional(),
+  /** Active enrollments currently absent from Meta. */
+  roster_missing_count: z.number().int().nonnegative().nullable().optional(),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
 
@@ -1171,6 +1265,54 @@ export type AdAccount = z.infer<typeof AdAccountSchema>;
 /** A suggested portfolio during onboarding (account ad sets grouped by objective).
  *  Today produced client-side; the canonical home is a future server RPC
  *  optimizer_suggest_portfolios — this schema is the shared contract for both. */
+/** One entity a cross-platform suggestion proposes, on whichever platform it lives. Meta
+ *  members are the suggestion's `adset_ids` again; the others exist only here. */
+export const SuggestionMemberSchema = z.object({
+  platform: PlatformIdSchema,
+  account_id: z.string(),
+  entity_id: z.string(),
+  level: z.enum(['adset', 'campaign']),
+  name: z.string().optional(),
+  /** The member's account currency and its daily budget in that currency's MAJOR units —
+   *  what the wizard sums and holds to one currency. Absent from an older suggest edge. */
+  currency: z.string().optional(),
+  daily_budget: z.number().nonnegative().optional(),
+});
+export type SuggestionMember = z.infer<typeof SuggestionMemberSchema>;
+
+/** One campaign another platform's account could put in a portfolio: the wizard's
+ *  "from scratch" list. Already filtered to what a portfolio may hold (enabled, a daily
+ *  budget, never Google Smart / Display / Video). `objectives` empty = its goals map to no
+ *  optimizer objective; it is still pickable. */
+export const PlatformCandidateSchema = z.object({
+  entity_id: z.string(),
+  name: z.string().nullable(),
+  objectives: z.array(OptimizationObjectiveSchema),
+  daily_budget: z.number().nonnegative(),
+  spend14: z.number(),
+  channel_type: z.string().nullable(),
+});
+export type PlatformCandidate = z.infer<typeof PlatformCandidateSchema>;
+
+export const PlatformCandidateAccountSchema = z.object({
+  platform: PlatformIdSchema,
+  account_id: z.string(),
+  currency: z.string().nullable(),
+  candidates: z.array(PlatformCandidateSchema),
+});
+export type PlatformCandidateAccount = z.infer<typeof PlatformCandidateAccountSchema>;
+
+/** A cross-platform suggestion's figures for one account: what the card's chips count. */
+export const SuggestionPlatformSummarySchema = z.object({
+  platform: PlatformIdSchema,
+  account_id: z.string(),
+  members: z.number().int().nonnegative(),
+  daily_total: z.number(),
+  spend14: z.number(),
+  conv14: z.number(),
+});
+export type SuggestionPlatformSummary = z.infer<typeof SuggestionPlatformSummarySchema>;
+
 export const PortfolioSuggestionSchema = z.object({
   objective: OptimizationObjectiveSchema,
   name: z.string(),
@@ -1189,6 +1331,13 @@ export const PortfolioSuggestionSchema = z.object({
    *  nameless rows and the dashboard rendered raw Meta ids until a backfill healed them.
    *  Optional because an older deployed suggest edge does not send it. */
   adset_names: z.record(z.string(), z.string()).optional(),
+  /** Cross-platform suggestions only ("Leads // All platforms", optimizer-suggest): every
+   *  member on every platform, the per-account figures, and the one currency they all bill
+   *  in. Absent on a Meta-only suggestion, whose shape is unchanged. `summary.adsets` then
+   *  counts every member. */
+  members: z.array(SuggestionMemberSchema).optional(),
+  by_platform: z.array(SuggestionPlatformSummarySchema).optional(),
+  currency: z.string().optional(),
   summary: z.object({
     adsets: z.number().int().nonnegative(),
     spend14: z.number(),
@@ -1674,6 +1823,29 @@ export const SuggestResultSchema = z.object({
   reason: SuggestReasonSchema.optional(),
   truncated: z.boolean().optional(),
   diagnostics: IngestDiagnosticsSchema.nullable().optional(),
+  /** Each of the brand's other ad accounts and whether it joined a cross-platform suggestion
+   *  — and if not, why (a different currency, no shared objective, a failed read). Absent for
+   *  a brand with Meta only. */
+  platform_accounts: z
+    .array(
+      z.object({
+        platform: PlatformIdSchema,
+        account_id: z.string(),
+        currency: z.string().nullable(),
+        status: z.enum([
+          'joined',
+          'no_shared_objective',
+          'currency_mismatch',
+          'currency_unknown',
+          'read_failed',
+        ]),
+      }),
+    )
+    .optional(),
+  /** Every eligible campaign on the brand's other ad accounts, suggested or not — what the
+   *  wizard lists when a person builds a portfolio from scratch. Absent for a Meta-only brand
+   *  and from an older suggest edge. */
+  platform_candidates: z.array(PlatformCandidateAccountSchema).optional(),
 });
 export type SuggestResult = z.infer<typeof SuggestResultSchema>;
 
@@ -2204,21 +2376,42 @@ export type CreativeSwapSource = z.infer<typeof CreativeSwapSourceSchema>;
  *  campaign/ad-set/ad ids are what make this a *swap* rather than a generation —
  *  the endpoint knows where the result lands, so the whole loop closes without a
  *  human copying an asset id between two screens. */
-export const CreativeSwapRequestSchema = z.object({
-  brandId: z.string(),
-  campaignId: z.string(),
-  adsetId: z.string(),
-  /** The ad being iterated on / replaced. */
-  adId: z.string(),
-  mode: CreativeSwapModeSchema,
-  prompt: z.string().optional(),
-  /** CreativeVariationSeed passthrough from the recommendation. */
-  seed: z.record(z.string(), z.unknown()).optional(),
-  /** Required for mode: 'use_asset' — the media.assets row to publish. */
-  assetId: z.string().optional(),
-  source: CreativeSwapSourceSchema,
-  recommendationId: z.string().optional(),
-});
+const creativeSwapDirectionShape = {
+  creativeSpec: creativeSpecV1Schema.optional(),
+  durableReferences: z.array(creativeReferenceSchema).max(12).optional(),
+};
+
+export const CreativeSwapRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    campaignId: z.string().min(1).optional(),
+    adsetId: z.string().min(1),
+    /** The ad being iterated on / replaced. */
+    adId: z.string().min(1).optional(),
+    mode: CreativeSwapModeSchema.default('generate'),
+    prompt: z.string().min(1).max(4000).optional(),
+    /** Recommendation fields pass through; structured direction is validated before enqueue. */
+    seed: z.object(creativeSwapDirectionShape).catchall(z.unknown()).optional(),
+    ...creativeSwapDirectionShape,
+    /** Required for mode: 'use_asset' — the media.assets row to publish. */
+    assetId: z.string().uuid().optional(),
+    portfolioId: z.string().uuid().optional(),
+    source: CreativeSwapSourceSchema.default('optimizer'),
+    recommendationId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine((value) => value.mode !== 'use_asset' || Boolean(value.assetId), {
+    message: 'mode "use_asset" requires assetId',
+    path: ['assetId'],
+  })
+  .refine(
+    (value) =>
+      value.mode === 'use_asset' ||
+      Boolean(value.prompt) ||
+      Boolean(value.seed) ||
+      Boolean(value.creativeSpec),
+    { message: 'a prompt, a seed or a creativeSpec is required', path: ['prompt'] },
+  );
 export type CreativeSwapRequest = z.infer<typeof CreativeSwapRequestSchema>;
 
 /** A durable swap job. `brief` is FROZEN at enqueue: what the worker executes must
@@ -2242,6 +2435,9 @@ export const CreativeSwapJobRowSchema = z
     attempts: z.number().int().nonnegative().optional(),
     result: z.record(z.string(), z.unknown()).nullable().optional(),
     error: z.record(z.string(), z.unknown()).nullable().optional(),
+    approved_manifest: creativeOutputManifestSchema.nullable().optional(),
+    publish_approved_by: z.string().nullable().optional(),
+    publish_approved_at: z.string().nullable().optional(),
     enqueued_via: z.string().optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),

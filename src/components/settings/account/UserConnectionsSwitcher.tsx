@@ -22,6 +22,7 @@ import { ConnectProviderPopover } from './ConnectProviderPopover';
 type UserConnectionsSwitcherProps = {
   integrations: UserIntegrationSummary;
   reconnectPrompts?: ProviderReconnectPrompt[];
+  figmaAccounts?: string[];
 };
 
 function statusFor(status: string | null): IntegrationSwitcherItemStatus {
@@ -31,6 +32,7 @@ function statusFor(status: string | null): IntegrationSwitcherItemStatus {
 export function UserConnectionsSwitcher({
   integrations,
   reconnectPrompts,
+  figmaAccounts,
 }: UserConnectionsSwitcherProps) {
   const { tabs, data, hasAny } = useMemo(() => {
     const tabs: IntegrationSwitcherTab[] = [];
@@ -81,7 +83,11 @@ export function UserConnectionsSwitcher({
           Connect Meta, Google, TikTok, or X to surface accounts you can later assign to brands.
         </p>
         <div className="mt-4 inline-block">
-          <ConnectProviderPopover integrations={integrations} reconnectPrompts={reconnectPrompts}>
+          <ConnectProviderPopover
+            integrations={integrations}
+            reconnectPrompts={reconnectPrompts}
+            figmaAccounts={figmaAccounts}
+          >
             <Button variant="outline" size="sm" className="gap-2">
               <Plus className="h-3.5 w-3.5" />
               Connect a provider
@@ -98,7 +104,11 @@ export function UserConnectionsSwitcher({
       data={data}
       className="max-w-none"
       tabBarTrailing={
-        <ConnectProviderPopover integrations={integrations} reconnectPrompts={reconnectPrompts} />
+        <ConnectProviderPopover
+          integrations={integrations}
+          reconnectPrompts={reconnectPrompts}
+          figmaAccounts={figmaAccounts}
+        />
       }
     />
   );

@@ -180,9 +180,11 @@ export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
     id: textNodeId,
     type: 'string',
     position: { x: 120, y: 160 },
-    data: { value: promptValue },
+    data: { value: workflowSpec.outputKind === 'text' ? seed.captionPreview : promptValue },
     style: { width: 420, height: 240 },
   } as StudioNode;
+
+  if (workflowSpec.outputKind === 'text') return { nodes: [textNode], edges: [] };
 
   if (workflowSpec.outputKind === 'video') {
     const videoNodeId = `organic-seed-reel-${seed.draftId}`;
@@ -393,6 +395,7 @@ export function seedFocusNodeId(seed: PlannerAiStudioHandoff): string {
     postType: seed.postType,
     workflowConcept: seed.workflowConcept,
   });
+  if (workflowSpec.outputKind === 'text') return `organic-seed-text-${seed.draftId}`;
   if (workflowSpec.outputKind === 'video') return `organic-seed-reel-${seed.draftId}`;
   if (workflowSpec.outputMode === 'ordered') return `organic-seed-carousel-${seed.draftId}-1`;
   return `organic-seed-image-${seed.draftId}`;

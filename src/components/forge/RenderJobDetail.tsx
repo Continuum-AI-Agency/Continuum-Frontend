@@ -10,11 +10,12 @@ import {
   ExternalLink,
   FileDigit,
   Layers,
+  Loader2,
   RectangleHorizontal,
   RefreshCw,
   Timer,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckRow, CheckTable } from '@/components/forge/CheckTable';
 import { DeliveryChain } from '@/components/forge/DeliveryChain';
@@ -25,11 +26,15 @@ import {
   playableFirst,
   previewFormats,
 } from '@/components/forge/FormatPreview';
+import { LibraryStateLine, useLibraryState } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
+import { Video } from '@/components/ui/video';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { fetchTemplateRevisionVariants } from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { formatDuration, renderJobChecks } from './renderJobChecks';
 
@@ -153,8 +158,15 @@ export function RenderModePill({ test }: { test: boolean }) {
 export function TemplateVersion({
   job,
 }: {
-  job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'>;
+  job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'> &
+    Partial<Pick<ApiRenderJob, 'templateRevision' | 'brandId'>>;
 }) {
+  if (job.templateRevision && job.brandId)
+    return (
+      <RevisionTemplateVersion
+        job={{ ...job, brandId: job.brandId, templateRevision: job.templateRevision }}
+      />
+    );
   const view = templateVersionOf(job);
   if (view.state === 'unrecorded') {
     return (
@@ -177,6 +189,31 @@ export function TemplateVersion({
   );
 }
 
+function RevisionTemplateVersion({
+  job,
+}: {
+  job: Pick<ApiRenderJob, 'brandId' | 'templateRevision'>;
+}) {
+  const pin = job.templateRevision!;
+  const { data } = useQuery({
+    queryKey: [...forgeQueryKeys.revisionVariants(job.brandId, pin.sourceAssetId), 'history'],
+    queryFn: () => fetchTemplateRevisionVariants(job.brandId, pin.sourceAssetId, true),
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const variant = data?.find((item) => item.variantId === pin.variantId);
+  const revision = variant?.revisions.find((item) => item.id === pin.revisionId);
+  return (
+    <span
+      className="tabular-nums"
+      title={`Immutable template revision ${pin.revisionId} · ${pin.checksum}`}
+    >
+      {variant && revision
+        ? `${variant.name} · Revision ${revision.number}`
+        : `Revision ${pin.revisionId.slice(0, 8)}`}
+    </span>
+  );
+}
+
 /**
  * Whether an image already failed to load when React attached to it. A transition (opening a job)
  * builds its elements before it commits them, so an expired link can fail in between and the error
@@ -185,9 +222,43 @@ export function TemplateVersion({
 export const imageFailed = (element: HTMLImageElement | null) =>
   element !== null && element.complete && element.naturalWidth === 0;
 
+/** The Kobra player owns the element, so a broken file is read off the video it mounts. */
+function OutputVideo({
+  url,
+  poster,
+  onBroken,
+}: {
+  url: string;
+  poster?: string;
+  onBroken: () => void;
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const video = host.current?.querySelector('video');
+    if (!video) return;
+    if (video.error) onBroken();
+    const fail = () => onBroken();
+    video.addEventListener('error', fail);
+    return () => video.removeEventListener('error', fail);
+  }, [url, onBroken]);
+  return (
+    <div ref={host} className="size-full">
+      <Video
+        src={url}
+        // The frame shows at once; the video itself buffers from the fleet's bucket behind it.
+        poster={poster}
+        ariaLabel="Render"
+        className="aspect-auto! size-full rounded-none border-0"
+        videoClassName="object-contain"
+      />
+    </div>
+  );
+}
+
 /** A file that will not load — an expired signed link, or a container the browser cannot play. */
 function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
   const [broken, setBroken] = useState(false);
+  const markBroken = useCallback(() => setBroken(true), []);
   if (broken) {
     return (
       <p className="m-0 flex size-full items-center justify-center bg-muted p-[var(--card-pad)] text-center text-xs text-muted-foreground">
@@ -198,22 +269,16 @@ function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
     );
   }
   return output.kind === 'video' ? (
-    // biome-ignore lint/a11y/useMediaCaption: renders carry no caption track.
-    <video
-      src={output.url}
-      controls
-      playsInline
-      className="size-full object-contain"
-      // The same race as `imageFailed`, read off the video's own error.
-      ref={(element) => {
-        if (element?.error) setBroken(true);
-      }}
-      onError={() => setBroken(true)}
+    // The Library copy plays from storage behind a CDN; the fleet's bucket is one far region.
+    <OutputVideo
+      url={output.libraryUrl ?? output.url}
+      poster={output.posterUrl}
+      onBroken={markBroken}
     />
   ) : (
     // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
     <img
-      src={output.url}
+      src={output.libraryUrl ?? output.url}
       alt={alt}
       className="size-full object-contain"
       ref={(element) => {
@@ -256,34 +321,94 @@ export function RenderJobDetail({
   onRefresh: () => void;
 }) {
   const { formats: templateFormats, labelByKey } = useJobFormats(job, givenFormats);
-  // ponytail: with no contract, parse or judged ratio to name them, each file is its own format
-  // drawn from its stored size (square when the fleet stored none). Goes once contracts always load.
-  const formats: PreviewFormat[] = templateFormats.length
-    ? templateFormats
-    : job.outputs.map((output) => ({
-        id: output.id,
-        label: output.fileName,
-        ratio: null,
-        width: output.width,
-        height: output.height,
-      }));
   const files = playableFirst(job.outputs);
+  const matched = files.map((file) => ({
+    file,
+    format: matchOutputFormat(file.fileName, templateFormats),
+  }));
+  // A real file remains available even when the template cannot name its format.
+  const formats: PreviewFormat[] = [
+    ...templateFormats,
+    ...matched
+      .filter(({ format }) => format === null)
+      .map(({ file }) => ({
+        id: `file:${file.id}`,
+        label: file.fileName,
+        ratio: null,
+        width: file.width,
+        height: file.height,
+      })),
+  ];
   const filesFor = (formatId: string) =>
-    files.filter((output) =>
-      templateFormats.length
-        ? matchOutputFormat(output.fileName, formats)?.id === formatId
-        : output.id === formatId,
-    );
+    matched
+      .filter(({ file, format }) => (format?.id ?? `file:${file.id}`) === formatId)
+      .map(({ file }) => file);
   const fileFor = (formatId: string) => filesFor(formatId)[0] ?? null;
   const [picked, setPicked] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState<'mov' | 'mxf' | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const value =
     formats.find((format) => format.id === picked)?.id ??
+    formats.find((format) => filesFor(format.id).some((file) => file.assetId))?.id ??
     formats.find((format) => fileFor(format.id))?.id ??
     formats[0]?.id ??
     '';
   const name = job.label ?? job.labelPath.at(-1) ?? templateName;
   const current = filesFor(value);
+  const source =
+    current.find((file) => extOf(file.fileName) === 'mov') ??
+    current.find((file) => extOf(file.fileName) === 'mxf') ??
+    current.find((file) => extOf(file.fileName) === 'mp4');
+  const missingMasters = (['mov', 'mxf'] as const).filter(
+    (format) => !current.some((file) => extOf(file.fileName) === format),
+  );
+  const prepareDownload = async (format: 'mov' | 'mxf') => {
+    if (!source || preparing) return;
+    setPreparing(format);
+    setDownloadError(null);
+    try {
+      const { path } = await apiRendersApi.prepareMasterDownload(job.id, {
+        brandId: job.brandId,
+        outputId: source.id,
+        format,
+      });
+      const deadline = Date.now() + 11 * 60_000;
+      while (mounted.current && Date.now() < deadline) {
+        const { status } = await apiRendersApi.masterDownloadStatus(path);
+        if (status === 'ready') {
+          if (mounted.current) window.location.assign(`${getApiBaseUrl()}${path}`);
+          return;
+        }
+        if (status === 'failed')
+          throw new Error(`${format.toUpperCase()} conversion failed. Try again.`);
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      if (mounted.current)
+        throw new Error(`${format.toUpperCase()} is taking too long. Try again.`);
+    } catch (error) {
+      if (mounted.current)
+        setDownloadError(
+          error instanceof Error ? error.message : 'Could not prepare this download.',
+        );
+    } finally {
+      if (mounted.current) setPreparing(null);
+    }
+  };
   const rendered = formats.filter((format) => fileFor(format.id));
+  const inLibrary = files.flatMap((output) =>
+    output.assetId ? [{ fileName: output.fileName, assetId: output.assetId }] : [],
+  );
+  const libraryState = useLibraryState(
+    job.brandId,
+    inLibrary.map((output) => output.assetId),
+  );
 
   return (
     <div className="flex flex-col divide-y divide-border">
@@ -322,7 +447,7 @@ export function RenderJobDetail({
                         node: (
                           <OutputFile
                             // By URL: a refresh that re-signs an expired link gets a fresh try.
-                            key={output.url}
+                            key={output.libraryUrl ?? output.url}
                             output={output}
                             alt={`${name} · ${format.ratio ?? format.label}`}
                           />
@@ -335,7 +460,9 @@ export function RenderJobDetail({
                           job.status === 'failed'
                             ? 'This render failed.'
                             : job.status === 'finished'
-                              ? 'No file for this format'
+                              ? matched.some(({ format }) => format === null)
+                                ? 'No file matched this format. Select the rendered file tab above.'
+                                : 'This job did not render this format.'
                               : 'No file yet.',
                       };
                 }}
@@ -352,7 +479,7 @@ export function RenderJobDetail({
               return (
                 <a
                   key={output.id}
-                  href={output.url}
+                  href={output.libraryUrl ?? output.url}
                   download={output.fileName}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -364,6 +491,27 @@ export function RenderJobDetail({
                 </a>
               );
             })}
+            {job.status === 'finished' &&
+              source &&
+              missingMasters.map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  disabled={preparing !== null}
+                  onClick={() => void prepareDownload(format)}
+                  aria-label={`Generate ${format.toUpperCase()} download`}
+                  className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                >
+                  {preparing === format ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                  ) : (
+                    <Download className="size-3" aria-hidden />
+                  )}
+                  {preparing === format
+                    ? `Preparing ${format.toUpperCase()}…`
+                    : `Generate ${format.toUpperCase()}`}
+                </button>
+              ))}
             {job.slackDelivery?.permalink ? (
               <a
                 href={job.slackDelivery.permalink}
@@ -375,6 +523,33 @@ export function RenderJobDetail({
               </a>
             ) : null}
           </div>
+          {job.status === 'finished' && source && missingMasters.length > 0 ? (
+            <p className="m-0 text-2xs text-muted-foreground">
+              Generated files are converted from the existing video.
+            </p>
+          ) : null}
+          {downloadError ? (
+            <p role="alert" className="m-0 text-xs text-destructive">
+              {downloadError}
+            </p>
+          ) : null}
+          {/* Each file as the Library holds it: where its review stands, and its thread. */}
+          {inLibrary.length ? (
+            <ul aria-label="In the Library" className="m-0 flex list-none flex-col gap-1 p-0">
+              {inLibrary.map((output) => (
+                <li key={output.assetId} className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
+                    {output.fileName}
+                  </span>
+                  <LibraryStateLine
+                    brandId={job.brandId}
+                    assetId={output.assetId}
+                    state={libraryState.get(output.assetId)}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col divide-y divide-border">
@@ -387,6 +562,9 @@ export function RenderJobDetail({
                 value: (
                   <span className="inline-flex items-center gap-1.5">
                     {job.status}
+                    {job.status === 'rendering' && typeof job.progressPct === 'number'
+                      ? ` ${job.progressPct}%`
+                      : ''}
                     <RenderModePill test={job.test} />
                   </span>
                 ),

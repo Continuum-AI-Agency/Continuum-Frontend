@@ -16,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { listAssetFieldValues, setAssetFieldValue } from '@/lib/library/customFields';
 import { validateCustomFieldValue, valuesByFieldId } from '@/lib/library/customFieldValue';
+import { useLibraryAccess } from '@/lib/library/useBrandRole';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { CustomFieldManagerDialog } from './CustomFieldManagerDialog';
 import { CustomFieldValueEditor } from './CustomFieldValueEditor';
 import { useCustomFields } from './useCustomFields';
@@ -31,6 +33,35 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
   const [valuesError, setValuesError] = useState<string | null>(null);
   const [savingFieldId, setSavingFieldId] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
+  const { canEdit } = useLibraryAccess(brandId, { assetId });
+
+  // Another member's write to this asset's fields lands here as the row arrives.
+  useEffect(
+    () =>
+      subscribeToPostgresChanges({
+        label: `asset-fields-${assetId}`,
+        bindings: [
+          {
+            event: '*',
+            schema: 'media',
+            table: 'asset_field_values',
+            filter: `asset_id=eq.${assetId}`,
+            onRow: (row, meta) => {
+              const source = meta.eventType === 'DELETE' ? meta.old : row;
+              const fieldId = typeof source.field_id === 'string' ? source.field_id : null;
+              if (!fieldId) return;
+              setValues((prev) =>
+                new Map(prev ?? []).set(
+                  fieldId,
+                  meta.eventType === 'DELETE' ? null : (row.value as CustomFieldValue),
+                ),
+              );
+            },
+          },
+        ],
+      }),
+    [assetId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -88,16 +119,18 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
         <p className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
           Custom fields
         </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 gap-1 px-1.5 text-2xs text-muted-foreground"
-          onClick={() => setManagerOpen(true)}
-        >
-          <Settings2 className="size-3.5" />
-          Manage
-        </Button>
+        {canEdit ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 gap-1 px-1.5 text-2xs text-muted-foreground"
+            onClick={() => setManagerOpen(true)}
+          >
+            <Settings2 className="size-3.5" />
+            Manage
+          </Button>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pt-1 pb-3">
@@ -124,7 +157,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
               <CustomFieldValueEditor
                 field={field}
                 value={values.get(field.id) ?? null}
-                disabled={savingFieldId === field.id}
+                disabled={!canEdit || savingFieldId === field.id}
                 onChange={(next) => void save(field, next)}
               />
             </div>

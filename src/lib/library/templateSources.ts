@@ -4,34 +4,87 @@ import type {
   ForgeLineageView,
   RenderWorkspace,
   TemplateFontPushResponse,
+  TemplateForgeBundle,
   TemplateForgeNeed,
+  TemplateMappingReview,
   TemplateRebindPreview,
   TemplateSource,
   TemplateSourceSummary,
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
+  type CreateTemplateVariantRequest,
+  createTemplateVariantRequestSchema,
+  type DesignArrangement,
+  type DesignArrangementsResponse,
+  type DesignImportRequest,
+  type DesignImportResponse,
+  type DesignLayersResponse,
+  designArrangementsResponseSchema,
+  designImportResponseSchema,
+  designLayersResponseSchema,
+  type FontInventoryRow,
+  fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
   readFontNames,
+  type SaveTemplateRevisionRequest,
   type TemplateFontAliasRequest,
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
+  type TemplateRevisionPreviewRequest,
   type TemplateSourceEvent,
+  type TemplateTextMoveRequest,
+  type TemplateTextMoveResponse,
+  type TemplateVariant,
   templateFontAliasRequestSchema,
   templateFontCandidatesResponseSchema,
   templateFontHealResultSchema,
   templateFontPushRequestSchema,
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
+  templateForgeBundleSchema,
+  templateLayerInventorySchema,
+  templateLayerPreviewResponseSchema,
+  templateLayerSceneSchema,
+  templateMappingReviewSchema,
   templateRebindPreviewSchema,
+  templateRevisionSchema,
+  templateRevisionVariantsResponseSchema,
   templateSourceEventsResponseSchema,
   templateSourceSchema,
   templateSourceSummarySchema,
+  templateTextMoveResponseSchema,
+  templateVariantSchema,
+  templateVariantsResponseSchema,
 } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type TemplateFontReadiness = import('@continuum/contracts').TemplateFontReadiness;
+
+export async function repairTemplateText(
+  assetId: string,
+  request: TemplateTextMoveRequest,
+): Promise<TemplateTextMoveResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/repair-text`,
+    { method: 'POST', body: JSON.stringify(request) },
+  );
+  return templateTextMoveResponseSchema.parse(await unwrap(response, 'Text layout repair'));
+}
+
+export async function editableTemplateFonts(brandId: string): Promise<FontInventoryRow[]> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/fonts?brandId=${encodeURIComponent(brandId)}`,
+  );
+  const inventory = fontInventoryResponseSchema.parse(await unwrap(response, 'Available fonts'));
+  return inventory.fonts.filter(
+    (font) =>
+      (font.brandId === brandId || font.brandId === null) &&
+      !!font.postScriptName &&
+      (font.format === 'ttf' || font.format === 'otf'),
+  );
+}
 
 // Client for the template-source routes on the Fastify backend. They live there rather than
 // in a Next route handler because they reach Template Forge with a server-only token, and
@@ -66,6 +119,35 @@ export async function fetchTemplateSources(brandId: string): Promise<TemplateSou
   );
   const body = await unwrap<{ items?: unknown[] }>(response, 'Template list');
   return (body.items ?? []).map((item) => templateSourceSummarySchema.parse(item));
+}
+
+export async function fetchTemplateForgeBundle(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateForgeBundle | null> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle?brandId=${encodeURIComponent(brandId)}`,
+  );
+  const body = await unwrap<{ bundle: unknown }>(response, 'Template bundle');
+  return body.bundle == null ? null : templateForgeBundleSchema.parse(body.bundle);
+}
+
+export async function advanceTemplateForgeBundle(
+  brandId: string,
+  assetId: string,
+  action: 'smoke' | 'promotion-plan' | 'approve' | 'resume',
+  options: { confirmation?: string; runId?: string } = {},
+): Promise<TemplateForgeBundle> {
+  const path =
+    action === 'resume'
+      ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/children/${encodeURIComponent(options.runId ?? '')}/resume`
+      : `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/${action}`;
+  const response = await authorizedFetch(path, {
+    method: 'POST',
+    body: JSON.stringify({ brandId, confirmation: options.confirmation }),
+  });
+  const body = await unwrap<{ bundle: unknown }>(response, 'Template bundle action');
+  return templateForgeBundleSchema.parse(body.bundle);
 }
 
 /** Rename a template: writes its Library asset's title, which becomes `displayName` everywhere. */
@@ -221,6 +303,23 @@ export async function sendTemplateToForge(
   return unwrap<TemplateSource>(response, 'Template Forge hand-off');
 }
 
+/**
+ * A Photoshop file already in the Library → an editable template beside it. Takes seconds: the
+ * Backend reads every layer and the forge writes the project. `exists` when this exact version was
+ * imported before — the call is idempotent, so a double drop makes one template.
+ */
+export async function importDesignTemplate(
+  brandId: string,
+  assetId: string,
+): Promise<DesignImportResponse> {
+  const body: DesignImportRequest = { brandId };
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/import-design`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return designImportResponseSchema.parse(await unwrap(response, 'Design import'));
+}
+
 export async function uploadBrandFont(input: {
   brandId: string;
   family: string;
@@ -345,6 +444,8 @@ export type TemplateVariable = {
   placement: null;
   /** A video slot's clip seconds — see `apiRenderVariableSchema.clip`. Null for anything else. */
   clip: { fromSec: number; toSec: number; playsSec: number } | null;
+  /** False: in the template but switched off — no form asks for it; renders what the file says. */
+  exposed?: boolean;
 };
 
 export type TemplateSlotEdit = {
@@ -353,8 +454,9 @@ export type TemplateSlotEdit = {
   role?: string | null;
   charBudget?: number | null;
   required?: boolean | null;
+  exposed?: boolean | null;
   defaultValue?: unknown;
-  binding?: { source: string; path: string; label?: string } | null;
+  binding?: { source: string; path: string; label?: string; line?: number } | null;
 };
 
 export type TemplateVariablesResponse = {
@@ -387,6 +489,30 @@ export async function saveTemplateVariables(
     body: JSON.stringify({ brandId, slots }),
   });
   await unwrap(response, 'Saving variables');
+}
+
+/** Every layer a design-import template's source file stacks, and the arrangements saved on it. */
+export async function fetchDesignLayers(
+  brandId: string,
+  assetId: string,
+): Promise<DesignLayersResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/design-layers?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return designLayersResponseSchema.parse(await unwrap(response, 'Layers'));
+}
+
+/** The whole approved set; the server re-authors the template as its next revision. */
+export async function saveDesignArrangements(
+  brandId: string,
+  assetId: string,
+  arrangements: DesignArrangement[],
+): Promise<DesignArrangementsResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/design-arrangements`,
+    { method: 'PUT', body: JSON.stringify({ brandId, arrangements }) },
+  );
+  return designArrangementsResponseSchema.parse(await unwrap(response, 'Saving arrangements'));
 }
 
 /** The mirrored run row. The LIVE channel is Realtime; this is the mount backfill beside it. */
@@ -434,6 +560,16 @@ export async function fetchTemplateRun(
   return body.run;
 }
 
+export async function fetchTemplateMappingReview(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateMappingReview> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/mapping-review?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return templateMappingReviewSchema.parse(await unwrap<unknown>(response, 'Template mapping'));
+}
+
 export type ForgeLadderAction = 'decisions' | 'draft' | 'smoke' | 'promote' | 'resume';
 
 /**
@@ -453,4 +589,128 @@ export async function advanceTemplateForgeRun(
     body: JSON.stringify({ brandId, ...(extra ?? {}) }),
   });
   await unwrap(response, `Forge ${action}`);
+}
+
+export async function fetchTemplateVariants(
+  brandId: string,
+  assetId?: string,
+): Promise<TemplateVariant[]> {
+  const params = new URLSearchParams({ brandId, ...(assetId ? { assetId } : {}) });
+  const response = await authorizedFetch(`/api/ai-studio/template-variants?${params}`);
+  return templateVariantsResponseSchema.parse(await unwrap(response, 'Template variants')).items;
+}
+export async function createTemplateVariant(
+  assetId: string,
+  request: CreateTemplateVariantRequest,
+): Promise<TemplateVariant> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/variants`,
+    { method: 'POST', body: JSON.stringify(createTemplateVariantRequestSchema.parse(request)) },
+  );
+  return templateVariantSchema.parse(await unwrap(response, 'Create variant'));
+}
+
+/** No workspace is normal for a new brand; discovery is advisory to its upload list. */
+export async function loadWorkspaceTemplates(brandId: string): Promise<WorkspaceTemplate[]> {
+  return discoverWorkspaceTemplates(brandId)
+    .then((result) => result.items)
+    .catch(() => []);
+}
+
+export async function fetchTemplateRevisionVariants(
+  brandId: string,
+  assetId?: string,
+  includeArchived = false,
+) {
+  return templateRevisionVariantsResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        assetId
+          ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`
+          : `/api/ai-studio/templates/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`,
+      ),
+      'Template revision variants',
+    ),
+  ).items;
+}
+
+export async function previewTemplateRevision(
+  assetId: string,
+  request: TemplateRevisionPreviewRequest,
+) {
+  return templateLayerPreviewResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions/preview`,
+        { method: 'POST', body: JSON.stringify(request) },
+      ),
+      'Template revision preview',
+    ),
+  );
+}
+
+export async function saveTemplateRevision(assetId: string, request: SaveTemplateRevisionRequest) {
+  return templateRevisionSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+      'Save template revision',
+    ),
+  );
+}
+
+/**
+ * The Layers tab's unedited layer list for one source version (the open revision's file). The
+ * Backend stores it per version, so only a first open reaches the forge.
+ */
+export async function fetchTemplateLayerInventory(
+  brandId: string,
+  assetId: string,
+  versionId: string,
+) {
+  const query = new URLSearchParams({ brandId, versionId });
+  return templateLayerInventorySchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/layers?${query}`),
+      'Layers',
+    ),
+  );
+}
+
+/** One comp's unedited layout preview; the template's default comp when none is named. */
+export async function fetchTemplateLayerScene(
+  brandId: string,
+  assetId: string,
+  versionId: string,
+  compId: number | null,
+) {
+  const query = new URLSearchParams({
+    brandId,
+    versionId,
+    ...(compId ? { compId: String(compId) } : {}),
+  });
+  return templateLayerSceneSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        `/api/ai-studio/templates/${encodeURIComponent(assetId)}/layer-scene?${query}`,
+      ),
+      'Layout preview',
+    ),
+  );
+}
+
+export async function archiveTemplateRevisionVariant(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await unwrap(
+    await authorizedFetch(
+      `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/archive`,
+      { method: 'POST', body: JSON.stringify({ brandId }) },
+    ),
+    'Archive template variant',
+  );
 }

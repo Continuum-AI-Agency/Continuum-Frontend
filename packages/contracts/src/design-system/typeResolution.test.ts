@@ -5,10 +5,18 @@ import type { DesignToken } from './tokens';
 import {
   designSystemFontFamilies,
   hasAnyBrandShape,
+  headlineWeights,
   PRELOADED_TYPE_FACES,
   resolveBrandInk,
   resolveBrandType,
 } from './typeResolution';
+
+const embed = (family: string, weight?: number) => ({
+  family,
+  format: 'ttf' as const,
+  base64: 'AAEAAA==',
+  ...(weight === undefined ? {} : { weight }),
+});
 
 const token = (
   name: string,
@@ -99,6 +107,99 @@ describe('resolveBrandType', () => {
         brandKit: { typography: { primary: 'Canela' } },
       }),
     ).toEqual({ display: 'Canela', body: 'Canela', source: 'brand-kit' });
+  });
+});
+
+describe('resolveBrandType with bytes resolved (the server lanes)', () => {
+  it('walks past a kit face nobody holds bytes for, to the shipped face, and names the skip', () => {
+    expect(
+      resolveBrandType({ brandKit: { typography: { primary: 'Proxima Nova' } }, fontEmbeds: [] }),
+    ).toEqual({
+      ...PRELOADED_TYPE_FACES,
+      source: 'fallback',
+      skipped: [{ source: 'brand-kit', family: 'Proxima Nova' }],
+    });
+  });
+
+  it('keeps a rung whose face is embedded or shipped', () => {
+    expect(
+      resolveBrandType({
+        brandKit: { typography: { primary: 'Proxima Nova' } },
+        scrape: { typography: { primary: 'Poppins', secondary: 'Lora' } },
+        fontEmbeds: [embed('Poppins', 700)],
+      }),
+    ).toEqual({
+      display: 'Poppins',
+      // The body face has no bytes: it takes the display face rather than Helvetica.
+      body: 'Poppins',
+      source: 'scrape',
+      skipped: [{ source: 'brand-kit', family: 'Proxima Nova' }],
+    });
+    expect(
+      resolveBrandType({ brandMd: { colors: [], typography: [{ family: 'Inter' }] }, fontEmbeds: [] })
+        .source,
+    ).toBe('brand-md');
+  });
+
+  it("reads the brand's own ads as the last brand rung", () => {
+    expect(
+      resolveBrandType({
+        ads: { typography: { primary: 'Oswald', secondary: 'Barlow' } },
+        fontEmbeds: [embed('Oswald', 300), embed('Barlow', 400)],
+      }),
+    ).toEqual({ display: 'Oswald', body: 'Barlow', source: 'ads', skipped: [] });
+  });
+
+  it('a declared face wins over the ads; the ads fill only the body it leaves empty', () => {
+    // Easy Fit: its brand book declares Montserrat and no secondary face.
+    expect(
+      resolveBrandType({
+        brandMd: { colors: [], typography: [{ family: 'Montserrat', role: 'display' }] },
+        ads: { typography: { primary: 'Barlow Condensed', secondary: 'Barlow Condensed' } },
+        fontEmbeds: [embed('Barlow Condensed', 300)],
+      }),
+    ).toEqual({
+      display: 'Montserrat',
+      body: 'Barlow Condensed',
+      source: 'brand-md',
+      bodySource: 'ads',
+      skipped: [],
+    });
+    // A rung that names its own body keeps it.
+    expect(
+      resolveBrandType({
+        brandKit: { typography: { primary: 'Inter', secondary: 'Montserrat' } },
+        ads: { typography: { primary: 'Oswald', secondary: 'Oswald' } },
+        fontEmbeds: [embed('Oswald', 300)],
+      }),
+    ).toMatchObject({ display: 'Inter', body: 'Montserrat', source: 'brand-kit' });
+  });
+
+  it('without resolved bytes the first named face still wins (Studio unchanged)', () => {
+    expect(resolveBrandType({ brandKit: { typography: { primary: 'Proxima Nova' } } })).toEqual({
+      display: 'Proxima Nova',
+      body: 'Proxima Nova',
+      source: 'brand-kit',
+    });
+  });
+});
+
+describe('headlineWeights', () => {
+  it('defaults to 300/700 and moves each to the nearest weight an embed holds', () => {
+    expect(headlineWeights({}, 'Poppins')).toEqual({ light: 300, bold: 700 });
+    expect(
+      headlineWeights({ fontEmbeds: [embed('Bebas Neue', 400)] }, 'Bebas Neue'),
+    ).toEqual({ light: 400, bold: 400 });
+    expect(
+      headlineWeights({ fontEmbeds: [embed('Oswald', 300), embed('Oswald', 600)] }, 'oswald'),
+    ).toEqual({ light: 300, bold: 600 });
+  });
+
+  it('a variable embed (no weight) holds every weight', () => {
+    expect(headlineWeights({ fontEmbeds: [embed('Inter')] }, 'Inter')).toEqual({
+      light: 300,
+      bold: 700,
+    });
   });
 });
 

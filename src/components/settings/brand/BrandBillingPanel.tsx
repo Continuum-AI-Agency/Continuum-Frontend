@@ -4,8 +4,10 @@ import { productCodeSchema } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
 import { CreditCard, TriangleAlert } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { type ReactNode, useEffect, useRef, useState, useTransition } from 'react';
+import { switchActiveBrandAction } from '@/app/(post-auth)/settings/actions';
+import { CheckoutReceiptDialog } from '@/components/billing/CheckoutReceiptDialog';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AutoBillingControl } from '@/components/settings/billing/AutoBillingControl';
@@ -21,6 +23,7 @@ import {
 import {
   BuyCreditsControl,
   CanvasCreditsMeter,
+  XCreditsMeter,
 } from '@/components/settings/billing/CanvasCreditsMeter';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -34,7 +37,8 @@ import {
   type SelfServeBillingView,
   toBillingView,
 } from '@/lib/billing/billingViewModel';
-import { CREDITS_ANCHOR } from '@/lib/billing/productAccess';
+import { CREDITS_ANCHOR, X_CREDITS_ANCHOR } from '@/lib/billing/productAccess';
+import { trackBillingEvent } from '@/lib/billing/telemetry';
 import { billingReturnUrl, useBillingOverviewWithPendingChange } from '@/lib/billing/useBilling';
 import { cn } from '@/lib/utils';
 
@@ -57,46 +61,133 @@ export function BrandBillingPanel({ billingLive }: BrandBillingPanelProps) {
   const { activeBrandId, brandSummaries, permissions } = useActiveBrandContext();
   const brandName =
     brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'this brand';
+  usePaywallViewed(billingLive, isBrandOwner(permissions, activeBrandId));
+  // A credit-alert email names its brand (`?brand=`); the app opens the ACTIVE one.
+  const linkedBrand = brandToOffer(useSearchParams().get('brand'), activeBrandId, brandSummaries);
 
   // billing-cutover: before go-live there is no billing-api to ask.
   if (!billingLive) return <BillingNotLiveState />;
-  if (!isBrandOwner(permissions, activeBrandId)) {
-    return <BillingLockedState brandName={brandName} />;
-  }
-  return <OwnerBillingPanel key={activeBrandId} brandId={activeBrandId} brandName={brandName} />;
+  return (
+    <>
+      {linkedBrand ? (
+        <SwitchBrandNotice
+          brandId={linkedBrand.id}
+          name={linkedBrand.name}
+          activeName={brandName}
+        />
+      ) : null}
+      {isBrandOwner(permissions, activeBrandId) ? (
+        <OwnerBillingPanel key={activeBrandId} brandId={activeBrandId} brandName={brandName} />
+      ) : (
+        <BillingLockedState brandName={brandName} />
+      )}
+    </>
+  );
+}
+
+/** The linked brand, when it is not the active one and the viewer can open it. */
+export function brandToOffer<Brand extends { id: string }>(
+  linkedBrandId: string | null,
+  activeBrandId: string,
+  brands: readonly Brand[],
+): Brand | undefined {
+  if (!linkedBrandId || linkedBrandId === activeBrandId) return undefined;
+  return brands.find((brand) => brand.id === linkedBrandId);
+}
+
+/** Offered, never automatic: switching brand changes what every page shows. */
+function SwitchBrandNotice({
+  brandId,
+  name,
+  activeName,
+}: {
+  brandId: string;
+  name: string;
+  activeName: string;
+}) {
+  const router = useRouter();
+  const [switching, startSwitch] = useTransition();
+  return (
+    <div
+      role="status"
+      data-testid="billing-switch-brand"
+      className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground"
+    >
+      <p>
+        This link is about <span className="font-medium">{name}</span>. You're viewing {activeName}.
+      </p>
+      <Button
+        variant="outline"
+        disabled={switching}
+        aria-busy={switching}
+        onClick={() =>
+          startSwitch(async () => {
+            await switchActiveBrandAction(brandId);
+            router.refresh();
+          })
+        }
+      >
+        {switching ? 'Switching…' : `Switch to ${name}`}
+      </Button>
+    </div>
+  );
+}
+
+/** A gate sent someone here (`?need=`): the top of the billing funnel. Once per page view. */
+function usePaywallViewed(billingLive: boolean, owner: boolean) {
+  const need = useSearchParams().get('need');
+  const trackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!billingLive || !need || trackedRef.current === need) return;
+    trackedRef.current = need;
+    trackBillingEvent('paywall_viewed', { product: need, owner });
+  }, [billingLive, need, owner]);
 }
 
 function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName: string }) {
-  const { overview, pending, track } = useBillingOverviewWithPendingChange(brandId);
+  const { overview, pending, track, receipt, closeReceipt } =
+    useBillingOverviewWithPendingChange(brandId);
   const need = productCodeSchema.safeParse(useSearchParams().get('need'));
+  // The receipt prints over whatever the panel shows while the purchase lands.
+  const withReceipt = (panel: ReactNode) => (
+    <>
+      {panel}
+      {receipt ? (
+        <CheckoutReceiptDialog brandId={brandId} receipt={receipt} onClose={closeReceipt} />
+      ) : null}
+    </>
+  );
 
-  if (overview.isPending) return <BillingSkeleton />;
+  if (overview.isPending) return withReceipt(<BillingSkeleton />);
   if (overview.isError) {
     if (isBillingManagerRequired(overview.error))
       return <BillingLockedState brandName={brandName} />;
-    return (
-      <BillingErrorState message={overview.error.message} onRetry={() => void overview.refetch()} />
+    return withReceipt(
+      <BillingErrorState
+        message={overview.error.message}
+        onRetry={() => void overview.refetch()}
+      />,
     );
   }
 
   const view = toBillingView(overview.data, need.success ? need.data : null);
   if (view.kind === 'contract') {
-    return (
+    return withReceipt(
       <div className="space-y-6">
         <BillingContractState features={view.features} />
         <AutoBillingControl brandId={brandId} autoBilling={view.autoBilling} onChanged={track} />
-      </div>
+      </div>,
     );
   }
 
-  return (
+  return withReceipt(
     <SelfServeBilling
       brandId={brandId}
       view={view}
       needLabel={need.success ? NEED_LABEL[need.data] : null}
       waitingOnStripe={pending !== null}
       onPlanChanged={track}
-    />
+    />,
   );
 }
 
@@ -119,8 +210,16 @@ function PanelRowTitle({ children }: { children: ReactNode }) {
 
 const HIGHLIGHT_MS = 2_400;
 
-/** The credit-pack section: on `#credits` it scrolls into view and highlights for a moment. */
-function CreditsRow({ children }: { children: ReactNode }) {
+/** A credit-pack section: on its anchor it scrolls into view and highlights for a moment. */
+function CreditsRow({
+  children,
+  anchor = CREDITS_ANCHOR,
+  title = 'Canvas credits',
+}: {
+  children: ReactNode;
+  anchor?: string;
+  title?: string;
+}) {
   const ref = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
   const [highlighted, setHighlighted] = useState(false);
@@ -128,7 +227,7 @@ function CreditsRow({ children }: { children: ReactNode }) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const focusIfTargeted = () => {
-      if (window.location.hash !== `#${CREDITS_ANCHOR}`) return;
+      if (window.location.hash !== `#${anchor}`) return;
       ref.current?.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
       setHighlighted(true);
       clearTimeout(timer);
@@ -140,20 +239,20 @@ function CreditsRow({ children }: { children: ReactNode }) {
       window.removeEventListener('hashchange', focusIfTargeted);
       clearTimeout(timer);
     };
-  }, [reduceMotion]);
+  }, [reduceMotion, anchor]);
 
   return (
     <section
       ref={ref}
-      id={CREDITS_ANCHOR}
-      aria-label="Canvas credits"
+      id={anchor}
+      aria-label={title}
       data-highlighted={highlighted || undefined}
       className={cn(
         'scroll-mt-4 space-y-4 rounded-md py-4 outline-2 outline-offset-4 outline-transparent transition-[outline-color] duration-500 first:pt-0 last:pb-0',
         'data-[highlighted]:outline-ring/60',
       )}
     >
-      <PanelRowTitle>Canvas credits</PanelRowTitle>
+      <PanelRowTitle>{title}</PanelRowTitle>
       {children}
     </section>
   );
@@ -174,6 +273,9 @@ function SelfServeBilling({
 }) {
   return (
     <div className="divide-y divide-border" aria-busy={waitingOnStripe}>
+      {view.paymentFailed ? (
+        <PaymentFailedNotice brandId={brandId} state={view.paymentFailed} />
+      ) : null}
       <PanelRow title="Plans">
         <BillingPlans
           brandId={brandId}
@@ -217,6 +319,32 @@ function SelfServeBilling({
           />
         </div>
       </CreditsRow>
+      {view.x ? (
+        <CreditsRow anchor={X_CREDITS_ANCHOR} title="X API credits">
+          <XCreditsMeter x={view.x} />
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {formatCredits(view.x.creditPack.credits)} X API credits for{' '}
+              {formatUsd(view.x.creditPack.priceUsd)} a pack, paid once and added as soon as Stripe
+              confirms.
+            </p>
+            <BuyCreditsControl
+              brandId={brandId}
+              offer={view.x.creditPack}
+              purchasedCredits={view.x.balanceCredits}
+              wallet="x"
+            />
+          </div>
+          <div className="border-t border-border pt-4">
+            <AutoBillingControl
+              brandId={brandId}
+              autoBilling={view.x.autoBilling}
+              onChanged={onPlanChanged}
+              meter="x"
+            />
+          </div>
+        </CreditsRow>
+      ) : null}
       <PanelRow title="Payment method">
         <PaymentMethodRow brandId={brandId} view={view} />
       </PanelRow>
@@ -253,7 +381,8 @@ const renewalFormat = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
 });
 
-function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeBillingView }) {
+/** Stripe's portal, where the card is updated. Pending until the browser has left the page. */
+function useBillingPortal(brandId: string) {
   const { show } = useToast();
   const portal = useMutation({
     mutationFn: () =>
@@ -266,7 +395,50 @@ function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeB
         variant: 'error',
       }),
   });
-  const redirecting = portal.isPending || portal.isSuccess;
+  return { open: () => portal.mutate(), redirecting: portal.isPending || portal.isSuccess };
+}
+
+/**
+ * A declined renewal. Access holds while Stripe retries, so this informs rather than alarms: one
+ * notice with the one action that fixes it. Stripe emails the owner as well.
+ */
+function PaymentFailedNotice({
+  brandId,
+  state,
+}: {
+  brandId: string;
+  state: NonNullable<SelfServeBillingView['paymentFailed']>;
+}) {
+  const { open, redirecting } = useBillingPortal(brandId);
+  return (
+    <div
+      role="status"
+      data-testid="billing-payment-failed"
+      className="flex flex-wrap items-center justify-between gap-3 py-4"
+    >
+      <p className="flex min-w-0 gap-2.5 text-sm text-foreground">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+        {state === 'retrying' ? (
+          <span>
+            <span className="font-medium">Your last payment didn't go through.</span> Your plan
+            stays on while Stripe retries. Update your card to keep it running.
+          </span>
+        ) : (
+          <span>
+            <span className="font-medium">Your plan is paused</span> because the last payment didn't
+            go through. Update your card in Stripe to turn it back on.
+          </span>
+        )}
+      </p>
+      <Button variant="outline" disabled={redirecting} aria-busy={redirecting} onClick={open}>
+        {redirecting ? 'Opening Stripe…' : 'Update card'}
+      </Button>
+    </div>
+  );
+}
+
+function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeBillingView }) {
+  const { open, redirecting } = useBillingPortal(brandId);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -286,12 +458,7 @@ function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeB
         ) : null}
       </div>
       {view.hasLiveSubscription || view.hasPaymentMethod ? (
-        <Button
-          variant="outline"
-          disabled={redirecting}
-          aria-busy={redirecting}
-          onClick={() => portal.mutate()}
-        >
+        <Button variant="outline" disabled={redirecting} aria-busy={redirecting} onClick={open}>
           {redirecting ? 'Opening Stripe…' : 'Manage payment method'}
         </Button>
       ) : (

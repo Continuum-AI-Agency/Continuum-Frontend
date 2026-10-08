@@ -17,6 +17,7 @@ import {
   DEFAULT_AD_FORMAT,
   DEFAULT_CREATIVE_ASSET_TYPE,
 } from '@/CampaignCanvas/types/adCreativeCompatibility';
+import { DEFAULT_OPTIMIZATION_GOAL } from '@/CampaignCanvas/types/nodeOptions';
 
 // The Meta five. This payload feeds `paid_scaffold_propose`, which only speaks Meta, so
 // the OpenAI node types are deliberately absent — they are filtered out below rather than
@@ -49,7 +50,9 @@ const validationStatusSchema = z.enum(VALIDATION_STATUSES);
 const objectiveSchema = z.enum(OBJECTIVES);
 const buyingTypeSchema = z.enum(BUYING_TYPES);
 const adFormatSchema = z.enum(['IMAGE', 'VIDEO', 'CAROUSEL', 'COLLECTION']);
-const creativeAssetTypeSchema = z.enum(['image', 'video']);
+const creativeAssetTypeSchema = z.enum(['image', 'video', 'carousel']);
+const audienceModeSchema = z.enum(['group', 'broad']);
+const placementModeSchema = z.enum(['advantage_plus', 'manual']);
 const budgetTypeSchema = z.enum(BUDGET_TYPES);
 const callToActionSchema = z.enum(CALL_TO_ACTIONS);
 const payloadSourceSchema = z.enum(PAYLOAD_SOURCES);
@@ -95,6 +98,11 @@ const adSetNodePayloadSchema = baseNodeSchema.extend({
     startTime: z.string().nullable(),
     endTime: z.string().nullable(),
     pacingType: z.array(z.string()),
+    placementMode: placementModeSchema.nullable(),
+    publisherPlatforms: z.array(z.string()),
+    facebookPositions: z.array(z.string()),
+    instagramPositions: z.array(z.string()),
+    devicePlatforms: z.array(z.string()),
   }),
 });
 
@@ -106,12 +114,16 @@ const adNodePayloadSchema = baseNodeSchema.extend({
     headline: z.string(),
     description: z.string().nullable(),
     callToAction: callToActionSchema,
+    linkUrl: z.string().nullable(),
   }),
 });
 
 const audienceNodePayloadSchema = baseNodeSchema.extend({
   nodeType: z.literal('audience'),
   options: z.object({
+    mode: audienceModeSchema,
+    audienceGroupId: z.string().nullable(),
+    audienceGroupVersionId: z.string().nullable(),
     locations: z.array(z.string()),
     ageMin: z.number().int().nullable(),
     ageMax: z.number().int().nullable(),
@@ -130,6 +142,15 @@ const creativeNodePayloadSchema = baseNodeSchema.extend({
     thumbnailUrl: z.string().nullable(),
     mediaId: z.string().nullable(),
     aspectRatio: z.string().nullable(),
+    cards: z.array(
+      z.object({
+        mediaId: z.string().min(1),
+        kind: z.enum(['image', 'video']),
+        thumbnailUrl: z.string().nullable(),
+        headline: z.string().nullable(),
+        linkUrl: z.string().nullable(),
+      }),
+    ),
   }),
 });
 
@@ -314,7 +335,7 @@ function normalizeAdSetNode(node: CampaignCanvasNode) {
     ...base,
     nodeType: 'ad-set' as const,
     options: {
-      optimizationGoal: normalizeLabel(data.optimizationGoal, 'CONVERSIONS'),
+      optimizationGoal: normalizeLabel(data.optimizationGoal, DEFAULT_OPTIMIZATION_GOAL),
       billingEvent: normalizeLabel(data.billingEvent, 'IMPRESSIONS'),
       bidStrategy: normalizeLabel(data.bidStrategy, 'LOWEST_COST_WITHOUT_CAP'),
       budgetType: BUDGET_TYPES.includes(data.budgetType as (typeof BUDGET_TYPES)[number])
@@ -325,6 +346,14 @@ function normalizeAdSetNode(node: CampaignCanvasNode) {
       startTime: normalizeString(data.startTime),
       endTime: normalizeString(data.endTime),
       pacingType: normalizeStringArray(data.pacingType),
+      placementMode:
+        data.placementMode === 'advantage_plus' || data.placementMode === 'manual'
+          ? data.placementMode
+          : null,
+      publisherPlatforms: normalizeStringArray(data.publisherPlatforms),
+      facebookPositions: normalizeStringArray(data.facebookPositions),
+      instagramPositions: normalizeStringArray(data.instagramPositions),
+      devicePlatforms: normalizeStringArray(data.devicePlatforms),
     },
   };
 }
@@ -347,6 +376,7 @@ function normalizeAdNode(node: CampaignCanvasNode) {
       callToAction: CALL_TO_ACTIONS.includes(data.callToAction as (typeof CALL_TO_ACTIONS)[number])
         ? (data.callToAction as (typeof CALL_TO_ACTIONS)[number])
         : 'LEARN_MORE',
+      linkUrl: normalizeString(data.linkUrl),
     },
   };
 }
@@ -358,6 +388,10 @@ function normalizeAudienceNode(node: CampaignCanvasNode) {
     ...base,
     nodeType: 'audience' as const,
     options: {
+      // A node drawn before modes existed has no `mode`; it was always broad targeting.
+      mode: data.mode === 'group' ? ('group' as const) : ('broad' as const),
+      audienceGroupId: normalizeString(data.audienceGroupId),
+      audienceGroupVersionId: normalizeString(data.audienceGroupVersionId),
       locations: normalizeStringArray(data.locations),
       ageMin: normalizeInteger(data.ageMin),
       ageMax: normalizeInteger(data.ageMax),
@@ -379,13 +413,27 @@ function normalizeCreativeNode(node: CampaignCanvasNode) {
     nodeType: 'creative' as const,
     options: {
       assetType:
-        data.assetType === 'image' || data.assetType === 'video'
+        data.assetType === 'image' || data.assetType === 'video' || data.assetType === 'carousel'
           ? (data.assetType as CreativeAssetType)
           : DEFAULT_CREATIVE_ASSET_TYPE,
       assetUrl: normalizeString(data.assetUrl),
       thumbnailUrl: normalizeString(data.thumbnailUrl),
       mediaId: normalizeString(data.mediaId),
       aspectRatio: normalizeString(data.aspectRatio),
+      // Order is Meta's card order, so it is kept as given; a card with no asset is dropped.
+      cards: (Array.isArray(data.cards) ? data.cards : []).flatMap((card) => {
+        const mediaId = normalizeString(card?.mediaId);
+        if (!mediaId) return [];
+        return [
+          {
+            mediaId,
+            kind: card.kind === 'video' ? ('video' as const) : ('image' as const),
+            thumbnailUrl: normalizeString(card.thumbnailUrl),
+            headline: normalizeString(card.headline),
+            linkUrl: normalizeString(card.linkUrl),
+          },
+        ];
+      }),
     },
   };
 }
@@ -579,6 +627,7 @@ function describeNode(node: CampaignCanvasPayload['nodes'][number]): string {
     if (node.options.pacingType.length > 0) {
       facts.push(`placement=${node.options.pacingType.join(',')}`);
     }
+    facts.push(`daily_budget=${node.options.budgetAmount} ${node.options.budgetCurrency}`);
   }
   if (node.nodeType === 'ad') {
     facts.push(`format=${node.options.adFormat}`, `call_to_action=${node.options.callToAction}`);
@@ -587,14 +636,22 @@ function describeNode(node: CampaignCanvasPayload['nodes'][number]): string {
     if (node.options.description) {
       facts.push(`description=${JSON.stringify(node.options.description)}`);
     }
+    if (node.options.linkUrl) facts.push(`link=${node.options.linkUrl}`);
   }
   if (node.nodeType === 'audience') {
+    facts.push(`mode=${node.options.mode}`);
+    if (node.options.audienceGroupVersionId) {
+      facts.push(`audience_group_version_id=${node.options.audienceGroupVersionId}`);
+    }
     if (node.options.locations.length > 0) facts.push(`geo=${node.options.locations.join(',')}`);
     if (node.options.ageMin !== null || node.options.ageMax !== null) {
       facts.push(`age=${node.options.ageMin ?? '?'}-${node.options.ageMax ?? '?'}`);
     }
     if (node.options.interests.length > 0) {
       facts.push(`interests=${node.options.interests.join(',')}`);
+    }
+    if (node.options.genders.length === 1) {
+      facts.push(`genders=${node.options.genders[0] === 1 ? 'male' : 'female'}`);
     }
     if (node.options.customAudiences.length > 0) {
       facts.push(`audiences=${node.options.customAudiences.join(',')}`);
@@ -603,6 +660,14 @@ function describeNode(node: CampaignCanvasPayload['nodes'][number]): string {
   if (node.nodeType === 'creative') {
     facts.push(`asset=${node.options.assetType}`);
     if (node.options.mediaId) facts.push(`media_id=${node.options.mediaId}`);
+    if (node.options.assetType === 'carousel') {
+      facts.push(`cards=${node.options.cards.length}`);
+      node.options.cards.forEach((card, index) => {
+        facts.push(
+          `card${index}=${card.mediaId}${card.headline ? `|${JSON.stringify(card.headline)}` : ''}${card.linkUrl ? `|${card.linkUrl}` : ''}`,
+        );
+      });
+    }
   }
   if (node.meta.metaId) facts.push(`meta_id=${node.meta.metaId}`);
   return facts.join(' ');
@@ -613,11 +678,20 @@ export function buildCampaignCanvasProposalBlock(
   note?: string,
 ): string {
   const byId = new Map(payload.nodes.map((node) => [node.nodeId, node]));
+  const isNode = (
+    item: CampaignCanvasPayload['nodes'][number] | undefined,
+  ): item is CampaignCanvasPayload['nodes'][number] => Boolean(item);
   const childrenOf = (nodeId: string, nodeType: CampaignNodeType) =>
     payload.edges
       .filter((item) => item.sourceNodeId === nodeId && item.targetType === nodeType)
       .map((item) => byId.get(item.targetNodeId))
-      .filter((item): item is CampaignCanvasPayload['nodes'][number] => Boolean(item));
+      .filter(isNode);
+  // An audience feeds its ad set from the side: it is the ad set's INCOMING audience edge.
+  const audiencesOf = (adSetId: string) =>
+    payload.edges
+      .filter((item) => item.targetNodeId === adSetId && item.sourceType === 'audience')
+      .map((item) => byId.get(item.sourceNodeId))
+      .filter(isNode);
 
   const lines: string[] = [];
   const emit = (
@@ -640,7 +714,7 @@ export function buildCampaignCanvasProposalBlock(
     childrenOf(campaign.nodeId, 'ad-set').forEach((adSet, adSetIndex) => {
       const adSetKey = `${campaignKey}/a${adSetIndex}`;
       emit(adSet, adSetKey, 1);
-      for (const audience of childrenOf(adSet.nodeId, 'audience')) {
+      for (const audience of audiencesOf(adSet.nodeId)) {
         emit(audience, `${adSetKey}/audience`, 2);
       }
       childrenOf(adSet.nodeId, 'ad').forEach((ad, adIndex) => {

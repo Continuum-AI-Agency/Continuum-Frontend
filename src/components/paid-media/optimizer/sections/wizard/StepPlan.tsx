@@ -108,7 +108,7 @@ export function StepPlan({
             onUse={(value) => onChange({ dailyTotal: value })}
           />
           {draft.dailyTotal.trim() === '' && selectedBudgetSum > 0 ? (
-            <p className="text-2xs text-muted-foreground tabular-nums">
+            <p className="text-xs text-muted-foreground tabular-nums">
               Blank matches the selection: {formatCurrency(selectedBudgetSum, currency)}/day today.
             </p>
           ) : null}
@@ -118,7 +118,7 @@ export function StepPlan({
       <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 p-3">
         <div>
           <h3 className="font-semibold text-sm tracking-tight">Flight (optional)</h3>
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             A start date, an end date and a budget. The optimizer paces spend to land on it.
           </p>
         </div>
@@ -134,7 +134,7 @@ export function StepPlan({
             />
             {!hasFlight ? (
               <button
-                className="text-2xs text-primary hover:underline"
+                className="text-xs text-primary hover:underline"
                 disabled={disabled}
                 onClick={() => {
                   const range = nextDays(30);
@@ -145,7 +145,7 @@ export function StepPlan({
                 Next 30 days
               </button>
             ) : (
-              <p className="text-2xs text-muted-foreground">{readout.days} days</p>
+              <p className="text-xs text-muted-foreground">{readout.days} days</p>
             )}
           </div>
           <div className="space-y-1.5">
@@ -162,7 +162,7 @@ export function StepPlan({
                 variant="outline"
               >
                 {(Object.keys(GRANULARITY_LABEL) as BudgetGranularity[]).map((value) => (
-                  <ToggleGroupItem className="h-6 px-2 text-2xs" key={value} value={value}>
+                  <ToggleGroupItem className="h-6 px-2 text-xs" key={value} value={value}>
                     {GRANULARITY_LABEL[value]}
                   </ToggleGroupItem>
                 ))}
@@ -176,7 +176,7 @@ export function StepPlan({
               placeholder={GRANULARITY_LABEL[draft.budgetGranularity]}
               value={draft.budgetAmount}
             />
-            <p className="text-2xs text-muted-foreground tabular-nums">
+            <p className="text-xs text-muted-foreground tabular-nums">
               {readout.total != null && readout.perDay != null
                 ? `= ${formatCurrency(readout.total, currency)} for the flight · ≈ ${formatCurrency(readout.perDay, currency)}/day`
                 : draft.budgetAmount && !hasFlight
@@ -201,7 +201,7 @@ export function StepPlan({
                 onChange={(event) => onChange({ maxDailyApply: event.target.value })}
                 value={draft.maxDailyApply}
               />
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Above this daily pool, autopilot writes nothing and asks you instead.
               </p>
             </div>
@@ -214,7 +214,7 @@ export function StepPlan({
                 onChange={(event) => onChange({ maxChangePct: event.target.value })}
                 value={draft.maxChangePct}
               />
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 A single move bigger than this is held for your approval.
               </p>
             </div>

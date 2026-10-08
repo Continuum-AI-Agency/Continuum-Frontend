@@ -3,15 +3,25 @@
 // shared by the API route, the realtime merge, and the sidebar.
 
 import {
+  type AssetTiming,
+  assetTimingSchema,
+  type CommentReaction,
+  commentReactionSchema,
   type CreateCommentRequest,
   commentAnnotationSchema,
+  commentAttachmentsSchema,
   commentMentionSchema,
+  commentVisibilitySchema,
   type DeleteCommentRequest,
   listCommentsResponseSchema,
   type MediaComment,
+  mediaCommentSchema,
+  type PatchCommentMetadataRequest,
+  parseCommentHashtags,
   type UpdateCommentRequest,
 } from '@continuum/contracts';
 import { z } from 'zod';
+import type { TimelineStart } from '@/lib/library/commentExport';
 import {
   createAssetCommentOperation,
   deleteAssetCommentOperation,
@@ -30,6 +40,8 @@ export type MediaCommentRow = {
   body: string;
   mentions?: unknown;
   annotation: unknown;
+  attachments?: unknown;
+  hashtags?: unknown;
   resolved_at: string | null;
   resolved_by: string | null;
   created_by: string | null;
@@ -63,7 +75,7 @@ export function initialsFor(name: string | null | undefined): string {
   return initials || '?';
 }
 
-// A malformed annotation or mentions payload must never take the whole comment
+// A malformed annotation, mentions or attachments payload must never take the whole comment
 // down with it — the comment degrades to un-annotated / un-tagged instead.
 export function commentRowToMediaComment(
   row: MediaCommentRow,
@@ -71,6 +83,8 @@ export function commentRowToMediaComment(
 ): MediaComment {
   const parsedAnnotation = commentAnnotationSchema.safeParse(row.annotation);
   const parsedMentions = z.array(commentMentionSchema).default([]).safeParse(row.mentions);
+  const parsedAttachments = commentAttachmentsSchema.default([]).safeParse(row.attachments);
+  const parsedVisibility = commentVisibilitySchema.safeParse(row.visibility);
   const author = row.created_by ? authors?.get(row.created_by) : undefined;
   return {
     id: row.id,
@@ -81,6 +95,14 @@ export function commentRowToMediaComment(
     body: row.body,
     mentions: parsedMentions.success ? parsedMentions.data : [],
     annotation: parsedAnnotation.success ? parsedAnnotation.data : null,
+    attachments: parsedAttachments.success ? parsedAttachments.data : [],
+    // The database derives them on write; a row selected without the column (or an
+    // optimistic one) gets the same parse the trigger runs.
+    hashtags: Array.isArray(row.hashtags)
+      ? row.hashtags.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0)
+      : parseCommentHashtags(row.body),
+    // Absent only on rows selected without the column; the column default is internal.
+    visibility: parsedVisibility.success ? parsedVisibility.data : 'internal',
     resolvedAt: row.resolved_at,
     resolvedBy: row.resolved_by,
     createdBy: row.created_by,
@@ -182,4 +204,141 @@ export async function updateComment(input: UpdateCommentRequest): Promise<MediaC
 
 export async function deleteComment(input: DeleteCommentRequest): Promise<void> {
   await deleteAssetCommentOperation(createSupabaseBrowserClient(), input);
+}
+
+// The lock toggle and attachments. The Creative Operations create path does not
+// carry either yet, so a new comment is created first and then patched here; the
+// column default ('internal') means a failed patch can only ever hide a comment
+// from share recipients, never expose one.
+export async function patchCommentMetadata(
+  input: PatchCommentMetadataRequest,
+): Promise<MediaComment> {
+  const response = await fetch('/api/library/comments/metadata', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return mediaCommentSchema.parse(await parseJsonOrThrow(response));
+}
+
+export type CommentAttachmentPreview = {
+  assetId: string;
+  kind: 'image' | 'video' | 'audio' | 'file';
+  name: string;
+  mimeType: string | null;
+  url: string | null;
+  thumbnailUrl: string | null;
+};
+
+export async function listCommentAttachmentPreviews(
+  brandId: string,
+  assetIds: string[],
+): Promise<CommentAttachmentPreview[]> {
+  if (assetIds.length === 0) return [];
+  const params = new URLSearchParams({ brandId, ids: assetIds.join(',') });
+  const response = await fetch(`/api/library/comments/attachments?${params.toString()}`);
+  const body = (await parseJsonOrThrow(response)) as { attachments: CommentAttachmentPreview[] };
+  return body.attachments;
+}
+
+export function commentExportHref(params: {
+  brandId: string;
+  assetId: string;
+  versionId: string | null;
+  format: string;
+  timeline?: TimelineStart;
+}): string {
+  const query = new URLSearchParams({
+    brandId: params.brandId,
+    assetId: params.assetId,
+    format: params.format,
+    ...(params.versionId ? { versionId: params.versionId } : {}),
+    ...(params.timeline ? { timeline: params.timeline } : {}),
+  });
+  return `/api/library/comments/export?${query.toString()}`;
+}
+
+// Fetches a file-producing route and saves it under the name the route gave, so
+// a failure (e.g. an unreadable frame rate) surfaces as an error instead of a
+// downloaded JSON body.
+export async function downloadFromRoute(href: string): Promise<void> {
+  const response = await fetch(href);
+  if (!response.ok) await parseJsonOrThrow(response);
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'export';
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function fetchAssetTiming(params: {
+  brandId: string;
+  assetId: string;
+  versionId: string | null;
+}): Promise<AssetTiming> {
+  const query = new URLSearchParams({ brandId: params.brandId, assetId: params.assetId });
+  if (params.versionId) query.set('versionId', params.versionId);
+  const response = await fetch(`/api/library/comments/timing?${query.toString()}`);
+  return assetTimingSchema.parse(await parseJsonOrThrow(response));
+}
+
+// The companion editor view: a compact, chrome-free comment list meant to sit
+// beside the NLE (app/open/review/[assetId]).
+export function editorViewHref(params: {
+  brandId: string;
+  assetId: string;
+  versionId: string | null;
+}): string {
+  const query = new URLSearchParams({ brandId: params.brandId });
+  if (params.versionId) query.set('versionId', params.versionId);
+  return `/open/review/${params.assetId}?${query.toString()}`;
+}
+
+// Emoji reactions, through /api/library/comments/reactions (the caller's own client,
+// the table's RLS). Realtime keeps the list live afterwards.
+const reactionListSchema = z.object({ reactions: z.array(commentReactionSchema) });
+
+export async function listCommentReactions(
+  brandId: string,
+  assetId: string,
+): Promise<CommentReaction[]> {
+  const params = new URLSearchParams({ brandId, assetId });
+  const response = await fetch(`/api/library/comments/reactions?${params.toString()}`);
+  return reactionListSchema.parse(await parseJsonOrThrow(response)).reactions;
+}
+
+export async function setCommentReaction(input: {
+  brandId: string;
+  commentId: string;
+  emoji: string;
+  on: boolean;
+}): Promise<void> {
+  const response = await fetch('/api/library/comments/reactions', {
+    method: input.on ? 'POST' : 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ brandId: input.brandId, commentId: input.commentId, emoji: input.emoji }),
+  });
+  await parseJsonOrThrow(response);
+}
+
+export type ReactionSummary = { emoji: string; count: number; mine: boolean };
+
+// Per comment, emoji in order of first use, with whether the viewer is among them.
+export function summarizeReactions(
+  reactions: readonly CommentReaction[],
+  currentUserId: string | null,
+): Map<string, ReactionSummary[]> {
+  const byComment = new Map<string, Map<string, ReactionSummary>>();
+  for (const reaction of reactions) {
+    const emojis = byComment.get(reaction.commentId) ?? new Map<string, ReactionSummary>();
+    const summary = emojis.get(reaction.emoji) ?? { emoji: reaction.emoji, count: 0, mine: false };
+    summary.count += 1;
+    summary.mine ||= reaction.userId === currentUserId;
+    emojis.set(reaction.emoji, summary);
+    byComment.set(reaction.commentId, emojis);
+  }
+  return new Map([...byComment].map(([id, emojis]) => [id, [...emojis.values()]]));
 }

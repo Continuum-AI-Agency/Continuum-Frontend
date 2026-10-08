@@ -57,7 +57,7 @@ describe('dating the read', () => {
         utcDay={null}
       />,
     );
-    expect(getByTestId('account-read-taken').textContent).toBe('No read taken yet');
+    expect(getByTestId('account-read-taken').textContent).toBe('No read yet');
   });
 });
 
@@ -92,7 +92,9 @@ describe('asking again', () => {
       />,
     );
     expect(tooSoon.getByTestId('account-read-refresh').hasAttribute('disabled')).toBe(true);
-    expect(tooSoon.getByTestId('account-read-refresh-note').textContent).toContain('again at');
+    expect(tooSoon.getByTestId('account-read-refresh-note').textContent).toContain(
+      'Can re-read at',
+    );
     cleanup();
 
     const spent = render(
@@ -147,7 +149,7 @@ describe('while a re-read is queued', () => {
     );
     const note = getByTestId('account-read-refresh-note');
     expect(note.getAttribute('data-running')).toBe('true');
-    expect(note.textContent).toContain('Re-reading this account now');
+    expect(note.textContent).toContain('Re-reading the account');
     // The words already on screen are still dated — they are not wiped while the new read runs.
     expect(getByTestId('account-read-taken').textContent).toContain('11 hours ago');
     expect(queryByTestId('account-read-refresh-error')).toBeNull();
@@ -157,7 +159,7 @@ describe('while a re-read is queued', () => {
   it('calls a stalled row what it is, and lets it be rescued', () => {
     const copy = refreshCopy(refresh({ can_request: true, state: 'stalled' }));
     expect(copy.running).toBe(false);
-    expect(copy.note).toContain('stopped part-way');
+    expect(copy.note).toContain('stopped halfway');
     const { getByTestId } = render(
       <AccountReadFreshness
         now={NOW}

@@ -55,7 +55,7 @@ export type JainaHyperframe = z.infer<typeof jainaHyperframeSchema>;
 export const jainaHyperframeSetSchema = z
   .object({
     read_id: z.string().min(1),
-    read_day: z.string().nullable().default(null),
+    read_day: z.string().min(1).nullable().default(null),
     frames: z.array(jainaHyperframeSchema).min(1).max(3),
   })
   .strict();

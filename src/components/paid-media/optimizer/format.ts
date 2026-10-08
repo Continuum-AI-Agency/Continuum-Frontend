@@ -34,10 +34,29 @@ export function formatCurrency(
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(Math.abs(value));
-  // The sign stays outside the unit: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
-  const sign = value < 0 ? '-' : '';
+  return withUnit(value < 0 ? '-' : '', body, code);
+}
+
+// The sign stays outside the unit: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
+function withUnit(sign: string, body: string, code: string | null): string {
   if (!code) return `${sign}${body}`;
   return code === 'USD' ? `${sign}$${body}` : `${sign}${body} ${code}`;
+}
+
+/** Money to an exact number of decimals, for an amount that has to read to the minor unit —
+ *  a cross-platform move takes off exactly what it puts on, so 957.68 never prints as 958.
+ *  Same unit rule as `formatCurrency`: an unknown code prints the bare figure. */
+export function formatCurrencyExact(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+  fractionDigits: number,
+): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const body = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Math.abs(value));
+  return withUnit(value < 0 ? '-' : '', body, normalizeCurrency(currency));
 }
 
 /** Cost per result, in the account's own currency. The digit rule owns the precision — a
@@ -68,7 +87,7 @@ export function currencyFieldSuffix(currency: string | null | undefined): string
 
 /** The account's ISO code, or null when the row does not carry a usable one. Null is the
  *  answer, never a fallback: see the note at the top of this file. */
-function normalizeCurrency(currency: string | null | undefined): string | null {
+export function normalizeCurrency(currency: string | null | undefined): string | null {
   const trimmed = (currency ?? '').trim().toUpperCase();
   return ISO_CURRENCY.test(trimmed) ? trimmed : null;
 }
@@ -199,4 +218,64 @@ export function formatHeadline(
     case 'count':
       return { figure: headline.value.toLocaleString('en-US'), label: headline.label };
   }
+}
+
+// ── Figure provenance ──────────────────────────────────────────────────────
+//
+// Every costly bug in this module was a number: a `d7` window summing 8 days, a null currency
+// printed as `$`, `$26/day` beside `$766/mo`. A screenshot cannot catch that class, and a unit
+// test only grades the formatter with the figure the test chose. `paid:parity:e2e:bench`
+// grades the SCREEN: it captures the payload the page fetched and checks, node by node, that
+// what the page rendered equals what it was handed. For that the raw figure has to travel
+// with its text — on the same element, from the same call site, so the two cannot be
+// computed from different inputs. That is what these attributes carry; nothing reads them at
+// runtime.
+
+/** The window a figure was computed over, in the range vocabulary, or `none` for a point. */
+export type FigureWindow = 'd1' | 'd3' | 'd7' | 'd14' | 'd30' | 'none';
+
+/** How the raw figure is meant to read on screen — the rule the bench re-derives. */
+export type FigureUnit =
+  | 'currency'
+  | 'per-period'
+  | 'per-month'
+  | 'percent'
+  | 'percent-signed'
+  | 'count'
+  /** Prose that quotes figures: the node names the one it is about, the bench reads every
+   *  money token in it against the payload's figures. */
+  | 'sentence';
+
+export type FigureProps = {
+  'data-testid': 'figure';
+  'data-figure': string;
+  'data-figure-raw': string;
+  'data-figure-currency': string;
+  'data-figure-window': FigureWindow;
+  'data-figure-unit': FigureUnit;
+};
+
+/**
+ * The provenance attributes for one numeric node.
+ *
+ * `raw` is the figure BEFORE formatting, in the unit the text is about (money in account
+ * currency, a percent already in display units, a count). `currency` is the code the site
+ * formatted with, normalised the same way `formatCurrency` normalises it, so `none` on the
+ * node means the text must carry no symbol.
+ */
+export function figureProps(
+  key: string,
+  raw: number | null | undefined,
+  currency: string | null | undefined,
+  window: FigureWindow = 'none',
+  unit: FigureUnit = 'currency',
+): FigureProps {
+  return {
+    'data-testid': 'figure',
+    'data-figure': key,
+    'data-figure-raw': raw == null || !Number.isFinite(raw) ? '' : String(raw),
+    'data-figure-currency': normalizeCurrency(currency) ?? 'none',
+    'data-figure-window': window,
+    'data-figure-unit': unit,
+  };
 }

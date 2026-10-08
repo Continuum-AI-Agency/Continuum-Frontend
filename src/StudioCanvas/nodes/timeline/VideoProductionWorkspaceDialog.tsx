@@ -1,37 +1,34 @@
 'use client';
 
 import {
-  type EditorCommand,
   type EditorGenerationKind,
-  type EditorProjectV2,
   type EditorTake,
-  editorCommandBatchSchema,
+  editorRenderBlockers,
+  type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { ArrowLeft, Check, ImageIcon, Loader2, Sparkles, Waves } from 'lucide-react';
+import { ArrowLeft, Check, ImageIcon, Loader2, Scissors, Sparkles, Waves } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
+import { Video } from '@/components/ui/video';
 import {
-  applyVideoProjectCommands,
   enqueueVideoProjectRender,
   generateVideoCandidates,
-  getVideoProject,
   getVideoProjectSummary,
-  restoreVideoProjectTimeline,
 } from '@/lib/api/videoProjects.client';
 import { listAssetVersions } from '@/lib/library/versions';
 import { cn } from '@/lib/utils';
 import type { TimelineInputSource } from '../../types';
 import { buildBeatMarkers } from '../../utils/audio/beatAnalysis';
+import { EditorAgentPanel } from './EditorAgentPanel';
 import { EditorProjectV2Assembly } from './EditorProjectV2Assembly';
-import {
-  type EditorAssemblyOperation,
-  exactVersionPreviewUrl,
-} from './editorProjectV2AssemblyModel';
+import { type EditorCommandDraft, exactVersionPreviewUrl } from './editorProjectV2AssemblyModel';
+import { EditWorkspace } from './workspace/EditWorkspace';
+import { type EditorProjectController, useEditorProject } from './workspace/useEditorProject';
 
 const STAGES = [
   { id: 'style', label: 'Style' },
@@ -42,19 +39,11 @@ const STAGES = [
   { id: 'assembly', label: 'Assembly' },
 ] as const;
 type WorkspaceStage = (typeof STAGES)[number]['id'];
-type WithoutCommandMetadata<T> = T extends unknown
-  ? Omit<T, 'commandId' | 'idempotencyKey' | 'expectedRevision' | 'issuedAt' | 'actor'>
-  : never;
-type EditorCommandDraft = WithoutCommandMetadata<EditorCommand>;
-interface AssemblyHistoryEntry {
-  label: string;
-  beforeRevision: number;
-  afterRevision: number;
-}
-type UndoEntry = AssemblyHistoryEntry & { appliedFingerprint: string };
-type RedoEntry = AssemblyHistoryEntry & { redoFingerprint: string };
+type LoadedController = EditorProjectController & {
+  project: NonNullable<EditorProjectController['project']>;
+};
 
-const stageFor = (project: EditorProjectV2): WorkspaceStage => {
+const stageFor = (project: LoadedController['project']): WorkspaceStage => {
   const stage = project.production.workflowStage;
   if (stage.startsWith('style')) return 'style';
   if (stage.startsWith('frame')) return 'frames';
@@ -91,219 +80,144 @@ function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
       <img src={url} alt="Generated frame candidate" className="aspect-video w-full object-cover" />
     );
   }
-  return (
-    // biome-ignore lint/a11y/useMediaCaption: generated silent review candidate.
-    <video src={url} controls className="aspect-video w-full bg-black object-contain" />
-  );
+  return <Video src={url} ariaLabel="Generated clip candidate" className="bg-black" />;
 }
 
+/** Assets the edit can draw on (graph wiring, project sources) as the stages' pool. */
+const poolSource = (asset: VideoEditorPoolAsset): TimelineInputSource => ({
+  nodeId: asset.assetId,
+  kind: asset.kind,
+  label: asset.title,
+  sourceAssetId: asset.assetId,
+  ...(asset.versionId ? { sourceVersionId: asset.versionId } : {}),
+  ...(asset.durationSec ? { durationSec: asset.durationSec } : {}),
+});
+
+/**
+ * `/studio/video/[projectId]`. Edit mode — the CapCut-style workspace — is the default.
+ * The production stages (Style → Assembly) are a second mode, offered only to projects
+ * that have shots, or when the canvas opened the motion editor.
+ */
 export function VideoStudioWorkspace({
   projectId,
   brandId,
-  pool,
   origin,
   view,
 }: {
   projectId: string;
   brandId: string;
-  pool: TimelineInputSource[];
   origin: 'canvas' | 'library';
   view?: 'assembly' | 'motion';
 }) {
-  const { show } = useToast();
-  const [project, setProject] = useState<EditorProjectV2 | null>(null);
-  const [activeStage, setActiveStage] = useState<WorkspaceStage>(
-    view || origin === 'canvas' ? 'assembly' : 'style',
+  const controller = useEditorProject(projectId);
+  const [mode, setMode] = useState<'edit' | 'production'>(
+    view === 'motion' ? 'production' : 'edit',
   );
-  const [busy, setBusy] = useState<string | null>(null);
+  const { project } = controller;
+  if (!project) {
+    return (
+      <div className="flex h-[var(--app-content-h)] items-center justify-center text-xs text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" /> Opening the editor…
+      </div>
+    );
+  }
+  const loaded = { ...controller, project };
+  const productionAvailable = project.production.shots.length > 0 || view === 'motion';
+  return mode === 'production' && productionAvailable ? (
+    <ProductionStages
+      controller={loaded}
+      brandId={brandId}
+      origin={origin}
+      view={view}
+      onOpenEdit={() => setMode('edit')}
+    />
+  ) : (
+    <EditWorkspace
+      controller={loaded}
+      brandId={brandId}
+      origin={origin}
+      productionAvailable={productionAvailable}
+      onOpenProduction={() => setMode('production')}
+    />
+  );
+}
+
+function ProductionStages({
+  controller,
+  brandId,
+  origin,
+  view,
+  onOpenEdit,
+}: {
+  controller: LoadedController;
+  brandId: string;
+  origin: 'canvas' | 'library';
+  view?: 'assembly' | 'motion';
+  onOpenEdit: () => void;
+}) {
+  const { show } = useToast();
+  const { project, refresh, commit: commitCommands, runOp } = controller;
+  const projectId = project.projectId;
+  const [activeStage, setActiveStage] = useState<WorkspaceStage>(() =>
+    view ? 'assembly' : stageFor(project),
+  );
+  const [localBusy, setBusy] = useState<string | null>(null);
+  const busy = localBusy ?? controller.busy;
+  const [pool, setPool] = useState<TimelineInputSource[]>([]);
   const [scriptText, setScriptText] = useState('');
   const [styleText, setStyleText] = useState('');
   const [narrationText, setNarrationText] = useState('');
   const [musicPrompt, setMusicPrompt] = useState('');
   const [bpm, setBpm] = useState('120');
   const [beatOffset, setBeatOffset] = useState('0');
-  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
-  const [redoStack, setRedoStack] = useState<RedoEntry[]>([]);
+  const [agentOpen, setAgentOpen] = useState(false);
 
-  const refresh = useCallback(async () => {
-    const next = await getVideoProject(projectId);
-    setProject(next);
-    setScriptText(next.production.sourceScript ?? '');
-    setStyleText(next.production.styleContract?.lockedText ?? '');
-    setNarrationText(
-      next.production.soundPlan?.narrationText ?? next.production.sourceScript ?? '',
-    );
-    setMusicPrompt(next.production.soundPlan?.musicPrompt ?? '');
-    setBpm(String(next.production.soundPlan?.bpm ?? 120));
-    setBeatOffset(String(next.production.soundPlan?.beatOffsetSec ?? 0));
-    setActiveStage((current) =>
-      current === 'style' && next.revision === 0 ? stageFor(next) : current,
-    );
-    return next;
-  }, [projectId]);
-
+  // The drafts follow the project whenever a new revision lands — ours or anyone's.
+  const { production } = project;
   useEffect(() => {
-    void refresh().catch((error) =>
-      show({
-        title: 'Could not open video production',
-        description: error instanceof Error ? error.message : 'Project loading failed.',
-        variant: 'error',
-      }),
-    );
-    const interval = window.setInterval(() => void refresh().catch(() => undefined), 3_000);
-    return () => window.clearInterval(interval);
-  }, [refresh, show]);
+    setScriptText(production.sourceScript ?? '');
+    setStyleText(production.styleContract?.lockedText ?? '');
+    setNarrationText(production.soundPlan?.narrationText ?? production.sourceScript ?? '');
+    setMusicPrompt(production.soundPlan?.musicPrompt ?? '');
+    setBpm(String(production.soundPlan?.bpm ?? 120));
+    setBeatOffset(String(production.soundPlan?.beatOffsetSec ?? 0));
+  }, [production]);
 
-  const commitCommands = useCallback(
-    async (commands: EditorCommandDraft[], label: string) => {
-      if (!project) return;
-      const issuedAt = new Date().toISOString();
-      const batchId = crypto.randomUUID();
-      const actor = { actorId: 'current-user', actorType: 'user' as const };
-      const batch = editorCommandBatchSchema.parse({
-        batchId,
-        projectId: project.projectId,
-        sequenceId: project.sequenceId,
-        idempotencyKey: `ui:${batchId}`,
-        expectedRevision: project.revision,
-        expectedFingerprint: project.fingerprint,
-        atomic: true,
-        issuedAt,
-        actor,
-        commands: commands.map((command, index) => {
-          const commandId = crypto.randomUUID();
-          return {
-            ...command,
-            commandId,
-            idempotencyKey: `ui-command:${batchId}:${index}:${commandId}`,
-            expectedRevision: project.revision,
-            issuedAt,
-            actor,
-          };
-        }),
+  // The pool carries each asset's signed preview so the media bin tiles play, as the
+  // project-clip bin did before `get_pool` subsumed it.
+  useEffect(() => {
+    let cancelled = false;
+    void runOp('get_pool', {})
+      .then((output) =>
+        Promise.all(
+          output.assets.map(async (asset): Promise<TimelineInputSource> => {
+            const source = poolSource(asset);
+            if (!asset.versionId) return source;
+            const versions = await listAssetVersions({ brandId, assetId: asset.assetId }).catch(
+              () => [],
+            );
+            const previewUrl = exactVersionPreviewUrl(versions, asset.versionId);
+            return previewUrl ? { ...source, previewUrl } : source;
+          }),
+        ),
+      )
+      .then((sources) => {
+        if (!cancelled) setPool(sources);
+      })
+      .catch(() => {
+        if (!cancelled) setPool([]);
       });
-      setBusy(label);
-      try {
-        const next = await applyVideoProjectCommands(batch);
-        setProject(next);
-        setScriptText(next.production.sourceScript ?? '');
-        setStyleText(next.production.styleContract?.lockedText ?? '');
-        setNarrationText(next.production.soundPlan?.narrationText ?? '');
-        setMusicPrompt(next.production.soundPlan?.musicPrompt ?? '');
-        return next;
-      } finally {
-        setBusy(null);
-      }
-    },
-    [project],
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, runOp]);
 
   const commit = useCallback(
     (command: EditorCommandDraft) => commitCommands([command], command.commandType),
     [commitCommands],
   );
 
-  const applyAssemblyOperation = useCallback(
-    async (operation: EditorAssemblyOperation) => {
-      if (busy || !project) return;
-      const beforeRevision = project.revision;
-      try {
-        const next = await commitCommands(operation.forward, operation.label);
-        if (!next) return;
-        setUndoStack((current) => [
-          ...current,
-          {
-            label: operation.label,
-            beforeRevision,
-            afterRevision: next.revision,
-            appliedFingerprint: next.fingerprint,
-          },
-        ]);
-        setRedoStack([]);
-      } catch (error) {
-        show({
-          title: 'Assembly edit failed',
-          description: error instanceof Error ? error.message : 'The project could not be updated.',
-          variant: 'error',
-        });
-      }
-    },
-    [busy, commitCommands, project, show],
-  );
-
-  const restoreTimelineRevision = useCallback(
-    async (restoreRevision: number, label: string) => {
-      if (!project) return;
-      setBusy(label);
-      try {
-        const next = await restoreVideoProjectTimeline(project.projectId, {
-          expectedRevision: project.revision,
-          expectedFingerprint: project.fingerprint,
-          restoreRevision,
-          idempotencyKey: `ui-restore:${project.projectId}:${project.revision}:${restoreRevision}:${crypto.randomUUID()}`,
-        });
-        setProject(next);
-        setScriptText(next.production.sourceScript ?? '');
-        setStyleText(next.production.styleContract?.lockedText ?? '');
-        return next;
-      } finally {
-        setBusy(null);
-      }
-    },
-    [project],
-  );
-
-  const undoAssembly = useCallback(async () => {
-    const entry = undoStack.at(-1);
-    if (!entry || !project || busy) return;
-    if (entry.appliedFingerprint !== project.fingerprint) {
-      show({
-        title: 'Undo needs the latest revision',
-        description: 'The project changed after this edit. Refresh before making another change.',
-        variant: 'warning',
-      });
-      return;
-    }
-    try {
-      const next = await restoreTimelineRevision(entry.beforeRevision, `Undo ${entry.label}`);
-      if (!next) return;
-      setUndoStack((current) => current.slice(0, -1));
-      setRedoStack((current) => [...current, { ...entry, redoFingerprint: next.fingerprint }]);
-    } catch (error) {
-      show({
-        title: 'Undo failed',
-        description: error instanceof Error ? error.message : 'The edit could not be reversed.',
-        variant: 'error',
-      });
-    }
-  }, [busy, project, restoreTimelineRevision, show, undoStack]);
-
-  const redoAssembly = useCallback(async () => {
-    const entry = redoStack.at(-1);
-    if (!entry || !project || busy) return;
-    if (entry.redoFingerprint !== project.fingerprint) {
-      show({
-        title: 'Redo needs the latest revision',
-        description: 'The project changed after undo. Redo was left unapplied.',
-        variant: 'warning',
-      });
-      return;
-    }
-    try {
-      const next = await restoreTimelineRevision(entry.afterRevision, `Redo ${entry.label}`);
-      if (!next) return;
-      setRedoStack((current) => current.slice(0, -1));
-      setUndoStack((current) => [...current, { ...entry, appliedFingerprint: next.fingerprint }]);
-    } catch (error) {
-      show({
-        title: 'Redo failed',
-        description: error instanceof Error ? error.message : 'The edit could not be replayed.',
-        variant: 'error',
-      });
-    }
-  }, [busy, project, redoStack, restoreTimelineRevision, show]);
-
-  const queueRender = useCallback(() => {
+  const queueRender = () => {
     setBusy('render');
     void enqueueVideoProjectRender(projectId)
       .then(() => {
@@ -322,47 +236,57 @@ export function VideoStudioWorkspace({
         }),
       )
       .finally(() => setBusy(null));
-  }, [projectId, refresh, show]);
+  };
 
-  const generate = useCallback(
-    async (kind: EditorGenerationKind, shotId?: string) => {
-      setBusy(`${kind}:${shotId ?? 'project'}`);
-      try {
-        await generateVideoCandidates({ projectId, kind, shotId });
-        show({
-          title: 'Generation queued',
-          description: 'Candidates will appear here automatically.',
-        });
-        await refresh();
-      } catch (error) {
-        show({
-          title: 'Generation blocked',
-          description: error instanceof Error ? error.message : 'The request could not start.',
-          variant: 'warning',
-        });
-      } finally {
-        setBusy(null);
-      }
-    },
-    [projectId, refresh, show],
-  );
+  const generate = async (kind: EditorGenerationKind, shotId?: string) => {
+    setBusy(`${kind}:${shotId ?? 'project'}`);
+    try {
+      await generateVideoCandidates({ projectId, kind, shotId });
+      show({
+        title: 'Generation queued',
+        description: 'Candidates will appear here automatically.',
+      });
+      await refresh();
+    } catch (error) {
+      show({
+        title: 'Generation blocked',
+        description: error instanceof Error ? error.message : 'The request could not start.',
+        variant: 'warning',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
-  const pinnedPool = useMemo(
-    () => pool.filter((source) => source.sourceAssetId && source.sourceVersionId),
-    [pool],
+  const pinnedPool = pool.filter((source) => source.sourceAssetId && source.sourceVersionId);
+  const counts = {
+    shots: production.shots.length,
+    frames: production.shots.filter((shot) => shot.selection.frameTakeId).length,
+    motion: production.shots.filter((shot) => shot.selection.motionDraftTakeId).length,
+    masters: production.shots.filter((shot) => shot.selection.motionMasterTakeId).length,
+  };
+  // A plain edit renders from pinned Library versions only; the server refuses anything else.
+  const hasPinnedPicture = project.tracks.some(
+    (track) =>
+      (track.kind === 'video' || (track.kind === 'overlay' && !track.muted)) &&
+      track.enabled &&
+      track.clips.some(
+        (clip) =>
+          clip.enabled &&
+          'source' in clip &&
+          clip.source.sourceType === 'library_asset' &&
+          Boolean(clip.source.renditionId),
+      ),
   );
-  const counts = useMemo(() => {
-    const shots = project?.production.shots ?? [];
-    return {
-      shots: shots.length,
-      frames: shots.filter((shot) => shot.selection.frameTakeId).length,
-      motion: shots.filter((shot) => shot.selection.motionDraftTakeId).length,
-      masters: shots.filter((shot) => shot.selection.motionMasterTakeId).length,
-    };
-  }, [project]);
+  const renderBlockers = [
+    ...editorRenderBlockers(project),
+    ...(counts.shots === 0 && !hasPinnedPicture
+      ? ['Add pinned Library picture before rendering.']
+      : []),
+  ];
 
   const addShot = () => {
-    const order = project?.production.shots.length ?? 0;
+    const order = production.shots.length;
     void commit({
       commandType: 'upsert_shot',
       shot: {
@@ -381,7 +305,6 @@ export function VideoStudioWorkspace({
     });
   };
 
-  if (!project) return null;
   const style = project.production.styleContract;
   const soundPlan = project.production.soundPlan;
   const soundDraft = (status: 'draft' | 'approved' = 'draft') => ({
@@ -501,6 +424,18 @@ export function VideoStudioWorkspace({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{project.production.workflowStage.replaceAll('_', ' ')}</Badge>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={onOpenEdit}>
+            <Scissors className="size-3.5" /> Edit
+          </Button>
+          <Button
+            size="sm"
+            variant={agentOpen ? 'secondary' : 'outline'}
+            onClick={() => setAgentOpen((open) => !open)}
+            aria-expanded={agentOpen}
+            aria-controls="video-editor-agent"
+          >
+            <Sparkles className="size-3.5" /> Agent
+          </Button>
           <Link
             href={origin === 'library' ? '/library' : '/ai-studio'}
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
@@ -542,327 +477,339 @@ export function VideoStudioWorkspace({
         })}
       </nav>
 
-      <main className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-5">
-        {activeStage === 'style' ? (
-          <div className="mx-auto max-w-4xl space-y-4">
-            <div className="rounded-xl border border-border/60 bg-card p-5">
-              <h2 className="font-medium">Script</h2>
-              <Textarea
-                className="mt-4"
-                value={scriptText}
-                onChange={(event) => setScriptText(event.target.value)}
-                rows={8}
-                placeholder="Paste or write the source script"
-              />
-              <div className="mt-3 flex justify-end">
-                <Button
-                  variant="outline"
-                  disabled={Boolean(busy)}
-                  onClick={() =>
-                    void commit({
-                      commandType: 'set_production_script',
-                      sourceScript: scriptText,
-                    })
-                  }
-                >
-                  Save script
-                </Button>
-              </div>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-card p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-medium">Style contract</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Lock the lens, light, palette, texture, blocking, and atmosphere before spending
-                    on motion.
-                  </p>
-                </div>
-                <Badge>{style?.status ?? 'not extracted'}</Badge>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {pinnedPool.map((source) => (
-                  <Badge key={source.nodeId} variant="outline">
-                    {source.label}
-                  </Badge>
-                ))}
-                {pinnedPool.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">
-                    Connect pinned Library images to the node first.
-                  </span>
-                ) : null}
-              </div>
-              {project.production.references.map((reference) => (
-                <label
-                  key={reference.id}
-                  className="mt-2 flex items-center justify-between gap-3 text-xs"
-                >
-                  <span>{reference.label ?? reference.id}</span>
-                  <select
-                    aria-label={`Role for ${reference.label ?? reference.id}`}
-                    className="h-8 rounded-md border bg-background px-2"
-                    value={reference.role}
-                    onChange={(event) =>
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <main className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-5">
+          {activeStage === 'style' ? (
+            <div className="mx-auto max-w-4xl space-y-4">
+              <div className="rounded-xl border border-border/60 bg-card p-5">
+                <h2 className="font-medium">Script</h2>
+                <Textarea
+                  className="mt-4"
+                  value={scriptText}
+                  onChange={(event) => setScriptText(event.target.value)}
+                  rows={8}
+                  placeholder="Paste or write the source script"
+                />
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="outline"
+                    disabled={Boolean(busy)}
+                    onClick={() =>
                       void commit({
-                        commandType: 'set_production_references',
-                        references: project.production.references.map((item) =>
-                          item.id === reference.id
-                            ? { ...item, role: event.target.value as typeof item.role }
-                            : item,
-                        ),
+                        commandType: 'set_production_script',
+                        sourceScript: scriptText,
                       })
                     }
                   >
-                    {['style', 'character', 'location', 'product', 'score', 'ambience'].map(
-                      (role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </label>
-              ))}
-              <div className="mt-4 flex gap-2">
-                <Button
-                  variant="outline"
-                  disabled={pinnedPool.length === 0 || Boolean(busy)}
-                  onClick={() =>
-                    void commit({
-                      commandType: 'set_production_references',
-                      references: pinnedPool.map((source) => {
-                        const existing = project.production.references.find(
-                          (reference) => reference.id === source.nodeId,
-                        );
-                        return {
-                          id: source.nodeId,
-                          role: existing?.role ?? ('style' as const),
-                          asset: {
-                            assetId: source.sourceAssetId as string,
-                            versionId: source.sourceVersionId as string,
-                          },
-                          label: source.label,
-                        };
-                      }),
-                    })
-                  }
-                >
-                  Pin connected references
-                </Button>
-                <Button
-                  disabled={
-                    !project.production.references.some(
-                      (reference) => reference.role === 'style',
-                    ) || Boolean(busy)
-                  }
-                  onClick={() => void generate('style_extract')}
-                >
-                  {busy === 'style_extract:project' ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Sparkles />
-                  )}
-                  Extract style
-                </Button>
-              </div>
-            </div>
-            {style ? (
-              <div className="rounded-xl border border-border/60 bg-card p-5">
-                <Textarea
-                  value={styleText}
-                  onChange={(event) => setStyleText(event.target.value)}
-                  rows={8}
-                  disabled={style.status === 'approved'}
-                />
-                <div className="mt-3 flex justify-end gap-2">
-                  {style.status === 'draft' ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        disabled={!styleText.trim() || Boolean(busy)}
-                        onClick={() =>
-                          void commit({
-                            commandType: 'set_style_contract',
-                            styleContract: { ...style, lockedText: styleText, status: 'draft' },
-                          })
-                        }
-                      >
-                        Save edits
-                      </Button>
-                      <Button
-                        disabled={Boolean(busy)}
-                        onClick={() => void commit({ commandType: 'approve_style_contract' })}
-                      >
-                        <Check /> Approve style
-                      </Button>
-                    </>
-                  ) : (
-                    <Badge>
-                      <Check /> Human approved
-                    </Badge>
-                  )}
+                    Save script
+                  </Button>
                 </div>
               </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {activeStage === 'frames' ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-medium">Frames first</h2>
-                <p className="text-xs text-muted-foreground">
-                  Explore composition cheaply, then choose one keeper per shot.
-                </p>
+              <div className="rounded-xl border border-border/60 bg-card p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-medium">Style contract</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Lock the lens, light, palette, texture, blocking, and atmosphere before
+                      spending on motion.
+                    </p>
+                  </div>
+                  <Badge>{style?.status ?? 'not extracted'}</Badge>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {pinnedPool.map((source) => (
+                    <Badge key={source.nodeId} variant="outline">
+                      {source.label}
+                    </Badge>
+                  ))}
+                  {pinnedPool.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      Connect pinned Library images to the node first.
+                    </span>
+                  ) : null}
+                </div>
+                {project.production.references.map((reference) => (
+                  <label
+                    key={reference.id}
+                    className="mt-2 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <span>{reference.label ?? reference.id}</span>
+                    <select
+                      aria-label={`Role for ${reference.label ?? reference.id}`}
+                      className="h-8 rounded-md border bg-background px-2"
+                      value={reference.role}
+                      onChange={(event) =>
+                        void commit({
+                          commandType: 'set_production_references',
+                          references: project.production.references.map((item) =>
+                            item.id === reference.id
+                              ? { ...item, role: event.target.value as typeof item.role }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      {['style', 'character', 'location', 'product', 'score', 'ambience'].map(
+                        (role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                ))}
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={pinnedPool.length === 0 || Boolean(busy)}
+                    onClick={() =>
+                      void commit({
+                        commandType: 'set_production_references',
+                        references: pinnedPool.map((source) => {
+                          const existing = project.production.references.find(
+                            (reference) => reference.id === source.nodeId,
+                          );
+                          return {
+                            id: source.nodeId,
+                            role: existing?.role ?? ('style' as const),
+                            asset: {
+                              assetId: source.sourceAssetId as string,
+                              versionId: source.sourceVersionId as string,
+                            },
+                            label: source.label,
+                          };
+                        }),
+                      })
+                    }
+                  >
+                    Pin connected references
+                  </Button>
+                  <Button
+                    disabled={
+                      !project.production.references.some(
+                        (reference) => reference.role === 'style',
+                      ) || Boolean(busy)
+                    }
+                    onClick={() => void generate('style_extract')}
+                  >
+                    {busy === 'style_extract:project' ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Sparkles />
+                    )}
+                    Extract style
+                  </Button>
+                </div>
               </div>
-              <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
-                <ImageIcon /> Add shot
-              </Button>
+              {style ? (
+                <div className="rounded-xl border border-border/60 bg-card p-5">
+                  <Textarea
+                    value={styleText}
+                    onChange={(event) => setStyleText(event.target.value)}
+                    rows={8}
+                    disabled={style.status === 'approved'}
+                  />
+                  <div className="mt-3 flex justify-end gap-2">
+                    {style.status === 'draft' ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          disabled={!styleText.trim() || Boolean(busy)}
+                          onClick={() =>
+                            void commit({
+                              commandType: 'set_style_contract',
+                              styleContract: { ...style, lockedText: styleText, status: 'draft' },
+                            })
+                          }
+                        >
+                          Save edits
+                        </Button>
+                        <Button
+                          disabled={Boolean(busy)}
+                          onClick={() => void commit({ commandType: 'approve_style_contract' })}
+                        >
+                          <Check /> Approve style
+                        </Button>
+                      </>
+                    ) : (
+                      <Badge>
+                        <Check /> Human approved
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
-            {takeGrid('frame', 'frame')}
-          </div>
-        ) : null}
-        {activeStage === 'motion' ? takeGrid('motion_draft', 'motion_draft') : null}
-        {activeStage === 'masters' ? takeGrid('motion_master', 'motion_master') : null}
-        {activeStage === 'sound' ? (
-          <div className="mx-auto grid max-w-5xl gap-px border border-border/60 bg-border/60 lg:grid-cols-2">
-            <section className="space-y-4 bg-background p-5">
-              <div>
-                <h2 className="font-medium">Voiceover</h2>
-                <p className="text-xs text-muted-foreground">
-                  Generate a WAV take from the approved script.
-                </p>
-              </div>
-              <Textarea
-                value={narrationText}
-                onChange={(event) => setNarrationText(event.target.value)}
-                rows={8}
-              />
-              <Button
-                disabled={!narrationText.trim() || Boolean(busy)}
-                onClick={() => void generateSound('narration')}
-              >
-                <Sparkles /> Generate narration
-              </Button>
-            </section>
-            <section className="space-y-4 bg-background p-5">
-              <div>
-                <h2 className="font-medium">Music and beat grid</h2>
-                <p className="text-xs text-muted-foreground">
-                  Set musical direction, then correct BPM and offset before syncing cuts.
-                </p>
-              </div>
-              <Textarea
-                value={musicPrompt}
-                onChange={(event) => setMusicPrompt(event.target.value)}
-                rows={4}
-                placeholder="Percussive, restrained, no vocals"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  aria-label="BPM"
-                  type="number"
-                  min="30"
-                  max="300"
-                  value={bpm}
-                  onChange={(event) => setBpm(event.target.value)}
-                />
-                <Input
-                  aria-label="Beat offset seconds"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={beatOffset}
-                  onChange={(event) => setBeatOffset(event.target.value)}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  disabled={!musicPrompt.trim() || Boolean(busy)}
-                  onClick={() => void generateSound('music')}
-                >
-                  <Sparkles /> Generate music
+          ) : null}
+
+          {activeStage === 'frames' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-medium">Frames first</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Explore composition cheaply, then choose one keeper per shot.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
+                  <ImageIcon /> Add shot
                 </Button>
+              </div>
+              {takeGrid('frame', 'frame')}
+            </div>
+          ) : null}
+          {activeStage === 'motion' ? takeGrid('motion_draft', 'motion_draft') : null}
+          {activeStage === 'masters' ? takeGrid('motion_master', 'motion_master') : null}
+          {activeStage === 'sound' ? (
+            <div className="mx-auto grid max-w-5xl gap-px border border-border/60 bg-border/60 lg:grid-cols-2">
+              <section className="space-y-4 bg-background p-5">
+                <div>
+                  <h2 className="font-medium">Voiceover</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Generate a WAV take from the approved script.
+                  </p>
+                </div>
+                <Textarea
+                  value={narrationText}
+                  onChange={(event) => setNarrationText(event.target.value)}
+                  rows={8}
+                />
                 <Button
-                  variant="outline"
-                  disabled={!Number(bpm) || Boolean(busy)}
-                  onClick={() => {
-                    const beats = buildBeatMarkers({
-                      durationSec: project.durationSec,
-                      bpm: Number(bpm),
-                      offsetSec: Number(beatOffset) || 0,
-                    });
-                    void commitCommands(
-                      [
-                        ...project.markers
-                          .filter((marker) => marker.kind === 'beat')
-                          .map((marker) => ({
-                            commandType: 'remove_marker' as const,
-                            markerId: marker.id,
+                  disabled={!narrationText.trim() || Boolean(busy)}
+                  onClick={() => void generateSound('narration')}
+                >
+                  <Sparkles /> Generate narration
+                </Button>
+              </section>
+              <section className="space-y-4 bg-background p-5">
+                <div>
+                  <h2 className="font-medium">Music and beat grid</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Set musical direction, then correct BPM and offset before syncing cuts.
+                  </p>
+                </div>
+                <Textarea
+                  value={musicPrompt}
+                  onChange={(event) => setMusicPrompt(event.target.value)}
+                  rows={4}
+                  placeholder="Percussive, restrained, no vocals"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    aria-label="BPM"
+                    type="number"
+                    min="30"
+                    max="300"
+                    value={bpm}
+                    onChange={(event) => setBpm(event.target.value)}
+                  />
+                  <Input
+                    aria-label="Beat offset seconds"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={beatOffset}
+                    onChange={(event) => setBeatOffset(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={!musicPrompt.trim() || Boolean(busy)}
+                    onClick={() => void generateSound('music')}
+                  >
+                    <Sparkles /> Generate music
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!Number(bpm) || Boolean(busy)}
+                    onClick={() => {
+                      const beats = buildBeatMarkers({
+                        durationSec: project.durationSec,
+                        bpm: Number(bpm),
+                        offsetSec: Number(beatOffset) || 0,
+                      });
+                      void commitCommands(
+                        [
+                          ...project.markers
+                            .filter((marker) => marker.kind === 'beat')
+                            .map((marker) => ({
+                              commandType: 'remove_marker' as const,
+                              markerId: marker.id,
+                            })),
+                          ...beats.map((marker) => ({
+                            commandType: 'upsert_marker' as const,
+                            marker,
                           })),
-                        ...beats.map((marker) => ({
-                          commandType: 'upsert_marker' as const,
-                          marker,
-                        })),
-                        {
-                          commandType: 'set_sound_plan' as const,
-                          soundPlan: { ...soundDraft(), beatConfidence: 1 },
-                        },
-                      ],
-                      'Beat Sync',
-                    );
-                  }}
-                >
-                  <Waves /> Beat Sync
-                </Button>
-              </div>
-              <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
-                <Button
-                  variant="outline"
-                  disabled={Boolean(busy)}
-                  onClick={() =>
-                    void commit({ commandType: 'set_sound_plan', soundPlan: soundDraft() })
-                  }
-                >
-                  Save sound plan
-                </Button>
-                <Button
-                  disabled={Boolean(busy)}
-                  onClick={() =>
-                    void commit({
-                      commandType: 'set_sound_plan',
-                      soundPlan: soundDraft('approved'),
-                    })
-                  }
-                >
-                  <Check /> Approve sound
-                </Button>
-              </div>
-            </section>
+                          {
+                            commandType: 'set_sound_plan' as const,
+                            soundPlan: { ...soundDraft(), beatConfidence: 1 },
+                          },
+                        ],
+                        'Beat Sync',
+                      );
+                    }}
+                  >
+                    <Waves /> Beat Sync
+                  </Button>
+                </div>
+                <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
+                  <Button
+                    variant="outline"
+                    disabled={Boolean(busy)}
+                    onClick={() =>
+                      void commit({ commandType: 'set_sound_plan', soundPlan: soundDraft() })
+                    }
+                  >
+                    Save sound plan
+                  </Button>
+                  <Button
+                    disabled={Boolean(busy)}
+                    onClick={() =>
+                      void commit({
+                        commandType: 'set_sound_plan',
+                        soundPlan: soundDraft('approved'),
+                      })
+                    }
+                  >
+                    <Check /> Approve sound
+                  </Button>
+                </div>
+              </section>
+            </div>
+          ) : null}
+          {activeStage === 'assembly' ? (
+            <EditorProjectV2Assembly
+              project={project}
+              brandId={brandId}
+              // The WHOLE connected pool, not just the Library-pinned part: the media bin
+              // is where a wired clip has to become visible, and filtering it to pinned
+              // sources is what made a connected video invisible in Assembly (#294).
+              pool={pool}
+              busy={Boolean(busy)}
+              canUndo={controller.canUndo}
+              canRedo={controller.canRedo}
+              renderBlockers={renderBlockers}
+              initialTimelineMode={view === 'motion' ? 'motion' : 'edit'}
+              onApply={(operation) => void controller.apply(operation)}
+              onUndo={() => void controller.undo()}
+              onRedo={() => void controller.redo()}
+              onRender={queueRender}
+            />
+          ) : null}
+        </main>
+        {agentOpen ? (
+          <div id="video-editor-agent" className="h-72 shrink-0 md:h-auto">
+            <EditorAgentPanel
+              projectId={projectId}
+              onApplied={async () => {
+                await refresh();
+              }}
+            />
           </div>
         ) : null}
-        {activeStage === 'assembly' ? (
-          <EditorProjectV2Assembly
-            project={project}
-            brandId={brandId}
-            // The WHOLE connected pool, not just the Library-pinned part: the media bin
-            // is where a wired clip has to become visible, and filtering it to pinned
-            // sources is what made a connected video invisible in Assembly (#294).
-            pool={pool}
-            busy={Boolean(busy)}
-            canUndo={undoStack.at(-1)?.appliedFingerprint === project.fingerprint}
-            canRedo={redoStack.at(-1)?.redoFingerprint === project.fingerprint}
-            canRender={counts.shots > 0 && counts.masters === counts.shots}
-            initialTimelineMode={view === 'motion' ? 'motion' : 'edit'}
-            onApply={(operation) => void applyAssemblyOperation(operation)}
-            onUndo={() => void undoAssembly()}
-            onRedo={() => void redoAssembly()}
-            onRender={queueRender}
-          />
-        ) : null}
-      </main>
+      </div>
     </div>
   );
 }

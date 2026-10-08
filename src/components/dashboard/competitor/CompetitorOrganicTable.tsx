@@ -12,6 +12,8 @@ export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
   return (
     <Panel
       title="Competitor organic"
+      className="h-full"
+      bodyClassName="flex flex-col"
       action={<CompetitorSpyLink href="/competitor-spy?tab=inspiration" />}
     >
       <InspirationBrowser
@@ -20,7 +22,7 @@ export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
         variant="compact"
         showSync
         feedLimit={18}
-        gridClassName="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2"
+        gridClassName="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-3 xl:grid-cols-4 gap-2"
       />
     </Panel>
   );

@@ -14,6 +14,8 @@ const TINT_DEFAULT_COLOR = '#ff8a3d';
 const AMOUNT_EFFECTS = [
   { field: 'vignette', label: 'Vignette' },
   { field: 'filmGrain', label: 'Film grain' },
+  { field: 'dust', label: 'Dust' },
+  { field: 'lightLeaks', label: 'Light leaks' },
   { field: 'chromaticAberration', label: 'Chromatic aberration' },
   { field: 'vhs', label: 'VHS' },
 ] as const;

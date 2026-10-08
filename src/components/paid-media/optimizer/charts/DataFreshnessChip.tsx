@@ -27,7 +27,7 @@ export function formatFreshness(fetchedAt: string | null, now: number = Date.now
     const minutes = Math.floor(ageMs / 60_000);
     return minutes < 1 ? 'Data as of just now' : `Data as of ${minutes}m ago`;
   }
-  const clock = new Date(readAt).toLocaleTimeString([], {
+  const clock = new Date(readAt).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -78,7 +78,7 @@ export function DataFreshnessChip({
   const isCoolingDown = !canRefresh && !isRefreshing;
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
       <Clock className="size-3 shrink-0" aria-hidden="true" />
       <span>{label}</span>
       <span aria-hidden="true">·</span>

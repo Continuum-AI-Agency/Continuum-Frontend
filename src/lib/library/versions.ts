@@ -25,7 +25,7 @@ import {
   signVersionUpload as signVersionUploadOperation,
 } from './creativeOperations';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
-import { MAX_PROJECT_FILE_BYTES } from './uploadMediaAsset';
+import { uploadSizeRefusal } from './uploadMediaAsset';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -157,7 +157,7 @@ async function probeMediaDimensions(
   return {};
 }
 
-async function uploadProjectVersion(params: {
+async function uploadVersionResumable(params: {
   supabase: SupabaseBrowserClient;
   ticket: VersionSignUploadResponse;
   file: File;
@@ -203,10 +203,8 @@ export async function uploadNewAssetVersion(
 ): Promise<RegisterVersionResponse> {
   const { brandId, assetId, baseVersionId, file, note } = params;
   const contentType = file.type || 'application/octet-stream';
-  const projectFile = isProjectFile(file);
-  if (projectFile && file.size > MAX_PROJECT_FILE_BYTES) {
-    throw new Error('file_too_large: Project files must be 5 GB or smaller');
-  }
+  const refusal = uploadSizeRefusal(file);
+  if (refusal) throw new Error(`file_too_large: ${refusal}`);
 
   const ticket =
     params.resume?.ticket ??
@@ -220,24 +218,18 @@ export async function uploadNewAssetVersion(
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
 
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
-  if (projectFile) {
-    await uploadProjectVersion({
-      supabase,
-      ticket,
-      file,
-      resume: params.resume ?? null,
-      signal: params.signal,
-      onResumeState: params.onResumeState,
-      onProgress: params.onProgress,
-      deps,
-    });
-  } else {
-    const { error } = await supabase.storage
-      .from(ticket.bucket)
-      .uploadToSignedUrl(ticket.path, ticket.token, file, { contentType });
-    if (error) throw new Error(`Upload to storage failed: ${error.message}`);
-    params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
-  }
+  // Every revision goes up through TUS — 6 MB chunks, resumable after a pause or a dropped
+  // connection. A single PUT of a large photo or video restarted from byte 0 on any hiccup.
+  await uploadVersionResumable({
+    supabase,
+    ticket,
+    file,
+    resume: params.resume ?? null,
+    signal: params.signal,
+    onResumeState: params.onResumeState,
+    onProgress: params.onProgress,
+    deps,
+  });
 
   const mediaDimensions = await probeMediaDimensions(file, contentType);
   const checksum = await fileSha256(file);

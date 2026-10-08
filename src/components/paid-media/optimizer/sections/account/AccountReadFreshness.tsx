@@ -45,11 +45,11 @@ export function agoLabel(from: string, now: Date): string | null {
   return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }
 
-/** The clock time the cooldown lifts, in the reader's own zone. */
+/** The clock time the cooldown lifts, in the reader's own zone, written en-US. */
 export function clockLabel(at: string): string | null {
   const when = Date.parse(at);
   if (Number.isNaN(when)) return null;
-  return new Date(when).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return new Date(when).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 /**
@@ -61,7 +61,7 @@ export function clockLabel(at: string): string | null {
 export function takenLine(readyAt: string | null, now: Date): string | null {
   if (!readyAt) return null;
   const ago = agoLabel(readyAt, now);
-  return ago ? `Read taken ${ago}` : null;
+  return ago ? `Read ${ago}` : null;
 }
 
 /** What the control should say, given what the server decided. */
@@ -74,23 +74,23 @@ export function refreshCopy(refresh: AccountReadRefresh): {
   if (!refresh) return { note: null, running: false };
   if (refresh.state === 'queued' || refresh.state === 'generating') {
     return {
-      note: 'Re-reading this account now — a new read lands in a few minutes.',
+      note: 'Re-reading the account — a fresh read lands in a few minutes.',
       running: true,
     };
   }
   if (refresh.state === 'stalled') {
-    return { note: 'The last read stopped part-way through.', running: false };
+    return { note: 'The last read stopped halfway.', running: false };
   }
   if (refresh.reason === 'too_soon') {
     const at = refresh.retry_after ? clockLabel(refresh.retry_after) : null;
     return {
-      note: at ? `Can be re-read again at ${at}.` : 'Re-read again shortly.',
+      note: at ? `Can re-read at ${at}.` : 'Can re-read in a while.',
       running: false,
     };
   }
   if (refresh.reason === 'daily_limit') {
     return {
-      note: 'Re-read three times today — the next one is tomorrow morning.',
+      note: 'Already re-read three times today — the next one is tomorrow morning.',
       running: false,
     };
   }
@@ -145,7 +145,7 @@ export function AccountReadFreshness({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-2xs text-muted-foreground',
+        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground',
         className,
       )}
       data-testid="account-read-freshness"
@@ -157,7 +157,7 @@ export function AccountReadFreshness({
             {utcDay ? <span className="text-muted-foreground/70"> · {utcDay} UTC</span> : null}
           </span>
         ) : (
-          <span data-testid="account-read-taken">No read taken yet</span>
+          <span data-testid="account-read-taken">No read yet</span>
         )}
         {note ? (
           <span

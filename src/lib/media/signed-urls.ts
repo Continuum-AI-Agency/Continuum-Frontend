@@ -1,6 +1,9 @@
 import 'server-only';
 
+import { CANVAS_MEDIA_PREVIEW_MAX_EDGE, isGcsPointer } from '@continuum/contracts';
+import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { displayDerivativeKey } from './mapper';
 import { toBrowserReachableStorageUrl } from './storage-url';
 
 const SIGNED_URL_TTL_SECONDS = 3600; // 1 hour
@@ -11,26 +14,79 @@ const SIGNED_URL_TTL_SECONDS = 3600; // 1 hour
 export interface SignablePath {
   path: string;
   bucket: string;
+  /** Sign a display-sized derivative instead of the original, keyed by displayDerivativeKey(path). */
+  displayDerivative?: boolean;
 }
 
+// Formats Supabase resizes without losing anything a card shows. GIF would lose
+// its animation; everything else keeps painting from the original.
+const RESIZABLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 // Every path an asset row needs signed: the asset itself plus its poster, which
-// lives in the SAME bucket. Feed this into mintSignedUrls and hand the resulting
-// Map to rowToSignedMediaAsset.
+// lives in the SAME bucket. An image with no poster gets a display-sized derivative
+// instead: generated originals are ~3 MB each, and a grid card is a few hundred
+// pixels wide. Feed this into mintSignedUrls and hand the resulting Map to
+// rowToSignedMediaAsset.
 export function assetSignablePaths(
   rows: readonly {
     bucket: string;
     storage_path: string;
+    mime_type?: string | null;
     thumbnail_path?: string | null;
   }[],
 ): SignablePath[] {
-  return rows.flatMap((row) => [
-    { path: row.storage_path, bucket: row.bucket },
-    ...(row.thumbnail_path ? [{ path: row.thumbnail_path, bucket: row.bucket }] : []),
-  ]);
+  return rows.flatMap((row) => {
+    const poster: SignablePath[] = row.thumbnail_path
+      ? [{ path: row.thumbnail_path, bucket: row.bucket }]
+      : RESIZABLE_IMAGE_TYPES.has(row.mime_type ?? '')
+        ? [{ path: row.storage_path, bucket: row.bucket, displayDerivative: true }]
+        : [];
+    return [{ path: row.storage_path, bucket: row.bucket }, ...poster];
+  });
 }
 
-export async function mintSignedUrl(storagePath: string, bucket: string): Promise<string | null> {
+type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+// A HyperFrames film lives in GCS (bucket `gs://…`), and only the Backend holds a key that
+// can sign it — never Vercel. The server hands the caller's own session to the Backend's
+// signer, which re-checks brand membership and that the path is under the brand.
+async function mintGcsSignedUrl(
+  client: ServerClient,
+  storagePath: string,
+  bucket: string,
+  download?: string,
+): Promise<string | null> {
+  const token = (await client.auth.getSession()).data.session?.access_token;
+  if (!token) return null;
+  const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/hyperframes/sign`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      brandId: storagePath.split('/')[0],
+      bucket,
+      path: storagePath,
+      ...(download ? { download } : {}),
+    }),
+  }).catch(() => null);
+  if (!response?.ok) {
+    console.error('[media/signed-urls] GCS sign failed', {
+      bucket,
+      storagePath,
+      status: response?.status,
+    });
+    return null;
+  }
+  return ((await response.json()) as { signedUrl?: string }).signedUrl ?? null;
+}
+
+/** `download` names the saved file; a GCS URL has to be signed with it. */
+export async function mintSignedUrl(
+  storagePath: string,
+  bucket: string,
+  download?: string,
+): Promise<string | null> {
   const client = await createSupabaseServerClient();
+  if (isGcsPointer(bucket)) return mintGcsSignedUrl(client, storagePath, bucket, download);
   const { data, error } = await client.storage
     .from(bucket)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
@@ -42,8 +98,9 @@ export async function mintSignedUrl(storagePath: string, bucket: string): Promis
 }
 
 // Signs a batch of paths that may span multiple buckets. Returns a Map keyed by
-// storage path. Paths are bucket-scoped and brand-prefixed, so path collisions
-// across buckets are not a practical concern.
+// storage path (display derivatives by displayDerivativeKey). Paths are
+// bucket-scoped and brand-prefixed, so path collisions across buckets are not a
+// practical concern.
 export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   if (items.length === 0) return map;
@@ -51,7 +108,8 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
   const client = await createSupabaseServerClient();
 
   const pathsByBucket = new Map<string, string[]>();
-  for (const { path, bucket } of items) {
+  for (const { path, bucket, displayDerivative } of items) {
+    if (displayDerivative) continue;
     const existing = pathsByBucket.get(bucket);
     if (existing) {
       existing.push(path);
@@ -60,25 +118,55 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
     }
   }
 
-  await Promise.all(
-    Array.from(pathsByBucket.entries()).map(async ([bucket, paths]) => {
+  const signOriginals = Array.from(pathsByBucket.entries()).map(async ([bucket, paths]) => {
+    if (isGcsPointer(bucket)) {
+      // ponytail: one Backend call per film; batch the sign route when a page holds many films.
+      for (const path of paths) {
+        const url = await mintGcsSignedUrl(client, path, bucket);
+        if (url) map.set(path, url);
+      }
+      return;
+    }
+    const { data, error } = await client.storage
+      .from(bucket)
+      .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
+    if (error || !data) {
+      console.error('[media/signed-urls] Batch sign failed', { bucket, error });
+      return;
+    }
+    for (const item of data) {
+      if (item.signedUrl && item.path) {
+        map.set(
+          item.path,
+          toBrowserReachableStorageUrl(item.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL),
+        );
+      }
+    }
+  });
+
+  // One call per path, because the batch signer accepts a `transform` and silently
+  // ignores it. A derivative that fails to sign is simply absent: the card falls
+  // back to the original.
+  const signDerivatives = items
+    .filter((item) => item.displayDerivative)
+    .map(async ({ path, bucket }) => {
       const { data, error } = await client.storage
         .from(bucket)
-        .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
-      if (error || !data) {
-        console.error('[media/signed-urls] Batch sign failed', { bucket, error });
-        return;
-      }
-      for (const item of data) {
-        if (item.signedUrl && item.path) {
-          map.set(
-            item.path,
-            toBrowserReachableStorageUrl(item.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL),
-          );
-        }
-      }
-    }),
-  );
+        .createSignedUrl(path, SIGNED_URL_TTL_SECONDS, {
+          transform: {
+            width: CANVAS_MEDIA_PREVIEW_MAX_EDGE,
+            height: CANVAS_MEDIA_PREVIEW_MAX_EDGE,
+            resize: 'contain',
+          },
+        });
+      if (error || !data?.signedUrl) return;
+      map.set(
+        displayDerivativeKey(path),
+        toBrowserReachableStorageUrl(data.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL),
+      );
+    });
+
+  await Promise.all([...signOriginals, ...signDerivatives]);
 
   return map;
 }

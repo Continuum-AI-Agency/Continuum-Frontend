@@ -10,11 +10,13 @@ import { encodeContainerOf } from './api-renders';
  *
  * The rule is inferred from real template-133 renders, so it refuses rather than guesses: a name
  * two formats could answer is `null`, and a caller shows the estimate instead of the wrong frame.
+ * Opaque PSD output names are unambiguous when the template has one delivery format.
  */
 
 export interface RenderOutputFormatCandidate {
   id: string;
   ratio: string | null;
+  label?: string;
   comp?: { name: string; width: number; height: number } | null;
   mediaType?: string | null;
 }
@@ -47,12 +49,30 @@ export function matchOutputFormat<T extends RenderOutputFormatCandidate>(
   const dot = fileName.lastIndexOf('.');
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
   const isVideo = dot > 0 && VIDEO_EXTENSIONS.has(fileName.slice(dot + 1).toLowerCase());
+  if (formats.length === 1 && /^_[a-z0-9]+$/i.test(stem) && /\.(?:jpe?g|png|webp|mp4|mov|mxf|webm|gif)$/i.test(fileName))
+    return formats[0] ?? null;
   const underscore = stem.lastIndexOf('_');
   if (underscore <= 0) return null;
   const named = slug(stem.slice(0, underscore));
 
-  const byComp = formats.filter((format) => format.comp && slug(format.comp.name) === named);
-  if (byComp.length > 0) return unique(byComp, isVideo);
+  const labelName = (format: T) => slug(format.label?.replace(/\s*\([^)]*\)\s*$/, '') ?? '');
+  const byName = formats.filter(
+    (format) =>
+      (format.comp && slug(format.comp.name) === named) ||
+      (!format.comp && (slug(format.label ?? '') === named || labelName(format) === named)),
+  );
+  if (byName.length > 0) return unique(byName, isVideo);
+
+  // Some renderers number Card 1/2 files while the contract calls them Card A/B.
+  const numberedCard = /(?:^|_)card_(\d+)$/.exec(named);
+  if (numberedCard) {
+    const number = Number(numberedCard[1]);
+    if (number >= 1 && number <= 26) {
+      const alias = `${named.slice(0, -numberedCard[1]!.length)}${String.fromCharCode(96 + number)}`;
+      const byLabel = formats.filter((format) => !format.comp && labelName(format) === alias);
+      if (byLabel.length > 0) return unique(byLabel, isVideo);
+    }
+  }
 
   const token = /(?:^|_)(\d+)_(\d+)$/.exec(named);
   if (!token) return null;

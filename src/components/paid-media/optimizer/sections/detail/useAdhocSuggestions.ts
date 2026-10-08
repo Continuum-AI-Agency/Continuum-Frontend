@@ -23,6 +23,7 @@ import {
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { optimizerQueryKeys } from '../../useOptimizerData';
 
 type LooseSupabase = {
   rpc: (
@@ -95,13 +96,35 @@ export function useAdhocSuggestions(portfolioId: string | null) {
   return { ...query, data: query.data ?? { ...EMPTY, portfolio_id: portfolioId ?? '' } };
 }
 
-export function useAdhocSuggestionMutations(portfolioId: string | null) {
+/**
+ * The writes, and what each one refreshes.
+ *
+ * Adopting and building change more than the suggestion row: the build mints a pending
+ * recommendation into the portfolio's latest cycle run and opens an audience proposal, and
+ * both of those live in OTHER cached reads — the performance report the queue is built from
+ * and the brand's audience proposals. Refreshing only the suggestions left the row saying
+ * "Open the audience proposal" over a queue with no such row until a reload, so those two
+ * are invalidated with it. The proposals query already polls while a row is transient; this
+ * only makes sure it has the new row to poll.
+ */
+export function useAdhocSuggestionMutations(portfolioId: string | null, brandId: string | null) {
   const queryClient = useQueryClient();
   const refresh = () => {
     void queryClient.invalidateQueries({
       queryKey: adhocSuggestionsQueryKey(portfolioId ?? 'none'),
       exact: true,
     });
+  };
+  const refreshWhatTheBuildTouches = () => {
+    refresh();
+    if (portfolioId) {
+      void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.performance(portfolioId) });
+    }
+    if (brandId) {
+      void queryClient.invalidateQueries({
+        queryKey: optimizerQueryKeys.audienceProposals(brandId),
+      });
+    }
   };
 
   const ask = useMutation({
@@ -127,7 +150,7 @@ export function useAdhocSuggestionMutations(portfolioId: string | null) {
       if (error) throw new Error(`Could not take this on: ${errorText(error)}`);
       return adhocSuggestionAdoptResultSchema.parse(data ?? {});
     },
-    onSuccess: refresh,
+    onSuccess: refreshWhatTheBuildTouches,
   });
 
   // Building what the adopted plan described. One RPC, and it opens no write path of its
@@ -143,7 +166,7 @@ export function useAdhocSuggestionMutations(portfolioId: string | null) {
       if (error) throw new Error(`Could not build this: ${errorText(error)}`);
       return adhocSuggestionImplementResultSchema.parse(data ?? {});
     },
-    onSuccess: refresh,
+    onSuccess: refreshWhatTheBuildTouches,
   });
 
   const dismiss = useMutation({

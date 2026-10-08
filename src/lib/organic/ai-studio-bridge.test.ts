@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  aiStudioHandoffIssue,
   buildAiStudioHandoffStorageCandidates,
   deriveCarouselSlideSeeds,
   normalizeDraftPostType,
@@ -23,6 +24,7 @@ describe('ai-studio-bridge', () => {
       schemaVersion: 'planner_ai_handoff_v1',
       draftId: 'draft-1',
       brandProfileId: 'brand-1',
+      sourceUpdatedAt: new Date().toISOString(),
       weekStartId: '2026-03-23',
       platform: 'instagram',
       postType: 'post',
@@ -35,6 +37,9 @@ describe('ai-studio-bridge', () => {
 
     expect(parsed.draftId).toBe('draft-1');
     expect(parsed.platform).toBe('instagram');
+    expect(
+      plannerAiStudioHandoffSchema.safeParse({ ...parsed, sourceUpdatedAt: undefined }).success,
+    ).toBe(false);
   });
 
   it('requires assets for apply payload', () => {
@@ -65,6 +70,31 @@ describe('ai-studio-bridge', () => {
     expect(resolveWorkflowConcept({ platform: 'linkedin', postType: 'post' })).toBe(
       'li_post_single_image',
     );
+    expect(resolveWorkflowConcept({ platform: 'tiktok', postType: 'post' })).toBe('tt_text');
+  });
+
+  it('opens persisted text-only TikTok copy and rejects unsupported platform/media combinations', () => {
+    const draft = {
+      status: 'draft',
+      platforms: ['tiktok'],
+      format: 'Post',
+      mediaStage: 'text_only',
+      backendDraftId: 'server-1',
+      updatedAt: '2026-09-22T00:00:00Z',
+    };
+    expect(aiStudioHandoffIssue(draft)).toBeNull();
+    expect(aiStudioHandoffIssue({ ...draft, updatedAt: null })).toContain('Save');
+    expect(aiStudioHandoffIssue({ ...draft, format: 'Reel' })).toContain('format');
+    expect(
+      aiStudioHandoffIssue({
+        ...draft,
+        mediaSuggestion: { assetUrl: 'https://example.com/video.mp4' },
+      }),
+    ).toContain('media');
+    expect(aiStudioHandoffIssue({ ...draft, platforms: ['tiktok', 'instagram'] })).toContain(
+      'one platform',
+    );
+    expect(aiStudioHandoffIssue({ ...draft, platforms: ['youtube'] })).toContain('not supported');
   });
 
   it('returns concept output behavior spec', () => {
@@ -83,6 +113,7 @@ describe('ai-studio-bridge', () => {
       schemaVersion: 'planner_ai_handoff_v1',
       draftId: 'seeded-1',
       brandProfileId: 'brand-1',
+      sourceUpdatedAt: new Date().toISOString(),
       weekStartId: '2026-03-23',
       platform: 'instagram',
       postType: 'post',
@@ -114,6 +145,7 @@ describe('ai-studio-bridge', () => {
       schemaVersion: 'planner_ai_handoff_v1',
       draftId: 'seeded-2',
       brandProfileId: 'brand-1',
+      sourceUpdatedAt: new Date().toISOString(),
       weekStartId: '2026-03-23',
       platform: 'instagram',
       postType: 'carousel',

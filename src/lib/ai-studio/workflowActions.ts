@@ -109,7 +109,9 @@ export async function listAiStudioWorkflowsAction(
     brandProfileId: parsed.brandProfileId,
   });
 
-  return data.workflows.map((row) => mapAiStudioWorkflowRow(aiStudioWorkflowRowSchema.parse(row)));
+  return data.workflows
+    .map((row) => mapAiStudioWorkflowRow(aiStudioWorkflowRowSchema.parse(row)))
+    .filter((workflow) => !workflow.metadata?.videoEditorAgentWorkflow);
 }
 
 export async function createAiStudioWorkflowAction(

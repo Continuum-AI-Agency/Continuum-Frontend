@@ -3,9 +3,11 @@
 // Saved dashboards, above the chat: a collapsed strip that opens into each saved report's
 // blocks, rendered by the same block renderer. "Refresh" is a prepared question back to
 // Jaina — the numbers on a dashboard are the numbers of the day it was saved, and the
-// strip says so.
+// strip says so. Each module also says whether it is re-runnable — whether the row kept
+// the tool, entity and window it was computed for — and which window that was; the picker
+// that re-runs it is not here yet.
 
-import type { JainaDashboard } from '@continuum/contracts';
+import { type DashboardBlockSpec, type JainaDashboard, rangeSpecLabel } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,23 @@ import { checkpointBlockV2Schema, degradeToNarrativeBlockV2 } from '@/lib/jaina/
 import { BlockRenderer } from '../blocks/BlockRenderer';
 
 const DATE_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+
+const DERIVED_NOTE: Record<
+  NonNullable<NonNullable<DashboardBlockSpec['spec']>['derived']>,
+  string
+> = {
+  severity: 'its judgements are recomputed, not re-fetched',
+  pacing: 'its pacing is recomputed, not re-fetched',
+  comparison: 'its comparison is recomputed, not re-fetched',
+};
+
+/** One line under a module: re-runnable and for which window, or why not. */
+export function describeBlockSpec(entry: DashboardBlockSpec | undefined): string {
+  if (!entry) return 'Saved without a re-run spec';
+  if (!entry.spec) return `Not re-runnable: ${entry.reason}`;
+  const derived = entry.spec.derived ? ` · ${DERIVED_NOTE[entry.spec.derived]}` : '';
+  return `Re-runnable · computed for ${rangeSpecLabel(entry.spec.range)}${derived}`;
+}
 
 export function SavedDashboardsPanel() {
   const scope = useJainaBrandScope();
@@ -75,6 +94,9 @@ export function SavedDashboardsPanel() {
             const refreshPrompt =
               dashboard.source_prompt ??
               `Refresh the analysis "${dashboard.source_title ?? dashboard.name}" with today's data, same scope and window.`;
+            const specByBlock = new Map(
+              (dashboard.spec?.blocks ?? []).map((entry) => [entry.block_id, entry] as const),
+            );
             return (
               <li className="px-3 py-2" key={dashboard.id}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -111,6 +133,9 @@ export function SavedDashboardsPanel() {
                   <div className="mt-2 space-y-3">
                     <p className="text-muted-foreground text-xs">
                       Figures as of the day this was saved. Refresh to get today's.
+                      {dashboard.spec
+                        ? null
+                        : ' Saved without a re-run spec: its figures cannot be re-dated.'}
                     </p>
                     {/* The scope frame first, as the live report reads: the window before
                      *  the figures, even on a row saved before the save kept it in front. */}
@@ -120,11 +145,17 @@ export function SavedDashboardsPanel() {
                         return parsed.success ? parsed.data : degradeToNarrativeBlockV2(raw);
                       }),
                     ).map((block, index) => (
-                      <BlockRenderer
-                        block={block}
-                        isStreaming={false}
-                        key={`${dashboard.id}:${block.block_id}:${index}`}
-                      />
+                      <div key={`${dashboard.id}:${block.block_id}:${index}`}>
+                        <BlockRenderer block={block} isStreaming={false} />
+                        {dashboard.spec ? (
+                          <p
+                            className="mt-1 text-muted-foreground text-xs"
+                            data-testid="block-rerun"
+                          >
+                            {describeBlockSpec(specByBlock.get(block.block_id))}
+                          </p>
+                        ) : null}
+                      </div>
                     ))}
                   </div>
                 ) : null}

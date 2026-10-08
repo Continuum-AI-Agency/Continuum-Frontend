@@ -120,13 +120,16 @@ describe('OmniGenBlock generated-video preview', () => {
       } as Partial<OmniGenNodeData>),
     );
 
-    expect(container.querySelector('media-controller')).not.toBeNull();
-    expect(container.querySelector('media-time-range')).not.toBeNull();
-
-    const main = container.querySelector('media-controller video') as HTMLVideoElement;
-    expect(main.getAttribute('preload')).toBe('metadata');
+    const main = container.querySelector(
+      '[data-testid="studio-node-video-preview"] video',
+    ) as HTMLVideoElement;
     expect(main.getAttribute('playsinline')).not.toBeNull();
     expect(main.className).toContain('object-contain');
+    expect(
+      container.querySelector(
+        '[data-testid="studio-node-video-preview"] button[aria-label="Play"]',
+      ),
+    ).not.toBeNull();
   });
 
   // The launcher shows a count, not the rail: the rail lives in the editor now, and

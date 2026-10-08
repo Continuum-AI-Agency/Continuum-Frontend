@@ -9,6 +9,13 @@ import { buildTimelineEditorRenderPlan } from '../../src/lib/client-render/execu
 import { registerDefaultClientRenderExecutors } from '../../src/lib/client-render/registerDefaultExecutors';
 import { uploadMediaAsset } from '../../src/lib/library/uploadMediaAsset';
 import { createSupabaseBrowserClient } from '../../src/lib/supabase/client';
+import { videoTimelineItems } from '../../src/StudioCanvas/nodes/timeline/editorProjectV2AssemblyModel';
+import { buildEditorProjectV2AudioPreviewPlan } from '../../src/StudioCanvas/nodes/timeline/useEditorProjectV2AudioPreview';
+import {
+  computeLayout,
+  effectiveItemDuration,
+} from '../../src/StudioCanvas/nodes/timeline/useTimelineEditorModel';
+import { TimelineWebAudioPreviewEngine } from '../../src/StudioCanvas/nodes/timeline/webAudioPreviewEngine';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
 
 const WIDTH = 320;
@@ -33,6 +40,7 @@ export type DurableRenderReceipt = {
 export type DurablePixel = { r: number; g: number; b: number };
 
 export type DurableTimelineRequest = {
+  frameTimeSec?: number;
   project: EditorProjectV2;
   inputs: Array<{
     sourceId: string;
@@ -41,6 +49,56 @@ export type DurableTimelineRequest = {
     storage: { bucket: string; path: string };
     url: string;
   }>;
+};
+
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32_768)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  return btoa(binary);
+};
+
+/** The real preview engine over the same stored project and signed recorded media. */
+const previewTimelineAudio = async (input: DurableTimelineRequest, fromSec = 0) => {
+  const blobsByUrl = new Map<string, Promise<Blob>>();
+  const entries = await Promise.all(
+    input.inputs.map(async (source) => {
+      let blob = blobsByUrl.get(source.url);
+      if (!blob) {
+        blob = fetch(source.url).then((response) => {
+          if (!response.ok) throw new Error(`Preview media HTTP ${response.status}`);
+          return response.blob();
+        });
+        blobsByUrl.set(source.url, blob);
+      }
+      return [source.sourceId, await blob] as const;
+    }),
+  );
+  const plan = buildEditorProjectV2AudioPreviewPlan({
+    project: input.project,
+    layout: computeLayout(videoTimelineItems(input.project), effectiveItemDuration, 80),
+    blobsByClipId: new Map(entries),
+  });
+  const rate = 48_000;
+  const context = new OfflineAudioContext(
+    2,
+    Math.round((plan.totalDurationSec - fromSec) * rate),
+    rate,
+  );
+  const engine = new TimelineWebAudioPreviewEngine(context);
+  try {
+    if (!(await engine.play(plan, fromSec))) throw new Error('Preview did not schedule audio');
+    const buffer = await context.startRendering();
+    return {
+      pcmBase64: bytesToBase64(new Uint8Array(buffer.getChannelData(0).buffer)),
+      channelsBase64: Array.from({ length: buffer.numberOfChannels }, (_, channel) =>
+        bytesToBase64(new Uint8Array(buffer.getChannelData(channel).buffer)),
+      ),
+      sampleRate: rate,
+    };
+  } finally {
+    await engine.dispose();
+  }
 };
 
 const authenticate = async (auth: BenchAuth): Promise<void> => {
@@ -149,19 +207,18 @@ const renderTimeline = async (
   });
   const result = await composeTimeline({
     ...plan,
-    frameRate: input.project.exportSettings.fps,
+    ...(input.frameTimeSec === undefined ? {} : { frameTimeSec: input.frameTimeSec }),
+    frameRate:
+      input.project.exportSettings.frameRate.numerator /
+      input.project.exportSettings.frameRate.denominator,
     targetWidth: input.project.exportSettings.width,
     targetHeight: input.project.exportSettings.height,
     signal,
   });
   URL.revokeObjectURL(result.objectUrl);
   const bytes = new Uint8Array(await result.blob.arrayBuffer());
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += 32_768) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
-  }
   return {
-    base64: btoa(binary),
+    base64: bytesToBase64(bytes),
     contentType: result.blob.type || 'video/mp4',
     durationSec: result.durationSec,
     width: result.width,
@@ -221,8 +278,15 @@ declare global {
       render: typeof render;
       readSignedPoint: typeof readSignedPoint;
       renderTimeline: typeof renderTimeline;
+      previewTimelineAudio: typeof previewTimelineAudio;
     };
   }
 }
 
-window.__editorV2DurableRenderBench = { seedSource, render, readSignedPoint, renderTimeline };
+window.__editorV2DurableRenderBench = {
+  seedSource,
+  render,
+  readSignedPoint,
+  renderTimeline,
+  previewTimelineAudio,
+};

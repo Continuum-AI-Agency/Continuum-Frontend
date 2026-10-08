@@ -1916,7 +1916,7 @@ export function CampaignAdSetWorkspace({
 
   return (
     <>
-      <Card className="h-full min-h-[var(--dashboard-min-panel-height)] gap-0 overflow-hidden border-border/70 py-0">
+      <Card className="h-[var(--app-content-h)] min-h-[var(--dashboard-min-panel-height)] gap-0 overflow-hidden border-border/70 py-0">
         <div className="border-b border-border/70 bg-muted/20 px-2 py-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">

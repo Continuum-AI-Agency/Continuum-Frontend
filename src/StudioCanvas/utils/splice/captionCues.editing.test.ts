@@ -11,6 +11,16 @@ import {
 const cueOf = (words: CaptionWord[]) => groupWordsIntoCues(words)[0];
 
 describe('updateCaptionCue', () => {
+  it('a spelling correction preserves heard offsets and emphasis', () => {
+    const cue = cueOf([
+      { text: 'Apollo', startSec: 0.2, endSec: 0.8, emphasis: true },
+      { text: 'eleven', startSec: 1.1, endSec: 1.6 },
+    ]);
+    expect(updateCaptionCue(cue, { text: 'Apollo 11' }).words).toEqual([
+      { ...cue.words[0] },
+      { ...cue.words[1], text: '11' },
+    ]);
+  });
   it('re-times replacement copy across the selected cue interval', () => {
     const cue = groupWordsIntoCues([{ text: 'old', startSec: 1, endSec: 2 }])[0];
     expect(updateCaptionCue(cue, { text: 'new caption', startSec: 2, endSec: 4 })).toMatchObject({

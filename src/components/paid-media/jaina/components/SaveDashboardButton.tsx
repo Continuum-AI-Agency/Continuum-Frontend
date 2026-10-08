@@ -70,6 +70,7 @@ export function SaveDashboardButton({
         scope: report._meta?.primary_scope ?? 'account',
         window_label: plan.windowLabel,
         blocks: plan.blocks,
+        spec: plan.spec,
       });
       setState('saved');
       setMessage('Saved. It is listed under Saved dashboards above the chat.');

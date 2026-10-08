@@ -5,6 +5,12 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
   SyntaxError;
 
 const syncMock = mock(() => {});
+const postsMock = mock((_params: { sort?: string; platform?: string }) => ({
+  isLoading: false,
+  isError: false,
+  error: null,
+  data: { items: [], syncFaults: [] },
+}));
 
 mock.module('next/navigation', () => ({
   useRouter: () => ({ push: () => {} }),
@@ -16,7 +22,7 @@ mock.module('@/lib/api/competitorSpy', () => ({
   useCompetitors: () => ({ data: [] }),
   useAdCounts: () => ({ data: {} }),
   useCompetitorSync: () => ({ mutate: syncMock, isPending: false }),
-  useInstagramPosts: () => ({ ...emptyQuery, data: [] }),
+  useInstagramPosts: postsMock,
   useInstagramCompetitorSearch: () => ({ ...emptyQuery, data: undefined }),
   useAdTimeline: () => ({ ...emptyQuery, data: [] }),
   useSavedInspirationPosts: () => ({ ...emptyQuery, data: [] }),
@@ -28,6 +34,7 @@ import { InspirationBrowser } from './InspirationBrowser';
 afterEach(() => {
   cleanup();
   syncMock.mockClear();
+  postsMock.mockClear();
 });
 
 describe('InspirationBrowser', () => {
@@ -65,5 +72,29 @@ describe('InspirationBrowser', () => {
     fireEvent.click(getByRole('button', { name: 'Saved' }));
     expect(getByLabelText('Instagram post URL')).toBeDefined();
     expect(getByText(/Nothing saved yet/)).toBeDefined();
+  });
+
+  it('switches Organic to a YouTube grid with raw-metric sorts only', () => {
+    const { getByRole, queryByRole, getByText, queryByLabelText } = render(
+      <InspirationBrowser brandId="b1" defaultSource="organic" />,
+    );
+    expect(getByRole('button', { name: 'Outlier' })).toBeDefined();
+    expect(queryByLabelText('Search competitors')).not.toBeNull();
+    expect(postsMock.mock.calls.at(-1)?.[0].platform).toBe('instagram');
+
+    fireEvent.click(getByRole('button', { name: 'Outlier' }));
+    fireEvent.click(getByRole('button', { name: 'YouTube' }));
+
+    expect(getByRole('button', { name: 'Newest' })).toBeDefined();
+    expect(getByRole('button', { name: 'Most viewed' })).toBeDefined();
+    expect(queryByRole('button', { name: 'Outlier' })).toBeNull();
+    expect(queryByRole('button', { name: 'For your brand' })).toBeNull();
+    expect(queryByLabelText('Search competitors')).toBeNull();
+    // Outlier has no YouTube meaning, so the grid asks for newest instead of a 400.
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'youtube', sort: 'recent' });
+    expect(getByText(/add a YouTube channel to a competitor/)).toBeDefined();
+
+    fireEvent.click(getByRole('button', { name: 'Most viewed' }));
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'youtube', sort: 'views' });
   });
 });

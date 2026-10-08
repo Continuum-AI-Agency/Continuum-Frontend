@@ -3,6 +3,7 @@ import {
   coerceNodeConfig,
   coerceVideoGeneratorDuration,
   type DesignSection,
+  getVideoGeneratorResolutions,
   isVideoGeneratorNodeType,
   VIDEO_GENERATOR_DURATION_NOTE,
   VIDEO_GENERATOR_DURATIONS,
@@ -102,13 +103,6 @@ const LimitedHandle = ({
   const baseConnectable = isConnectable ?? true;
 
   return <Handle {...props} isConnectable={baseConnectable && withinLimit} />;
-};
-
-const getResolutionOptions = (
-  model: VideoGeneratorModel,
-): Array<NonNullable<VideoGenNodeData['resolution']>> => {
-  if (model === 'veo-3.1' || model === 'veo-3.1-fast') return ['720p', '1080p', '4k'];
-  return ['720p', '1080p'];
 };
 
 // Computed once: the catalog is static, so re-deriving it per render buys nothing.
@@ -855,7 +849,7 @@ export function VideoGenBlock({
           <ContextMenuSub>
             <ContextMenuSubTrigger>Resolution</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
-              {getResolutionOptions(model).map((value) => (
+              {getVideoGeneratorResolutions(model).map((value) => (
                 <ContextMenuCheckboxItem
                   key={value}
                   checked={(data.resolution ?? '720p').toLowerCase() === value.toLowerCase()}

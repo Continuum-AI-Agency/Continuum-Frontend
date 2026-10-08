@@ -1,5 +1,7 @@
 'use client';
 
+import type { OrganicMetricPlatform } from '@continuum/contracts';
+
 import dynamic from 'next/dynamic';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
 import type { OrganicAccountOption } from '@/components/organic/OrganicMetricsDashboard';
@@ -15,14 +17,8 @@ const OrganicMetricsDashboardDynamic = dynamic(
 
 type Props = {
   brandId: string;
-  accountsByPlatform: {
-    instagram: OrganicAccountOption[];
-    facebook: OrganicAccountOption[];
-    tiktok: OrganicAccountOption[];
-    youtube: OrganicAccountOption[];
-    linkedin: OrganicAccountOption[];
-  };
-  initialPlatform?: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  accountsByPlatform: Record<OrganicMetricPlatform, OrganicAccountOption[]>;
+  initialPlatform?: OrganicMetricPlatform;
   brandInsights?: OrganicMetricsBrandInsights | null;
 };
 

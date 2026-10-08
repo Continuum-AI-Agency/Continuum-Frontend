@@ -21,12 +21,19 @@ export function BoardColumn({
   selectedAssetIds?: ReadonlySet<string>;
   onToggleSelected?: (asset: MediaAsset) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: lane.id });
+  const { setNodeRef, isOver } = useDroppable({ id: lane.id, disabled: !lane.droppable });
 
   return (
-    <div className="flex w-56 shrink-0 flex-col rounded-lg border bg-muted/30">
+    <div
+      data-testid="board-lane"
+      data-lane-label={lane.label}
+      className="flex w-56 shrink-0 flex-col rounded-lg border bg-muted/30"
+    >
       <div className="flex items-center gap-1.5 px-2 py-1.5">
-        <span className={cn('inline-flex size-2 shrink-0 rounded-full', lane.dotClass)} />
+        <span
+          className={cn('inline-flex size-2 shrink-0 rounded-full', lane.dotClass)}
+          style={lane.dotColor ? { backgroundColor: lane.dotColor } : undefined}
+        />
         <h3 className="truncate text-xs font-medium">{lane.label}</h3>
         <span className="ml-auto text-2xs text-muted-foreground tabular-nums">
           {lane.assets.length}

@@ -42,6 +42,7 @@ import {
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 import type { ElementMemberUploader } from './ElementCreateForm';
+import { HeadlessElementReview } from './HeadlessElementReview';
 
 /** The measured cost of one reference generation — the Wave-2 bench run timed 16.7s.
  *  Quoted so the wait is a stated cost rather than an unexplained hang. */
@@ -186,6 +187,11 @@ export function ElementDetail({
         </Button>
       </div>
 
+      <HeadlessElementReview
+        brandId={brandId}
+        elementId={element.id}
+        updatedAt={element.updatedAt}
+      />
       <div className="flex flex-col gap-2">
         <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
           {referenceUrl ? (

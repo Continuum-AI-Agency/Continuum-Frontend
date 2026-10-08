@@ -12,7 +12,7 @@
  */
 import { type PublishPlatform, publishPlatformSchema, supportsFormat } from '@continuum/contracts';
 
-export type PostPreviewFrame = 'phone' | 'feed' | 'desktop';
+export type PostPreviewFrame = 'phone' | 'vertical' | 'feed' | 'desktop';
 
 export type PostPlatformConfig = {
   label: string;
@@ -63,7 +63,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     abbr: 'TT',
     color: '#69C9D0',
     gradient: ['#69C9D0', '#010101'],
-    frame: 'phone',
+    frame: 'vertical',
     mediaTemplate: { width: 1080, height: 1920 },
     reelAspect: 9 / 16,
   },
@@ -72,9 +72,20 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     abbr: 'YT',
     color: '#FF0000',
     gradient: ['#FF0000', '#CC0000'],
-    frame: 'phone',
+    frame: 'vertical',
     mediaTemplate: { width: 1080, height: 1920 },
     reelAspect: 9 / 16,
+  },
+  x: {
+    label: 'X',
+    abbr: 'X',
+    color: '#0F1419',
+    gradient: ['#0F1419', '#536471'],
+    frame: 'feed',
+    mediaTemplate: { width: 1600, height: 900 },
+    reelAspect: 16 / 9,
+    // X redirects /i/status/<id> to the post under its author's handle.
+    permalink: (postId) => `https://x.com/i/status/${postId}`,
   },
 };
 
@@ -93,6 +104,8 @@ const POST_FORMATS = [
   { option: 'Post', format: 'POST' },
   { option: 'Carousel', format: 'CAROUSEL' },
   { option: 'Reel', format: 'REEL' },
+  // Instagram only: offered only when every selected platform can take it.
+  { option: 'Story', format: 'STORY' },
 ] as const;
 
 export type PostFormatOption = (typeof POST_FORMATS)[number]['option'];

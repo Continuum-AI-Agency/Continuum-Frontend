@@ -177,7 +177,7 @@ describe('POST /api/library/custom-fields', () => {
     expect(response.status).toBe(422);
   });
 
-  it('drops options supplied for a type that cannot use them', async () => {
+  it('refuses options supplied for a type that cannot use them', async () => {
     const db = useDb(new FakeDb({ 'media.custom_fields': [] }));
     const response = await POST(
       jsonRequest('POST', {
@@ -187,8 +187,8 @@ describe('POST /api/library/custom-fields', () => {
         options: [{ id: 'nonsense', label: 'Nonsense' }],
       }),
     );
-    expect(response.status).toBe(201);
-    expect(db.rows('media.custom_fields')[0]?.options).toEqual([]);
+    expect(response.status).toBe(422);
+    expect(db.rows('media.custom_fields')).toEqual([]);
   });
 
   it('409s on a duplicate name, case-insensitively', async () => {

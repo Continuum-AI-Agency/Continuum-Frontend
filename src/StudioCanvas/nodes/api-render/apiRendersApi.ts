@@ -2,13 +2,20 @@ import {
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
   API_RENDER_DESTINATIONS_ROUTE,
+  API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
+  API_RENDER_IMPORT_MEDIA_ROUTE,
   API_RENDER_IMPORT_PREVIEW_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
+  API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
+  API_RENDER_MOTION_PROOFS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
+  API_RENDER_PREVIEW_LIVE_ROUTE,
+  API_RENDER_PREVIEW_PICTURES_ROUTE,
   API_RENDER_PREVIEW_ROUTE,
+  API_RENDER_PREVIEW_SKETCH_ROUTE,
   API_RENDER_SETS_ROUTE,
   API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
@@ -22,11 +29,15 @@ import {
   type ApiRenderCreateJobRequest,
   type ApiRenderDeliveryDestination,
   type ApiRenderDeliveryDestinationsResponse,
+  type ApiRenderDraftSourcesStatusRequest,
+  type ApiRenderDraftSourcesStatusResponse,
   type ApiRenderEnvironmentListResponse,
   type ApiRenderInputSet,
   type ApiRenderInputSetListResponse,
   type ApiRenderJob,
   type ApiRenderJobListResponse,
+  type ApiRenderMasterDownloadRequest,
+  type ApiRenderMasterDownloadResponse,
   type ApiRenderPreflightRequest,
   type ApiRenderPreflightResponse,
   type ApiRenderSlackChannelListResponse,
@@ -38,44 +49,82 @@ import {
   apiRenderBatchPreflightResponseSchema,
   apiRenderBatchSchema,
   apiRenderBatchShareResponseSchema,
-  apiRenderBatchShareRoute,
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDestinationRoute,
+  apiRenderDraftSourcesStatusResponseSchema,
   apiRenderEnvironmentListResponseSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
   apiRenderJobListResponseSchema,
   apiRenderJobSchema,
+  apiRenderMasterDownloadResponseSchema,
+  apiRenderMasterDownloadStatusSchema,
   apiRenderPreflightResponseSchema,
+  apiRenderSetZipShareRoute,
   apiRenderSlackChannelListResponseSchema,
   apiRenderSuggestRowsResponseSchema,
   apiRenderTemplateContractSchema,
   apiRenderTemplateListResponseSchema,
+  type ChangeRenderSetTemplateRevisionRequest,
   type CreateForgeRenderSetRequest,
+  FORGE_LIBRARY_STATE_ROUTE,
+  FORGE_PROVENANCE_ROUTE,
+  type ForgeLibraryStateResponse,
+  type ForgeMotionProof,
+  type ForgeMotionProofFormat,
+  type ForgeMotionProofRequest,
+  type ForgeProvenanceResponse,
   type ForgeRenderDriveSnapshot,
   type ForgeRenderDriveSnapshotRequest,
+  type ForgeRenderImportMediaRequest,
+  type ForgeRenderImportMediaResponse,
   type ForgeRenderImportPreview,
   type ForgeRenderImportPreviewRequest,
+  type ForgeRenderLive,
+  type ForgeRenderLiveRequest,
+  type ForgeRenderPictures,
+  type ForgeRenderPicturesRequest,
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
+  type ForgeRenderSetShareResponse,
+  type ForgeRenderSketch,
+  type ForgeRenderSketchRequest,
+  forgeLibraryStateResponseSchema,
+  forgeMotionProofFormatsSchema,
+  forgeMotionProofSchema,
+  forgeProvenanceResponseSchema,
   forgeRenderDriveSnapshotSchema,
+  forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
+  forgeRenderLiveSchema,
+  forgeRenderPicturesSchema,
   forgeRenderPreviewSchema,
   forgeRenderSetListResponseSchema,
   forgeRenderSetRevisionListResponseSchema,
   forgeRenderSetSchema,
+  forgeRenderSetShareResponseSchema,
+  forgeRenderSetShareRoute,
+  forgeRenderSketchSchema,
+  isLayerSwitch,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
-import { getApiBaseUrl } from '@/lib/api/config';
 import { http } from '@/lib/api/http';
 
 const query = (input: Record<string, string | number>) =>
   new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
 
 export const apiRendersApi = {
+  importMedia(input: ForgeRenderImportMediaRequest) {
+    return http.request<ForgeRenderImportMediaResponse>({
+      path: API_RENDER_IMPORT_MEDIA_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderImportMediaResponseSchema,
+    });
+  },
   previewImport(input: ForgeRenderImportPreviewRequest) {
     return http.request<ForgeRenderImportPreview>({
       path: API_RENDER_IMPORT_PREVIEW_ROUTE,
@@ -109,13 +158,27 @@ export const apiRendersApi = {
       schema: apiRenderTemplateListResponseSchema,
     });
   },
-  getContract(brandId: string, templateKey: string, bindingId?: string | null) {
-    return http.request<ApiRenderTemplateContract>({
+  // A switched-off field (a design import's layer nobody turned on) is not the caller's to fill:
+  // the server renders what the file says. Dropped here, so no grid, node or import asks for it.
+  async getContract(brandId: string, templateKey: string, bindingId?: string | null) {
+    const contract = await http.request<ApiRenderTemplateContract>({
       path: `${API_RENDER_TEMPLATES_ROUTE}/${encodeURIComponent(templateKey)}/contract?${query(
         bindingId ? { brandId, bindingId } : { brandId },
       )}`,
       schema: apiRenderTemplateContractSchema,
     });
+    return {
+      ...contract,
+      variables: contract.variables.filter((variable) => variable.exposed !== false),
+      // Kept aside rather than dropped: a layer's Show switch nobody asked for yet, which the
+      // Render tab offers as a column (UTEC's career logo was one of these, found by SQL).
+      layerSwitchesNotAsked: contract.variables.filter(
+        (variable) => variable.exposed === false && isLayerSwitch(variable.sourceSlotKey),
+      ),
+      // Filled by the server from another field (a fill's outline copy, a headline's second line):
+      // the grid needs them only to take the source's lines and name a split that does not fit.
+      linkedFields: contract.variables.filter((variable) => variable.derivedFrom !== null),
+    };
   },
   preflight(input: ApiRenderPreflightRequest) {
     return http.request<ApiRenderPreflightResponse>({
@@ -126,12 +189,59 @@ export const apiRendersApi = {
     });
   },
   /** One row composed over the closest real render (or drawn whole from the template) on the server. */
-  composePreview(input: ForgeRenderPreviewRequest) {
+  composePreview(input: ForgeRenderPreviewRequest, signal?: AbortSignal) {
     return http.request<ForgeRenderPreview>({
       path: API_RENDER_PREVIEW_ROUTE,
       method: 'POST',
       body: input,
       schema: forgeRenderPreviewSchema,
+      signal,
+    });
+  },
+  livePreview(input: ForgeRenderLiveRequest, signal?: AbortSignal) {
+    return http.request<ForgeRenderLive>({
+      path: API_RENDER_PREVIEW_LIVE_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderLiveSchema,
+      signal,
+    });
+  },
+  previewPictures(input: ForgeRenderPicturesRequest, signal?: AbortSignal) {
+    return http.request<ForgeRenderPictures>({
+      path: API_RENDER_PREVIEW_PICTURES_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderPicturesSchema,
+      signal,
+    });
+  },
+  sketchPreview(input: ForgeRenderSketchRequest) {
+    return http.request<ForgeRenderSketch>({
+      path: API_RENDER_PREVIEW_SKETCH_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderSketchSchema,
+    });
+  },
+  startMotionProof(input: ForgeMotionProofRequest) {
+    return http.request<ForgeMotionProof>({
+      path: API_RENDER_MOTION_PROOFS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeMotionProofSchema,
+    });
+  },
+  listMotionProofFormats(brandId: string, bindingId: string, templateKey: string) {
+    return http.request<ForgeMotionProofFormat[]>({
+      path: `${API_RENDER_MOTION_PROOF_FORMATS_ROUTE}?${query({ brandId, bindingId, templateKey })}`,
+      schema: forgeMotionProofFormatsSchema,
+    });
+  },
+  getMotionProof(brandId: string, proofId: string) {
+    return http.request<ForgeMotionProof>({
+      path: `${API_RENDER_MOTION_PROOFS_ROUTE}/${encodeURIComponent(proofId)}?${query({ brandId })}`,
+      schema: forgeMotionProofSchema,
     });
   },
   createJob(input: ApiRenderCreateJobRequest) {
@@ -172,6 +282,20 @@ export const apiRendersApi = {
     return http.request<ApiRenderJob>({
       path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
       schema: apiRenderJobSchema,
+    });
+  },
+  prepareMasterDownload(jobId: string, input: ApiRenderMasterDownloadRequest) {
+    return http.request<ApiRenderMasterDownloadResponse>({
+      path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}/master-download`,
+      method: 'POST',
+      body: input,
+      schema: apiRenderMasterDownloadResponseSchema,
+    });
+  },
+  masterDownloadStatus(path: string) {
+    return http.request<{ status: 'processing' | 'ready' | 'failed' }>({
+      path: `${path}/status`,
+      schema: apiRenderMasterDownloadStatusSchema,
     });
   },
 
@@ -240,6 +364,14 @@ export const apiRendersApi = {
       schema: forgeRenderSetSchema,
     });
   },
+  changeRenderSetTemplateRevision(setId: string, input: ChangeRenderSetTemplateRevisionRequest) {
+    return http.request<ForgeRenderSet>({
+      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}/template-revision`,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderSetSchema,
+    });
+  },
   /** The states the set was left in, newest first, for Version history. */
   listRenderSetRevisions(brandId: string, setId: string) {
     return http.request<{ items: ForgeRenderSetRevision[] }>({
@@ -251,6 +383,45 @@ export const apiRendersApi = {
     return http.request<void>({
       path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}?${query({ brandId })}`,
       method: 'DELETE',
+    });
+  },
+
+  // The Library side of Forge. Review status, version and comment count of up to 200 of the
+  // brand's Library assets (outputs or not), and where one output came from in Forge.
+  libraryState(brandId: string, assetIds: string[]) {
+    return http.request<ForgeLibraryStateResponse>({
+      path: `${FORGE_LIBRARY_STATE_ROUTE}?${query({ brandId, assetIds: assetIds.join(',') })}`,
+      schema: forgeLibraryStateResponseSchema,
+    });
+  },
+  getProvenance(brandId: string, assetId: string) {
+    return http.request<ForgeProvenanceResponse>({
+      path: `${FORGE_PROVENANCE_ROUTE}?${query({ brandId, assetId })}`,
+      schema: forgeProvenanceResponseSchema,
+    });
+  },
+  /**
+   * A link to the whole set as one zip: each row's newest finished render plus manifest.csv, so
+   * a batch that retried failed rows is folded into the one it retried.
+   */
+  shareRenderSetZip(brandId: string, setId: string) {
+    return http.request<ApiRenderBatchShareResponse>({
+      path: apiRenderSetZipShareRoute(setId),
+      method: 'POST',
+      body: { brandId },
+      schema: apiRenderBatchShareResponseSchema,
+    });
+  },
+  /**
+   * The set's Library collection as a revocable share link. Refused 409
+   * `render_set_not_in_library` while nothing in the set has rendered into the Library.
+   */
+  shareRenderSet(brandId: string, setId: string) {
+    return http.request<ForgeRenderSetShareResponse>({
+      path: forgeRenderSetShareRoute(setId),
+      method: 'POST',
+      body: { brandId },
+      schema: forgeRenderSetShareResponseSchema,
     });
   },
 
@@ -271,6 +442,14 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderSuggestRowsResponseSchema,
+    });
+  },
+  draftSourcesStatus(input: ApiRenderDraftSourcesStatusRequest) {
+    return http.request<ApiRenderDraftSourcesStatusResponse>({
+      path: API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: apiRenderDraftSourcesStatusResponseSchema,
     });
   },
   // Delivery destinations: where a render can go besides the Library. The Slack channel list is
@@ -305,19 +484,6 @@ export const apiRendersApi = {
       path: apiRenderDestinationRoute(destinationId),
       method: 'DELETE',
     });
-  },
-  /**
-   * A 30-day link that downloads the batch as one zip, with no sign-in. Minted per click: the
-   * link is the credential, so it is never cached or shown before someone asks for it.
-   */
-  async shareBatch(brandId: string, batchId: string) {
-    const share = await http.request<ApiRenderBatchShareResponse>({
-      path: apiRenderBatchShareRoute(batchId),
-      method: 'POST',
-      body: { brandId },
-      schema: apiRenderBatchShareResponseSchema,
-    });
-    return { url: `${getApiBaseUrl()}${share.path}`, expiresAt: share.expiresAt };
   },
   createBatch(input: ApiRenderCreateJobRequest) {
     return http.request<ApiRenderBatch>({

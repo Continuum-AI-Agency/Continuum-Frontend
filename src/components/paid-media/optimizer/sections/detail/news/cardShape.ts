@@ -34,9 +34,6 @@ export const NEWS_ROW_COLUMNS = { phone: 1, tablet: 2, desktop: 3 } as const;
 /** How many cards the first row shows before the rest go behind a disclosure. */
 export const NEWS_ROW_SIZE = NEWS_ROW_COLUMNS.desktop;
 
-/** The gap between cells, in rem, so a cell's width can be reasoned about. */
-export const NEWS_ROW_GAP_REM = 0.75;
-
 /**
  * The name the pane registers under, so the row's breakpoints ask about the pane and not
  * about the window.
@@ -54,15 +51,6 @@ export const NEWS_ROW =
 /** A cell: a container, so the card inside can floor its height against the cell's width. */
 export const NEWS_CELL = '@container/news-cell min-w-0';
 
-/**
- * How far the recap prose reaches when it sits BESIDE the cards rather than under them: it
- * takes every column the cards left empty, so one card plus its recap is still a full row.
- */
-export const RECAP_BESIDE_SPAN: Record<1 | 2, string> = {
-  1: '@[36rem]/news:col-span-1 @[56rem]/news:col-span-2',
-  2: '@[36rem]/news:col-span-2 @[56rem]/news:col-span-1',
-};
-
 /** The floor the band implies, as a share of the cell's width: 100 ÷ the widest ratio. */
 export function cardMinHeightCqw(): number {
   return Math.round((100 / CARD_ASPECT_BAND.max) * 100) / 100;
@@ -76,21 +64,3 @@ export function cardMinHeightCqw(): number {
  * keeps a card inside the aspect band at any column width.
  */
 export const CARD_FRAME = 'flex h-full w-full min-h-[66.67cqw]';
-
-/**
- * The cell width, in rem, at a given pane width and column count.
- */
-export function cellWidthRem(paneRem: number, columns: number): number {
-  return (paneRem - NEWS_ROW_GAP_REM * (columns - 1)) / columns;
-}
-
-/**
- * The width at which a justification block earns its angled layout.
- *
- * A CONTAINER width, never the viewport. The three layouts were written with `sm:`, which is
- * a viewport query: on a desktop an insight card 336px wide still matched `sm:` and laid its
- * figure and its argument into two ~150px columns, which is the other half of "the cards did
- * not hold". A block only splits when the BLOCK has room to split — which, in a three-column
- * row, is a pane wider than about 85rem.
- */
-export const JUSTIFICATION_SPLIT_REM = 28;

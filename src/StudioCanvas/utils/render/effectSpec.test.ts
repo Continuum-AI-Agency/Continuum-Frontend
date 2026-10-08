@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  applyCanvasTransform,
   clipEffectsToCss,
   cornerRadiusFracFor,
   FILTER_PRESETS,
@@ -394,4 +395,58 @@ describe('the five preset primitives', () => {
     const css = clipEffectsToCss({ vhs: { amount: 1 }, pixelate: { blockPx: 32 } }, 0);
     expect(css.filter).toBeUndefined();
   });
+});
+
+it('filter intensity interpolates from neutral and keeps manual adjustments', () => {
+  expect(resolveAdjustments({ filterPreset: 'vintage', filterStrength: 0 })).toMatchObject({
+    sepia: 0,
+    saturation: 1,
+    contrast: 1,
+    brightness: 1,
+  });
+  expect(
+    resolveAdjustments({
+      filterPreset: 'vintage',
+      filterStrength: 0.5,
+      adjustments: { brightness: 2 },
+    }),
+  ).toMatchObject({ sepia: 0.225, saturation: 0.925, contrast: 1.05, brightness: 2 });
+});
+
+it('a serialized parent position track requires the compositor effect draw path', () => {
+  expect(
+    hasVisualEffects({
+      parentPositionTracks: [{ startOffsetSec: 0, position: { x: 0.5, y: 0.5 }, keyframes: [] }],
+    }),
+  ).toBe(true);
+  expect(hasVisualEffects({ parentPositionTracks: [] })).toBe(false);
+});
+
+it('shares a non-center pivot between CSS and canvas while retaining legacy center defaults', () => {
+  const spec = {
+    transform: {
+      anchorX: 0.25,
+      anchorY: 0.75,
+      offsetX: 0.1,
+      offsetY: -0.1,
+      scaleX: -0.8,
+      scaleY: 0.6,
+      rotate: 30,
+    },
+  };
+  expect(clipEffectsToCss(spec, 0).transformOrigin).toBe('25% 75%');
+  const calls: unknown[] = [];
+  const ctx = {
+    translate: (x: number, y: number) => calls.push(['translate', x, y]),
+    rotate: (angle: number) => calls.push(['rotate', angle]),
+    scale: (x: number, y: number) => calls.push(['scale', x, y]),
+  };
+  applyCanvasTransform(
+    ctx as unknown as CanvasRenderingContext2D,
+    resolveTransformAt(spec, 0),
+    1000,
+    500,
+  );
+  expect(calls[0]).toEqual(['translate', 350, 325]);
+  expect(calls.at(-1)).toEqual(['translate', -250, -375]);
 });

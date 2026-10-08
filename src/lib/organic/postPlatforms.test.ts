@@ -26,7 +26,7 @@ describe('POST_PLATFORMS', () => {
 
   it('previews TikTok and YouTube as vertical phone posts', () => {
     for (const platform of ['tiktok', 'youtube'] as const) {
-      expect(POST_PLATFORMS[platform].frame).toBe('phone');
+      expect(POST_PLATFORMS[platform].frame).toBe('vertical');
       expect(POST_PLATFORMS[platform].reelAspect).toBe(9 / 16);
       expect(POST_PLATFORMS[platform].permalink).toBeUndefined();
     }
@@ -37,7 +37,8 @@ describe('isPostPlatform', () => {
   it('accepts every publishable platform and nothing else', () => {
     expect(isPostPlatform('tiktok')).toBe(true);
     expect(isPostPlatform('youtube')).toBe(true);
-    expect(isPostPlatform('x')).toBe(false);
+    expect(isPostPlatform('x')).toBe(true);
+    expect(isPostPlatform('threads')).toBe(false);
     expect(isPostPlatform('TikTok')).toBe(false);
     expect(isPostPlatform(undefined)).toBe(false);
   });
@@ -53,6 +54,11 @@ describe('postPlatformLabel', () => {
 describe('postFormatOptions', () => {
   it('offers every format for a platform that supports them all', () => {
     expect(postFormatOptions(['tiktok'])).toEqual(['Post', 'Carousel', 'Reel']);
+  });
+
+  it('offers Story on Instagram alone, never once another platform is selected', () => {
+    expect(postFormatOptions(['instagram'])).toEqual(['Post', 'Carousel', 'Reel', 'Story']);
+    expect(postFormatOptions(['instagram', 'facebook'])).toEqual(['Post', 'Carousel', 'Reel']);
   });
 
   it('offers only Reel on YouTube, alone or alongside another platform', () => {

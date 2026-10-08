@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import type { PortfolioSuggestion } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { PortfolioSuggestion, SuggestResult } from '@continuum/contracts';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import * as realData from '../useOptimizerData';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
@@ -10,6 +10,12 @@ const createMutateAsync = mock(async () => ({ portfolio_id: 'p-new' }));
 const enrollMutateAsync = mock(async () => ({}));
 const runMutate = mock(() => {});
 const onCreated = mock(() => {});
+const neverCalled = mock(async () => {
+  throw new Error('a Meta-only portfolio called a non-Meta writer');
+});
+// The non-Meta writers refuse unless a test arms them: a Meta-only flow must never reach them.
+const createPlatformMutateAsync = mock(neverCalled);
+const addMembersMutateAsync = mock(neverCalled);
 
 const suggestion: PortfolioSuggestion = {
   objective: 'lead',
@@ -56,6 +62,13 @@ const snapshots = [
 
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
+const META_ONLY: SuggestResult = {
+  suggestions: [suggestion],
+  diagnostics: null,
+  reason: null,
+};
+let suggestData: SuggestResult = META_ONLY;
+
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
@@ -66,7 +79,7 @@ mock.module('../useOptimizerData', () => ({
     ],
   }),
   useOptimizerSuggestions: () => ({
-    data: { suggestions: [suggestion], diagnostics: null, reason: null },
+    data: suggestData,
     isLoading: false,
     isError: false,
   }),
@@ -87,6 +100,12 @@ mock.module('../useOptimizerData', () => ({
   useOptimizerMutations: () => ({
     create: { mutate: mock(() => {}), mutateAsync: createMutateAsync, isPending: false },
     enroll: { mutate: mock(() => {}), mutateAsync: enrollMutateAsync, isPending: false },
+    // A Meta-only wizard never reaches the non-Meta writers; a call would be a regression.
+    createPlatform: {
+      mutateAsync: createPlatformMutateAsync,
+      isPending: false,
+    },
+    addMembers: { mutateAsync: addMembersMutateAsync, isPending: false },
     run: { mutate: runMutate, isPending: false },
   }),
 }));
@@ -108,6 +127,11 @@ mock.module('./SignalReadinessCard', () => ({ SignalReadinessCard: () => null })
 const { PortfolioSetup } = await import('./PortfolioSetup');
 
 beforeEach(() => {
+  suggestData = META_ONLY;
+  createPlatformMutateAsync.mockReset();
+  createPlatformMutateAsync.mockImplementation(neverCalled);
+  addMembersMutateAsync.mockReset();
+  addMembersMutateAsync.mockImplementation(neverCalled);
   createMutateAsync.mockClear();
   enrollMutateAsync.mockClear();
   runMutate.mockClear();
@@ -272,5 +296,120 @@ describe('PortfolioSetup — the four-step wizard', () => {
       scale_growth_pct: 0.1,
       scale_cadence_days: 14,
     });
+  });
+});
+
+// Vivo 47: Meta buys conversations, Google buys leads — the suggest edge keeps them apart,
+// says so, and lists Google's campaigns for a portfolio built from scratch.
+const VIVO_GOOGLE: SuggestResult = {
+  suggestions: [suggestion],
+  diagnostics: null,
+  reason: null,
+  platform_accounts: [
+    {
+      platform: 'google_ads',
+      account_id: '3710693645',
+      currency: 'MXN',
+      status: 'no_shared_objective',
+    },
+  ],
+  platform_candidates: [
+    {
+      platform: 'google_ads',
+      account_id: '3710693645',
+      currency: 'MXN',
+      candidates: [
+        {
+          entity_id: '20775796216',
+          name: 'VIVO 47-EKATAR',
+          objectives: ['lead'],
+          daily_budget: 1179,
+          spend14: 15287,
+          channel_type: 'SEARCH',
+        },
+        {
+          entity_id: '24331887298',
+          name: 'SALES-PMAX-OCTUBRE',
+          objectives: ['lead'],
+          daily_budget: 450,
+          spend14: 0,
+          channel_type: 'PERFORMANCE_MAX',
+        },
+      ],
+    },
+  ],
+};
+
+describe('PortfolioSetup — from scratch on any platform', () => {
+  it('says why a Google account was not combined with this Meta account', () => {
+    suggestData = VIVO_GOOGLE;
+    renderSetup();
+    expect(screen.getByTestId('suggest-platform-notes').textContent).toContain(
+      'Google Ads account 3710693645 buys different results than this Meta account',
+    );
+  });
+
+  it('lists Google campaigns, none blocked before anything is ticked, and TikTok\u2019s Connect', () => {
+    suggestData = VIVO_GOOGLE;
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /Start from scratch/ }));
+    const members = screen.getAllByTestId('wizard-other-platform-member');
+    expect(members.map((row) => row.textContent)).toEqual([
+      expect.stringContaining('VIVO 47-EKATAR'),
+      expect.stringContaining('SALES-PMAX-OCTUBRE'),
+    ]);
+    const empty = screen.getAllByTestId('wizard-platform-empty');
+    expect(empty.map((row) => row.getAttribute('data-platform'))).toEqual(['tiktok_ads']);
+    expect(screen.getByTestId('platform-connect-tiktok_ads')).toBeDefined();
+    // Nothing ticked yet, so no currency is fixed: every campaign can still be picked.
+    expect(members.every((row) => row.getAttribute('data-blocked') == null)).toBe(true);
+  });
+
+  it('a Google-only portfolio is created on the Google account and enrolls its campaigns', async () => {
+    suggestData = VIVO_GOOGLE;
+    createPlatformMutateAsync.mockImplementation(async () => ({
+      portfolio_id: 'p-google',
+    }));
+    addMembersMutateAsync.mockImplementation(async () => ({
+      enrolled: 2,
+      already: 0,
+      currency: 'MXN',
+    }));
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /Start from scratch/ }));
+    const section = screen.getByTestId('wizard-other-platform-members');
+    fireEvent.click(within(section).getAllByRole('checkbox')[0]);
+    fireEvent.click(within(section).getAllByRole('checkbox')[1]);
+    next();
+    next();
+    fireEvent.change(document.getElementById('wizard-name') as HTMLElement, {
+      target: { value: 'Test 1 — Google Ads' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Create & enroll 2 Google campaigns/,
+      }),
+    );
+    await flush();
+    await flush();
+    expect(createMutateAsync).not.toHaveBeenCalled();
+    expect(createPlatformMutateAsync).toHaveBeenCalledTimes(1);
+    const [request] = createPlatformMutateAsync.mock.calls[0] as unknown as [
+      {
+        platform: string;
+        account_id: string;
+        config: { apply_mode: string; daily_total: number };
+      },
+    ];
+    expect(request.platform).toBe('google_ads');
+    expect(request.account_id).toBe('3710693645');
+    expect(request.config.apply_mode).toBe('recommend');
+    expect(request.config.daily_total).toBe(1629);
+    const [enrollRequest] = addMembersMutateAsync.mock.calls[0] as unknown as [
+      { portfolio_id: string; members: { entity_id: string }[] },
+    ];
+    expect(enrollRequest.portfolio_id).toBe('p-google');
+    expect(enrollRequest.members.map((m) => m.entity_id)).toEqual(['20775796216', '24331887298']);
+    expect(runMutate).toHaveBeenCalledWith('p-google');
   });
 });

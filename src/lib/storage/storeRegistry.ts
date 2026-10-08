@@ -1,4 +1,4 @@
-export type BrandSwitchReason = 'local-switch' | 'cross-tab-sync';
+export type BrandSwitchReason = 'local-switch' | 'cross-tab-sync' | 'logout';
 
 export type BrandSwitchEvent = {
   prevBrandId: string;
@@ -63,6 +63,34 @@ export function purge(prevBrandId: string): void {
     } catch (error) {
       if (process.env.NODE_ENV !== 'production') {
         console.error(`[storeRegistry] purge failed for "${entry.name}"`, error);
+      }
+    }
+  }
+}
+
+/**
+ * Logout teardown: resets every registered store's in-memory state. Unlike
+ * teardown()/purge() (which target one brand), this runs on logout so the
+ * next login in the same tab never inherits the previous account's state.
+ * Registered teardowns ignore the brand id by convention, so passing '' is safe.
+ */
+export function teardownAll(): void {
+  const evt: BrandSwitchEvent = { prevBrandId: '', nextBrandId: null, reason: 'logout' };
+  for (const entry of entries.values()) {
+    try {
+      entry.teardown('', evt);
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(`[storeRegistry] teardownAll failed for "${entry.name}"`, error);
+      }
+    }
+  }
+  for (const handler of subscribers) {
+    try {
+      handler(evt);
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[storeRegistry] subscriber failed', error);
       }
     }
   }

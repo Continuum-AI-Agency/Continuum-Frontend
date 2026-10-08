@@ -1,4 +1,10 @@
+import {
+  type EditorAudioFadeClock,
+  editorAudioFadeGainAt,
+  type NumericKeyframe,
+} from '@continuum/contracts';
 import { throwIfAborted } from './appendRange';
+import { audioGainAt } from './timelineAudioEnvelope';
 
 // PCM mixdown for the Video Editor (timelineEditor) render. The old audio path
 // appended each clip's samples inline into one AudioSampleSource, so overlapping
@@ -63,23 +69,64 @@ export function resampleToStereo48k(
 
 export interface EnvelopeOptions {
   gain?: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  transitionFadeInSec?: number;
+  transitionFadeOutSec?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
+  /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain
+   *  (the clip's volume outside them), sampled like every other keyed property. */
+  volumeKeyframes?: readonly NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: readonly NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 }
 
-// Apply constant gain plus linear fade-in/out envelopes in place. Overlapping
-// clips fade complementarily over a cross-dissolve window, so summation produces a
-// constant-power-ish crossfade.
+/** Frames between two samples of a keyed gain curve; the gain is linear in between. */
+const GAIN_CONTROL_FRAMES = 128;
+
+// Apply the gain (constant, or its keyframed curve) plus linear fade-in/out envelopes in
+// place. Overlapping clips fade complementarily over a cross-dissolve window, so
+// summation produces a constant-power-ish crossfade.
 export function applyEnvelope(pcm: StereoPcm, opts: EnvelopeOptions): void {
   const gain = opts.gain ?? 1;
   const n = pcm.left.length;
   if (n === 0) return;
   const fadeIn = Math.min(n, Math.round(Math.max(0, opts.fadeInSec ?? 0) * AUDIO_SAMPLE_RATE));
   const fadeOut = Math.min(n, Math.round(Math.max(0, opts.fadeOutSec ?? 0) * AUDIO_SAMPLE_RATE));
+  const hasKeys = Boolean(opts.volumeKeyframes?.length || opts.groupVolumeKeyframes?.length);
+  const keyedGain = (frame: number) => audioGainAt(opts, frame / AUDIO_SAMPLE_RATE);
+  const clip = { ...opts, durationSec: n / AUDIO_SAMPLE_RATE };
+  let fromGain = gain;
+  let toGain = gain;
   for (let i = 0; i < n; i += 1) {
     let g = gain;
-    if (fadeIn > 0 && i < fadeIn) g *= i / fadeIn;
-    if (fadeOut > 0 && i >= n - fadeOut) g *= Math.max(0, n - 1 - i) / fadeOut;
+    if (hasKeys) {
+      const step = i % GAIN_CONTROL_FRAMES;
+      if (step === 0) {
+        fromGain = keyedGain(i);
+        toGain = keyedGain(i + GAIN_CONTROL_FRAMES);
+      }
+      g = fromGain + ((toGain - fromGain) * step) / GAIN_CONTROL_FRAMES;
+    }
+    if (opts.audioFadeClock) {
+      const localSec = i / AUDIO_SAMPLE_RATE;
+      const transitionIn =
+        (opts.transitionFadeInSec ?? 0) > 0 ? Math.min(1, localSec / opts.transitionFadeInSec!) : 1;
+      const transitionOut =
+        (opts.transitionFadeOutSec ?? 0) > 0
+          ? Math.max(0, Math.min(1, (n - 1 - i) / AUDIO_SAMPLE_RATE / opts.transitionFadeOutSec!))
+          : 1;
+      g *= Math.min(editorAudioFadeGainAt(clip, localSec, 'in'), transitionIn);
+      // Retain the mixer's last-sample-at-zero convention on the authored clock.
+      g *= Math.min(
+        editorAudioFadeGainAt(clip, localSec + 1 / AUDIO_SAMPLE_RATE, 'out'),
+        transitionOut,
+      );
+    } else {
+      if (fadeIn > 0 && i < fadeIn) g *= i / fadeIn;
+      if (fadeOut > 0 && i >= n - fadeOut) g *= Math.max(0, n - 1 - i) / fadeOut;
+    }
     pcm.left[i] *= g;
     pcm.right[i] *= g;
   }
@@ -137,8 +184,15 @@ export interface AudioPlanItem {
   speed: number;
   outputStartSec: number;
   gain: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  transitionFadeInSec?: number;
+  transitionFadeOutSec?: number;
   fadeInSec: number;
   fadeOutSec: number;
+  volumeKeyframes?: readonly NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: readonly NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 }
 
 export async function decodeClipPcm(
@@ -151,35 +205,53 @@ export async function decodeClipPcm(
   const track = await input.getPrimaryAudioTrack();
   if (!track) return null;
   const sink = new mb.AudioSampleSink(track);
-  const chunks: Float32Array[][] = [];
+  const chunks: { offset: number; channels: Float32Array[] }[] = [];
   let sampleRate = AUDIO_SAMPLE_RATE;
   let channelCount = AUDIO_CHANNELS;
-  for await (const sample of sink.samples(startSec, endSec)) {
-    throwIfAborted(signal);
-    sampleRate = sample.sampleRate;
-    channelCount = Math.max(1, sample.numberOfChannels);
-    const frames = sample.numberOfFrames;
-    const perChannel: Float32Array[] = [];
-    for (let c = 0; c < channelCount; c += 1) {
-      const dest = new Float32Array(frames);
-      sample.copyTo(dest, { planeIndex: c, format: 'f32-planar' });
-      perChannel.push(dest);
+  // Decode history before a seek so AAC/Opus initialization does not silence the selected start.
+  // ponytail: 250ms pre-roll covers current codecs; extend for codecs needing longer history.
+  for await (const sample of sink.samples(startSec - 0.25, endSec)) {
+    try {
+      throwIfAborted(signal);
+      if (
+        chunks.length &&
+        (sample.sampleRate !== sampleRate || sample.numberOfChannels !== channelCount)
+      )
+        throw new Error('Audio format changed within the selected source span.');
+      sampleRate = sample.sampleRate;
+      channelCount = Math.max(1, sample.numberOfChannels);
+      const offset = Math.round((sample.timestamp - startSec) * sampleRate);
+      const first = Math.max(0, -offset);
+      const last = Math.min(
+        sample.numberOfFrames,
+        Math.round((endSec - startSec) * sampleRate) - offset,
+      );
+      const frames = last - first;
+      if (frames <= 0) continue;
+      const perChannel: Float32Array[] = [];
+      for (let c = 0; c < channelCount; c += 1) {
+        const dest = new Float32Array(frames);
+        sample.copyTo(dest, {
+          planeIndex: c,
+          format: 'f32-planar',
+          frameOffset: first,
+          frameCount: frames,
+        });
+        perChannel.push(dest);
+      }
+      chunks.push({ offset: offset + first, channels: perChannel });
+    } finally {
+      sample.close();
     }
-    chunks.push(perChannel);
-    sample.close();
   }
   if (chunks.length === 0) return null;
-  const total = chunks.reduce((sum, chunk) => sum + (chunk[0]?.length ?? 0), 0);
+  const total = Math.max(0, Math.round((endSec - startSec) * sampleRate));
   const channels: Float32Array[] = Array.from(
     { length: channelCount },
     () => new Float32Array(total),
   );
-  let offset = 0;
   for (const chunk of chunks) {
-    const frames = chunk[0]?.length ?? 0;
-    for (let c = 0; c < channelCount; c += 1)
-      channels[c].set(chunk[c] ?? new Float32Array(frames), offset);
-    offset += frames;
+    for (let c = 0; c < channelCount; c += 1) channels[c].set(chunk.channels[c], chunk.offset);
   }
   return { channels, sampleRate };
 }
@@ -203,7 +275,19 @@ export async function mixdownTimelineAudio(
     );
     if (!decoded) continue;
     const pcm = resampleToStereo48k(decoded.channels, decoded.sampleRate, item.speed);
-    applyEnvelope(pcm, { gain: item.gain, fadeInSec: item.fadeInSec, fadeOutSec: item.fadeOutSec });
+    applyEnvelope(pcm, {
+      gain: item.gain,
+      audioFadeClock: item.audioFadeClock,
+      transitionFadeInSec: item.transitionFadeInSec,
+      transitionFadeOutSec: item.transitionFadeOutSec,
+      fadeInSec: item.fadeInSec,
+      fadeOutSec: item.fadeOutSec,
+      groupVolumeKeyframes: item.groupVolumeKeyframes,
+      groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+      ...(item.volumeKeyframes
+        ? { volumeKeyframes: item.volumeKeyframes, keyframeOffsetSec: item.keyframeOffsetSec }
+        : {}),
+    });
     mixInto(master, pcm, item.outputStartSec * AUDIO_SAMPLE_RATE);
   }
   clampStereo(master);

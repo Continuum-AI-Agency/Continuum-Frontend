@@ -4,6 +4,7 @@
 import type { MediaAsset } from '@continuum/contracts';
 import {
   AlertTriangle,
+  AudioLines,
   ImageOff,
   Loader2,
   Play,
@@ -267,8 +268,18 @@ function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
   );
 }
 
+// Image/video tiles paint the original. Audio and source files (PSD, INDD, 3D, PDF…)
+// paint their Library preview still, never the original bytes an <img> cannot draw.
+function tileStill(asset: MediaAsset): string | null {
+  if (asset.kind === 'image' || asset.kind === 'video') return sanitizeCreativeAssetUrl(asset.signedUrl);
+  const preview = asset.preview;
+  return sanitizeCreativeAssetUrl(
+    preview?.state === 'ready' && preview.kind === 'image' ? preview.signedUrl : asset.thumbnailUrl,
+  );
+}
+
 function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: string }) {
-  const url = sanitizeCreativeAssetUrl(asset.signedUrl);
+  const url = tileStill(asset);
   const isVideo = asset.kind === 'video';
   const label = asset.title ?? asset.fileName;
 
@@ -297,7 +308,11 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-gray-600">
-                  <ImageOff className="h-6 w-6" />
+                  {asset.kind === 'audio' ? (
+                    <AudioLines className="h-6 w-6" />
+                  ) : (
+                    <ImageOff className="h-6 w-6" />
+                  )}
                 </div>
               )}
 
@@ -307,7 +322,7 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
                 </div>
               )}
 
-              {!isVideo && url ? (
+              {asset.kind === 'image' && url ? (
                 <QuickReformatMenu
                   asset={asset}
                   brandId={brandId}

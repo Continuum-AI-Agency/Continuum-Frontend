@@ -1,148 +1,101 @@
 'use client';
 
-// Overview — the optimizer's front page.
+// Overview — the optimizer's front page, as the Performance+ redesign orders it (proposal O1,
+// docs/performance-plus-redesign/overview.html). Above the fold, in this order and nothing
+// else: one sentence with figures (what the account spent over the window, what each result
+// kind cost against its target, how many decisions wait); a sub-line with the window and when
+// the read was taken; the band that asks Jaina; four to six tiles whose top border is a state;
+// the recommendation cards in impact order with the lead marked; and the portfolios as
+// one-line rows, sortable by distance to target.
 //
-// One board, then the rest. The board is the account's state as a single surface: the lead
-// card (what is worth attention today, or how the account is doing when nothing is), the
-// four health tiles seated under it as one row (what the book spends per day, what it spent
-// yesterday against that, how much of it runs itself, what is waiting on a decision), and
-// the line saying when the read was taken with the control to ask again. It used to be four
-// strips with gaps between them — hero, dateline, a "nothing to move" panel, a folded
-// autonomy control — and it read as a stack of leftovers. Then the spend-by-objective stream
-// with the live split beside it, and the portfolio cards; the legend filters the cards, so
-// "show me the lead portfolios" is one click.
+// Nothing here is a chart and nothing is prose written by a model. The sentence and the tiles
+// are composed from the same typed rows — the portfolio list and the optimizer's own
+// efficiency series per portfolio — in ./account/overviewModel.ts, so a figure in the sentence
+// is always one the reader can find again in a tile or a row. The cards come from today's
+// account read; the read's own narrative, its footnotes and its charts are not shown.
 //
-// The account-level autonomy controls are not here. They have a tab of their own.
+// Above all of it sits the platform tab row (All · Meta · Google · TikTok, kept in ?platform=,
+// docs/optimizer-multiplatform/frontend.html §2). "All" is the MP1 frame: its sentence and
+// tiles come from ONE producer, public.optimizer_get_account_platform_metrics, so they span the
+// three platforms without adding two currencies or two result kinds together. "Meta" is the O1
+// above, unchanged. Google and TikTok lead with their own rows of the same producer, then what
+// only that platform's own read holds (Google's campaign types, TikTok's snapshots and top ad
+// groups). Until that RPC is deployed every tab says so plainly, and "All" falls back to today's
+// Meta O1. Under its tiles "All" may show the platforms side by side (MP3), which a viewer can
+// hide; each portfolio row carries one chip per platform it holds members on.
 
-import type { OptimizationObjective, PortfolioListItem } from '@continuum/contracts';
-import { applyApprovals, OptimizationObjectiveSchema } from '@continuum/contracts';
-import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
+import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import { applyApprovals } from '@continuum/contracts';
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, FileTextIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { budgetByObjective, lastFullDay, type SpendStream, spendStream } from '../charts/chartData';
-import { SpendByObjectiveStream } from '../charts/SpendByObjectiveStream';
+import { jainaPromptHref } from '@/lib/jaina/deepLink';
+import { cn } from '@/lib/utils';
 import { KpiTile } from '../components/KpiTile';
-import { StatusChip, type StatusTone } from '../components/StatusChip';
-import { formatCurrency, formatPercent, humanize } from '../format';
+import { figureProps, formatCpa, formatCurrency } from '../format';
 import { pendingWorkCount } from '../reportModel';
+import * as typeScale from '../typeScale';
 import {
   useAccountApprovals,
-  useInsightApprovalMutations,
   useOptimizerAccountRead,
-  useOptimizerSpendByObjective,
+  useOptimizerAdAccounts,
+  useOptimizerPortfolioEfficiency,
   useRequestAccountRead,
 } from '../useOptimizerData';
-import { AccountLeadCard, type AccountMix } from './account/AccountLeadCard';
+import { useOptimizerUrlState } from '../useOptimizerUrlState';
 import { AccountRead } from './account/AccountRead';
 import { AccountReadFreshness } from './account/AccountReadFreshness';
-import { OptimizerPanel } from './OptimizerPanel';
-import { PortfolioRowCard, portfolioLeads } from './PortfolioRowCard';
+import {
+  accountSpend,
+  autopilotSummary,
+  decisionsLabel,
+  headlineClauses,
+  joinClauses,
+  latestCycle,
+  type PortfolioWindow,
+  portfolioWindow,
+  type ResultKind,
+  type RowSortDir,
+  type RowSortKey,
+  resultKinds,
+  sortPortfolioRows,
+  spendState,
+  WINDOW_DAYS,
+  windowLabel,
+} from './account/overviewModel';
+import { JainaEntryChips } from './JainaEntryChips';
+import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
+import { PortfolioRowCard } from './PortfolioRowCard';
+import type { PlatformCardAction } from './platformCards/platformCardActionModel';
+import {
+  AllPlatformsHeadline,
+  AllPlatformsSubline,
+  AllPlatformsTiles,
+  PlatformMetricsSection,
+} from './platforms/AccountPlatformsOverview';
+import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
+import { GoogleAdsTab } from './platforms/GoogleAdsTab';
+import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
+import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
+import { PlatformTabs } from './platforms/PlatformTabs';
+import {
+  type AdPlatform,
+  connectedPlatforms,
+  OPTIMIZER_MANAGED_PLATFORM,
+  rendersManagedOverview,
+} from './platforms/platformTabsModel';
+import { memberPlatforms, usePortfolioMemberStates } from './platforms/portfolioPlatforms';
+import { TikTokAdsTab } from './platforms/TikTokAdsTab';
+import {
+  type AccountPlatformMetricsState,
+  useAccountPlatformMetrics,
+} from './platforms/useAccountPlatformMetrics';
+import { underManagement } from './portfolioStaleness';
 
-type SortKey = 'name' | 'daily' | 'pending';
-type SortDir = 'asc' | 'desc';
-
-const STREAM_DAYS = 14;
-
-/**
- * The objective the account mostly buys, by money rather than by count.
- *
- * The rung line says what a figure BUYS — money, a person, an intent, attention — and a
- * mixed account has no single answer, so the largest book wins and a tie says nothing.
- * The read doc does not carry an objective yet; the portfolio list does.
- */
-export function dominantObjective(portfolios: PortfolioListItem[]): OptimizationObjective | null {
-  const byObjective = new Map<OptimizationObjective, number>();
-  for (const portfolio of portfolios) {
-    const parsed = OptimizationObjectiveSchema.safeParse(portfolio.objective);
-    if (!parsed.success) continue;
-    byObjective.set(
-      parsed.data,
-      (byObjective.get(parsed.data) ?? 0) + (portfolio.daily_total ?? 0),
-    );
-  }
-  let best: OptimizationObjective | null = null;
-  let bestSpend = -1;
-  let tied = false;
-  for (const [objective, spend] of byObjective) {
-    if (spend > bestSpend) {
-      best = objective;
-      bestSpend = spend;
-      tied = false;
-    } else if (spend === bestSpend) {
-      tied = true;
-    }
-  }
-  return tied ? null : best;
-}
-
-/**
- * What the account's money is split across — the same split the legend beside the stream
- * draws, folded once here so the lead card and the legend cannot name a different leader.
- *
- * Spent over the window when there is history; the daily plan by objective when there is
- * not, which is also what the legend falls back to. Null when neither carries any money.
- */
-export function accountMix(
-  stream: SpendStream,
-  portfolios: PortfolioListItem[],
-): AccountMix | null {
-  if (stream.hasData) {
-    const total = Object.values(stream.totals).reduce((sum, value) => sum + value, 0);
-    if (total > 0) {
-      return {
-        basis: 'spent',
-        days: stream.points.length,
-        slices: stream.objectives.map((objective) => ({
-          label: humanize(objective),
-          share: Math.round(((stream.totals[objective] ?? 0) / total) * 100),
-        })),
-      };
-    }
-  }
-  const planned = budgetByObjective(portfolios).filter((slice) => slice.daily > 0);
-  const total = planned.reduce((sum, slice) => sum + slice.daily, 0);
-  if (total <= 0) return null;
-  return {
-    basis: 'planned',
-    slices: planned.map((slice) => ({
-      label: slice.name,
-      share: Math.round((slice.daily / total) * 100),
-    })),
-  };
-}
-
-/** Pure, order-stable sort for the glance list. Nullable daily budgets sort as 0 so a
- *  half-configured portfolio does not jump to the top of a descending budget sort. */
-export function sortPortfolios(
-  portfolios: PortfolioListItem[],
-  key: SortKey,
-  dir: SortDir,
-): PortfolioListItem[] {
-  const factor = dir === 'asc' ? 1 : -1;
-  return [...portfolios].sort((a, b) => {
-    let delta: number;
-    if (key === 'name') delta = a.name.localeCompare(b.name);
-    else if (key === 'daily') delta = (a.daily_total ?? 0) - (b.daily_total ?? 0);
-    else delta = pendingWorkCount(a) - pendingWorkCount(b);
-    return delta * factor;
-  });
-}
-
-/** Yesterday's spend against the daily plan, as a verdict. Null without either number. */
-export function spendVsPlan(
-  spent: number | null,
-  plan: number,
-): { pct: number; tone: StatusTone; label: string } | null {
-  if (spent == null || plan <= 0) return null;
-  const ratio = spent / plan;
-  const pct = Math.round(ratio * 100);
-  const share = formatPercent(pct);
-  if (ratio > 1.1) return { pct, tone: 'warning', label: `${share} of plan · over` };
-  if (ratio < 0.9) return { pct, tone: 'info', label: `${share} of plan · under` };
-  return { pct, tone: 'success', label: `${share} of plan` };
-}
+/** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
+const MAX_KIND_TILES = 3;
 
 type OptimizerOverviewProps = {
   brandId: string;
@@ -157,8 +110,55 @@ type OptimizerOverviewProps = {
   onPrefetchPortfolio?: (portfolioId: string) => void;
 };
 
-/** The tiles sit inside the board as one row, so each drops its own frame. */
-const TILE_IN_BOARD = 'rounded-none border-0';
+/** The tile's second line for one result kind: cost, target, and last week — or why not. */
+export function kindTileSub(kind: ResultKind, currency: string | null | undefined): string {
+  if (kind.costPerResult == null) {
+    return kind.spend > 0 ? `${formatCurrency(kind.spend, currency)} no results` : 'no spend';
+  }
+  const parts = [formatCpa(kind.costPerResult, currency)];
+  if (kind.targetRange == null) parts.push('no target');
+  else if (kind.targetRange.min === kind.targetRange.max)
+    parts.push(`target ${formatCpa(kind.targetRange.min, currency)}`);
+  else
+    parts.push(
+      `target ${formatCpa(kind.targetRange.min, currency)}–${formatCpa(kind.targetRange.max, currency)}`,
+    );
+  if (kind.priorCostPerResult != null)
+    parts.push(`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`);
+  return parts.join(' · ');
+}
+
+/** The tile's second line for autopilot: who only recommends, or what is stopped. */
+export function autopilotTileSub(summary: ReturnType<typeof autopilotSummary>): string {
+  if (summary.paused > 0) return `${summary.paused} paused`;
+  if (summary.recommending.length === 0) return 'all apply on their own';
+  if (summary.recommending.length <= 2)
+    return `${summary.recommending.join(' and ')} ${summary.recommending.length === 1 ? 'recommends, does not apply' : 'recommend, do not apply'}`;
+  return `${summary.recommending.length} recommend, do not apply`;
+}
+
+/** Candidate id → the action its platform card hands a person, exactly as the read carries it
+ *  (`card_action`: the pending recommendation, its portfolio and the engine's action). A card
+ *  without one shows no control of its own. */
+export function cardActionsOf(
+  candidates: readonly AccountCandidate[],
+): ReadonlyMap<string, PlatformCardAction> {
+  const actions = new Map<string, PlatformCardAction>();
+  for (const candidate of candidates) {
+    const target = candidate.card_action;
+    if (!target) continue;
+    actions.set(candidate.id, {
+      portfolioId: target.portfolio_id,
+      action: target.action,
+      recommendationId: target.recommendation_id,
+    });
+  }
+  return actions;
+}
+
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
 
 export function OptimizerOverview({
   brandId,
@@ -171,38 +171,64 @@ export function OptimizerOverview({
   onCreatePortfolio,
   onPrefetchPortfolio,
 }: OptimizerOverviewProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('name');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [objectiveFilter, setObjectiveFilter] = useState<string | null>(null);
-  const spendQuery = useOptimizerSpendByObjective(brandId, STREAM_DAYS);
-  // The account read opens the screen when the worker has written one. Absent is absent:
-  // no spinner, no empty shell — the rest of the overview stands on its own.
+  const [sortKey, setSortKey] = useState<RowSortKey>('distance');
+  const [sortDir, setSortDir] = useState<RowSortDir>('asc');
+  const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
+  const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
+  const memberStates = usePortfolioMemberStates(portfolioIds);
+  // The account read opens the cards when the worker has written one. Absent is absent:
+  // no spinner, no empty shell — the sentence and the tiles stand on their own.
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
-  const approvals = useInsightApprovalMutations(brandId, adAccountId);
   const approvalMaps = useAccountApprovals(brandId, adAccountId);
   const requestRead = useRequestAccountRead(brandId, adAccountId);
+  const { platform: platformTab, setPlatform } = useOptimizerUrlState();
+  const adAccounts = useOptimizerAdAccounts(brandId);
+  const platformMetrics = useAccountPlatformMetrics(brandId);
+  const connected = useMemo(() => {
+    const granted = connectedPlatforms(adAccounts.data);
+    // The producer knows TikTok too; the grant list does not. Either one saying "connected"
+    // is enough — a tab never says "Connect" for an account the page is already reading.
+    const read =
+      platformMetrics.status === 'ready' ? connectedFromMetrics(platformMetrics.metrics) : null;
+    return {
+      // The selected account is a Meta account the brand already reads: Meta is connected even
+      // while the account list is still loading or failed.
+      meta: granted.meta || adAccountId != null || Boolean(read?.meta),
+      google_ads: granted.google_ads || Boolean(read?.google_ads),
+      tiktok_ads: granted.tiktok_ads || Boolean(read?.tiktok_ads),
+    };
+  }, [adAccounts.data, adAccountId, platformMetrics]);
 
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
-  const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
-  const paused = autopilot.filter((portfolio) => portfolio.autopilot_paused).length;
-  const stream = useMemo(
-    () =>
-      spendStream(spendQuery.data, STREAM_DAYS, lastFullDay(new Date().toISOString().slice(0, 10))),
-    [spendQuery.data],
+  const windows = useMemo(() => {
+    const byId = new Map<string, PortfolioWindow>();
+    portfolios.forEach((portfolio, index) => {
+      const window = portfolioWindow(portfolio, efficiency.series[index] ?? []);
+      if (window) byId.set(portfolio.id, window);
+    });
+    return byId;
+  }, [portfolios, efficiency.series]);
+  const names = useMemo(
+    () => new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name])),
+    [portfolios],
   );
-  const spentSpark = stream.points.map((point) => point.total);
-  const vsPlan = spendVsPlan(stream.latest?.total ?? null, dailyTotal);
-  const mix = useMemo(() => accountMix(stream, portfolios), [stream, portfolios]);
 
-  const visible = objectiveFilter
-    ? portfolios.filter((portfolio) => portfolio.objective === objectiveFilter)
-    : portfolios;
-  const sorted = sortPortfolios(visible, sortKey, sortDir);
+  const spend = accountSpend(windows);
+  // A sum over the portfolios that answered is not the account's spend.
+  const complete = efficiency.failed === 0;
+  const kinds = useMemo(() => resultKinds(portfolios, windows), [portfolios, windows]);
+  const autopilot = autopilotSummary(portfolios);
+  const book = underManagement(portfolios);
+  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const portfoliosWithDecisions = portfolios.filter(
+    (portfolio) => pendingWorkCount(portfolio) > 0,
+  ).length;
+  const window = windowLabel(latestCycle(windows));
+  const clauses = headlineClauses(kinds, (value) => formatCpa(value, currency), names);
+  const sorted = sortPortfolioRows(portfolios, windows, sortKey, sortDir);
 
   const read = accountRead.data?.read ?? null;
   // The stored read is a nightly snapshot, so the state baked into it is last night's. Apply
-  // what has been approved SINCE, against the very ceilings that read was composed under —
-  // otherwise a change made at noon is invisible until tomorrow and the control looks broken.
+  // what has been approved SINCE, against the very ceilings that read was composed under.
   const shown = useMemo(() => {
     if (!read) return null;
     const maps = approvalMaps.data;
@@ -214,23 +240,68 @@ export function OptimizerOverview({
       guards: applyApprovals(read.guards, { ...maps, defaults }),
     };
   }, [read, approvalMaps.data]);
+  const cardActions = useMemo(() => cardActionsOf(shown?.candidates ?? []), [shown]);
 
-  // The same read the lead card is built from, resolved per portfolio. Pure — no second fetch,
-  // no hook: the portfolios list shows what today already found rather than asking again.
-  const { leads, emphasised } = useMemo(
-    () => portfolioLeads(shown?.candidates ?? []),
-    [shown?.candidates],
+  const jainaEntries = useMemo(() => {
+    let worst: { name: string; pct: number } | null = null;
+    let silent: string | null = null;
+    for (const portfolio of portfolios) {
+      const row = windows.get(portfolio.id);
+      if (!row) continue;
+      if (row.vsTargetPct != null && row.vsTargetPct > 0 && (!worst || row.vsTargetPct > worst.pct))
+        worst = { name: portfolio.name, pct: row.vsTargetPct };
+      if (silent == null && row.spend > 0 && row.results === 0) silent = portfolio.name;
+    }
+    return jainaTabEntryPrompts(platformTab, {
+      accountLabel: adAccountId,
+      portfolios: portfolios.map((portfolio) => ({
+        name: portfolio.name,
+        objective: portfolio.objective,
+      })),
+      worstOverTarget: worst?.name ?? null,
+      noResults: silent,
+    });
+  }, [platformTab, portfolios, windows, adAccountId]);
+  // "All" spans every platform, so its questions carry none; a platform's tab carries its own.
+  const jainaPlatform = platformTab === 'all' ? null : platformTab;
+  const jainaBand = (
+    <JainaEntryChips entries={jainaEntries} label="Ask Jaina" platform={jainaPlatform} />
   );
 
   const portfolioNoun = portfolios.length === 1 ? 'portfolio' : 'portfolios';
 
+  // Every brand gets the four tabs: a missing Google or TikTok tab reads as "we don't do
+  // Google", where a tab that says Connect reads as "you haven't connected it yet".
+  const tabs = <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />;
+  if (!rendersManagedOverview(platformTab)) {
+    return (
+      <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+        {tabs}
+        {jainaBand}
+        <PlatformTab
+          brandId={brandId}
+          metrics={platformMetrics}
+          onCreatePortfolio={onCreatePortfolio}
+          platform={platformTab}
+        />
+      </div>
+    );
+  }
+
+  // "All" reads the producer; "Meta" is today's O1 whatever the producer says.
+  const allFrame = platformTab === 'all' ? platformMetrics : null;
+  const multiplatform = allFrame?.status === 'ready' ? allFrame.metrics : null;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+      {tabs}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold text-foreground">
-          {portfolios.length} {portfolioNoun} ·{' '}
-          {portfolios.reduce((sum, portfolio) => sum + portfolio.adset_count, 0)} ad sets under
-          management
+        <p className="text-xs font-semibold text-foreground" data-testid="book-line">
+          {portfolios.length} {portfolioNoun} · {book.managed}{' '}
+          {book.managed === 1 ? 'ad set' : 'ad sets'}
+          {book.gone > 0 ? (
+            <span className="font-normal text-muted-foreground"> · {book.gone} lost</span>
+          ) : null}
         </p>
         <div className="flex items-center gap-2">
           {pendingCount > 0 ? (
@@ -245,6 +316,21 @@ export function OptimizerOverview({
               <ArrowRightIcon aria-hidden="true" className="size-3.5" />
             </Button>
           ) : null}
+          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
+           *  prepared ask for this account, the way the band's questions do. */}
+          {adAccountId ? (
+            <a
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 gap-1.5 px-2 text-xs',
+              )}
+              data-testid="overview-weekly-report"
+              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
+            >
+              <FileTextIcon aria-hidden="true" className="size-3.5" />
+              Weekly report
+            </a>
+          ) : null}
           <Button
             className="h-7 gap-1.5 px-2 text-xs"
             onClick={onCreatePortfolio}
@@ -257,87 +343,179 @@ export function OptimizerOverview({
         </div>
       </div>
 
-      {/* The board: the lead card, the four tiles seated under it as one row, and the dateline
-       *  as its foot. One border around all of it, hairlines inside — so the account's state
-       *  reads as one surface rather than as a hero with a half-empty band and three strips. */}
-      <section
-        className="overflow-hidden rounded-lg border border-border/60 bg-card"
-        data-testid="account-board"
-      >
-        {/* The lead card answers the question the screen is opened with — what is the ONE thing
-         *  worth attention across this account, and can it be believed. On a quiet day it says
-         *  how the account is doing instead, from the same series the stream below draws. */}
-        {shown ? (
-          <AccountLeadCard
-            candidates={[...shown.candidates, ...shown.guards]}
-            className="rounded-none border-0 border-b"
-            currency={shown.currency ?? currency ?? null}
-            dailySpend={shown.scale_per_day ?? dailyTotal}
-            // The same series the stream below draws, handed down rather than fetched again —
-            // and only when it HAS rows: a window of zeros is what "no snapshot history" looks
-            // like, and a card cannot tell that from an account that spent nothing.
-            delivery={
-              stream.hasData
-                ? stream.points.map((point) => ({ date: point.date, spend: point.total }))
-                : null
-            }
-            mix={mix}
-            objective={dominantObjective(portfolios)}
-            onOpenPortfolio={onSelectPortfolio}
-            plannedPerDay={dailyTotal}
-            source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
-          />
-        ) : null}
+      {allFrame?.status === 'error' ? (
+        <p
+          className="px-1 text-muted-foreground text-xs"
+          data-testid="multiplatform-error"
+          role="status"
+        >
+          {allFrame.message} The figures below are Meta's.
+        </p>
+      ) : null}
 
+      {/* 1 — the sentence. Every figure in it is one of the tiles below, said in a row. */}
+      <section className="space-y-1 px-1" data-testid="overview-hero">
+        {multiplatform ? (
+          <AllPlatformsHeadline metrics={multiplatform} />
+        ) : allFrame?.status === 'loading' ? (
+          <p
+            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            data-pending="true"
+            data-testid="overview-headline"
+          >
+            Reading the account across platforms…
+          </p>
+        ) : efficiency.failed > 0 && !efficiency.pending ? (
+          <p
+            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            data-incomplete="true"
+            data-testid="overview-headline"
+          >
+            Could not read the cycle of {efficiency.failed}{' '}
+            {efficiency.failed === 1 ? 'portfolio' : 'portfolios'}, so the account figure is
+            incomplete.{' '}
+            <button
+              className="text-primary underline-offset-2 hover:underline"
+              data-testid="overview-retry"
+              onClick={efficiency.retryFailed}
+              type="button"
+            >
+              Retry
+            </button>
+          </p>
+        ) : spend ? (
+          <p
+            className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
+            data-testid="overview-headline"
+          >
+            The account spent{' '}
+            <span
+              className="tabular-nums"
+              {...figureProps('overview.spend', spend.spend, currency, 'd7')}
+            >
+              {formatCurrency(spend.spend, currency)}
+            </span>{' '}
+            in {WINDOW_DAYS} days
+            {clauses.length > 0 ? ': ' : '.'}
+            {clauses.map((clause, index) => (
+              <span key={clause.kind.kind}>
+                {index > 0 ? (index === clauses.length - 1 ? ' and ' : ', ') : ''}
+                {clause.shape === 'cost' ? (
+                  <>
+                    {clause.kind.words.many} at{' '}
+                    <span
+                      className="tabular-nums"
+                      {...figureProps(
+                        `overview.kind.${clause.kind.kind}.cost`,
+                        clause.kind.costPerResult,
+                        currency,
+                        'd7',
+                      )}
+                    >
+                      {clause.cost}
+                    </span>{' '}
+                    ({clause.distance})
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className="tabular-nums"
+                      {...figureProps(
+                        `overview.kind.${clause.kind.kind}.results`,
+                        clause.kind.results,
+                        null,
+                        'd7',
+                        'count',
+                      )}
+                    >
+                      {clause.count}
+                    </span>
+                    {clause.where ? ` in ${clause.where}` : ''}
+                  </>
+                )}
+              </span>
+            ))}
+            {clauses.length > 0 ? '. ' : ' '}
+            <span className="tabular-nums" data-testid="overview-decisions">
+              {capitalise(decisionsLabel(pendingCount))}.
+            </span>
+          </p>
+        ) : (
+          <p
+            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            data-pending={efficiency.pending ? 'true' : undefined}
+            data-testid="overview-headline"
+          >
+            {efficiency.pending
+              ? "Reading the account's cycles…"
+              : `No portfolio has a measured cycle yet. ${capitalise(decisionsLabel(pendingCount))}.`}
+          </p>
+        )}
+        {/* 2 — the sub-line: the window the figures cover, and when the read was taken. */}
         <div
-          className="grid grid-cols-2 gap-px bg-border/60 lg:grid-cols-4"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
+          data-testid="overview-subline"
+        >
+          {multiplatform ? (
+            <AllPlatformsSubline metrics={multiplatform} />
+          ) : window ? (
+            <span data-testid="overview-window">{window}</span>
+          ) : null}
+          {(multiplatform || window) && accountRead.data ? <span aria-hidden="true">·</span> : null}
+          {accountRead.data ? (
+            <AccountReadFreshness
+              error={requestRead.error instanceof Error ? requestRead.error.message : null}
+              onRequest={() => requestRead.mutate()}
+              readyAt={accountRead.data.ready_at}
+              refresh={accountRead.data.refresh}
+              requesting={requestRead.isPending}
+              utcDay={accountRead.data.utc_day}
+            />
+          ) : null}
+        </div>
+      </section>
+
+      {/* 3 — the band that asks Jaina, with the questions of the tab a person is on. */}
+      {jainaBand}
+
+      {/* 4 — the radiography: four to six tiles, each with a state on its top border. */}
+      {multiplatform ? (
+        <AllPlatformsTiles metrics={multiplatform} onOpenActions={onOpenActions} />
+      ) : allFrame?.status === 'loading' ? null : (
+        <div
+          className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6"
           data-testid="account-tiles"
         >
           <KpiTile
-            className={TILE_IN_BOARD}
-            label="Daily budget"
-            spark={spentSpark}
-            sub={`planned across ${portfolios.length} ${portfolioNoun}`}
-            value={formatCurrency(dailyTotal, currency)}
-          />
-          <KpiTile
-            chip={
-              vsPlan ? (
-                <StatusChip
-                  hint="The last full day of spend across every enrolled ad set, against the sum of the daily budgets."
-                  tone={vsPlan.tone}
-                >
-                  {vsPlan.label}
-                </StatusChip>
-              ) : (
-                <StatusChip tone="muted">no spend history yet</StatusChip>
-              )
+            figure={figureProps('tiles.spend', spend?.spend ?? null, currency, 'd7')}
+            label={`Spend · ${WINDOW_DAYS} days`}
+            state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
+            sub={
+              !complete
+                ? `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
+                : spend
+                  ? `${formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan ${formatCurrency(dailyTotal, currency)}`
+                  : `plan ${formatCurrency(dailyTotal, currency)} per day`
             }
-            className={TILE_IN_BOARD}
-            label="Spent yesterday"
-            sub={stream.latest ? `last full day · ${STREAM_DAYS}-day trend` : undefined}
-            value={stream.latest ? formatCurrency(stream.latest.total, currency) : '—'}
+            testId="tile-spend"
+            value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
           />
-          <KpiTile
-            chip={
-              paused > 0 ? (
-                <StatusChip tone="warning">{paused} stopped</StatusChip>
-              ) : autopilot.length > 0 ? (
-                <StatusChip tone="success">applying within guardrails</StatusChip>
-              ) : (
-                <StatusChip tone="muted">you approve every move</StatusChip>
-              )
-            }
-            className={TILE_IN_BOARD}
-            label="On autopilot"
-            sub={`of ${portfolios.length} ${portfolioNoun}`}
-            value={String(autopilot.length)}
-          />
+          {kinds.slice(0, MAX_KIND_TILES).map((kind) => (
+            <KpiTile
+              figure={figureProps(`tiles.kind.${kind.kind}`, kind.results, null, 'd7', 'count')}
+              key={kind.kind}
+              label={capitalise(kind.words.many)}
+              state={kind.state}
+              sub={kindTileSub(kind, currency)}
+              testId={`tile-kind-${kind.kind}`}
+              value={kind.results.toLocaleString('en-US')}
+            />
+          ))}
           <KpiTile
             action={
               pendingCount > 0 ? (
                 <button
-                  className="text-2xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline"
                   onClick={onOpenActions}
                   type="button"
                 >
@@ -345,118 +523,78 @@ export function OptimizerOverview({
                 </button>
               ) : null
             }
-            chip={
-              pendingCount > 0 ? (
-                <StatusChip tone="info">waiting on you</StatusChip>
-              ) : (
-                <StatusChip tone="success">all clear</StatusChip>
-              )
+            figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
+            label="Decisions"
+            sub={
+              pendingCount > 0
+                ? `in ${portfoliosWithDecisions} ${portfoliosWithDecisions === 1 ? 'portfolio' : 'portfolios'}`
+                : 'nothing waits for your decision'
             }
-            className={TILE_IN_BOARD}
-            label="Decisions waiting"
+            testId="tile-decisions"
             value={String(pendingCount)}
           />
-        </div>
-
-        {/* A quiet day and a first read still queueing are exactly when a reader most needs to
-         *  know WHEN this was taken. A figure without its date cannot be checked, and a row
-         *  composed before a deploy is indistinguishable from a current one without this line. */}
-        {accountRead.data ? (
-          <AccountReadFreshness
-            className="border-border/60 border-t px-4 py-2"
-            error={requestRead.error instanceof Error ? requestRead.error.message : null}
-            onRequest={() => requestRead.mutate()}
-            readyAt={accountRead.data.ready_at}
-            refresh={accountRead.data.refresh}
-            requesting={requestRead.isPending}
-            utcDay={accountRead.data.utc_day}
+          <KpiTile
+            figure={figureProps('tiles.on-autopilot', autopilot.autopilot, null, 'none', 'count')}
+            label="Autopilot"
+            state={autopilot.paused > 0 ? 'warn' : 'none'}
+            sub={autopilotTileSub(autopilot)}
+            testId="tile-autopilot"
+            value={`${autopilot.autopilot} of ${autopilot.total}`}
           />
-        ) : null}
-      </section>
+        </div>
+      )}
 
-      {/* What else today's read found, ranked — or, on a quiet day, only the operator's
-       *  footnotes: what was assumed and which checks could not ask. Never a headline. */}
+      {/* 4b — the platforms side by side (MP3): optional, hidden per viewer. */}
+      {multiplatform ? <PlatformComparisonRow metrics={multiplatform} /> : null}
+
+      {/* 5 — the recommendation cards, in impact order, the lead marked. */}
       {shown ? (
-        <AccountRead
-          assumptions={shown.assumptions ?? []}
-          candidates={[...shown.candidates, ...shown.guards]}
-          currency={shown.currency ?? currency ?? null}
-          dailySpend={shown.scale_per_day ?? dailyTotal}
-          objective={dominantObjective(portfolios)}
-          onOpenPortfolio={onSelectPortfolio}
-          onSetState={(detector, state) => approvals.setInsight.mutate({ detector, state })}
-          // The read's own narrative, not a constant. The envelope has carried it all along
-          // while the screen printed the fallback line under a header crediting Jaina.
-          sentence={shown.narrative || null}
-          source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
-          starved={shown.starved}
-        />
-      ) : null}
-      {/* A control that silently does nothing is worse than one that is absent. Until the
-       *  approval RPCs are applied to a database, this write fails — say so where the
-       *  person tapped, rather than leaving the card looking like it accepted the change. */}
-      {approvals.setInsight.isError ? (
-        <p className="text-2xs text-destructive" data-testid="approval-error">
-          {approvals.setInsight.error instanceof Error
-            ? approvals.setInsight.error.message
-            : 'Could not change this insight.'}
-        </p>
-      ) : null}
-
-      <OptimizerPanel
-        meta={
-          <span className="text-3xs text-muted-foreground">
-            {stream.hasData
-              ? `last ${STREAM_DAYS} days · click an objective to filter`
-              : 'from enrolled ad sets'}
-          </span>
-        }
-        title="Spend by objective"
-      >
-        <SpendByObjectiveStream
-          currency={currency}
-          days={STREAM_DAYS}
-          filter={objectiveFilter}
-          onFilter={setObjectiveFilter}
-          portfolios={portfolios}
-          rows={spendQuery.data}
-          stream={stream}
-        />
-      </OptimizerPanel>
-
-      <section className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Portfolios
-            {objectiveFilter ? (
-              <span className="ml-2 normal-case tracking-normal">
-                · {humanize(objectiveFilter)} only
-              </span>
-            ) : null}
+        <section className="space-y-2" data-testid="overview-recommendations">
+          <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
+            Jaina&apos;s recommendations
           </p>
+          <AccountRead
+            candidates={[...shown.candidates, ...shown.guards]}
+            cardActions={cardActions}
+            currency={shown.currency ?? currency ?? null}
+            dailySpend={shown.scale_per_day ?? dailyTotal}
+            onOpenPortfolio={onSelectPortfolio}
+            platform={OPTIMIZER_MANAGED_PLATFORM}
+            portfolioNames={names}
+          />
+        </section>
+      ) : null}
+
+      {/* 6 — the portfolios, one line each, sortable by distance to target. */}
+      <section className="space-y-2" data-testid="portfolio-rows">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
           <div className="flex items-center gap-1.5">
             <ToggleGroup
               aria-label="Sort portfolios by"
               onValueChange={(value) => {
-                if (value) setSortKey(value as SortKey);
+                if (value) setSortKey(value as RowSortKey);
               }}
               size="sm"
               type="single"
               value={sortKey}
               variant="outline"
             >
-              <ToggleGroupItem className="h-7 px-2 text-2xs" value="name">
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="distance">
+                Distance to target
+              </ToggleGroupItem>
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="name">
                 Name
               </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-2xs" value="daily">
-                Daily budget
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="daily">
+                Budget
               </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-2xs" value="pending">
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="pending">
                 Pending
               </ToggleGroupItem>
             </ToggleGroup>
             <Button
-              aria-label={sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'}
+              aria-label={sortDir === 'asc' ? 'Ascending' : 'Descending'}
               className="size-7 p-0"
               onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
               size="sm"
@@ -471,23 +609,109 @@ export function OptimizerOverview({
             </Button>
           </div>
         </div>
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="space-y-1.5">
           {sorted.map((portfolio) => (
             <PortfolioRowCard
               currency={currency}
-              emphasis={portfolio.id === emphasised}
               key={portfolio.id}
-              lead={leads.get(portfolio.id) ?? null}
               onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
               onSelect={() => onSelectPortfolio(portfolio.id)}
+              platform={OPTIMIZER_MANAGED_PLATFORM}
+              platforms={memberPlatforms(
+                memberStates.get(portfolio.id),
+                OPTIMIZER_MANAGED_PLATFORM,
+              )}
               portfolio={portfolio}
+              window={windows.get(portfolio.id) ?? null}
             />
           ))}
           {sorted.length === 0 ? (
-            <p className="text-2xs text-muted-foreground">No portfolios match this objective.</p>
+            <p className="text-xs text-muted-foreground">No portfolios yet.</p>
           ) : null}
         </div>
       </section>
     </div>
   );
+}
+
+/** A platform's own tab: its rows of the producer first, then what only that platform's
+ *  edge read holds (Google's campaign types, TikTok's snapshots). Before the producer is
+ *  deployed, the tab says so and shows today's screen for that platform. TikTok's advertiser
+ *  is known only from the producer, so without it the TikTok tab stays "not connected". */
+function PlatformTab({
+  brandId,
+  metrics,
+  platform,
+  onCreatePortfolio,
+}: {
+  brandId: string;
+  metrics: AccountPlatformMetricsState;
+  platform: Exclude<AdPlatform, 'meta'>;
+  onCreatePortfolio: () => void;
+}) {
+  // One window on the tab: the producer's when it answered, else the same 7 complete days
+  // ending yesterday the producer would read.
+  const window =
+    metrics.status === 'ready'
+      ? { since: metrics.metrics.window.since, until: metrics.metrics.window.until }
+      : null;
+  const fallback =
+    platform === 'google_ads' ? (
+      <GoogleAdsTab brandId={brandId} onCreatePortfolio={onCreatePortfolio} window={window} />
+    ) : (
+      <TikTokAdsTab advertiserId={null} brandId={brandId} />
+    );
+  if (metrics.status === 'unavailable') {
+    return (
+      <>
+        <MultiPlatformUnavailable
+          detail={
+            platform === 'google_ads' ? "Below is Google's own read of the account." : undefined
+          }
+        />
+        {fallback}
+      </>
+    );
+  }
+  const row = metrics.status === 'ready' ? platformTotals(metrics.metrics, platform) : null;
+  if (metrics.status === 'ready' && row?.connected) {
+    // Google connected but not yet read by the Optimizer: Google's own read leads in full,
+    // under a note that says what it is.
+    const googleUnread = platform === 'google_ads' && row.spend == null;
+    return (
+      <>
+        <PlatformMetricsSection
+          liveBelow={googleUnread}
+          metrics={metrics.metrics}
+          onCreatePortfolio={onCreatePortfolio}
+          platform={platform}
+        />
+        {platform === 'google_ads' ? (
+          <GoogleAdsTab
+            brandId={brandId}
+            mode={googleUnread ? 'full' : 'breakdown'}
+            readingNote={false}
+            window={window}
+          />
+        ) : (
+          <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
+        )}
+      </>
+    );
+  }
+  if (metrics.status === 'error') {
+    return (
+      <>
+        <p
+          className="px-1 text-muted-foreground text-xs"
+          data-testid="multiplatform-error"
+          role="status"
+        >
+          {metrics.message}
+        </p>
+        {fallback}
+      </>
+    );
+  }
+  return fallback;
 }

@@ -3,7 +3,7 @@
 // The chrome both optimizer feeds share — the ACTION feed (what we did to the ad account)
 // and the SERVER LOG (what the machine did). They render different rows from different RPCs;
 // what they have in common is how a feed behaves: relative timestamps, a portfolio narrowing
-// of what has loaded, a copyable Meta receipt, and an honest "load more" that appears only
+// of what has loaded, a copyable platform receipt, and an honest "load more" that appears only
 // when the RPC's own cursor says there IS more.
 
 import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
@@ -20,6 +20,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ALL_PORTFOLIOS } from './logFilters';
+import { type AdPlatform, PLATFORM_NAMES } from './platforms/platformTabsModel';
 
 const SKELETON_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6'];
 
@@ -41,22 +42,62 @@ export function formatWhen(ts: string): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function RowHeader({ title, ts }: { title: string; ts: string }) {
+/** `lg` is the roomier scale the portfolio Activity tab's "Recently applied" rows use; the
+ *  default keeps the dense look of the Server log and the account-wide Activity feed. */
+export type RowHeaderSize = 'default' | 'lg';
+
+const ROW_HEADER_CLASS: Record<RowHeaderSize, { title: string; ts: string }> = {
+  default: { title: 'text-sm font-medium', ts: 'text-xs' },
+  lg: { title: 'text-base font-semibold', ts: 'text-sm' },
+};
+
+export function RowHeader({
+  title,
+  ts,
+  size = 'default',
+}: {
+  title: string;
+  ts: string;
+  size?: RowHeaderSize;
+}) {
+  const classes = ROW_HEADER_CLASS[size];
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-      <span className="truncate text-sm font-medium tracking-tight">{title}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">{formatWhen(ts)}</span>
+      <span className={cn('truncate tracking-tight', classes.title)}>{title}</span>
+      <span className={cn('shrink-0 text-muted-foreground', classes.ts)}>{formatWhen(ts)}</span>
     </div>
   );
 }
 
-/** The Meta trace id, one-click copyable — the receipt an operator pastes into a Graph API
- *  support ticket. Clipboard access is optional-chained so a render environment without it
- *  (or a denied permission) never throws. */
-export function ReceiptToken({ value }: { value: string }) {
+/** What each platform calls the id its support desk asks for. */
+const RECEIPT_NAME: Record<AdPlatform, string> = {
+  meta: 'trace id',
+  google_ads: 'request id',
+  tiktok_ads: 'request id',
+};
+
+export function receiptLabel(platform: AdPlatform): string {
+  return `${PLATFORM_NAMES[platform]} ${RECEIPT_NAME[platform]}`;
+}
+
+/** The write's receipt, one-click copyable and named by its platform — the id an operator
+ *  pastes into that platform's support ticket. Clipboard access is optional-chained so a render
+ *  environment without it (or a denied permission) never throws. `className` lets a roomier
+ *  surface (the action cards) lift the type size; without it the token renders exactly as the
+ *  dense feeds use it. */
+export function ReceiptToken({
+  value,
+  platform,
+  className,
+}: {
+  value: string;
+  platform: AdPlatform;
+  className?: string;
+}) {
+  const label = receiptLabel(platform);
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard?.writeText(value)?.catch(() => {});
@@ -67,14 +108,21 @@ export function ReceiptToken({ value }: { value: string }) {
     <button
       type="button"
       onClick={copy}
-      aria-label={`Copy Meta trace id ${value}`}
-      className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground transition-colors hover:bg-muted"
+      aria-label={`Copy ${label} ${value}`}
+      data-testid="receipt-token"
+      className={cn(
+        'mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
+        className,
+      )}
     >
       {copied ? (
         <CheckIcon aria-hidden="true" className="size-3 shrink-0 text-success" />
       ) : (
         <CopyIcon aria-hidden="true" className="size-3 shrink-0" />
       )}
+      <span className="shrink-0 font-sans" data-testid="receipt-label">
+        {label}
+      </span>
       <span className="truncate">{value}</span>
     </button>
   );
@@ -167,7 +215,7 @@ export function FeedFooter({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {hasMore
           ? `${loaded} ${noun} loaded — there are older ones.`
           : `${loaded} ${noun} — that is all of them.`}

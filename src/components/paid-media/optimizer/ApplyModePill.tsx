@@ -7,6 +7,7 @@
 import type { AutopilotScopes } from '@continuum/contracts';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { applyModeExplainer, applyModePill } from './reportModel';
 
 export function ApplyModePill({
@@ -42,7 +43,7 @@ export function ApplyModePill({
       <TooltipTrigger
         render={
           <span className="inline-flex rounded-full">
-            <Pill variant={variant} className={className ?? 'cursor-default'}>
+            <Pill variant={variant} className={cn('cursor-default text-xs', className)}>
               <PillIndicator variant={indicator} />
               {label}
             </Pill>

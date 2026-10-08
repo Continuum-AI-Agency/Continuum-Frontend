@@ -1,5 +1,6 @@
 'use client';
 
+import type { Skill } from '@continuum/contracts';
 import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -20,7 +21,9 @@ import { streamJainaSpeechToText } from '@/lib/jaina/speech';
 import { cn } from '@/lib/utils';
 import { type Attachment, Attachments } from './attachments';
 import { MentionPickerMenu, type MentionPlatformOption } from './mention-picker-menu';
+import { SlashMenu, useSlashMenu } from './slash-menu';
 import type { MentionAnalyticsContext } from './mention-suggestion-hover';
+import { MENTION_DRAG_TYPE } from './SessionContentTray';
 import { SpeechInput } from './speech-input';
 import { ACCEPTED_ATTACHMENT_TYPES, type ChatAttachmentsController } from './useChatAttachments';
 
@@ -70,6 +73,12 @@ type PromptInputProps = {
   queuedText?: string | null;
   onQueuedTextConsumed?: () => void;
   /**
+   * 'insert' (default) drops the text at the caret, as a saved prompt should. 'replace'
+   * makes it the whole draft — for a host's prefill ("Propose via Jaina"), where a second
+   * click must not leave the same request in the composer twice.
+   */
+  queuedTextMode?: 'insert' | 'replace';
+  /**
    * When the user selects a multi-ref pack (e.g. KPIs › Packs › Grow followers),
    * expand it into concrete metric chips instead of inserting a single pack atom.
    * Return null/empty to fall through to normal single-chip insert.
@@ -88,6 +97,8 @@ type PromptInputProps = {
   // can always interrupt a running turn.
   isStreaming?: boolean;
   onStop?: () => void;
+  /** The brand's skills, for the `/` shortcut menu. Absent switches the menu off. */
+  slashSkills?: readonly Skill[];
 };
 
 type ActiveMention = {
@@ -337,6 +348,20 @@ function buildChipElement(tracked: TrackedReference): HTMLSpanElement {
   return chip;
 }
 
+/** Selects the plain-text span [from, to) — an `@query` or `/query` — and returns its range. */
+function selectPlainRange(root: HTMLElement, from: number, to: number): Range | null {
+  setCaretFromPlainOffset(root, from);
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const startRange = selection.getRangeAt(0);
+  setCaretFromPlainOffset(root, to);
+  const endRange = selection.getRangeAt(0);
+  startRange.setEnd(endRange.startContainer, endRange.startOffset);
+  selection.removeAllRanges();
+  selection.addRange(startRange);
+  return startRange;
+}
+
 function insertChipAtSelection(
   root: HTMLElement,
   tracked: TrackedReference,
@@ -345,18 +370,7 @@ function insertChipAtSelection(
 ): void {
   root.focus();
   if (replaceFromPlainOffset != null && replaceToPlainOffset != null) {
-    setCaretFromPlainOffset(root, replaceFromPlainOffset);
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      // Extend selection to cover the @query span.
-      const startRange = selection.getRangeAt(0);
-      setCaretFromPlainOffset(root, replaceToPlainOffset);
-      const endRange = selection.getRangeAt(0);
-      startRange.setEnd(endRange.startContainer, endRange.startOffset);
-      selection.removeAllRanges();
-      selection.addRange(startRange);
-      startRange.deleteContents();
-    }
+    selectPlainRange(root, replaceFromPlainOffset, replaceToPlainOffset)?.deleteContents();
   }
 
   const selection = window.getSelection();
@@ -425,6 +439,7 @@ export function PromptInput({
   onQueuedMentionSuggestionsConsumed,
   queuedText,
   onQueuedTextConsumed,
+  queuedTextMode = 'insert',
   expandPackSuggestion,
   mentionAnalytics,
   mentionPlatforms,
@@ -436,6 +451,7 @@ export function PromptInput({
   attachmentOnlyPrompt,
   inlinePastedText = false,
   onFocus,
+  slashSkills,
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -470,6 +486,16 @@ export function PromptInput({
     setIsEmpty(serialized.text.trim().length === 0 && serialized.references.length === 0);
     return serialized;
   }, []);
+
+  const slash = useSlashMenu(slashSkills, (option, query) => {
+    const root = editorRef.current;
+    if (!root) return;
+    root.focus();
+    selectPlainRange(root, query.start, query.end);
+    // A no-break space: a trailing plain space collapses in contenteditable.
+    insertTextAtSelection(root, `/${option.slug}\u00a0`);
+    syncFromEditor();
+  });
 
   // Holding submit until every upload settles is what stops the old failure: a chip whose file was
   // never uploaded serialized to an attachment with no url, and the agent silently received none.
@@ -580,7 +606,8 @@ export function PromptInput({
     const next = findActiveMentionInText(serialized.text, caret, completedTokens);
     setActiveMention(next);
     if (!next) setMentionParentStack([]);
-  }, [syncFromEditor]);
+    slash.track(serialized.text, caret);
+  }, [slash.track, syncFromEditor]);
 
   const insertTrackedMention = useCallback(
     (suggestion: AgentMentionSuggestion, replaceActive: boolean) => {
@@ -632,10 +659,11 @@ export function PromptInput({
     }
     if (!editorRef.current || insertedQueuedTextRef.current === queuedText) return;
     insertedQueuedTextRef.current = queuedText;
+    if (queuedTextMode === 'replace') editorRef.current.replaceChildren();
     insertTextAtSelection(editorRef.current, queuedText);
     syncFromEditor();
     onQueuedTextConsumed?.();
-  }, [queuedText, onQueuedTextConsumed, syncFromEditor]);
+  }, [queuedText, queuedTextMode, onQueuedTextConsumed, syncFromEditor]);
 
   const selectMentionSuggestion = useCallback(
     (suggestion: AgentMentionSuggestion) => {
@@ -664,6 +692,7 @@ export function PromptInput({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (slash.onKeyDown(event)) return;
       if (activeMention && mentionSuggestions.length > 0) {
         if (event.key === 'ArrowDown') {
           event.preventDefault();
@@ -708,6 +737,7 @@ export function PromptInput({
       mentionParent,
       mentionSuggestions,
       selectMentionSuggestion,
+      slash.onKeyDown,
     ],
   );
 
@@ -747,8 +777,12 @@ export function PromptInput({
 
   const handleDragOver = useCallback(
     (event: React.DragEvent<HTMLFormElement>) => {
-      if (!attachments || disabled || !event.dataTransfer.types.includes('Files')) return;
+      if (disabled) return;
+      const types = event.dataTransfer.types;
+      const isMention = types.includes(MENTION_DRAG_TYPE);
+      if (!isMention && !(attachments && types.includes('Files'))) return;
       event.preventDefault();
+      if (isMention) event.dataTransfer.dropEffect = 'copy';
       setIsDraggingOver(true);
     },
     [attachments, disabled],
@@ -762,13 +796,41 @@ export function PromptInput({
 
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLFormElement>) => {
-      if (!attachments || disabled) return;
+      if (disabled) return;
+      const mention = event.dataTransfer.getData(MENTION_DRAG_TYPE);
+      if (mention) {
+        event.preventDefault();
+        setIsDraggingOver(false);
+        const root = editorRef.current;
+        if (!root) return;
+        // Land the chip where it was dropped, else at the end — never wherever the page caret was.
+        const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+        const at =
+          range && root.contains(range.startContainer)
+            ? range
+            : (() => {
+                const end = document.createRange();
+                end.selectNodeContents(root);
+                end.collapse(false);
+                return end;
+              })();
+        root.focus();
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(at);
+        try {
+          insertTrackedMention(JSON.parse(mention) as AgentMentionSuggestion, false);
+        } catch {
+          // A foreign payload under our type is not a reference; drop nothing.
+        }
+        return;
+      }
+      if (!attachments) return;
       const dropped = Array.from(event.dataTransfer.files ?? []);
       event.preventDefault();
       setIsDraggingOver(false);
       if (dropped.length > 0) attachments.add(dropped);
     },
-    [attachments, disabled],
+    [attachments, disabled, insertTrackedMention],
   );
 
   const handleSpeechResult = useCallback(
@@ -877,6 +939,7 @@ export function PromptInput({
                 refreshActiveMention();
               }}
               onFocus={() => onFocus?.()}
+              onBlur={slash.close}
               onKeyDown={handleKeyDown}
               onKeyUp={() => refreshActiveMention()}
               onMouseUp={() => refreshActiveMention()}
@@ -886,7 +949,9 @@ export function PromptInput({
               tabIndex={disabled ? -1 : 0}
             />
           </div>
-          {activeMention && mentionProvider ? (
+          {slash.menuProps ? (
+            <SlashMenu {...slash.menuProps} />
+          ) : activeMention && mentionProvider ? (
             <MentionPickerMenu
               suggestions={mentionSuggestions}
               highlightedIndex={highlightedMentionIndex}

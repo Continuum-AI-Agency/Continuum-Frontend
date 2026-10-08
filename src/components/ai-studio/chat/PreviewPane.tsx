@@ -5,6 +5,7 @@ import Image from 'next/image';
 import React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
+import { Video } from '@/components/ui/video';
 import type { StreamState } from '@/lib/types/chatImage';
 
 type PreviewPaneProps = {
@@ -77,18 +78,17 @@ export function PreviewPane({
         }}
       >
         {streamState.videoUrl ? (
-          // biome-ignore lint/a11y/useMediaCaption: pre-existing user-generated artifact preview; no caption track exists, out of scope for this styling swap.
-          <video
-            src={streamState.videoUrl}
-            controls
-            playsInline
+          <Video
             key={streamState.videoUrl}
+            src={streamState.videoUrl}
+            ariaLabel="Current preview"
             poster={
               streamState.posterBase64
                 ? `data:image/png;base64,${streamState.posterBase64}`
                 : undefined
             }
-            className="absolute inset-0 h-full w-full object-contain transition duration-200"
+            className="absolute inset-0 aspect-auto! size-full rounded-none border-0"
+            videoClassName="object-contain"
           />
         ) : streamState.currentBase64 || streamState.posterBase64 ? (
           <Image

@@ -1,6 +1,6 @@
 'use client';
 
-import type { InspirationSort } from '@continuum/contracts';
+import type { InspirationSort, OrganicPostPlatform } from '@continuum/contracts';
 import { type ReactNode, useMemo, useState } from 'react';
 
 import { useInstagramCompetitorSearch, useInstagramPosts } from '@/lib/api/competitorSpy';
@@ -17,6 +17,18 @@ const SORT_OPTIONS: Array<{ id: InspirationSort; label: string }> = [
   { id: 'relevance', label: 'For your brand' },
 ];
 
+// YouTube's policies allow raw "sorted by views" but no channel-average multiplier
+// and no merging with our brand data, so it has neither Outlier nor For your brand.
+const YOUTUBE_SORT_OPTIONS: Array<{ id: InspirationSort; label: string }> = [
+  { id: 'recent', label: 'Newest' },
+  { id: 'views', label: 'Most viewed' },
+];
+
+const PLATFORM_OPTIONS: Array<{ id: OrganicPostPlatform; label: string }> = [
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'youtube', label: 'YouTube' },
+];
+
 // Copy mirrors the shared Instagram lookup taxonomy (see instagramLookupErrorKind),
 // phrased for competitor search. The 503 "reduce data" case is folded into
 // lookup_unavailable — common for mega-accounts Graph refuses to enumerate.
@@ -24,6 +36,8 @@ const SEARCH_ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
   account_required: 'Connect an Instagram business account to this brand to look up competitors.',
   permission_denied:
     'Instagram Business Discovery is not permitted for your connected account — competitor lookups read other profiles through your own Instagram Business account and need a permission your own analytics do not. Reconnecting will not fix it.',
+  facebook_login_required:
+    "Competitor lookups need this brand's Instagram connected through Facebook. It is connected with Instagram only, which Meta does not allow to read other accounts.",
   rate_limited:
     'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.',
   lookup_unavailable:
@@ -37,6 +51,8 @@ const SEARCH_ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
 // sorts), filtered by post type and format. Looking up any public handle (Graph
 // business_discovery, the same path as the AI Studio unfurl) temporarily replaces
 // the feed; those posts are unscored for the brand, so only Recent/Outlier apply.
+// The YouTube platform is its own grid, never interleaved with Instagram, and has
+// no handle lookup.
 export function CompetitorOrganicExplorer({
   brandId,
   competitorId,
@@ -57,9 +73,20 @@ export function CompetitorOrganicExplorer({
   const [input, setInput] = useState('');
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [sort, setSort] = useState<InspirationSort>('recent');
+  const [platform, setPlatform] = useState<OrganicPostPlatform>('instagram');
 
-  const isSearching = activeQuery !== null;
-  const feed = useInstagramPosts({ brandId, competitorId, limit: feedLimit, sort });
+  const youtube = platform === 'youtube';
+  const isSearching = !youtube && activeQuery !== null;
+  const platformSorts = youtube ? YOUTUBE_SORT_OPTIONS : SORT_OPTIONS;
+  // A sort picked on the other platform falls back to newest instead of a 400.
+  const feedSort = platformSorts.some((option) => option.id === sort) ? sort : 'recent';
+  const feed = useInstagramPosts({
+    brandId,
+    competitorId,
+    limit: feedLimit,
+    sort: feedSort,
+    platform,
+  });
   const search = useInstagramCompetitorSearch(brandId, activeQuery ?? '');
 
   const searchViews = useMemo(() => {
@@ -70,6 +97,16 @@ export function CompetitorOrganicExplorer({
   const searchError =
     isSearching && search.isError
       ? SEARCH_ERROR_COPY[instagramLookupErrorKind(search.error)]
+      : null;
+
+  // Tracked-feed staleness: the rows are served for metrics, but their IG CDN
+  // preview URLs expired because the last sync failed. Banner the connection
+  // fault so a dead tile reads as actionable, not broken.
+  const syncFaults = youtube ? [] : (feed.data?.syncFaults ?? []);
+  const firstFault = syncFaults[0];
+  const syncFaultNotice =
+    !isSearching && !feed.isLoading && firstFault
+      ? `Live previews for ${syncFaults.map((fault) => `@${fault.instagramUsername}`).join(', ')} are unavailable. ${SEARCH_ERROR_COPY[firstFault.kind]}`
       : null;
 
   const submit = () => {
@@ -86,19 +123,30 @@ export function CompetitorOrganicExplorer({
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <CompetitorSearchBar
-          value={input}
-          onChange={setInput}
-          onSubmit={submit}
-          onClear={clear}
-          active={isSearching}
-          className="min-w-0 flex-1"
+        <Segmented
+          label="Platform"
+          value={platform}
+          options={PLATFORM_OPTIONS}
+          onChange={setPlatform}
+          size={compact ? 'sm' : 'md'}
         />
+        {youtube ? null : (
+          <CompetitorSearchBar
+            value={input}
+            onChange={setInput}
+            onSubmit={submit}
+            onClear={clear}
+            active={isSearching}
+            className="min-w-0 flex-1"
+          />
+        )}
         <Segmented
           label="Sort posts"
-          value={isSearching && sort === 'relevance' ? 'recent' : sort}
+          value={isSearching && feedSort === 'relevance' ? 'recent' : feedSort}
           options={
-            isSearching ? SORT_OPTIONS.filter((option) => option.id !== 'relevance') : SORT_OPTIONS
+            isSearching
+              ? platformSorts.filter((option) => option.id !== 'relevance')
+              : platformSorts
           }
           onChange={setSort}
           size={compact ? 'sm' : 'md'}
@@ -111,6 +159,12 @@ export function CompetitorOrganicExplorer({
         </p>
       ) : null}
 
+      {syncFaultNotice ? (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+          {syncFaultNotice}
+        </p>
+      ) : null}
+
       {searchError ? (
         <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           {searchError}
@@ -119,7 +173,7 @@ export function CompetitorOrganicExplorer({
         <FilterablePostGrid
           brandId={brandId}
           showFilters={!compact}
-          views={isSearching ? searchViews : (feed.data ?? [])}
+          views={isSearching ? searchViews : (feed.data?.items ?? [])}
           isLoading={isSearching ? search.isLoading : feed.isLoading}
           isError={isSearching ? false : feed.isError}
           gridClassName={gridClassName}
@@ -127,7 +181,9 @@ export function CompetitorOrganicExplorer({
           emptyText={
             isSearching
               ? 'No posts found for that account.'
-              : 'No competitor posts yet — tag competitors in Brand Spy.'
+              : youtube
+                ? 'No YouTube videos yet — add a YouTube channel to a competitor in Brand Spy.'
+                : 'No competitor posts yet — tag competitors in Brand Spy.'
           }
         />
       )}

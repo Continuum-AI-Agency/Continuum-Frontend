@@ -100,3 +100,42 @@ describe('RecEvidenceChart', () => {
     expect(container.textContent).toBe('');
   });
 });
+
+describe('RecEvidenceChart — +1 type scale', () => {
+  it('draws the caption and the rows at text-xs, with no micro type', () => {
+    const { getByTestId, getByText } = render(
+      <RecEvidenceChart
+        currency="USD"
+        denominatorMultiplier={1}
+        item={null}
+        kpiField="leads"
+        maxCpa={100}
+        rec={base as never}
+        snapshot={snapshot}
+      />,
+    );
+    const chart = getByTestId('rec-evidence-bars');
+    expect(chart.outerHTML).not.toMatch(/text-[23]xs/);
+    expect(chart.querySelector('p')?.className).toContain('text-xs');
+    expect(getByText('1.00%').closest('li')?.className).toContain('text-xs');
+  });
+
+  it('the cost-interval caption is text-xs too', () => {
+    const { getByTestId } = render(
+      <RecEvidenceChart
+        currency="USD"
+        denominatorMultiplier={1}
+        item={
+          { adset_id: 'a', diagnostics: { ci: { cpa: 40, lo: 30, hi: 55, events: 12 } } } as never
+        }
+        kpiField="leads"
+        maxCpa={100}
+        rec={{ ...base, kind: 'pause', trigger: 'P2_sustained_poor' } as never}
+        snapshot={snapshot}
+      />,
+    );
+    const block = getByTestId('rec-evidence-ci');
+    expect(block.outerHTML).not.toMatch(/text-[23]xs/);
+    expect(block.querySelector('p')?.className).toContain('text-xs');
+  });
+});

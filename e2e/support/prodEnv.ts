@@ -16,6 +16,7 @@
 // unquoted multi-word value that a POSIX shell tries to execute. This parser reads
 // `KEY=VALUE` literally and never evaluates anything.
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -81,12 +82,19 @@ export function loadProdSupabaseEnv(): {
   const frontend = parseEnvFile(FRONTEND_ENV);
   const backend = parseEnvFile(BACKEND_ENV);
 
-  const url = frontend.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  // The runner's own environment outranks both files, as it does for Next itself: a
+  // checkout whose .env is the placeholder the build gate needs (or that has no Backend
+  // .env at all) can still run the bench by exporting the prod values. The prod-URL check
+  // below still applies to whatever wins, so nothing here loosens the one guarantee.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? frontend.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY ??
     frontend.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
     frontend.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY ??
     '';
-  const serviceRoleKey = backend.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? backend.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
   if (!url || !publishableKey) {
     throw new Error(
@@ -127,4 +135,54 @@ export function loadProdSupabaseEnv(): {
   }
 
   return { url, publishableKey, serviceRoleKey };
+}
+
+/**
+ * Which Chromium the live benches drive. The default is the installed Google Chrome
+ * (`channel: 'chrome'`), the browser the product's users actually run. Set
+ * OPTIMIZER_E2E_BROWSER_CHANNEL=bundled to use Playwright's own Chromium instead — the
+ * case when the machine's Chrome has moved ahead of the installed Playwright's protocol and
+ * `browserType.launch` aborts before the first page (Chrome 153 against Playwright 1.61.1
+ * on 2026-09-28). Per-environment configuration, never a code-path switch.
+ */
+export function benchBrowserChannel(): { channel?: string } {
+  const channel = process.env.OPTIMIZER_E2E_BROWSER_CHANNEL;
+  if (channel === 'bundled') return {};
+  return { channel: channel && channel.length > 0 ? channel : 'chrome' };
+}
+
+/** Existing loopback stack only; never starts, resets or hydrates shared data. */
+export function loadLocalSupabaseEnv(): { url: string; serviceRoleKey: string; dbUrl: string } {
+  const status = execFileSync('supabase', ['status', '-o', 'env'], {
+    cwd: resolve(__dirname, '../../..'),
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const env = Object.fromEntries(
+    status.split('\n').flatMap((line) => {
+      const match = /^([A-Z_]+)="(.*)"$/.exec(line);
+      return match ? [[match[1], match[2]]] : [];
+    }),
+  );
+  const url = env.API_URL;
+  const dbUrl = env.DB_URL;
+  if (
+    !url ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname) ||
+    !env.SERVICE_ROLE_KEY ||
+    !env.ANON_KEY ||
+    !dbUrl ||
+    !['postgres:', 'postgresql:'].includes(new URL(dbUrl).protocol) ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(dbUrl).hostname)
+  )
+    throw new Error(
+      'Local editor journey requires the running loopback Supabase stack; no reset/hydration is performed.',
+    );
+  process.env.SUPABASE_ANON_KEY = env.ANON_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = env.SERVICE_ROLE_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = url;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = env.ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = env.ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY = env.ANON_KEY;
+  return { url, serviceRoleKey: env.SERVICE_ROLE_KEY, dbUrl };
 }

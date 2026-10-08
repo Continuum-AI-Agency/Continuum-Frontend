@@ -195,3 +195,24 @@ describe('defaultStoryLookback', () => {
     expect(defaultStoryLookback(null)).toBe(7);
   });
 });
+
+describe('buildReallocationStory on a zero-conversion ad set', () => {
+  it('prices it as unknown, never as a $0 cost under target', () => {
+    const story = buildReallocationStory({
+      items: [
+        item('dead', 17, 16, {
+          diagnostics: { ci: { cpa: 0, lo: 0, hi: null, events: 0 } },
+        }),
+      ],
+      metric: lead,
+      snapshotById: new Map(),
+      nameById: new Map(),
+      lookback: 14,
+      target: 30,
+      currency: 'USD',
+    });
+    expect(story.rows[0].cost).toBeNull();
+    expect(story.rows[0].ci).toBeNull();
+    expect(story.rows[0].standing).toBe('unknown');
+  });
+});

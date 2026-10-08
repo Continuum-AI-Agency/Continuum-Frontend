@@ -1,6 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 @import "tw-animate-css";
+@source "../../packages/contracts/src";
 @source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/loomix/dist/*.js";
 @source not "../../.next-shell-review-41739";
 @source not "../../tmp/continuum-next-e2e-shell";
 
@@ -43,6 +45,20 @@
   --success-foreground: #ffffff;
   --warning: #b45309; /* amber-700 — caution states */
   --warning-foreground: #ffffff;
+
+  /* Ad-platform identity (Optimizer): chip, dot and active-tab underline only — never a
+     figure, which keeps the ok/warn/bad state colours. TikTok's purple sits well off
+     --primary's blue-violet so a TikTok chip never reads as a brand control. -fg is the
+     chip text on its -soft background (Google's dark amber clears WCAG AA there). */
+  --platform-meta: #0866ff;
+  --platform-meta-soft: #e7f0ff;
+  --platform-meta-fg: #0047b3;
+  --platform-google: #f9ab00;
+  --platform-google-soft: #fef3d6;
+  --platform-google-fg: #7a4f00;
+  --platform-tiktok: #a020c8;
+  --platform-tiktok-soft: #f6e6fb;
+  --platform-tiktok-fg: #7a1499;
 
   --border: #e4e2f7; /* violet-tinted border */
   --input: #e4e2f7;
@@ -335,6 +351,15 @@ html {
   --success-foreground: #052e16;
   --warning: #fbbf24; /* amber-400 */
   --warning-foreground: #241a02;
+  --platform-meta: #4c8dff;
+  --platform-meta-soft: #0b2a5c;
+  --platform-meta-fg: #9cc2ff;
+  --platform-google: #fbc02d;
+  --platform-google-soft: #3a2b00;
+  --platform-google-fg: #ffe08a;
+  --platform-tiktok: #c45be8;
+  --platform-tiktok-soft: #3a1247;
+  --platform-tiktok-fg: #e7b3f7;
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.1);
   --ring: #7c6fff;
@@ -422,6 +447,15 @@ html {
     --success-foreground: #052e16;
     --warning: #fbbf24;
     --warning-foreground: #241a02;
+    --platform-meta: #4c8dff;
+    --platform-meta-soft: #0b2a5c;
+    --platform-meta-fg: #9cc2ff;
+    --platform-google: #fbc02d;
+    --platform-google-soft: #3a2b00;
+    --platform-google-fg: #ffe08a;
+    --platform-tiktok: #c45be8;
+    --platform-tiktok-soft: #3a1247;
+    --platform-tiktok-fg: #e7b3f7;
     --border: rgba(255, 255, 255, 0.1);
     --input: rgba(255, 255, 255, 0.1);
     --ring: #7c6fff;
@@ -1102,6 +1136,11 @@ body {
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 0.9375rem;
 
+  /* The 15px body step of the Jaina answer scale (jaina/reading.ts JAINA_TYPE): Tailwind
+     ships nothing between sm (14) and base (16). */
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.5rem;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -1122,6 +1161,15 @@ body {
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-platform-meta: var(--platform-meta);
+  --color-platform-meta-soft: var(--platform-meta-soft);
+  --color-platform-meta-fg: var(--platform-meta-fg);
+  --color-platform-google: var(--platform-google);
+  --color-platform-google-soft: var(--platform-google-soft);
+  --color-platform-google-fg: var(--platform-google-fg);
+  --color-platform-tiktok: var(--platform-tiktok);
+  --color-platform-tiktok-soft: var(--platform-tiktok-soft);
+  --color-platform-tiktok-fg: var(--platform-tiktok-fg);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -1509,4 +1557,14 @@ button:focus-visible .mention-inline__label {
   100% {
     transform: translateX(300%);
   }
+}
+
+/*
+  The checkout receipt's torn thermal-paper edge (CheckoutReceiptDialog): each 8px tile keeps
+  everything above a downward point, so the bottom edge reads as a tear-off serration.
+*/
+.receipt-edge {
+  -webkit-mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
 }

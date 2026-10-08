@@ -25,6 +25,17 @@ export type AssetRenditionRow = {
 const RENDITION_SELECT =
   'id, brand_id, asset_id, asset_version_id, role, state, bucket, storage_path, mime_type, width, height, duration_ms, error_code, created_at, updated_at';
 
+// What the Library shows. A video's sampled frames (first/last/frame_N) exist only to feed
+// its visual embedding; loading them would sign up to eight unused URLs per video card.
+export const DISPLAYED_RENDITION_ROLES: AssetRenditionRole[] = [
+  'thumbnail',
+  'poster',
+  // A 3D model's card image, rendered by the viewer on first open.
+  'model_poster',
+  'preview_image',
+  'preview_video',
+];
+
 export async function loadAssetRenditions(
   client: SupabaseClient,
   versionIds: readonly string[],
@@ -33,7 +44,8 @@ export async function loadAssetRenditions(
   const { data, error } = await mediaSchema(client)
     .from('asset_renditions')
     .select(RENDITION_SELECT)
-    .in('asset_version_id', [...new Set(versionIds)]);
+    .in('asset_version_id', [...new Set(versionIds)])
+    .in('role', DISPLAYED_RENDITION_ROLES);
   if (error) throw new Error(`Library rendition hydration failed: ${error.message}`);
   return (data ?? []) as unknown as AssetRenditionRow[];
 }
@@ -46,7 +58,7 @@ export function renditionSignablePaths(rows: readonly AssetRenditionRow[]): Sign
   );
 }
 
-const CARD_ROLES: AssetRenditionRole[] = ['thumbnail', 'poster', 'preview_image'];
+const CARD_ROLES: AssetRenditionRole[] = ['thumbnail', 'poster', 'model_poster', 'preview_image'];
 
 export function buildAssetPreview(
   asset: Pick<

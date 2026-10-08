@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import type { AgentMentionReference, AiStudioComposerFrame } from '@continuum/contracts';
-import { CANVAS_NO_CHANGE_WARNING_CODE, composerHistoryMessageSchema } from '@continuum/contracts';
+import {
+  CANVAS_NO_CHANGE_WARNING_CODE,
+  composerHistoryMessageSchema,
+  ugcTalkingHeadPipelineCandidate,
+} from '@continuum/contracts';
 import { parseComposerFrame } from '@/lib/ai-studio/composer/streamCanvasComposer';
 import {
   applyComposerFrame,
@@ -197,6 +201,62 @@ describe('applyComposerFrame', () => {
     ] as AiStudioComposerFrame[]);
 
     expect(state).toEqual(IDLE_COMPOSER_STATE);
+  });
+
+  it('keeps the latest pipeline proposal off the wire, publishing nothing', () => {
+    const request = ugcTalkingHeadPipelineCandidate({
+      brandProfileId: '11111111-1111-4111-8111-111111111111',
+    });
+    const capability = {
+      contract_version: 2,
+      pipeline_id: '33333333-3333-4333-8333-333333333333',
+      identity: {
+        family_id: '44444444-4444-4444-8444-444444444444',
+        revision: 1,
+        contract_hash: 'a'.repeat(64),
+      },
+      name: request.name,
+      source: 'brand',
+      inputs: [],
+      outputs: [{ output_id: 'video', kind: 'asset', label: 'Video', media: 'video', count: 1 }],
+      execution_policy: {
+        runtime: 'server',
+        timeout_seconds: 600,
+        max_attempts: 1,
+        max_generations: 3,
+      },
+      cost_policy: {
+        currency: 'USD',
+        max_amount_minor: null,
+        approval: 'within_limit',
+        on_exceed: 'refuse',
+      },
+      quality_policy: {
+        minimum_score: 0.7,
+        required_checks: ['persona_match'],
+        on_failure: 'refuse',
+      },
+    };
+    const proposal = (name: string, seq: number) =>
+      parseComposerFrame(
+        line(
+          {
+            type: 'composer.pipeline_proposal',
+            data: { request: { ...request, name }, capability: { ...capability, name } },
+          },
+          seq,
+        ),
+      );
+    const first = proposal('First draft', 1);
+    const second = proposal('Checked draft', 2);
+    expect(first?.type).toBe('composer.pipeline_proposal');
+
+    const state = fold([first, second] as AiStudioComposerFrame[]);
+
+    expect(state.pipelineProposal?.request.name).toBe('Checked draft');
+    expect(state.pipelineProposal?.capability.name).toBe('Checked draft');
+    expect(state.pipelineProposal?.outcome).toBeUndefined();
+    expect(state.status).toBe('idle');
   });
 
   it('parses an optimistic composer patch without treating it as narration', () => {

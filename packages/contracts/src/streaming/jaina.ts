@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { databaseUuidSchema } from '../media/database-uuid';
+import {
+  paidCanvasCreativeTargetSchema,
+  paidScaffoldCreativeTargetSchema,
+} from '../paid-creative/ad-intent';
 
 /**
  * Jaina stream frame definitions — cross-side type contract.
@@ -167,7 +171,6 @@ export type JainaResponseType =
   | 'response.checkpoint_report'
   | 'response.checkpoint_report.delta'
   | 'response.checkpoint_report.error'
-  | 'response.report_assembly'
   | 'response.report_artifact_job.started'
   | 'response.objectives'
   | 'response.objective.updated'
@@ -222,11 +225,11 @@ export const jainaPaidCreativeRenderPayloadSchema = z
     draft_id: z.string().min(1).max(200),
     clip_count: z.number().int().min(1).max(50),
     state: z.literal('awaiting_client_render'),
+    scaffold_target: paidScaffoldCreativeTargetSchema.optional(),
+    canvas_target: paidCanvasCreativeTargetSchema.optional(),
   })
   .strict();
-export type JainaPaidCreativeRenderPayload = z.infer<
-  typeof jainaPaidCreativeRenderPayloadSchema
->;
+export type JainaPaidCreativeRenderPayload = z.infer<typeof jainaPaidCreativeRenderPayloadSchema>;
 
 /**
  * The AI-SDK tool call this frame was emitted underneath, when it was emitted from

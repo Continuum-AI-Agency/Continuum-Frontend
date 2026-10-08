@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   API_RENDER_DESTINATIONS_ROUTE,
+  API_RENDER_DRAFT_DOCUMENTS_MAX,
+  API_RENDER_DRAFT_MEDIA_MAX,
   API_RENDER_MEDIA_LIST_MAX,
   apiRenderApprovalSummarySchema,
   apiRenderBatchPreflightRequestSchema,
@@ -9,17 +11,22 @@ import {
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDeliveryTargetSchema,
   apiRenderDestinationRoute,
+  apiRenderDraftSourcesStatusRequestSchema,
   apiRenderJobListQuerySchema,
   apiRenderJobSchema,
   apiRenderPreflightRequestSchema,
   apiRenderPreflightResponseSchema,
   apiRenderSlackChannelListResponseSchema,
+  apiRenderSuggestRowsRequestSchema,
   apiRenderTemplateContractSchema,
   apiRenderTemplateSummarySchema,
   apiRenderVariableKeySchema,
+  clipRequirement,
   compactEncodeBlock,
+  effectiveRenderValues,
   encodeContainerOf,
   encodeSettingsSchema,
+  expandLinkedValues,
   mergeEncodeSettings,
   WATERMARK_LOGO_VARIABLE_KEY,
 } from './api-renders';
@@ -30,6 +37,58 @@ import {
 } from './workflow-graph';
 
 describe('API render contracts', () => {
+  it('drafts from a file without a brief but refuses an empty source', () => {
+    const base = {
+      brandId: '00000000-0000-4000-8000-000000000001',
+      templateKey: 'vivo-hero',
+      contractHash: 'contract-1',
+      prompt: '',
+      autoCount: true,
+    };
+    expect(apiRenderSuggestRowsRequestSchema.safeParse(base).success).toBe(false);
+    expect(
+      apiRenderSuggestRowsRequestSchema.safeParse({
+        ...base,
+        documentIds: ['00000000-0000-4000-8000-000000000002'],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('accepts larger source folders within the draft budget', () => {
+    expect(API_RENDER_DRAFT_DOCUMENTS_MAX).toBe(40);
+    expect(API_RENDER_DRAFT_MEDIA_MAX).toBe(40);
+    const ids = (count: number) =>
+      Array.from(
+        { length: count },
+        (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      );
+    const base = {
+      brandId: '00000000-0000-4000-8000-000000000001',
+      templateKey: 'vivo-hero',
+      contractHash: 'contract-1',
+      prompt: '',
+    };
+    expect(
+      apiRenderSuggestRowsRequestSchema.safeParse({
+        ...base,
+        documentIds: ids(API_RENDER_DRAFT_DOCUMENTS_MAX),
+        mediaAssetIds: ids(API_RENDER_DRAFT_MEDIA_MAX),
+      }).success,
+    ).toBe(true);
+    expect(
+      apiRenderDraftSourcesStatusRequestSchema.safeParse({
+        brandId: base.brandId,
+        documentIds: ids(API_RENDER_DRAFT_DOCUMENTS_MAX),
+      }).success,
+    ).toBe(true);
+    expect(
+      apiRenderSuggestRowsRequestSchema.safeParse({
+        ...base,
+        documentIds: ids(API_RENDER_DRAFT_DOCUMENTS_MAX + 1),
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts stable public aliases and version-pinned image inputs', () => {
     const request = apiRenderPreflightRequestSchema.parse({
       brandId: '00000000-0000-4000-8000-000000000001',
@@ -125,32 +184,6 @@ describe('API render contracts', () => {
     // Defaulting to false is the safe direction: an unknown variable is one the
     // caller must fill, never one a client silently hides from the user.
     expect(contract.variables[0]?.reserved).toBe(false);
-  });
-
-  it('accepts Forge clip timing on every variable in the contract response', () => {
-    const variable = { key: 'slot', label: 'Slot', kind: 'text', required: false };
-    const contract = apiRenderTemplateContractSchema.parse({
-      template: {
-        key: '331',
-        name: 'Cards',
-        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
-        environment: 'Six_app',
-        contractVersion: '1',
-        contractHash: 'hash',
-        contractSource: 'template_forge',
-        outputKinds: ['video'],
-        variableCount: 22,
-        previewUrl: null,
-        updatedAt: null,
-      },
-      variables: Array.from({ length: 22 }, (_, index) => ({
-        ...variable,
-        key: `slot_${index}`,
-        clip: null,
-      })),
-    });
-    expect(contract.variables).toHaveLength(22);
-    expect(contract.variables.every((item) => item.clip === null)).toBe(true);
   });
 
   it('carries the frozen watermark pin, and defaults it to null on an older response', () => {
@@ -819,5 +852,122 @@ describe('approval destinations and the package summary', () => {
     expect(
       apiRenderBatchPreflightResponseSchema.parse({ ...response, approval: summary }).approval,
     ).toEqual(summary);
+  });
+});
+
+describe('clipRequirement', () => {
+  it('states the clip length as a demand, not as a duration', () => {
+    const shown = clipRequirement({ fromSec: 0, toSec: 10, playsSec: 6.25 });
+    // The bare "10.0s" this replaces read as the clip's own length; it is the minimum.
+    expect(shown?.chip).toBe('\u226510.0s');
+    expect(shown?.detail).toBe(
+      'Plays 0.0s\u201310.0s of the clip, on screen up to 6.3s. ' +
+        'A shorter clip runs out and leaves the layer empty.',
+    );
+  });
+
+  it('fits the column it is shown in', () => {
+    expect(clipRequirement({ fromSec: 0, toSec: 123.4, playsSec: 9 })?.chip.length).toBeLessThan(9);
+  });
+
+  it('is null when there is no clip, so a text slot shows its budget instead', () => {
+    expect(clipRequirement(null)).toBeNull();
+    expect(clipRequirement(undefined)).toBeNull();
+  });
+});
+
+describe('linked fields take their value from their source', () => {
+  const field = (key: string, derivedFrom: { key: string; line: number | null } | null = null) => ({
+    key,
+    label: key,
+    derivedFrom,
+  });
+  const headline = field('headline');
+  const outline = field('outline', { key: 'headline', line: null });
+  const front = field('front', { key: 'headline', line: 2 });
+
+  it('copies the whole value into every repeated copy', () => {
+    expect(expandLinkedValues([headline, outline], { headline: 'TRAIN HARD' })).toEqual({
+      values: { headline: 'TRAIN HARD', outline: 'TRAIN HARD' },
+      problems: [],
+    });
+  });
+
+  it('splits authored lines across layers, and a copy shows what its source now shows', () => {
+    const { values, problems } = expandLinkedValues([headline, front, outline], {
+      headline: 'TRAIN HARD\r\nFEEL STRONG\n',
+    });
+    expect(problems).toEqual([]);
+    expect(values).toEqual({ headline: 'TRAIN HARD', front: 'FEEL STRONG', outline: 'TRAIN HARD' });
+  });
+
+  it('refuses a split that does not fit, naming the fields, and never guesses one', () => {
+    for (const text of ['TRAIN HARD', 'TRAIN\nHARD\nFEEL STRONG']) {
+      const { values, problems } = expandLinkedValues([headline, front], { headline: text });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]?.key).toBe('headline');
+      expect(problems[0]?.message).toContain('headline needs 2 lines');
+      expect(problems[0]?.message).toContain('front');
+      expect(values).toEqual({ headline: text });
+    }
+  });
+
+  it('refuses links that cannot resolve', () => {
+    const chained = field('chained', { key: 'outline', line: null });
+    const self = field('self', { key: 'self', line: null });
+    const gap = field('gap', { key: 'headline', line: 3 });
+    expect(expandLinkedValues([headline, outline, chained], {}).problems).toHaveLength(1);
+    expect(expandLinkedValues([self], {}).problems).toHaveLength(1);
+    expect(expandLinkedValues([headline, gap], { headline: 'A\nB' }).problems).toEqual([
+      {
+        key: 'headline',
+        message: "headline's linked lines must run 2, 3, … with none repeated or skipped.",
+      },
+    ]);
+  });
+
+  it('leaves an unset source alone: the fields keep what the file says', () => {
+    expect(expandLinkedValues([headline, outline, front], {}).values).toEqual({});
+  });
+});
+
+describe('what a render fills each field with', () => {
+  const variable = (key: string, over: Record<string, unknown> = {}) => ({
+    key,
+    label: key,
+    derivedFrom: null,
+    defaultValue: null,
+    exposed: true,
+    fallback: null,
+    ...over,
+  });
+
+  it('the row wins; an empty field takes the saved default; a switched-off one what the file says', () => {
+    const variables = [
+      variable('headline', { defaultValue: 'TRAIN HARD' }),
+      variable('logo', { defaultValue: { assetId: '11111111-1111-4111-8111-111111111111' } }),
+      variable('legal', { exposed: false, fallback: 'Aplican restricciones' }),
+      variable('cta'),
+    ];
+    expect(effectiveRenderValues(variables, { headline: 'GO' }).values).toEqual({
+      headline: 'GO',
+      logo: { assetId: '11111111-1111-4111-8111-111111111111' },
+    });
+    expect(effectiveRenderValues(variables, {}, { fallback: true }).values).toEqual({
+      headline: 'TRAIN HARD',
+      logo: { assetId: '11111111-1111-4111-8111-111111111111' },
+      legal: 'Aplican restricciones',
+    });
+  });
+
+  it('a default feeds the fields linked to it', () => {
+    const variables = [
+      variable('headline', { defaultValue: 'TRAIN HARD\nFEEL STRONG' }),
+      variable('front', { exposed: false, derivedFrom: { key: 'headline', line: 2 } }),
+    ];
+    expect(effectiveRenderValues(variables, {}).values).toEqual({
+      headline: 'TRAIN HARD',
+      front: 'FEEL STRONG',
+    });
   });
 });

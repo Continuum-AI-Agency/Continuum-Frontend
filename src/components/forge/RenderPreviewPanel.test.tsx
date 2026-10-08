@@ -12,8 +12,14 @@ import type {
   ApiRenderJob,
   ApiRenderTemplateContract,
   ApiRenderTemplateLayout,
+  ForgeMotionProof,
+  ForgeMotionProofRequest,
+  ForgeRenderLive,
+  ForgeRenderLiveRequest,
+  ForgeRenderPictures,
   ForgeRenderPreview,
   ForgeRenderPreviewRequest,
+  ForgeRenderSketch,
 } from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
@@ -37,11 +43,86 @@ const composePreviewMock = mock(
     throw new Error('preview_unavailable');
   },
 );
+const startMotionProofMock = mock(
+  async (input: ForgeMotionProofRequest): Promise<ForgeMotionProof> => ({
+    id:
+      input.values.headline === 'Hola'
+        ? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+        : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    contentHash: 'a'.repeat(64),
+    templateSourceSha256: 'b'.repeat(64),
+    templateCommitSha: null,
+    outputId: input.outputId,
+    comp: input.comp,
+    state: 'queued',
+    progressPct: 0,
+    signedUrl: null,
+    durationSec: null,
+    frameRate: null,
+    hasAudio: null,
+    error: null,
+  }),
+);
+const getMotionProofMock = mock(
+  async (_brandId: string, id: string): Promise<ForgeMotionProof> => ({
+    id,
+    contentHash: 'a'.repeat(64),
+    templateSourceSha256: 'b'.repeat(64),
+    templateCommitSha: null,
+    outputId: 'square',
+    comp: 'Square',
+    state: 'ready',
+    progressPct: 100,
+    signedUrl: `https://cdn.test/${id}.mp4`,
+    durationSec: 6,
+    frameRate: 30,
+    hasAudio: true,
+    error: null,
+  }),
+);
+const sketchPreviewMock = mock(
+  async (): Promise<ForgeRenderSketch> => ({
+    video: 'data:video/mp4;base64,AAAA',
+    width: 640,
+    height: 640,
+    comp: 'Square',
+    window: [1, 7.25],
+    fps: 8,
+    frames: 48,
+    notes: ['motion an expression drives is not drawn: headline'],
+  }),
+);
+// Unavailable unless a test goes Live: without a kit, Live stands down and Exact shows.
+const livePreviewMock = mock(
+  async (_input: ForgeRenderLiveRequest, _signal?: AbortSignal): Promise<ForgeRenderLive> => {
+    throw new Error('live_unavailable');
+  },
+);
+const previewPicturesMock = mock(
+  async (): Promise<ForgeRenderPictures> => ({
+    pictures: [{ uri: 'data:image/png;base64,SEVSTw==', width: 800, height: 800 }],
+  }),
+);
+const listMotionProofFormatsMock = mock(async () => [
+  {
+    id: 'square',
+    label: 'Square',
+    ratio: '1:1' as const,
+    comp: SQUARE.comp,
+    mediaType: 'video/mp4' as const,
+  },
+]);
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs: listJobsMock,
     composePreview: composePreviewMock,
+    startMotionProof: startMotionProofMock,
+    getMotionProof: getMotionProofMock,
+    listMotionProofFormats: listMotionProofFormatsMock,
+    sketchPreview: sketchPreviewMock,
+    livePreview: livePreviewMock,
+    previewPictures: previewPicturesMock,
     listRenderSets: async () => ({
       items: [{ id: '33333333-3333-4333-8333-333333333333', revision: setRevision }],
       nextCursor: null,
@@ -212,6 +293,13 @@ function render(ui: ReactElement) {
   return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
+/** The Exact view: what the server composes over the closest real render. */
+function renderExact(ui: ReactElement) {
+  const view = render(ui);
+  fireEvent.click(screen.getByRole('button', { name: 'Exact' }));
+  return view;
+}
+
 const slot = (container: HTMLElement, key: string) =>
   container.querySelector(`[data-slot="${key}"]`);
 const frame = (container: HTMLElement) =>
@@ -250,9 +338,143 @@ afterEach(() => {
   composePreviewMock.mockImplementation(async () => {
     throw new Error('preview_unavailable');
   });
+  startMotionProofMock.mockClear();
+  getMotionProofMock.mockClear();
+  listMotionProofFormatsMock.mockClear();
+  sketchPreviewMock.mockClear();
+  livePreviewMock.mockReset();
+  livePreviewMock.mockImplementation(async () => {
+    throw new Error('live_unavailable');
+  });
+  previewPicturesMock.mockClear();
 });
 
 describe('RenderPreviewPanel', () => {
+  test('the animation sketch is asked for, plays for these values, and an edit hides it', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+    } as ApiRenderTemplateContract;
+    const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: null };
+    const { container, rerender } = render(
+      <RenderPreviewPanel {...props} rows={rowWith('Hola')} />,
+    );
+    expect(sketchPreviewMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sketch the animation' }));
+    await waitFor(() => expect(badge(container)).toBe('Animation sketch'));
+    expect(sketchPreviewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ fps: 8, values: expect.objectContaining({ headline: 'Hola' }) }),
+    );
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(
+      'data:video/mp4;base64,AAAA',
+    );
+    expect(caption(container)).toContain('motion an expression drives is not drawn: headline');
+    rerender(<RenderPreviewPanel {...props} rows={rowWith('Adios')} />);
+    expect(badge(container)).not.toBe('Animation sketch');
+    expect(screen.getByRole('button', { name: 'Sketch the animation' })).toBeTruthy();
+  });
+  test('plays only the selected row’s settled full animation proof', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      outputs: [],
+    } as ApiRenderTemplateContract;
+    const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: null };
+    const { container, rerender } = render(
+      <RenderPreviewPanel {...props} rows={rowWith('Hola')} />,
+    );
+    await waitFor(
+      () =>
+        expect(startMotionProofMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            values: expect.objectContaining({ headline: 'Hola' }),
+            outputId: 'square',
+            comp: 'Square',
+          }),
+        ),
+      { timeout: 3000 },
+    );
+    expect(listMotionProofFormatsMock).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(container.querySelector('video')?.getAttribute('src')).toContain('aaaaaaaa-aaaa'),
+    );
+    rerender(<RenderPreviewPanel {...props} rows={rowWith('Adios')} />);
+    expect(container.querySelector('video')).toBeNull();
+    await waitFor(
+      () =>
+        expect(container.querySelector('video')?.getAttribute('src')).toContain('bbbbbbbb-bbbb'),
+      { timeout: 3000 },
+    );
+  });
+
+  test('shows worker and canvas measurement findings on a render row', () => {
+    const contract = {
+      ...CONTRACT,
+      publishCheck: {
+        state: 'warn',
+        issues: ['Worker graph pointer check was denied by Template Forge permissions.'],
+        workerAttachmentId: null,
+        media: [
+          { key: 'hero', label: 'Hero', comp: null, box: null, source: [254, 305], rigged: true },
+        ],
+      },
+    } as ApiRenderTemplateContract;
+    render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    expect(screen.getByText(/Template placement needs review/)).toBeTruthy();
+    expect(screen.getByText(/Worker graph pointer check was denied/)).toBeTruthy();
+    expect(screen.getByText(/Hero: source 254×305 px/)).toBeTruthy();
+  });
+
+  test('gives Inyogo jersey preparation guidance before rendering', () => {
+    const contract = {
+      ...CONTRACT,
+      template: {
+        ...CONTRACT.template,
+        key: '331',
+        environment: 'Six_app',
+        updatedAt: '2026-09-28T03:23:47.118Z',
+      },
+    } as ApiRenderTemplateContract;
+    const { rerender } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+
+    const guidance = screen.getByRole('note');
+    expect(guidance.textContent).toContain('254×305 px canvas for Left Jersey');
+    expect(guidance.textContent).toContain('249×311 px for Right Jersey');
+    expect(guidance.textContent).toContain('Bet Amount and Win Amount as short numbers');
+    expect(guidance.textContent).toContain('Lside/Rside Value as numeric odds');
+    expect(guidance.textContent).toContain('Check a Proof before Final');
+
+    rerender(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={{
+          ...contract,
+          template: { ...contract.template, updatedAt: '2026-09-29T00:00:00.000Z' },
+        }}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
   test('draws text in its box and flags overflow live from props', () => {
     const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: null };
     const { container, rerender } = render(
@@ -324,7 +546,7 @@ describe('RenderPreviewPanel', () => {
         file('Producto_individual_con_descuento_16_9_9w5xxwa.jpg'),
       ]),
     ]);
-    const { container } = render(
+    const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={contract}
@@ -343,7 +565,7 @@ describe('RenderPreviewPanel', () => {
       'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
     );
     expect(frame(container).style.aspectRatio).toBe('1 / 1');
-    await waitFor(() => expect(badge(container)).toBe('Rendered · 2h ago'));
+    await waitFor(() => expect(badge(container)).toBe('Previous render'));
     // Three cached reads: the row's newest render, the set's renders, the template's newest.
     expect(listJobsMock).toHaveBeenCalledTimes(3);
     expect(listJobsMock).toHaveBeenCalledWith(BRAND, 1, {
@@ -357,7 +579,7 @@ describe('RenderPreviewPanel', () => {
 
   test('a format no file answers shows the estimate, never another format’s file', async () => {
     serveJobs([job(ROW, [file('Story_ooqxxwb.png')], { templateKey: 'another' })]);
-    const { container } = render(
+    const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={CONTRACT}
@@ -388,7 +610,7 @@ describe('RenderPreviewPanel', () => {
         overflows: ['Headline'],
       }),
     );
-    const { container } = render(
+    const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={CONTRACT}
@@ -399,27 +621,31 @@ describe('RenderPreviewPanel', () => {
     );
 
     // The composition comes first; nothing says which values the render used, so all are sent.
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(screen.getByAltText('Composed preview').getAttribute('src')).toBe(COMPOSED);
     expect(caption(container)).toBe(
       "Based on 'Spain' render · 2h ago · Headline: resize rig approximated",
     );
     expect(warning(container)).toBe('Headline overflows its box · Not previewed: Background');
-    expect(composePreviewMock).toHaveBeenCalledWith({
-      brandId: BRAND,
-      environment: 'Continuum_app',
-      templateKey: '133',
-      format: { id: 'square', ratio: '1:1', comp: 'Square' },
-      values: {
-        headline: 'Hola',
-        hero: { assetId: '77777777-7777-4777-8777-777777777777' },
-        bg: 'ff3366',
+    // The second argument is the query's abort signal: a superseded composition is cancelled.
+    expect(composePreviewMock).toHaveBeenCalledWith(
+      {
+        brandId: BRAND,
+        environment: 'Continuum_app',
+        templateKey: '133',
+        format: { id: 'square', ratio: '1:1', comp: 'Square' },
+        values: {
+          headline: 'Hola',
+          hero: { assetId: '77777777-7777-4777-8777-777777777777' },
+          bg: 'ff3366',
+        },
+        backdrop: { jobId: stale.id, fileName: 'Square_1mjxxwb.png' },
       },
-      backdrop: { jobId: stale.id, fileName: 'Square_1mjxxwb.png' },
-    });
+      expect.any(AbortSignal),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Rendered' }));
-    expect(badge(container)).toBe('Rendered · before latest edits');
+    expect(badge(container)).toBe('Previous render · before latest edits');
     expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
       'https://cdn.test/Square_1mjxxwb.png',
     );
@@ -440,7 +666,7 @@ describe('RenderPreviewPanel', () => {
         },
       }),
     ]);
-    const { container } = render(
+    const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={CONTRACT}
@@ -450,7 +676,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Rendered · 2h ago'));
+    await waitFor(() => expect(badge(container)).toBe('Previous render'));
     expect(screen.queryByRole('group', { name: 'Picture' })).toBeNull();
     expect(warning(container)).toBe('');
     expect(composePreviewMock).not.toHaveBeenCalled();
@@ -489,7 +715,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(caption(container)).toStartWith("Based on 'Spain' render · 2h ago");
     // The fork's own values over what it inherits, painted over the parent's render.
     expect(composePreviewMock.mock.calls.at(-1)?.[0]).toMatchObject({
@@ -525,7 +751,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(caption(container)).toStartWith("Based on 'Madrid' render");
     expect(composePreviewMock.mock.calls.at(-1)?.[0].backdrop).toEqual({
       jobId: madrid.id,
@@ -551,7 +777,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Composed from template'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(caption(container)).toBe(
       'Drawn from the template · drawn from the template: effects and masks are not drawn',
     );
@@ -565,23 +791,22 @@ describe('RenderPreviewPanel', () => {
     const { container, rerender } = render(
       <RenderPreviewPanel {...props} rows={rowWith('Adiós')} />,
     );
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     const settledCalls = composePreviewMock.mock.calls.length;
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Adiós, ')} />);
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Adiós, amigos')} />);
-    expect(badge(container)).toBe('Preview · updating…');
+    expect(badge(container)).toBe('Layout frame');
     expect(screen.getByAltText('Composed preview')).toBeTruthy();
 
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(composePreviewMock.mock.calls.length).toBe(settledCalls + 1));
     // One composition for the settled value, none for the keystrokes on the way.
-    expect(composePreviewMock.mock.calls.length).toBe(settledCalls + 1);
     expect(composePreviewMock.mock.calls.at(-1)?.[0].values.headline).toBe('Adiós, amigos');
   });
 
   test('when no composition can be made, the last render or the measured boxes stand in, and say so', async () => {
     serveJobs([job(ROW, [file('Square_1mjxxwb.png')], { renderInput: { headline: 'Hola' } })]);
-    const { container } = render(
+    const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={CONTRACT}
@@ -591,7 +816,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
     await waitFor(() => expect(warning(container)).toBe('Composed preview unavailable'));
-    expect(badge(container)).toBe('Rendered · before latest edits');
+    expect(badge(container)).toBe('Previous render · before latest edits');
     cleanup();
 
     // No render anywhere: the slot boxes, with the reason in the caption.
@@ -665,7 +890,7 @@ describe('RenderPreviewPanel', () => {
         { id: 'square', label: 'Square', ratio: '1:1', layout: null },
       ],
     } as unknown as ApiRenderTemplateContract;
-    const { container } = render(
+    const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={contract}
@@ -733,6 +958,31 @@ describe('RenderPreviewPanel', () => {
     expect(screen.queryAllByText(/^(Still ·|\d+\.\d+s ·)/)).toHaveLength(0);
   });
 
+  test('scrubbing requests the selected template frame', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+    } as ApiRenderTemplateContract;
+    renderExact(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    fireEvent.change(screen.getByRole('slider', { name: 'Preview frame' }), {
+      target: { value: '75' },
+    });
+    await waitFor(() =>
+      expect(composePreviewMock).toHaveBeenCalledWith(
+        expect.objectContaining({ atSec: 2.5 }),
+        expect.any(AbortSignal),
+      ),
+    );
+  });
+
   test('no selected row shows the hint', () => {
     render(
       <RenderPreviewPanel
@@ -746,5 +996,207 @@ describe('RenderPreviewPanel', () => {
 
     expect(screen.getByText('Select a row to preview it')).toBeTruthy();
     expect(listJobsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('RenderPreviewPanel · Live', () => {
+  // A face whose letters are 50 px wide at the kit's size, each drawn as one bar.
+  const BAR =
+    'M 0 0 C 0 0 100 0 100 0 C 100 0 100 700 100 700 C 100 700 0 700 0 700 C 0 700 0 0 0 0 Z';
+  const letters = [...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+  const FACE = {
+    upem: 1000,
+    ascender: 0.8,
+    chars: {
+      ...Object.fromEntries(letters.map((ch) => [ch, [500, 500, BAR]])),
+      ' ': [250, 250, ''],
+    },
+    kern: {},
+  } as ForgeRenderLive['scene']['glyphs'] extends infer G
+    ? G extends Record<string, infer F>
+      ? F
+      : never
+    : never;
+  const drawn = {
+    depth: 0,
+    enabled: true,
+    guide: false,
+    opacity: 100,
+    onscreen: true,
+    tier: 'measured',
+  };
+  const quad = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+  const KIT: ForgeRenderLive = {
+    comp: 'Square',
+    at: 2,
+    notes: [],
+    brandMark: null,
+    variables: [
+      { key: 'headline', label: 'Headline', kind: 'text', reserved: false, layerIds: [7] },
+      { key: 'hero', label: 'Hero', kind: 'image', reserved: false, layerIds: [8] },
+      { key: 'bg', label: 'Background', kind: 'color', reserved: false, layerIds: [] },
+      { key: 'logo', label: 'Logo', kind: 'image', reserved: true, layerIds: [] },
+    ],
+    scene: {
+      ok: true,
+      comp: { name: 'Square', width: 1080, height: 1080 },
+      at: 2,
+      glyphs: { 'Round-Regular': FACE },
+      layers: [
+        {
+          ...drawn,
+          id: 7,
+          name: 'headline',
+          kind: 'text',
+          fill: '#ffffff',
+          corners: quad(60, 60, 1020, 260),
+          text: { value: 'Authored', fill: '#ffffff', paths: [] },
+          kit: {
+            font: 'Round-Regular',
+            size: 100,
+            tracking: 0,
+            hscale: 1,
+            fauxbold: false,
+            caps: 0,
+            leading: 120,
+            justify: 7415,
+            indents: [0, 0, 0],
+            box: [60, 60, 960, 200, 0],
+            matrix: [1, 0, 0, 1, 0, 0],
+          },
+        },
+        {
+          ...drawn,
+          id: 8,
+          name: 'hero',
+          kind: 'file',
+          fill: null,
+          corners: quad(240, 300, 840, 900),
+          asset: {},
+        },
+        {
+          ...drawn,
+          id: 5,
+          name: 'plate',
+          kind: 'shape',
+          fill: '#000000',
+          corners: quad(0, 0, 1080, 1080),
+          refs: [{ layer: 'Controls', effect: 'Background', prop: 'ADBE Vector Fill Color' }],
+        },
+      ],
+    },
+  };
+
+  // The painted SVG, read back from the blob the <img> is pointed at.
+  const painted: Blob[] = [];
+  const { createObjectURL, revokeObjectURL } = URL;
+  const lastSvg = () => (painted.at(-1) as Blob).text();
+  const glyphs = (svg: string) => svg.match(/M -?\d/g)?.length ?? 0;
+  afterEach(() => {
+    painted.length = 0;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+  });
+  const goLive = () => {
+    URL.createObjectURL = ((blob: Blob) => {
+      painted.push(blob);
+      return `blob:live-${painted.length}`;
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = () => undefined;
+    livePreviewMock.mockImplementation(async () => KIT);
+  };
+
+  test('paints the row from the template on every keystroke — no debounce, nothing composed', async () => {
+    goLive();
+    const { container, rerender } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    await screen.findByAltText('Live preview');
+    expect(badge(container)).toBe('Live');
+    const first = await lastSvg();
+    expect(glyphs(first)).toBe(4);
+    // The row's colour reaches the plate that reads its controller.
+    expect(first).toContain('fill="#ff3366"');
+
+    rerender(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hola mundo')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    expect(glyphs(await lastSvg())).toBe(9);
+    // The row's picture, fetched once from the Library at the kit's instant, lands in its slot.
+    await waitFor(async () =>
+      expect(await lastSvg()).toContain('href="data:image/png;base64,SEVSTw=="'),
+    );
+    expect(previewPicturesMock).toHaveBeenCalledTimes(1);
+    expect(composePreviewMock).not.toHaveBeenCalled();
+    // One kit per format, never one per keystroke: the picked format's, and its sibling prefetched.
+    expect(livePreviewMock.mock.calls.map(([input]) => input.format.id)).toEqual([
+      'square',
+      'story',
+    ]);
+  });
+
+  test('a value Live cannot lay out stands down to Exact, and says why', async () => {
+    goLive();
+    composeWith(composedOver({ source: 'template', basedOn: null }));
+    const { container } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hölá')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    await waitFor(() => expect(composePreviewMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(warning(container)).toContain(
+        'Live preview unavailable — Headline: a character is not in the face',
+      ),
+    );
+  });
+
+  test('the strip paints every row, and a thumbnail previews its row', async () => {
+    goLive();
+    const fork: RequestRow = {
+      ...(rowWith('Hola')[0] as RequestRow),
+      id: OTHER_ROW,
+      parentId: ROW,
+      label: 'Spain · B',
+      values: { headline: 'Adios' },
+    };
+    const onRowChange = mock((_rowId: string) => undefined);
+    render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={[...rowWith('Hola'), fork]}
+        rowId={ROW}
+        renderSetId={null}
+        onRowChange={onRowChange}
+      />,
+    );
+    const strip = await screen.findByRole('group', { name: 'All variations' });
+    const thumbs = strip.querySelectorAll('button');
+    expect([...thumbs].map((thumb) => thumb.getAttribute('title'))).toEqual(['Spain', 'Spain · B']);
+    expect(thumbs[0]?.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(thumbs[1] as HTMLButtonElement);
+    expect(onRowChange).toHaveBeenCalledWith(OTHER_ROW);
   });
 });

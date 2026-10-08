@@ -6,11 +6,14 @@
 
 import type { AppNotification } from '@continuum/contracts';
 import {
+  AlarmClockIcon,
   AtSignIcon,
   CheckCheckIcon,
   CircleCheckBigIcon,
   EyeIcon,
   MessageSquareReplyIcon,
+  SirenIcon,
+  UserCheckIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -25,6 +28,9 @@ const KIND_ICONS = {
   review_status_change: CircleCheckBigIcon,
   comment_reply: MessageSquareReplyIcon,
   comment_mention: AtSignIcon,
+  asset_assigned: UserCheckIcon,
+  review_reminder: AlarmClockIcon,
+  review_escalation: SirenIcon,
 } satisfies Record<AppNotification['kind'], typeof EyeIcon>;
 
 export type NotificationsPanelProps = {
@@ -54,7 +60,13 @@ export function NotificationsPanel({
     const { href } = describeNotification(notification);
     if (href) {
       onNavigate?.();
-      router.push(href);
+      // The Library opens the asset and comment its URL names when it mounts; already on
+      // /library, a client push would change the URL and leave the old view open.
+      if (href.startsWith('/library') && window.location.pathname === '/library') {
+        window.location.assign(href);
+      } else {
+        router.push(href);
+      }
     }
   };
 

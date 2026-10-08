@@ -11,14 +11,21 @@ import {
   type AssetFieldValue,
   assetFieldValueSchema,
   type CreateCustomFieldRequest,
+  CURRENT_USER_FILTER_TOKEN,
   type CustomField,
   type CustomFieldFilter,
   type CustomFieldValue,
+  customFieldChoiceOptions,
   customFieldFilterSchema,
   customFieldSchema,
+  customFieldValueSchema,
+  DEFAULT_RATING_MAX,
   type DeleteCustomFieldRequest,
   listAssetFieldValuesResponseSchema,
   listCustomFieldsResponseSchema,
+  MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
+  MAX_CUSTOM_FIELD_URL_LENGTH,
+  MAX_CUSTOM_FIELD_USERS,
   type SetAssetFieldValueRequest,
   type UpdateCustomFieldRequest,
 } from '@continuum/contracts';
@@ -32,6 +39,8 @@ export const MAX_FIELD_TEXT_LENGTH = 2000;
 export const MAX_FIELD_FILTERS = 20;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const URL_PATTERN = /^https?:\/\/\S+$/i;
 
 export type FieldValueSpec = Pick<CustomField, 'type' | 'options'>;
 
@@ -59,7 +68,7 @@ function isCalendarDate(value: string): boolean {
 export function validateFieldValue(field: FieldValueSpec, value: unknown): FieldValueCheck {
   if (value === null || value === undefined) return { ok: true, value: null };
 
-  const optionIds = new Set(field.options.map((option) => option.id));
+  const optionIds = new Set(customFieldChoiceOptions(field).map((option) => option.id));
 
   switch (field.type) {
     case 'single_select': {
@@ -108,10 +117,87 @@ export function validateFieldValue(field: FieldValueSpec, value: unknown): Field
       }
       return { ok: true, value: trimmed };
     }
+    case 'status': {
+      if (typeof value !== 'string') return { ok: false, reason: 'This field takes a status id' };
+      if (value.length === 0) return { ok: true, value: null };
+      if (!optionIds.has(value)) {
+        return { ok: false, reason: `"${value}" is not a status on this field` };
+      }
+      return { ok: true, value };
+    }
+    case 'number': {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return { ok: false, reason: 'This field takes a number' };
+      }
+      return { ok: true, value };
+    }
+    case 'checkbox': {
+      if (typeof value !== 'boolean')
+        return { ok: false, reason: 'This field takes true or false' };
+      return { ok: true, value };
+    }
+    case 'rating': {
+      const max = ratingMax(field);
+      // 0 stars is "not rated": the one cleared representation is null.
+      if (value === 0) return { ok: true, value: null };
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > max) {
+        return { ok: false, reason: `A rating is a whole number from 1 to ${max}` };
+      }
+      return { ok: true, value };
+    }
+    case 'user': {
+      if (typeof value !== 'string') return { ok: false, reason: 'This field takes a user id' };
+      if (value.length === 0) return { ok: true, value: null };
+      if (!UUID_PATTERN.test(value)) return { ok: false, reason: `"${value}" is not a user id` };
+      return { ok: true, value };
+    }
+    case 'user_multi': {
+      if (!Array.isArray(value)) return { ok: false, reason: 'This field takes a list of user ids' };
+      const people: string[] = [];
+      for (const entry of value) {
+        if (typeof entry !== 'string' || !UUID_PATTERN.test(entry)) {
+          return { ok: false, reason: `"${String(entry)}" is not a user id` };
+        }
+        if (!people.includes(entry)) people.push(entry);
+      }
+      if (people.length > MAX_CUSTOM_FIELD_USERS) {
+        return { ok: false, reason: `At most ${MAX_CUSTOM_FIELD_USERS} people` };
+      }
+      return people.length === 0 ? { ok: true, value: null } : { ok: true, value: people };
+    }
+    case 'long_text': {
+      if (typeof value !== 'string') return { ok: false, reason: 'This field takes text' };
+      const trimmed = value.trim();
+      if (trimmed.length === 0) return { ok: true, value: null };
+      if (trimmed.length > MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH) {
+        return {
+          ok: false,
+          reason: `Text is longer than ${MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH} characters`,
+        };
+      }
+      return { ok: true, value: trimmed };
+    }
+    case 'url': {
+      if (typeof value !== 'string') return { ok: false, reason: 'This field takes a link' };
+      const trimmed = value.trim();
+      if (trimmed.length === 0) return { ok: true, value: null };
+      if (trimmed.length > MAX_CUSTOM_FIELD_URL_LENGTH || !URL_PATTERN.test(trimmed)) {
+        return { ok: false, reason: `"${value}" is not an http(s) link` };
+      }
+      return { ok: true, value: trimmed };
+    }
     default:
       // The row's type column is cast, not parsed, on the way out of the DB.
       return { ok: false, reason: 'Unknown field type' };
   }
+}
+
+/** The top of a rating field's scale. */
+export function ratingMax(field: Pick<CustomField, 'options'>): number {
+  const options = field.options;
+  return !Array.isArray(options) && typeof options.max === 'number'
+    ? options.max
+    : DEFAULT_RATING_MAX;
 }
 
 /** Cleared, in every shape a stored value could take. */
@@ -120,6 +206,34 @@ export function isEmptyFieldValue(value: unknown): boolean {
   if (typeof value === 'string') return value.trim().length === 0;
   if (Array.isArray(value)) return value.length === 0;
   return false;
+}
+
+// A stored scalar as the string a filter carries it as: 12 → "12", true → "true".
+function filterLiteral(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
+}
+
+/**
+ * Filters may name the viewer as CURRENT_USER_FILTER_TOKEN ("Assigned to me"), so
+ * one saved collection means a different person for everyone who opens it. The
+ * token is replaced with the viewer's id before any value is compared.
+ */
+export function resolveViewerToken(
+  filters: readonly CustomFieldFilter[],
+  viewerId: string,
+): CustomFieldFilter[] {
+  return filters.map((filter) =>
+    filter.values.includes(CURRENT_USER_FILTER_TOKEN)
+      ? {
+          ...filter,
+          values: filter.values.map((value) =>
+            value === CURRENT_USER_FILTER_TOKEN ? viewerId : value,
+          ),
+        }
+      : filter,
+  );
 }
 
 /**
@@ -133,15 +247,19 @@ export function matchesFieldFilter(value: unknown, filter: CustomFieldFilter): b
       return isEmptyFieldValue(value);
     case 'any_of': {
       if (filter.values.length === 0) return false;
-      // One predicate for both select types: a single_select holds one id, a
-      // multi_select holds many, and "any of" is overlap either way.
+      // One predicate for every choice type: a single_select/status/user/rating
+      // holds one value, a multi_select holds many, and "any of" is overlap
+      // either way. Filter values travel as strings, so a rating 4 matches "4".
       const held = Array.isArray(value) ? value : [value];
-      return held.some((entry) => typeof entry === 'string' && filter.values.includes(entry));
+      return held.some((entry) => {
+        const literal = filterLiteral(entry);
+        return literal !== null && filter.values.includes(literal);
+      });
     }
     case 'is': {
       const wanted = filter.values[0];
       if (wanted === undefined) return false;
-      return typeof value === 'string' && value === wanted;
+      return filterLiteral(value) === wanted;
     }
     default:
       return false;
@@ -268,4 +386,23 @@ export async function setAssetFieldValue(
   const parsed = assetFieldValueResponseSchema.safeParse(await response.json());
   if (!parsed.success) throw new Error('Field value response was malformed');
   return parsed.data.value;
+}
+
+const fieldValuesByAssetSchema = z
+  .object({ values: z.array(z.object({ assetId: z.string(), value: customFieldValueSchema })) })
+  .strict();
+
+/** Every asset's stored value for one field — the board's lane map in one read. */
+export async function listFieldValuesByAsset(params: {
+  brandId: string;
+  fieldId: string;
+}): Promise<Map<string, CustomFieldValue>> {
+  const query = new URLSearchParams(params);
+  const response = await fetch(`/api/library/asset-fields?${query.toString()}`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Loading field values failed'));
+  }
+  const parsed = fieldValuesByAssetSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error('Field values response was malformed');
+  return new Map(parsed.data.values.map((entry) => [entry.assetId, entry.value]));
 }

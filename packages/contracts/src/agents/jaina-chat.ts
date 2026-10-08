@@ -88,13 +88,17 @@ export const jainaChatContextSchema = z
     documentScopeKey: z.string().min(1).max(200).optional(),
   })
   .superRefine((value, ctx) => {
+    // TikTok is a paid platform Jaina has no data for yet: the Backend states it to the model
+    // rather than reading it, which is only possible if the pick reaches the Backend at all.
     if (
-      value.dataScope?.accounts.some(({ platform }) => !['meta', 'google_ads'].includes(platform))
+      value.dataScope?.accounts.some(
+        ({ platform }) => !['meta', 'google_ads', 'tiktok'].includes(platform),
+      )
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['dataScope', 'accounts'],
-        message: 'Jaina dataScope accepts only paid account platforms: meta and google_ads',
+        message: 'Jaina dataScope accepts only paid account platforms: meta, google_ads and tiktok',
       });
     }
     if (!value.adAccountIds) return;
@@ -123,38 +127,159 @@ export const jainaPlanActionSchema = z.object({
 });
 export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
 
-export const jainaChatRequestSchema = z.object({
-  query: z.string().min(1, 'query is required'),
-  userId: z.string().optional(),
-  include_thoughts: z.boolean().optional(),
-  force_report_artifact: z.boolean().optional(),
-  canvas: z.boolean().optional(),
-  clarification: z.object({ id: z.string().min(1) }).optional(),
-  plan_action: jainaPlanActionSchema.optional(),
-  /**
-   * A human's answer to a paid-scaffold approval gate. Sibling of `plan_action`,
-   * deliberately on this endpoint rather than a fifth one — the decision resumes the same
-   * conversation and must reach the same orchestrator.
-   */
-  scaffold_action: jainaScaffoldActionSchema.optional(),
-  /**
-   * A human's answer to any OTHER approval gate (audience publish, pipeline runs, the
-   * optimizer's approve / budget-apply / pause acts). Sibling of `scaffold_action`, same
-   * security posture: no token, no hash, no signature travels — the gate row is re-read
-   * server-side by `approval_id`.
-   */
-  tool_action: jainaToolActionSchema.optional(),
-  message_metadata: agentMentionMetadataSchema.optional(),
-  /**
-   * Origin metadata when this turn was initiated from the chat layer (Slack/Teams/WhatsApp).
-   * Stashed on JainaRunContext so tools that enqueue downstream artifacts can attach the
-   * origin and the chat deliverer can post results back into the originating thread.
-   */
-  chatOrigin: jainaChatOriginSchema.optional(),
-  /** Present when this turn was initiated by another agent (cross-agent call). */
-  provenance: crossAgentProvenanceSchema.optional(),
-  context: jainaChatContextSchema,
+/**
+ * OPERATOR ACTIONS — a button that opens a Jaina approval gate with no model turn.
+ *
+ * The runtime scripts exactly ONE tool call from `{tool, input}`, so the SDK pauses on
+ * the tool's approval exactly as it would for a model's call: the gate row and resume
+ * transcript are persisted and the ordinary `tool.approval_required` frame (with its
+ * before → after `preview`) goes out. Approve / deny is the ordinary `tool_action`
+ * resume, keyed by that frame's `approvalId`. Zero LLM calls open the gate.
+ *
+ * Only these three tools are reachable this way. The input is validated here AND by the
+ * tool's own schema when it executes; nothing a client sends here is an approval.
+ */
+export const JAINA_OPERATOR_ACTION_TOOLS = [
+  'paid_scaffold_deploy',
+  'pause_meta_entity',
+  'activate_meta_entity',
+] as const;
+export const jainaOperatorActionToolSchema = z.enum(JAINA_OPERATOR_ACTION_TOOLS);
+export type JainaOperatorActionTool = z.infer<typeof jainaOperatorActionToolSchema>;
+
+/**
+ * Deploy one scaffold version PAUSED: build + populate + optimizer enrollment, one
+ * approval. The server expands this into the tool's full input (every entity, budget,
+ * audience and creative the preview lists) from the stored version, so what the person
+ * approves is read off the database, never off the client.
+ */
+export const jainaScaffoldDeployOperatorInputSchema = z
+  .object({
+    scaffold_version_id: z.string().uuid(),
+    content_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+export type JainaScaffoldDeployOperatorInput = z.infer<
+  typeof jainaScaffoldDeployOperatorInputSchema
+>;
+
+const metaEntityStatusOperatorInputShape = {
+  /** The Meta campaign / ad set / ad id. */
+  entity_id: z.string().min(1),
+  level: z.enum(['campaign', 'adset', 'ad']),
+  /** The person's reason, recorded on the write. */
+  reason: z.string().trim().min(1).max(500),
+  /** An operator action always writes; a preview is the approval card itself. */
+  dry_run: z.literal(false),
+};
+
+/** Pause one live entity. `expected_status` is the status the row showed the person. */
+export const jainaPauseMetaEntityOperatorInputSchema = z
+  .object({ ...metaEntityStatusOperatorInputShape, expected_status: z.literal('ACTIVE') })
+  .strict();
+export type JainaPauseMetaEntityOperatorInput = z.infer<
+  typeof jainaPauseMetaEntityOperatorInputSchema
+>;
+
+/** Unpause one paused entity — the ONLY way a scaffold-built campaign goes live. */
+export const jainaActivateMetaEntityOperatorInputSchema = z
+  .object({ ...metaEntityStatusOperatorInputShape, expected_status: z.literal('PAUSED') })
+  .strict();
+export type JainaActivateMetaEntityOperatorInput = z.infer<
+  typeof jainaActivateMetaEntityOperatorInputSchema
+>;
+
+export const jainaOperatorActionSchema = z.discriminatedUnion('tool', [
+  z.object({
+    tool: z.literal('paid_scaffold_deploy'),
+    input: jainaScaffoldDeployOperatorInputSchema,
+  }),
+  z.object({
+    tool: z.literal('pause_meta_entity'),
+    input: jainaPauseMetaEntityOperatorInputSchema,
+  }),
+  z.object({
+    tool: z.literal('activate_meta_entity'),
+    input: jainaActivateMetaEntityOperatorInputSchema,
+  }),
+]);
+export type JainaOperatorAction = z.infer<typeof jainaOperatorActionSchema>;
+
+/**
+ * What `pause_meta_entity` / `activate_meta_entity` read back from Meta AFTER a
+ * successful write, carried on their tool result as `read_back`. A row shows this, not
+ * the status it asked for.
+ */
+export const jainaMetaEntityStatusReadBackSchema = z.object({
+  entity_id: z.string(),
+  level: z.enum(['campaign', 'adset', 'ad']),
+  status: z.string(),
+  effective_status: z.string().nullable(),
 });
+export type JainaMetaEntityStatusReadBack = z.infer<typeof jainaMetaEntityStatusReadBackSchema>;
+
+/**
+ * What an `operator_action` may not travel with. The orchestrator answers `scaffold_action`
+ * and `tool_action` BEFORE it dispatches an operator action, and on the operator path
+ * `plan_action` and a `clarification` answer are never read — so each would either steal
+ * the button's turn or be silently dropped.
+ */
+const OPERATOR_ACTION_EXCLUSIVE_WITH = [
+  'scaffold_action',
+  'tool_action',
+  'plan_action',
+  'clarification',
+] as const;
+
+export const jainaChatRequestSchema = z
+  .object({
+    query: z.string().min(1, 'query is required'),
+    userId: z.string().optional(),
+    include_thoughts: z.boolean().optional(),
+    force_report_artifact: z.boolean().optional(),
+    canvas: z.boolean().optional(),
+    clarification: z.object({ id: z.string().min(1) }).optional(),
+    plan_action: jainaPlanActionSchema.optional(),
+    /**
+     * A human's answer to a paid-scaffold approval gate. Sibling of `plan_action`,
+     * deliberately on this endpoint rather than a fifth one — the decision resumes the same
+     * conversation and must reach the same orchestrator.
+     */
+    scaffold_action: jainaScaffoldActionSchema.optional(),
+    /**
+     * A human's answer to any OTHER approval gate (audience publish, pipeline runs, the
+     * optimizer's approve / budget-apply / pause acts). Sibling of `scaffold_action`, same
+     * security posture: no token, no hash, no signature travels — the gate row is re-read
+     * server-side by `approval_id`.
+     */
+    tool_action: jainaToolActionSchema.optional(),
+    /**
+     * Open one approval gate from a button, with no model turn. Sibling of `tool_action`;
+     * mutually exclusive with every field in `OPERATOR_ACTION_EXCLUSIVE_WITH` (enforced
+     * below). The answer to the gate it opens is an ordinary `tool_action`.
+     */
+    operator_action: jainaOperatorActionSchema.optional(),
+    message_metadata: agentMentionMetadataSchema.optional(),
+    /**
+     * Origin metadata when this turn was initiated from the chat layer (Slack/Teams/WhatsApp).
+     * Stashed on JainaRunContext so tools that enqueue downstream artifacts can attach the
+     * origin and the chat deliverer can post results back into the originating thread.
+     */
+    chatOrigin: jainaChatOriginSchema.optional(),
+    /** Present when this turn was initiated by another agent (cross-agent call). */
+    provenance: crossAgentProvenanceSchema.optional(),
+    context: jainaChatContextSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (!value.operator_action) return;
+    const alongside = OPERATOR_ACTION_EXCLUSIVE_WITH.filter((field) => value[field] !== undefined);
+    if (alongside.length === 0) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['operator_action'],
+      message: `operator_action_not_exclusive: operator_action cannot be sent with ${alongside.join(', ')}`,
+    });
+  });
 export type JainaChatRequest = z.infer<typeof jainaChatRequestSchema>;
 
 /**

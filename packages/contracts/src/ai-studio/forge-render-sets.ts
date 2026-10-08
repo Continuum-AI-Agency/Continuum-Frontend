@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import {
+  templateRevisionPinSchema,
+  templateRevisionRefSchema,
+} from '../media/template-revision-pin';
+import {
   type ApiRenderDeliveryTarget,
   apiRenderDeliveryTargetSchema,
   apiRenderEncodeOverrideSchema,
@@ -11,6 +15,7 @@ import {
   type EncodeSettingKey,
   type EncodeSettings,
   flattenEncodeSettings,
+  forgeRowEvidenceMapSchema,
   unflattenEncodeSettings,
 } from './api-renders';
 
@@ -73,6 +78,8 @@ export const forgeRenderSetRowSchema = z
     parentId: z.string().uuid().nullable(),
     label: z.string().trim().min(1).max(200),
     overrides: apiRenderVariableMapSchema.default({}),
+    /** Evidence belongs to this row's own values; edits remove the corresponding entry. */
+    evidence: forgeRowEvidenceMapSchema.optional(),
     clearedKeys: z.array(apiRenderVariableKeySchema).default([]),
     outputIds: z.array(z.string().min(1)).default([]),
     /** Output settings authored on THIS row, keyed by public output id. Children inherit. */
@@ -103,6 +110,7 @@ export const forgeRenderSetSchema = z
     description: descriptionSchema.default(null),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
+    templateRevision: templateRevisionPinSchema.nullable().optional(),
     revision: z.number().int().nonnegative(),
     rows: forgeRenderSetRowsSchema,
     createdAt: z.string(),
@@ -123,6 +131,7 @@ export const createForgeRenderSetRequestSchema = z
     description: descriptionSchema.optional(),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
+    templateRevision: templateRevisionRefSchema.optional(),
     rows: forgeRenderSetRowsSchema,
   })
   .strict();
@@ -164,6 +173,7 @@ export const forgeRenderSetRevisionSchema = z
     revision: z.number().int().nonnegative(),
     name: z.string().min(1),
     contractHash: z.string().min(1),
+    templateRevision: templateRevisionPinSchema.nullable().optional(),
     rows: forgeRenderSetRowsSchema,
     savedAt: z.string(),
   })
@@ -282,7 +292,10 @@ export function crossForgeRenderSetRows(args: {
       parentId: args.parentId ?? null,
       label: args.label
         ? args.label(combination)
-        : combination.map((part) => part.value).join(' · ').slice(0, 200),
+        : combination
+            .map((part) => part.value)
+            .join(' · ')
+            .slice(0, 200),
       overrides: Object.fromEntries(combination.map((part) => [part.key, part.value])),
       clearedKeys: [],
       outputIds: [],

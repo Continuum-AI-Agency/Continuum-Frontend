@@ -14,9 +14,11 @@ import {
   encodeStyleFiles,
   encodeStyleOf,
   flattenEncodeSettings,
+  isMotion,
   mergeEncodeSettings,
   unflattenEncodeSettings,
 } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import { http } from '@/lib/api/http';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
+import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 
 // Output settings — frame rate, files, audio and video quality — for a template's renders.
 //
@@ -161,7 +164,7 @@ export function isStillsOnly(contract: Pick<ApiRenderTemplateContract, 'outputs'
   const named = contract.outputs.filter((output) => output.mediaType != null);
   if (named.length) return named.every((output) => !encodeContainerOf(output.mediaType));
   const motion = contract.template.motion;
-  return motion != null && Math.round(motion.durationSec * motion.frameRate) <= 1;
+  return motion != null && !isMotion(motion.durationSec, motion.frameRate);
 }
 
 export function setEncodeLeaves(
@@ -401,6 +404,7 @@ export function OutputSettingsPanel({
   /** Read off the template row. A key alone is ambiguous — 133 exists in two sub-apps. */
   bindingId: string | null;
 }) {
+  const queryClient = useQueryClient();
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [draft, setDraft] = useState<EncodeBlock>({});
   const [scope, setScope] = useState('all');
@@ -408,7 +412,11 @@ export function OutputSettingsPanel({
 
   const load = useCallback(async () => {
     try {
-      const next = await apiRendersApi.getContract(brandId, templateKey, bindingId);
+      const next = await queryClient.fetchQuery({
+        queryKey: forgeQueryKeys.contract(brandId, bindingId, templateKey),
+        queryFn: () => apiRendersApi.getContract(brandId, templateKey, bindingId),
+        staleTime: FORGE_STALE_MS.contract,
+      });
       setContract(next);
       setDraft(next.encode?.stored ?? {});
     } catch (error) {
@@ -416,7 +424,7 @@ export function OutputSettingsPanel({
       // and a template whose contract cannot be read has none to show.
       console.warn('[OutputSettingsPanel] could not read the template contract', error);
     }
-  }, [brandId, templateKey, bindingId]);
+  }, [brandId, templateKey, bindingId, queryClient]);
 
   useEffect(() => {
     setScope('all');
@@ -450,6 +458,9 @@ export function OutputSettingsPanel({
         path: `/api/ai-studio/templates/${encodeURIComponent(templateKey)}/encode`,
         method: 'PUT',
         body: { brandId, encode: compactEncodeBlock(draft) ?? {} },
+      });
+      await queryClient.invalidateQueries({
+        queryKey: forgeQueryKeys.contract(brandId, bindingId, templateKey),
       });
       await load();
       toast.success('Output settings saved');

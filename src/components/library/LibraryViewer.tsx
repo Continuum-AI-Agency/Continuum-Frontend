@@ -1,7 +1,9 @@
 'use client';
 
 import type {
+  CollectionViewConfig,
   CommentDeepLink,
+  CustomField,
   CustomFieldFilter,
   LibraryAspectRatioBin,
   LibraryBrowseDestination,
@@ -12,6 +14,8 @@ import type {
   LibraryPreviewFrame,
   LibrarySavedView,
   LibrarySort,
+  LibrarySortKey,
+  LibrarySortSpec,
   MediaAsset,
   MediaCollection,
   MediaSearchResultItem,
@@ -21,16 +25,43 @@ import {
   classifyLibraryFile,
   LIBRARY_ACCEPT_ATTRIBUTE,
   libraryAspectRatioBin,
+  MAX_LIBRARY_THEN_BY,
   templateFamilyForLibraryFormat,
 } from '@continuum/contracts';
-import { Columns3, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
+import {
+  ChevronDown,
+  Columns3,
+  FolderUp,
+  GalleryHorizontalEnd,
+  LayoutGrid,
+  List,
+  ScanSearch,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
+import {
+  DesignTemplateImports,
+  useDesignTemplateImports,
+} from '@/components/forge/DesignTemplateImports';
+import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
 import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -38,8 +69,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast-imperative';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { librarySearchPath } from '@/lib/library/libraryHref';
+import {
+  createLibraryCollectionOperation,
+  mutateCollectionMembershipOperation,
+} from '@/lib/library/creativeOperations';
+import {
+  createFolderCollections,
+  type FolderFile,
+  folderFilesFromDrop,
+  folderFilesFromInput,
+  folderPaths,
+} from '@/lib/library/folderUpload';
+import { librarySearchPath, withReviewStates } from '@/lib/library/libraryHref';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
@@ -47,15 +90,18 @@ import {
   type KindFilterValue,
   kindToMediaType,
   LIBRARY_SORT_OPTIONS,
+  LIBRARY_THEN_BY_KEYS,
   type LibraryTagOption,
+  librarySortLabel,
   mediaTypeToKind,
   type SourceFilterValue,
+  type StructuredLibraryFilters,
 } from '@/lib/media/filters';
 import type { LibrarySection } from '@/lib/media/sections';
 import { useProjects } from '@/lib/projects';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
-import { AssetDetailModal } from './detail/AssetDetailModal';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
@@ -73,11 +119,34 @@ import { PlacementBar } from './PlacementBar';
 import { RatioShelves } from './RatioShelves';
 import { TemplateGrid } from './TemplateGrid';
 import { TypographyPanel } from './TypographyPanel';
+import { TrashView } from './trash/TrashView';
 import { UploadStrip } from './UploadStrip';
 import { useMediaLibrary } from './useMediaLibrary';
 import { useMediaUpload } from './useMediaUpload';
+import { useCollectionAssetDrop } from './views/assetDrag';
+import { CardOptionsMenu } from './views/CardOptionsMenu';
+import { chosenCustomFieldIds } from './views/cardOptions';
+import { LibraryBreadcrumbs } from './views/LibraryBreadcrumbs';
+import { ListView } from './views/ListView';
+import { ReelView } from './views/ReelView';
+import { stackDroppedAssets } from './views/stackDrop';
+import { useAssetFieldValues } from './views/useAssetFieldValues';
+import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
 
-const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip';
+// The detail stage (zoom, players, waveforms) loads when an asset is opened, not with the grid.
+const AssetDetailModal = dynamic(
+  () => import('./detail/AssetDetailModal').then((module) => module.AssetDetailModal),
+  { ssr: false, loading: () => null },
+);
+
+const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip,.psd,.ai';
+
+const LAYOUT_TABS = [
+  { id: 'grid', label: 'Grid', Icon: LayoutGrid },
+  { id: 'list', label: 'List', Icon: List },
+  { id: 'board', label: 'Board', Icon: Columns3 },
+  { id: 'reel', label: 'Reel', Icon: GalleryHorizontalEnd },
+] as const;
 
 type Props = {
   brandId: string;
@@ -88,10 +157,12 @@ type Props = {
   initialBrowseQuery: LibraryBrowseQuery;
   initialCollections: MediaCollection[];
   initialSavedViews: LibrarySavedView[];
-  storageUsedBytes: number;
   captionStyle: CaptionStyle;
   section: LibrarySection;
   initialDeepLink?: CommentDeepLink;
+  /** The user's saved layout + card options (media.library_view_preferences). */
+  initialViewConfig?: CollectionViewConfig;
+  initialTrashOpen?: boolean;
 };
 
 export function LibraryViewer({
@@ -103,10 +174,11 @@ export function LibraryViewer({
   initialBrowseQuery,
   initialCollections,
   initialSavedViews,
-  storageUsedBytes,
   captionStyle,
   section,
   initialDeepLink,
+  initialViewConfig = {},
+  initialTrashOpen = false,
 }: Props) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -147,18 +219,49 @@ export function LibraryViewer({
   const [optimisticReviewStatuses, setOptimisticReviewStatuses] = useOptimistic(
     initialBrowseQuery.reviewStatuses,
   );
+  const committedStructured = useMemo<StructuredLibraryFilters>(
+    () => ({
+      families: initialBrowseQuery.families,
+      ranges: initialBrowseQuery.ranges,
+      technical: initialBrowseQuery.technical,
+      fieldRanges: initialBrowseQuery.fieldRanges,
+    }),
+    [initialBrowseQuery],
+  );
+  const [optimisticStructured, setOptimisticStructured] = useOptimistic(committedStructured);
+  const [optimisticThenBy, setOptimisticThenBy] = useOptimistic(initialBrowseQuery.thenBy);
   // Custom-field filters stay in client state rather than the URL: the RSC seed
   // cannot pre-filter on them (the values live in their own table), so a URL
   // round-trip would buy nothing but an unreadable query string.
   const { fields: customFields } = useCustomFields(brandId);
   const [fieldFilters, setFieldFilters] = useState<CustomFieldFilter[]>([]);
+  // The brand's custom review states (review_state_id). Client state like the field filters —
+  // the browse read model cannot filter on them — mirrored into ?reviewStates= so a link keeps
+  // the view.
+  const [reviewStateIds, setReviewStateIdsState] = useState<string[]>(() =>
+    typeof window === 'undefined'
+      ? []
+      : (new URLSearchParams(window.location.search).get('reviewStates') ?? '')
+          .split(',')
+          .filter(Boolean),
+  );
+  // The URL the filters were last navigated to, while that navigation is still pending: the
+  // custom-state setter and the filter push each build on it, so neither drops the other.
+  const pendingPathRef = useRef<string | null>(null);
+  const reviewStateIdsRef = useRef(reviewStateIds);
+  useEffect(() => {
+    pendingPathRef.current = null;
+  }, [initialBrowseQuery]);
   const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
     query: initialBrowseQuery,
     fieldFilters,
+    reviewStateIds,
     seed: initialAssets,
     initialNextCursor,
   });
   const [tagOptions, setTagOptions] = useState<LibraryTagOption[]>([]);
+  const [familyCounts, setFamilyCounts] = useState<Record<string, number>>({});
+  const [reviewStateCounts, setReviewStateCounts] = useState<Record<string, number>>({});
   const [tagRevision, setTagRevision] = useState(0);
   const facetQueryKey = buildLibraryBrowseParams(initialBrowseQuery, {
     includeBrandId: true,
@@ -166,11 +269,15 @@ export function LibraryViewer({
   }).toString();
   useEffect(() => {
     let cancelled = false;
+    const countsByValue = (facets: LibraryBrowseFacets['families'] = []) =>
+      Object.fromEntries(facets.map(({ value, count }) => [value, count]));
     fetch(`/api/library/facets?${facetQueryKey}`)
       .then((response) => (response.ok ? response.json() : { tags: [] }))
-      .then((data: Pick<LibraryBrowseFacets, 'tags'>) => {
+      .then((data: Pick<LibraryBrowseFacets, 'tags'> & Partial<LibraryBrowseFacets>) => {
         if (!cancelled) {
           setTagOptions(data.tags.map(({ value, count }) => ({ tag: value, count })));
+          setFamilyCounts(countsByValue(data.families));
+          setReviewStateCounts(countsByValue(data.reviewStates));
         }
       })
       .catch((err: unknown) => {
@@ -181,6 +288,15 @@ export function LibraryViewer({
     };
   }, [facetQueryKey, tagRevision]);
 
+  const {
+    card: cardOptions,
+    setLayout: saveLayout,
+    setCard,
+  } = useLibraryViewPreferences(brandId, initialViewConfig);
+  const chosenFields = chosenCustomFieldIds(cardOptions)
+    .map((id) => customFields?.find((field) => field.id === id))
+    .filter((field): field is CustomField => !!field);
+  const [trashOpen, setTrashOpen] = useState(initialTrashOpen);
   const [view, setView] = useState<'media' | 'inspiration'>('media');
   const [detailAsset, setDetailAsset] = useState<MediaAsset | null>(initialDetailAsset);
   const [deepLink, setDeepLink] = useState<CommentDeepLink>(
@@ -198,6 +314,9 @@ export function LibraryViewer({
   const [fontReviewFiles, setFontReviewFiles] = useState<File[]>([]);
   const [fontRevision, setFontRevision] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  // Files from a folder upload → the collection made for the folder each one sat in.
+  const folderTargets = useRef(new Map<File, string>());
   const dragDepth = useRef(0);
 
   const isSearching = searchResults !== null;
@@ -218,6 +337,12 @@ export function LibraryViewer({
       return bin != null && allowed.has(bin);
     });
   })();
+  const fieldValues = useAssetFieldValues(
+    brandId,
+    displayedAssets.map((asset) => asset.id),
+    chosenFields.length > 0 && (optimisticLayout === 'grid' || optimisticLayout === 'list'),
+    assetRevision,
+  );
   const activeCollection = selectedCollectionId
     ? initialCollections.find((c) => c.id === selectedCollectionId)
     : null;
@@ -237,6 +362,14 @@ export function LibraryViewer({
     (optimisticMediaType === 'carousel'
       ? 'Carousels'
       : KIND_FILTERS.find((option) => option.value === optimisticKind)?.label);
+
+  // A List column header can order by any key in either direction; the select still names it.
+  const sortOptions = LIBRARY_SORT_OPTIONS.filter(
+    (option) => option.value !== 'manual' || selectedCollectionId,
+  );
+  if (!sortOptions.some((option) => option.value === optimisticSort)) {
+    sortOptions.push({ value: optimisticSort, label: librarySortLabel(optimisticSort) });
+  }
 
   const showTemplates = initialBrowseQuery.templateOnly;
   const showTypography = section === 'typography';
@@ -297,8 +430,12 @@ export function LibraryViewer({
       fonts?: string[];
       performanceWindow?: LibraryBrowseQuery['performanceWindow'];
       boardGroupBy?: string;
+      // Replaces all four at once: a key absent here means cleared, not unchanged.
+      structured?: StructuredLibraryFilters;
+      thenBy?: LibrarySortSpec[];
     }) => {
       setSearchResults(null);
+      setTrashOpen(false);
       const nextSource = next.createdWith
         ? (next.createdWith[0] ?? 'all')
         : (next.source ?? optimisticSource);
@@ -318,6 +455,9 @@ export function LibraryViewer({
       const nextTags = next.tags ?? optimisticTags;
       const nextProjectIds = next.projectIds ?? optimisticProjectIds;
       const nextSort = next.sort ?? optimisticSort;
+      const nextThenBy = next.thenBy ?? optimisticThenBy;
+      const nextStructured = next.structured ?? optimisticStructured;
+      const nextFamilies = nextStructured.families ?? [];
       const nextLayout = next.layout ?? optimisticLayout;
       const nextCollectionId =
         next.collectionId !== undefined ? next.collectionId : selectedCollectionId;
@@ -337,7 +477,12 @@ export function LibraryViewer({
         ratios: next.ratios ?? initialBrowseQuery.ratios,
         fonts: next.fonts ?? initialBrowseQuery.fonts,
         performanceWindow: next.performanceWindow ?? initialBrowseQuery.performanceWindow,
+        families: [...nextFamilies],
+        ranges: nextStructured.ranges,
+        technical: nextStructured.technical,
+        fieldRanges: [...(nextStructured.fieldRanges ?? [])],
         sort: nextSort,
+        thenBy: [...nextThenBy],
         layout: nextLayout,
         boardGroupBy: next.boardGroupBy ?? initialBrowseQuery.boardGroupBy,
         destination: next.destination ?? initialBrowseQuery.destination,
@@ -351,6 +496,10 @@ export function LibraryViewer({
         cursor: null,
       };
       if (nextQuery.sort === 'manual' && !nextCollectionId) nextQuery.sort = 'created_desc';
+      // Home is recent images and videos only, so a Format choice there would read as empty.
+      if (nextFamilies.length > 0 && nextQuery.destination === 'home') {
+        nextQuery.destination = 'everything';
+      }
       startFilterTransition(() => {
         setOptimisticSource(nextSource);
         setOptimisticCreatedWith(nextCreatedWith);
@@ -359,14 +508,19 @@ export function LibraryViewer({
         setOptimisticTags(nextTags);
         setOptimisticProjectIds(nextProjectIds);
         setOptimisticSort(nextSort);
+        setOptimisticThenBy(nextThenBy);
+        setOptimisticStructured(nextStructured);
         setOptimisticLayout(nextLayout);
         setOptimisticReviewStatuses(nextQuery.reviewStatuses);
-        router.push(
+        const path = withReviewStates(
           librarySearchPath(nextQuery, {
             assetId: detailAsset?.id,
             deepLink: detailAsset ? deepLink : null,
           }),
+          reviewStateIdsRef.current,
         );
+        pendingPathRef.current = path;
+        router.push(path);
       });
     },
     [
@@ -381,6 +535,8 @@ export function LibraryViewer({
       optimisticTags,
       optimisticProjectIds,
       optimisticSort,
+      optimisticThenBy,
+      optimisticStructured,
       optimisticLayout,
       initialBrowseQuery,
       setOptimisticSource,
@@ -390,6 +546,8 @@ export function LibraryViewer({
       setOptimisticTags,
       setOptimisticProjectIds,
       setOptimisticSort,
+      setOptimisticThenBy,
+      setOptimisticStructured,
       setOptimisticLayout,
       setOptimisticReviewStatuses,
     ],
@@ -413,10 +571,13 @@ export function LibraryViewer({
       setDetailAsset(asset);
       setDeepLink(link ?? { commentId: null, timeMs: null, endMs: null });
       router.replace(
-        librarySearchPath(initialBrowseQuery, {
-          assetId: asset.id,
-          deepLink: link,
-        }),
+        withReviewStates(
+          librarySearchPath(initialBrowseQuery, {
+            assetId: asset.id,
+            deepLink: link,
+          }),
+          reviewStateIdsRef.current,
+        ),
         { scroll: false },
       );
     },
@@ -426,15 +587,122 @@ export function LibraryViewer({
   const closeDetail = useCallback(() => {
     setDetailAsset(null);
     setDeepLink({ commentId: null, timeMs: null, endMs: null });
-    router.replace(librarySearchPath(initialBrowseQuery), { scroll: false });
+    router.replace(
+      withReviewStates(librarySearchPath(initialBrowseQuery), reviewStateIdsRef.current),
+      { scroll: false },
+    );
   }, [initialBrowseQuery, router]);
+
+  // The grid re-seeds from the RSC; the board holds its own fetch, so it also needs
+  // an explicit revision bump to re-read.
+  const refreshAssets = useCallback(() => {
+    setAssetRevision((revision) => revision + 1);
+    router.refresh();
+  }, [router]);
+
+  const toggleSelected = useCallback(
+    (asset: MediaAsset) =>
+      setSelectedAssetIds((current) => {
+        const next = new Set(current);
+        if (next.has(asset.id)) next.delete(asset.id);
+        else next.add(asset.id);
+        return next;
+      }),
+    [],
+  );
+
+  // The preference is written BEFORE navigating: a URL without `layout` (grid) makes
+  // the page read the saved one, and it must not read the previous choice.
+  const onLayoutChange = useCallback(
+    (layout: LibraryLayout) => {
+      void saveLayout(layout).then(() => pushFilters({ layout }));
+    },
+    [pushFilters, saveLayout],
+  );
+
+  const onStackDrop = useCallback(
+    (target: MediaAsset, sourceAssetIds: string[]) => {
+      void stackDroppedAssets(brandId, target, sourceAssetIds).then((stacked) => {
+        if (!stacked) return;
+        setSelectedAssetIds((current) => {
+          const next = new Set(current);
+          for (const id of sourceAssetIds) next.delete(id);
+          return next;
+        });
+        refreshAssets();
+      });
+    },
+    [brandId, refreshAssets],
+  );
+
+  const collectionDrop = useCollectionAssetDrop({
+    brandId,
+    sourceCollectionId: selectedCollectionId,
+    collectionName: (id) => initialCollections.find((collection) => collection.id === id)?.name,
+    onDropped: refreshAssets,
+  });
+
+  const setReviewStateIds = useCallback(
+    (ids: string[]) => {
+      // Like the field filters: narrowing the listing leaves search mode.
+      setSearchResults(null);
+      setReviewStateIdsState(ids);
+      reviewStateIdsRef.current = ids;
+      const path = withReviewStates(
+        pendingPathRef.current ?? `${window.location.pathname}${window.location.search}`,
+        ids,
+      );
+      if (pendingPathRef.current) {
+        // A filter navigation is in flight: supersede it through the router with the URL that
+        // carries both, so the page data (and the grid's refetch) follows. An out-of-band
+        // history write here left the pending navigation stranded — the grid kept the query
+        // without the base status and never refetched.
+        pendingPathRef.current = path;
+        startFilterTransition(() => router.replace(path, { scroll: false }));
+        return;
+      }
+      window.history.replaceState(null, '', path);
+    },
+    [router],
+  );
+
+  const setTrashUrl = useCallback(
+    (open: boolean) => {
+      window.history.replaceState(
+        null,
+        '',
+        open
+          ? '/library?view=trash'
+          : withReviewStates(librarySearchPath(initialBrowseQuery), reviewStateIdsRef.current),
+      );
+    },
+    [initialBrowseQuery],
+  );
+
+  // Card presentation + stacking for every grid, including the ratio shelves, which
+  // forward their props to MediaGrid.
+  const gridCardProps = {
+    card: cardOptions,
+    cardFields: chosenFields,
+    fieldValues,
+    onStackDrop,
+  };
+
+  const detailIndex = detailAsset
+    ? displayedAssets.findIndex((asset) => asset.id === detailAsset.id)
+    : -1;
+  const previousAsset = detailIndex > 0 ? displayedAssets[detailIndex - 1] : undefined;
+  const nextAsset = detailIndex >= 0 ? displayedAssets[detailIndex + 1] : undefined;
 
   const onDeepLinkChange = useCallback(
     (link: CommentDeepLink) => {
       setDeepLink(link);
       if (!detailAsset) return;
       router.replace(
-        librarySearchPath(initialBrowseQuery, { assetId: detailAsset.id, deepLink: link }),
+        withReviewStates(
+          librarySearchPath(initialBrowseQuery, { assetId: detailAsset.id, deepLink: link }),
+          reviewStateIdsRef.current,
+        ),
         { scroll: false },
       );
     },
@@ -525,8 +793,28 @@ export function LibraryViewer({
     [pushFilters, router],
   );
 
+  const { imports: designImports, start: importDesign } = useDesignTemplateImports(brandId, () => {
+    setAssetRevision((revision) => revision + 1);
+    router.refresh();
+  });
+
+  // A Photoshop/Illustrator file dropped on Templates becomes one (anywhere else it is just a file).
+  const templateDesigns = useRef(new Set<File>());
   const onUploaded = useCallback(
-    ({ file }: { file: File }) => {
+    ({ file, uploaded }: { file: File; uploaded: { assetId: string } }) => {
+      if (templateDesigns.current.delete(file)) void importDesign(file.name, uploaded.assetId);
+      const collectionId = folderTargets.current.get(file);
+      if (collectionId) {
+        folderTargets.current.delete(file);
+        void mutateCollectionMembershipOperation(createSupabaseBrowserClient(), {
+          brandId,
+          collectionId,
+          assetIds: [uploaded.assetId],
+          mode: 'add',
+        })
+          .then(() => router.refresh())
+          .catch(() => toast.error(`${file.name} uploaded, but could not be filed in its folder`));
+      }
       setAssetRevision((revision) => revision + 1);
       router.refresh();
       const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
@@ -534,9 +822,9 @@ export function LibraryViewer({
         onSelectDestination('templates');
       }
     },
-    [onSelectDestination, router],
+    [brandId, importDesign, onSelectDestination, router],
   );
-  const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload } =
+  const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload, moveUpload } =
     useMediaUpload(brandId, { onUploaded });
 
   const onSelectSavedView = useCallback(
@@ -552,12 +840,50 @@ export function LibraryViewer({
   );
 
   const routeUploadFiles = useCallback(
-    (fileList: FileList | File[]) => {
-      const { fonts, media } = partitionLibraryUploadFiles(fileList);
+    async (fileList: FileList | File[]) => {
+      let files = Array.from(fileList);
+      if (showTemplates) {
+        try {
+          const { expandDesignArchives } = await import('@/components/forge/designArchive');
+          files = await expandDesignArchives(files);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Could not open the ZIP');
+          return;
+        }
+      }
+      const { fonts, media } = partitionLibraryUploadFiles(files);
       if (fonts.length > 0) setFontReviewFiles(fonts);
+      if (showTemplates) {
+        for (const file of media)
+          if (isForgeDesignFile(file.name)) templateDesigns.current.add(file);
+      }
       if (media.length > 0) void uploadFiles(media);
     },
-    [uploadFiles],
+    [showTemplates, uploadFiles],
+  );
+
+  const routeFolderFiles = useCallback(
+    async (entries: FolderFile[]) => {
+      try {
+        const ids = await createFolderCollections(folderPaths(entries), ({ name, parentId }) =>
+          createLibraryCollectionOperation(createSupabaseBrowserClient(), {
+            brandId,
+            name,
+            kind: 'manual',
+            parentId,
+          }),
+        );
+        for (const { file, folders } of entries) {
+          const collectionId = ids.get(folders.join('/'));
+          if (collectionId) folderTargets.current.set(file, collectionId);
+        }
+        router.refresh();
+      } catch {
+        toast.error('Could not recreate the folders as collections; uploading the files anyway');
+      }
+      routeUploadFiles(entries.map((entry) => entry.file));
+    },
+    [brandId, routeUploadFiles, router],
   );
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -577,7 +903,11 @@ export function LibraryViewer({
     e.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    routeUploadFiles(e.dataTransfer.files);
+    const { files, items } = e.dataTransfer;
+    // Started synchronously: the dropped entries are gone once this handler returns.
+    void folderFilesFromDrop(items).then((entries) =>
+      entries ? routeFolderFiles(entries) : routeUploadFiles(files),
+    );
   };
 
   return (
@@ -609,22 +939,31 @@ export function LibraryViewer({
         <CompetitorInspirationPanel brandId={brandId} />
       ) : (
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <LibrarySidebar
-            brandId={brandId}
-            collections={initialCollections}
-            savedViews={initialSavedViews}
-            currentQuery={initialBrowseQuery}
-            onSelectSavedView={onSelectSavedView}
-            selectedCollectionId={selectedCollectionId}
-            onSelectCollection={onSelectCollection}
-            selectedMediaType={optimisticMediaType}
-            selectedSort={optimisticSort}
-            selectedReviewStatuses={optimisticReviewStatuses}
-            selectedTemplateOnly={showTemplates}
-            section={section}
-            onSelectDestination={onSelectDestination}
-            storageUsedBytes={storageUsedBytes}
-          />
+          {/* Delegated drop target: any sidebar row carrying data-collection-id
+              accepts dragged assets (useCollectionAssetDrop finds the row). */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: drop delegation only; the sidebar rows stay the interactive controls */}
+          <div
+            className="flex min-h-0"
+            onDragOver={collectionDrop.onDragOver}
+            onDragLeave={collectionDrop.onDragLeave}
+            onDrop={collectionDrop.onDrop}
+          >
+            <LibrarySidebar
+              brandId={brandId}
+              collections={initialCollections}
+              savedViews={initialSavedViews}
+              currentQuery={initialBrowseQuery}
+              onSelectSavedView={onSelectSavedView}
+              selectedCollectionId={selectedCollectionId}
+              onSelectCollection={onSelectCollection}
+              selectedMediaType={optimisticMediaType}
+              selectedSort={optimisticSort}
+              selectedReviewStatuses={optimisticReviewStatuses}
+              selectedTemplateOnly={showTemplates}
+              section={section}
+              onSelectDestination={onSelectDestination}
+            />
+          </div>
 
           {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
           <div
@@ -660,6 +999,9 @@ export function LibraryViewer({
                         kind={selectedKind}
                         collectionId={selectedCollectionId}
                         tags={selectedTags}
+                        reviewStateIds={reviewStateIds}
+                        reviewStatuses={optimisticReviewStatuses}
+                        customFields={customFields ?? []}
                         onResults={setSearchResults}
                         onClear={() => setSearchResults(null)}
                       />
@@ -698,6 +1040,32 @@ export function LibraryViewer({
                       </Button>
                       <Button
                         type="button"
+                        variant={trashOpen ? 'secondary' : 'outline'}
+                        size="sm"
+                        data-testid="library-trash-open"
+                        aria-pressed={trashOpen}
+                        onClick={() => {
+                          setTrashOpen(!trashOpen);
+                          setTrashUrl(!trashOpen);
+                        }}
+                        title="Recently deleted assets"
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="hidden sm:inline">Trash</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        data-testid="library-upload-folder"
+                        onClick={() => folderInputRef.current?.click()}
+                        title="Upload a folder: its subfolders become nested collections"
+                      >
+                        <FolderUp className="size-4" />
+                        <span className="hidden sm:inline">Folder</span>
+                      </Button>
+                      <Button
+                        type="button"
                         size="sm"
                         onClick={() => fileInputRef.current?.click()}
                         className="active:scale-[0.96] [transition-property:scale]"
@@ -714,7 +1082,8 @@ export function LibraryViewer({
             <div
               className={cn(
                 'flex items-center justify-between gap-3',
-                (showTemplates || showTypography || showPipelines || showElements) && 'hidden',
+                (showTemplates || showTypography || showPipelines || showElements || trashOpen) &&
+                  'hidden',
               )}
             >
               <LibraryFilterBar
@@ -730,6 +1099,9 @@ export function LibraryViewer({
                 onPlacementsChange={(values) => pushFilters({ placements: values })}
                 reviewStatuses={optimisticReviewStatuses}
                 onReviewStatusesChange={(values) => pushFilters({ reviewStatuses: values })}
+                brandId={brandId}
+                reviewStateIds={reviewStateIds}
+                onReviewStateIdsChange={setReviewStateIds}
                 used={initialBrowseQuery.used}
                 onUsedChange={(value) => pushFilters({ used: value })}
                 shared={initialBrowseQuery.shared}
@@ -752,6 +1124,10 @@ export function LibraryViewer({
                   setSearchResults(null);
                   setFieldFilters(next);
                 }}
+                structuredFilters={optimisticStructured}
+                onStructuredFiltersChange={(structured) => pushFilters({ structured })}
+                familyCounts={familyCounts}
+                reviewStateCounts={reviewStateCounts}
               />
               {view === 'media' &&
               !showTemplates &&
@@ -790,18 +1166,24 @@ export function LibraryViewer({
                   onValueChange={(value: LibrarySort) => pushFilters({ sort: value })}
                 >
                   <SelectTrigger size="sm" aria-label="Sort library" className="h-8">
-                    <SelectValue />
+                    <SelectValue
+                      items={Object.fromEntries(
+                        sortOptions.map((option) => [option.value, option.label]),
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectContent align="end">
-                    {LIBRARY_SORT_OPTIONS.filter(
-                      (option) => option.value !== 'manual' || selectedCollectionId,
-                    ).map((option) => (
+                    {sortOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <ThenBySortControl
+                  value={optimisticThenBy}
+                  onChange={(thenBy) => pushFilters({ thenBy })}
+                />
                 {optimisticSort === 'best_performing' ? (
                   <Select
                     value={initialBrowseQuery.performanceWindow}
@@ -819,23 +1201,27 @@ export function LibraryViewer({
                     </SelectContent>
                   </Select>
                 ) : null}
+                {optimisticLayout === 'grid' || optimisticLayout === 'list' ? (
+                  <CardOptionsMenu
+                    card={cardOptions}
+                    customFields={customFields ?? []}
+                    onChange={setCard}
+                    showSizeAndAspect={optimisticLayout === 'grid'}
+                  />
+                ) : null}
                 <div
                   className="flex items-center gap-1 rounded-lg border border-border p-0.5"
                   role="tablist"
                   aria-label="Library layout"
                 >
-                  {(
-                    [
-                      { id: 'grid', label: 'Grid', Icon: LayoutGrid },
-                      { id: 'board', label: 'Board', Icon: Columns3 },
-                    ] as const
-                  ).map(({ id, label, Icon }) => (
+                  {LAYOUT_TABS.map(({ id, label, Icon }) => (
                     <button
                       key={id}
                       type="button"
                       role="tab"
+                      data-testid={`library-layout-${id}`}
                       aria-selected={optimisticLayout === id}
-                      onClick={() => pushFilters({ layout: id })}
+                      onClick={() => onLayoutChange(id)}
                       className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
                         optimisticLayout === id
                           ? 'bg-secondary text-foreground'
@@ -861,6 +1247,20 @@ export function LibraryViewer({
                 e.target.value = '';
               }}
             />
+            <input
+              ref={folderInputRef}
+              type="file"
+              data-testid="library-folder-input"
+              // Not in React's typings; it makes the picker choose a folder and gives every
+              // file its webkitRelativePath.
+              {...{ webkitdirectory: '' }}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void routeFolderFiles(folderFilesFromInput(e.target.files));
+                e.target.value = '';
+              }}
+            />
 
             <McpUploadIntentPanel brandId={brandId} />
 
@@ -872,9 +1272,16 @@ export function LibraryViewer({
                   onResume={resumeUpload}
                   onRetry={retryUpload}
                   onCancel={cancelUpload}
+                  onMove={moveUpload}
                 />
               )}
             </AnimatePresence>
+            <DesignTemplateImports
+              imports={designImports}
+              onRetry={importDesign}
+              sourceIds={templateSources.map((source) => source.assetId)}
+              onOpen={(assetId) => router.push(`/forge?template=${encodeURIComponent(assetId)}`)}
+            />
 
             {selectedAssetIds.size > 0 ? (
               <LibraryBulkToolbar
@@ -901,11 +1308,29 @@ export function LibraryViewer({
 
             {view === 'media' ? <LibraryRenderQueue /> : null}
 
+            {selectedCollectionId && !trashOpen ? (
+              <LibraryBreadcrumbs
+                collections={initialCollections}
+                collectionId={selectedCollectionId}
+                onSelectCollection={onSelectCollection}
+                drop={collectionDrop}
+              />
+            ) : null}
+
             <div
               className={`transition-opacity ${isFiltering ? 'pointer-events-none opacity-60' : ''}`}
               aria-busy={isFiltering}
             >
-              {showTypography ? (
+              {trashOpen ? (
+                <TrashView
+                  brandId={brandId}
+                  onClose={() => {
+                    setTrashOpen(false);
+                    setTrashUrl(false);
+                  }}
+                  onRestored={refreshAssets}
+                />
+              ) : showTypography ? (
                 <TypographyPanel
                   key={fontRevision}
                   brandId={brandId}
@@ -952,22 +1377,42 @@ export function LibraryViewer({
                     refreshKey={assetRevision}
                     onOpenDetail={openDetail}
                     selectedAssetIds={selectedAssetIds}
-                    onToggleSelected={(asset) =>
-                      setSelectedAssetIds((current) => {
-                        const next = new Set(current);
-                        if (next.has(asset.id)) next.delete(asset.id);
-                        else next.add(asset.id);
-                        return next;
-                      })
-                    }
+                    onToggleSelected={toggleSelected}
                     groupBy={initialBrowseQuery.boardGroupBy}
                     onGroupByChange={(boardGroupBy) => pushFilters({ boardGroupBy })}
                   />
                 </>
+              ) : optimisticLayout === 'list' ? (
+                <ListView
+                  assets={displayedAssets}
+                  card={cardOptions}
+                  customFields={chosenFields}
+                  fieldValues={fieldValues}
+                  serverSort={optimisticSort}
+                  onServerSort={(sort) => pushFilters({ sort })}
+                  onOpenDetail={openDetail}
+                  selectedAssetIds={selectedAssetIds}
+                  onToggleSelected={toggleSelected}
+                  onLoadMore={isSearching ? undefined : loadMore}
+                  hasMore={isSearching ? false : hasMore}
+                  loadingMore={loadingMore}
+                  emptyHint={emptyHint}
+                />
+              ) : optimisticLayout === 'reel' ? (
+                <ReelView
+                  assets={displayedAssets}
+                  active={!detailAsset}
+                  onOpenDetail={openDetail}
+                  onExit={() => onLayoutChange('grid')}
+                  onLoadMore={isSearching ? undefined : loadMore}
+                  hasMore={isSearching ? false : hasMore}
+                  loadingMore={loadingMore}
+                />
               ) : initialBrowseQuery.destination === 'home' &&
                 !isSearching &&
                 initialBrowseQuery.previewFrame === 'native' ? (
                 <RatioShelves
+                  {...gridCardProps}
                   brandId={brandId}
                   assets={displayedAssets}
                   showBoundingBoxes={showBoundingBoxes}
@@ -978,19 +1423,9 @@ export function LibraryViewer({
                   loadingMore={loadingMore}
                   onOpenDetail={openDetail}
                   onSelectBin={onSelectRatioBin}
-                  onAssetChanged={() => {
-                    setAssetRevision((revision) => revision + 1);
-                    router.refresh();
-                  }}
+                  onAssetChanged={refreshAssets}
                   selectedAssetIds={selectedAssetIds}
-                  onToggleSelected={(asset) =>
-                    setSelectedAssetIds((current) => {
-                      const next = new Set(current);
-                      if (next.has(asset.id)) next.delete(asset.id);
-                      else next.add(asset.id);
-                      return next;
-                    })
-                  }
+                  onToggleSelected={toggleSelected}
                 />
               ) : (
                 <MediaGrid
@@ -1004,19 +1439,10 @@ export function LibraryViewer({
                   loadingMore={loadingMore}
                   previewFrame={initialBrowseQuery.previewFrame}
                   onOpenDetail={openDetail}
-                  onAssetChanged={() => {
-                    setAssetRevision((revision) => revision + 1);
-                    router.refresh();
-                  }}
+                  onAssetChanged={refreshAssets}
                   selectedAssetIds={selectedAssetIds}
-                  onToggleSelected={(asset) =>
-                    setSelectedAssetIds((current) => {
-                      const next = new Set(current);
-                      if (next.has(asset.id)) next.delete(asset.id);
-                      else next.add(asset.id);
-                      return next;
-                    })
-                  }
+                  onToggleSelected={toggleSelected}
+                  {...gridCardProps}
                 />
               )}
             </div>
@@ -1041,12 +1467,9 @@ export function LibraryViewer({
               previewFrame={initialBrowseQuery.previewFrame}
               onDeepLinkChange={onDeepLinkChange}
               onClose={closeDetail}
-              onAssetChanged={() => {
-                // The grid re-seeds from the RSC; the board holds its own fetch,
-                // so it needs an explicit revision bump to re-read the lanes.
-                setAssetRevision((n) => n + 1);
-                router.refresh();
-              }}
+              onAssetChanged={refreshAssets}
+              onPrev={previousAsset ? () => openDetail(previousAsset) : undefined}
+              onNext={nextAsset ? () => openDetail(nextAsset) : undefined}
             />
 
             {/* Full-area drop overlay */}
@@ -1072,5 +1495,88 @@ export function LibraryViewer({
         </div>
       )}
     </div>
+  );
+}
+
+/** Tie-breaking keys after the main sort, each flipped between ascending and descending. */
+function ThenBySortControl({
+  value,
+  onChange,
+}: {
+  value: readonly LibrarySortSpec[];
+  onChange: (thenBy: LibrarySortSpec[]) => void;
+}) {
+  const labelOf = (key: string) =>
+    LIBRARY_THEN_BY_KEYS.find((option) => option.value === key)?.label ?? key;
+  const unused = LIBRARY_THEN_BY_KEYS.filter(
+    (option) => !value.some((spec) => spec.key === option.value),
+  );
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            Then by
+            {value.length > 0 ? (
+              <span className="rounded-full bg-primary/10 px-1.5 text-primary">{value.length}</span>
+            ) : null}
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </button>
+        }
+      />
+      <PopoverContent align="end" className="w-64 space-y-1 p-2">
+        {value.map((spec, index) => {
+          const label = labelOf(spec.key);
+          const ascending = spec.dir === 'asc';
+          return (
+            <div key={spec.key} className="flex min-h-9 items-center gap-1">
+              <span className="min-w-0 flex-1 truncate px-2 text-sm">{label}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  onChange(
+                    value.map((current, at) =>
+                      at === index ? { ...current, dir: ascending ? 'desc' : 'asc' } : current,
+                    ),
+                  )
+                }
+                aria-label={`${label}: ${ascending ? 'ascending' : 'descending'}. Reverse`}
+                className="rounded-md px-2 py-1 text-sm hover:bg-accent"
+              >
+                {ascending ? '↑' : '↓'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((_, at) => at !== index))}
+                aria-label={`Stop sorting by ${label}`}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          );
+        })}
+        {value.length < MAX_LIBRARY_THEN_BY ? (
+          <Select
+            value={null}
+            onValueChange={(key: LibrarySortKey) => onChange([...value, { key, dir: 'desc' }])}
+          >
+            <SelectTrigger size="sm" aria-label="Add a sort key" className="h-8 w-full">
+              <SelectValue placeholder="Add a sort key" />
+            </SelectTrigger>
+            <SelectContent>
+              {unused.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -4,13 +4,24 @@
 // pipeline both paths (a suggestion, from scratch) share — the two hand-duplicated
 // pipelines this replaces could disagree about what a portfolio was created with.
 //
-// Data paths are unchanged from before: suggestions from optimizer-suggest, the picker from
-// paid-media-metrics snapshots + inventory, create through optimizer_create_portfolio,
-// enroll through optimizer-enroll (by ad-set ids, or by campaign id when whole campaigns
-// were chosen), then a first cycle. Creating in Autopilot is allowed here because the
-// create RPC now stores the guardrails the DB requires.
+// Data paths: suggestions from optimizer-suggest, the picker from paid-media-metrics
+// snapshots + inventory, create through optimizer_create_portfolio, enroll through
+// optimizer-enroll (by ad-set ids, or by campaign id when whole campaigns were chosen), then a
+// first cycle. Creating in Autopilot is allowed here because the create RPC now stores the
+// guardrails the DB requires.
+//
+// A cross-platform suggestion's ticked Google campaigns are enrolled after the Meta ad sets
+// through optimizer_add_portfolio_members. With every Meta ad set unticked the portfolio is
+// born on the Google account instead (optimizer_create_platform_portfolio), recommend-only.
+// From scratch, the brand's other accounts' campaigns (optimizer-suggest platform_candidates)
+// are listed unticked beside the Meta picker, so a portfolio can start on any platform.
 
-import type { AdSetSnapshot, PortfolioSuggestion } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  PlatformCandidateAccount,
+  PlatformId,
+  PortfolioSuggestion,
+} from '@continuum/contracts';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -30,9 +41,15 @@ import { StepStart, type SuggestionOverride } from './StepStart';
 import { WizardSummary } from './WizardSummary';
 import {
   buildCreateConfig,
+  draftFromScratch,
   draftFromSuggestion,
   effectiveTargetMetric,
   emptyDraft,
+  enrollLabel,
+  memberPayload,
+  platformHost,
+  selectedMembers,
+  selectedMembersBudget,
   stepIssues,
   WIZARD_STEPS,
   type WizardDraft,
@@ -50,6 +67,15 @@ type PortfolioWizardProps = {
   snapshots: AdSetSnapshot[];
   snapshotsLoading: boolean;
   snapshotsError: boolean;
+  /** Every eligible campaign on the brand's other accounts: the from-scratch list. */
+  platformCandidates?: PlatformCandidateAccount[];
+  /** False when the account in context is not a Meta account: there are no ad sets to pick. */
+  metaAvailable?: boolean;
+  /** Platforms with an account granted to the brand (the platform tabs' rule). */
+  connectedPlatforms?: PlatformId[];
+  /** Whether the suggest edge returned `platform_candidates` at all — an older one does not,
+   *  and then an empty list proves nothing about a connected platform. */
+  candidatesKnown?: boolean;
   onCreated?: (portfolioId: string) => void;
   /** Rendered under the suggestions on step 1 (CBO campaigns, projections). */
   startExtras?: React.ReactNode;
@@ -68,6 +94,10 @@ export function PortfolioWizard({
   snapshots,
   snapshotsLoading,
   snapshotsError,
+  platformCandidates = [],
+  metaAvailable = true,
+  connectedPlatforms = [],
+  candidatesKnown = false,
   onCreated,
   startExtras,
 }: PortfolioWizardProps) {
@@ -77,7 +107,10 @@ export function PortfolioWizard({
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
+  const { create, enroll, createPlatform, addMembers, run } = useOptimizerMutations(
+    brandId,
+    adAccountId,
+  );
   const inventoryRead = useOptimizerAdsetInventory(brandId, adAccountId, true);
   const accountEnrollmentsRead = useOptimizerAccountEnrollments(brandId, adAccountId);
   const claims = useMemo(
@@ -93,12 +126,15 @@ export function PortfolioWizard({
     setDraft((prev) => ({ ...prev, ...next }));
   }, []);
 
+  // Meta ad sets plus the ticked campaigns on other platforms — one currency, by the rule the
+  // Assets step enforces.
   const selectedBudgetSum = useMemo(() => {
     const ids = new Set(draft.adsetIds);
-    return pickerEntities
+    const meta = pickerEntities
       .filter((entity) => ids.has(entity.id))
       .reduce((sum, entity) => sum + (entity.currentBudget ?? 0), 0);
-  }, [pickerEntities, draft.adsetIds]);
+    return meta + selectedMembersBudget(draft);
+  }, [pickerEntities, draft]);
   const inactiveCount = useMemo(() => {
     const ids = new Set(draft.adsetIds);
     return pickerEntities.filter(
@@ -127,10 +163,15 @@ export function PortfolioWizard({
     target: draft.target,
   });
 
-  const issues = stepIssues(draft, step, { selectedBudgetSum, blockedCount });
+  const issues = stepIssues(draft, step, {
+    selectedBudgetSum,
+    blockedCount,
+    metaCurrency: currency,
+  });
   const stepIndex = STEP_ORDER.indexOf(step);
   const isLast = stepIndex === STEP_ORDER.length - 1;
-  const busy = create.isPending || enroll.isPending;
+  const busy =
+    create.isPending || enroll.isPending || createPlatform.isPending || addMembers.isPending;
 
   function goTo(next: WizardStep) {
     setStep(next);
@@ -163,9 +204,30 @@ export function PortfolioWizard({
     setStep('assets');
   }
   function startScratch() {
-    setDraft({ ...emptyDraft(), source: 'scratch' });
+    setDraft(draftFromScratch(platformCandidates));
     setCompleted(new Set(['start']));
     setStep('assets');
+  }
+
+  async function enrollMeta(portfolio_id: string) {
+    if (draft.assetMode === 'campaign' && draft.campaignIds.length > 0) {
+      // One enroll per campaign: the server takes every eligible ad set in it.
+      for (const campaignId of draft.campaignIds) {
+        await enroll.mutateAsync({ portfolio_id, campaign_id: campaignId });
+      }
+      return;
+    }
+    const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
+    const adset_names: Record<string, string> = {};
+    for (const id of draft.adsetIds) {
+      const name = nameById.get(id);
+      if (name && name.trim().length > 0) adset_names[id] = name;
+    }
+    await enroll.mutateAsync({
+      portfolio_id,
+      adset_ids: draft.adsetIds,
+      ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
+    });
   }
 
   async function submit() {
@@ -176,30 +238,25 @@ export function PortfolioWizard({
       selectedBudgetSum,
       level: draft.assetMode,
     });
+    const members = selectedMembers(draft);
+    const host = platformHost(draft);
     try {
-      const { portfolio_id } = await create.mutateAsync({
-        brand_id: brandId,
-        ad_account_id: adAccountId,
-        config,
-      });
+      const { portfolio_id } = host
+        ? await createPlatform.mutateAsync({
+            brand_id: brandId,
+            platform: host.platform,
+            account_id: host.account_id,
+            config,
+          })
+        : await create.mutateAsync({
+            brand_id: brandId,
+            ad_account_id: adAccountId,
+            config,
+          });
       setCreatedId(portfolio_id);
-      if (draft.assetMode === 'campaign' && draft.campaignIds.length > 0) {
-        // One enroll per campaign: the server takes every eligible ad set in it.
-        for (const campaignId of draft.campaignIds) {
-          await enroll.mutateAsync({ portfolio_id, campaign_id: campaignId });
-        }
-      } else {
-        const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
-        const adset_names: Record<string, string> = {};
-        for (const id of draft.adsetIds) {
-          const name = nameById.get(id);
-          if (name && name.trim().length > 0) adset_names[id] = name;
-        }
-        await enroll.mutateAsync({
-          portfolio_id,
-          adset_ids: draft.adsetIds,
-          ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
-        });
+      if (!host) await enrollMeta(portfolio_id);
+      if (members.length > 0) {
+        await addMembers.mutateAsync({ portfolio_id, members: memberPayload(members) });
       }
       run.mutate(portfolio_id);
       onCreated?.(portfolio_id);
@@ -261,7 +318,15 @@ export function PortfolioWizard({
               objective={draft.objective}
               onAssetModeChange={(assetMode) => patch({ assetMode })}
               onChangeCampaigns={(campaignIds) => patch({ campaignIds })}
+              draft={draft}
+              memberKeys={draft.memberKeys}
+              metaAvailable={metaAvailable}
+              candidatesKnown={candidatesKnown}
+              connectedPlatforms={connectedPlatforms}
+              onChangeMembers={(memberKeys) => patch({ memberKeys })}
               onChangeSelection={(adsetIds) => patch({ adsetIds })}
+              proposedMembers={draft.proposedMembers}
+              source={draft.source}
               selectedIds={draft.adsetIds}
               warnings={{ inactiveCount, blockedCount, moves }}
             />
@@ -311,11 +376,11 @@ export function PortfolioWizard({
               <p className="text-destructive text-xs" role="alert">
                 {failure}
                 {createdId
-                  ? ' The portfolio exists — fix the above and press Create again to enroll, or add ad sets from Manage.'
+                  ? ' The portfolio exists — fix the above and press Create again to enroll, or add members from Manage.'
                   : ''}
               </p>
             ) : issues.length > 0 ? (
-              <p className="text-2xs text-muted-foreground" role="status">
+              <p className="text-xs text-muted-foreground" role="status">
                 {issues[0]}
               </p>
             ) : null}
@@ -338,9 +403,7 @@ export function PortfolioWizard({
                 ) : (
                   <CheckIcon aria-hidden className="size-3.5" />
                 )}
-                {busy
-                  ? 'Creating…'
-                  : `Create & enroll ${draft.adsetIds.length} ad set${draft.adsetIds.length === 1 ? '' : 's'}`}
+                {busy ? 'Creating…' : enrollLabel(draft)}
               </Button>
             ) : (
               <Button

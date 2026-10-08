@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { AdhocSuggestionRow } from '@continuum/contracts';
-import { buildAskedForRows } from './askedForModel';
+import { askedRecommendationIds, buildAskedForRows } from './askedForModel';
 
 const base: AdhocSuggestionRow = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -160,15 +160,18 @@ describe('buildAskedForRows — after adopting', () => {
     expect(row?.nextNote).toContain('names no ad set');
   });
 
-  it('lands a built row on the recommendation it made, and says it is not delivering', () => {
+  it('lands a built row on the proposal it opened, and says it is not delivering', () => {
     const [row] = buildAskedForRows(
       [adopted({ category: 'audience' }, { category: 'audience', handoff })],
       500,
     );
-    expect(row?.cta.kind).toBe('queue_row');
+    // An audience handoff is an audience_card CTA: the proposal opens on the row itself,
+    // and the key still names the recommendation row it belongs to.
+    expect(row?.cta.kind).toBe('audience_card');
     expect(row?.cta.rowKey).toBe(`rec:${handoff.recommendation_id}`);
     expect(row?.cta.label).toBe('Open the audience proposal');
     expect(row?.tierLabel).toBe('Handed off');
+    expect(row?.proposal).toBeNull();
     expect(row?.nextNote).toContain('audience proposal is being built');
     expect(row?.nextNote).toContain('arrive paused');
   });
@@ -202,5 +205,315 @@ describe('buildAskedForRows — after adopting', () => {
     const [row] = buildAskedForRows([adopted({}, { handoff: { kind: 'nonsense' } })], 500);
     expect(row?.handoff).toBeNull();
     expect(row?.cta.kind).toBe('build');
+  });
+});
+
+// Where a CTA lands. Two resolvers used to disagree: the hero card resolved an `audience_card`
+// CTA to its candidate's `rec:<id>` while this model handed the queue the bare PROPOSAL id —
+// a key no row has, so "Open the audience proposal" switched tabs and focused nothing. The
+// cases below pin the one rule both sides now share (heroModel.queueRowKeyFor).
+describe('buildAskedForRows — where the CTA lands', () => {
+  const REC = '44444444-4444-4444-8444-444444444444';
+  const PROPOSAL = '55555555-5555-4555-8555-555555555555';
+  const handoff = {
+    kind: 'audience_proposal',
+    recommendation_id: REC,
+    proposal_id: PROPOSAL,
+    adset_id: '120210',
+    adset_name: 'Retargeting 30d',
+    reused: false,
+    built_at: '2026-09-21T10:05:00Z',
+  };
+  const audienceRow = (
+    over: Record<string, unknown> = {},
+    row: Record<string, unknown> = {},
+  ): AdhocSuggestionRow =>
+    ({
+      ...base,
+      category: 'audience',
+      suggestion: plan({ category: 'audience', ...over }),
+      ...row,
+    }) as AdhocSuggestionRow;
+
+  it("never hands the queue a bare proposal id: an audience_card CTA with no handoff offers the row's own next step", () => {
+    const [row] = buildAskedForRows(
+      [audienceRow({ cta: { kind: 'audience_card', target_id: PROPOSAL } })],
+      500,
+    );
+    expect(row?.cta).toEqual({ kind: 'manage', rowKey: null, label: 'Take this on' });
+  });
+
+  it('resolves an audience_card CTA through the handoff to the recommendation row it became', () => {
+    const [row] = buildAskedForRows(
+      [
+        audienceRow(
+          { cta: { kind: 'audience_card', target_id: PROPOSAL } },
+          { status: 'adopted', handoff },
+        ),
+      ],
+      500,
+    );
+    expect(row?.cta).toEqual({
+      kind: 'audience_card',
+      rowKey: `rec:${REC}`,
+      label: 'Open the audience proposal',
+    });
+  });
+
+  it('keeps an audience_card CTA that already names a queue row', () => {
+    const [row] = buildAskedForRows(
+      [audienceRow({ cta: { kind: 'audience_card', target_id: 'rec:abc' } })],
+      500,
+    );
+    expect(row?.cta.rowKey).toBe('rec:abc');
+  });
+
+  it('a queue_row CTA whose target is not a row key is not a queue_row CTA', () => {
+    const [row] = buildAskedForRows(
+      [audienceRow({ cta: { kind: 'queue_row', target_id: PROPOSAL } })],
+      500,
+    );
+    expect(row?.cta.kind).toBe('manage');
+    expect(row?.cta.rowKey).toBeNull();
+  });
+
+  it('lists the recommendations the handoffs point at, once each', () => {
+    const rows = buildAskedForRows(
+      [
+        audienceRow({}, { status: 'adopted', handoff }),
+        audienceRow({}, { id: '99999999-9999-4999-8999-999999999999', status: 'adopted', handoff }),
+        audienceRow({}),
+      ],
+      500,
+    );
+    expect(askedRecommendationIds(rows)).toEqual([REC]);
+  });
+
+  // Easy Fit → Tours, 2026-09-28: the handoff opened proposal 622bc858, the worker blocked it
+  // (no_creatives, proposal null) and the next cycle superseded it, expiring the
+  // recommendation with it. The row used to keep saying "being built".
+  it('says why a handed-off proposal is blocked, and that the cycle has closed it', () => {
+    const proposal = {
+      id: PROPOSAL,
+      recommendation_id: REC,
+      adset_id: '120210',
+      trigger: 'F3_audience_exhausted',
+      kind: 'audience_expand',
+      status: 'superseded',
+      proposal: null,
+      blocked_by: {
+        code: 'no_creatives',
+        message:
+          'No delivering creative in this portfolio has enough results to carry into a new ad set yet.',
+        campaign_id: 'c1',
+        campaign_name: 'ITESO // TOURS',
+      },
+      error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+      created_at: '2026-09-27T09:20:16Z',
+    } as never;
+    const [row] = buildAskedForRows([audienceRow({}, { status: 'adopted', handoff })], 500, {
+      proposals: [proposal],
+    });
+    expect(row?.tierLabel).toBe('Blocked');
+    expect(row?.nextNote).toBe(
+      'Blocked — No delivering creative in this portfolio has enough results to carry into a new ad set yet. The trigger did not fire again. The cycle closed the recommendation it opened.',
+    );
+    expect(row?.proposal?.state).toBe('blocked');
+    expect(row?.proposal?.closed).toBe(true);
+    expect(row?.proposal?.retryable).toBe(false);
+    expect(row?.cta.rowKey).toBe(`rec:${REC}`);
+  });
+
+  it('keeps the built note when the handed-off proposal is not blocked', () => {
+    const [row] = buildAskedForRows([audienceRow({}, { status: 'adopted', handoff })], 500, {
+      proposals: [],
+    });
+    expect(row?.tierLabel).toBe('Handed off');
+    expect(row?.nextNote).toContain('audience proposal is being built');
+  });
+});
+
+// The proposal's own state, read off the proposals query for the row that opened it. One
+// case per state the worker can leave a proposal in, and one for the cycle closing it. The
+// failed case is MENSAJES // TODOS on 2026-09-29 (suggestion 1f2426b1, proposal e2310011):
+// the worker stored a 40-line Zod issue list in `error.message`, and the row must never
+// print it.
+describe('buildAskedForRows — the state of the proposal a handoff opened', () => {
+  const REC = '2b89167f-2fb3-44ff-8d2b-c2a316991daf';
+  const PROPOSAL = 'e2310011-8823-4419-868d-ea1a53d235dd';
+  const handoff = {
+    kind: 'audience_proposal',
+    recommendation_id: REC,
+    proposal_id: PROPOSAL,
+    adset_id: '120252387327740236',
+    adset_name: 'ALEIRA // AGOSTO - LKL - Mensajes',
+    reused: false,
+    built_at: '2026-09-29T19:08:58Z',
+  };
+  const suggestion = (): AdhocSuggestionRow =>
+    ({
+      ...base,
+      id: '1f2426b1-36b7-4921-a222-54559979434d',
+      category: 'audience',
+      status: 'adopted',
+      suggestion: plan({ category: 'audience', adset_id: '120252387327740236' }),
+      handoff,
+    }) as AdhocSuggestionRow;
+  const proposal = (over: Record<string, unknown>) =>
+    ({
+      id: PROPOSAL,
+      portfolio_id: '3c1d992e-e0f8-453c-b743-7eb8ad686a7a',
+      brand_id: '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64',
+      ad_account_id: 'act_521903353286118',
+      campaign_id: null,
+      adset_id: '120252387327740236',
+      trigger: 'F3_audience_exhausted',
+      kind: 'audience_expand',
+      recommendation_id: REC,
+      cycle_run_id: 'acfe6eca-56be-45c1-aa3d-68fae4a2a381',
+      utc_day: '2026-09-29',
+      requested_via: 'human',
+      requested_by: null,
+      attempts: 1,
+      proposal: null,
+      proposal_built_at: null,
+      blocked_by: null,
+      approved_at: null,
+      approved_by: null,
+      approval: null,
+      result: null,
+      executed_at: null,
+      undo_requested_at: null,
+      undo_result: null,
+      undone_at: null,
+      error: null,
+      created_at: '2026-09-29T19:08:58Z',
+      updated_at: '2026-09-29T19:09:45Z',
+      ...over,
+    }) as never;
+  const rowFor = (over: Record<string, unknown>) =>
+    buildAskedForRows([suggestion()], 500, { proposals: [proposal(over)] })[0];
+
+  it('queued: the row waits with the proposal, and the proposal opens on the row', () => {
+    const row = rowFor({ status: 'queued' });
+    expect(row?.tierLabel).toBe('Queued');
+    expect(row?.nextNote).toBe('Queued: Jaina picks it up in under a minute.');
+    expect(row?.proposal?.state).toBe('queued');
+    expect(row?.proposal?.retryable).toBe(false);
+    expect(row?.cta).toEqual({
+      kind: 'audience_card',
+      rowKey: `rec:${REC}`,
+      label: 'Open the audience proposal',
+    });
+  });
+
+  it('proposing: Jaina is reading', () => {
+    const row = rowFor({ status: 'proposing' });
+    expect(row?.tierLabel).toBe('Jaina is reading');
+    expect(row?.nextNote).toContain('Jaina is reading');
+    expect(row?.proposal?.retryable).toBe(false);
+  });
+
+  it('ready: the row says so and points at the create flow', () => {
+    const row = rowFor({ status: 'ready', proposal: { version: 1 } });
+    expect(row?.tierLabel).toBe('Ready');
+    expect(row?.nextNote).toContain('create the new ad set (paused)');
+    expect(row?.proposal?.state).toBe('ready');
+    expect(row?.proposal?.retryable).toBe(false);
+  });
+
+  it('blocked: the reason, still open to asking again while the recommendation is pending', () => {
+    const row = rowFor({
+      status: 'blocked',
+      blocked_by: {
+        code: 'no_creatives',
+        message: 'No creative in the portfolio has enough results.',
+        campaign_id: 'c1',
+        campaign_name: 'MENSAJES',
+      },
+    });
+    expect(row?.tierLabel).toBe('Blocked');
+    expect(row?.nextNote).toBe('Blocked — No creative in the portfolio has enough results.');
+    expect(row?.proposal?.reason).toBe('No creative in the portfolio has enough results.');
+    expect(row?.proposal?.closed).toBe(false);
+    expect(row?.proposal?.retryable).toBe(true);
+  });
+
+  it('failed: a one-line human reason, never the raw error dump, and asking again on offer', () => {
+    const zodDump =
+      '[\n  {\n    "origin": "string",\n    "code": "too_big",\n    "maximum": 240,\n    "path": ["blocked_option_ids", 0, "rule"]\n  }\n]';
+    const row = rowFor({
+      status: 'failed',
+      error: { code: 'propose_failed', phase: 'propose', message: zodDump },
+    });
+    expect(row?.tierLabel).toBe('Failed');
+    expect(row?.nextNote).toBe(
+      'Failed — Jaina ran into an error while reading the audience, catalogue and creatives.',
+    );
+    expect(row?.nextNote).not.toContain('too_big');
+    expect(row?.nextNote).not.toContain('{');
+    expect(row?.proposal?.state).toBe('failed');
+    expect(row?.proposal?.retryable).toBe(true);
+  });
+
+  it('failed with a sentence for a message keeps that sentence', () => {
+    const row = rowFor({
+      status: 'failed',
+      error: { code: 'execute_failed', message: 'Meta rejected the ad set: minimum budget.' },
+    });
+    expect(row?.nextNote).toBe('Failed — Meta rejected the ad set: minimum budget.');
+  });
+
+  it('superseded without a body: closed by the cycle, nothing to ask again for', () => {
+    const row = rowFor({
+      status: 'superseded',
+      error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+    });
+    expect(row?.tierLabel).toBe('Closed');
+    expect(row?.nextNote).toBe(
+      'The trigger did not fire again. The cycle closed the recommendation it opened.',
+    );
+    expect(row?.proposal?.closed).toBe(true);
+    expect(row?.proposal?.retryable).toBe(false);
+  });
+
+  it('asked again: the row follows the proposal that replaced the one the handoff opened', () => {
+    // Production, 2026-09-29 21:11: "Ask Jaina again" superseded e2310011 ("refreshed") and
+    // opened 1e89d5e7 on the same recommendation. The row must read 1e89d5e7, as the card
+    // does, not report the refreshed row as closed by the cycle.
+    const [row] = buildAskedForRows([suggestion()], 500, {
+      proposals: [
+        proposal({
+          status: 'superseded',
+          error: { code: 'refreshed', message: 'Re-analysed on request.' },
+          updated_at: '2026-09-29T21:11:24Z',
+        }),
+        proposal({
+          id: '1e89d5e7-0000-4000-8000-000000000000',
+          status: 'failed',
+          error: { code: 'execute_failed', message: 'Meta rejected the ad set: no permission.' },
+          created_at: '2026-09-29T21:11:24Z',
+          updated_at: '2026-09-29T21:13:56Z',
+        }),
+      ],
+    });
+    expect(row?.proposal?.row.id).toBe('1e89d5e7-0000-4000-8000-000000000000');
+    expect(row?.proposal?.closed).toBe(false);
+    expect(row?.tierLabel).toBe('Failed');
+    expect(row?.nextNote).toBe('Failed — Meta rejected the ad set: no permission.');
+    expect(row?.proposal?.retryable).toBe(true);
+  });
+
+  it('executed: created on Meta', () => {
+    const row = rowFor({ status: 'executed', proposal: { version: 1 }, result: {} });
+    expect(row?.tierLabel).toBe('Created in Meta');
+    expect(row?.nextNote).toContain('Created in Meta');
+  });
+
+  it('a proposal the query does not have yet leaves the handoff note in place', () => {
+    const [row] = buildAskedForRows([suggestion()], 500, { proposals: [] });
+    expect(row?.proposal).toBeNull();
+    expect(row?.tierLabel).toBe('Handed off');
+    expect(row?.nextNote).toContain('audience proposal is being built');
   });
 });

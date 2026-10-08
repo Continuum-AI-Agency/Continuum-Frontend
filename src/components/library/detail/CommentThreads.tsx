@@ -10,27 +10,74 @@
 // crop that is no longer on screen and their timecode addresses a cut that no
 // longer exists, so they carry a version chip and a way to go look at the
 // version they were written on instead of a pin that would point at nothing.
+//
+// Review metadata lives here too: a lock marks a comment internal (never shown
+// on a share link), a globe marks one shared with share recipients, and either
+// can be flipped in place; attachments preview inline; and the timed comments of
+// the version on stage export as editing-app markers. #hashtags render as chips and
+// filter the list; any comment takes emoji reactions.
 
-import type { MediaComment } from '@continuum/contracts';
-import { splitCommentBodyForRender } from '@continuum/contracts';
+import type { CommentVisibility, MediaComment } from '@continuum/contracts';
+import {
+  HASHTAG_TOKEN_PATTERN,
+  parseCommentHashtags,
+  splitCommentBodyForRender,
+} from '@continuum/contracts';
 import {
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Download,
+  Globe,
   History,
   Link2,
+  Lock,
+  PanelRight,
   RotateCcw,
+  SmilePlus,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast-imperative';
+import {
+  COMMENT_EXPORT_FORMATS,
+  type CommentExportFormat,
+  TIMELINE_STARTS,
+  type TimelineStart,
+} from '@/lib/library/commentExport';
 import type { CommentThread, CommentThreadGroups } from '@/lib/library/comments';
-import { displayNameFromEmail, initialsFor } from '@/lib/library/comments';
+import {
+  type CommentAttachmentPreview,
+  commentExportHref,
+  displayNameFromEmail,
+  downloadFromRoute,
+  editorViewHref,
+  initialsFor,
+  listCommentAttachmentPreviews,
+  patchCommentMetadata,
+  type ReactionSummary,
+} from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
-import { CommentComposer } from './CommentComposer';
+import { AttachmentPreviewList } from '../review/AttachmentPreviewList';
+import { formatStageRange, useTimecodeDisplay } from '../review/timecodeDisplay';
+import { useAssetTiming } from '../review/useAssetTiming';
+import { CommentComposer, type ComposerExtras } from './CommentComposer';
 
 type Props = {
   /** Brand context enables @mention autocomplete in reply composers. */
@@ -52,11 +99,121 @@ type Props = {
   pendingIds: ReadonlySet<string>;
   posting: boolean;
   loading: boolean;
-  onReply: (parentId: string, body: string) => void;
+  onReply: (parentId: string, body: string, extras?: ComposerExtras) => void;
   onResolve: (commentId: string, resolved: boolean) => void;
   onDelete: (commentId: string) => void;
   commentHref?: (comment: MediaComment) => string;
+  /** Emoji reactions by comment id; with onReact, every comment offers them. */
+  reactions?: ReadonlyMap<string, ReactionSummary[]>;
+  onReact?: (commentId: string, emoji: string) => void;
 };
+
+const QUICK_REACTIONS = ['👍', '❤️', '🎉', '😂', '👀', '✅'] as const;
+
+type Reacting = {
+  reactions?: ReadonlyMap<string, ReactionSummary[]>;
+  onReact?: (commentId: string, emoji: string) => void;
+};
+
+function ReactionBar({ commentId, reacting }: { commentId: string; reacting: Reacting }) {
+  const { reactions, onReact } = reacting;
+  if (!onReact) return null;
+  const summaries = reactions?.get(commentId) ?? [];
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1 pl-8" data-reactions-for={commentId}>
+      {summaries.map((summary) => (
+        <button
+          key={summary.emoji}
+          type="button"
+          data-testid="reaction-chip"
+          data-emoji={summary.emoji}
+          data-count={summary.count}
+          aria-pressed={summary.mine}
+          aria-label={`${summary.emoji} ${summary.count}${summary.mine ? ', including you' : ''}`}
+          onClick={() => onReact(commentId, summary.emoji)}
+          className={cn(
+            'flex h-6 items-center gap-1 rounded-full border px-1.5 text-xs tabular-nums transition-colors',
+            summary.mine
+              ? 'border-primary/50 bg-primary/10 text-foreground'
+              : 'border-border bg-background text-muted-foreground hover:bg-muted',
+          )}
+        >
+          <span>{summary.emoji}</span>
+          {summary.count}
+        </button>
+      ))}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Add a reaction"
+              data-testid="reaction-add"
+              className="flex h-6 items-center rounded-full px-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <SmilePlus className="size-3.5" />
+            </button>
+          }
+        />
+        <DropdownMenuContent align="start" className="flex min-w-0 gap-0.5 p-1">
+          {QUICK_REACTIONS.map((emoji) => (
+            <DropdownMenuItem
+              key={emoji}
+              data-emoji={emoji}
+              className="px-1.5 text-base"
+              onSelect={() => onReact(commentId, emoji)}
+            >
+              {emoji}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// Plain text with its #tags pulled out as chips. The pattern (mirrored from the
+// database trigger) consumes the character before the '#', so a tag's start is
+// found from the end of the match.
+function TextWithHashtags({ text }: { text: string }) {
+  const parts: Array<{ text: string } | { tag: string; raw: string }> = [];
+  let cursor = 0;
+  for (const match of text.matchAll(HASHTAG_TOKEN_PATTERN)) {
+    const raw = `#${match[1]}`;
+    const start = (match.index ?? 0) + match[0].length - raw.length;
+    if (start > cursor) parts.push({ text: text.slice(cursor, start) });
+    parts.push({ tag: match[1].toLowerCase(), raw });
+    cursor = start + raw.length;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  return (
+    <>
+      {parts.map((part, index) =>
+        'tag' in part ? (
+          <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: a pure derived split of an immutable string
+            key={index}
+            data-hashtag={part.tag}
+            className="rounded bg-sky-500/10 px-0.5 font-medium text-sky-700 dark:text-sky-300"
+          >
+            {part.raw}
+          </span>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: same derived-split rationale
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+// A comment just posted comes back without the database's hashtags (the trigger fills
+// them on the row), so it is parsed the same way the trigger does until realtime brings them.
+function threadHashtags(thread: CommentThread): string[] {
+  return [thread.root, ...thread.replies].flatMap(
+    (comment) => comment.hashtags ?? parseCommentHashtags(comment.body),
+  );
+}
 
 function authorLabel(comment: MediaComment): string {
   return comment.authorName ?? displayNameFromEmail(comment.authorEmail) ?? 'Member';
@@ -70,7 +227,7 @@ function CommentBodyText({ body }: { body: string }) {
       {segments.map((segment, index) =>
         segment.kind === 'text' ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: segments are a pure derived split of an immutable string
-          <span key={index}>{segment.text}</span>
+          <TextWithHashtags key={index} text={segment.text} />
         ) : (
           // biome-ignore lint/suspicious/noArrayIndexKey: same derived-split rationale
           <span key={index} className="rounded bg-primary/10 px-0.5 font-medium text-primary">
@@ -82,24 +239,91 @@ function CommentBodyText({ body }: { body: string }) {
   );
 }
 
+function VisibilityMark({ visibility }: { visibility: CommentVisibility }) {
+  if (visibility === 'internal') {
+    return (
+      <Lock
+        data-testid="comment-internal-lock"
+        aria-label="Internal — hidden from share links"
+        className="size-3 shrink-0 text-muted-foreground"
+      />
+    );
+  }
+  return (
+    <Globe
+      data-testid="comment-shared-mark"
+      aria-label={visibility === 'external' ? 'From a share-link reviewer' : 'Shown on share links'}
+      className="size-3 shrink-0 text-primary"
+    />
+  );
+}
+
+const TIMELINE_LABELS: Record<TimelineStart, string> = {
+  hour: '01:00:00:00',
+  source: 'Clip timecode',
+};
+
+const EXPORT_LABELS: Record<CommentExportFormat, string> = {
+  csv: 'CSV (spreadsheet)',
+  edl: 'EDL (DaVinci Resolve markers)',
+  fcpxml: 'FCPXML (Final Cut Pro)',
+  premiere: 'XML (Premiere Pro markers)',
+};
+
+// Attachments are Library assets; previews are signed on demand and cached per
+// comment for the life of the card.
+function CommentAttachments({ brandId, comment }: { brandId?: string; comment: MediaComment }) {
+  const [previews, setPreviews] = useState<CommentAttachmentPreview[] | null>(null);
+  const ids = comment.attachments.map((attachment) => attachment.assetId).join(',');
+
+  useEffect(() => {
+    if (!brandId || !ids) return;
+    let cancelled = false;
+    listCommentAttachmentPreviews(brandId, ids.split(','))
+      .then((result) => {
+        if (!cancelled) setPreviews(result);
+      })
+      .catch((error: unknown) => {
+        console.error('[CommentThreads] attachment previews failed', error);
+        if (!cancelled) setPreviews([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, ids]);
+
+  if (!ids) return null;
+  if (previews === null) {
+    return <div className="mt-1.5 h-16 w-28 animate-pulse rounded-md bg-muted/70" />;
+  }
+  return <AttachmentPreviewList previews={previews} />;
+}
+
 function CommentBody({
+  brandId,
   comment,
   pinLabel,
   pending,
 }: {
+  brandId?: string;
   comment: MediaComment;
   pinLabel?: string;
   pending: boolean;
 }) {
   const name = authorLabel(comment);
   return (
-    <div className={cn('flex gap-2.5', pending && 'opacity-60')}>
+    <div
+      className={cn('flex gap-2.5', pending && 'opacity-60')}
+      data-comment-id={comment.id}
+      data-visibility={comment.visibility ?? 'internal'}
+    >
       <Avatar className="size-6 shrink-0">
         <AvatarFallback className="text-2xs font-medium">{initialsFor(name)}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-xs font-medium">{name}</span>
+          <VisibilityMark visibility={comment.visibility ?? 'internal'} />
           <span className="shrink-0 text-2xs text-muted-foreground/70">
             {formatRelativeTime(comment.createdAt)}
           </span>
@@ -112,6 +336,7 @@ function CommentBody({
         <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
           <CommentBodyText body={comment.body} />
         </p>
+        <CommentAttachments brandId={brandId} comment={comment} />
       </div>
     </div>
   );
@@ -133,7 +358,9 @@ function ThreadCard({
   onResolve,
   onDelete,
   href,
+  reacting,
 }: {
+  reacting: Reacting;
   brandId?: string;
   thread: CommentThread;
   pinLabel?: string;
@@ -146,14 +373,37 @@ function ThreadCard({
   pendingIds: ReadonlySet<string>;
   posting: boolean;
   onSelect: () => void;
-  onReply: (body: string) => void;
+  onReply: (body: string, extras?: ComposerExtras) => void;
   onResolve: (resolved: boolean) => void;
   onDelete: (commentId: string) => void;
   href?: string;
 }) {
   const [replying, setReplying] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Held until realtime echoes the row back, so the lock flips on click.
+  const [visibilityOverride, setVisibilityOverride] = useState<CommentVisibility | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const rootVisibility = visibilityOverride ?? thread.root.visibility ?? 'internal';
+  const root = { ...thread.root, visibility: rootVisibility };
+
+  // Drop the optimistic value once the server confirms it — not on any change: a
+  // late realtime echo of an EARLIER toggle would otherwise show the stale state,
+  // and the next click would write the opposite of what the reviewer sees.
+  useEffect(() => {
+    setVisibilityOverride((current) => (current === thread.root.visibility ? null : current));
+  }, [thread.root.visibility]);
+
+  const toggleVisibility = () => {
+    if (!brandId || rootVisibility === 'external') return;
+    const next = rootVisibility === 'internal' ? 'shared' : 'internal';
+    setVisibilityOverride(next);
+    patchCommentMetadata({ brandId, commentId: thread.root.id, visibility: next }).catch(
+      (error: unknown) => {
+        setVisibilityOverride(null);
+        toast.error(`Could not change who sees this comment · ${(error as Error).message}`);
+      },
+    );
+  };
 
   useEffect(() => {
     if (selected) cardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -162,6 +412,8 @@ function ThreadCard({
   return (
     <div
       ref={cardRef}
+      data-thread-id={thread.root.id}
+      aria-current={selected ? 'true' : undefined}
       className={cn(
         'group rounded-lg border p-2.5 transition-colors',
         selected ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card',
@@ -187,18 +439,21 @@ function ThreadCard({
 
       <button type="button" className="w-full text-left" onClick={onSelect}>
         <CommentBody
-          comment={thread.root}
+          brandId={brandId}
+          comment={root}
           pinLabel={pinLabel}
           pending={pendingIds.has(thread.root.id)}
         />
       </button>
+      <ReactionBar commentId={thread.root.id} reacting={reacting} />
 
       {thread.replies.length > 0 && (
         <div className="mt-2 flex flex-col gap-2 border-l border-border/60 pl-3">
           {thread.replies.map((reply) => (
             <div key={reply.id} className="flex items-start gap-1">
               <div className="min-w-0 flex-1">
-                <CommentBody comment={reply} pending={pendingIds.has(reply.id)} />
+                <CommentBody brandId={brandId} comment={reply} pending={pendingIds.has(reply.id)} />
+                <ReactionBar commentId={reply.id} reacting={reacting} />
               </div>
               {currentUserId && reply.createdBy === currentUserId && (
                 <button
@@ -245,6 +500,29 @@ function ThreadCard({
             {copied ? 'Copied' : 'Copy link'}
           </Button>
         ) : null}
+        {brandId && rootVisibility !== 'external' ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="comment-visibility-switch"
+            data-visibility-state={rootVisibility}
+            className="h-6 px-1.5 text-2xs text-muted-foreground"
+            onClick={toggleVisibility}
+            title={
+              rootVisibility === 'internal'
+                ? 'Show this comment to share-link reviewers'
+                : 'Hide this comment from share links'
+            }
+          >
+            {rootVisibility === 'internal' ? (
+              <Globe className="size-3" />
+            ) : (
+              <Lock className="size-3" />
+            )}
+            {rootVisibility === 'internal' ? 'Share' : 'Make internal'}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -277,8 +555,9 @@ function ThreadCard({
             busy={posting}
             autoFocus
             brandId={brandId}
-            onSubmit={(body) => {
-              onReply(body);
+            reviewOptions={Boolean(brandId)}
+            onSubmit={(body, extras) => {
+              onReply(body, extras);
               setReplying(false);
             }}
             onCancel={() => setReplying(false)}
@@ -330,9 +609,41 @@ export function CommentThreads({
   onResolve,
   onDelete,
   commentHref,
+  reactions,
+  onReact,
 }: Props) {
+  const reacting: Reacting = { reactions, onReact };
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [showOtherVersions, setShowOtherVersions] = useState(false);
+  const [timeline, setTimeline] = useState<TimelineStart>('hour');
+
+  // The version on stage, read off its own threads (a legacy row with no pin
+  // is the head's, which the export and timing routes resolve when none is named).
+  const currentRoots = [...threads.open, ...threads.resolved].map((thread) => thread.root);
+  const timedRoot = currentRoots.find((root) => root.annotation?.kind === 'time');
+
+  // In timecode or frame mode the labels come from the file's own timing; until it
+  // arrives (or for a still) the stage's m:ss labels stand.
+  const timecodeMode = useTimecodeDisplay();
+  const timing = useAssetTiming(
+    timecodeMode !== 'clock' && brandId && timedRoot
+      ? { brandId, assetId: timedRoot.assetId, versionId: timedRoot.versionId ?? null }
+      : null,
+  );
+  const labelFor = (root: MediaComment): string | undefined => {
+    const annotation = root.annotation;
+    if (timecodeMode === 'clock' || !timing || annotation?.kind !== 'time') {
+      return pinLabels.get(root.id);
+    }
+    return formatStageRange(
+      annotation.timeMs,
+      annotation.endMs ?? null,
+      timecodeMode,
+      timing.frameRate,
+      { startFrame: timing.startFrame, dropFrame: timing.dropFrame },
+    );
+  };
 
   if (loading) {
     return (
@@ -345,6 +656,17 @@ export function CommentThreads({
   }
 
   const currentCount = threads.open.length + threads.resolved.length;
+  const allTags = [
+    ...new Set(
+      [...threads.open, ...threads.resolved, ...otherVersionThreads].flatMap(threadHashtags),
+    ),
+  ].sort();
+  const activeTag = tagFilter && allTags.includes(tagFilter) ? tagFilter : null;
+  const tagged = (list: CommentThread[]) =>
+    activeTag ? list.filter((thread) => threadHashtags(thread).includes(activeTag)) : list;
+  const openShown = tagged(threads.open);
+  const resolvedShown = tagged(threads.resolved);
+  const otherShown = tagged(otherVersionThreads);
 
   if (currentCount === 0 && otherVersionThreads.length === 0) {
     return (
@@ -367,44 +689,148 @@ export function CommentThreads({
         <p className="px-1 py-2 text-xs text-muted-foreground">No comments on this version yet.</p>
       )}
 
-      {threads.open.map((thread) => (
+      {brandId && timedRoot ? (
+        <div className="flex justify-end gap-1">
+          <a
+            href={editorViewHref({
+              brandId,
+              assetId: timedRoot.assetId,
+              versionId: timedRoot.versionId ?? null,
+            })}
+            target="continuum-editor-view"
+            rel="noreferrer"
+            data-testid="editor-view-link"
+            title="Open a compact comment list to keep beside your editor"
+            className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-2xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <PanelRight className="size-3" />
+            Editor view
+          </a>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-2xs text-muted-foreground"
+                  aria-label="Export comments as markers"
+                >
+                  <Download className="size-3" />
+                  Export markers
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Timeline starts at</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={timeline}
+                  onValueChange={(value) => setTimeline(value as TimelineStart)}
+                >
+                  {TIMELINE_STARTS.map((start) => (
+                    <DropdownMenuRadioItem
+                      key={start}
+                      value={start}
+                      className="text-xs"
+                      data-timeline-start={start}
+                    >
+                      {TIMELINE_LABELS[start]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              {COMMENT_EXPORT_FORMATS.map((format) => (
+                <DropdownMenuItem
+                  key={format}
+                  className="text-xs"
+                  data-export-format={format}
+                  onSelect={() => {
+                    downloadFromRoute(
+                      commentExportHref({
+                        brandId,
+                        assetId: timedRoot.assetId,
+                        versionId: timedRoot.versionId ?? null,
+                        format,
+                        timeline,
+                      }),
+                    ).catch((error: unknown) =>
+                      toast.error(`Export failed · ${(error as Error).message}`),
+                    );
+                  }}
+                >
+                  {EXPORT_LABELS[format]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
+
+      {allTags.length > 0 ? (
+        <div data-testid="hashtag-filter" className="flex flex-wrap items-center gap-1">
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              data-hashtag={tag}
+              aria-pressed={activeTag === tag}
+              onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
+              className={cn(
+                'flex h-6 items-center gap-0.5 rounded-full border px-2 text-2xs font-medium transition-colors',
+                activeTag === tag
+                  ? 'border-sky-500/60 bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                  : 'border-border text-muted-foreground hover:bg-muted',
+              )}
+            >
+              #{tag}
+              {activeTag === tag ? <X className="size-3" aria-hidden /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {openShown.map((thread) => (
         <ThreadCard
+          reacting={reacting}
           key={thread.root.id}
           brandId={brandId}
           thread={thread}
-          pinLabel={pinLabels.get(thread.root.id)}
+          pinLabel={labelFor(thread.root)}
           selected={selectedId === thread.root.id}
           resolved={false}
           currentUserId={currentUserId}
           pendingIds={pendingIds}
           posting={posting}
           onSelect={() => onSelectThread(thread.root)}
-          onReply={(body) => onReply(thread.root.id, body)}
+          onReply={(body, extras) => onReply(thread.root.id, body, extras)}
           onResolve={(resolved) => onResolve(thread.root.id, resolved)}
           onDelete={onDelete}
           href={commentHref?.(thread.root)}
         />
       ))}
 
-      {threads.resolved.length > 0 && (
+      {resolvedShown.length > 0 && (
         <>
           <SectionToggle open={showResolved} onToggle={() => setShowResolved((v) => !v)}>
-            Resolved ({threads.resolved.length})
+            Resolved ({resolvedShown.length})
           </SectionToggle>
           {showResolved &&
-            threads.resolved.map((thread) => (
+            resolvedShown.map((thread) => (
               <ThreadCard
+                reacting={reacting}
                 key={thread.root.id}
                 brandId={brandId}
                 thread={thread}
-                pinLabel={pinLabels.get(thread.root.id)}
+                pinLabel={labelFor(thread.root)}
                 selected={selectedId === thread.root.id}
                 resolved
                 currentUserId={currentUserId}
                 pendingIds={pendingIds}
                 posting={posting}
                 onSelect={() => onSelectThread(thread.root)}
-                onReply={(body) => onReply(thread.root.id, body)}
+                onReply={(body, extras) => onReply(thread.root.id, body, extras)}
                 onResolve={(resolved) => onResolve(thread.root.id, resolved)}
                 onDelete={onDelete}
                 href={commentHref?.(thread.root)}
@@ -413,18 +839,19 @@ export function CommentThreads({
         </>
       )}
 
-      {otherVersionThreads.length > 0 && (
+      {otherShown.length > 0 && (
         <>
           <SectionToggle open={showOtherVersions} onToggle={() => setShowOtherVersions((v) => !v)}>
             <History className="size-3.5" />
             {otherVersionsLabel}
           </SectionToggle>
           {showOtherVersions &&
-            otherVersionThreads.map((thread) => {
+            otherShown.map((thread) => {
               const versionId = thread.root.versionId ?? null;
               const versionLabel = versionId ? versionLabels.get(versionId) : undefined;
               return (
                 <ThreadCard
+                  reacting={reacting}
                   key={thread.root.id}
                   brandId={brandId}
                   thread={thread}
@@ -440,7 +867,7 @@ export function CommentThreads({
                   pendingIds={pendingIds}
                   posting={posting}
                   onSelect={() => onSelectThread(thread.root)}
-                  onReply={(body) => onReply(thread.root.id, body)}
+                  onReply={(body, extras) => onReply(thread.root.id, body, extras)}
                   onResolve={(resolved) => onResolve(thread.root.id, resolved)}
                   onDelete={onDelete}
                   href={commentHref?.(thread.root)}

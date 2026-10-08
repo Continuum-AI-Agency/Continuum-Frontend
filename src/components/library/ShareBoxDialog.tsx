@@ -2,6 +2,8 @@
 
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
+import { ShareLinkPanel } from '@/components/library/share/ShareLinkPanel';
+import { shareTokenFromUrl } from '@/components/library/share/shareLinkClient';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,6 +21,7 @@ type Props = {
 
 export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
   const [copied, setCopied] = useState(false);
+  const token = url ? shareTokenFromUrl(url) : null;
 
   const copy = async () => {
     if (!url) return;
@@ -29,7 +32,7 @@ export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Share box</DialogTitle>
           <DialogDescription>
@@ -52,6 +55,7 @@ export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
         ) : (
           <p className="text-sm text-muted-foreground">Creating link…</p>
         )}
+        {token ? <ShareLinkPanel by={{ token }} /> : null}
       </DialogContent>
     </Dialog>
   );

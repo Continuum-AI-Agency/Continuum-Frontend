@@ -50,6 +50,7 @@ const PLATFORM_DISPLAY_NAME: Record<OrganicPlatformKey, string> = {
   linkedin: 'LinkedIn',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  x: 'X',
 };
 
 type TrendWorkbenchProps = {

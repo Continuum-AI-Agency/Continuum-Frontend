@@ -14,6 +14,7 @@ mock.module('next/image', () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
 }));
 
+import { AiStudioHandoffProvider } from './AiStudioHandoffContext';
 import { CalendarDraftCard } from './CalendarDraftCard';
 import type { OrganicCalendarDraft } from './types';
 
@@ -470,6 +471,7 @@ describe('CalendarDraftCard', () => {
       ...draft,
       id: 'draft-reel-ready',
       backendDraftId: 'backend-draft-1',
+      updatedAt: '2026-09-22T00:00:00Z',
       mediaStage: 'storyboard_ready',
       mediaSuggestion: {
         mediaStatus: 'pending',
@@ -498,21 +500,38 @@ describe('CalendarDraftCard', () => {
     const onRealize = mock();
 
     render(
-      <CalendarDraftCard
-        draft={preparedReel}
-        isSelected={false}
-        isMultiSelected={false}
-        onSelect={mock()}
-        onToggleSelection={mock()}
-        onStitch={onStitch}
-        onRealize={onRealize}
-      />,
+      <AiStudioHandoffProvider onOpen={mock()}>
+        <CalendarDraftCard
+          draft={preparedReel}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+          onStitch={onStitch}
+          onRealize={onRealize}
+        />
+      </AiStudioHandoffProvider>,
     );
 
     fireEvent.click(screen.getByText('Ready to render'));
     fireEvent.click(screen.getByText('Edit in AI Studio'));
     expect(onStitch).toHaveBeenCalledWith('draft-reel-ready');
     expect(onRealize).toHaveBeenCalledWith('draft-reel-ready');
+  });
+
+  it('does not offer a Studio action when no brand handoff is available', () => {
+    const onRealize = mock();
+    render(
+      <CalendarDraftCard
+        draft={{ ...draft, backendDraftId: 'server-1', mediaStage: 'storyboard_ready' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        onRealize={onRealize}
+      />,
+    );
+    expect(screen.queryByText('Generate final media')).toBeNull();
   });
 
   it('shows a generating indicator while media is generating', () => {

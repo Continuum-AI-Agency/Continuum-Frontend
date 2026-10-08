@@ -20,11 +20,16 @@ const PRODUCT_FEATURES: Record<ProductCode, string> = {
   paid_media: 'Jaina, Forge ad creation, approvals and optimizer',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'Brand listening: mentions of your brand and competitors',
 };
 
-export type PlanStatus = 'active' | 'activating' | 'available';
-/** `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal. */
-export type PlanAction = 'checkout' | 'add' | 'remove' | 'none';
+/** `payment_failed`: on the subscription, but Stripe is retrying a declined renewal. */
+export type PlanStatus = 'active' | 'activating' | 'payment_failed' | 'available';
+/**
+ * `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal.
+ * `requires_organic`: Trends+ is an add-on to Organic and the brand has no Organic access.
+ */
+export type PlanAction = 'checkout' | 'add' | 'remove' | 'none' | 'requires_organic';
 
 export type PlanCardView = {
   planCode: PlanCode;
@@ -76,6 +81,20 @@ export const AUTO_BILLING_NEEDS_PLAN =
 export const AUTO_BILLING_CONTRACT =
   'Contract brands are billed through their agreement and never metered.';
 
+/** The prepaid X API wallet: what X publishing and X analytics draw from. */
+export type XWalletView = {
+  balanceCredits: number;
+  /** Plain posts left at 2 credits each (X's $0.015 × 1.15, rounded up). */
+  postsLeft: number;
+  autoBilling: AutoBillingView;
+  creditPack: CreditPackOffer;
+};
+
+/** Credits a plain X post costs (X's $0.015 list price × 1.15, rounded up to whole credits). */
+export const X_POST_CREDITS = 2;
+/** Credits an X post carrying a link costs (X's $0.20 link rate × 1.15). */
+export const X_LINK_POST_CREDITS = 23;
+
 export type SelfServeBillingView = {
   kind: 'self_serve';
   hasLiveSubscription: boolean;
@@ -91,8 +110,15 @@ export type SelfServeBillingView = {
   credits: CanvasCreditsView;
   /** Nothing left and nothing billed to the card: generation is refused until the owner acts. */
   outOfCredits: boolean;
+  /**
+   * Stripe could not charge the renewal (`past_due`). `retrying`: access holds while Stripe
+   * retries. `lapsed`: Stripe gave up (unpaid, stored as past_due) and the plan's products are off.
+   */
+  paymentFailed: 'retrying' | 'lapsed' | null;
   autoBilling: AutoBillingView;
   creditPack: CreditPackOffer;
+  /** Null while billing-api predates the X wallet. */
+  x: XWalletView | null;
   invoices: InvoiceRowView[];
 };
 
@@ -127,7 +153,15 @@ function featuresFor(products: readonly ProductCode[], includedCanvasCredits = 0
   return features;
 }
 
-function planAction(plan: PlanCode, livePlans: readonly PlanCode[] | null): PlanAction {
+function planAction(
+  plan: PlanCode,
+  livePlans: readonly PlanCode[] | null,
+  hasOrganic: boolean,
+): PlanAction {
+  // billing-api answers 409 plan_required here; the card says so before the click.
+  if (plan === 'trends_plus' && !hasOrganic && !livePlans?.includes(plan)) {
+    return 'requires_organic';
+  }
   if (!livePlans) return 'checkout';
   if (!livePlans.includes(plan)) return 'add';
   return livePlans.length > 1 ? 'remove' : 'none';
@@ -156,6 +190,17 @@ function toCreditsView(overview: BillingOverview): CanvasCreditsView {
   };
 }
 
+/**
+ * Past due, is the plan still on? Entitlements list no `plans` while past_due, but the grace
+ * period keeps the plan's products active — gone once Stripe gives up (unpaid).
+ */
+function accessHeld(overview: BillingOverview, livePlans: readonly PlanCode[] | null): boolean {
+  return (livePlans ?? []).some((planCode) => {
+    const plan = overview.catalog.plans.find((candidate) => candidate.planCode === planCode);
+    return plan?.products.every((product) => overview.entitlements.products.includes(product));
+  });
+}
+
 /** Only the owner manages billing; billing-api enforces the same rule with a 403. */
 export function isBrandOwner(
   permissions: readonly { brand_profile_id: string; role: string | null }[],
@@ -173,6 +218,7 @@ export const NEED_LABEL: Record<ProductCode, string> = {
   paid_media: 'paid media',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'brand listening',
 };
 
 export function toBillingView(
@@ -191,6 +237,7 @@ export function toBillingView(
   const liveSubscription =
     subscription && LIVE_SUBSCRIPTION_STATUSES.has(subscription.status) ? subscription : null;
   const livePlans = liveSubscription?.plans ?? null;
+  const paymentFailed = liveSubscription?.status === 'past_due';
   const catalogOrder = (plan: PlanCode) => PLAN_CODES.indexOf(plan);
 
   const plans = [...overview.catalog.plans]
@@ -201,12 +248,21 @@ export function toBillingView(
       monthlyPriceUsd: plan.monthlyPriceUsd,
       priceLabel: formatUsd(plan.monthlyPriceUsd),
       features: featuresFor(plan.products, plan.includedCanvasCredits),
-      status: entitlements.plans.includes(plan.planCode)
-        ? 'active'
-        : livePlans?.includes(plan.planCode)
-          ? 'activating'
-          : 'available',
-      action: planAction(plan.planCode, livePlans),
+      status: !livePlans?.includes(plan.planCode)
+        ? entitlements.plans.includes(plan.planCode)
+          ? 'active'
+          : 'available'
+        : paymentFailed
+          ? 'payment_failed'
+          : entitlements.plans.includes(plan.planCode)
+            ? 'active'
+            : 'activating',
+      action: planAction(
+        plan.planCode,
+        livePlans,
+        entitlements.products.includes('organic_agent') ||
+          Boolean(livePlans?.includes('organic_studio')),
+      ),
       highlighted: need !== null && plan.products.includes(need),
     }));
 
@@ -222,12 +278,31 @@ export function toBillingView(
     plans,
     credits,
     outOfCredits: canBuyCredits && credits.availableCredits === 0 && !credits.billsOverageToCard,
+    paymentFailed: !paymentFailed ? null : accessHeld(overview, livePlans) ? 'retrying' : 'lapsed',
     autoBilling: {
       enabled: overview.overageEnabled,
       capUsd: overview.overageCapUsd,
       disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
     },
     creditPack: overview.catalog.creditPack,
+    // X credits pay for X publishing, so they are sold where the brand can publish organically
+    // (a live plan, or an admin/grandfathered organic grant) — or already holds some.
+    x:
+      overview.x &&
+      (liveSubscription !== null ||
+        entitlements.products.includes('organic_agent') ||
+        overview.x.balanceUsd > 0)
+      ? {
+          balanceCredits: usdToCredits(overview.x.balanceUsd),
+          postsLeft: Math.floor(usdToCredits(overview.x.balanceUsd) / X_POST_CREDITS),
+          autoBilling: {
+            enabled: overview.x.overageEnabled,
+            capUsd: overview.x.overageCapUsd,
+            disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
+          },
+          creditPack: overview.catalog.xCreditPack ?? overview.catalog.creditPack,
+        }
+      : null,
     invoices: overview.invoices.map((invoice) => ({
       id: invoice.id,
       label: invoice.number ?? invoice.id,
@@ -252,19 +327,28 @@ export type PendingBillingChange =
   | { kind: 'plan_added'; plan: PlanCode }
   | { kind: 'plan_removed'; plan: PlanCode }
   | { kind: 'credits_added'; purchasedCreditsBefore: number }
-  | { kind: 'overage_changed'; enabled: boolean };
+  | { kind: 'overage_changed'; enabled: boolean }
+  | { kind: 'x_credits_added'; xCreditsBefore: number }
+  | { kind: 'x_overage_changed'; enabled: boolean };
 
 export type CheckoutReturn =
   | { outcome: 'cancel' }
-  | { outcome: 'success'; change: PendingBillingChange };
+  /** `sessionId` is Stripe's substituted `{CHECKOUT_SESSION_ID}`; null on an older return link. */
+  | { outcome: 'success'; change: PendingBillingChange; sessionId: string | null };
+
+const CHECKOUT_SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]+$/;
 
 type SearchParamsLike = { get(name: string): string | null };
 
 export function checkoutReturnParams(
-  change: Extract<PendingBillingChange, { kind: 'plan_added' | 'credits_added' }>,
+  change: Extract<
+    PendingBillingChange,
+    { kind: 'plan_added' | 'credits_added' | 'x_credits_added' }
+  >,
 ): { success: string; cancel: string } {
   const success = new URLSearchParams({ section: 'billing', checkout: 'success' });
   if (change.kind === 'plan_added') success.set('plan', change.plan);
+  else if (change.kind === 'x_credits_added') success.set('xbalance', String(change.xCreditsBefore));
   else success.set('balance', String(change.purchasedCreditsBefore));
   return {
     success: success.toString(),
@@ -277,8 +361,23 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
   if (outcome === 'cancel') return { outcome: 'cancel' };
   if (outcome !== 'success') return null;
 
+  const rawSessionId = params.get('session_id');
+  const sessionId = rawSessionId && CHECKOUT_SESSION_ID.test(rawSessionId) ? rawSessionId : null;
+
   const plan = planCodeSchema.safeParse(params.get('plan'));
-  if (plan.success) return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data } };
+  if (plan.success) {
+    return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data }, sessionId };
+  }
+
+  const rawXBalance = params.get('xbalance');
+  const xBalance = Number(rawXBalance);
+  if (rawXBalance !== null && Number.isInteger(xBalance) && xBalance >= 0) {
+    return {
+      outcome: 'success',
+      change: { kind: 'x_credits_added', xCreditsBefore: xBalance },
+      sessionId,
+    };
+  }
 
   const rawBalance = params.get('balance');
   const balance = Number(rawBalance);
@@ -286,9 +385,39 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
     return {
       outcome: 'success',
       change: { kind: 'credits_added', purchasedCreditsBefore: balance },
+      sessionId,
     };
   }
   return null;
+}
+
+// ── The printed receipt ──────────────────────────────────────────────────────────────────
+// A Checkout return with a session id prints a receipt instead of toasting. It prints once
+// Stripe says paid, our webhook has granted the purchase, and Stripe's invoice exists: the
+// receipt then never promises something the panel does not show yet.
+
+export type ReceiptPhase = 'processing' | 'printing' | 'complete' | 'delayed' | 'unavailable';
+
+export function receiptPhase(input: {
+  receipt: { paid: boolean; invoicePdf: string | null } | undefined;
+  /** The receipt could not be read (billing-api refused or failed). */
+  failed: boolean;
+  /** Our webhook has granted the purchase. */
+  settled: boolean;
+  /** The CHANGE_POLL_WINDOW_MS wait ran out. */
+  expired: boolean;
+  /** The paper has finished feeding. */
+  printed: boolean;
+}): ReceiptPhase {
+  const { receipt, failed, settled, expired, printed } = input;
+  if (failed) return 'unavailable';
+  const paid = receipt?.paid === true;
+  if (paid && settled && (receipt.invoicePdf !== null || expired)) {
+    return printed ? 'complete' : 'printing';
+  }
+  if (!expired) return 'processing';
+  if (!paid) return 'unavailable';
+  return printed ? 'delayed' : 'printing';
 }
 
 export function isChangeSettled(change: PendingBillingChange, overview: BillingOverview): boolean {
@@ -308,5 +437,9 @@ export function isChangeSettled(change: PendingBillingChange, overview: BillingO
         (!studio || (studio.overageAction === 'bill') === change.enabled)
       );
     }
+    case 'x_credits_added':
+      return usdToCredits(overview.x?.balanceUsd ?? 0) > change.xCreditsBefore;
+    case 'x_overage_changed':
+      return overview.x?.overageEnabled === change.enabled;
   }
 }

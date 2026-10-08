@@ -38,12 +38,12 @@ export function JainaReportRecommendations({
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                   {item.expected_impact && (
-                    <Pill variant="violet" className="text-2xs uppercase">
+                    <Pill variant="violet" className="text-xs uppercase">
                       Impact: {item.expected_impact}
                     </Pill>
                   )}
                   {item.priority && (
-                    <Pill variant="teal" className="text-2xs uppercase">
+                    <Pill variant="teal" className="text-xs uppercase">
                       Priority: {item.priority}
                     </Pill>
                   )}

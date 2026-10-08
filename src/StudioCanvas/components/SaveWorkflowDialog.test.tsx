@@ -103,7 +103,9 @@ async function chooseSelect(name: RegExp, optionName: string) {
   fireEvent.pointerDown(option);
   fireEvent.pointerUp(option);
   fireEvent.click(option);
-  await waitFor(() => expect(screen.queryByRole('option', { name: optionName })).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole('option', { name: optionName }) === null).toBe(true),
+  );
 }
 
 beforeEach(() => {
@@ -206,6 +208,105 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
       category: 'character',
       rightsNote: 'Brand-owned fictional character.',
     });
+  });
+
+  it('keeps the plain-workflow description optional', () => {
+    renderPanel();
+    expect(screen.getByLabelText('Description')).toBeDefined();
+    expect(screen.getByPlaceholderText('Optional notes for your team')).toBeDefined();
+  });
+
+  it('prefills the pipeline description from the guide draft and publishes it verbatim', async () => {
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    const description = (await screen.findByLabelText(
+      'What it makes and when to use it',
+    )) as HTMLTextAreaElement;
+    await waitFor(() =>
+      expect(description.value).toBe('Creates approved character launch images.'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
+
+    await waitFor(() => expect(publishPipeline).toHaveBeenCalledTimes(1));
+    const payload = publishPipeline.mock.calls[0]?.[0] as unknown as { description: string };
+    expect(payload.description).toBe('Creates approved character launch images.');
+  });
+
+  it('says when the Backend derived the guide by rule, so the author reviews it', async () => {
+    draftPipelineGuide.mockImplementationOnce(async () => ({
+      description: 'One static image from Brief (text).',
+      agent_guide: {
+        version: 1 as const,
+        use_when: ['A request for exactly one static image per brief'],
+        avoid_when: ['Video, reels or motion: every output is a still'],
+        input_guidance: [],
+        invocation_notes: [],
+      },
+      source: 'fallback' as const,
+    }));
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+
+    expect(await screen.findByText(/Drafted from the pipeline's inputs and outputs/)).toBeDefined();
+    expect(
+      screen.getByDisplayValue('A request for exactly one static image per brief'),
+    ).toBeDefined();
+  });
+
+  it('shows why a draft was refused and invents no guide in its place', async () => {
+    draftPipelineGuide.mockImplementationOnce(async () => {
+      throw new Error('draft unavailable');
+    });
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    // The refusal is shown as-is; no generic "Supply X as text" guide is invented in its place.
+    await screen.findByText('draft unavailable');
+    expect(screen.queryByLabelText('Use when · one per line')).toBeNull();
+    expect(screen.queryByText(/Supply/)).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: 'Publish pipeline' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(publishPipeline).not.toHaveBeenCalled();
+  });
+
+  it('refuses to publish a pipeline with a blank description', async () => {
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    const description = (await screen.findByLabelText(
+      'What it makes and when to use it',
+    )) as HTMLTextAreaElement;
+    await waitFor(() => expect(description.value).not.toBe(''));
+    fireEvent.change(description, { target: { value: '  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
+
+    expect(
+      await screen.findByText('Describe what this pipeline makes and when to use it.'),
+    ).toBeDefined();
+    expect(publishPipeline).not.toHaveBeenCalled();
   });
 
   it('publishes the selected editor source slot with an exact project configuration', async () => {

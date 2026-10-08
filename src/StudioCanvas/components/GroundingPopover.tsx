@@ -6,20 +6,23 @@
 // mirroring the pre-grounding-UX BrandBookMenu / CreativeSkillMenu context
 // submenus; row descriptions live in side="right" tooltips and pieces the brand
 // has not built yet are disabled with a "not in brand book" nudge. The inspector
-// (GroundingSection) mounts the same editor inline as a flat panel. Both surfaces
-// render the row model `useGroundingModel` builds, so the checked/disabled/hint
-// semantics can never drift between them; the pure toggle helpers stay in
-// `utils/brandEnforcement`, shared with the node payload builder.
+// (GroundingSection) mounts the same editor inline as collapsed accordion sections,
+// each header carrying a one-line summary. Both surfaces render the row model
+// `useGroundingModel` builds, so the checked/disabled/hint semantics can never drift
+// between them; the pure toggle helpers stay in `utils/brandEnforcement`, shared with
+// the node payload builder.
 //
-// The flat panel owns NO scroller: the inspector's bounded pane
-// (CanvasFloatingPanel) is the one scrollport, and the section headers stick to it.
-// It must not be given one back — not a plain overflow div (a second scrollport
-// steals sticky from the pane above it) and not shadcn ScrollArea, whose viewport is
-// `size-full` (a `max-h` on its root resolves to `height: auto`, so content spills
-// instead of scrolling) and wraps children in a `display: table` div that breaks
-// sticky outright.
+// Shortcut skills (`/goldenhour`, tagged `shortcut`) are invoked by typing `/` in a
+// prompt, so neither surface lists them — one hint line points at the slash menu.
+//
+// The inspector panel owns NO scroller: the inspector's bounded pane
+// (CanvasFloatingPanel) is the one scrollport. It must not be given one back — not a
+// plain overflow div and not shadcn ScrollArea, whose viewport is `size-full` (a
+// `max-h` on its root resolves to `height: auto`, so content spills instead of
+// scrolling). The sections stay short instead: collapsed by default, skills capped.
 
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
+import { isShortcutSkill } from '@continuum/contracts';
 import { Check, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
@@ -27,6 +30,12 @@ import {
   BrandBookPiecePreview,
   SkillConfigPreview,
 } from '@/components/brand/GenerationConfigPreview';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuGroup,
@@ -37,6 +46,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -51,8 +61,10 @@ import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import {
   brandBookAvailability,
+  brandBookMode,
+  brandBookModeDetail,
+  brandBookModeLabel,
   CONCRETE_BRAND_BOOK_PIECES,
-  enforcedConcretePieces,
   isBrandEnforced,
   isPieceEnforced,
 } from '../utils/brandEnforcement';
@@ -84,6 +96,11 @@ const STYLE_CAPTION =
   'What this generation is allowed to draw on. Switch on only what this piece needs.';
 const DIRECTION_CAPTION =
   'What the compiler is allowed to say. Only pieces this brand has authored appear.';
+const BRAND_CAPTION =
+  'New nodes start Light (colors, type, logo); nodes an agent builds use the full book. Type /brand or /nobrand in a prompt to override one generation.';
+
+/** How many skill rows the inspector shows before "Show all". */
+const SKILL_PREVIEW_ROWS = 8;
 
 /**
  * Where a canvas node's design-system grounding comes from.
@@ -175,14 +192,23 @@ function useGroundingModel({
   const availability = React.useMemo(() => brandBookAvailability(brandTokens), [brandTokens]);
   const { all, isLoading } = useBrandSkills(brandId);
   // Canvas nodes drive visual generation, so only visual/both skills belong here —
-  // copy skills steer the organic agent's text.
+  // copy skills steer the organic agent's text. Shortcuts are typed as `/slug`, so they
+  // stay out of the list unless one is already switched on (it must stay switchable off).
   const creativeSkills = React.useMemo(
-    () => all.filter((skill) => skill.surface !== 'copy' && skill.status === 'active'),
-    [all],
+    () =>
+      all.filter(
+        (skill) =>
+          skill.surface !== 'copy' &&
+          skill.status === 'active' &&
+          (!isShortcutSkill(skill) || skillIds.includes(skill.id)),
+      ),
+    [all, skillIds],
   );
+  const shortcutCount = React.useMemo(() => all.filter(isShortcutSkill).length, [all]);
 
   const brandEnforced = isBrandEnforced(brandBookPieces);
-  const enforcedCount = enforcedConcretePieces(brandBookPieces).length;
+  const brandMode = brandBookMode(brandBookPieces);
+  const brandModeLabel = brandBookModeLabel(brandBookPieces);
 
   const effectiveSections = React.useMemo(
     () => effectiveDesignSections(designSystemSections, contextual),
@@ -291,8 +317,11 @@ function useGroundingModel({
   return {
     enforceRow,
     bookRows,
-    brandEnforced,
-    enforcedCount,
+    brandModeLabel,
+    brandSummary:
+      brandMode === 'light' || brandMode === 'custom'
+        ? `${brandModeLabel} · ${brandBookModeDetail(brandBookPieces)}`
+        : brandModeLabel,
     directionRows,
     directionCount,
     designRows,
@@ -301,6 +330,10 @@ function useGroundingModel({
     skillRows,
     skillsLoading: isLoading,
     skillCount: skillIds.length,
+    shortcutHint:
+      shortcutCount > 0
+        ? `Type / in the prompt for ${shortcutCount >= 100 ? '100+' : shortcutCount} style shortcuts`
+        : null,
   };
 }
 
@@ -374,11 +407,9 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
         <DropdownMenuLabel className="text-foreground">Style</DropdownMenuLabel>
         <SubCaption>{STYLE_CAPTION}</SubCaption>
         <DropdownMenuSub>
-          <SectionSubTrigger
-            title="Brand book"
-            count={model.brandEnforced ? `${model.enforcedCount} on` : null}
-          />
+          <SectionSubTrigger title="Brand book" count={model.brandModeLabel} />
           <DropdownMenuSubContent className={SUB_CONTENT_CLASS}>
+            <SubCaption>{BRAND_CAPTION}</SubCaption>
             <DropdownMenuGroup>
               <GroundingCheckboxRow row={model.enforceRow} />
               <DropdownMenuSeparator />
@@ -443,6 +474,12 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
                 model.skillRows.map((row) => <GroundingCheckboxRow key={row.key} row={row} />)
               )}
             </DropdownMenuGroup>
+            {model.shortcutHint ? (
+              <>
+                <DropdownMenuSeparator />
+                <SubCaption>{model.shortcutHint}</SubCaption>
+              </>
+            ) : null}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       </DropdownMenuGroup>
@@ -450,21 +487,7 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
   );
 }
 
-// ————— The inspector's flat inline panel —————
-
-// `mt-3` is the group spacing the flat column no longer gets from a `gap`, and `min-h-6`
-// keeps every header the same height: they all pin to `top-0` in one containing block, so
-// the one arriving covers the one already there — a taller header underneath would peek.
-function SectionHeader({ title, children }: { title: string; children?: React.ReactNode }) {
-  return (
-    <div className="sticky top-0 z-10 mb-1 mt-3 flex min-h-6 items-center justify-between gap-2 bg-background px-0.5 py-1">
-      <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </p>
-      {children}
-    </div>
-  );
-}
+// ————— The inspector's inline panel —————
 
 function ToggleRow({ row }: { row: GroundingRow }) {
   return (
@@ -509,109 +532,168 @@ function ToggleRow({ row }: { row: GroundingRow }) {
   );
 }
 
+function SectionTrigger({ title, summary }: { title: string; summary: string }) {
+  return (
+    <AccordionTrigger className="items-center gap-2 px-1.5 py-2 text-xs hover:no-underline">
+      <span className="shrink-0 font-medium">{title}</span>
+      <span className="ml-auto min-w-0 truncate text-[0.65rem] font-normal text-muted-foreground">
+        {summary}
+      </span>
+    </AccordionTrigger>
+  );
+}
+
+// The panel's default `p:not(:last-child)` margin is for prose; these captions sit on rows.
+const PANEL_CLASS = 'pb-1 [&_p:not(:last-child)]:mb-0';
+
+function InspectorCaption({ children }: { children: React.ReactNode }) {
+  return <p className="px-1.5 pb-1 text-[0.65rem] text-muted-foreground">{children}</p>;
+}
+
+/** Bounded skill list: a search box once there are more than a screenful, then N rows. */
+function SkillRows({
+  rows,
+  loading,
+  shortcutHint,
+}: {
+  rows: GroundingRow[];
+  loading: boolean;
+  shortcutHint: string | null;
+}) {
+  const [query, setQuery] = React.useState('');
+  const [showAll, setShowAll] = React.useState(false);
+  const needle = query.trim().toLowerCase();
+  const matches = needle
+    ? rows.filter((row) => `${row.label} ${row.description ?? ''}`.toLowerCase().includes(needle))
+    : rows;
+  const visible = showAll ? matches : matches.slice(0, SKILL_PREVIEW_ROWS);
+
+  return (
+    <>
+      {loading ? (
+        <InspectorCaption>Loading…</InspectorCaption>
+      ) : rows.length === 0 ? (
+        <InspectorCaption>No creative skills yet — create one from Manage.</InspectorCaption>
+      ) : (
+        <>
+          {rows.length > SKILL_PREVIEW_ROWS ? (
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search skills"
+              aria-label="Search skills"
+              className="mb-1 h-7 text-xs"
+            />
+          ) : null}
+          {visible.map((row) => (
+            <ToggleRow key={row.key} row={row} />
+          ))}
+          {needle && matches.length === 0 ? (
+            <InspectorCaption>No skills match “{query.trim()}”.</InspectorCaption>
+          ) : null}
+          {visible.length < matches.length ? (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="w-full rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            >
+              Show all ({matches.length})
+            </button>
+          ) : null}
+        </>
+      )}
+      <div className="mt-1 flex items-center justify-between gap-2 px-1.5">
+        <span className="text-[0.65rem] text-muted-foreground">{shortcutHint}</span>
+        <Link
+          href="/settings?section=skills"
+          className="inline-flex shrink-0 items-center gap-1 text-[0.65rem] text-muted-foreground no-underline! transition-colors hover:text-foreground"
+        >
+          <Wand2 className="h-3 w-3" />
+          Manage
+        </Link>
+      </div>
+    </>
+  );
+}
+
 /**
- * The same editor as the chip's hover menu, laid flat: the inspector mounts it
- * inline, where a menu-in-a-panel would be a popover on a popover.
+ * The same editor as the chip's hover menu, laid inline: the inspector mounts it as
+ * collapsed sections, where a menu-in-a-panel would be a popover on a popover.
  */
 export function GroundingPopover(props: GroundingEditorProps) {
   const model = useGroundingModel(props);
 
   return (
     <TooltipProvider delay={250}>
-      {/* No scroll container of its own. This surface is only ever mounted INSIDE the
-          inspector's bounded pane, and `--available-height` is set by a Base UI
-          Positioner — which is not in this tree, so the max-h was invalid at
-          computed-value time and resolved to `none` (verified in Chromium). What the
-          dead `overflow-y-auto` still did was claim the scrollport, so every
-          `sticky top-0` header below stuck to a box that never scrolls and slid out of
-          view instead of holding the top of the list (Airtable #281). */}
+      {/* No scroll container of its own: the inspector's bounded pane is the one
+          scrollport (Airtable #281). The sections are collapsed by default and the
+          skill list is capped, so the pane stays short without a second scroller. */}
       <div className="p-2">
-        {/* One flat column, not a <section> per group. A sticky header resolves against
-            its nearest block ancestor, so a wrapper that ends where its group ends
-            carries its own header out of the scrollport the moment the group does —
-            measured at full scroll as -1445 for the first group's header against 0 for
-            the last one's. Sharing one containing block that runs the length of the
-            list makes every header hold the top until the next one covers it. The
-            spacing the column's `gap-3` used to give now rides on the headers' `mt-3`,
-            so the groups still read apart. */}
-        <div className="flex flex-col">
-          <p className="px-1.5 pt-0.5 font-medium text-foreground text-xs">Style</p>
-          <p className="mt-1 px-1.5 text-[0.65rem] text-muted-foreground">{STYLE_CAPTION}</p>
+        <p className="px-1.5 pt-0.5 font-medium text-foreground text-xs">Style</p>
+        <p className="mt-1 px-1.5 text-[0.65rem] text-muted-foreground">{STYLE_CAPTION}</p>
 
-          <SectionHeader title="Brand book">
-            {model.brandEnforced ? (
-              <span className="text-[0.65rem] text-muted-foreground">{model.enforcedCount} on</span>
-            ) : null}
-          </SectionHeader>
-          <ToggleRow row={model.enforceRow} />
-          <Separator className="my-1" />
-          {model.bookRows ? (
-            model.bookRows.map((row) => <ToggleRow key={row.key} row={row} />)
-          ) : (
-            <p className="px-1.5 py-1 text-xs text-muted-foreground">
-              No brand book yet —{' '}
-              <Link
-                href="/settings?section=brand"
-                className="underline underline-offset-2 transition-colors hover:text-foreground"
-              >
-                finish it in Settings
-              </Link>
-              .
-            </p>
-          )}
+        <Accordion type="multiple" className="mt-2">
+          <AccordionItem value="brand">
+            <SectionTrigger title="Brand book" summary={model.brandSummary} />
+            <AccordionContent className={PANEL_CLASS}>
+              <InspectorCaption>{BRAND_CAPTION}</InspectorCaption>
+              <ToggleRow row={model.enforceRow} />
+              <Separator className="my-1" />
+              {model.bookRows ? (
+                model.bookRows.map((row) => <ToggleRow key={row.key} row={row} />)
+              ) : (
+                <p className="px-1.5 py-1 text-xs text-muted-foreground">
+                  No brand book yet —{' '}
+                  <Link
+                    href="/settings?section=brand"
+                    className="underline underline-offset-2 transition-colors hover:text-foreground"
+                  >
+                    finish it in Settings
+                  </Link>
+                  .
+                </p>
+              )}
+            </AccordionContent>
+          </AccordionItem>
 
           {model.directionRows ? (
-            <>
-              <SectionHeader title="Creative direction">
-                <span className="text-[0.65rem] text-muted-foreground">{model.directionCount}</span>
-              </SectionHeader>
-              <p className="px-1.5 pb-1 text-[0.65rem] text-muted-foreground">
-                {DIRECTION_CAPTION}
-              </p>
-              {model.directionRows.map((row) => (
-                <ToggleRow key={row.key} row={row} />
-              ))}
-            </>
+            <AccordionItem value="direction">
+              <SectionTrigger title="Creative direction" summary={model.directionCount} />
+              <AccordionContent className={PANEL_CLASS}>
+                <InspectorCaption>{DIRECTION_CAPTION}</InspectorCaption>
+                {model.directionRows.map((row) => (
+                  <ToggleRow key={row.key} row={row} />
+                ))}
+              </AccordionContent>
+            </AccordionItem>
           ) : null}
 
           {model.designRows ? (
-            <>
-              <SectionHeader title="Design system">
-                <span className="text-[0.65rem] text-muted-foreground">{model.designCount}</span>
-              </SectionHeader>
-              <p className="px-1.5 pb-1 text-[0.65rem] text-muted-foreground">
-                {model.designCaption}
-              </p>
-              {model.designRows.map((row) => (
-                <ToggleRow key={row.key} row={row} />
-              ))}
-            </>
+            <AccordionItem value="design">
+              <SectionTrigger title="Design system" summary={model.designCount} />
+              <AccordionContent className={PANEL_CLASS}>
+                <InspectorCaption>{model.designCaption}</InspectorCaption>
+                {model.designRows.map((row) => (
+                  <ToggleRow key={row.key} row={row} />
+                ))}
+              </AccordionContent>
+            </AccordionItem>
           ) : null}
 
-          <SectionHeader title="Creative skills">
-            <div className="flex items-center gap-2">
-              {model.skillCount > 0 ? (
-                <span className="text-[0.65rem] text-muted-foreground">{model.skillCount} on</span>
-              ) : null}
-              <Link
-                href="/settings?section=skills"
-                className="inline-flex items-center gap-1 text-[0.65rem] text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Wand2 className="h-3 w-3" />
-                Manage
-              </Link>
-            </div>
-          </SectionHeader>
-          {model.skillsLoading ? (
-            <p className="px-1.5 py-1 text-xs text-muted-foreground">Loading…</p>
-          ) : model.skillRows.length === 0 ? (
-            <p className="px-1.5 py-1 text-xs text-muted-foreground">
-              No creative skills yet — create one from Manage.
-            </p>
-          ) : (
-            model.skillRows.map((row) => <ToggleRow key={row.key} row={row} />)
-          )}
-        </div>
+          <AccordionItem value="skills">
+            <SectionTrigger
+              title="Skills"
+              summary={model.skillCount > 0 ? `${model.skillCount} on` : 'none on'}
+            />
+            <AccordionContent className={PANEL_CLASS}>
+              <SkillRows
+                rows={model.skillRows}
+                loading={model.skillsLoading}
+                shortcutHint={model.shortcutHint}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </TooltipProvider>
   );

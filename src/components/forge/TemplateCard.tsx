@@ -121,10 +121,12 @@ export function InlineRename({
   value,
   onRename,
   className,
+  iconOnly = false,
 }: {
   value: string;
   onRename: (next: string) => void;
   className?: string;
+  iconOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value);
@@ -167,14 +169,17 @@ export function InlineRename({
       )}
     >
       {/* biome-ignore lint/a11y/noStaticElementInteractions: a shortcut beside the pencil button, which is the accessible path */}
-      <span className="truncate" title={value} onDoubleClick={begin}>
+      <span className={iconOnly ? 'sr-only' : 'truncate'} title={value} onDoubleClick={begin}>
         {value}
       </span>
       <button
         type="button"
         aria-label={`Rename ${value}`}
         onClick={begin}
-        className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/rename:opacity-100"
+        className={cn(
+          'shrink-0 rounded p-0.5 text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/rename:opacity-100',
+          !iconOnly && 'opacity-0',
+        )}
       >
         <Pencil className="size-3.5" aria-hidden />
       </button>
@@ -208,6 +213,8 @@ export type CardRender = { job: ApiRenderJob; file: ApiRenderOutput };
 export function latestCardRender(
   jobs: readonly ApiRenderJob[],
   formats: readonly PreviewFormat[],
+  /** Only this format's file — an output row shows its own comp, never a sibling's. */
+  formatId?: string,
 ): CardRender | null {
   for (const job of jobs) {
     if (!formats.length) {
@@ -222,7 +229,7 @@ export function latestCardRender(
       if (file) return { job, file };
       continue;
     }
-    for (const format of formats) {
+    for (const format of formatId ? formats.filter((item) => item.id === formatId) : formats) {
       const file = fileForFormat(job.outputs, formats, format.id);
       if (file) return { job, file };
     }
@@ -231,7 +238,7 @@ export function latestCardRender(
 }
 
 /** The card's picture: the rendered file, else the drawing of the boxes with a word on why. */
-function CardPicture({
+export function CardPicture({
   name,
   render,
   emptyLabel,
@@ -280,6 +287,81 @@ function CardPicture({
   );
 }
 
+/** The parse narrowed to one delivery composition, so a drawing shows only that output's boxes. */
+export function parseOfComp(
+  parse: NonNullable<TemplateSourceSummary['parse']>,
+  comp: string,
+): NonNullable<TemplateSourceSummary['parse']> {
+  return {
+    ...parse,
+    comps: parse.comps.filter((item) => item.name === comp || !item.isDelivery),
+    ratios: parse.ratios.flatMap((entry) =>
+      entry.comps.includes(comp) ? [{ ...entry, comps: [comp] }] : [],
+    ),
+  };
+}
+
+/**
+ * A gallery row's hover: its best picture — the newest finished render, else the drawing of its
+ * boxes — over whatever facts the caller has. The drawing reads its own latest frame by key, and
+ * that read waits for the hover, because hover content mounts only when it opens.
+ */
+export function TemplateHoverPreview({
+  brandId,
+  name,
+  templateKey,
+  parse,
+  ratios,
+  renders,
+  emptyLabel,
+  comp,
+  children,
+}: {
+  brandId: string;
+  name: string;
+  templateKey: string | null;
+  parse: TemplateSourceSummary['parse'] | null;
+  ratios: readonly string[];
+  renders: readonly ApiRenderJob[];
+  emptyLabel: string | null;
+  /** One delivery composition of the template: its own file, else its own drawing. */
+  comp?: string;
+  children?: ReactNode;
+}) {
+  const formats = useMemo(
+    () => previewFormats({ parse: parse ?? undefined, ratios }),
+    [parse, ratios],
+  );
+  const formatId = comp ? formats.find((format) => format.label === comp)?.id : undefined;
+  const render = comp
+    ? formatId
+      ? latestCardRender(renders, formats, formatId)
+      : null
+    : latestCardRender(renders, formats);
+  const drawn = comp && parse ? parseOfComp(parse, comp) : parse;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="aspect-[4/3] overflow-hidden rounded-md border bg-muted/40">
+        <CardPicture
+          key={render?.file.url ?? 'none'}
+          name={name}
+          render={render}
+          emptyLabel={emptyLabel}
+        >
+          <TemplateWireframe
+            brandId={brandId}
+            // An output's drawing is its own boxes; the template's latest frame may be a sibling's.
+            templateKey={comp ? null : templateKey}
+            parse={drawn}
+            className="size-full p-3"
+          />
+        </CardPicture>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // The ledger's reading of a version (templateVersion.ts): a source revision and the day it was used.
 const shortDate = (value: string) =>
   new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -289,7 +371,7 @@ const shortDate = (value: string) =>
  * its cache — never a fetch of its own. Named-variable and missing-font counts need the template's
  * own reads, so they appear once the template has been opened.
  */
-function TemplateFacts({
+export function TemplateFacts({
   brandId,
   source,
   lastRender,
@@ -472,6 +554,7 @@ export type SharedTemplate = {
   updatedAt: string | null;
   /** The binding this template lives in. Always set — adoption and rendering both need it. */
   workspaceId: string;
+  sourceAssetId?: string | null;
 };
 
 /**

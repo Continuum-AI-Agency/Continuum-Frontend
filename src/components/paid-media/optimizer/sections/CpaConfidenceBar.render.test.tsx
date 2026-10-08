@@ -50,4 +50,17 @@ describe('CpaConfidenceBar', () => {
     expect(getByText('Retargeting — 30d')).toBeTruthy();
     expect(getByText('Held · CBO/lifetime')).toBeTruthy();
   });
+
+  it('says there is no upper bound yet for a zero-conversion ad set — no $0.00, no NaN', () => {
+    const unbounded = {
+      ...gainer,
+      diagnostics: { ci: { cpa: 0, lo: 0, hi: null, events: 0 } },
+    } as (typeof cycleItemsMixed)[number];
+    const { container } = renderRow(unbounded);
+    const text = container.textContent ?? '';
+    expect(text).toContain('no upper bound yet (0 conversions)');
+    expect(text).not.toContain('$0');
+    expect(text).not.toContain('NaN');
+    expect(text).not.toContain('0ev');
+  });
 });

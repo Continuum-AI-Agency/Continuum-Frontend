@@ -7,6 +7,7 @@ import { type BrandAccessClient, readBrandAccess } from '@/lib/billing/brandAcce
 import type { BrandAccess } from '@/lib/billing/productAccess';
 import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { resolveActiveBrandId } from '@/lib/brands/resolve-active-brand';
+import { claimPendingInvite } from '@/lib/onboarding/claimInvite';
 import type { BrandSummary } from '@/lib/repositories/brandProfile';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -62,6 +63,11 @@ type BrandPermissionRow = {
 type BrandInviteRow = {
   brand_profile_id: string;
   role: string | null;
+};
+
+type AccessibleBrandRows = {
+  permissions: BrandPermissionRow[];
+  invites: BrandInviteRow[];
 };
 
 function isStatementTooComplex(error: unknown): boolean {
@@ -148,11 +154,40 @@ async function fetchAccessibleBrandRows(
   }
 }
 
+/**
+ * A pending invite grants nothing until it is redeemed, and only the emailed link redeems it.
+ * An invitee who signs in any other way (password, Google) was shown the brand and refused
+ * every read of it. Onboarding could not rescue them: `has_brand_access` hides the brand row
+ * from a non-member, so its claim branch never ran. The dashboard layout and the onboarding
+ * page both pass through here first, so this is where the invite gets redeemed.
+ */
+export async function redeemPendingInvites(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  rows: AccessibleBrandRows,
+  refetch: () => Promise<AccessibleBrandRows>,
+): Promise<AccessibleBrandRows> {
+  const permitted = new Set(rows.permissions.map((p) => p.brand_profile_id));
+  const unredeemed = new Set(
+    rows.invites.map((i) => i.brand_profile_id).filter((id) => !permitted.has(id)),
+  );
+  if (unredeemed.size === 0) return rows;
+
+  // ponytail: an invite that keeps refusing (unverified email) is retried on every render; add a backoff if that shows up in edge logs.
+  await Promise.all([...unredeemed].map((id) => claimPendingInvite(supabase, id, userId)));
+  return refetch();
+}
+
 export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
   const supabase = await createSupabaseServerClient();
   const user = await requireClaimsIdentity();
 
-  const { permissions: perms, invites } = await fetchAccessibleBrandRows(user, supabase);
+  const { permissions: perms, invites } = await redeemPendingInvites(
+    supabase,
+    user.id,
+    await fetchAccessibleBrandRows(user, supabase),
+    () => fetchAccessibleBrandRows(user, supabase),
+  );
 
   const permittedIds = (perms ?? []).map((p) => p.brand_profile_id);
   const invitedIds = (invites ?? []).map((i) => i.brand_profile_id);

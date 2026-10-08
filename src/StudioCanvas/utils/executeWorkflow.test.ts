@@ -2704,6 +2704,24 @@ describe('executeWorkflow — omniGen payload', () => {
     expect(payload.brandBookPieces).toEqual(['tone']);
   });
 
+  // Unset used to travel as `undefined`, which the Backend reads as the FULL book while
+  // the node's chip said Light — the one generator whose payload disagreed with its chip.
+  it('resolves an untouched node to the light canvas book, like every other generator', async () => {
+    const payload = await runOmni(
+      [
+        {
+          id: 'omni',
+          position: { x: 0, y: 0 },
+          type: 'omniGen',
+          data: { model: 'gemini-omni-flash', prompt: 'a marble on a track' },
+        } as unknown as StudioNode,
+      ],
+      [],
+    );
+
+    expect(payload.brandBookPieces).toEqual(['colors', 'typography', 'logo']);
+  });
+
   it('defaults the resolution rather than letting the Backend pick silently', async () => {
     const payload = await runOmni(
       [
@@ -2994,6 +3012,49 @@ describe('an edge that exists is never reported as missing', () => {
     expect(
       c.executeGeneration.mock.calls.map((call) => (call[1] as { prompt?: string }).prompt).sort(),
     ).toEqual(['a blue car', 'a red car']);
+  });
+
+  // A Batch run with no credits said "This batch produced nothing for any item" with only
+  // Dismiss, while a single node said "Out of Canvas credits" with Buy credits. The card
+  // is keyed on errorCode, which the fan-out dropped.
+  it('stamps the refusal code on a batch generator whose every item was refused', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'bat',
+        position: { x: 0, y: 0 },
+        type: 'batch',
+        data: {
+          itemType: 'text',
+          combine: 'zip',
+          items: [
+            { id: 'a', kind: 'text', value: 'a red car' },
+            { id: 'b', kind: 'text', value: 'a blue car' },
+          ],
+        },
+      },
+      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+    ] as unknown as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        {
+          id: 'e1',
+          source: 'bat',
+          target: 'gen',
+          sourceHandle: 'collection',
+          targetHandle: 'prompt',
+        },
+      ]);
+
+    const c = controls();
+    c.executeGeneration.mockImplementation(async () => ({
+      success: false,
+      error: 'Out of Canvas credits',
+      errorCode: 'credits_exhausted',
+    }));
+    await executeWorkflow(c as never, { targetNodeId: 'gen' });
+
+    expect(nodeById('gen')?.data.errorCode).toBe('credits_exhausted');
   });
 
   // Bug #301: a Router with a Text Block wired in showed the badge `Unset` and the

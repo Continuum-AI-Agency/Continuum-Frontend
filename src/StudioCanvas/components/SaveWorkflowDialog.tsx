@@ -304,6 +304,7 @@ export function SaveWorkflowDialog({
   const [error, setError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isDraftingGuide, setIsDraftingGuide] = React.useState(false);
+  const [guideSource, setGuideSource] = React.useState<'model' | 'fallback' | null>(null);
   const [kind, setKind] = React.useState<SaveKind>('workflow');
   const [pipelineBindings, setPipelineBindings] = React.useState<PipelineBindings>({});
   const [editorConfigurations, setEditorConfigurations] = React.useState<
@@ -474,6 +475,7 @@ export function SaveWorkflowDialog({
     setPipelineBindings({});
     setEditorConfigurations({});
     setAgentGuide(null);
+    setGuideSource(null);
   }, [form, setOpen]);
 
   const draftGuide = async () => {
@@ -494,20 +496,17 @@ export function SaveWorkflowDialog({
       });
       form.setValue('description', draft.description, { shouldDirty: true });
       setAgentGuide(draft.agent_guide);
+      setGuideSource(draft.source ?? 'model');
     } catch (err) {
-      const summary = values.description?.trim() || `${values.name.trim()} creative pipeline.`;
-      form.setValue('description', summary, { shouldDirty: true });
-      setAgentGuide({
-        version: 1,
-        use_when: [`The task matches the declared inputs and outputs of ${values.name.trim()}.`],
-        avoid_when: [],
-        input_guidance: pipelineMetadata.inputPorts.map((port) => ({
-          input_id: port.id,
-          instruction: `Supply ${port.label ?? port.id} as ${port.dataType ?? 'text'}.`,
-        })),
-        invocation_notes: [],
+      // No invented guide: the Backend already falls back to a rule-based one when its writer
+      // model fails, so reaching here means the request itself was refused (e.g. an input on
+      // an occupied handle). Say why, and let the author fix it and redraft.
+      const toastOptions = coerceToastOptions(err, {
+        title: 'Could not draft the guide',
+        description: err instanceof Error ? err.message : 'Try again.',
+        variant: 'error',
       });
-      setError('The automatic draft failed. A manual guide is ready for review below.');
+      setError(toastOptions.description ?? toastOptions.title);
     } finally {
       setIsDraftingGuide(false);
     }
@@ -516,6 +515,15 @@ export function SaveWorkflowDialog({
   const onSubmit = form.handleSubmit(async (values) => {
     if (!brandProfileId) {
       setError('Select a brand profile to save workflows.');
+      return;
+    }
+    // The description is what another agent reads to decide whether to run this pipeline,
+    // so a filler line like "<name> creative pipeline." is worse than refusing.
+    const description = values.description?.trim() ?? '';
+    if (kind === 'pipeline' && !description) {
+      form.setError('description', {
+        message: 'Describe what this pipeline makes and when to use it.',
+      });
       return;
     }
 
@@ -541,7 +549,7 @@ export function SaveWorkflowDialog({
         await publishPipeline({
           brand_profile_id: brandProfileId,
           name: values.name.trim(),
-          description: values.description?.trim() || `${values.name.trim()} creative pipeline.`,
+          description,
           nodes: snapshot.nodes,
           edges: snapshot.edges,
           ...(roomId ? { source_room_id: roomId } : {}),
@@ -552,7 +560,7 @@ export function SaveWorkflowDialog({
         await createAiStudioWorkflowAction({
           brandProfileId,
           name: values.name.trim(),
-          description: values.description?.trim() || undefined,
+          description: description || undefined,
           nodes: snapshot.nodes,
           edges: snapshot.edges,
           metadata: {
@@ -699,13 +707,23 @@ export function SaveWorkflowDialog({
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="workflow-description">Description</Label>
+        <Label htmlFor="workflow-description">
+          {kind === 'pipeline' ? 'What it makes and when to use it' : 'Description'}
+        </Label>
         <Textarea
           id="workflow-description"
-          placeholder="Optional notes for your team"
+          placeholder={
+            kind === 'pipeline'
+              ? 'Makes 9:16 launch images of a character. Use for product launches.'
+              : 'Optional notes for your team'
+          }
           rows={3}
+          aria-invalid={Boolean(form.formState.errors.description)}
           {...form.register('description')}
         />
+        {form.formState.errors.description?.message && (
+          <p className="text-xs text-danger">{form.formState.errors.description.message}</p>
+        )}
       </div>
 
       {kind === 'pipeline' ? (
@@ -729,6 +747,11 @@ export function SaveWorkflowDialog({
           </div>
           {agentGuide ? (
             <>
+              {guideSource === 'fallback' ? (
+                <p className="text-xs text-muted-foreground">
+                  Drafted from the pipeline's inputs and outputs. Review it before publishing.
+                </p>
+              ) : null}
               <div className="grid gap-1">
                 <Label htmlFor="pipeline-use-when">Use when · one per line</Label>
                 <Textarea

@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
 import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
+import { NotificationPreferences } from '@/components/notifications/NotificationPreferences';
 import { ChatConnectionsSection } from '@/components/settings/account/ChatConnectionsSection';
 import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
 import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
@@ -47,6 +48,7 @@ import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   createEmptyUserIntegrationSummary,
+  fetchFigmaAccountNames,
   fetchProviderReconnectPrompts,
   fetchUserIntegrationSummary,
 } from '@/lib/integrations/userIntegrations';
@@ -54,6 +56,7 @@ import type { AgentRequestPayload } from '@/lib/onboarding/agentClient';
 import { mapOnboardingStateToAgentPayload } from '@/lib/onboarding/mapping';
 import { ensureOnboardingState, fetchOnboardingState } from '@/lib/onboarding/storage';
 import { createBrandProfileRepository } from '@/lib/repositories/brandProfile';
+import { DriveSettings } from './drive/DriveSettings';
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
@@ -395,6 +398,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const reconnectPrompts = user
       ? await fetchProviderReconnectPrompts(user.id, userIntegrationSummary)
       : [];
+    const figmaAccounts = user ? await fetchFigmaAccountNames(user.id) : [];
 
     activeSectionSlot = (
       <>
@@ -405,16 +409,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <UserConnectionsSwitcher
             integrations={userIntegrationSummary}
             reconnectPrompts={reconnectPrompts}
+            figmaAccounts={figmaAccounts}
           />
         </SettingsSection>
-        {user?.id ? (
-          <SettingsSection
-            title="Sharing and removal"
-            description="Which brands each connection reaches, and how to take one back."
-          >
-            <MyConnectionsSharingSection userId={user.id} />
-          </SettingsSection>
-        ) : null}
+        {user?.id ? <MyConnectionsSharingSection userId={user.id} /> : null}
         <SettingsSection
           title="Chat request delivery"
           description="Slack and Microsoft Teams identities that can receive Goal questions. Choose the preferred route for this brand."
@@ -439,6 +437,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <McpConnectionsSection />
         </SettingsSection>
       </>
+    );
+  } else if (initialSection === 'drive') {
+    activeSectionSlot = <DriveSettings email={userEmail} />;
+  } else if (initialSection === 'notifications') {
+    activeSectionSlot = (
+      <SettingsSection
+        title="Notifications"
+        description="Choose where each kind of update reaches you, and how often. Digests group everything waiting into one message."
+      >
+        <NotificationPreferences />
+      </SettingsSection>
     );
   } else if (initialSection === 'activity') {
     activeSectionSlot = (

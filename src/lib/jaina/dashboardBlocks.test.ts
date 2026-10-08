@@ -60,6 +60,18 @@ describe('prepareDashboardBlocks', () => {
     expect(plan.windowLabel).toBe('2026-08-23 → 2026-09-21');
   });
 
+  test('pairs every kept block with its re-run spec, in the same order, never guessing one', () => {
+    const plan = prepareDashboardBlocks({ blocks: [scopeFrame, grid, prose] }, [prose, grid]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.spec.version).toBe(1);
+    expect(plan.spec.blocks.map((entry) => entry.block_id)).toEqual(['scope', 'prose', 'grid']);
+    // None of these fixtures records a tool, so none is re-runnable — and each says why.
+    expect(plan.spec.blocks.map((entry) => entry.spec)).toEqual([null, null, null]);
+    expect(plan.spec.blocks[0]?.reason).toMatch(/composed/);
+    expect(plan.spec.blocks[1]?.reason).toBe('no tool recorded');
+  });
+
   test('injects the report frame when the person hid it, so no figure is saved naked', () => {
     const plan = prepareDashboardBlocks({ blocks: [scopeFrame, grid, prose] }, [prose, grid]);
     expect(plan.ok).toBe(true);

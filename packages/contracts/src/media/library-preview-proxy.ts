@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Backend asks Continuum-Render for an H.264 proxy of an MXF / unplayable MOV. */
+/** The Frontend asks the Backend for a version's playback renditions (see library-playback). */
 export const libraryPreviewProxyRequestSchema = z
   .object({
     brandId: z.string().uuid(),

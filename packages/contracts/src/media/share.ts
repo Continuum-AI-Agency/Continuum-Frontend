@@ -5,49 +5,41 @@
 
 import { z } from 'zod';
 import { mediaAssetSchema } from './asset';
-import { commentAnnotationSchema } from './comments';
+import { commentAnnotationSchema, commentAttachmentsSchema } from './comments';
+import {
+  type CustomFieldType,
+  customFieldOptionsSchema,
+  customFieldTypeSchema,
+  customFieldValueSchema,
+} from './custom-fields';
+import {
+  SHARE_FEATURED_FIELD_TYPES,
+  type ShareLinkScope,
+  type ShareVersionMode,
+  shareLinkBrandingSchema,
+  shareLinkLayoutSchema,
+  shareLinkSchema,
+  shareLinkScopeSchema,
+  shareLinkWatermarkSchema,
+  sharePolicySchema,
+  shareVersionModeSchema,
+} from './share-core';
 
-export const shareLinkScopeSchema = z.enum(['asset', 'collection', 'selection']);
-export type ShareLinkScope = z.infer<typeof shareLinkScopeSchema>;
+export * from './share-core';
 
-export const shareVersionModeSchema = z.enum(['live', 'pinned', 'all']);
-export type ShareVersionMode = z.infer<typeof shareVersionModeSchema>;
+// Every featurable type is a real custom-field type.
+const featurableTypesAreFieldTypes: readonly CustomFieldType[] = SHARE_FEATURED_FIELD_TYPES;
+void featurableTypesAreFieldTypes;
 
-export const sharePolicySchema = z
+export const shareFeaturedFieldSchema = z
   .object({
-    versionMode: shareVersionModeSchema,
-    pinnedVersionId: z.string().min(1).nullable(),
-    allowComments: z.boolean(),
-    allowApproval: z.boolean(),
-    allowDownload: z.boolean(),
-    showMetadata: z.boolean(),
-    showCustomFields: z.boolean(),
-    requireIdentity: z.boolean(),
-    hasPasscode: z.boolean(),
+    id: z.string().uuid(),
+    name: z.string(),
+    type: customFieldTypeSchema,
+    options: customFieldOptionsSchema,
   })
   .strict();
-export type SharePolicy = z.infer<typeof sharePolicySchema>;
-
-export const shareLinkSchema = z
-  .object({
-    id: z.string().min(1),
-    brandId: z.string().min(1),
-    token: z.string().min(1),
-    scope: shareLinkScopeSchema,
-    assetId: z.string().nullable().optional(),
-    collectionId: z.string().nullable().optional(),
-    assetIds: z.array(z.string().min(1)).default([]),
-    permissions: z.literal('view'),
-    policy: sharePolicySchema,
-    createdBy: z.string().nullable().optional(),
-    expiresAt: z.string().nullable().optional(),
-    revokedAt: z.string().nullable().optional(),
-    createdAt: z.string(),
-    // Transient: absolute public URL for the token, built at read time.
-    url: z.string().nullable().optional(),
-  })
-  .strict();
-export type ShareLink = z.infer<typeof shareLinkSchema>;
+export type ShareFeaturedField = z.infer<typeof shareFeaturedFieldSchema>;
 
 const createShareLinkFields = {
   brandId: z.string().min(1),
@@ -79,18 +71,21 @@ function validateShareTarget(
   },
   context: z.RefinementCtx,
 ) {
-    if (value.scope === 'asset' && !value.assetId) {
-      context.addIssue({ code: 'custom', message: 'assetId is required for asset scope' });
-    }
-    if (value.scope === 'collection' && !value.collectionId) {
-      context.addIssue({ code: 'custom', message: 'collectionId is required for collection scope' });
-    }
-    if (value.scope === 'selection' && !value.assetIds?.length) {
-      context.addIssue({ code: 'custom', message: 'assetIds are required for selection scope' });
-    }
-    if (value.versionMode === 'pinned' && value.scope === 'asset' && !value.pinnedVersionId) {
-      context.addIssue({ code: 'custom', message: 'pinnedVersionId is required for pinned asset links' });
-    }
+  if (value.scope === 'asset' && !value.assetId) {
+    context.addIssue({ code: 'custom', message: 'assetId is required for asset scope' });
+  }
+  if (value.scope === 'collection' && !value.collectionId) {
+    context.addIssue({ code: 'custom', message: 'collectionId is required for collection scope' });
+  }
+  if (value.scope === 'selection' && !value.assetIds?.length) {
+    context.addIssue({ code: 'custom', message: 'assetIds are required for selection scope' });
+  }
+  if (value.versionMode === 'pinned' && value.scope === 'asset' && !value.pinnedVersionId) {
+    context.addIssue({
+      code: 'custom',
+      message: 'pinnedVersionId is required for pinned asset links',
+    });
+  }
 }
 
 export const createShareLinkRequestSchema = z
@@ -139,6 +134,21 @@ export type ListShareLinksResponse = z.infer<typeof listShareLinksResponseSchema
 // A comment as an anonymous viewer may see it. Deliberately narrower than
 // MediaComment: no createdBy, no resolvedBy, and never an email address — the
 // share page is unauthenticated, so identity is a display name or nothing.
+// What a guest needs to preview a comment's attachment in place. Signed for the
+// share page like the shared assets themselves; only attachments of comments the
+// brand chose to share ever get here.
+export const publicShareAttachmentPreviewSchema = z
+  .object({
+    assetId: z.string().min(1),
+    kind: z.enum(['image', 'video', 'audio', 'file']),
+    name: z.string(),
+    mimeType: z.string().nullable(),
+    url: z.string().nullable(),
+    thumbnailUrl: z.string().nullable(),
+  })
+  .strict();
+export type PublicShareAttachmentPreview = z.infer<typeof publicShareAttachmentPreviewSchema>;
+
 export const publicShareCommentSchema = z
   .object({
     id: z.string().min(1),
@@ -147,6 +157,8 @@ export const publicShareCommentSchema = z
     parentCommentId: z.string().nullable().optional(),
     body: z.string(),
     annotation: commentAnnotationSchema.nullable().optional(),
+    attachments: commentAttachmentsSchema.optional(),
+    attachmentPreviews: z.array(publicShareAttachmentPreviewSchema).max(10).optional(),
     authorName: z.string().nullable().optional(),
     createdAt: z.string(),
   })
@@ -174,6 +186,32 @@ export const publicSharePayloadSchema = z
     assets: z.array(publicShareAssetSchema),
     comments: z.array(publicShareCommentSchema),
     policy: sharePolicySchema,
+    layout: shareLinkLayoutSchema.optional(),
+    branding: shareLinkBrandingSchema.optional(),
+    watermark: shareLinkWatermarkSchema.nullable().optional(),
+    featuredFieldId: z.string().uuid().nullable().optional(),
+    // Resolved presentation: brand kit defaults under the link's overrides.
+    logoUrl: z.string().nullable().optional(),
+    featuredField: shareFeaturedFieldSchema.nullable().optional(),
+    featuredValues: z.record(z.string(), customFieldValueSchema).optional(),
+    viewerIp: z.string().nullable().optional(),
+    // The name a viewer gave on an open link (no email), which tags their events.
+    viewerName: z.string().nullable().optional(),
+    // Protected links: where each shown version's stored preview stands, keyed by version
+    // id (library-share asked the Backend to make the missing ones, for that version).
+    // Absent = nothing was missing.
+    previewStates: z
+      .record(z.string(), z.enum(['ready', 'pending', 'failed', 'unsupported', 'not_found']))
+      .optional(),
+    // Collection shares page instead of truncating; total counts every member.
+    pagination: z
+      .object({
+        page: z.number().int().positive(),
+        pageSize: z.number().int().positive(),
+        total: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
     reviewer: z
       .object({
         displayName: z.string(),
@@ -194,9 +232,7 @@ export const externalReviewerSessionRequestSchema = z
     email: z.string().trim().email().max(320).optional(),
   })
   .strict();
-export type ExternalReviewerSessionRequest = z.infer<
-  typeof externalReviewerSessionRequestSchema
->;
+export type ExternalReviewerSessionRequest = z.infer<typeof externalReviewerSessionRequestSchema>;
 
 export const createExternalReviewerSessionOperationSchema =
   externalReviewerSessionRequestSchema.extend({
@@ -211,9 +247,7 @@ export const externalReviewerSessionResponseSchema = z
     email: z.string().nullable(),
   })
   .strict();
-export type ExternalReviewerSessionResponse = z.infer<
-  typeof externalReviewerSessionResponseSchema
->;
+export type ExternalReviewerSessionResponse = z.infer<typeof externalReviewerSessionResponseSchema>;
 
 export const createExternalShareCommentRequestSchema = z
   .object({

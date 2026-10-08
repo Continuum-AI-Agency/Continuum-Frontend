@@ -14,13 +14,20 @@ import {
   type AgentAttachment,
   type AgentDocumentAttachment,
   type ConversationDataAccount,
+  type ConversationDataPlatform,
   type ConversationDataScopeV1,
   type JainaChatRequest as JainaChatStreamRequest,
   jainaChatRequestSchema,
+  type PlatformId,
 } from '@continuum/contracts';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { browserTimezone } from '@/lib/automations/schedule';
-import type { JainaPlanAction, JainaScaffoldAction, JainaToolAction } from '@/lib/jaina/schemas';
+import type {
+  JainaOperatorAction,
+  JainaPlanAction,
+  JainaScaffoldAction,
+  JainaToolAction,
+} from '@/lib/jaina/schemas';
 
 export type { JainaChatStreamRequest };
 
@@ -30,6 +37,12 @@ export type JainaChatInput = {
   adAccountId: string;
   adAccountIds?: string[];
   accounts?: ConversationDataAccount[];
+  /**
+   * The platform `adAccountId` (and `adAccountIds`) live on, when the caller knows it: the
+   * account's own platform, or the Optimizer tab a question was asked from. Absent is Meta, the
+   * platform every account was before Google and TikTok. Explicit `accounts` carry their own.
+   */
+  platform?: PlatformId;
   brandId: string;
   /**
    * The optional sub-brand project scope, from ActiveProjectProvider. Absent means brand
@@ -50,6 +63,11 @@ export type JainaChatInput = {
   scaffoldAction?: JainaScaffoldAction;
   /** A human's answer to any gated tool that is not a paid scaffold. */
   toolAction?: JainaToolAction;
+  /**
+   * A deterministic gated call opened by a button, not by the model: the Backend opens the
+   * tool's approval gate with no LLM turn, and the answer comes back as a `toolAction`.
+   */
+  operatorAction?: JainaOperatorAction;
   forceReportArtifact?: boolean;
   /**
    * Invoked when the request fails to reach the backend.
@@ -109,6 +127,13 @@ function buildJainaDataScope(
   };
 }
 
+/** The ad-platform id as the conversation data-scope contract spells it. */
+const CONVERSATION_PLATFORM: Record<PlatformId, ConversationDataPlatform> = {
+  meta: 'meta',
+  google_ads: 'google_ads',
+  tiktok_ads: 'tiktok',
+};
+
 export function buildJainaChatStreamRequest(
   input: JainaChatInput,
   timezone = browserTimezone(),
@@ -116,12 +141,18 @@ export function buildJainaChatStreamRequest(
   const accountIds = input.accounts?.map((account) => account.accountId) ??
     input.adAccountIds ?? [input.adAccountId];
   const references = input.references ?? [];
+  const platform = CONVERSATION_PLATFORM[input.platform ?? 'meta'];
   const { dataScope, hasEntityScope } = buildJainaDataScope(
-    input.accounts ?? accountIds.map((accountId) => ({ platform: 'meta', accountId })),
+    input.accounts ?? accountIds.map((accountId) => ({ platform, accountId })),
     references,
   );
+  // A Meta account alone is the legacy request; any other platform has to be said, or the
+  // Backend reads the account as Meta.
   const includeScope =
-    input.accounts !== undefined || input.adAccountIds !== undefined || hasEntityScope;
+    input.accounts !== undefined ||
+    input.adAccountIds !== undefined ||
+    hasEntityScope ||
+    platform !== 'meta';
 
   return jainaChatRequestSchema.parse({
     query: input.query,
@@ -134,6 +165,7 @@ export function buildJainaChatStreamRequest(
     ...(input.planAction ? { plan_action: input.planAction } : {}),
     ...(input.scaffoldAction ? { scaffold_action: input.scaffoldAction } : {}),
     ...(input.toolAction ? { tool_action: input.toolAction } : {}),
+    ...(input.operatorAction ? { operator_action: input.operatorAction } : {}),
     context: {
       adAccountId: input.adAccountId,
       ...(includeScope ? { adAccountIds: accountIds, dataScope } : {}),

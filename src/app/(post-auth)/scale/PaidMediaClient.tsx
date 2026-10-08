@@ -6,10 +6,16 @@ import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
+import { CampaignCreativeActionsProvider } from '@/CampaignCanvas/components/CampaignCreativeActions';
+import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
+import { CampaignsTabSkeleton } from '@/components/paid-media/campaigns/CampaignsTabSkeleton';
+import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/usePrefetchScaleCampaigns';
 import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
   useOptimizerAdAccounts,
+  useOptimizerPortfolios,
   usePrefetchOptimizerOverview,
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import { useOptimizerUrlState } from '@/components/paid-media/optimizer/useOptimizerUrlState';
@@ -21,13 +27,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSession } from '@/hooks/useSession';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import {
+  buildCampaignCreativeRequest,
+  type CampaignCreativeRequest,
+} from '@/lib/campaign-canvas/creativeGeneration';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
+import { jainaNewConversationParam, jainaPlatformParam } from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
+import {
+  assignedAccountsForPlatform,
+  chooseDefaultAdAccount,
+  isSameAdAccount,
+  rankPortfolioAccounts,
+  readSavedAdAccount,
+  saveAdAccount,
+} from './adAccountSelection';
+import { OptimizerSurfaceSkeleton } from './OptimizerSurfaceSkeleton';
 
-const PAID_MEDIA_TABS = ['dashboard', 'performance', 'jaina'] as const;
+const PAID_MEDIA_TABS = ['dashboard', 'performance', 'campaigns', 'jaina'] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
 function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
@@ -73,31 +94,6 @@ function JainaSkeleton() {
   );
 }
 
-function OptimizerSurfaceSkeleton() {
-  return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
-      <div className="flex items-center justify-between border-border/70 border-b px-4 py-3">
-        <Skeleton className="h-5 w-28 rounded-md" />
-        <Skeleton className="h-8 w-72 rounded-md" />
-      </div>
-      <div className="min-h-0 space-y-3 overflow-hidden p-3">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-        </div>
-        <Skeleton className="h-[min(20rem,45vh)] rounded-lg" />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <Skeleton className="h-36 rounded-lg" />
-          <Skeleton className="h-36 rounded-lg" />
-          <Skeleton className="h-36 rounded-lg" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const PaidMediaDashboard = dynamic(
   () =>
     import('@/components/paid-media/dashboard/PaidMediaDashboard').then(
@@ -110,6 +106,13 @@ const JainaChatSurface = dynamic(
   () =>
     import('@/components/paid-media/jaina/JainaChatSurface').then((mod) => mod.JainaChatSurface),
   { ssr: false, loading: () => <JainaSkeleton /> },
+);
+
+// The chat's companion canvas. Dynamic like the chat: the canvas store carries React Flow, and
+// the Scale page's first load must not.
+const ScaleCompanionCanvas = dynamic(
+  () => import('@/CampaignCanvas/ScaleCompanionCanvas').then((mod) => mod.ScaleCompanionCanvas),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
 // The win-rate explorer is a pop-out, not a tab: it needs full height, and the
@@ -130,6 +133,13 @@ const OptimizerTab = dynamic(
   { ssr: false, loading: () => <OptimizerSurfaceSkeleton /> },
 );
 
+// Meta only: every campaign on the account, active and paused, with Pause / Unpause through a
+// Jaina approval.
+const CampaignsTab = dynamic(
+  () => import('@/components/paid-media/campaigns/CampaignsTab').then((mod) => mod.CampaignsTab),
+  { ssr: false, loading: () => <CampaignsTabSkeleton /> },
+);
+
 type PaidMediaClientPageProps = {
   brandProfileId: string;
   brandName: string;
@@ -141,7 +151,11 @@ type PaidMediaClientPageProps = {
 type PaidMediaAccountContext = {
   brandProfileId: string;
   selectedAdAccount: string | null;
+  /** The person picked this account in this brand context; defaults stop overriding it. */
+  userChosen: boolean;
 };
+
+type SavedAccountChoice = { key: string; accountId: string | null };
 
 export default function PaidMediaClientPage({
   brandProfileId,
@@ -165,10 +179,16 @@ export default function PaidMediaClientPage({
     jainaPromptParam && jainaPromptParam.trim().length > 0 && !jainaPromptParam.startsWith('/')
       ? jainaPromptParam
       : null;
+  // The platform a question was asked from (the Optimizer's Google or TikTok tab): the turn is
+  // scoped to the brand's account there.
+  const jainaPlatform = jainaPlatformParam(searchParams.get('platform'));
+  // An Ask-Jaina chip's question is a fresh ask (`new=1`): it opens its own conversation.
+  const jainaNewConversation = jainaNewConversationParam(searchParams.get('new'));
   const clearJainaPrompt = React.useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     if (!params.has('prompt')) return;
     params.delete('prompt');
+    params.delete('new');
     router.replace(`?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
   const { user } = useSession();
@@ -181,22 +201,38 @@ export default function PaidMediaClientPage({
   const [accountContext, setAccountContext] = React.useState<PaidMediaAccountContext>(() => ({
     brandProfileId,
     selectedAdAccount: initialAdAccountId ?? null,
+    userChosen: false,
   }));
   const isBrandContextTransition = accountContext.brandProfileId !== brandProfileId;
   const selectedAdAccount = isBrandContextTransition ? null : accountContext.selectedAdAccount;
   const setSelectedAdAccount = React.useCallback(
-    (adAccountId: string | null) => {
+    (adAccountId: string | null, userChosen = false) => {
       setAccountContext((current) => {
         if (current.brandProfileId !== brandProfileId) return current;
-        if (current.selectedAdAccount === adAccountId) return current;
-        return { ...current, selectedAdAccount: adAccountId };
+        if (current.selectedAdAccount === adAccountId && current.userChosen === userChosen) {
+          return current;
+        }
+        return { ...current, selectedAdAccount: adAccountId, userChosen };
       });
     },
     [brandProfileId],
   );
   const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
+  // A person's pick is remembered per brand and platform; an auto-selection never is.
+  const handleUserSelectAdAccount = React.useCallback(
+    (adAccountId: string) => {
+      setSelectedAdAccount(adAccountId, true);
+      saveAdAccount(brandProfileId, platform, adAccountId);
+    },
+    [brandProfileId, platform, setSelectedAdAccount],
+  );
+  const handleAutoSelectAdAccount = React.useCallback(
+    (adAccountId: string) => setSelectedAdAccount(adAccountId),
+    [setSelectedAdAccount],
+  );
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const prefetchOptimizerOverview = usePrefetchOptimizerOverview(brandProfileId, selectedAdAccount);
+  const prefetchScaleCampaigns = usePrefetchScaleCampaigns(brandProfileId, selectedAdAccount);
 
   // The optimizer admits only ad accounts ASSIGNED to this brand
   // (plugin_mcp.list_brand_ad_accounts). Scope the picker to that exact set so it
@@ -210,6 +246,63 @@ export default function PaidMediaClientPage({
     if (!optimizerAccounts.isSuccess) return undefined;
     return optimizerAccounts.data.map((account) => account.account_id);
   }, [platform, optimizerAccounts.isSuccess, optimizerAccounts.data]);
+  // The same assigned rows carry names, so the picker can render them without waiting on
+  // the integration summary — the request that held "Loading accounts..." on beta.
+  const knownAccounts = React.useMemo(() => {
+    if (!optimizerAccounts.isSuccess) return undefined;
+    return assignedAccountsForPlatform(optimizerAccounts.data, platform);
+  }, [platform, optimizerAccounts.isSuccess, optimizerAccounts.data]);
+
+  // Read after mount: storage is per-viewer and the server render cannot see it. The key
+  // pins the read to its brand and platform so a stale read never applies to the next one.
+  const savedChoiceKey = `${brandProfileId}:${platform}`;
+  const [savedChoice, setSavedChoice] = React.useState<SavedAccountChoice | null>(null);
+  React.useEffect(() => {
+    setSavedChoice({
+      key: savedChoiceKey,
+      accountId: readSavedAdAccount(brandProfileId, platform),
+    });
+  }, [savedChoiceKey, brandProfileId, platform]);
+  const savedAccountId = savedChoice?.key === savedChoiceKey ? savedChoice.accountId : null;
+  const savedChoiceRead = savedChoice?.key === savedChoiceKey;
+
+  const brandPortfolios = useOptimizerPortfolios(brandProfileId, null);
+  const portfoliosSettled = brandPortfolios.isSuccess || brandPortfolios.isError;
+  const portfolioAccountRank = React.useMemo(
+    () => rankPortfolioAccounts(brandPortfolios.brandPortfolios),
+    [brandPortfolios.brandPortfolios],
+  );
+  const preferredAccountId = React.useMemo(
+    () =>
+      knownAccounts
+        ? chooseDefaultAdAccount({
+            candidates: knownAccounts,
+            savedAccountId,
+            portfolioAccountRank,
+          })
+        : null,
+    [knownAccounts, savedAccountId, portfolioAccountRank],
+  );
+
+  // Until the person picks, the page sits on the preferred account rather than the server
+  // seed (the alphabetical first assigned account). A saved choice applies at once; the
+  // portfolio-holder default waits for the portfolio list so it does not flip twice.
+  React.useEffect(() => {
+    if (isBrandContextTransition || accountContext.userChosen) return;
+    if (!preferredAccountId || !savedChoiceRead) return;
+    if (!savedAccountId && !portfoliosSettled) return;
+    if (isSameAdAccount(selectedAdAccount, preferredAccountId)) return;
+    setSelectedAdAccount(preferredAccountId);
+  }, [
+    isBrandContextTransition,
+    accountContext.userChosen,
+    preferredAccountId,
+    savedChoiceRead,
+    savedAccountId,
+    portfoliosSettled,
+    selectedAdAccount,
+    setSelectedAdAccount,
+  ]);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
   const handlePlatformChange = React.useCallback(
@@ -222,7 +315,49 @@ export default function PaidMediaClientPage({
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
     normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
+  const [creativeRequest, setCreativeRequest] = React.useState<CampaignCreativeRequest | null>(
+    null,
+  );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
+  // The scaffold the Jaina thread is about, shown on its companion canvas.
+  const [companionScaffoldId, setCompanionScaffoldId] = React.useState<string | null>(null);
+  // A turn the companion canvas hands the chat ("Generate with Jaina"), and its Deploy paused.
+  const [companionTurn, setCompanionTurn] = React.useState<{ id: string; text: string } | null>(
+    null,
+  );
+  const companionDeploy = useDeployRequest();
+  const canvasNodes = useCampaignStore((store) => store.nodes);
+  const canvasEdges = useCampaignStore((store) => store.edges);
+  const canvasPlatform = useCampaignStore((store) => store.platform);
+  const campaignCanvasPayload = React.useMemo(() => {
+    if (!isCanvasOpen || canvasPlatform !== 'meta') return null;
+    try {
+      return buildCampaignCanvasPayload(canvasNodes, canvasEdges, {
+        source: 'propose',
+        brandProfileId,
+        adAccountId: selectedAdAccount,
+      });
+    } catch {
+      // Match the full Canvas page: an invalid graph still permits ordinary chat.
+      return null;
+    }
+  }, [isCanvasOpen, canvasPlatform, canvasNodes, canvasEdges, brandProfileId, selectedAdAccount]);
+  const handleGenerateCreative = React.useCallback(
+    async (nodeId: string) => {
+      if (!brandProfileId || !selectedAdAccount)
+        throw new Error('Select a brand and ad account first.');
+      const request = await buildCampaignCreativeRequest({
+        ...useCampaignStore.getState(),
+        nodeId,
+        brandId: brandProfileId,
+        adAccountId: selectedAdAccount,
+      });
+      setCreativeRequest(request);
+      setActiveTab('jaina');
+      setIsCanvasOpen(true);
+    },
+    [brandProfileId, selectedAdAccount],
+  );
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
   // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
   // one must not close the other.
@@ -243,15 +378,11 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setAccountContext((current) => {
       const nextAdAccount = initialAdAccountId ?? null;
-      if (
-        current.brandProfileId === brandProfileId &&
-        current.selectedAdAccount === nextAdAccount
-      ) {
-        return current;
-      }
+      if (current.brandProfileId === brandProfileId) return current;
       return {
         brandProfileId,
         selectedAdAccount: nextAdAccount,
+        userChosen: false,
       };
     });
     setSelectedCampaign(null);
@@ -335,6 +466,20 @@ export default function PaidMediaClientPage({
   const handleCanvasActionApplied = React.useCallback(() => {
     setIsCanvasOpen(true);
   }, []);
+
+  // A proposal or a card's Expand opens the companion; a loaded thread only points it, so
+  // switching threads never reopens a canvas someone closed.
+  const handleScaffoldFocus = React.useCallback(
+    (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => {
+      setCompanionScaffoldId(parentScaffoldId);
+      if (reason !== 'thread') setIsCanvasOpen(true);
+    },
+    [],
+  );
+  const sendCompanionTurn = React.useCallback((text: string) => {
+    setCompanionTurn({ id: crypto.randomUUID(), text });
+  }, []);
+  const clearCompanionTurn = React.useCallback(() => setCompanionTurn(null), []);
 
   const getCanvasWidthLimits = React.useCallback(() => {
     const shellWidth = canvasShellRef.current?.clientWidth ?? 1200;
@@ -475,9 +620,12 @@ export default function PaidMediaClientPage({
               brandId={brandProfileId}
               platform={activeTab === 'jaina' ? 'all' : platform}
               selectedAccountId={selectedAdAccount}
-              onSelect={setSelectedAdAccount}
+              onSelect={handleUserSelectAdAccount}
+              onAutoSelect={handleAutoSelectAdAccount}
               initialTimelineAccounts={initialAccounts}
               assignedAccountIds={assignedAccountIds}
+              knownAccounts={knownAccounts}
+              preferredAccountId={preferredAccountId}
             />
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -545,6 +693,22 @@ export default function PaidMediaClientPage({
               >
                 Optimization
               </TabsTrigger>
+              {platform === 'meta' ? (
+                <TabsTrigger
+                  value="campaigns"
+                  className="px-3 text-xs"
+                  onMouseEnter={() => {
+                    void import('@/components/paid-media/campaigns/CampaignsTab');
+                    prefetchScaleCampaigns();
+                  }}
+                  onFocus={() => {
+                    void import('@/components/paid-media/campaigns/CampaignsTab');
+                    prefetchScaleCampaigns();
+                  }}
+                >
+                  Campaigns
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger
                 value="jaina"
                 data-tour-id="paid-jaina-tab"
@@ -631,7 +795,9 @@ export default function PaidMediaClientPage({
                       </div>
                       <div className="relative min-h-0 flex-1">
                         <ReactFlowProvider>
-                          <CampaignCanvas />
+                          <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                            <CampaignCanvas />
+                          </CampaignCreativeActionsProvider>
                         </ReactFlowProvider>
                       </div>
                     </div>
@@ -648,10 +814,26 @@ export default function PaidMediaClientPage({
               brandId={brandProfileId}
               adAccountId={selectedAdAccount}
               platform={platform}
-              onSelectAdAccount={setSelectedAdAccount}
+              onSelectAdAccount={handleUserSelectAdAccount}
             />
           ) : (
             renderBlockedState()
+          )}
+        </TabsContent>
+
+        <TabsContent value="campaigns" className="box-border min-h-0 overflow-hidden">
+          {!selectedAdAccount ? (
+            renderBlockedState()
+          ) : platform === 'meta' ? (
+            <CampaignsTab
+              key={`${brandProfileId}:${selectedAdAccount}`}
+              brandId={brandProfileId}
+              adAccountId={selectedAdAccount}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center p-4 text-muted-foreground text-sm">
+              Campaign controls are available for Meta ad accounts.
+            </div>
           )}
         </TabsContent>
 
@@ -672,9 +854,20 @@ export default function PaidMediaClientPage({
                   campaignId={selectedCampaign}
                   userId={user?.id ?? null}
                   initialSessionId={jainaSessionIdParam}
+                  campaignCanvasPayload={campaignCanvasPayload}
+                  requestedCreative={creativeRequest}
+                  onCreativeRequestConsumed={() => setCreativeRequest(null)}
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
+                  platform={jainaPlatform}
+                  startNewConversation={jainaNewConversation}
                   onCanvasActionApplied={handleCanvasActionApplied}
+                  onScaffoldFocus={handleScaffoldFocus}
+                  autoSendPrompt={companionTurn}
+                  onAutoSendConsumed={clearCompanionTurn}
+                  operatorActionRequest={companionDeploy.request}
+                  onOperatorActionConsumed={companionDeploy.consumed}
+                  onOperatorActionSettled={companionDeploy.settled}
                   onOpenAccountRead={handleOpenAccountRead}
                   goalsAccessEnabled={goalsAccessEnabled}
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
@@ -716,9 +909,16 @@ export default function PaidMediaClientPage({
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <ReactFlowProvider>
-                          <CampaignCanvas />
-                        </ReactFlowProvider>
+                        <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                          <ScaleCompanionCanvas
+                            brandId={brandProfileId}
+                            scaffoldId={companionScaffoldId}
+                            onSend={sendCompanionTurn}
+                            onDeploy={companionDeploy.requestDeploy}
+                            deployInFlight={companionDeploy.inFlight}
+                            deployRefusal={companionDeploy.refusal}
+                          />
+                        </CampaignCreativeActionsProvider>
                       </motion.div>
                     </motion.aside>
                   </>

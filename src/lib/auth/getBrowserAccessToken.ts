@@ -21,3 +21,13 @@ export async function getBrowserAccessToken(): Promise<string | null> {
     return null;
   }
 }
+
+// A browser-side Storage write with no session goes out as `anon`, and Storage refuses it as
+// "new row violates row-level security policy". The usual cause is a silent sign-out (GoTrue
+// revokes a refresh token family when a stale token is reused), which that message disguises
+// as a permissions bug. Upload paths call this first so the user reads what actually happened.
+export async function requireBrowserAccessToken(): Promise<string> {
+  const token = await getBrowserAccessToken();
+  if (!token) throw new Error('You were signed out. Sign in again, then retry the upload.');
+  return token;
+}

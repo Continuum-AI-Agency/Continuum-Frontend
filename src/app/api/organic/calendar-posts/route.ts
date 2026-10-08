@@ -1,3 +1,4 @@
+import { plannerInstantFromDayTime, resolvePlannerTimeZone } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
@@ -7,13 +8,16 @@ import {
   calendarPostAccountsByPlatformSchema,
   calendarPostsResponseSchema,
   formatCalendarDayId,
+  formatPostedDayId,
   formatPostedTimeLabel,
   normalizeCalendarPlatform,
+  shouldFetchExternalCalendarPosts,
 } from '@/lib/organic/calendar-posts';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { normalizeInstagramOrganicMetricsResponse } from '@/lib/organic-metrics/normalize';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { fetchPublishedPostPages, type PublishedPostRow } from './publishedPostPages';
 
 const calendarPostsRequestSchema = z.object({
   brandId: z.string().uuid(),
@@ -23,23 +27,6 @@ const calendarPostsRequestSchema = z.object({
   includeExternal: z.boolean().optional(),
   forceRefreshExternal: z.boolean().optional(),
 });
-
-type PublishedPostRow = {
-  brand_id: string;
-  caption: string | null;
-  content_snapshot: unknown;
-  created_at: string;
-  draft_id: string | null;
-  ig_user_id: string | null;
-  instagram_post_id: string | null;
-  media_urls: unknown;
-  permalink: string | null;
-  platform: string;
-  platform_account_id: string;
-  platform_post_id: string;
-  post_type: string;
-  published_at: string;
-};
 
 type TikTokVideo = {
   id: string;
@@ -71,21 +58,31 @@ function readMediaUrl(value: unknown): string | null {
   return first?.trim() ?? null;
 }
 
-function toTimestampRange(start: string, end: string) {
+function toTimestampRange(start: string, end: string, timeZone: string) {
+  const nextDay = new Date(`${end}T12:00:00.000Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const startIso = plannerInstantFromDayTime({ dayId: start, timeOfDay: '00:00', timeZone });
+  const nextStartIso = plannerInstantFromDayTime({
+    dayId: nextDay.toISOString().slice(0, 10),
+    timeOfDay: '00:00',
+    timeZone,
+  });
   return {
-    startIso: `${start}T00:00:00.000Z`,
-    endIso: `${end}T23:59:59.999Z`,
+    startIso: startIso ?? `${start}T00:00:00.000Z`,
+    endIso: nextStartIso
+      ? new Date(Date.parse(nextStartIso) - 1).toISOString()
+      : `${end}T23:59:59.999Z`,
   };
 }
 
-function mapTimestampToPostFields(timestamp: string) {
+function mapTimestampToPostFields(timestamp: string, timeZone: string) {
   const parsed = new Date(timestamp);
   const dayId = Number.isNaN(parsed.getTime())
     ? timestamp.slice(0, 10)
-    : formatCalendarDayId(parsed);
+    : (formatPostedDayId(timestamp, timeZone) ?? formatCalendarDayId(parsed));
   return {
     dayId,
-    timeLabel: formatPostedTimeLabel(timestamp),
+    timeLabel: formatPostedTimeLabel(timestamp, timeZone),
   };
 }
 
@@ -118,6 +115,7 @@ function durableThumbRef(snapshot: Record<string, unknown>): SignablePath | null
 function mapPublishedPost(
   row: PublishedPostRow,
   freshThumbnailUrl: string | null,
+  timeZone: string,
 ): OrganicCalendarPostedContent {
   const snapshot = asRecord(row.content_snapshot);
   const timestamp = row.published_at || row.created_at;
@@ -125,7 +123,7 @@ function mapPublishedPost(
   const title = readString(snapshot.title) ?? caption?.slice(0, 72) ?? 'Published post';
   const mediaUrl =
     freshThumbnailUrl ?? readMediaUrl(row.media_urls) ?? readMediaUrl(snapshot.mediaUrls);
-  const { dayId, timeLabel } = mapTimestampToPostFields(timestamp);
+  const { dayId, timeLabel } = mapTimestampToPostFields(timestamp, timeZone);
   const platform = normalizeCalendarPlatform(row.platform);
 
   return {
@@ -150,11 +148,12 @@ function mapAnalyticsPost(args: {
   post: OrganicPost;
   platform: OrganicPlatformKey;
   integrationAccountId: string;
+  timeZone: string;
 }): OrganicCalendarPostedContent | null {
-  const { post, platform, integrationAccountId } = args;
+  const { post, platform, integrationAccountId, timeZone } = args;
   if (!post.timestamp) return null;
 
-  const { dayId, timeLabel } = mapTimestampToPostFields(post.timestamp);
+  const { dayId, timeLabel } = mapTimestampToPostFields(post.timestamp, timeZone);
   const caption = post.caption ?? post.title;
 
   return {
@@ -178,10 +177,11 @@ function mapAnalyticsPost(args: {
 function mapTikTokVideo(
   video: TikTokVideo,
   integrationAccountId: string,
+  timeZone: string,
 ): OrganicCalendarPostedContent | null {
   if (!video.id || !video.create_time) return null;
   const timestamp = new Date(video.create_time * 1000).toISOString();
-  const { dayId, timeLabel } = mapTimestampToPostFields(timestamp);
+  const { dayId, timeLabel } = mapTimestampToPostFields(timestamp, timeZone);
   const caption = video.video_description;
 
   return {
@@ -223,9 +223,10 @@ async function fetchExternalPosts(params: {
   end: string;
   accountsByPlatform: CalendarPostAccountsByPlatform;
   forceRefresh: boolean;
+  timeZone: string;
 }): Promise<OrganicCalendarPostedContent[]> {
   const posts: OrganicCalendarPostedContent[] = [];
-  const { supabase, brandId, start, end, accountsByPlatform, forceRefresh } = params;
+  const { supabase, brandId, start, end, accountsByPlatform, forceRefresh, timeZone } = params;
 
   for (const platform of ['instagram', 'facebook', 'youtube'] as const) {
     for (const account of accountsByPlatform[platform]) {
@@ -249,6 +250,7 @@ async function fetchExternalPosts(params: {
               post,
               platform: normalizeCalendarPlatform(platform),
               integrationAccountId: account.integrationAccountId,
+              timeZone,
             }),
           )
           .filter((post): post is OrganicCalendarPostedContent => post !== null),
@@ -268,7 +270,7 @@ async function fetchExternalPosts(params: {
     if (error) continue;
 
     const videos = ((data as TikTokEdgeResponse | null)?.videos ?? [])
-      .map((video) => mapTikTokVideo(video, account.integrationAccountId))
+      .map((video) => mapTikTokVideo(video, account.integrationAccountId, timeZone))
       .filter((post): post is OrganicCalendarPostedContent => post !== null)
       .filter((post) => post.dayId >= start && post.dayId <= end);
     posts.push(...videos);
@@ -296,7 +298,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { startIso, endIso } = toTimestampRange(parsed.data.start, parsed.data.end);
+  const { data: brand, error: brandError } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('timezone')
+    .eq('id', parsed.data.brandId)
+    .single();
+  if (brandError || !brand) {
+    return NextResponse.json({ error: 'Brand unavailable' }, { status: 403 });
+  }
+  const timeZone = resolvePlannerTimeZone(brand.timezone);
+  const { startIso, endIso } = toTimestampRange(parsed.data.start, parsed.data.end, timeZone);
   const organicSchema = supabase.schema('organic' as never) as unknown as {
     from: (table: 'organic_published_posts') => {
       select: (columns: string) => {
@@ -305,17 +317,24 @@ export async function POST(request: Request) {
           value: string,
         ) => {
           or: (filters: string) => {
-            order: (
-              column: string,
-              options: { ascending: boolean },
-            ) => Promise<{ data: PublishedPostRow[] | null; error: { message: string } | null }>;
+            order: (column: string, options: { ascending: boolean }) => PostPageQuery;
           };
         };
       };
     };
   };
+  type PostPageQuery = {
+    order: (column: string, options: { ascending: boolean }) => PostPageQuery;
+    range: (
+      from: number,
+      to: number,
+    ) => Promise<{
+      data: PublishedPostRow[] | null;
+      error: { message: string } | null;
+    }>;
+  };
 
-  const { data, error } = await organicSchema
+  const postQuery = organicSchema
     .from('organic_published_posts')
     .select(
       'brand_id, caption, content_snapshot, created_at, draft_id, ig_user_id, instagram_post_id, media_urls, permalink, platform, platform_account_id, platform_post_id, post_type, published_at',
@@ -324,13 +343,16 @@ export async function POST(request: Request) {
     .or(
       `and(published_at.gte.${startIso},published_at.lte.${endIso}),and(published_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`,
     )
-    .order('published_at', { ascending: true });
+    .order('published_at', { ascending: true })
+    .order('platform', { ascending: true })
+    .order('platform_account_id', { ascending: true })
+    .order('platform_post_id', { ascending: true });
 
+  const { rows, error } = await fetchPublishedPostPages((from, to) => postQuery.range(from, to));
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = data ?? [];
   const thumbRefByRow = new Map<PublishedPostRow, SignablePath>();
   for (const row of rows) {
     const ref = durableThumbRef(asRecord(row.content_snapshot));
@@ -338,9 +360,12 @@ export async function POST(request: Request) {
   }
   const signedByPath = await mintSignedUrls([...thumbRefByRow.values()]);
   const databasePosts = rows.map((row) =>
-    mapPublishedPost(row, signedByPath.get(thumbRefByRow.get(row)?.path ?? '') ?? null),
+    mapPublishedPost(row, signedByPath.get(thumbRefByRow.get(row)?.path ?? '') ?? null, timeZone),
   );
-  const shouldFetchExternal = databasePosts.length === 0 || parsed.data.includeExternal === true;
+  const shouldFetchExternal = shouldFetchExternalCalendarPosts({
+    databaseCount: databasePosts.length,
+    includeExternal: parsed.data.includeExternal,
+  });
   const externalPosts = shouldFetchExternal
     ? await fetchExternalPosts({
         supabase,
@@ -349,6 +374,7 @@ export async function POST(request: Request) {
         end: parsed.data.end,
         accountsByPlatform: parsed.data.accountsByPlatform,
         forceRefresh: parsed.data.forceRefreshExternal ?? false,
+        timeZone,
       })
     : [];
 

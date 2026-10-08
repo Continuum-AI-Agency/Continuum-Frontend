@@ -9,19 +9,18 @@ import type {
 } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
 import type { AgentMentionMetadata } from '@/lib/agent-references';
+import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 import type {
   ArtifactDeltaEventData,
   CheckpointReportV2,
   JainaObjective,
   PlanStep,
   ProgressEventData,
-  ReportAssembly,
   ReportPayload,
   ResponseReportArtifactJobStartedEventData,
   ToolCallEventData,
   ToolResultEventData,
 } from '@/lib/jaina/schemas';
-import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 
 export type JainaProgressEntry = {
   stage: string;
@@ -54,8 +53,6 @@ export type JainaChatMessage = {
   toolResults?: ToolResultEventData[];
   report?: ReportPayload;
   reportV2?: CheckpointReportV2;
-  reportAssembly?: ReportAssembly;
-  reportAssemblyHtml?: string;
   plan?: JainaPlan;
   artifacts?: ArtifactDeltaEventData;
   paidCreativeRenders?: JainaPaidCreativeRenderPayload[];

@@ -50,6 +50,12 @@
  * streamed blocks rendered under the v1 "Checkpoint Blocks" heading. That turn grades every
  * snapshot, because both leaks only showed mid-stream.
  *
+ * `--question "<text>"` replaces the analysis ask. The 2026-10-05 field report asked, in Spanish,
+ * "muestrame la tendencia de como fue el CPL cada mes todo este año": the reply opened with the
+ * question echoed back over "Thinking…", and its prose glued every coloured figure to the words
+ * beside it ("costo de1386.70 MXN") and printed a raw `this_year`. Both are graded on every
+ * analysis turn; that question is the one that reproduced them.
+ *
  * `--no-env-file --env-file=.env` is not decoration: Bun auto-loads `.env.local`, which on
  * this machine points Supabase at the LOCAL stack while the Backend is on prod — a 403
  * cascade that reads like a code bug. `loadProdSupabaseEnv()` below re-pins it anyway and
@@ -59,18 +65,20 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { JAINA_UI_DATA_PART, type JainaUIMessage } from '@continuum/contracts';
+import { JAINA_UI_DATA_PART, type JainaUIMessage, parseProseMarks } from '@continuum/contracts';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { DefaultChatTransport, readUIMessageStream } from 'ai';
 import type { JainaChatMessage } from '@/components/paid-media/jaina/types';
 // The one place a turn becomes `jainaChatRequestSchema`. Imported, never re-implemented — see
 // `makeTransport` below for why a hand-rolled body is the trap this bench exists to catch.
+import { readsAsSpanish, windowLabel } from '@/components/paid-media/jaina/answerLanguage';
 import { buildJainaChatStreamRequest, type JainaChatInput } from '@/lib/jaina/chatRequest';
 // THE THING UNDER TEST. Not a copy of it, not a re-derivation: the module the transcript
 // imports. If this file stops being what the surface renders from, this bench stops proving
 // anything — which is why it is imported by the same specifier the app uses.
 import { toJainaChatMessage } from '@/lib/jaina/uiMessageProjection';
 import { mintAccessTokenForEmail } from './support/auth';
+import { renderProseText } from './support/realProse';
 import { loadProdSupabaseEnv } from './support/prodEnv';
 
 const { serviceRoleKey } = loadProdSupabaseEnv();
@@ -91,9 +99,37 @@ const AD_ACCOUNT_ID = 'act_521903353286118';
 /** The greeting `jaina:uistream:e2e:bench` uses. This bench grades RENDER SHAPES, not analysis. */
 const PROMPT = 'Reply with a one sentence greeting and nothing else.';
 
-/** The ask from the field report that showed the plan as the reply. */
-const ANALYSIS_PROMPT =
-  'Find untapped audience opportunities for the current ad account and prioritize concrete tests.';
+/** The ask from the field report that showed the plan as the reply; `--question` replaces it. */
+const ANALYSIS_PROMPT = (() => {
+  const at = process.argv.indexOf('--question');
+  const asked = at >= 0 ? process.argv[at + 1]?.trim() : '';
+  return (
+    asked ||
+    'Find untapped audience opportunities for the current ad account and prioritize concrete tests.'
+  );
+})();
+
+/** Lowercase, unaccented, single-spaced: the form two wordings of one question share. */
+const normalizeWords = (text: string): string =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9ñ]+/g, ' ')
+    .trim();
+
+/** The reply is the question said back: the plan title, or the ask's own opening words. */
+function echoesQuestion(content: string, planTitle: string | undefined): boolean {
+  const said = normalizeWords(content);
+  if (!said) return false;
+  if (planTitle && said === normalizeWords(planTitle)) return true;
+  return said.length >= 12 && normalizeWords(ANALYSIS_PROMPT).startsWith(said);
+}
+
+/** A date preset token (`this_year`, `last_30d`) where the reader should see words. */
+const PRESET_TOKEN = /\b[a-z]+_[a-z0-9_]+\b/;
+/** An English window phrase, which a Spanish answer must never print. */
+const ENGLISH_WINDOW = /\b(?:this|last) (?:year|month|week|quarter)\b|\blast \d+ days\b/i;
 
 /** A line only `renderObjectivePlanMarkdown` writes. If a reader can see it, the plan leaked. */
 const PLAN_MARKDOWN_SIGNATURE = 'Scope ceiling:';
@@ -657,12 +693,6 @@ async function main(): Promise<void> {
       projected: rendered.pendingClarification,
     });
     gradeProjectedField({
-      field: 'reportAssembly',
-      evidence: JAINA_UI_DATA_PART.reportAssembly,
-      evidenceCount: countOf(finalMessage, JAINA_UI_DATA_PART.reportAssembly),
-      projected: rendered.reportAssembly,
-    });
-    gradeProjectedField({
       field: 'pendingToolApprovals',
       evidence: `${JAINA_UI_DATA_PART.approval} / tool state approval-requested`,
       evidenceCount:
@@ -893,6 +923,8 @@ async function analysisTurn(
   const thoughtAsAnswerAt: number[] = [];
   let blocksAheadOfReport = 0;
   const v1ReportAt: number[] = [];
+  const echoAt: number[] = [];
+  let echoed = '';
 
   for await (const message of readUIMessageStream<JainaUIMessage>({ stream })) {
     last = message;
@@ -903,6 +935,10 @@ async function analysisTurn(
       planVisibleAt.push(snapshots);
     }
     const content = view.content.trim();
+    if (echoesQuestion(content, view.plan?.title)) {
+      echoAt.push(snapshots);
+      echoed ||= content;
+    }
     if (content && (view.reasoning ?? []).some((entry) => entry.detail?.trim() === content)) {
       thoughtAsAnswerAt.push(snapshots);
     }
@@ -953,6 +989,16 @@ async function analysisTurn(
     );
   }
 
+  check(
+    'the reply never opens with the question said back, at any snapshot',
+    echoAt.length === 0,
+    echoAt.length === 0
+      ? `${snapshots} snapshots graded`
+      : `echoed at ${echoAt.length}/${snapshots}, first #${echoAt[0]}: ${JSON.stringify(echoed)}`,
+  );
+
+  await gradeProseSpacing(rendered);
+
   const planParts = countOf(last, JAINA_UI_DATA_PART.plan);
   if (planParts === 0) {
     record(
@@ -974,6 +1020,86 @@ async function analysisTurn(
     `${rendered.content.length} chars; reportV2 ${rendered.reportV2 ? 'set' : 'absent'}`,
   );
   return last;
+}
+
+/** Every prose string the finished turn shows: the reply, the summary, each narrative. */
+function proseOf(message: JainaChatMessage): string[] {
+  const report = message.reportV2;
+  const narratives = (report?.blocks ?? []).flatMap((block) =>
+    block.category === 'narrative'
+      ? [block.body, block.what, block.so_what, block.now_what].filter(
+          (text): text is string => typeof text === 'string',
+        )
+      : [],
+  );
+  return [message.content, report?.executive_summary ?? '', ...narratives].filter((text) =>
+    text.trim(),
+  );
+}
+
+/**
+ * The real answer's prose through the real renderer (Streamdown included), graded on what a
+ * reader sees: every coloured figure keeps the space its sentence gave it on either side, and
+ * no window prints a date-preset token. Marks are the model's choice, so a turn that wrote none
+ * is a SKIP that says so, never a pass.
+ */
+async function gradeProseSpacing(message: JainaChatMessage): Promise<void> {
+  const marked = proseOf(message).filter((text) =>
+    parseProseMarks(text).some((segment) => segment.kind === 'mark'),
+  );
+  if (marked.length === 0) {
+    record(
+      'a coloured figure keeps the spaces around it in the rendered answer',
+      'SKIP',
+      'the model wrote no prose mark this turn — the real render path ran on nothing marked',
+    );
+    return;
+  }
+  const glued: string[] = [];
+  const presets: string[] = [];
+  let marks = 0;
+  for (const text of marked) {
+    const shown = await renderProseText(text);
+    const language = readsAsSpanish(text) ? 'es' : 'en';
+    const segments = parseProseMarks(text);
+    let cursor = 0;
+    segments.forEach((segment, index) => {
+      if (segment.kind !== 'mark') return;
+      marks += 1;
+      const value =
+        segment.tone === 'window' ? windowLabel(segment.value, language) : segment.value;
+      const at = shown.indexOf(value, cursor);
+      if (at < 0) return;
+      const end = at + value.length;
+      cursor = end;
+      const before = segments[index - 1];
+      const after = segments[index + 1];
+      if (before?.kind === 'text' && /\s$/.test(before.value) && !/\s/.test(shown[at - 1] ?? ' ')) {
+        glued.push(shown.slice(Math.max(0, at - 12), end));
+      }
+      if (after?.kind === 'text' && /^\s/.test(after.value) && !/\s/.test(shown[end] ?? ' ')) {
+        glued.push(shown.slice(at, end + 12));
+      }
+    });
+    const preset = PRESET_TOKEN.exec(shown);
+    if (preset) presets.push(preset[0]);
+    const english = language === 'es' ? ENGLISH_WINDOW.exec(shown) : null;
+    if (english) presets.push(`"${english[0]}" in a Spanish answer`);
+  }
+  check(
+    'a coloured figure keeps the spaces around it in the rendered answer',
+    glued.length === 0,
+    glued.length === 0
+      ? `${marks} mark(s) across ${marked.length} prose string(s), rendered through Streamdown`
+      : `glued: ${glued.map((g) => JSON.stringify(g)).join(', ')}`,
+  );
+  check(
+    'every window reads as words in the answer’s language',
+    presets.length === 0,
+    presets.length === 0
+      ? 'no preset token, and no English window inside Spanish prose'
+      : presets.join(', '),
+  );
 }
 
 /**

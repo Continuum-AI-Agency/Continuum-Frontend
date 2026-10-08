@@ -15,6 +15,7 @@ const responseSchema = z.object({
   transcript: z.string().nullable(),
   transcriptSegments: z.array(transcriptSegmentSchema).nullable(),
   transcriptSource: z.string().nullable(),
+  transcriptLanguage: z.string().nullable().optional(),
 });
 
 export type UseAssetTranscriptResult = {
@@ -22,6 +23,7 @@ export type UseAssetTranscriptResult = {
   error: string | null;
   view: TranscriptView;
   source: string | null;
+  language: string | null;
 };
 
 const UNTRANSCRIBED: TranscriptView = { status: 'untranscribed' };
@@ -35,6 +37,7 @@ export function useAssetTranscript(
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<TranscriptView>(UNTRANSCRIBED);
   const [source, setSource] = useState<string | null>(null);
+  const [language, setLanguage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) {
@@ -60,6 +63,7 @@ export function useAssetTranscript(
           }),
         );
         setSource(payload.transcriptSource);
+        setLanguage(payload.transcriptLanguage ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -74,5 +78,5 @@ export function useAssetTranscript(
     };
   }, [brandId, assetId, enabled]);
 
-  return { loading, error, view, source };
+  return { loading, error, view, source, language };
 }

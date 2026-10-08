@@ -5,9 +5,15 @@ import { CreativeCard } from './CreativeCard';
 
 type CreativesSectionProps = {
   creatives: CreativeArtifact[];
+  onRequestCreative?: (query: string) => void;
+  disabled?: boolean;
 };
 
-export function CreativesSection({ creatives }: CreativesSectionProps) {
+export function CreativesSection({
+  creatives,
+  onRequestCreative,
+  disabled,
+}: CreativesSectionProps) {
   if (creatives.length === 0) return null;
 
   return (
@@ -17,7 +23,13 @@ export function CreativesSection({ creatives }: CreativesSectionProps) {
       </p>
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {creatives.map((creative, i) => (
-          <CreativeCard key={creative.id} creative={creative} index={i} />
+          <CreativeCard
+            key={creative.id}
+            creative={creative}
+            index={i}
+            onRequestCreative={onRequestCreative}
+            disabled={disabled}
+          />
         ))}
       </div>
     </div>

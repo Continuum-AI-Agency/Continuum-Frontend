@@ -27,7 +27,7 @@ export function ConversionVolumeBadge({
   const volume = conversionVolume(confidence);
   if (!volume) {
     return (
-      <span className={cn('text-2xs text-muted-foreground', className)} data-testid="volume-badge">
+      <span className={cn('text-xs text-muted-foreground', className)} data-testid="volume-badge">
         no scored cycle yet
       </span>
     );
@@ -35,7 +35,7 @@ export function ConversionVolumeBadge({
   const band = BAND[volume.band];
   return (
     <span
-      className={cn('inline-flex items-center gap-1.5 text-2xs', className)}
+      className={cn('inline-flex items-center gap-1.5 text-xs', className)}
       data-testid="volume-badge"
       title={volume.note}
     >

@@ -1,13 +1,13 @@
-import type { TemplateFontReadiness } from '@continuum/contracts';
+import type { ApiRenderTemplateContract, TemplateFontReadiness, TemplateMappingReview } from '@continuum/contracts';
 import type { ForgeLadderAction, TemplateRunRow } from '@/lib/library/templateSources';
 import type { CheckState, CheckTick } from './CheckTable';
 
-// What a template has been through, as five checks that each say what they look at and what they
+// What a template has been through, as checks that each say what they look at and what they
 // found. Pure: every fact is an argument, so every state's copy is pinned by a test and the sheet
 // only decides where the words go.
 
 export type TemplateCheck = {
-  id: 'parse' | 'fonts' | 'build' | 'test' | 'publish';
+  id: 'parse' | 'fonts' | 'build' | 'mapping' | 'test' | 'publish';
   name: string;
   what: string;
   state: CheckState;
@@ -155,6 +155,30 @@ function buildCheck(input: TemplateChecksInput, state: string | null): TemplateC
   return { ...base, state: 'running', result: labelForState(state), ...extras };
 }
 
+function mappingCheck(input: TemplateChecksInput): TemplateCheck {
+  const base = {
+    id: 'mapping' as const,
+    name: 'Mapping',
+    what: 'Matches each editable After Effects layer to the Forge field that renders it.',
+  };
+  if (input.parseState !== 'parsed' || (!input.run && !input.templateKey))
+    return { ...base, state: 'todo', result: 'Available after the build starts' };
+  if (input.mappingCheckFailed)
+    return { ...base, state: 'warn', result: "Couldn't read the mapping review" };
+  const review = input.mappingReview;
+  if (!review) return { ...base, state: 'running', result: 'Checking the field mapping…' };
+  if (review.state === 'unavailable')
+    return { ...base, state: 'warn', result: 'Forge has not supplied field identities yet' };
+  const additional = review.fields.filter((field) => field.match === 'forge_only').length;
+  if (review.state === 'needs_review')
+    return { ...base, state: 'fail', result: `${review.matchedSlots} of ${review.slotCount} layers mapped · review ${review.unmatchedSlots.length} unmatched` };
+  return {
+    ...base,
+    state: review.identityAvailable ? 'pass' : 'warn',
+    result: `${review.matchedSlots} of ${review.slotCount} layers mapped${additional ? ` · ${additional} Forge-only fields` : ''}${review.identityAvailable ? '' : ' by name only'}`,
+  };
+}
+
 function testRenderCheck(state: string | null): TemplateCheck {
   const base = {
     id: 'test' as const,
@@ -176,11 +200,26 @@ function publishCheck(input: TemplateChecksInput, state: string | null): Templat
   const base = {
     id: 'publish' as const,
     name: 'Publish',
-    what: 'Adds it to the render catalog so this brand can render it.',
+    what: 'Publishes the template, then checks its worker graph and media boxes.',
   };
-  // Only a template key means renderable: a run can say `published` against a package the fleet
-  // never promoted, and that template renders a blank frame.
-  if (input.templateKey) return { ...base, state: 'pass', result: 'Published' };
+  if (input.templateKey) {
+    const check = input.publishVerification;
+    if (check)
+      return {
+        ...base,
+        state: check.state,
+        result:
+          check.issues[0] ??
+          `Published · worker graph and ${plural(check.media.length, 'media slot')} measured`,
+      };
+    return input.publishCheckFailed
+      ? {
+          ...base,
+          state: 'warn',
+          result: 'Published, but the worker graph and layout could not be checked',
+        }
+      : { ...base, state: 'pass', result: 'Published · checking the worker graph and layout…' };
+  }
   if (state === 'promoting') return { ...base, state: 'running', result: 'Publishing…' };
   return {
     ...base,
@@ -201,6 +240,10 @@ export type TemplateChecksInput = {
   /** The source's own record of the last run, for when the run row itself is not loaded. */
   forgeState: string | null | undefined;
   templateKey: string | null;
+  publishVerification?: ApiRenderTemplateContract['publishCheck'];
+  publishCheckFailed?: boolean;
+  mappingReview?: TemplateMappingReview | null;
+  mappingCheckFailed?: boolean;
 };
 
 export function templateChecks(input: TemplateChecksInput): TemplateCheck[] {
@@ -209,6 +252,7 @@ export function templateChecks(input: TemplateChecksInput): TemplateCheck[] {
     parseCheck(input),
     fontsCheck(input),
     buildCheck(input, state),
+    mappingCheck(input),
     testRenderCheck(state),
     publishCheck(input, state),
   ];

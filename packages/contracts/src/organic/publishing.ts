@@ -3,7 +3,7 @@
  *
  * Both sides import from here: the Backend publisher emits `PublishEvent` over SSE,
  * the Frontend `usePublishDraft` hook interprets it. Post format stays platform-neutral
- * (`POST | REEL | CAROUSEL`) because every existing consumer already speaks it —
+ * (`POST | REEL | CAROUSEL | STORY`) because every existing consumer already speaks it —
  * `content_json.content.format`, `slot_data`, the `post_type` CHECK constraint, and the
  * planner's `inferPostType`. Per-platform native shapes are derived from
  * `PLATFORM_CAPABILITIES` at the boundary rather than fanned out into the type system.
@@ -40,10 +40,9 @@ export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
  * creative / copywriter / hashtag / visual / audio prompt set for exactly these five, and a
  * placement on a platform with no prompt set has nothing to generate from.
  *
- * X and Threads sit outside it: a brand can CONNECT them (one X integration exists in
- * production today, which is why they stay in the canonical vocabulary and the MCP read
- * surface keeps serving them) but nothing can compose a post for them. Widen this only
- * together with a prompt set in `platformRegistry.ts`.
+ * Threads sits outside it: a brand can CONNECT it (which is why it stays in the canonical
+ * vocabulary and the MCP read surface keeps serving it) but nothing can compose a post for it.
+ * Widen this only together with a prompt set in `platformRegistry.ts`.
  */
 export const organicGeneratablePlatformSchema = organicPlatformSchema.extract([
   'instagram',
@@ -51,6 +50,7 @@ export const organicGeneratablePlatformSchema = organicPlatformSchema.extract([
   'linkedin',
   'tiktok',
   'youtube',
+  'x',
 ]);
 export type OrganicGeneratablePlatform = z.infer<typeof organicGeneratablePlatformSchema>;
 
@@ -67,8 +67,8 @@ export type OrganicGeneratablePlatform = z.infer<typeof organicGeneratablePlatfo
  *   generatable  — …and `platformRegistry.ts` can compose a post for it
  *   publishable  — …and `publisherRegistry.ts` can send that post
  *
- * X and Threads generate nothing and publish nothing; they stay canonical because live
- * integrations exist for them. Flattening these would break in one direction or the other —
+ * Threads generates nothing and publishes nothing; it stays canonical because live
+ * integrations exist for it. Flattening these would break in one direction or the other —
  * widening this enum makes an unpublishable platform look publishable, narrowing the canonical
  * one erases platforms that already hold live integrations.
  *
@@ -80,10 +80,15 @@ export const publishPlatformSchema = organicPlatformSchema.extract([
   'linkedin',
   'tiktok',
   'youtube',
+  'x',
 ]);
 export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 
-export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
+/**
+ * STORY is an Instagram Story: one image or video, no caption, gone after 24h. Only Instagram
+ * publishes it; every other platform refuses it at the boundary with `unsupported_format`.
+ */
+export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL', 'STORY']);
 export type PublishFormat = z.infer<typeof publishFormatSchema>;
 
 /** Match generator-written and user-written format strings at the boundary. */
@@ -93,7 +98,8 @@ export type PublishFormat = z.infer<typeof publishFormatSchema>;
  * `url`   — the platform fetches a publicly reachable URL we hand it (Instagram, Facebook,
  *           TikTok). TikTok additionally rejects URLs on domains the developer app has not
  *           verified, so ours are served through `mediaProxy.ts`.
- * `bytes` — the platform refuses URLs and requires us to upload the raw file (LinkedIn).
+ * `bytes` — the platform refuses URLs and requires us to upload the raw file (LinkedIn,
+ *           YouTube, X).
  */
 export type PublishMediaTransport = 'url' | 'bytes';
 
@@ -122,6 +128,8 @@ export interface PublishOptionCapability {
   readonly thumbnailOffset: boolean;
   /** A native "AI-generated" label on the post. Video (REEL) posts only. */
   readonly aiGeneratedLabel: boolean;
+  /** A trial reel, shown to non-followers first. Video (REEL) posts only. */
+  readonly trialReel: boolean;
 }
 
 export interface PlatformCapability {
@@ -134,7 +142,7 @@ export interface PlatformCapability {
 
 export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCapability>> = {
   instagram: {
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: true },
     carousel: { min: 2, max: 10 },
     mediaTransport: 'url',
     // Instagram Content Publishing API.
@@ -146,10 +154,11 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: true,
       thumbnailOffset: true,
       aiGeneratedLabel: false,
+      trialReel: true,
     },
   },
   facebook: {
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     carousel: { min: 2, max: 10 },
     mediaTransport: 'url',
     // Facebook's message field is effectively unbounded at the post level (63,206).
@@ -161,11 +170,12 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: false,
       thumbnailOffset: false,
       aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
   linkedin: {
     // REEL maps to a native video post; CAROUSEL maps to a native multiImage post.
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     carousel: { min: 2, max: 20 },
     mediaTransport: 'bytes',
     // LinkedIn ugcPost commentary.
@@ -175,13 +185,14 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: false,
       thumbnailOffset: false,
       aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
   youtube: {
     // YouTube has no photo or carousel surface at all: a video IS the post. POST and CAROUSEL
     // are refused at the boundary with `unsupported_format` rather than mapped onto something
     // that would upload a still image as a one-frame video.
-    formats: { POST: false, REEL: true, CAROUSEL: false },
+    formats: { POST: false, REEL: true, CAROUSEL: false, STORY: false },
     // Unreachable while CAROUSEL is false; kept so the shape stays total over PublishFormat.
     carousel: { min: 0, max: 0 },
     // YouTube will not fetch a URL — `videos.insert` is a resumable upload of the bytes,
@@ -195,12 +206,13 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: false,
       thumbnailOffset: false,
       aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
   tiktok: {
     // REEL is the native shape (a video). POST is a single-image photo post and CAROUSEL a
     // multi-image photo post, both via /post/publish/content/init with media_type=PHOTO.
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     // TikTok photo posts accept up to 35 images.
     carousel: { min: 2, max: 35 },
     // URL-pull for EVERY format. The Business Organic API (business-api.tiktok.com/open_api/v1.3,
@@ -219,6 +231,26 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: true,
       thumbnailOffset: true,
       aiGeneratedLabel: true,
+      trialReel: false,
+    },
+  },
+  x: {
+    // POST = text with up to 4 images; CAROUSEL = 2–4 images on one post; REEL = one video.
+    // Every X call is metered against the brand's prepaid X wallet (`x:post_create`, or
+    // `x:post_create_url` at $0.20 when the text carries a link) — see `xPublisher.ts`.
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
+    carousel: { min: 2, max: 4 },
+    // POST /2/media/upload (initialize / append / finalize): X never fetches a URL.
+    mediaTransport: 'bytes',
+    // ponytail: plain-length check; X counts a link as 23 and CJK/emoji as 2, so weight it
+    // (twitter-text) if real captions get clipped.
+    caption: { maxLength: 280, maxHashtags: 3 },
+    publishOptions: {
+      firstComment: false,
+      thumbnailUrl: false,
+      thumbnailOffset: false,
+      aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
 };
@@ -329,6 +361,9 @@ export const publishErrorCodeSchema = z.enum([
   'confirmation_required',
   'confirmation_stale',
   'not_approved',
+  // The brand's prepaid X API wallet is empty and X auto-billing is off (or at its cap).
+  // Terminal for the scheduled publish: the owner buys X credits, then reschedules.
+  'credits_exhausted',
   'unknown',
 ]);
 export type PublishErrorCode = z.infer<typeof publishErrorCodeSchema>;

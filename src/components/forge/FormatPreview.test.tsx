@@ -72,6 +72,26 @@ describe('FormatPreview', () => {
     expect(screen.getByRole('button', { name: `${COMP} 9:16` }).textContent).toBe('9:16');
   });
 
+  test('two comps of one ratio and size are told apart by name', () => {
+    render(
+      <FormatPreview
+        label="Preview"
+        formats={[
+          { id: 'fijo', label: 'Fijo 9:16', ratio: '9:16', width: 1080, height: 1920 },
+          { id: 'animado', label: 'Animado 9:16', ratio: '9:16', width: 1080, height: 1920 },
+        ]}
+        value="fijo"
+        onValueChange={() => undefined}
+        frame={() => ({ mode: 'none' })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Fijo 9:16' }).textContent).toBe('9:16Fijo 9:16');
+    expect(screen.getByRole('button', { name: 'Animado 9:16' }).textContent).toBe(
+      '9:16Animado 9:16',
+    );
+  });
+
   test('the badge says estimate, rendered with its age, or rendered before the latest edits', () => {
     const at = new Date(Date.now() - 2 * 3_600_000).toISOString();
     const { rerender } = render(<Harness frame={() => ({ mode: 'estimate', node: null })} />);

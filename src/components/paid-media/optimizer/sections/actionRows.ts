@@ -9,7 +9,13 @@
 // this is a DB-derived read model, so an op the contract has not caught up with (today,
 // 'convert') must still render as something honest rather than crash the page.
 
+import { currencyMinorOffset } from '@continuum/contracts';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
+import {
+  type AdPlatform,
+  OPTIMIZER_MANAGED_PLATFORM,
+  readAdPlatform,
+} from './platforms/platformTabsModel';
 
 /** How one action's before/after should be printed. `unit` decides the formatter:
  *  'money' values are MINOR units and the caller applies its currency; 'text' is printed
@@ -20,6 +26,19 @@ export type ActionChange = {
   before: string | number | null;
   after: string | number | null;
 };
+
+/** MINOR → MAJOR by the currency's ISO 4217 exponent: 100 for MXN and USD, 1 for JPY, 1000
+ *  for KWD. A hard-coded /100 printed a yen budget a hundred times too small. A currency
+ *  nobody recorded (or a malformed code) keeps the two-decimal reading the ledger was written
+ *  in for every account this app has served. */
+export function minorToMajor(minor: number, currency: string | null): number {
+  if (!currency) return minor / 100;
+  try {
+    return minor / currencyMinorOffset(currency);
+  } catch {
+    return minor / 100;
+  }
+}
 
 function readMinor(value: Record<string, unknown> | null | undefined): number | null {
   const minor = value?.minor;
@@ -98,12 +117,34 @@ export function actorLabel(row: OptimizerActionFeedRow): string {
   }
 }
 
-/** The Meta trace id, when the write carried one. The receipt jsonb is the raw
- *  `apply_audits.meta_receipt`, so the key is whatever the applier stored. */
+/** Which platform the write landed on. The receipt says it first: every Google and TikTok
+ *  applier stamps `receipt.platform`, and optimizer_list_actions sends no platform column, so
+ *  the receipt is the one place a non-Meta row is told apart without a migration. A row whose
+ *  receipt names no known platform falls back to its own `platform` (read the day the RPC adds
+ *  it), and only then to Meta — Meta's fbtrace receipt carries no platform key. */
+export function actionPlatform(row: OptimizerActionFeedRow): AdPlatform {
+  return (
+    readAdPlatform(row.receipt?.['platform']) ??
+    readAdPlatform(row.platform) ??
+    OPTIMIZER_MANAGED_PLATFORM
+  );
+}
+
+/** Where each platform's applier puts the id its support desk asks for: Meta's fbtrace, the
+ *  Google Ads `request-id` header, TikTok's `request_id`. The Optimizer's appliers store both
+ *  of the latter as `requestId` (PlatformReceipt). */
+const RECEIPT_KEYS: Record<AdPlatform, readonly string[]> = {
+  meta: ['fbtrace_id', 'fbtraceId', 'trace_id', 'id'],
+  google_ads: ['requestId', 'request_id'],
+  tiktok_ads: ['requestId', 'request_id'],
+};
+
+/** The write's receipt id, when it carried one. The receipt jsonb is the raw audit receipt,
+ *  so the key is whatever that platform's applier stored. */
 export function readReceiptTrace(row: OptimizerActionFeedRow): string | null {
   const receipt = row.receipt;
   if (!receipt) return null;
-  for (const key of ['fbtrace_id', 'fbtraceId', 'trace_id', 'id']) {
+  for (const key of RECEIPT_KEYS[actionPlatform(row)]) {
     const value = receipt[key];
     if (typeof value === 'string' && value.trim() !== '') return value;
   }

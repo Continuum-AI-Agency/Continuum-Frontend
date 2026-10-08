@@ -16,6 +16,7 @@ import type {
   MetaPageResolution,
   MetaPageResolutionCandidate,
   MetaPageSearchResult,
+  OrganicPostPlatform,
   RecommendedCompetitor,
   RecommendedCompetitorsResponse,
   SaveCompetitorPostToLibraryRequest,
@@ -29,6 +30,7 @@ import type {
   SaveInspirationUrlResponse,
   SaveItemRequest,
   Skill,
+  TiktokTrendsResponse,
   TimelineEntry,
 } from '@continuum/contracts';
 import {
@@ -40,6 +42,7 @@ import {
   savedInspirationPostsResponseSchema,
   saveInspirationTemplateResponseSchema,
   saveInspirationUrlResponseSchema,
+  tiktokTrendsResponseSchema,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api/http';
@@ -105,16 +108,25 @@ export async function fetchInstagramPosts(params: {
   competitorId?: string;
   limit?: number;
   sort?: InspirationSort;
-}): Promise<CompetitorInspirationPost[]> {
+  platform?: OrganicPostPlatform;
+}): Promise<InspirationPostsResponse> {
   const qs = new URLSearchParams({ brandId: params.brandId });
   if (params.competitorId) qs.set('competitorId', params.competitorId);
   qs.set('limit', String(clampInstagramPostsLimit(params.limit)));
   if (params.sort && params.sort !== 'recent') qs.set('sort', params.sort);
-  const res = await request<InspirationPostsResponse>({
+  if (params.platform && params.platform !== 'instagram') qs.set('platform', params.platform);
+  return request<InspirationPostsResponse>({
     path: `${BASE}/instagram/posts?${qs.toString()}`,
     schema: inspirationPostsResponseSchema,
   });
-  return res.items;
+}
+
+export async function fetchTiktokTrends(brandId: string): Promise<TiktokTrendsResponse> {
+  const qs = new URLSearchParams({ brandId });
+  return request<TiktokTrendsResponse>({
+    path: `${BASE}/tiktok/trends?${qs.toString()}`,
+    schema: tiktokTrendsResponseSchema,
+  });
 }
 
 export async function searchMetaPages(brandId: string, q: string): Promise<MetaPageSearchResult[]> {
@@ -312,6 +324,8 @@ export async function createCompetitor(input: {
   instagramUserId?: string;
   instagramName?: string;
   instagramFollowersCount?: number;
+  // A channel URL, @handle or UC… id; the Backend resolves it (400/422/503 on failure).
+  youtube?: string;
 }): Promise<Competitor> {
   const res = await request<{ competitor: Competitor }>({
     path: `${BASE}/competitors`,
@@ -392,6 +406,7 @@ const keys = {
     competitorId?: string,
     limit?: number,
     sort?: InspirationSort,
+    platform?: OrganicPostPlatform,
   ) =>
     [
       'competitor-spy',
@@ -400,6 +415,7 @@ const keys = {
       competitorId ?? null,
       limit ?? null,
       sort ?? 'recent',
+      platform ?? 'instagram',
     ] as const,
   savedInspiration: (brandId: string) => ['competitor-spy', 'inspiration-saved', brandId] as const,
   smartSearch: (brandId: string, q: string) =>
@@ -409,6 +425,7 @@ const keys = {
   boards: (brandId: string) => ['competitor-spy', 'boards', brandId] as const,
   boardItems: (boardId: string) => ['competitor-spy', 'board-items', boardId] as const,
   savedPostIds: (brandId: string) => ['competitor-spy', 'saved-post-ids', brandId] as const,
+  tiktokTrends: (brandId: string) => ['competitor-spy', 'tiktok-trends', brandId] as const,
 };
 
 export function useCompetitors(brandId: string) {
@@ -432,12 +449,30 @@ export function useInstagramPosts(params: {
   competitorId?: string;
   limit?: number;
   sort?: InspirationSort;
+  platform?: OrganicPostPlatform;
 }) {
   return useQuery({
-    queryKey: keys.instagramPosts(params.brandId, params.competitorId, params.limit, params.sort),
+    queryKey: keys.instagramPosts(
+      params.brandId,
+      params.competitorId,
+      params.limit,
+      params.sort,
+      params.platform,
+    ),
     queryFn: () => fetchInstagramPosts(params),
     enabled: Boolean(params.brandId),
     staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+// Server refreshes on a 12h TTL; a first load may take several seconds while it queries TikTok.
+export function useTiktokTrends(brandId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: keys.tiktokTrends(brandId ?? ''),
+    queryFn: () => fetchTiktokTrends(brandId as string),
+    enabled: Boolean(brandId) && enabled,
+    staleTime: 30 * 60_000,
     retry: false,
   });
 }
@@ -516,6 +551,7 @@ export function useCreateCompetitor(brandId: string) {
       instagramUserId?: string;
       instagramName?: string;
       instagramFollowersCount?: number;
+      youtube?: string;
     }) => createCompetitor({ brandId, ...input }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
@@ -724,9 +760,10 @@ function replaceCachedPost(
         ? { ...item, analysis: next.analysis, format: next.format, whyItWorked: next.whyItWorked }
         : item,
     );
-  qc.setQueriesData<CompetitorInspirationPost[]>(
+  qc.setQueriesData<InspirationPostsResponse>(
     { queryKey: ['competitor-spy', 'instagram-posts', brandId] },
-    swap,
+    (response) =>
+      response ? { ...response, items: swap(response.items) ?? response.items } : response,
   );
   qc.setQueryData<SavedInspirationPost[]>(keys.savedInspiration(brandId), swap);
 }

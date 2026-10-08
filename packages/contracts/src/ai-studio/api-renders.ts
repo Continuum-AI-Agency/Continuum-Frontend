@@ -1,12 +1,34 @@
 import { z } from 'zod';
 import { mediaAssetSchema } from '../media/asset';
 import { fontLicenceScopeSchema } from '../media/fonts';
+import {
+  templateRevisionPinSchema,
+  templateRevisionRefSchema,
+} from '../media/template-revision-pin';
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
 
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
 export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
+export const API_RENDER_MASTER_DOWNLOADS_ROUTE = '/api/ai-studio/renders/master-downloads';
+export const apiRenderMasterDownloadRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    outputId: z.string().min(1),
+    format: z.enum(['mov', 'mxf']),
+  })
+  .strict();
+export type ApiRenderMasterDownloadRequest = z.infer<typeof apiRenderMasterDownloadRequestSchema>;
+export const apiRenderMasterDownloadResponseSchema = z
+  .object({ path: z.string().startsWith('/') })
+  .strict();
+export type ApiRenderMasterDownloadResponse = z.infer<typeof apiRenderMasterDownloadResponseSchema>;
+export const apiRenderMasterDownloadStatusSchema = z
+  .object({
+    status: z.enum(['processing', 'ready', 'failed']),
+  })
+  .strict();
 export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
 export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
 export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
@@ -21,6 +43,13 @@ export const apiRenderDestinationRoute = (destinationId: string) =>
 /** Mints a share link for one batch. Signed-in brand members only. */
 export const apiRenderBatchShareRoute = (batchId: string) =>
   `${API_RENDER_BATCHES_ROUTE}/${batchId}/share`;
+
+/**
+ * Mints a zip link for a whole render set: each row's newest finished render plus a manifest, so
+ * a batch that retried failed rows folds into the one it retried. Signed-in brand members only.
+ */
+export const apiRenderSetZipShareRoute = (renderSetId: string) =>
+  `/api/ai-studio/renders/sets/${renderSetId}/zip-share`;
 
 export const API_RENDER_SHARED_ROUTE = '/api/ai-studio/renders/shared';
 
@@ -115,6 +144,28 @@ export const apiRenderVariableKindSchema = z.enum([
 ]);
 export type ApiRenderVariableKind = z.infer<typeof apiRenderVariableKindSchema>;
 
+/**
+ * A durable Library coordinate for a media variable.
+ *
+ * `versionId` is OPTIONAL because a caller frequently holds an asset id without the
+ * exact version: a node stamped by a producer that only carried the asset id, a
+ * Library asset whose `head_version_id` was never materialized, or a slot filled
+ * straight from the Library picker. Refusing those made the canvas say "needs a
+ * Library asset" about an asset that was already in the Library.
+ *
+ * Omitting it is not a loosening of the version pin. Preflight resolves the head
+ * version server-side and freezes the exact `{assetId, versionId}` into the signed
+ * confirmation, so a render is still reproducible against one immutable version —
+ * the same way the reserved `watermark_logo` pin has always been resolved.
+ */
+export const pinnedRenderAssetSchema = z
+  .object({
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
+  })
+  .strict();
+export type PinnedRenderAsset = z.infer<typeof pinnedRenderAssetSchema>;
+
 export const apiRenderVariableSchema = z
   .object({
     key: apiRenderVariableKeySchema,
@@ -154,19 +205,173 @@ export const apiRenderVariableSchema = z
     charBudget: z.number().int().nonnegative().nullable().default(null),
     /** Which delivery comps carry this slot. One slot in seven ratios is one slot. */
     comps: z.array(z.string()).default([]),
+    /** Exact parsed AEP slot behind this field, or null when the parse did not expose one. */
+    sourceSlotKey: z.string().nullable().default(null),
+    /** Layer identity is stronger than the legacy name fallback. */
+    sourceMatch: z.enum(['layer_id', 'name']).nullable().default(null),
     /** The designer's own value, when the parse read one. Useful as a placeholder. */
     sample: z.string().nullable().default(null),
     /** Where this slot lands, so a picked asset can be placed before a render is spent. */
     placement: slotPlacementSchema.nullable().default(null),
-    /** Clip timing supplied by the Forge contract, including null on non-video slots. */
+    /**
+     * A video slot's clip, in the clip's own seconds: the template plays `fromSec..toSec` of
+     * whatever is picked (across every ratio), and shows it for `playsSec` at most. A render
+     * keeps the layer's timing and swaps only the clip, so a clip shorter than `toSec` runs out
+     * and the layer is empty for the rest. Null when unparsed, not a video, or time-remapped.
+     */
     clip: z
       .object({ fromSec: z.number(), toSec: z.number(), playsSec: z.number() })
+      .strict()
+      .nullable()
+      .default(null),
+    /**
+     * Whether a form asks for this field. False: the template carries it but it is switched off
+     * (a design import publishes every layer and switches on only text and smart objects), and a
+     * render that does not supply it uses `fallback` — what the file itself says.
+     */
+    exposed: z.boolean().default(true),
+    /** The value a switched-off field renders with: the authored copy, the layer's own picture
+     * URL, the file's own visibility. Null when the field is on, or nothing was authored. */
+    fallback: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null),
+    /**
+     * The brand's own default (Template → Variables → Default): what a render uses when a row
+     * leaves the field empty. Null when none was saved.
+     */
+    defaultValue: z
+      .union([z.string(), z.number(), z.boolean(), pinnedRenderAssetSchema])
+      .nullable()
+      .default(null),
+    /**
+     * A linked field: its value is another field's — whole (`line` null: a fill and its outline
+     * copy), or one line of it (a two-line headline set on two layers). Never asked for
+     * (`exposed` is false); the server fills it from `key` on every render and preview.
+     */
+    derivedFrom: z
+      .object({ key: apiRenderVariableKeySchema, line: z.number().int().min(2).nullable() })
       .strict()
       .nullable()
       .default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
+
+/**
+ * Fill every linked field from its source, exactly as the render will: a line split first (the
+ * source keeps line 1, each linked line field its own), then whole-value copies of what each
+ * source now shows. A source that must split into N lines and does not is a problem naming the
+ * fields — never a guessed split, a dropped word, or a line silently left empty.
+ */
+export function expandLinkedValues<V>(
+  variables: ReadonlyArray<Pick<ApiRenderVariable, 'key' | 'label' | 'derivedFrom'>>,
+  values: Readonly<Record<string, V>>,
+): { values: Record<string, V | string>; problems: Array<{ key: string; message: string }> } {
+  const expanded: Record<string, V | string> = { ...values };
+  const problems: Array<{ key: string; message: string }> = [];
+  const byKey = new Map(variables.map((variable) => [variable.key, variable]));
+  const linesBySource = new Map<string, Array<{ key: string; label: string; line: number }>>();
+  const copies: Array<{ key: string; from: string }> = [];
+  for (const variable of variables) {
+    const from = variable.derivedFrom;
+    if (!from) continue;
+    const source = byKey.get(from.key);
+    if (!source || source.derivedFrom || from.key === variable.key) {
+      problems.push({
+        key: variable.key,
+        message: `${variable.label} is linked to a field that cannot fill it.`,
+      });
+    } else if (from.line === null) {
+      copies.push({ key: variable.key, from: from.key });
+    } else {
+      const lines = linesBySource.get(from.key) ?? [];
+      lines.push({ key: variable.key, label: variable.label, line: from.line });
+      linesBySource.set(from.key, lines);
+    }
+  }
+  for (const [sourceKey, fields] of linesBySource) {
+    const sourceLabel = byKey.get(sourceKey)?.label ?? sourceKey;
+    const ordered = [...fields].sort((a, b) => a.line - b.line);
+    if (ordered.some((field, index) => field.line !== index + 2)) {
+      problems.push({
+        key: sourceKey,
+        message: `${sourceLabel}'s linked lines must run 2, 3, … with none repeated or skipped.`,
+      });
+      continue;
+    }
+    const text = values[sourceKey];
+    if (typeof text !== 'string') continue;
+    const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+    if (lines.length !== ordered.length + 1) {
+      problems.push({
+        key: sourceKey,
+        message:
+          `${sourceLabel} needs ${ordered.length + 1} lines — one for itself and one each for ` +
+          `${ordered.map((field) => field.label).join(', ')} — and has ${lines.length}.`,
+      });
+      continue;
+    }
+    expanded[sourceKey] = lines[0];
+    for (const field of ordered) expanded[field.key] = lines[field.line - 1];
+  }
+  for (const copy of copies) {
+    if (expanded[copy.from] !== undefined) expanded[copy.key] = expanded[copy.from];
+  }
+  return { values: expanded, problems };
+}
+
+/**
+ * What a render fills each field with, in order: the row's own value; else the brand's saved
+ * default; else — `fallback` on, for a field no form asks for — what the file itself says; then
+ * every linked field from its source. The one resolution render, preview and the grid share, so a
+ * default or a link can never show one thing and render another.
+ */
+export function effectiveRenderValues(
+  variables: ReadonlyArray<
+    Pick<
+      ApiRenderVariable,
+      'key' | 'label' | 'derivedFrom' | 'defaultValue' | 'exposed' | 'fallback'
+    >
+  >,
+  values: Readonly<Record<string, ApiRenderInputValue>>,
+  options: { fallback: boolean } = { fallback: false },
+): {
+  values: Record<string, ApiRenderInputValue>;
+  problems: Array<{ key: string; message: string }>;
+} {
+  const filled: Record<string, ApiRenderInputValue> = { ...values };
+  for (const variable of variables) {
+    if (filled[variable.key] !== undefined) continue;
+    if (variable.defaultValue !== null && variable.defaultValue !== undefined)
+      filled[variable.key] = variable.defaultValue;
+    else if (options.fallback && variable.exposed === false && variable.fallback !== null)
+      filled[variable.key] = variable.fallback;
+  }
+  return expandLinkedValues(variables, filled);
+}
+
+/**
+ * How a video slot's clip requirement reads — the one wording every surface uses.
+ *
+ * `toSec` is a REQUIREMENT, not a duration: a clip shorter than it runs out before the layer
+ * does. Shown bare it reads as "this is 12 seconds long", which is how the template editor came
+ * to display a worse number than the render grid it feeds. The `\u2265` is what makes it a demand.
+ *
+ * Lives beside `clip` rather than beside `clipOfSlot`, so the field and its wording are mirrored
+ * into the Frontend's vendored contracts copy together and cannot deploy out of step.
+ *
+ * `chip` is sized for a 3.5rem column; `detail` is the sentence for its title.
+ */
+export function clipRequirement(
+  clip: ApiRenderVariable['clip'] | undefined,
+): { chip: string; detail: string } | null {
+  if (!clip) return null;
+  const sec = (value: number) => `${value.toFixed(1)}s`;
+  return {
+    chip: `\u2265${sec(clip.toSec)}`,
+    detail:
+      `Plays ${sec(clip.fromSec)}\u2013${sec(clip.toSec)} of the clip, on screen up to ` +
+      `${sec(clip.playsSec)}. A shorter clip runs out and leaves the layer empty.`,
+  };
+}
 
 export const apiRenderTemplateSummarySchema = z
   .object({
@@ -274,9 +479,9 @@ export function templateRefOf(template: { bindingId: string; key: string }): str
 }
 
 /**
- * One frame is a still; anything longer is motion. THE rule — the gallery's Animated filter,
- * `outputKindsOf` and the encode guard all defer to it, so a template cannot be a video in one
- * place and a still in another.
+ * One frame is a still; anything longer is motion. THE rule — `motionLabel`, the gallery's
+ * Animated filter, `outputKindsOf` and the encode guard all defer to it, so a template cannot be
+ * a video in one place and a still in another.
  */
 export function isMotion(durationSec: number, frameRate: number): boolean {
   return Math.round(durationSec * frameRate) > 1;
@@ -285,8 +490,7 @@ export function isMotion(durationSec: number, frameRate: number): boolean {
 /** `1 frame` for a still, `6.0s · 30 fps` for a video. The pane's whole motion vocabulary. */
 export function motionLabel(motion: ApiRenderTemplateSummary['motion']): string | null {
   if (!motion) return null;
-  const frames = Math.round(motion.durationSec * motion.frameRate);
-  return frames <= 1
+  return !isMotion(motion.durationSec, motion.frameRate)
     ? 'Still · 1 frame'
     : `${motion.durationSec.toFixed(1)}s · ${Math.round(motion.frameRate)} fps`;
 }
@@ -299,6 +503,23 @@ export const apiRenderTemplateFontSchema = z
     held: z.boolean(),
     /** Whose licence the held face is under — the brand's own upload, or a house/vendor face. */
     scope: fontLicenceScopeSchema.optional(),
+    /**
+     * Present only when a person accepted a face we hold in place of one we do not.
+     *
+     * This schema is `.strict()` and it validates the render contract, so it has to admit the
+     * same two fields `templateFontStatusSchema` can now produce: the moment anything hands
+     * `templateFontStatuses` its substitution map, a strict schema without them refuses the
+     * whole contract and the template stops rendering rather than reporting a swap.
+     */
+    via: z.enum(['direct', 'substitute']).optional(),
+    substitutedBy: z
+      .object({
+        fontId: z.string().uuid(),
+        family: z.string().min(1),
+        weight: z.number().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;
@@ -475,7 +696,8 @@ export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' |
 export const ENCODE_FILE_CONTAINERS = ['mp4', 'mov', 'mxf', 'webm', 'gif'] as const;
 export type EncodeFileContainer = (typeof ENCODE_FILE_CONTAINERS)[number];
 
-const FILE_LABEL: Record<EncodeFileContainer, string> = {
+/** The display name of each container — the one spelling every surface and bench must use. */
+export const FILE_LABEL: Record<EncodeFileContainer, string> = {
   mp4: 'MP4',
   mov: 'MOV',
   mxf: 'MXF',
@@ -646,6 +868,30 @@ export const apiRenderTemplateContractSchema = z
      * a picked asset in it before spending a render. Null when the template has no parsed source.
      */
     layout: apiRenderTemplateLayoutSchema.nullable().default(null),
+    /** Live publish audit from the worker pointer and the displayed contract. Null means unchecked. */
+    publishCheck: z
+      .object({
+        state: z.enum(['pass', 'warn', 'fail']),
+        issues: z.array(z.string()),
+        workerAttachmentId: z.number().int().positive().nullable(),
+        media: z.array(
+          z
+            .object({
+              key: z.string(),
+              label: z.string(),
+              comp: z.string().nullable(),
+              box: pixelBoxSchema.nullable(),
+              source: z
+                .tuple([z.number().int().positive(), z.number().int().positive()])
+                .nullable(),
+              rigged: z.boolean(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /**
      * Where the LIVE template and its stored contract disagree, straight from the forge. A
      * template whose fields moved under its contract is one whose renders quietly stop matching
@@ -761,28 +1007,6 @@ export const apiRenderTemplateListResponseSchema = z
   })
   .strict();
 export type ApiRenderTemplateListResponse = z.infer<typeof apiRenderTemplateListResponseSchema>;
-
-/**
- * A durable Library coordinate for a media variable.
- *
- * `versionId` is OPTIONAL because a caller frequently holds an asset id without the
- * exact version: a node stamped by a producer that only carried the asset id, a
- * Library asset whose `head_version_id` was never materialized, or a slot filled
- * straight from the Library picker. Refusing those made the canvas say "needs a
- * Library asset" about an asset that was already in the Library.
- *
- * Omitting it is not a loosening of the version pin. Preflight resolves the head
- * version server-side and freezes the exact `{assetId, versionId}` into the signed
- * confirmation, so a render is still reproducible against one immutable version —
- * the same way the reserved `watermark_logo` pin has always been resolved.
- */
-export const pinnedRenderAssetSchema = z
-  .object({
-    assetId: z.string().uuid(),
-    versionId: z.string().uuid().optional(),
-  })
-  .strict();
-export type PinnedRenderAsset = z.infer<typeof pinnedRenderAssetSchema>;
 
 /**
  * How many pins one `multiple` media variable may carry. Named rather than inlined
@@ -904,6 +1128,7 @@ const finalField = z.boolean().optional();
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
+    requestId: z.string().uuid().optional(),
     bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
@@ -931,6 +1156,7 @@ export const apiRenderPreflightRequestSchema = z
      * render that silently ignores the head someone picked is the failure this exists to stop.
      */
     templateRef: z.string().min(1).optional(),
+    templateRevision: templateRevisionRefSchema.optional(),
     /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
     encode: apiRenderEncodeOverrideSchema.optional(),
     /**
@@ -1034,6 +1260,7 @@ export const apiRenderBatchPreflightRequestSchema = z
      * would be found by a client.
      */
     templateRef: z.string().min(1).optional(),
+    templateRevision: templateRevisionRefSchema.optional(),
     records: z.array(apiRenderBatchRecordSchema).min(1).max(50),
     /**
      * Post each finished render to this brand Slack destination. Here, not on createBatch, so the
@@ -1132,10 +1359,13 @@ export const apiRenderJobSchema = z
     id: z.string().uuid(),
     brandId: z.string().uuid(),
     templateKey: z.string().min(1),
+    templateRevision: templateRevisionPinSchema.nullable().optional(),
     templateName: z.string().min(1),
     contractHash: z.string().min(1),
     taskUid: z.string().nullable(),
     status: z.enum(['submitting', 'queued', 'rendering', 'finished', 'failed']),
+    /** Null until the fleet has measured render progress. */
+    progressPct: z.number().int().min(0).max(100).nullable().default(null),
     // True = a Proof (submitted `test: true`), false = a Final. Recorded per job since Finals
     // exist. Defaulted because a job from before the column is one that was only ever a proof.
     // It is what was REQUESTED: the fleet's watermark switch is off upstream, so today a proof
@@ -1296,6 +1526,7 @@ export const apiRenderPreflightResponseSchema = z
     template: apiRenderTemplateSummarySchema,
     target: resolvedRenderTargetSchema.nullable(),
     inputKeys: z.array(z.string()),
+    renderInput: apiRenderVariableMapSchema.optional(),
     effects: z.literal('none'),
     // Mirrors the `test` flag frozen into the signed trigger — see apiRenderJobSchema.
     test: z.boolean().default(true),
@@ -1401,6 +1632,26 @@ export type ApiRenderBatchShareResponse = z.infer<typeof apiRenderBatchShareResp
 // the same client validation and server preflight as a typed one — this is a draft, not a render.
 
 export const API_RENDER_SUGGEST_ROWS_ROUTE = '/api/ai-studio/renders/suggest-rows';
+export const API_RENDER_DRAFT_SOURCES_STATUS_ROUTE = '/api/ai-studio/renders/draft-sources/status';
+export const API_RENDER_DRAFT_DOCUMENTS_MAX = 40;
+export const API_RENDER_DRAFT_MEDIA_MAX = 40;
+export const apiRenderDraftSourcesStatusRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    documentIds: z.array(z.string().uuid()).min(1).max(API_RENDER_DRAFT_DOCUMENTS_MAX),
+  })
+  .strict();
+export type ApiRenderDraftSourcesStatusRequest = z.infer<
+  typeof apiRenderDraftSourcesStatusRequestSchema
+>;
+export const apiRenderDraftSourcesStatusResponseSchema = z
+  .object({
+    status: z.enum(['processing', 'ready', 'error']),
+  })
+  .strict();
+export type ApiRenderDraftSourcesStatusResponse = z.infer<
+  typeof apiRenderDraftSourcesStatusResponseSchema
+>;
 
 export const API_RENDER_SUGGEST_ROWS_MAX = 20;
 /** Variations drafted under each new row. Rows and their variations together stay within the max. */
@@ -1412,8 +1663,12 @@ export const apiRenderSuggestRowsRequestSchema = z
     bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
-    prompt: z.string().trim().min(1).max(2000),
+    prompt: z.string().trim().max(2000),
     count: z.number().int().min(1).max(API_RENDER_SUGGEST_ROWS_MAX).default(5),
+    /** Count is a ceiling; the model chooses the useful rows and variations. */
+    autoCount: z.boolean().default(false),
+    documentIds: z.array(z.string().uuid()).max(API_RENDER_DRAFT_DOCUMENTS_MAX).default([]),
+    mediaAssetIds: z.array(z.string().uuid()).max(API_RENDER_DRAFT_MEDIA_MAX).default([]),
     /** Variations drafted under each new row, each changing one or two of its values. */
     forksPerRow: z.number().int().min(0).max(API_RENDER_SUGGEST_FORKS_MAX).default(0),
     /** Values to keep across every proposed row — a product already chosen, a fixed price. */
@@ -1431,6 +1686,14 @@ export const apiRenderSuggestRowsRequestSchema = z
       .optional(),
   })
   .strict()
+  .refine(
+    (request) =>
+      request.prompt.length > 0 || request.documentIds.length + request.mediaAssetIds.length > 0,
+    {
+      message: 'A brief or uploaded file is required',
+      path: ['prompt'],
+    },
+  )
   .refine((request) => request.count * (1 + request.forksPerRow) <= API_RENDER_SUGGEST_ROWS_MAX, {
     message: `Rows and their variations together are at most ${API_RENDER_SUGGEST_ROWS_MAX}`,
     path: ['forksPerRow'],
@@ -1490,6 +1753,24 @@ export const apiRenderRowGateSchema = z
   .strict();
 export type ApiRenderRowGate = z.infer<typeof apiRenderRowGateSchema>;
 
+export const forgeRowEvidenceSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('document'),
+      documentId: z.string().uuid(),
+      name: z.string().min(1),
+      excerpt: z.string().min(1).max(500),
+      sheet: z.string().min(1).optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('media'), assetId: z.string().uuid() }).strict(),
+]);
+export type ForgeRowEvidence = z.infer<typeof forgeRowEvidenceSchema>;
+export const forgeRowEvidenceMapSchema = z.record(
+  apiRenderVariableKeySchema,
+  forgeRowEvidenceSchema,
+);
+
 export const apiRenderSuggestRowsResponseSchema = z
   .object({
     /**
@@ -1504,6 +1785,7 @@ export const apiRenderSuggestRowsResponseSchema = z
           parentId: z.string().uuid().nullable(),
           label: z.string().min(1).max(200),
           overrides: apiRenderVariableMapSchema,
+          evidence: forgeRowEvidenceMapSchema.optional(),
           /** Absent only from a server older than the gate. */
           gate: apiRenderRowGateSchema.optional(),
         })
@@ -1515,6 +1797,8 @@ export const apiRenderSuggestRowsResponseSchema = z
     dropped: z.array(z.string()).default([]),
     /** What nothing could fill: a picture slot with no Library match, a required value left blank. */
     unfilled: z.array(z.string()).default([]),
+    /** A source was too large to read in full, or has no matching template slot. */
+    sourceWarnings: z.array(z.string()).default([]),
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;

@@ -1,9 +1,17 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ForgeWorkbench } from '@/components/forge/ForgeWorkbench';
-import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import {
+  PendingApprovals,
+  useRenderApprovals,
+  waitingCount,
+} from '@/components/forge/PendingApprovals';
+import { templateListQuery } from '@/components/forge/queryKeys';
+import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const RenderRequestsGrid = dynamic(() =>
@@ -17,6 +25,9 @@ const RenderJobsGrid = dynamic(() =>
 // against a published one, and watch them come back. A render request is against a PUBLISHED
 // template — including ones that never came through the Library — so the grids do not live
 // inside the workbench's "selected upload" branch, and a spreadsheet wants the full width.
+//
+// Approvals are the ledger's: a finished render waits there for a person before it becomes an ad.
+// The ledger tab carries the waiting count, so nothing waits unseen from the Templates tab.
 
 type ForgeTab = 'templates' | 'render' | 'renders';
 
@@ -27,6 +38,11 @@ const PANEL = 'min-h-0 min-w-0 overflow-y-auto overscroll-contain pt-2';
 export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
   const [visited, setVisited] = useState<ReadonlySet<ForgeTab>>(() => new Set(['templates']));
+  // The Render picker's list is the slowest read on the page; start it now, not on first visit.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    void queryClient.prefetchQuery(templateListQuery(brandId));
+  }, [brandId, queryClient]);
   const activate = (next: ForgeTab) => {
     setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
     setTab(next);
@@ -38,6 +54,20 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     setRenderIntent(intent);
     activate('render');
   };
+  // The way back: a template opened from the Render tab, held until the workbench takes it.
+  const [templateIntent, setTemplateIntent] = useState<ForgeTemplateIntent | undefined>(undefined);
+  const openTemplate = (intent: ForgeTemplateIntent) => {
+    setTemplateIntent(intent);
+    activate('templates');
+  };
+  // The approval notification links to `/forge#approvals`. A hash never reaches the server, so the
+  // ledger opens after mount.
+  useEffect(() => {
+    if (window.location.hash !== '#approvals') return;
+    setVisited((current) => new Set(current).add('renders'));
+    setTab('renders');
+  }, []);
+  const waiting = waitingCount(useRenderApprovals(brandId).data);
   return (
     // Bounded by the page: the strip stays put and each panel scrolls on its own.
     <Tabs
@@ -48,7 +78,15 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
       <TabsList className="shrink-0">
         <TabsTrigger value="templates">Templates</TabsTrigger>
         <TabsTrigger value="render">Render</TabsTrigger>
-        <TabsTrigger value="renders">Render ledger</TabsTrigger>
+        <TabsTrigger value="renders">
+          Render ledger
+          {waiting ? (
+            <Badge variant="warning" className="ml-1.5 tabular-nums">
+              {waiting}
+              <span className="sr-only"> waiting for approval</span>
+            </Badge>
+          ) : null}
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="templates" className={PANEL}>
         <ForgeWorkbench
@@ -56,6 +94,8 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
           brandId={brandId}
           brandName={brandName}
           onOpenRender={openRender}
+          templateIntent={templateIntent}
+          onTemplateIntentConsumed={() => setTemplateIntent(undefined)}
         />
       </TabsContent>
       {/* Kept mounted: unsaved rows live in the grid, and a tab round trip must not reload them. */}
@@ -68,12 +108,16 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
             intent={renderIntent}
             onIntentConsumed={() => setRenderIntent(undefined)}
             onFired={() => activate('renders')}
+            onOpenTemplate={openTemplate}
           />
         </TabsContent>
       ) : null}
       {visited.has('renders') ? (
         <TabsContent value="renders" className={PANEL}>
-          <RenderJobsGrid key={brandId} brandId={brandId} active={tab === 'renders'} />
+          <div key={brandId} className="flex min-w-0 flex-col gap-4">
+            <PendingApprovals brandId={brandId} />
+            <RenderJobsGrid brandId={brandId} active={tab === 'renders'} />
+          </div>
         </TabsContent>
       ) : null}
     </Tabs>

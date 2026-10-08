@@ -8,7 +8,12 @@ import type {
   MediaKind,
   MediaSource,
 } from '@continuum/contracts';
-import { DEFAULT_LIBRARY_SORT } from '@continuum/contracts';
+import {
+  collectionViewConfigSchema,
+  collectionVisibilitySchema,
+  DEFAULT_LIBRARY_SORT,
+} from '@continuum/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
@@ -18,7 +23,6 @@ import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from '
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';
-import { sumActiveMediaAssetBytes } from './storage-usage';
 import { mediaSchema } from './supabase-media';
 
 const PAGE_SIZE = 48;
@@ -163,6 +167,7 @@ export async function fetchMediaAssets(
 
 export async function fetchMediaCollections(brandId: string): Promise<MediaCollection[]> {
   const client = await createSupabaseServerClient();
+  await ensureLibrarySystemViews(client, brandId);
 
   const { data, error } = await mediaSchema(client)
     .from('collections')
@@ -176,8 +181,10 @@ export async function fetchMediaCollections(brandId: string): Promise<MediaColle
     return [];
   }
 
-  return (data ?? []).map(
-    (row): MediaCollection => ({
+  return (data ?? []).map((row): MediaCollection => {
+    const visibility = collectionVisibilitySchema.safeParse(row.visibility);
+    const viewConfig = collectionViewConfigSchema.safeParse(row.view_config);
+    return {
       id: row.id,
       brandId: row.brand_id,
       name: row.name,
@@ -188,19 +195,27 @@ export async function fetchMediaCollections(brandId: string): Promise<MediaColle
       parentId: row.parent_id ?? null,
       depth: row.depth ?? 0,
       systemKey: row.system_key ?? null,
+      visibility: visibility.success ? visibility.data : 'team',
+      access: row.access === 'restricted' ? 'restricted' : 'brand',
+      viewConfig: viewConfig.success ? viewConfig.data : {},
       createdBy: row.created_by,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-    }),
-  );
+    };
+  });
 }
 
-export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
-  const client = await createSupabaseServerClient();
-  try {
-    return await sumActiveMediaAssetBytes(client, brandId);
-  } catch (error) {
-    console.error('[media/fetchers] storage usage query failed', error);
-    return 0;
-  }
+/**
+ * Seeds the brand's system views (Needs my review, Assigned to me, Approved, Forge
+ * renders) the first time its collections are listed. Idempotent in SQL; a failure
+ * only means the views appear on the next listing, so it never fails the read.
+ */
+export async function ensureLibrarySystemViews(
+  client: SupabaseClient,
+  brandId: string,
+): Promise<void> {
+  const { error } = await mediaSchema(client).rpc('ensure_library_system_views', {
+    p_brand_id: brandId,
+  });
+  if (error) console.warn('[media/fetchers] system view seed failed', error.message);
 }

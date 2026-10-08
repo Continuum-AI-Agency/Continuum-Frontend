@@ -39,7 +39,10 @@ export function BrandSwitcher() {
     isPending: brand.isPending,
   }));
 
-  const activeTeam = brands.find((b) => b.id === activeBrandId) || brands[0];
+  // No arbitrary fallback: if the server-confirmed activeBrandId is not in
+  // the summaries (stale cache, deleted brand, refresh race), render nothing
+  // rather than flashing some other brand as if it were selected.
+  const activeTeam = brands.find((b) => b.id === activeBrandId);
 
   if (!activeTeam) {
     return null;

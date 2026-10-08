@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
+import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
+import { organicGeneratablePlatformSchema } from '../organic/publishing';
 import {
   uiBrandBookAppliedFrameSchema,
   uiBrandBookFrameSchema,
@@ -547,7 +549,7 @@ export type PlanItemStatus = z.infer<typeof planItemStatusSchema>;
 export const planItemSchema = z.object({
   itemId: z.string().describe('uuid; agent-generated'),
   kind: z.enum(['create_post', 'create_draft', 'edit_draft', 'publish_draft']),
-  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']),
+  platform: organicGeneratablePlatformSchema,
   scheduledAt: z.string().describe('ISO datetime'),
   format: z.preprocess(coerceLegacyHyperframeFormat, organicPostFormatEnum.nullable()),
   // trend_id is a uuid FK column. The planner sometimes emits a slug derived
@@ -576,6 +578,9 @@ export const planItemSchema = z.object({
   // by the time the user approves. Loose by design — this is a payload passthrough,
   // and the job schema is the thing that narrows it.
   payloadExtras: z.record(z.string(), z.unknown()).nullish(),
+  /** The blocks a headless piece is built from (concept, effect, template, cast, scene); absent,
+   *  the item takes the classic media path. */
+  creative: headlessCreativeBlocksSchema.nullish(),
 });
 export type PlanItem = z.infer<typeof planItemSchema>;
 

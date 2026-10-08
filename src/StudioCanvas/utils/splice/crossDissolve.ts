@@ -11,6 +11,7 @@ import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawEffectFrame } from './frameDraw';
+import { drawCanvasBackground } from './letterbox';
 
 // Renders the overlap window of an OVERLAP transition (crossDissolve, slide, wipe,
 // zoom, spin): the outgoing clip's tail and the incoming clip's head composited on
@@ -125,11 +126,13 @@ export async function appendOverlapTransition(params: {
   videoSource: MbCanvasSource;
   targetWidth: number;
   targetHeight: number;
+  backgroundColor?: string;
   type: ClipTransitionType;
   outgoing: CrossDissolveClip;
   incoming: CrossDissolveClip;
   overlapOutputSec: number;
   outputStart: number;
+  frameTimeSec?: number;
   compositeOverlays?: (
     ctx: OffscreenCanvasRenderingContext2D,
     outputTimestampSec: number,
@@ -156,6 +159,9 @@ export async function appendOverlapTransition(params: {
     signal,
   } = params;
 
+  const snapshotLocal =
+    params.frameTimeSec === undefined ? undefined : params.frameTimeSec - outputStart;
+  if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= overlap)) return;
   const outProvider = await makeFrameProvider(mb, outgoing);
   const inProvider = await makeFrameProvider(mb, incoming);
 
@@ -167,7 +173,7 @@ export async function appendOverlapTransition(params: {
 
   for (let frame = 0; frame < frameCount; frame += 1) {
     throwIfAborted(signal);
-    const u = frame * frameDuration;
+    const u = snapshotLocal ?? frame * frameDuration;
     const t = overlap > 0 ? Math.min(1, u / overlap) : 1;
 
     // Source time within each clip: the outgoing clip's tail, the incoming's head.
@@ -187,11 +193,7 @@ export async function appendOverlapTransition(params: {
     const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
     await drawFrameComposition({
       drawBase: async () => {
-        ctx.filter = 'none';
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        drawCanvasBackground(ctx, targetWidth, targetHeight, params.backgroundColor);
         if (outFrame) {
           await drawOverlapLayer(
             ctx,
@@ -235,6 +237,7 @@ export async function appendOverlapTransition(params: {
           }
         : {}),
     });
+    if (snapshotLocal !== undefined) return;
     await videoSource.add(outputStart + u, frameDuration);
     params.onFrameProgress?.(u);
   }

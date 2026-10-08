@@ -1,13 +1,15 @@
 'use client';
 
 // "Request review" — pick brand members, write in-app notifications, and send
-// email pings via the send-library-ping edge function. Owned by WS6.
+// email pings via the send-library-ping edge function. An optional due date
+// drives the review-due sweep: reminders before it, escalation after.
 
 import type { MediaAsset } from '@continuum/contracts';
 import { Loader2Icon, UserRoundPlusIcon } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,6 +36,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState('');
+  const [dueAt, setDueAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const loadTargets = useCallback(async () => {
@@ -72,6 +75,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
         assetId: asset.id,
         reviewerUserIds: [...selectedIds],
         ...(trimmedMessage ? { note: trimmedMessage } : {}),
+        ...(dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}),
         idempotencyKey: crypto.randomUUID(),
       });
       const result = await sendReviewPing({
@@ -91,6 +95,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
       setOpen(false);
       setSelectedIds(new Set());
       setMessage('');
+      setDueAt('');
     } catch (error) {
       toast.show({
         title: 'Review ping failed',
@@ -166,6 +171,19 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
               maxLength={2000}
               className="mt-3 min-h-16 text-xs"
             />
+            <label
+              htmlFor="review-due-at"
+              className="mt-3 flex flex-col gap-1 text-2xs text-muted-foreground"
+            >
+              Due (optional — reminders before, escalation after)
+              <Input
+                id="review-due-at"
+                type="datetime-local"
+                value={dueAt}
+                onChange={(event) => setDueAt(event.target.value)}
+                className="h-8 text-xs"
+              />
+            </label>
             <Button
               size="sm"
               className="mt-3 w-full gap-1.5"

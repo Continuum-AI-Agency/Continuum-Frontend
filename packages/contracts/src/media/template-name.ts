@@ -112,7 +112,10 @@ const CLIENT_KEY_NAME_MAX = 12;
 export const SHARED_RENDER_WORKSPACE = 'Continuum_app';
 
 export function renderClientKeyFor(brandName: string | null | undefined, brandId: string): string {
-  const uniq = String(brandId).replace(/[^0-9a-f]/gi, '').slice(0, 6).toLowerCase();
+  const uniq = String(brandId)
+    .replace(/[^0-9a-f]/gi, '')
+    .slice(0, 6)
+    .toLowerCase();
   let stem = templateKeySlug(brandName ?? '').slice(0, CLIENT_KEY_NAME_MAX);
   // A cut that landed mid-word reads as a typo; fall back to the last whole word it kept.
   if (templateKeySlug(brandName ?? '').length > CLIENT_KEY_NAME_MAX && stem.includes('_')) {
@@ -148,21 +151,57 @@ export function templateDisplayName(input: string | null | undefined): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : UNTITLED_TEMPLATE_NAME;
 }
 
+const LAYER_SWITCH = /^boolean__show-(.+)$/;
+
+/**
+ * Is this slot a layer's Show switch — the per-layer toggle a design import adds, or an After
+ * Effects checkbox named "show …" — rather than some other checkbox? Only a Show switch can be
+ * described as a layer being shown or hidden.
+ */
+export function isLayerSwitch(slotKey: string | null | undefined): boolean {
+  return LAYER_SWITCH.test(slotKey ?? '');
+}
+
+/**
+ * What a layer's Show switch is called, as a person reads it: "Show Carrera de Administración y
+ * Negocios Digitales". A design import keys the switch `boolean__show-<slug>` and names it the
+ * slug too, which drops accents ("administraci-n") — 310 of 320 prod switches reached people that
+ * way on 2026-09-29. The layer's own slot shares the slug and keeps the name the designer typed,
+ * so the switch borrows it; with no such sibling the slug is read back as words. Null for
+ * anything that is not a Show switch.
+ */
+export function layerSwitchName(
+  slotKey: string,
+  slots: ReadonlyArray<{ key: string; name?: string | null }>,
+): string | null {
+  const slug = LAYER_SWITCH.exec(slotKey)?.[1];
+  if (!slug) return null;
+  const layer = slots.find(
+    (slot) => slot.key !== slotKey && slot.key.endsWith(`__${slug}`) && slot.name?.trim(),
+  );
+  const name = layer?.name?.trim();
+  return `Show ${name ? readableLayerName(name) : slug.replace(/-+/g, ' ')}`;
+}
+
 const LAYER_PREFIX = /^(?:ref|txt|img|var)[_\s]+/i;
+/** The Picnic render convention marks an exposed layer `Picnic Person`; the marker is not its name. */
+const PICNIC_MARKER = /^\s*picnic[\s_-]+/i;
 
 /**
  * A variable label that is still the raw After Effects layer name, as a person reads it:
- * `ref_price_text` → `Price text`, `Ref_ precio_anterior` → `Precio anterior`. Display only —
- * never written back, never used to guess a role. A label someone already typed (no underscore)
- * is returned as it is.
+ * `ref_price_text` → `Price text`, `Ref_ precio_anterior` → `Precio anterior`,
+ * `Picnic Person` → `Person`. Display only — never written back, never used to guess a role. A
+ * label someone already typed (no underscore, no Picnic marker) is returned as it is.
  */
 export function readableLayerName(raw: string): string {
-  if (!raw.includes('_')) return raw;
-  const words = raw
+  const unmarked = raw.replace(PICNIC_MARKER, '');
+  const name = unmarked.trim() ? unmarked : raw;
+  if (!name.includes('_')) return name;
+  const words = name
     .trim()
     .replace(LAYER_PREFIX, '')
     .replace(/[_\s]+/g, ' ')
     .trim()
     .toLowerCase();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : raw;
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name;
 }

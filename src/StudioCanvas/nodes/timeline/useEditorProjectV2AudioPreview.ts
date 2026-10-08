@@ -4,7 +4,13 @@ import type { EditorProjectV2, EditorTrack } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { headFadeFor, tailFadeFor } from '../../utils/render/transitions';
-import { resolveTimelineAudioEnvelope } from '../../utils/splice/timelineAudioEnvelope';
+import {
+  editorAudioTracks,
+  nestedAudioClips,
+  nestedAudioSources,
+  resolveTimelineAudioEnvelope,
+  volumeKeyframesOf,
+} from '../../utils/splice/timelineAudioEnvelope';
 import type {
   TimelinePreviewAudioEvent,
   TimelinePreviewAudioPlan,
@@ -15,12 +21,6 @@ import { TimelineWebAudioPreviewEngine } from './webAudioPreviewEngine';
 
 type VideoTrack = Extract<EditorTrack, { kind: 'video' }>;
 type AudioTrack = Extract<EditorTrack, { kind: 'audio' }>;
-type AudioBearingTrack = VideoTrack | AudioTrack;
-
-function activeTracks<T extends AudioBearingTrack>(tracks: T[]): T[] {
-  const enabled = tracks.filter((track) => track.enabled && !track.muted);
-  return enabled.some((track) => track.solo) ? enabled.filter((track) => track.solo) : enabled;
-}
 
 function exactSourceKey(clip: VideoTrack['clips'][number] | AudioTrack['clips'][number]): string {
   const source = clip.source;
@@ -31,11 +31,7 @@ function exactSourceKey(clip: VideoTrack['clips'][number] | AudioTrack['clips'][
 }
 
 export function editorProjectV2AudioClipIds(project: EditorProjectV2): string[] {
-  const tracks = activeTracks(
-    project.tracks.filter(
-      (track): track is AudioBearingTrack => track.kind === 'video' || track.kind === 'audio',
-    ),
-  );
+  const tracks = editorAudioTracks(project);
   const videoIds = tracks
     .filter((track): track is VideoTrack => track.kind === 'video')
     .flatMap((track) =>
@@ -46,7 +42,13 @@ export function editorProjectV2AudioClipIds(project: EditorProjectV2): string[] 
     .flatMap((track) =>
       track.clips.filter((clip) => clip.enabled && !clip.muted).map((clip) => clip.id),
     );
-  return [...videoIds, ...audioIds];
+  return [
+    ...new Set([
+      ...videoIds,
+      ...audioIds,
+      ...nestedAudioSources(project).map((item) => item.child.id),
+    ]),
+  ];
 }
 
 export function buildEditorProjectV2AudioPreviewPlan(input: {
@@ -55,11 +57,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
   blobsByClipId: ReadonlyMap<string, Blob>;
 }): TimelinePreviewAudioPlan {
   const events: TimelinePreviewAudioEvent[] = [];
-  const tracks = activeTracks(
-    input.project.tracks.filter(
-      (track): track is AudioBearingTrack => track.kind === 'video' || track.kind === 'audio',
-    ),
-  );
+  const tracks = editorAudioTracks(input.project);
   const videoTracks = tracks.filter((track): track is VideoTrack => track.kind === 'video');
   const videoById = new Map(
     videoTracks.flatMap((track) => track.clips.map((clip) => [clip.id, clip])),
@@ -79,6 +77,10 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
       ? Math.max(0, placement.startSec + placement.durationSec - next.startSec)
       : 0;
     const envelope = resolveTimelineAudioEnvelope({
+      gain: clip.volume,
+      audioFadeClock: clip.audioFadeClock,
+      manualFadeInSec: clip.fadeInSec,
+      manualFadeOutSec: clip.fadeOutSec,
       transitionFadeInSec: Math.max(
         inOverlapSec,
         headFadeFor(placement.item.transition, index === 0)?.durationSec ?? 0,
@@ -99,6 +101,8 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
       sourceStartSec: clip.sourceInSec,
       sourceEndSec: clip.sourceInSec + placement.durationSec * clip.playbackRate,
       playbackRate: clip.playbackRate,
+      volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+      keyframeOffsetSec: clip.keyframeOffsetSec,
       ...envelope,
     });
   }
@@ -107,6 +111,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
   for (const clip of audioTracks.flatMap((track) => track.clips)) {
     const blob = input.blobsByClipId.get(clip.id);
     if (!clip.enabled || clip.muted || !blob) continue;
+    const volumeKeyframes = volumeKeyframesOf(clip.keyframes);
     events.push({
       id: clip.id,
       sourceKey: exactSourceKey(clip),
@@ -120,12 +125,43 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
       playbackRate: clip.playbackRate,
       ...resolveTimelineAudioEnvelope({
         gain: clip.volume,
+        audioFadeClock: clip.audioFadeClock,
+        manualFadeInSec: clip.fadeInSec,
+        manualFadeOutSec: clip.fadeOutSec,
+      }),
+      ...(volumeKeyframes.length > 0
+        ? { volumeKeyframes, keyframeOffsetSec: clip.keyframeOffsetSec }
+        : {}),
+    });
+  }
+
+  for (const item of nestedAudioClips(input.project)) {
+    const blob = input.blobsByClipId.get(item.sourceClipId);
+    if (!blob) continue;
+    const clip = item.clock;
+    events.push({
+      id: item.id,
+      sourceKey: exactSourceKey(clip),
+      sourceNodeId: item.sourceClipId,
+      kind: 'audio',
+      blob,
+      outputStartSec: item.outputStartSec,
+      outputEndSec: item.outputStartSec + clip.durationSec,
+      sourceStartSec: item.sourceStartSec,
+      sourceEndSec: item.sourceEndSec,
+      playbackRate: item.playbackRate,
+      volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+      keyframeOffsetSec: clip.keyframeOffsetSec,
+      groupVolumeKeyframes: item.groupVolumeKeyframes,
+      groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+      ...resolveTimelineAudioEnvelope({
+        gain: clip.volume,
+        audioFadeClock: clip.audioFadeClock,
         manualFadeInSec: clip.fadeInSec,
         manualFadeOutSec: clip.fadeOutSec,
       }),
     });
   }
-
   return {
     events: events.sort(
       (left, right) =>

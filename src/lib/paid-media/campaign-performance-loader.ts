@@ -63,8 +63,13 @@ async function parseFunctionError(error: unknown): Promise<Error> {
   if (typeof json !== 'function') return error;
 
   try {
-    const parsed = CampaignFunctionErrorSchema.safeParse(await json.call(context));
-    if (!parsed.success) return error;
+    const body: unknown = await json.call(context);
+    const parsed = CampaignFunctionErrorSchema.safeParse(body);
+    if (!parsed.success) {
+      // Non-Meta handlers (Google Ads) answer a bare { error } carrying the platform's reason.
+      const reason = body && typeof body === 'object' ? Reflect.get(body, 'error') : null;
+      return typeof reason === 'string' && reason ? new Error(reason) : error;
+    }
     const status = Reflect.get(context, 'status');
     return new CampaignPerformanceLoadError(
       parsed.data,

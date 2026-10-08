@@ -26,7 +26,7 @@ type Row = ActionsBlockV2['rows'][number];
 
 const row = (overrides: Partial<Row> = {}): Row => ({
   priority: 'P1',
-  entity: { id: '120210', name: 'Prospecting — Broad', kind: 'campaign' },
+  entity: { id: '120210', name: 'Prospecting — Broad', kind: 'campaign', level: 'campaign' },
   action: 'Cut daily budget by 30%',
   sizing: '−$450/day',
   evidence: {
@@ -105,6 +105,54 @@ describe('ActionsBlock', () => {
     );
   });
 
+  // The card built to be clicked shipped naming the ACCOUNT on every row. The resolved
+  // level and id now ride on the entity element; no link is rendered, because nothing in
+  // the app addresses a Meta campaign or ad set by id — a link to nowhere is the same
+  // defect in a different coat.
+  it('carries the resolved level and id on the entity, and renders no link', () => {
+    const { container } = render(<ActionsBlock block={block([row()])} isStreaming={false} />);
+    const entity = container.querySelector('[data-testid="actions-entity"]');
+    expect(entity?.getAttribute('data-entity-level')).toBe('campaign');
+    expect(entity?.getAttribute('data-entity-id')).toBe('120210');
+    expect(entity?.textContent).toBe('Prospecting — Broad');
+    expect(container.querySelector('a')).toBeNull();
+  });
+
+  it('says "(account)" for an account-wide move the model gave no kind for, and nothing for an unresolved row', () => {
+    const { container, rerender } = render(
+      <ActionsBlock
+        block={block([
+          row({
+            entity: {
+              id: '521903353286118',
+              name: 'account-521903353286118',
+              kind: null,
+              level: 'account',
+            },
+          }),
+        ])}
+        isStreaming={false}
+      />,
+    );
+    const sentence = () => container.querySelector('[data-testid="actions-sentence"]');
+    expect(sentence()?.textContent).toContain('account-521903353286118 (account)');
+    expect(
+      container.querySelector('[data-testid="actions-entity"]')?.getAttribute('data-entity-level'),
+    ).toBe('account');
+    rerender(
+      <ActionsBlock
+        block={block([
+          row({ entity: { id: null, name: 'Summer Lookalike', kind: null, level: null } }),
+        ])}
+        isStreaming={false}
+      />,
+    );
+    expect(sentence()?.textContent).not.toContain('(');
+    const entity = container.querySelector('[data-testid="actions-entity"]');
+    expect(entity?.hasAttribute('data-entity-level')).toBe(false);
+    expect(entity?.hasAttribute('data-entity-id')).toBe(false);
+  });
+
   it('says the move in one sentence that names the entity and its size', () => {
     const { container } = render(<ActionsBlock block={block([row()])} isStreaming={false} />);
     const sentence = container.querySelector('[data-testid="actions-sentence"]');
@@ -141,7 +189,7 @@ describe('ActionsBlock', () => {
     expect(container.querySelector('[data-testid="actions-comparator"]')).toBeNull();
   });
 
-  it('keeps the ranking it was given — the lead move is set larger than the ones under it', () => {
+  it('keeps the ranking it was given in the order and the priority, with every figure at the figure step', () => {
     const { container } = render(
       <ActionsBlock
         block={block([row(), row({ priority: 'P2', action: 'Hold' }), row({ priority: 'P3' })])}
@@ -152,9 +200,13 @@ describe('ActionsBlock', () => {
       ...container.querySelectorAll('[data-testid="actions-figure"] span:first-child'),
     ];
     expect(figures).toHaveLength(3);
-    expect(figures[0]?.className).toContain('text-2xl');
-    expect(figures[1]?.className).toContain('text-lg');
-    expect(figures[2]?.className).toContain('text-base');
+    // One scale: a figure is 16px mono/600 wherever it sits. The rank is the position.
+    for (const figure of figures) {
+      expect(figure.className).toContain('font-mono');
+      expect(figure.className).toContain('text-base');
+      expect(figure.className).toContain('font-semibold');
+      expect(figure.className).not.toMatch(/text-(2xl|lg|xl)/);
+    }
     expect(
       [...container.querySelectorAll('[data-testid="actions-row"]')].map((node) =>
         node.getAttribute('data-priority'),

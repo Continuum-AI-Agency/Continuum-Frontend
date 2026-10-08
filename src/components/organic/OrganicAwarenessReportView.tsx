@@ -6,13 +6,17 @@
 // carry share % + a breakdown tooltip, and the summary tiles surface their
 // period-over-period delta so the section reads as signal, not a wall of numbers.
 
-import type { OrganicAwarenessBlock, OrganicAwarenessReportPayload } from '@continuum/contracts';
+import type {
+  OrganicAwarenessBlock,
+  OrganicAwarenessReportPayload,
+  OrganicMetricPlatform,
+} from '@continuum/contracts';
 import * as React from 'react';
 
 import { PillDelta } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useOrganicPostDetail } from '@/hooks/useOrganicPostDetail';
-import type { OrganicPlatform, OrganicPost } from '@/lib/schemas/organicMetrics';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
 import { AwarenessTopPostRow } from './awareness/AwarenessTopPostRow';
 import type { AwarenessContentTypeRow, AwarenessTopPost } from './awareness/types';
@@ -21,10 +25,7 @@ const nf = new Intl.NumberFormat('en-US');
 
 type Comparison = Record<string, { percentageChange?: number } | undefined> | null | undefined;
 
-type PostDetailPlatform = Extract<
-  OrganicPlatform,
-  'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'
->;
+type PostDetailPlatform = OrganicMetricPlatform;
 
 function deltaFor(comparison: Comparison, keys: string[]): number | null {
   if (!comparison) return null;

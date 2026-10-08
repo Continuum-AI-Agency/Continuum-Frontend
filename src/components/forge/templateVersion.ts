@@ -13,7 +13,7 @@ import type { ApiRenderJob } from '@continuum/contracts';
  * digest — never a number invented from the job row.
  */
 
-/** A sha256 as people read it aloud. Matches LineagePanel's own elision. */
+/** A sha256 as people read it aloud: the first ten characters. */
 export function shortSha(sha: string | null | undefined): string {
   if (!sha) return '—';
   return `${sha.slice(0, 10)}…`;

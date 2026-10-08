@@ -4,6 +4,7 @@ import {
   type AssetPreviewState,
   classifyLibraryFile,
   type SignAssetRenditionOperation,
+  sharePreviewRoleFor,
   signAssetRenditionResponseSchema,
 } from '@continuum/contracts';
 
@@ -159,6 +160,89 @@ export async function rasterizeBrowserImage(file: Blob): Promise<{
   }
 }
 
+const SAMPLED_FRAME_WIDTH = 512;
+
+// The opening and closing frames, beside the poster: the video's visual embedding is the
+// average of all three, so one unlucky poster frame does not decide what a search for the
+// footage finds. Best effort — a frame that will not decode leaves the poster alone.
+async function persistSampledFrames(params: {
+  file: File;
+  brandId: string;
+  assetId: string;
+  assetVersionId: string;
+  client: SupabaseBrowserClient;
+}): Promise<void> {
+  for (const [selector, role] of [
+    ['first', 'first_frame'],
+    ['last', 'last_frame'],
+  ] as const) {
+    try {
+      const frame = await generateVideoPoster(params.file, {
+        selector,
+        maxWidth: SAMPLED_FRAME_WIDTH,
+      });
+      if (!frame) continue;
+      await persistAssetRendition({
+        ...params,
+        role,
+        blob: frame.blob,
+        mimeType: frame.mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/webp',
+        width: frame.width,
+        height: frame.height,
+        renderer: 'mediabunny-browser-frame',
+        sourceTimestampMs: Math.round(frame.timestampSec * 1000),
+      });
+    } catch (error) {
+      console.warn(`[assetPreview] ${role} sample failed`, error);
+    }
+  }
+}
+
+// A ≤1600 px WebP preview_image (and the source's true dimensions). False when the browser
+// could not decode the file.
+async function storeRasterPreview(params: {
+  file: File;
+  brandId: string;
+  assetId: string;
+  assetVersionId: string;
+  client: SupabaseBrowserClient;
+}): Promise<boolean> {
+  const preview = await rasterizeBrowserImage(params.file);
+  if (!preview) return false;
+  await persistAssetRendition({
+    ...params,
+    role: 'preview_image',
+    blob: preview.blob,
+    mimeType: 'image/webp',
+    width: preview.width,
+    height: preview.height,
+    renderer: 'browser-image-decoder',
+  });
+  await writeAssetSourceMetadata({
+    client: params.client,
+    brandId: params.brandId,
+    assetId: params.assetId,
+    metadata: { width: preview.sourceWidth, height: preview.sourceHeight, durationMs: null },
+  });
+  return true;
+}
+
+// The server (Render) makes what the browser does not: the poster when no frame decodes
+// here, the proxy ladder, the scrub sprite, and an audio proxy. Best effort — the upload
+// already succeeded, and a missed request is picked up by the preview backfill.
+function requestServerPreview(
+  params: { brandId: string; assetId: string; assetVersionId: string },
+  what: string,
+): void {
+  void requestLibraryPreviewProxy({
+    brandId: params.brandId,
+    assetId: params.assetId,
+    assetVersionId: params.assetVersionId,
+  }).catch((error: unknown) => {
+    console.error(`[assetPreview] ${what} request failed`, error);
+  });
+}
+
 export async function attachAssetPreview(params: {
   file: File;
   brandId: string;
@@ -169,31 +253,40 @@ export async function attachAssetPreview(params: {
   const client = params.client ?? createSupabaseBrowserClient();
   const format = classifyLibraryFile({ fileName: params.file.name, mimeType: params.file.type });
   if (!format.accepted) return 'unsupported';
-  if (format.previewStrategy === 'native') return 'ready';
+  if (format.previewStrategy === 'native') {
+    // The browser shows a JPEG/PNG/WebP as is, but a protected share never signs the
+    // original: it needs a stored preview (prod had none for 9,291 images). Best effort —
+    // the upload itself already succeeded.
+    if (
+      sharePreviewRoleFor({ fileName: params.file.name, mimeType: params.file.type }) ===
+      'preview_image'
+    ) {
+      await storeRasterPreview({ ...params, client }).catch((error: unknown) => {
+        console.warn('[assetPreview] stored image preview failed', error);
+      });
+    }
+    // The browser plays the original; the server still writes the AAC proxy that shares
+    // and the download menu offer.
+    if (format.originalKind === 'audio') requestServerPreview(params, 'audio proxy');
+    return 'ready';
+  }
+  // Office documents: there is no converter, so there is honestly nothing to wait for.
+  if (format.previewStrategy === 'none') return 'unsupported';
 
   if (format.previewStrategy === 'browser_video') {
     const poster = await generateVideoPoster(params.file);
+    // No frame decodes here (HEVC in Firefox, ProRes, a codec this browser lacks) is not
+    // a failed upload: the server decodes it and makes the poster, ladder and sprite.
     if (!poster) {
-      const wantsProxy = params.file.name.toLowerCase().endsWith('.mov');
       await markPreviewState({
         ...params,
         client,
-        state: wantsProxy ? 'awaiting_companion' : 'failed',
-        errorCode: wantsProxy ? 'proxy_transcode_pending' : 'browser_decode_failed',
-        errorMessage: wantsProxy
-          ? 'This MOV is not browser-playable. Building an H.264 proxy, or add an MP4 companion.'
-          : 'This browser could not decode a representative video frame.',
+        state: 'awaiting_companion',
+        errorCode: 'server_preview_pending',
+        errorMessage: 'Building the preview on our servers. It will appear here shortly.',
       });
-      if (wantsProxy) {
-        void requestLibraryPreviewProxy({
-          brandId: params.brandId,
-          assetId: params.assetId,
-          assetVersionId: params.assetVersionId,
-        }).catch((error: unknown) => {
-          console.error('[assetPreview] MOV proxy request failed', error);
-        });
-      }
-      return wantsProxy ? 'awaiting_companion' : 'failed';
+      requestServerPreview(params, 'server preview');
+      return 'awaiting_companion';
     }
     await persistAssetRendition({
       ...params,
@@ -220,6 +313,10 @@ export async function attachAssetPreview(params: {
         durationMs: poster.durationMs,
       },
     });
+    await persistSampledFrames({ ...params, client });
+    // The server fills what the browser did not make: the six mid-video frames the visual
+    // search vector averages, the proxy ladder, and the scrub sprite.
+    requestServerPreview(params, 'server preview');
     return 'ready';
   }
 
@@ -232,37 +329,15 @@ export async function attachAssetPreview(params: {
       errorMessage:
         'Building an H.264 proxy so this can play in Continuum. You can also drop a same-stem MP4.',
     });
-    void requestLibraryPreviewProxy({
-      brandId: params.brandId,
-      assetId: params.assetId,
-      assetVersionId: params.assetVersionId,
-    }).catch((error: unknown) => {
-      console.error('[assetPreview] MXF proxy request failed', error);
-    });
+    requestServerPreview(params, 'MXF proxy');
     return 'awaiting_companion';
   }
 
-  if (format.previewStrategy === 'browser_raster') {
-    const preview = await rasterizeBrowserImage(params.file);
-    if (preview) {
-      await persistAssetRendition({
-        ...params,
-        client,
-        role: 'preview_image',
-        blob: preview.blob,
-        mimeType: 'image/webp',
-        width: preview.width,
-        height: preview.height,
-        renderer: 'browser-image-decoder',
-      });
-      await writeAssetSourceMetadata({
-        client,
-        brandId: params.brandId,
-        assetId: params.assetId,
-        metadata: { width: preview.sourceWidth, height: preview.sourceHeight, durationMs: null },
-      });
-      return 'ready';
-    }
+  if (
+    format.previewStrategy === 'browser_raster' &&
+    (await storeRasterPreview({ ...params, client }))
+  ) {
+    return 'ready';
   }
 
   await markPreviewState({

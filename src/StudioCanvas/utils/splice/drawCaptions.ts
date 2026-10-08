@@ -5,6 +5,7 @@ import {
 } from '@/lib/clips/captionAnimation';
 import { resolveStyleWithPreset } from '@/lib/clips/captionPresets';
 import { type CaptionStyle, DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
+import { opacityFor, resolveTransformAt } from '../render/effectSpec';
 import type { CaptionCue, CaptionWord } from './captionCues';
 
 // Burns one word-synced caption line onto the output frame. Drawn in the splice worker
@@ -24,7 +25,9 @@ import type { CaptionCue, CaptionWord } from './captionCues';
 //      every word after a popping word would jitter horizontally on every single frame.
 //
 // The motion itself lives in lib/clips/captionAnimation.ts as a pure function of word age,
-// so this file never sees a delta, a clock, or any state between frames.
+// so this file never sees a delta, a clock, or any state between frames. A text clip's
+// keyframes (cue.motion) move the whole cue on top of that, sampled by the same
+// resolveTransformAt a video clip moves by.
 
 const MIN_FONT_PX = 16;
 const MAX_TEXT_WIDTH_FRACTION = 0.9;
@@ -42,6 +45,9 @@ type Ctx = OffscreenCanvasRenderingContext2D;
 /** One word, measured once, with the exact font it will be drawn in. */
 type MeasuredWord = {
   word: CaptionWord;
+  /** Position in the cue, and where its glyphs start in the cue's text (typewriter). */
+  index: number;
+  charStart: number;
   /** Post-uppercase glyphs. Measured AND drawn — measuring the other casing wraps wrong. */
   glyphs: string;
   width: number;
@@ -172,14 +178,19 @@ export function drawActiveCaption(
 
   // ── Layout: everything below is measured ONCE, for the whole cue ────────────────────
   const uppercase = resolvedStyle.uppercase === true;
-  const measured: MeasuredWord[] = cue.words.map((word) => {
+  let charCursor = 0;
+  const measured: MeasuredWord[] = cue.words.map((word, index) => {
     // toLocaleUpperCase, not toUpperCase: Turkish dotless i, and we transcribe 100+ locales.
     const glyphs = uppercase ? word.text.toLocaleUpperCase() : word.text;
     const emphasis = word.emphasis === true;
     const font = emphasis ? emphasisFont : baseFont;
     if (ctx.font !== font) ctx.font = font;
-    return { word, glyphs, width: ctx.measureText(glyphs).width, font, emphasis };
+    const charStart = charCursor;
+    // One space between words is typed too, so a typewriter pauses where a person would.
+    charCursor += Array.from(glyphs).length + 1;
+    return { word, index, charStart, glyphs, width: ctx.measureText(glyphs).width, font, emphasis };
   });
+  const totalChars = Math.max(0, charCursor - 1);
   ctx.font = baseFont;
   const spaceWidth = ctx.measureText(' ').width;
 
@@ -228,22 +239,66 @@ export function drawActiveCaption(
   const emphasisColor = resolvedStyle.emphasis?.color;
   const emphasisScale = resolvedStyle.emphasis?.scale ?? 1;
   const shadow = resolvedStyle.shadow;
+  const sequenceCount = measured.length;
+
+  // A text clip's keyframed transform moves the whole cue about its anchor point.
+  let cueAlpha = 1;
+  if (cue.motion) {
+    const span = cue.endSec - cue.startSec;
+    const u = span > 0 ? (outputTimeSec - cue.startSec) / span : 0;
+    const at = resolveTransformAt(cue.motion, u);
+    cueAlpha = opacityFor(cue.motion, u);
+    ctx.translate(targetWidth * (0.5 + at.offsetX), targetHeight * (0.5 + at.offsetY));
+    if (at.rotate) ctx.rotate((at.rotate * Math.PI) / 180);
+    ctx.scale(at.scaleX, at.scaleY);
+    ctx.translate(-targetWidth * position.xFrac, -targetHeight * position.yFrac);
+  }
+  // A cue-anchored animation (a title, not a spoken word) moves as one line, so its panel
+  // arrives and leaves with it. Word-anchored captions keep the static panel, which is what
+  // keeps `classic` byte-identical.
+  const animations = [animation, exitAnimation].filter((entry) => entry !== undefined);
+  const lineMoves = animations.length > 0 && animations.every((entry) => entry.anchor === 'cue');
+  const lineMotion = lineMoves
+    ? captionMotionTransform({
+        entry: animation,
+        exit: exitAnimation,
+        cueStartSec: cue.startSec,
+        cueEndSec: cue.endSec,
+        cueAnimationClock: cue.animationClock,
+        wordStartSec: cue.startSec,
+        wordEndSec: cue.endSec,
+        outputTimeSec,
+        fontPx,
+        sequence: { index: 0, count: sequenceCount },
+      })
+    : undefined;
+  const typedChars =
+    lineMotion?.typed !== undefined ? Math.floor(lineMotion.typed * totalChars + 1e-9) : undefined;
 
   for (const { line, baselineY: lineBaseline, left, width } of placed) {
-    // The line panel is deliberately static: it is the ground the words move on, and
-    // keeping it out of the per-word transform is what makes `classic` byte-identical.
+    ctx.save();
+    if (lineMotion?.wiped !== undefined) {
+      // The wipe reveals each line from its left edge, panel and all.
+      const reach = padX + ctx.lineWidth;
+      ctx.beginPath();
+      ctx.rect(left - reach, 0, (width + reach * 2) * lineMotion.wiped, targetHeight);
+      ctx.clip();
+    }
     if (backgroundMode === 'line' && resolvedStyle.backgroundColor) {
       ctx.save();
-      ctx.globalAlpha = backgroundOpacity;
+      const panelX = left - padX;
+      const panelY = lineBaseline - lineHeight + padY;
+      const panelWidth = width + padX * 2;
+      ctx.globalAlpha = cueAlpha * backgroundOpacity * (lineMotion?.alpha ?? 1);
+      if (lineMotion) {
+        const centerX = panelX + panelWidth / 2;
+        const centerY = panelY + lineHeight / 2;
+        ctx.translate(centerX + lineMotion.dx, centerY + lineMotion.dy);
+        ctx.scale(lineMotion.scale, lineMotion.scale);
+        ctx.translate(-centerX, -centerY);
+      }
       ctx.fillStyle = resolvedStyle.backgroundColor;
-      fillBox(
-        ctx,
-        left - padX,
-        lineBaseline - lineHeight + padY,
-        width + padX * 2,
-        lineHeight,
-        backgroundRadius,
-      );
+      fillBox(ctx, panelX, panelY, panelWidth, lineHeight, backgroundRadius);
       ctx.restore();
     }
 
@@ -255,13 +310,22 @@ export function drawActiveCaption(
         exit: exitAnimation,
         cueStartSec: cue.startSec,
         cueEndSec: cue.endSec,
+        cueAnimationClock: cue.animationClock,
         wordStartSec: word.startSec,
         wordEndSec: word.endSec,
         outputTimeSec,
         fontPx,
+        sequence: { index: item.index, count: sequenceCount },
       });
+      // Typed so far: this word's first `shown` characters, drawn from its own left edge.
+      const shown =
+        typedChars === undefined
+          ? glyphs
+          : Array.from(glyphs)
+              .slice(0, Math.max(0, typedChars - item.charStart))
+              .join('');
 
-      if (transform.visible) {
+      if (transform.visible && shown.length > 0) {
         const active = outputTimeSec >= word.startSec && outputTimeSec < word.endSec;
         // Emphasis and the karaoke highlight are two different signals; a word that is
         // simultaneously active-yellow, emphasis-green and scaled is three signals fighting.
@@ -278,7 +342,8 @@ export function drawActiveCaption(
         const centerY = lineBaseline - centerOffsetY;
 
         ctx.save();
-        ctx.globalAlpha = transform.alpha;
+        ctx.globalAlpha = cueAlpha * transform.alpha;
+        if (transform.blurPx) ctx.filter = `blur(${transform.blurPx}px)`;
         ctx.translate(centerX + transform.dx, centerY + transform.dy);
         ctx.scale(scale, scale);
         ctx.translate(-centerX, -centerY);
@@ -294,7 +359,7 @@ export function drawActiveCaption(
               : undefined;
         if (boxColor) {
           ctx.save();
-          ctx.globalAlpha = transform.alpha * backgroundOpacity;
+          ctx.globalAlpha = cueAlpha * transform.alpha * backgroundOpacity;
           ctx.fillStyle = boxColor;
           fillBox(
             ctx,
@@ -316,19 +381,20 @@ export function drawActiveCaption(
           ctx.shadowOffsetY = shadow.offsetYFrac * fontPx;
         }
         if (strokes) {
-          ctx.strokeText(glyphs, x, lineBaseline);
+          ctx.strokeText(shown, x, lineBaseline);
           // A shadow applies to BOTH strokeText and fillText. Left set, the fill draws a
           // second shadow onto the first one's edge and visibly darkens it.
           if (shadow) ctx.shadowColor = 'transparent';
         }
         ctx.fillStyle = fillStyle;
-        ctx.fillText(glyphs, x, lineBaseline);
+        ctx.fillText(shown, x, lineBaseline);
         ctx.restore();
       }
 
       // The advance is always the UN-animated width — see invariant 2 at the top.
       x += wordWidth + spaceWidth;
     }
+    ctx.restore();
   }
   ctx.restore();
 }

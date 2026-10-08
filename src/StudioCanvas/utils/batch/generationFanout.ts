@@ -284,9 +284,17 @@ export interface BatchGenerationDeps {
   executeGeneration(
     executionId: string,
     payload: BackendChatImageRequestPayload,
-  ): Promise<{ success: boolean; output?: NodeOutput; error?: string }>;
+  ): Promise<{ success: boolean; output?: NodeOutput; error?: string; errorCode?: string }>;
   onProgress?(record: BatchRunRecord): void;
 }
+
+// Refusals about the node, its brand or its model rather than one item's input. They
+// fail every remaining item the same way, so the batch stops issuing requests.
+const NODE_WIDE_ERROR_CODES = new Set([
+  'credits_exhausted',
+  'product_required',
+  'model_unavailable',
+]);
 
 export interface BatchGenerationResult {
   readonly output: CollectionOutput;
@@ -331,15 +339,23 @@ export async function runGenerationFanOut(
     truncated: plan.truncated,
   });
 
+  let stoppedBy: string | undefined;
   const fan = await fanOut(
     plan.pairs,
     async (pair) => {
+      if (stoppedBy) {
+        results[pair.pairIndex] = resultFromOutput(pair, null, stoppedBy);
+        throw new Error(stoppedBy);
+      }
       const perItem = substituteCollections(resolvedOutputs, plan, pair);
       const payload = deps.buildPayload(node, perItem);
       if (!payload) throw new Error('This batch item has no usable prompt or reference');
       const result = await deps.executeGeneration(`${node.id}::b${pair.pairIndex}`, payload);
       if (!result.success || !result.output) {
-        throw new Error(result.error ?? 'Generation returned no output');
+        const error = result.error ?? 'Generation returned no output';
+        if (result.errorCode && NODE_WIDE_ERROR_CODES.has(result.errorCode)) stoppedBy ??= error;
+        results[pair.pairIndex] = resultFromOutput(pair, null, error);
+        throw new Error(error);
       }
       results[pair.pairIndex] = resultFromOutput(pair, result.output);
       deps.onProgress?.(snapshot());

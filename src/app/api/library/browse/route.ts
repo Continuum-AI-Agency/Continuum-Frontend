@@ -1,8 +1,9 @@
 import { libraryBrowseQuerySchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
+import { parseFieldFiltersParam } from '@/lib/library/customFields';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { fetchLibraryBrowsePage } from '@/lib/media/browse.server';
-import { parseTagsParam } from '@/lib/media/filters';
+import { libraryBrowseExtrasFromParams, parseTagsParam } from '@/lib/media/filters';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 function optionalBoolean(value: string | null): boolean | null | undefined {
@@ -20,7 +21,15 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const url = new URL(request.url);
+  // A malformed custom-field filter fails loudly: dropping it would widen the result.
+  const fieldFilterParse = parseFieldFiltersParam(url.searchParams.get('fieldFilters'));
+  if (!fieldFilterParse.ok) {
+    return NextResponse.json({ error: fieldFilterParse.reason }, { status: 422 });
+  }
   const parsed = libraryBrowseQuerySchema.safeParse({
+    ...libraryBrowseExtrasFromParams((key) => url.searchParams.get(key)),
+    reviewStateIds: parseTagsParam(url.searchParams.get('reviewStateIds')),
+    fieldFilters: fieldFilterParse.filters,
     brandId: url.searchParams.get('brandId'),
     mediaType: url.searchParams.get('mediaType') ?? undefined,
     createdWith: parseTagsParam(url.searchParams.get('createdWith')),
@@ -45,6 +54,7 @@ export async function GET(request: Request) {
     sort: url.searchParams.get('sort') ?? undefined,
     performanceWindow: url.searchParams.get('performanceWindow') ?? undefined,
     layout: url.searchParams.get('layout') ?? undefined,
+    sortFieldId: url.searchParams.get('sortField') ?? undefined,
     cursor: url.searchParams.get('cursor'),
     limit: url.searchParams.get('limit') ? Number(url.searchParams.get('limit')) : undefined,
   });
@@ -56,6 +66,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Custom review states, custom-field filters (a smart collection's saved ones too) and
+    // every range are predicates in the one browse RPC.
     return NextResponse.json(await fetchLibraryBrowsePage(supabase, parsed.data));
   } catch (error) {
     console.error('[library/browse] query failed', error);

@@ -6,12 +6,18 @@
 import { z } from 'zod';
 import { libraryAspectRatioBinSchema } from './aspect-ratio';
 import { assetPreviewSchema } from './asset-renditions';
+import { LIBRARY_COLLECTION_MAX_DEPTH } from './collection-nesting';
 import { assetIntegrityStateSchema } from './creative-operations';
+import { mediaAssetTechnicalFieldsSchema } from './media-info';
+
+/** media.assets.notes — free text, written only through the dispatcher's set_notes. */
+export const MAX_ASSET_NOTES_LENGTH = 10_000;
 
 // 'file' covers non-renderable source files (After Effects projects, RAW
 // bundles) stored for the future rendering backend; the grid shows a generic
-// file card and no analysis pipeline runs for them.
-export const mediaKindSchema = z.enum(['image', 'video', 'file']);
+// file card and no analysis pipeline runs for them. 'audio' is a playable sound
+// asset (voiceover, music bed) — distinct from an opaque file.
+export const mediaKindSchema = z.enum(['image', 'video', 'file', 'audio']);
 export type MediaKind = z.infer<typeof mediaKindSchema>;
 
 // Human review workflow over an asset — independent of the processing
@@ -40,6 +46,9 @@ export type MediaReviewStatus = z.infer<typeof mediaReviewStatusSchema>;
 //   meta_ad:      an ad creative pulled back OUT of Meta into the Library, so a
 //                 creative that only ever existed as an ad can still be annotated,
 //                 versioned and reviewed like any other asset (Creative DNA).
+//   figma:        imported from a Figma file.
+//   goal_artifact: produced by a goal run.
+//   forge:        a Template Forge render output (register_forge_output).
 export const mediaSourceSchema = z.enum([
   'upload',
   'ai_generated',
@@ -52,6 +61,8 @@ export const mediaSourceSchema = z.enum([
   'reel',
   'meta_ad',
   'figma',
+  'goal_artifact',
+  'forge',
 ]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
@@ -187,6 +198,8 @@ export const mediaAssetSchema = z
     originRef: z.record(z.string(), z.unknown()).nullable().optional(),
     status: mediaStatusSchema,
     reviewStatus: mediaReviewStatusSchema.default('none'),
+    // The brand's custom state within reviewStatus (media.review_custom_states).
+    reviewStateId: z.string().nullable().optional(),
     headVersionId: z.string().nullable().optional(),
     integrityState: assetIntegrityStateSchema.optional(),
     checksum: z.string().nullable().optional(),
@@ -235,12 +248,48 @@ export const mediaAssetSchema = z
       .nullable()
       .optional(),
     groupId: z.string().uuid().nullable().optional(),
+    notes: z.string().max(MAX_ASSET_NOTES_LENGTH).nullable().optional(),
+    // Typed copies of the head version's probe (media-info.ts).
+    ...mediaAssetTechnicalFieldsSchema.shape,
   })
   .strict();
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 
 export const mediaCollectionKindSchema = z.enum(['manual', 'smart']);
 export type MediaCollectionKind = z.infer<typeof mediaCollectionKindSchema>;
+
+// 'private' collections are visible to their creator only; 'team' to the brand.
+export const collectionVisibilitySchema = z.enum(['team', 'private']);
+export type CollectionVisibility = z.infer<typeof collectionVisibilitySchema>;
+
+// 'restricted' = only the collection's member list (and brand owners/admins) can see it
+// and everything inside it; children inherit from the nearest restricted ancestor.
+export const collectionAccessSchema = z.enum(['brand', 'restricted']);
+export type CollectionAccess = z.infer<typeof collectionAccessSchema>;
+
+// How a collection presents itself (media.collections.view_config). SQL does not
+// validate this jsonb, so every level passes unknown keys through untouched.
+export const collectionViewConfigSchema = z
+  .object({
+    layout: z.enum(['grid', 'list', 'board', 'reel']).optional(),
+    // A custom field id, or the first-class review status.
+    groupBy: z.union([z.string().uuid(), z.literal('review_status')]).optional(),
+    sort: z
+      .object({ field: z.string().min(1), direction: z.enum(['asc', 'desc']) })
+      .passthrough()
+      .optional(),
+    card: z
+      .object({
+        size: z.enum(['sm', 'md', 'lg']).optional(),
+        aspect: z.enum(['original', 'square', 'portrait', 'landscape']).optional(),
+        fields: z.array(z.string()).optional(),
+        showTitle: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type CollectionViewConfig = z.infer<typeof collectionViewConfigSchema>;
 
 export const mediaCollectionSchema = z
   .object({
@@ -253,12 +302,15 @@ export const mediaCollectionSchema = z
     smartQuery: z.record(z.string(), z.unknown()).nullable().optional(),
     coverAssetId: z.string().nullable().optional(),
     itemCount: z.number().int().nonnegative().default(0),
-    /** Null on a root board. Same brand, no cycles, depth ≤ 5. */
+    /** Null on a root board. Same brand, no cycles, depth ≤ LIBRARY_COLLECTION_MAX_DEPTH. */
     parentId: z.string().uuid().nullable().optional(),
-    /** 0 = root. A row at 5 cannot grow children. */
-    depth: z.number().int().min(0).max(5).default(0),
+    /** 0 = root. A row at LIBRARY_COLLECTION_MAX_DEPTH (9, i.e. 10 levels) cannot grow children. */
+    depth: z.number().int().min(0).max(LIBRARY_COLLECTION_MAX_DEPTH).default(0),
     /** Product-owned boards (`canvas_outputs`). Null on operator-created ones. */
     systemKey: z.string().min(1).max(64).nullable().optional(),
+    visibility: collectionVisibilitySchema.default('team'),
+    access: collectionAccessSchema.optional(),
+    viewConfig: collectionViewConfigSchema.default({}),
     createdBy: z.string().nullable().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),

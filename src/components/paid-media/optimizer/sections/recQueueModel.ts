@@ -145,13 +145,28 @@ const AS_OF_FMT = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 });
 
-/** "As of Sep 17, 6:10 AM · next cycle Sep 20, 6:00 AM". Null with no scored cycle yet. */
-export function asOfLine(latestCycleTs: string | null, nextCycleTs: string | null): string | null {
+/**
+ * "As of Sep 17, 6:10 AM · next cycle Sep 20, 6:00 AM". Null with no scored cycle yet.
+ *
+ * On a STALE portfolio (stale_for_days set — a cycle was missed) the same date reads
+ * "next attempt Sep 20, 6:00 AM". next_realloc_at is real: the scheduler will claim the
+ * portfolio then. But it has been claiming it for weeks and no cycle has landed, so the date
+ * says when it will try, not when a cycle will run. Dropping the date would hide that the
+ * scheduler still touches the portfolio; "next cycle" would promise what 49 claims did not
+ * deliver. "attempt" is the word that is true of both.
+ */
+export function asOfLine(
+  latestCycleTs: string | null,
+  nextCycleTs: string | null,
+  stale = false,
+): string | null {
   const at = latestCycleTs ? Date.parse(latestCycleTs) : Number.NaN;
   if (Number.isNaN(at)) return null;
   const parts = [`As of ${AS_OF_FMT.format(new Date(at))}`];
   const next = nextCycleTs ? Date.parse(nextCycleTs) : Number.NaN;
-  if (!Number.isNaN(next)) parts.push(`next cycle ${AS_OF_FMT.format(new Date(next))}`);
+  if (!Number.isNaN(next)) {
+    parts.push(`${stale ? 'next attempt' : 'next cycle'} ${AS_OF_FMT.format(new Date(next))}`);
+  }
   return parts.join(' · ');
 }
 

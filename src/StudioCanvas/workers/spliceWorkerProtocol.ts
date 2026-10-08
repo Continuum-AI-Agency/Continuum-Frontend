@@ -1,9 +1,10 @@
-import type { ActionId } from '@continuum/contracts';
+import type { ActionId, EditorAudioFadeClock, NumericKeyframe } from '@continuum/contracts';
 import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
+import type { TimelineNestedRenderGroup } from '../utils/splice/composeTimeline';
 
 // Encoder selection for timeline renders. Optional and additive: when absent the
 // worker encodes exactly as before (avc in mp4). Only `start_timeline` carries these —
@@ -38,6 +39,9 @@ export type TimelineWorkerItem = {
   durationSec?: number;
   muteAudio?: boolean;
   volume?: number;
+  volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   effects?: ClipEffectSpec;
@@ -69,8 +73,14 @@ export type TimelineAudioWorkerItem = {
   trimEndSec?: number;
   speed?: number;
   volume?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   fadeInSec?: number;
   fadeOutSec?: number;
+  /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
+  volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 };
 
 // WOFF2 bytes ride WITH the job rather than being fetched worker-side: a worker has no
@@ -105,6 +115,7 @@ export type SpliceWorkerInbound =
       kind: 'start_timeline';
       items: TimelineWorkerItem[];
       overlays?: TimelineOverlayWorkerItem[];
+      groups?: TimelineNestedRenderGroup[];
       audioTracks?: TimelineAudioWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;
@@ -113,6 +124,7 @@ export type SpliceWorkerInbound =
       frameRate?: number;
       targetWidth?: number;
       targetHeight?: number;
+      backgroundColor?: string;
       // Auto-caption words (output-time) + style, burned in when present.
       captionCues?: CaptionCue[];
       captionWords?: CaptionWord[];

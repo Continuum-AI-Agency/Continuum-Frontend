@@ -16,31 +16,41 @@
 
 import { CalmRule } from '@/components/paid-media/optimizer/sections/account/candidateHeadline';
 import type { SurveyBlockV2 } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
+import { JAINA_TYPE } from '../reading';
+import { BlockHeading } from './BlockHeading';
 
 type SurveyBlockProps = { block: SurveyBlockV2; isStreaming: boolean };
 
 export default function SurveyBlock({ block }: SurveyBlockProps) {
   return (
     <section data-testid="survey-block">
-      <div className="mb-2 flex items-center gap-2">
-        <CalmRule play testId="survey-calm-rule" />
-        <h4 className="font-semibold text-foreground text-sm">{block.title}</h4>
-      </div>
+      <BlockHeading
+        title={block.title}
+        leading={<CalmRule play testId="survey-calm-rule" />}
+        className="gap-2"
+      />
 
       <p
-        className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
+        className={cn(
+          'flex flex-wrap items-baseline gap-x-1.5 text-muted-foreground',
+          JAINA_TYPE.table,
+        )}
         data-testid="survey-figure"
       >
-        <span className="font-mono font-semibold text-foreground text-xl">“{block.term}”</span>
+        <span className={cn(JAINA_TYPE.figure, 'text-foreground')}>“{block.term}”</span>
         <span className="text-foreground">was read as</span>
       </p>
 
-      <p className="mt-0.5 text-foreground text-sm" data-testid="survey-sentence">
+      <p className={cn('mt-0.5 text-foreground', JAINA_TYPE.body)} data-testid="survey-sentence">
         {block.used}
       </p>
 
       {/* Never a control. The reader asks for another reading by asking. */}
-      <p className="mt-1 text-3xs text-muted-foreground" data-testid="survey-alternatives">
+      <p
+        className={cn('mt-1 text-muted-foreground', JAINA_TYPE.table)}
+        data-testid="survey-alternatives"
+      >
         It could also have meant {block.alternatives.join('; ')}.
       </p>
     </section>

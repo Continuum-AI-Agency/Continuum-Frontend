@@ -3,9 +3,13 @@ import { z } from 'zod';
 export const creativeOperationErrorCodeSchema = z.enum([
   'unauthenticated',
   'brand_forbidden',
+  // A brand member whose role (viewer) may not run this action.
+  'insufficient_role',
   'asset_not_found',
   'version_not_found',
   'version_conflict',
+  // The asset's review status moved under the caller (a concurrent approve/request).
+  'review_status_conflict',
   'unsupported_file',
   'file_too_large',
   'share_forbidden',
@@ -43,7 +47,7 @@ export const registerGeneratedAssetOperationSchema = z
   .object({
     action: z.literal('register_generated_asset'),
     brandId: z.string().uuid(),
-    kind: z.enum(['image', 'video', 'file']),
+    kind: z.enum(['image', 'video', 'file', 'audio']),
     bucket: z.string().min(1).max(100),
     storagePath: z.string().min(1).max(1024),
     fileName: z.string().min(1).max(255),
@@ -64,6 +68,8 @@ export const registerGeneratedAssetOperationSchema = z
       'reel',
       'meta_ad',
       'figma',
+      'goal_artifact',
+      'forge',
     ]),
     operation: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/),
     originRef: z.record(z.string(), z.unknown()).default({}),

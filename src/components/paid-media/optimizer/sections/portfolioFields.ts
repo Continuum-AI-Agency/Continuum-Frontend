@@ -14,6 +14,7 @@
 
 import {
   type BudgetGranularity,
+  currencyMinorOffset,
   DAYS_PER_MONTH,
   metaCurrencyOffset,
   toMinorUnits,
@@ -21,6 +22,7 @@ import {
   UpdatePortfolioPatchSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
+import { type AdPlatform, PLATFORM_NAMES } from './platforms/platformTabsModel';
 
 const PATCH_SHAPE = UpdatePortfolioPatchSchema.shape;
 
@@ -314,4 +316,61 @@ export function buildPatch(
     patch[key] = value;
   }
   return patch as UpdatePortfolioPatch;
+}
+
+// ---------------------------------------------------------------------------
+// Per-platform daily cap (optimizer.portfolio_platforms.daily_cap_minor)
+//
+// Not a column of the portfolio form: it is one value per PLATFORM, read and written through
+// optimizer_get_portfolio_platform_caps / optimizer_set_portfolio_platform_cap. Its unit is
+// minor units of that platform account's own currency — Meta's table for Meta, ISO 4217 for
+// Google and TikTok, the unit each applier writes the ledger's delta_minor in. A cap is never
+// added to another platform's, so two currencies never meet here.
+// ---------------------------------------------------------------------------
+
+/** MAJOR -> MINOR multiplier for one platform's currency, or null when there is no single
+ *  usable currency (the read reports null when a platform's accounts disagree). */
+function platformMinorOffset(platform: AdPlatform, currency: string | null): number | null {
+  if (!currency) return null;
+  if (platform === 'meta') return metaCurrencyOffset(currency);
+  try {
+    return currencyMinorOffset(currency);
+  } catch {
+    return null;
+  }
+}
+
+export function platformCapLabel(platform: AdPlatform): string {
+  return `Daily limit on ${PLATFORM_NAMES[platform]}`;
+}
+
+/** stored minor cap -> the major amount the input shows; blank for no cap or no currency. */
+export function platformCapToInput(
+  minor: number | null,
+  platform: AdPlatform,
+  currency: string | null,
+): string {
+  const offset = platformMinorOffset(platform, currency);
+  if (minor == null || offset == null) return '';
+  return String(trim(minor / offset));
+}
+
+export type PlatformCapInput = { ok: true; minor: number | null } | { ok: false; message: string };
+
+/** The typed major amount -> the minor cap to store. Blank clears the cap (null). */
+export function parsePlatformCapInput(
+  raw: string,
+  platform: AdPlatform,
+  currency: string | null,
+): PlatformCapInput {
+  const offset = platformMinorOffset(platform, currency);
+  if (offset == null) {
+    return { ok: false, message: 'These accounts have no single currency to set a limit in.' };
+  }
+  const trimmed = raw.trim();
+  if (trimmed === '') return { ok: true, minor: null };
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) return { ok: false, message: 'Enter a number.' };
+  if (parsed < 0) return { ok: false, message: 'A limit cannot be negative.' };
+  return { ok: true, minor: Math.round(parsed * offset) };
 }

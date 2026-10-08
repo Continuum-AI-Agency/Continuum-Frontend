@@ -7,6 +7,7 @@ import {
   creativeRefSchema,
   findMultiVideoSelectionError,
   publishFormatForAssetKinds,
+  reconcileFormatWithAssetKinds,
   shapeUserSuppliedMedia,
 } from './attach';
 
@@ -306,6 +307,35 @@ describe('publishFormatForAssetKinds', () => {
 
   it('follows the video-first rule the shaper uses, not the count', () => {
     expect(publishFormatForAssetKinds(['video', 'image'])).toBe('REEL');
+  });
+});
+
+/**
+ * The planner's media edit knows the draft's format AND what was just attached. An image on a
+ * Reel draft is a Post; an image on a Story draft is still a Story. Taking only the kinds turned
+ * every Story into a Post; taking only the current format left a Reel with no video.
+ */
+describe('reconcileFormatWithAssetKinds', () => {
+  it('demotes a reel to a post when the one asset is an image', () => {
+    expect(reconcileFormatWithAssetKinds('REEL', ['image'])).toBe('POST');
+  });
+
+  it('keeps a story a story — one image or one video is a valid story', () => {
+    expect(reconcileFormatWithAssetKinds('STORY', ['image'])).toBe('STORY');
+    expect(reconcileFormatWithAssetKinds('STORY', ['video'])).toBe('STORY');
+  });
+
+  it('promotes a post to a carousel once a second image lands', () => {
+    expect(reconcileFormatWithAssetKinds('POST', ['image', 'image'])).toBe('CAROUSEL');
+  });
+
+  it('keeps a reel a reel when its asset is a video, cover image or not', () => {
+    expect(reconcileFormatWithAssetKinds('REEL', ['video'])).toBe('REEL');
+    expect(reconcileFormatWithAssetKinds('CAROUSEL', ['video', 'image'])).toBe('CAROUSEL');
+  });
+
+  it('infers from the assets when the draft names no format', () => {
+    expect(reconcileFormatWithAssetKinds(null, ['image'])).toBe('POST');
   });
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -134,6 +134,9 @@ const executableReport = {
 // The mocked performance read returns whichever report the current test installed. Defaults
 // back to the pure-selection `report` in afterEach so the existing suites are untouched.
 let activeReport: unknown = report;
+// The brand's audience proposals, as optimizer_get_audience_proposals returns them. Empty by
+// default; the carried-row specs install one.
+let activeProposals: unknown[] = [];
 
 // The portfolio's recent ad-account writes, as public.optimizer_list_actions returns them.
 // Empty by default so the existing queue specs are unaffected.
@@ -185,27 +188,31 @@ mock.module('../useOptimizerData', () => ({
   useApplyApproved: () => ({ mutate: applyApprovedMutate, isPending: false }),
   useApplyAdsetStatus: () => ({ mutate: applyAdsetStatusMutate, isPending: false }),
   // Reads the queue only touches when a creative row is expanded; empty here.
-  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false }),
+  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false, targeting: [] }),
   useOptimizerAdsetAds: () => ({ data: [], isLoading: false }),
   useOptimizerCreativeSwapJobs: () => ({ data: [], isLoading: false, refetch: () => undefined }),
   useOptimizerPortfolioAudiences: () => ({ data: [], isLoading: false }),
   useFlashCreativeMutations: () => ({
     request: { mutateAsync: async () => 'job', isPending: false },
+    generate: { mutateAsync: async () => 'job', isPending: false },
+    retry: { mutate: () => undefined, isPending: false },
     implement: { mutateAsync: async () => 'job', isPending: false },
     refreshPipelines: () => undefined,
   }),
   useAdAccountCurrency: () => 'USD',
   fetchAdsetAds: async () => [],
-  useOptimizerAudienceProposals: () => ({ data: [], isLoading: false }),
+  useOptimizerAudienceProposals: () => ({ data: activeProposals, isLoading: false }),
   useAudienceProposalMutations: () => ({
     request: { mutate: () => undefined, isPending: false },
     approve: { mutate: () => undefined, isPending: false },
     cancel: { mutate: () => undefined, isPending: false },
     activate: { mutate: () => undefined, isPending: false },
     undo: { mutate: () => undefined, isPending: false },
+    retry: { mutate: () => undefined, isPending: false },
     refresh: () => undefined,
   }),
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
+  useRevertApply: () => ({ mutateAsync: async () => ({ ok: true }), isPending: false }),
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
@@ -227,6 +234,11 @@ mock.module('@/components/ui/alert-dialog', () => ({
     dialogOnOpenChange = onOpenChange ?? (() => {});
     return open ? children : null;
   },
+  AlertDialogTrigger: ({ children }: { children: ReactNode }) => (
+    <button onClick={() => dialogOnOpenChange(true)} type="button">
+      {children}
+    </button>
+  ),
   AlertDialogContent: ({ children }: { children: ReactNode }) => (
     <div role="alertdialog">{children}</div>
   ),
@@ -263,8 +275,14 @@ mock.module('./RecommendationInsight', () => ({
   RecommendationInsight: ({ kind }: { kind: string }) => <span>{kind}</span>,
 }));
 
-const { OptimizerActionsPortfolioGroup, buildActionQueue, isSelectableRow, selectionLabel } =
-  await import('./OptimizerActionsPortfolioGroup');
+const {
+  OptimizerActionsPortfolioGroup,
+  buildActionQueue,
+  buildMoveQueue,
+  isSelectableRow,
+  selectionLabel,
+} = await import('./OptimizerActionsPortfolioGroup');
+const { moveRec, feedRow, MOVE_ID } = await import('./crossPlatformMove/moveFixtures');
 
 afterEach(() => {
   cleanup();
@@ -276,6 +294,7 @@ afterEach(() => {
   applyApprovedHandler = () => {};
   applyAdsetStatusHandler = () => {};
   activeReport = report;
+  activeProposals = [];
   recentActions = [];
 });
 
@@ -301,6 +320,48 @@ const renderGroup = (over: Partial<PortfolioListItem> = {}) =>
   render(
     <OptimizerActionsPortfolioGroup adAccountId="act_1" brandId="b1" portfolio={portfolio(over)} />,
   );
+
+// Easy Fit → Tours, 2026-09-28: an asked-for row's handoff opened this proposal, the worker
+// blocked it for want of creatives, and the next cycle superseded it — expiring the
+// recommendation, which therefore left the report. The row that opened it still says "Open
+// the audience proposal", and that press has to land here.
+const CARRIED_REC_ID = '77777777-7777-4777-8777-777777777777';
+const supersededProposal = {
+  id: '88888888-8888-4888-8888-888888888888',
+  brand_id: '2f1c1c1e-0000-4000-8000-000000000003',
+  ad_account_id: 'act_1',
+  campaign_id: 'c1',
+  adset_id: 'as-tours',
+  trigger: 'F3_audience_exhausted',
+  kind: 'audience_expand',
+  recommendation_id: CARRIED_REC_ID,
+  cycle_run_id: RUN_ID,
+  utc_day: '2026-09-27',
+  status: 'superseded',
+  requested_via: 'human',
+  requested_by: null,
+  attempts: 1,
+  proposal: null,
+  proposal_built_at: null,
+  blocked_by: {
+    code: 'no_creatives',
+    message:
+      'No delivering creative in this portfolio has enough results to carry into a new ad set yet.',
+    campaign_id: 'c1',
+    campaign_name: 'ITESO // TOURS',
+  },
+  approved_at: null,
+  approved_by: null,
+  approval: null,
+  result: null,
+  executed_at: null,
+  undo_requested_at: null,
+  undo_result: null,
+  undone_at: null,
+  error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+  created_at: '2026-09-27T09:20:16Z',
+  updated_at: '2026-09-28T00:20:00Z',
+};
 
 describe('buildActionQueue — pure inclusion + selectability', () => {
   it('builds a budget row, a pause row, a creative row, and a hidden ad-level row', () => {
@@ -872,5 +933,420 @@ describe('a queue row leads with the trigger own headline', () => {
     const text = renderGroup().container.textContent ?? '';
     expect(text).not.toContain('lots');
     expect(text).toContain('CTR 0.74% vs 1.03%');
+  });
+});
+
+describe('queue header — a portfolio dead on Meta says so before its rows', () => {
+  // "Citas Agosto - check leads" as the live bench read it on 2026-09-23.
+  const citas = {
+    name: 'Citas Agosto - check leads',
+    apply_mode: 'autopilot',
+    next_realloc_at: '2026-09-24T06:00:00Z',
+    adset_count: 12,
+    last_actual_cycle_at: '2026-08-05T12:00:00Z',
+    stale_for_days: 49,
+    roster_state: 'absent' as const,
+    roster_absent_since: '2026-08-06T12:00:00Z',
+    roster_missing_count: 12,
+  };
+
+  it('reads exactly as before when the row carries no staleness fields', () => {
+    const { container, queryByTestId } = renderGroup({
+      next_realloc_at: '2026-09-24T06:00:00Z',
+    });
+    expect(container.textContent).toMatch(/next cycle Sep 2[34]/);
+    expect(queryByTestId('queue-staleness')).toBeNull();
+  });
+
+  it('calls the next claim an attempt and wears the stale and roster chips', () => {
+    const { container, getByTestId } = renderGroup(citas);
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/next attempt Sep 2[34]/);
+    expect(text).not.toContain('next cycle');
+    const header = getByTestId('queue-staleness');
+    expect(header.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
+      'last cycle 49 days ago',
+    );
+    expect(header.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
+      'roster gone since Aug 6 · 12 of 12 ad sets',
+    );
+  });
+
+  it('adds nothing to a fresh portfolio after the migration', () => {
+    const { container, queryByTestId } = renderGroup({
+      next_realloc_at: '2026-09-24T06:00:00Z',
+      stale_for_days: null,
+      roster_state: 'present',
+      roster_missing_count: 0,
+    });
+    expect(container.textContent).toMatch(/next cycle Sep 2[34]/);
+    expect(queryByTestId('queue-staleness')).toBeNull();
+  });
+});
+
+describe('the portfolio Activity tab reads at the optimizer type scale', () => {
+  const MICRO = /text-[23]xs/;
+
+  it('leaves no micro type in the queue, the notices, or Recently applied', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    // Observe mode is what surfaces the writes-blocked notice, so it is in the markup too.
+    const { container } = renderGroup({ apply_mode: 'observe' });
+    const expander = container.querySelector(
+      '[data-row-key^="budget:"] button[aria-label="Show detail"]',
+    );
+    expect(expander).not.toBeNull();
+    fireEvent.click(expander as Element);
+    expect(screen.getByRole('button', { name: 'Hide detail' })).toBeTruthy();
+
+    expect(screen.getByText('Recently applied').className).toContain('text-xs');
+    expect(container.innerHTML).not.toMatch(MICRO);
+  });
+
+  it('lifts the Recently applied row title and timestamp, and the lookback buttons', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    const { container } = renderGroup();
+    const recent = screen.getByText('Recently applied').parentElement as HTMLElement;
+    const header = recent.querySelector('li span.truncate') as HTMLElement;
+    expect(header.className).toContain('text-base');
+    expect(header.className).toContain('font-semibold');
+    expect((header.nextElementSibling as HTMLElement).className).toContain('text-sm');
+    for (const days of ['3d', '7d', '14d']) {
+      const toggle = screen.getByText(days, { selector: 'button' });
+      expect(toggle.className).toContain('h-7');
+      expect(toggle.className).toContain('text-xs');
+    }
+    expect(container.querySelector('li[data-row-key]')?.className).toContain('py-3.5');
+  });
+});
+
+describe('buildActionQueue — recommendations carried in from asked-for handoffs', () => {
+  const carried: RecommendationRow = {
+    id: CARRIED_REC_ID,
+    adset_id: 'as-tours',
+    adset_name: 'ITESO // AGOSTO // 2 - LKL',
+    ad_id: null,
+    kind: 'audience_expand',
+    trigger: 'F3_audience_exhausted',
+    severity: null,
+    reason: 'No delivering creative has enough results yet.',
+    status: 'expired',
+  };
+
+  it('adds a rec:<id> row the report does not carry, on the audience route, never selectable', () => {
+    const rows = buildActionQueue(
+      {
+        portfolio: null,
+        latest_run: { id: RUN_ID } as never,
+        latest_items: [],
+        recommendations: report.recommendations as never,
+        history: [],
+      },
+      null,
+      [carried],
+    );
+    const row = rows.find((candidate) => candidate.key === `rec:${CARRIED_REC_ID}`);
+    expect(row?.route).toBe('fatigue');
+    expect(row && isSelectableRow(row)).toBe(false);
+    // The report's three recommendations plus the carried one.
+    expect(rows).toHaveLength(4);
+  });
+
+  it('does not duplicate a recommendation the report already lists', () => {
+    const rows = buildActionQueue(
+      {
+        portfolio: null,
+        latest_run: { id: RUN_ID } as never,
+        latest_items: [],
+        recommendations: [{ ...carried, status: 'pending' }],
+        history: [],
+      },
+      null,
+      [carried],
+    );
+    expect(rows.filter((row) => row.key === `rec:${CARRIED_REC_ID}`)).toHaveLength(1);
+    expect(rows[0]?.route === 'fatigue' && rows[0].rec.status).toBe('pending');
+  });
+
+  it('holds the carried rows even before the report has loaded', () => {
+    expect(buildActionQueue(null, null, [carried]).map((row) => row.key)).toEqual([
+      `rec:${CARRIED_REC_ID}`,
+    ]);
+    expect(buildActionQueue(null, null, [])).toEqual([]);
+  });
+});
+
+describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', () => {
+  const scrolled: string[] = [];
+  const nativeScroll = Element.prototype.scrollIntoView;
+  const scrollSpy = function (this: Element) {
+    scrolled.push(this.getAttribute('data-row-key') ?? '');
+  };
+
+  it('expands the focused row, scrolls it into view and hands the key back once the row exists', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    scrolled.length = 0;
+    const consumed = mock(() => {});
+    try {
+      const { container } = render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusRowKey={`rec:${PAUSE_ID}`}
+          onFocusRowConsumed={consumed}
+          portfolio={portfolio()}
+        />,
+      );
+      const row = container.querySelector(`li[data-row-key="rec:${PAUSE_ID}"]`) as HTMLElement;
+      expect(row.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+      await waitFor(() => expect(consumed).toHaveBeenCalledTimes(1));
+      expect(scrolled).toEqual([`rec:${PAUSE_ID}`]);
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  it('does not hand the key back while the row is not in the queue yet', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    scrolled.length = 0;
+    const consumed = mock(() => {});
+    try {
+      render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusRowKey="rec:not-in-the-queue"
+          onFocusRowConsumed={consumed}
+          portfolio={portfolio()}
+        />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(consumed).not.toHaveBeenCalled();
+      expect(scrolled).toEqual([]);
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  // A key with no row is a pressed button that did nothing. Silence there is the dead end
+  // the read rows exist to close; after the delay the queue says so, and stops the moment
+  // the row exists.
+  it('says so, in words, once a focus key has gone unmatched for the delay — and not before', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    try {
+      const { rerender } = render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusMissingDelayMs={40}
+          focusRowKey="rec:not-in-the-queue"
+          portfolio={portfolio()}
+        />,
+      );
+      expect(screen.queryByTestId('queue-focus-missing')).toBeNull();
+      await waitFor(() => expect(screen.getByTestId('queue-focus-missing')).toBeTruthy());
+      expect(screen.getByTestId('queue-focus-missing').textContent).toContain(
+        "isn't in the queue yet",
+      );
+      rerender(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusMissingDelayMs={40}
+          focusRowKey={`rec:${PAUSE_ID}`}
+          portfolio={portfolio()}
+        />,
+      );
+      await waitFor(() => expect(screen.queryByTestId('queue-focus-missing')).toBeNull());
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  it('carries the recommendation an asked-for handoff points at and shows its blocked proposal', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    activeProposals = [supersededProposal];
+    try {
+      const { container } = render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          askedRecommendationIds={[CARRIED_REC_ID]}
+          brandId="b1"
+          focusRowKey={`rec:${CARRIED_REC_ID}`}
+          portfolio={portfolio()}
+        />,
+      );
+      const row = container.querySelector(
+        `li[data-row-key="rec:${CARRIED_REC_ID}"]`,
+      ) as HTMLElement;
+      expect(row).not.toBeNull();
+      expect(row.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+      const card = row.querySelector('[data-testid="audience-recommendation-card"]') as HTMLElement;
+      expect(card.textContent).toContain('Blocked');
+      expect(card.textContent).toContain('No delivering creative in this portfolio');
+      const create = card.querySelector(
+        '[data-testid="audience-create-blocked"]',
+      ) as HTMLButtonElement;
+      expect(create.disabled).toBe(true);
+      expect(card.textContent).not.toContain('Ask Jaina again');
+      await waitFor(() => expect(scrolled).toContain(`rec:${CARRIED_REC_ID}`));
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  it('a recommendation the report still lists is not carried twice', () => {
+    activeProposals = [supersededProposal];
+    activeReport = {
+      ...report,
+      recommendations: [
+        ...report.recommendations,
+        {
+          id: CARRIED_REC_ID,
+          adset_id: 'as-tours',
+          kind: 'audience_expand',
+          trigger: 'F3_audience_exhausted',
+          severity: 'medium',
+          reason: 'Audience exhausted',
+          status: 'pending',
+        },
+      ],
+    };
+    const { container } = render(
+      <OptimizerActionsPortfolioGroup
+        adAccountId="act_1"
+        askedRecommendationIds={[CARRIED_REC_ID]}
+        brandId="b1"
+        portfolio={portfolio()}
+      />,
+    );
+    expect(container.querySelectorAll(`li[data-row-key="rec:${CARRIED_REC_ID}"]`)).toHaveLength(1);
+  });
+});
+
+// Decisions 17 and 18: a cross-platform move is ONE row in the queue with every leg under it,
+// and a person decides it with one of three buttons.
+describe('a cross-platform budget move in the queue', () => {
+  const MOVE_REC_ID = '99999999-9999-4999-8999-999999999999';
+  const withMove = (status = 'pending') => ({
+    ...report,
+    recommendations: [...report.recommendations, moveRec({ id: MOVE_REC_ID, status })],
+  });
+
+  it('renders as ONE row, never as a fatigue row, with every leg and the three buttons', () => {
+    activeReport = withMove();
+    renderGroup();
+    const rows = screen.getAllByTestId('budget-move-row');
+    expect(rows).toHaveLength(1);
+    expect(screen.getAllByTestId('budget-move-leg')).toHaveLength(4);
+    expect(
+      screen.getByText('We recommend a person approves moves between platforms.'),
+    ).toBeTruthy();
+    for (const name of ['Approve the move', 'Approve the decrease only', 'Dismiss']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+    expect(
+      buildActionQueue(withMove() as never).some((row) => row.key === `rec:${MOVE_REC_ID}`),
+    ).toBe(false);
+  });
+
+  it('Approve the move records the approval, and holds the row while it is in flight', () => {
+    activeReport = withMove();
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve the move' }));
+    expect(setStatusMutate.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
+      { recommendation_id: MOVE_REC_ID, status: 'approved' },
+    ]);
+    expect(screen.getByRole('button', { name: 'Dismiss' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('Dismiss rejects it', () => {
+    activeReport = withMove();
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(setStatusMutate.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
+      { recommendation_id: MOVE_REC_ID, status: 'rejected' },
+    ]);
+  });
+
+  it('a portfolio whose only work is a move still shows its queue', () => {
+    activeReport = { ...report, latest_items: [], recommendations: [moveRec({ id: MOVE_REC_ID })] };
+    renderGroup();
+    expect(screen.getByTestId('budget-move-row')).toBeTruthy();
+  });
+
+  it('observe mode blocks the move as it blocks every write', () => {
+    activeReport = withMove();
+    renderGroup({ apply_mode: 'observe' });
+    expect(screen.getByRole('button', { name: 'Approve the move' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  it('buildMoveQueue keeps pending and approved moves, drops decided ones and unparseable ones', () => {
+    const parsed = (recs: unknown[]) =>
+      buildMoveQueue({ ...report, recommendations: recs } as never).map((row) => row.rec.id);
+    expect(
+      parsed([
+        moveRec({ id: 'a', status: 'approved' }),
+        moveRec({ id: 'b' }),
+        moveRec({ id: 'c', status: 'rejected' }),
+        moveRec({ id: 'd', action: { kind: 'budget_move' } }),
+      ]),
+    ).toEqual(['b', 'a']);
+  });
+
+  it('Recently applied folds a move into one decision with its legs', () => {
+    recentActions = [
+      feedRow({
+        id: 'leg-1',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        move_id: MOVE_ID,
+        leg: 1,
+        platform: 'google_ads',
+        before: { minor: 70_000 },
+        after: { minor: 80_000 },
+      }),
+      feedRow({
+        id: 'leg-0',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        move_id: MOVE_ID,
+        leg: 0,
+        platform: 'tiktok_ads',
+        before: { minor: 100_000 },
+        after: { minor: 90_000 },
+      }),
+    ];
+    renderGroup();
+    expect(screen.getAllByTestId('move-decision')).toHaveLength(1);
+    expect(screen.getAllByTestId('move-decision-leg')).toHaveLength(2);
+    // Undo both itself is covered by MoveDecisionCard.render.test (this suite mocks the dialog).
+    expect(screen.getByTestId('move-state').textContent).toBe('applied');
+    expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
   });
 });

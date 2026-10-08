@@ -43,62 +43,7 @@ import {
   DEFAULT_AD_FORMAT,
   isAdFormatCompatibleWithCreativeType,
 } from '../types/adCreativeCompatibility';
-
-const AD_FORMATS: Array<{ value: AdFormat; label: string; description: string }> = [
-  {
-    value: 'IMAGE',
-    label: 'Single Image',
-    description: 'Single Image uses one static visual for each impression.',
-  },
-  {
-    value: 'VIDEO',
-    label: 'Single Video',
-    description: 'Single Video uses one motion creative with optional audio.',
-  },
-  {
-    value: 'CAROUSEL',
-    label: 'Carousel',
-    description: 'Carousel presents multiple swipeable cards in one ad unit.',
-  },
-  {
-    value: 'COLLECTION',
-    label: 'Collection',
-    description: 'Collection combines a hero asset with product-style follow-up cards.',
-  },
-];
-
-const CALL_TO_ACTIONS = [
-  {
-    value: 'LEARN_MORE',
-    label: 'Learn More',
-    description: 'Learn More invites users to explore details before deciding.',
-  },
-  {
-    value: 'SHOP_NOW',
-    label: 'Shop Now',
-    description: 'Shop Now emphasizes immediate product browsing or purchase intent.',
-  },
-  {
-    value: 'SIGN_UP',
-    label: 'Sign Up',
-    description: 'Sign Up prompts users to register or create an account.',
-  },
-  {
-    value: 'BOOK_NOW',
-    label: 'Book Now',
-    description: 'Book Now directs users toward scheduling or reservation actions.',
-  },
-  {
-    value: 'CONTACT_US',
-    label: 'Contact Us',
-    description: 'Contact Us encourages direct outreach through message or form.',
-  },
-  {
-    value: 'DOWNLOAD',
-    label: 'Download',
-    description: 'Download prompts users to save a file or install an asset.',
-  },
-];
+import { AD_FORMATS, CALL_TO_ACTIONS } from '../types/nodeOptions';
 
 export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode, nodes, edges } =

@@ -38,6 +38,9 @@ export type PreviewRepaint = {
   /** Whose render is underneath, as the caption names it: "Based on '{basedOn}' render". */
   basedOn: string | null;
   node: ReactNode;
+  /** A rendered full-timeline proof can name itself without inheriting still-frame wording. */
+  badge?: string;
+  caption?: string;
   /** What the picture could not match, each said once: "Headline: resize rig approximated". */
   notes?: string[];
   /** A newer composition is on its way; this one shows the last settled edit. */
@@ -52,6 +55,7 @@ export type PreviewFrame =
       /** The file predates the edits now on screen. */
       stale?: boolean;
       node: ReactNode;
+      badge?: string;
       /** The same render with the edits since painted over it; shown first when present. */
       preview?: PreviewRepaint;
       /** The drawing too, so a person can compare the render with what was measured. */
@@ -132,7 +136,8 @@ const containerRank = (output: ApiRenderOutput) => {
  * contract order — so a preview shows the file a browser can play before ProRes or MXF.
  */
 export const playableFirst = (outputs: readonly ApiRenderOutput[]) =>
-  [...outputs].sort((a, b) => containerRank(a) - containerRank(b));
+  [...outputs].sort((a, b) =>
+    Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) || containerRank(a) - containerRank(b));
 
 export function fileForFormat(
   outputs: readonly ApiRenderOutput[],
@@ -200,15 +205,15 @@ export function FormatPreview({
 
   const badge =
     shown.mode === 'rendered'
-      ? shown.stale
+      ? shown.badge ?? (shown.stale
         ? 'Rendered · before latest edits'
-        : `Rendered · ${formatRelativeTime(shown.at)}`
+        : `Rendered · ${formatRelativeTime(shown.at)}`)
       : shown.mode === 'preview'
-        ? shown.pending
+        ? shown.badge ?? (shown.pending
           ? 'Preview · updating…'
           : shown.basedOn === null
             ? 'Composed from template'
-            : 'Preview'
+            : 'Preview')
         : shown.mode === 'estimate'
           ? 'Estimate · wireframe'
           : 'No preview';
@@ -218,8 +223,8 @@ export function FormatPreview({
       ? (shown.caption ?? ESTIMATE_CAPTION)
       : shown.mode === 'rendered'
         ? shown.caption
-        : shown.mode === 'preview'
-          ? [
+      : shown.mode === 'preview'
+          ? shown.caption ?? [
               shown.basedOn === null
                 ? 'Drawn from the template'
                 : `Based on '${shown.basedOn}' render${shown.at ? ` · ${formatRelativeTime(shown.at)}` : ''}`,
@@ -242,22 +247,38 @@ export function FormatPreview({
         // A pressed chip pressed again reports no value; the pick stays where it was.
         onValueChange={(next) => next && onValueChange(next)}
       >
-        {formats.map((entry) => (
-          <ToggleGroupItem
-            key={entry.id}
-            value={entry.id}
-            aria-label={entry.label}
-            className="gap-1.5 px-2"
-          >
-            <RatioGlyph ratio={entry.ratio} className="text-muted-foreground" />
-            <span className="text-xs">{entry.ratio ?? entry.label}</span>
-            {entry.width && entry.height ? (
-              <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-                {entry.width}×{entry.height}
-              </span>
-            ) : null}
-          </ToggleGroupItem>
-        ))}
+        {formats.map((entry) => {
+          // Two comps can share a ratio and a size (a fixed and an animated 9:16); only their
+          // names tell the chips apart.
+          const twin = formats.some(
+            (other) =>
+              other.id !== entry.id &&
+              other.ratio === entry.ratio &&
+              other.width === entry.width &&
+              other.height === entry.height,
+          );
+          return (
+            <ToggleGroupItem
+              key={entry.id}
+              value={entry.id}
+              aria-label={entry.label}
+              title={entry.label}
+              className="gap-1.5 px-2"
+            >
+              <RatioGlyph ratio={entry.ratio} className="text-muted-foreground" />
+              <span className="text-xs">{entry.ratio ?? entry.label}</span>
+              {twin ? (
+                <span className="max-w-32 truncate text-2xs text-muted-foreground">
+                  {entry.label}
+                </span>
+              ) : entry.width && entry.height ? (
+                <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                  {entry.width}×{entry.height}
+                </span>
+              ) : null}
+            </ToggleGroupItem>
+          );
+        })}
       </ToggleGroup>
       <div
         data-slot="format-preview-well"

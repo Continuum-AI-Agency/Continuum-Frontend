@@ -5,6 +5,10 @@ import { useCallback, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiUrl } from '@/lib/api/config';
 import { authedSseHeaders } from '@/lib/api/sseHeaders';
+import {
+  notifyPaymentRequiredResponse,
+  notifyStreamPaymentRequired,
+} from '@/lib/billing/paymentRequired';
 import { readServerSentEvents } from '@/lib/sse/readServerSentEvents';
 import type {
   BackendChatImageRequestPayload,
@@ -118,6 +122,13 @@ export function useWorkflowExecution() {
         });
 
         if (!res.ok || !res.body) {
+          // A billing refusal already has its Buy credits / Upgrade toast; the node says why.
+          const refusal = await notifyPaymentRequiredResponse(res);
+          if (refusal) {
+            const { title } = generationErrorCopy(refusal.error);
+            setStreamState({ status: 'error', error: title, currentNodeId: nodeId });
+            return { success: false, error: title, errorCode: refusal.error };
+          }
           const body = await res.text();
           const msg = body.includes('<!DOCTYPE')
             ? 'API endpoint returned HTML (likely 404). Check API base URL.'
@@ -397,8 +408,10 @@ export function useWorkflowExecution() {
                 const message = parsed.message ?? 'Stream error';
                 streamError = { message, code: parsed.code };
                 setStreamState((prev) => ({ ...prev, status: 'error', error: message }));
-                const copy = generationErrorCopy(parsed.code, message);
-                show({ title: copy.title, description: copy.guidance, variant: 'error' });
+                if (!notifyStreamPaymentRequired(parsed.code)) {
+                  const copy = generationErrorCopy(parsed.code, message);
+                  show({ title: copy.title, description: copy.guidance, variant: 'error' });
+                }
               }
 
               if (eventName === 'complete') {
@@ -539,6 +552,12 @@ export function useWorkflowExecution() {
         });
 
         if (!response.ok) {
+          const refusal = await notifyPaymentRequiredResponse(response);
+          if (refusal) {
+            const { title } = generationErrorCopy(refusal.error);
+            setStreamState({ status: 'error', error: title, currentNodeId: nodeId });
+            return { success: false, error: title };
+          }
           const err = await response.text();
           return { success: false, error: err || `Omni request failed (${response.status})` };
         }
@@ -552,6 +571,7 @@ export function useWorkflowExecution() {
         let assetId: string | null | undefined;
         let durationSec: number | null | undefined;
         let streamError: string | undefined;
+        let billingRefused = false;
 
         await readServerSentEvents({
           reader,
@@ -587,6 +607,7 @@ export function useWorkflowExecution() {
               if (!interactionId && f.data.interactionId) interactionId = f.data.interactionId;
             } else if (f.type === 'error') {
               streamError = f.data.message;
+              billingRefused = notifyStreamPaymentRequired(f.data.code) !== null;
             }
           },
         });
@@ -594,7 +615,9 @@ export function useWorkflowExecution() {
         setStreamState((prev) => ({ ...prev, status: 'done', progressPct: 100 }));
 
         if (streamError) {
-          show({ title: 'Omni generation failed', description: streamError, variant: 'error' });
+          if (!billingRefused) {
+            show({ title: 'Omni generation failed', description: streamError, variant: 'error' });
+          }
           return { success: false, error: streamError, interactionId };
         }
         if (!output) {

@@ -8,15 +8,16 @@ import 'server-only';
 // only weaken it. callerHasBrandAccess in the route is the friendly 403 on top.
 
 import {
+  CURRENT_USER_FILTER_TOKEN,
   type CustomField,
   type CustomFieldFilter,
-  customFieldOptionSchema,
+  customFieldOptionsSchema,
   customFieldTypeSchema,
   DEFAULT_CUSTOM_FIELDS,
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mediaSchema } from '@/lib/media/supabase-media';
-import { matchesFieldFilter } from './customFields';
+import { matchesFieldFilter, resolveViewerToken } from './customFields';
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -45,7 +46,7 @@ export type AssetFieldValueRow = {
 // (options is jsonb), so both are narrowed here rather than trusted.
 export function rowToCustomField(row: CustomFieldRow): CustomField {
   const type = customFieldTypeSchema.safeParse(row.type);
-  const options = customFieldOptionSchema.array().safeParse(row.options);
+  const options = customFieldOptionsSchema.safeParse(row.options);
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -164,6 +165,19 @@ export type FieldFilterResolution =
 
 type ValueRow = { asset_id: string; field_id: string; value: unknown };
 
+// "@me" is resolved against the signed-in caller of THIS client, so it can never be
+// widened to someone else by a client-sent id. No caller (a service client) matches no one.
+async function withViewerResolved(
+  client: SupabaseClient,
+  filters: readonly CustomFieldFilter[],
+): Promise<CustomFieldFilter[]> {
+  if (!filters.some((filter) => filter.values.includes(CURRENT_USER_FILTER_TOKEN))) {
+    return [...filters];
+  }
+  const { data } = await client.auth.getUser();
+  return resolveViewerToken(filters, data.user?.id ?? 'no-viewer');
+}
+
 /**
  * Turns field filters into an asset-id constraint.
  *
@@ -174,9 +188,10 @@ type ValueRow = { asset_id: string; field_id: string; value: unknown };
 export async function resolveFieldFilterAssetIds(
   client: SupabaseClient,
   brandId: string,
-  filters: readonly CustomFieldFilter[],
+  requestedFilters: readonly CustomFieldFilter[],
 ): Promise<FieldFilterResolution> {
-  if (filters.length === 0) return { kind: 'unfiltered' };
+  if (requestedFilters.length === 0) return { kind: 'unfiltered' };
+  const filters = await withViewerResolved(client, requestedFilters);
 
   const fieldIds = [...new Set(filters.map((filter) => filter.fieldId))];
   const { data, error } = await mediaSchema(client)

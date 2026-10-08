@@ -3,6 +3,7 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { parseRangeParam, type RangeSpec, serializeRange } from './sections/detail/rangeModel';
+import { type PlatformTab, parsePlatformTab } from './sections/platforms/platformTabsModel';
 
 // `automations` sits first in the tablist: it is where the account-level autonomy controls
 // live, and they used to be a strip inside Overview that nobody could find again.
@@ -36,6 +37,8 @@ export function useOptimizerUrlState() {
     const section = searchParams.get('section');
     const range = searchParams.get('range');
     return {
+      // The Overview's platform tab. "All" is the default and stays out of the URL.
+      platform: parsePlatformTab(searchParams.get('platform')),
       view: isOneOf(view, VIEWS) ? view : 'overview',
       portfolioId: searchParams.get('portfolio'),
       adsetId: searchParams.get('adset'),
@@ -148,6 +151,16 @@ export function useOptimizerUrlState() {
     [navigate],
   );
 
+  const setPlatform = useCallback(
+    (platform: PlatformTab) => {
+      navigate((params) => {
+        if (platform === 'all') params.delete('platform');
+        else params.set('platform', platform);
+      }, 'replace');
+    },
+    [navigate],
+  );
+
   const setMetric = useCallback(
     (metric: OptimizerAdMetric) => {
       navigate((params) => {
@@ -168,5 +181,6 @@ export function useOptimizerUrlState() {
     setAdset,
     setMetric,
     setRange,
+    setPlatform,
   };
 }

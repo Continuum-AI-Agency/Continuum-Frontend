@@ -1,5 +1,6 @@
 'use client';
 
+import type { CreditWallet } from '@continuum/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import {
@@ -29,23 +30,52 @@ import { billingOverviewKey } from '@/lib/billing/useBilling';
 
 const PER_CREDIT = formatUsd(0.01);
 
-function describe({ enabled, capUsd, disabledReason }: AutoBillingView): string {
+// The same switch drives both meters; only the words differ.
+const COPY = {
+  canvas: {
+    label: 'Auto-bill overage to card',
+    confirmTitle: 'Turn on auto-billing?',
+    usage: 'Canvas usage',
+    paused: 'generation pauses',
+    keepGoing: 'keep generating',
+    wallet: 'Canvas credits',
+    goesOn: 'generation keeps going',
+  },
+  x: {
+    label: 'Auto-bill X API usage to card',
+    confirmTitle: 'Turn on X auto-billing?',
+    usage: 'X API usage',
+    paused: 'X publishing and X analytics pause',
+    keepGoing: 'keep posting',
+    wallet: 'X API credits',
+    goesOn: 'X posts and analytics keep going',
+  },
+} as const;
+
+function describe(
+  { enabled, capUsd, disabledReason }: AutoBillingView,
+  copy: (typeof COPY)[CreditWallet],
+): string {
   if (disabledReason) return disabledReason;
   const cap = capUsd !== null ? `, up to ${formatUsd(capUsd)} a month` : '';
   return enabled
-    ? `On. When credits run out, Canvas usage is billed to your card at ${PER_CREDIT} per credit${cap}.`
-    : `Off. When credits run out, generation pauses until you buy a pack. Turn on to keep generating at ${PER_CREDIT} per credit${cap}.`;
+    ? `On. When credits run out, ${copy.usage} is billed to your card at ${PER_CREDIT} per credit${cap}.`
+    : `Off. When credits run out, ${copy.paused} until you buy a pack. Turn on to ${copy.keepGoing} at ${PER_CREDIT} per credit${cap}.`;
 }
 
 export function AutoBillingControl({
   brandId,
   autoBilling,
   onChanged,
+  meter = 'canvas',
 }: {
   brandId: string;
   autoBilling: AutoBillingView;
   onChanged: (change: PendingBillingChange) => void;
+  /** Which metered item the switch adds or removes. */
+  meter?: CreditWallet;
 }) {
+  const copy = COPY[meter];
   const { show } = useToast();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -54,10 +84,13 @@ export function AutoBillingControl({
   const cap = autoBilling.capUsd !== null ? formatUsd(autoBilling.capUsd) : null;
 
   const change = useMutation({
-    mutationFn: (enabled: boolean) => setOverageBilling(brandId, { enabled }),
+    mutationFn: (enabled: boolean) => setOverageBilling(brandId, { enabled, meter }),
     onSuccess: (result) => {
       setConfirming(false);
-      onChanged({ kind: 'overage_changed', enabled: result.overageEnabled });
+      onChanged({
+        kind: meter === 'x' ? 'x_overage_changed' : 'overage_changed',
+        enabled: result.overageEnabled,
+      });
       void queryClient.invalidateQueries({ queryKey: billingOverviewKey(brandId) });
     },
     onError: (error, enabled) => {
@@ -71,13 +104,16 @@ export function AutoBillingControl({
   });
 
   return (
-    <div data-testid="auto-billing" className="flex items-start justify-between gap-4">
+    <div
+      data-testid={meter === 'x' ? 'x-auto-billing' : 'auto-billing'}
+      className="flex items-start justify-between gap-4"
+    >
       <div className="min-w-0 space-y-1">
         <p id={labelId} className="text-sm font-medium text-foreground">
-          Auto-bill overage to card
+          {copy.label}
         </p>
         <p id={descriptionId} className="max-w-[60ch] text-xs text-muted-foreground">
-          {describe(autoBilling)}
+          {describe(autoBilling, copy)}
         </p>
       </div>
       <Switch
@@ -92,10 +128,10 @@ export function AutoBillingControl({
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Turn on auto-billing?</AlertDialogTitle>
+            <AlertDialogTitle>{copy.confirmTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              When this brand runs out of Canvas credits, generation keeps going and usage is billed
-              to the card on file at {PER_CREDIT} per credit
+              When this brand runs out of {copy.wallet}, {copy.goesOn} and usage is billed to the
+              card on file at {PER_CREDIT} per credit
               {cap ? `, up to ${cap} a month` : ''}. It appears on your next invoice. Credit packs
               are still used first.
             </AlertDialogDescription>

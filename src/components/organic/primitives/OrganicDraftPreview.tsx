@@ -45,13 +45,22 @@ import {
   type PublishOptionsChange,
   PublishOptionsPanel,
 } from '@/components/organic/publish-options/PublishOptionsPanel';
+import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
+import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
-import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
+import { isPostPlatform, POST_PLATFORMS, type PostFormatOption } from '@/lib/organic/postPlatforms';
 import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
@@ -65,11 +74,13 @@ import { CarouselSlideStrip } from './CarouselSlideStrip';
 import { type DraftMediaKind, resolveDraftMedia } from './DraftCardMedia';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import {
+  deriveMediaStageLabel,
   EnrichmentLadder,
   MediaEnrichmentSummary,
   resolveDraftMediaStage,
   SchedulingRequirementsHint,
 } from './DraftLifecycle';
+import { draftStatusPresentation } from './draft-card-styles';
 import { EditableCaption, InlinePreviewTextarea } from './EditableCaption';
 import { HyperFramePlayer } from './HyperFramePlayer';
 import { type LightboxItem, MediaLightbox } from './MediaLightbox';
@@ -90,6 +101,16 @@ interface OrganicDraftPreviewProps {
 
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function safeSourceUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function resolveDraftMediaAltText(draft: OrganicCalendarDraft): string {
@@ -490,7 +511,12 @@ function ReadOnlyCarouselMediaArea({
         )}
         style={{ aspectRatio: `${aspectRatio}` }}
       >
-        <p className="px-4 text-xs text-muted-foreground/70">No media</p>
+        <div className="px-4 text-center">
+          <p className="text-xs font-medium text-muted-foreground">No media</p>
+          <p className="mt-1 text-2xs text-muted-foreground">
+            Edit this draft to add creative before publishing.
+          </p>
+        </div>
       </div>
     );
   }
@@ -553,12 +579,13 @@ function LifecyclePill({ status }: { status: OrganicCalendarDraft['status'] }) {
   );
 }
 
-function toPublishFormat(format: string): 'Post' | 'Carousel' | 'Reel' {
+function toPublishFormat(format: string): PostFormatOption {
   const f = format.toLowerCase();
   // Legacy 'hyperframe' drafts display as Reel — HyperFrames is a production
   // method whose rendered MP4 publishes as a reel, not a selectable post type.
   if (f === 'hyperframe' || f === 'reel' || f === 'video') return 'Reel';
   if (f === 'carousel') return 'Carousel';
+  if (f === 'story') return 'Story';
   return 'Post';
 }
 
@@ -727,6 +754,7 @@ export function OrganicDraftPreview({
   const previewMaxWidth = resolvePreviewMaxWidth(framePlatform);
   const mediaAspectRatio = resolvePreviewAspectRatio(framePlatform, draft.format);
   const creativeDirection = resolveCreativeDirection(draft);
+  const inspirationSourceUrl = safeSourceUrl(draft.inspirationSourceUrl);
   // The agent-generated hook, if this draft has been generated. Scored on view.
   const draftHook = resolveDraftHook(draft);
 
@@ -795,6 +823,7 @@ export function OrganicDraftPreview({
   const replaceTargetRef = React.useRef<number | null>(null);
   const [creativeOpen, setCreativeOpen] = React.useState(false);
   const [hashtagsOpen, setHashtagsOpen] = React.useState(false);
+  const [productionDetailsOpen, setProductionDetailsOpen] = React.useState(false);
   // View↔edit mode. Default: a locked, read-only "final look" preview. The pencil
   // toggle mounts the editable affordances (caption textarea, hashtag/creative
   // editors, media dropzone). Every save/change handler below stays wired — it is
@@ -1379,7 +1408,9 @@ export function OrganicDraftPreview({
         canPublish={canPublish}
         publishPlatformLabel={publishPlatformLabel(publishPlatform)}
         isPublishing={isPublishing}
-        onOpenInStudio={openInStudio ? () => openInStudio(draft.id) : undefined}
+        onOpenInStudio={
+          openInStudio && !aiStudioHandoffIssue(draft) ? () => openInStudio(draft.id) : undefined
+        }
         onDelete={handleDelete}
       />
     </div>
@@ -1406,29 +1437,60 @@ export function OrganicDraftPreview({
           actions={headerActions}
         />
 
-        {/* Two lifecycle axes: publish status (stepper) + media enrichment stage.
-            The schedule-requirements hint replaces the old footer checklist. */}
-        <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <LifecyclePill status={draft.status} />
-            </div>
+        <div className="shrink-0 border-b border-border/60 bg-muted/30">
+          <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5">
+            <span className="text-xs font-semibold text-foreground">
+              {draftStatusPresentation(draft.status).label}
+            </span>
+            <span className="text-xs text-muted-foreground" aria-hidden="true">
+              ·
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {deriveMediaStageLabel(resolveDraftMediaStage(draft))}
+            </span>
             {!isPublished && !readiness.ready && (
               <SchedulingRequirementsHint checks={readiness.checks} />
             )}
+            <div className="ml-auto flex items-center gap-1">
+              {!productionDetailsOpen && !isPublished && ladder.actionLabel && (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="secondary"
+                  disabled={ladder.isBusy || ladder.disabledReason !== null}
+                  onClick={ladder.run}
+                >
+                  {ladder.disabledReason ?? ladder.actionLabel}
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                aria-expanded={productionDetailsOpen}
+                onClick={() => setProductionDetailsOpen((open) => !open)}
+              >
+                {productionDetailsOpen ? 'Hide details' : 'Details'}
+              </Button>
+            </div>
           </div>
-          <EnrichmentLadder ladder={ladder} />
-          <MediaEnrichmentSummary
-            draft={draft}
-            onReuseLibrary={() => setMediaSelectOpen(true)}
-            onRealize={handleGenerateMedia}
-            canRealize={canGenerate}
-          />
+          {productionDetailsOpen && (
+            <div className="flex flex-col gap-1.5 border-t border-border/60 px-3 py-2">
+              <LifecyclePill status={draft.status} />
+              <EnrichmentLadder ladder={ladder} />
+              <MediaEnrichmentSummary
+                draft={draft}
+                onReuseLibrary={() => setMediaSelectOpen(true)}
+                onRealize={handleGenerateMedia}
+                canRealize={canGenerate}
+              />
+            </div>
+          )}
           {placement.canUndo && (
             <button
               type="button"
               onClick={placement.undo}
-              className="self-start rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="mx-3 mb-1.5 rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Undo last media change
             </button>
@@ -1437,7 +1499,7 @@ export function OrganicDraftPreview({
             <div
               role="alert"
               aria-live="assertive"
-              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+              className="mx-3 mb-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300"
             >
               {placement.error.message}
               <button
@@ -1462,6 +1524,17 @@ export function OrganicDraftPreview({
             style={{ maxWidth: `${previewMaxWidth}px` }}
           >
             {panelTabs}
+
+            {inspirationSourceUrl && (
+              <a
+                href={inspirationSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Inspiration source · View original post
+              </a>
+            )}
 
             {panelTab === 'publish' ? (
               publishTab
@@ -1522,6 +1595,33 @@ export function OrganicDraftPreview({
                       />
                     </div>
                   </div>
+                ) : !isEditing &&
+                  previewSlides.length === 0 &&
+                  POST_PLATFORMS[framePlatform].frame === 'vertical' ? (
+                  <Empty className="h-auto gap-3 rounded-lg border border-dashed border-border bg-muted/20 py-8">
+                    <EmptyHeader>
+                      <EmptyTitle>No media</EmptyTitle>
+                      <EmptyDescription>
+                        {publishPlatformLabel(framePlatform)} preview needs creative before it can
+                        show the final post.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    {draft.captionPreview && (
+                      <p className="line-clamp-4 max-w-sm whitespace-pre-wrap text-left text-xs leading-relaxed text-foreground">
+                        {draft.captionPreview}
+                      </p>
+                    )}
+                    <EmptyContent>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        Edit post to add media
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <SocialPostFrame
                     draft={draftForPreview}

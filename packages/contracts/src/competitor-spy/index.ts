@@ -68,6 +68,9 @@ export const competitorSchema = z.object({
   instagramUserId: z.string().nullable().optional(),
   instagramName: z.string().nullable().optional(),
   instagramFollowersCount: z.number().int().nonnegative().nullable().optional(),
+  youtubeChannelId: z.string().nullable().optional(),
+  youtubeHandle: z.string().nullable().optional(),
+  tiktokUsername: z.string().nullable().optional(),
   metaPageName: z.string().nullable().optional(),
   metaPageResolutionStatus: metaPageResolutionStatusSchema.nullable().optional(),
   metaPageResolutionConfidence: z.number().min(0).max(1).nullable().optional(),
@@ -141,6 +144,7 @@ export const competitorOrganicPostSchema = z
   .object({
     competitorId: z.string().uuid(),
     competitorName: z.string(),
+    // The handle on post.platform; see competitorInspirationPostSchema.
     instagramUsername: z.string(),
     post: instagramPostSchema,
   })
@@ -301,15 +305,18 @@ export * from './angleMap';
 export * from './gapReport';
 // Health-chip projection over the status enums above (Brand Spy competitor chips).
 export * from './health-chip';
+// The Inspiration Library: analysed, ranked posts and the act routes on one post.
+export * from './inspiration';
 export * from './organicQuery';
 // Onboarding-derived competitor recommendations (Competitors tab).
 export * from './recommended';
 export * from './savedBoards';
 // Save a competitor post into the media Library as a tagged, re-fetchable asset.
 export * from './saveToLibrary';
-// The Inspiration Library: analysed, ranked posts and the act routes on one post.
-export * from './inspiration';
 // Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
 export * from './smartSearch';
 // Durable top-posts-of-top-competitors digest (Pulse email + organic agent grounding).
 export * from './topPostsDigest';
+export * from './whatsWorking';
+// TikTok trends in the brand's markets (official Discovery API; no per-account feed).
+export * from './tiktokTrends';

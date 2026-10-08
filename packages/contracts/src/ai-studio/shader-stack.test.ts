@@ -64,6 +64,27 @@ describe('shaderStackV1Schema', () => {
     });
   });
 
+  test('dust and light leaks accept bounded intensity and reject unrelated parameters', () => {
+    for (const effectId of ['dust', 'light_leaks']) {
+      expect(
+        shaderStackV1Schema.safeParse({
+          version: 1,
+          effects: [{ effectId, parameters: { amount: 0.6 } }],
+        }).success,
+      ).toBe(true);
+      for (const parameters of [
+        { amount: -0.1 },
+        { amount: 1.1 },
+        { amount: 0.6, color: '#ff0000' },
+        {},
+      ])
+        expect(
+          shaderStackV1Schema.safeParse({ version: 1, effects: [{ effectId, parameters }] })
+            .success,
+        ).toBe(false);
+    }
+  });
+
   test('rejects arbitrary shader source, unknown effects and invalid parameters', () => {
     expect(
       shaderStackV1Schema.safeParse({

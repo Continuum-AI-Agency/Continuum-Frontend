@@ -238,6 +238,51 @@ describe('runGenerationFanOut', () => {
     expect(result).toBeUndefined();
   });
 
+  it('stops issuing items once one fails for a reason every item shares (credits)', async () => {
+    // Out of credits on item 1 means out of credits on item 100: the rest are doomed
+    // requests, each one more 402 against the meter.
+    let calls = 0;
+    const plan = planFor(Array.from({ length: 9 }, (_, i) => `p${i}`));
+    const result = await runGenerationFanOut(gen, plan, new Map(), {
+      outputItemType: 'image',
+      buildPayload: () => ({ medium: 'image' }) as never,
+      executeGeneration: async () => {
+        calls += 1;
+        return { success: false, error: 'Out of Canvas credits', errorCode: 'credits_exhausted' };
+      },
+    });
+    expect(result).toBeUndefined();
+    // Pool of 3: the first three are already in flight when the first refusal lands.
+    expect(calls).toBe(3);
+  });
+
+  it('keeps running past a failure that belongs to one item only', async () => {
+    let calls = 0;
+    const plan = planFor(['p1', 'p2', 'p3', 'p4', 'p5']);
+    await runGenerationFanOut(gen, plan, new Map(), {
+      outputItemType: 'image',
+      buildPayload: () => ({ medium: 'image' }) as never,
+      executeGeneration: async () => {
+        calls += 1;
+        return { success: false, error: 'blocked', errorCode: 'image_blocked' };
+      },
+    });
+    expect(calls).toBe(5);
+  });
+
+  it("records each failed item's own error instead of a generic one", async () => {
+    const plan = planFor(['p1', 'p2']);
+    const result = await runGenerationFanOut(gen, plan, new Map(), {
+      outputItemType: 'image',
+      buildPayload: () => ({ medium: 'image' }) as never,
+      executeGeneration: async (executionId) =>
+        executionId.endsWith('b1')
+          ? { success: false, error: 'provider said no' }
+          : { success: true, output: img(executionId) },
+    });
+    expect(result?.record.items[1].error).toBe('provider said no');
+  });
+
   it('labels the emitted collection with the GENERATOR modality, not the batch kind', async () => {
     // A batch of text prompts fanned through an image generator emits IMAGES. Copying the
     // batch's itemType would send every downstream consumer looking for a string.

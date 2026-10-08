@@ -46,6 +46,7 @@ export function SharedTemplateDetail({
   busy,
   onBack,
   onToggle,
+  onOpenSource,
   onOpenRender,
 }: {
   brandId: string;
@@ -54,6 +55,7 @@ export function SharedTemplateDetail({
   busy: boolean;
   onBack: () => void;
   onToggle: () => void;
+  onOpenSource?: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
   const { templateKey, workspaceId } = template;
@@ -94,10 +96,11 @@ export function SharedTemplateDetail({
           </Button>
           <h2 className="min-w-0 truncate text-base font-semibold">{name}</h2>
           <p className="truncate text-xs text-muted-foreground">
-            Shared with you{template.granted ? ` · in ${brand}` : null}
+            {template.sourceAssetId ? 'Built from your Library' : 'Shared with you'}{template.granted ? ` · in ${brand}` : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenSource ? <Button type="button" size="sm" variant="outline" onClick={onOpenSource}>Edit source</Button> : null}
           <Button
             type="button"
             size="sm"

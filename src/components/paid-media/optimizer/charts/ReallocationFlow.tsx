@@ -125,13 +125,13 @@ export function ReallocationFlow({
           across {movedCount} {movedCount === 1 ? 'ad set' : 'ad sets'}
         </p>
         {budgetSource === 'observed' && Math.abs(net) >= 1 ? (
-          <p className="text-2xs text-warning">
+          <p className="text-xs text-warning">
             This portfolio reallocates within current spend, so the net should be about zero. A gap
             this size usually means ad-set budgets changed in Meta since the last cycle.
           </p>
         ) : null}
         {budgetSource === 'fixed' && net <= -1 ? (
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Total spend is coming down because this portfolio targets a fixed daily budget. Switch
             it to &ldquo;Match current spend&rdquo; in Manage to reallocate instead.
           </p>
@@ -180,7 +180,7 @@ function ChangeCell({
       >
         {positive ? '+' : '−'}
         {formatCurrency(Math.abs(change), currency)}
-        <span className="text-2xs text-muted-foreground">{pctLabel}</span>
+        <span className="text-xs text-muted-foreground">{pctLabel}</span>
       </span>
     </div>
   );

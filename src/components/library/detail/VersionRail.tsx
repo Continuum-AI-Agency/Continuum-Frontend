@@ -3,9 +3,11 @@
 // Version history rail for the asset detail modal: horizontal strip of version
 // cards (thumbnail, vN badge, comment count, author, relative time), "New
 // version" upload (sign → direct-to-storage PUT → register), rollback with
-// confirm, and a side-by-side compare dialog. Clicking a card puts that
-// version's bytes on the stage — a read-only look, deliberately distinct from
-// rollback, which is still an explicit confirmed write that moves the head.
+// confirm, stack edits (unstack a version into its own asset, move a version up or
+// down the stack), and the synced compare dialog (compare/VersionCompareDialog). Clicking
+// a card puts that version's bytes on the stage — a read-only look, deliberately
+// distinct from rollback, which is still an explicit confirmed write that moves
+// the head.
 //
 // The versions list itself lives in the modal (see useAssetVersions): the stage
 // and the comment partition need it too, so the rail no longer owns the fetch.
@@ -13,6 +15,8 @@
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
 import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
 import {
+  ChevronLeft,
+  ChevronRight,
   Columns2,
   FileIcon,
   Loader2,
@@ -21,8 +25,9 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Ungroup,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,
@@ -35,16 +40,22 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
+import {
+  reorderAssetVersionsOperation,
+  unstackAssetVersionOperation,
+} from '@/lib/library/creativeOperations';
 import {
   rollbackAssetVersion,
   uploadNewAssetVersion,
   type VersionUploadResumeState,
 } from '@/lib/library/versions';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import { VersionCompareDialog } from './compare/VersionCompareDialog';
+import { reorderedVersionIds } from './compare/versionOrder';
 
 export type VersionRailProps = {
   brandId: string;
@@ -52,6 +63,7 @@ export type VersionRailProps = {
   /** null while the first fetch is in flight. */
   versions: MediaAssetVersion[] | null;
   loadError: string | null;
+  /** Re-fetches the list: the load retry, and after unstack/reorder, whose results carry none. */
   onRetry: () => void;
   /** The version whose bytes are on the stage. */
   viewedVersionId: string | null;
@@ -160,15 +172,56 @@ function VersionCard({
   onView,
   onCompare,
   onRollback,
+  onMoveUp,
+  onMoveDown,
+  onUnstack,
 }: {
   version: VersionDisplay;
   viewing: boolean;
   onView?: () => void;
   onCompare?: () => void;
   onRollback?: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onUnstack?: () => void;
 }) {
+  const actions = [
+    {
+      run: onCompare,
+      label: `Compare v${version.versionNumber} with current`,
+      icon: Columns2,
+      testId: undefined,
+    },
+    {
+      run: onRollback,
+      label: `Roll back to v${version.versionNumber}`,
+      icon: RotateCcw,
+      testId: undefined,
+    },
+    // The strip runs newest first, so "up" the stack (toward current) is leftward.
+    {
+      run: onMoveUp,
+      label: `Move v${version.versionNumber} up the stack`,
+      icon: ChevronLeft,
+      testId: 'version-move-up',
+    },
+    {
+      run: onMoveDown,
+      label: `Move v${version.versionNumber} down the stack`,
+      icon: ChevronRight,
+      testId: 'version-move-down',
+    },
+    {
+      run: onUnstack,
+      label: `Unstack v${version.versionNumber} into its own asset`,
+      icon: Ungroup,
+      testId: 'version-unstack',
+    },
+  ].filter((action) => action.run);
   return (
     <div
+      data-version-id={version.versionId ?? undefined}
+      data-version-number={version.versionNumber}
       className={cn(
         'w-36 shrink-0 space-y-1 rounded-md border bg-card p-1.5 transition-colors',
         viewing ? 'border-primary ring-1 ring-primary/40' : 'border-border',
@@ -205,32 +258,23 @@ function VersionCard({
         {formatRelativeTime(version.createdAt)}
         {version.authorName ? ` · ${version.authorName}` : ''}
       </p>
-      {!version.isHead && (onCompare || onRollback) ? (
+      {actions.length > 0 ? (
         <div className="flex items-center gap-0.5">
-          {onCompare ? (
+          {actions.map(({ run, label, icon: Icon, testId }) => (
             <Button
+              key={label}
               type="button"
               variant="ghost"
               size="icon"
               className="size-6 text-muted-foreground"
-              aria-label={`Compare v${version.versionNumber} with current`}
-              onClick={onCompare}
+              aria-label={label}
+              title={label}
+              data-testid={testId}
+              onClick={run}
             >
-              <Columns2 className="size-3.5" />
+              <Icon className="size-3.5" />
             </Button>
-          ) : null}
-          {onRollback ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-6 text-muted-foreground"
-              aria-label={`Roll back to v${version.versionNumber}`}
-              onClick={onRollback}
-            >
-              <RotateCcw className="size-3.5" />
-            </Button>
-          ) : null}
+          ))}
         </div>
       ) : null}
     </div>
@@ -251,13 +295,16 @@ export function VersionRail({
 }: VersionRailProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadPaused, setUploadPaused] = useState(false);
+  const [pausedByNetwork, setPausedByNetwork] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const resumeStateRef = useRef<VersionUploadResumeState | null>(null);
   const uploadControllerRef = useRef<AbortController | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
   const [rollbackTarget, setRollbackTarget] = useState<MediaAssetVersion | null>(null);
-  const [compareTarget, setCompareTarget] = useState<MediaAssetVersion | null>(null);
+  const [restacking, setRestacking] = useState(false);
+  const [unstackTarget, setUnstackTarget] = useState<MediaAssetVersion | null>(null);
+  const [comparePair, setComparePair] = useState<{ a: string; b: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const runUpload = async (file: File, resume: VersionUploadResumeState | null) => {
@@ -265,6 +312,7 @@ export function VersionRail({
     uploadControllerRef.current = controller;
     setUploadFile(file);
     setUploadPaused(false);
+    setPausedByNetwork(false);
     setUploading(true);
     try {
       const result = await uploadNewAssetVersion({
@@ -288,6 +336,11 @@ export function VersionRail({
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') {
         setUploadPaused(true);
+      } else if (!navigator.onLine) {
+        // A dropped connection is a pause, not a failure: the upload resumes from Storage's
+        // committed offset when the browser is back online.
+        setUploadPaused(true);
+        setPausedByNetwork(true);
       } else {
         toast.error(`Version upload failed · ${(err as Error).message}`);
       }
@@ -296,6 +349,13 @@ export function VersionRail({
       uploadControllerRef.current = null;
     }
   };
+
+  useEffect(() => {
+    if (!pausedByNetwork || !uploadFile) return;
+    const resume = () => void runUpload(uploadFile, resumeStateRef.current);
+    window.addEventListener('online', resume, { once: true });
+    return () => window.removeEventListener('online', resume);
+  }, [pausedByNetwork, uploadFile, runUpload]);
 
   const handleFileSelected = async (file: File | null) => {
     if (!file) return;
@@ -325,12 +385,54 @@ export function VersionRail({
     }
   };
 
+  const handleUnstackConfirmed = async () => {
+    const target = unstackTarget;
+    setUnstackTarget(null);
+    if (!target) return;
+    setRestacking(true);
+    try {
+      await unstackAssetVersionOperation(createSupabaseBrowserClient(), {
+        brandId,
+        assetId: asset.id,
+        versionId: target.id,
+      });
+      toast.success(`Unstacked v${target.versionNumber} into a new asset`);
+      onRetry();
+      onChanged?.();
+    } catch (err) {
+      toast.error(`Unstack failed · ${(err as Error).message}`);
+    } finally {
+      setRestacking(false);
+    }
+  };
+
+  const moveVersion = async (versionId: string, direction: 'up' | 'down') => {
+    const versionIds = versions ? reorderedVersionIds(versions, versionId, direction) : null;
+    if (!versionIds) return;
+    setRestacking(true);
+    try {
+      const result = await reorderAssetVersionsOperation(createSupabaseBrowserClient(), {
+        brandId,
+        assetId: asset.id,
+        versionIds,
+      });
+      onRetry();
+      if (result.headChanged) onChanged?.();
+    } catch (err) {
+      toast.error(`Reorder failed · ${(err as Error).message}`);
+    } finally {
+      setRestacking(false);
+    }
+  };
+
   const loading = versions === null;
+  const mutating = rollingBack || restacking;
+  const stacked = versions !== null && versions.length > 1;
   const displayList: VersionDisplay[] =
     versions && versions.length > 0
       ? versions.map((version) => toDisplay(version, commentCounts.get(version.id) ?? 0))
       : [implicitHeadFromAsset(asset)];
-  const headDisplay = displayList.find((version) => version.isHead) ?? implicitHeadFromAsset(asset);
+  const headId = versions?.find((version) => version.isHead)?.id ?? null;
 
   return (
     <section className="space-y-1.5">
@@ -339,23 +441,39 @@ export function VersionRail({
           Versions{versions && versions.length > 0 ? ` · ${versions.length}` : ''}
         </h3>
         <div className="flex items-center gap-1">
-          {uploading && asset.kind === 'file' ? (
+          {versions && stacked ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs"
+              data-testid="version-compare-open"
+              onClick={() => setComparePair({ a: versions[1].id, b: versions[0].id })}
+            >
+              <Columns2 className="size-3" />
+              Compare versions
+            </Button>
+          ) : null}
+          {uploading ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              data-testid="version-upload-pause"
               onClick={() => uploadControllerRef.current?.abort()}
             >
               <Pause className="size-3" />
               Pause {uploadProgress}%
             </Button>
-          ) : uploadPaused && uploadFile && asset.kind === 'file' ? (
+          ) : uploadPaused && uploadFile ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs"
+              data-testid="version-upload-resume"
+              data-paused-by={pausedByNetwork ? 'network' : 'user'}
               onClick={() => void runUpload(uploadFile, resumeStateRef.current)}
             >
               <Play className="size-3" />
@@ -367,7 +485,7 @@ export function VersionRail({
             variant="outline"
             size="sm"
             className="h-7 gap-1 text-xs"
-            disabled={uploading || rollingBack}
+            disabled={uploading || mutating}
             onClick={() => fileInputRef.current?.click()}
           >
             {uploading ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
@@ -376,6 +494,7 @@ export function VersionRail({
         </div>
         <input
           ref={fileInputRef}
+          data-testid="version-upload-input"
           type="file"
           accept={asset.kind === 'file' ? LIBRARY_ACCEPT_ATTRIBUTE : `${asset.kind}/*`}
           className="hidden"
@@ -401,21 +520,35 @@ export function VersionRail({
             </p>
           ) : null}
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {displayList.map((display) => {
+            {displayList.map((display, index) => {
               const source = versions?.find((version) => version.id === display.key) ?? null;
               const versionId = display.versionId;
+              const restackable = source !== null && stacked && !mutating;
               return (
                 <VersionCard
                   key={display.key}
                   version={display}
                   viewing={versionId !== null && versionId === viewedVersionId}
                   onView={versionId ? () => onView(versionId) : undefined}
-                  onCompare={source && !display.isHead ? () => setCompareTarget(source) : undefined}
+                  onCompare={
+                    source && headId && !display.isHead
+                      ? () => setComparePair({ a: source.id, b: headId })
+                      : undefined
+                  }
                   onRollback={
-                    source && !display.isHead && !rollingBack
+                    source && !display.isHead && !mutating
                       ? () => setRollbackTarget(source)
                       : undefined
                   }
+                  onMoveUp={
+                    restackable && index > 0 ? () => void moveVersion(source.id, 'up') : undefined
+                  }
+                  onMoveDown={
+                    restackable && index < displayList.length - 1
+                      ? () => void moveVersion(source.id, 'down')
+                      : undefined
+                  }
+                  onUnstack={restackable ? () => setUnstackTarget(source) : undefined}
                 />
               );
             })}
@@ -451,38 +584,39 @@ export function VersionRail({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog
-        open={compareTarget !== null}
-        onOpenChange={(open) => (!open ? setCompareTarget(null) : undefined)}
+      <AlertDialog
+        open={unstackTarget !== null}
+        onOpenChange={(open) => (!open ? setUnstackTarget(null) : undefined)}
       >
-        <DialogContent className="max-w-3xl">
-          <DialogTitle className="text-sm">
-            Compare v{compareTarget?.versionNumber} with current
-          </DialogTitle>
-          {compareTarget ? (
-            <div className="grid grid-cols-2 gap-3">
-              {[toDisplay(compareTarget, 0), headDisplay].map((side) => (
-                <figure key={side.key} className="space-y-1.5">
-                  <figcaption className="text-xs text-muted-foreground">
-                    v{side.versionNumber}
-                    {side.isHead ? ' · Current' : ''} · {formatRelativeTime(side.createdAt)}
-                  </figcaption>
-                  {side.signedUrl && side.mimeType.startsWith('video/') ? (
-                    // biome-ignore lint/a11y/useMediaCaption: comparing the user's own uploaded cuts; no caption track exists
-                    <video
-                      src={side.signedUrl}
-                      controls
-                      className="max-h-80 w-full rounded bg-muted object-contain"
-                    />
-                  ) : (
-                    <VersionPreview version={side} className="h-64 w-full" />
-                  )}
-                </figure>
-              ))}
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm">
+              Unstack v{unstackTarget?.versionNumber} into its own asset?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              v{unstackTarget?.versionNumber} leaves this stack and appears in the library as a
+              separate asset. The other versions stay here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleUnstackConfirmed()}>
+              Unstack
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {comparePair && versions ? (
+        <VersionCompareDialog
+          open
+          onOpenChange={(open) => (!open ? setComparePair(null) : undefined)}
+          asset={asset}
+          versions={versions}
+          initialAId={comparePair.a}
+          initialBId={comparePair.b}
+        />
+      ) : null}
     </section>
   );
 }

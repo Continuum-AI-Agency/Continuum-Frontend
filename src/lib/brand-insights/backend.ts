@@ -2,15 +2,10 @@ import { trendsStageSchema } from '@continuum/contracts';
 import { z } from 'zod';
 
 import {
-  brandInsightsAudienceSchema,
-  brandInsightsAudienceSegmentSchema,
-  brandInsightsBrandVoiceSchema,
-  brandInsightsCompetitorSchema,
   brandInsightsDataSchema,
   brandInsightsEventSchema,
   brandInsightsGenerationResponseSchema,
   brandInsightsJobStreamSchema,
-  brandInsightsProfileSchema,
   brandInsightsQuestionSchema,
   brandInsightsQuestionsByNicheSchema,
   brandInsightsSchema,
@@ -511,83 +506,6 @@ const backendStatusMessageSchema = z
     createdAt: isoDateSchema.nullish(),
   })
   .passthrough();
-
-const backendAudienceSegmentSchema = z
-  .object({
-    name: z.string().nullish(),
-    segment_name: z.string().nullish(),
-    description: z.string().nullish(),
-    summary: z.string().nullish(),
-    details: z.string().nullish(),
-  })
-  .passthrough();
-
-const backendAudienceSchema = z.object({
-  summary: z.string().nullish(),
-  ideal_customer_persona_summary: z.string().nullish(),
-  pain_points: z.array(z.string()).nullish(),
-  challenges: z.array(z.string()).nullish(),
-  barriers: z.array(z.string()).nullish(),
-  pains_and_fears: z.array(z.string()).nullish(),
-  motivations_and_triggers: z.array(z.string()).nullish(),
-  motivations: z.array(z.string()).nullish(),
-  emotional_drivers: z.array(z.string()).nullish(),
-  segments: z.array(backendAudienceSegmentSchema).nullish(),
-});
-
-const backendCompetitorSchema = z
-  .object({
-    name: z.string().nullish(),
-    strategy: z.string().nullish(),
-    messaging: z.string().nullish(),
-    urls: z.array(z.string()).nullish(),
-    primary_url: z.string().nullish(),
-  })
-  .passthrough();
-
-const backendBrandVoiceSchema = z
-  .object({
-    tone: z.string().nullish(),
-    keywords: z.array(z.string().nullish()).nullish(),
-    emoji_usage: z.string().nullish(),
-    key_messaging: z.array(z.string().nullish()).nullish(),
-  })
-  .passthrough();
-
-const backendBrandFoundationSchema = z
-  .object({
-    mission: z.string().nullish(),
-    vision: z.string().nullish(),
-    core_values: z.array(z.string()).nullish(),
-    niches: z.array(z.string()).nullish(),
-  })
-  .passthrough();
-
-const backendProfileDataSchema = z.object({
-  brand_id: z.string(),
-  brand_summary: z.string().nullish(),
-  brand_foundation: backendBrandFoundationSchema.nullish(),
-  niches: z.array(z.string()).nullish(),
-  audience_profile: backendAudienceSchema.nullish(),
-  competitive_landscape: z
-    .object({
-      top_competitors: z.array(backendCompetitorSchema).nullish(),
-    })
-    .nullish(),
-  brand_voice: backendBrandVoiceSchema.nullish(),
-});
-
-const backendProfileResponseSchema = z.object({
-  status: z.enum(['success', 'onboarding_required']).or(z.string()),
-  data: backendProfileDataSchema.nullish(),
-});
-
-function normalizeStrings(values?: Array<string | null | undefined>) {
-  const result = (values ?? [])
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
-  return result.length > 0 ? result : undefined;
-}
 
 function normalizeTimestamp(value?: string | null): string | undefined {
   if (!value) return undefined;
@@ -1365,105 +1283,5 @@ export function mapBackendStatusMessage(payload: unknown) {
     runtime: mapRuntime((parsed.payload as Record<string, unknown> | undefined)?.runtime),
     payload: parsed.payload ?? undefined,
     createdAt: normalizeTimestamp(parsed.created_at ?? parsed.createdAt),
-  });
-}
-
-function mapAudienceSegment(segment: z.infer<typeof backendAudienceSegmentSchema>) {
-  const name = segment.name ?? segment.segment_name ?? undefined;
-  if (!name) {
-    return null;
-  }
-
-  return brandInsightsAudienceSegmentSchema.parse({
-    name,
-    description: segment.description ?? segment.summary ?? segment.details ?? undefined,
-  });
-}
-
-function mapAudience(payload?: z.infer<typeof backendAudienceSchema> | null) {
-  if (!payload) return undefined;
-
-  const pains = normalizeStrings([
-    ...(payload.pains_and_fears ?? []),
-    ...(payload.pain_points ?? []),
-    ...(payload.challenges ?? []),
-    ...(payload.barriers ?? []),
-  ]);
-
-  const motivations = normalizeStrings([
-    ...(payload.motivations_and_triggers ?? []),
-    ...(payload.motivations ?? []),
-    ...(payload.emotional_drivers ?? []),
-  ]);
-
-  const segments =
-    payload.segments
-      ?.map(mapAudienceSegment)
-      .filter((segment): segment is NonNullable<ReturnType<typeof mapAudienceSegment>> =>
-        Boolean(segment),
-      ) ?? undefined;
-
-  return brandInsightsAudienceSchema.parse({
-    summary: payload.summary ?? payload.ideal_customer_persona_summary ?? undefined,
-    painsAndFears: pains,
-    motivationsAndTriggers: motivations,
-    segments,
-  });
-}
-
-function mapCompetitors(
-  payload?: z.infer<typeof backendProfileDataSchema>['competitive_landscape'] | null,
-) {
-  const competitors = payload?.top_competitors ?? [];
-  if (!competitors || competitors.length === 0) return undefined;
-
-  const mapped = competitors
-    .map((competitor) => backendCompetitorSchema.parse(competitor))
-    .map((competitor) =>
-      brandInsightsCompetitorSchema.parse({
-        name: competitor.name ?? '',
-        strategy: competitor.strategy ?? undefined,
-        messaging: competitor.messaging ?? undefined,
-        urls: normalizeStrings([...(competitor.urls ?? []), competitor.primary_url ?? undefined]),
-      }),
-    )
-    .filter((competitor) => competitor.name.trim().length > 0);
-
-  return mapped.length > 0 ? mapped : undefined;
-}
-
-function mapBrandVoice(payload?: z.infer<typeof backendBrandVoiceSchema> | null) {
-  if (!payload) return undefined;
-
-  return brandInsightsBrandVoiceSchema.parse({
-    tone: payload.tone ?? undefined,
-    keywords: normalizeStrings(payload.keywords ?? undefined),
-    emojiUsage: payload.emoji_usage ?? undefined,
-    keyMessaging: normalizeStrings(payload.key_messaging ?? undefined),
-  });
-}
-
-export function mapBackendProfileResponse(payload: unknown) {
-  const parsed = backendProfileResponseSchema.parse(payload);
-  if (parsed.status === 'onboarding_required') {
-    return brandInsightsProfileSchema.parse({ status: 'onboarding_required' });
-  }
-
-  const data = backendProfileDataSchema.parse(parsed.data);
-  const foundation = data.brand_foundation ?? undefined;
-  const coreValues = normalizeStrings(foundation?.core_values ?? undefined);
-  const niches = normalizeStrings(data.niches ?? foundation?.niches ?? undefined);
-
-  return brandInsightsProfileSchema.parse({
-    status: 'success',
-    brandId: data.brand_id,
-    brandSummary: data.brand_summary ?? undefined,
-    mission: foundation?.mission ?? undefined,
-    vision: foundation?.vision ?? undefined,
-    coreValues,
-    niches,
-    audience: mapAudience(data.audience_profile ?? undefined),
-    competitors: mapCompetitors(data.competitive_landscape ?? undefined),
-    brandVoice: mapBrandVoice(data.brand_voice ?? undefined),
   });
 }

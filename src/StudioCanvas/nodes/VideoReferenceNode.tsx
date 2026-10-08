@@ -18,7 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,6 +49,8 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoNodeData } from '../types';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
+import { MediaTrimStrip } from './media/MediaTrimStrip';
+import { CLEARED_TRIM } from './media/mediaTrim';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 // Mirrors the sizing this node has always used for a dropped clip.
@@ -71,6 +73,7 @@ export function VideoReferenceNode({
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const refBadge = referenceStatusBadge(data.referenceStatus);
@@ -103,6 +106,8 @@ export function VideoReferenceNode({
         sourcePath?: undefined;
         bucket?: undefined;
         sourceUrl?: undefined;
+        trimStartMs?: undefined;
+        trimEndMs?: undefined;
       },
     ) => {
       if (!brandId) {
@@ -138,6 +143,7 @@ export function VideoReferenceNode({
             sourcePath: undefined,
             bucket: undefined,
             sourceUrl: undefined,
+            ...CLEARED_TRIM,
           });
         };
         reader.readAsDataURL(file);
@@ -209,6 +215,7 @@ export function VideoReferenceNode({
             sourcePath: undefined,
             bucket: undefined,
             sourceUrl: undefined,
+            ...CLEARED_TRIM,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read dropped file';
@@ -256,6 +263,7 @@ export function VideoReferenceNode({
         sourcePath: resolved.sourcePath,
         bucket: resolved.bucket,
         sourceUrl: resolved.sourceUrl,
+        ...CLEARED_TRIM,
       });
       triggerSave();
     },
@@ -356,6 +364,7 @@ export function VideoReferenceNode({
                     {preview ? (
                       <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black/80">
                         <video
+                          ref={videoRef}
                           preload="none"
                           src={preview}
                           className="h-full w-full object-contain"
@@ -386,9 +395,24 @@ export function VideoReferenceNode({
                     onChange={handleFileUpload}
                   />
 
-                  {data.fileName && (
-                    <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
-                      {data.fileName}
+                  {/* Outside the upload label, so a drag on a trim handle never opens the file picker. */}
+                  {(preview || data.fileName) && (
+                    <div className="absolute inset-x-0 bottom-0 z-10">
+                      {preview && (
+                        <MediaTrimStrip
+                          nodeId={id}
+                          src={preview}
+                          mediaRef={videoRef}
+                          trimStartMs={data.trimStartMs}
+                          trimEndMs={data.trimEndMs}
+                          atOutPoint="loop"
+                        />
+                      )}
+                      {data.fileName && (
+                        <div className="px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
+                          {data.fileName}
+                        </div>
+                      )}
                     </div>
                   )}
                 </NodeContent>

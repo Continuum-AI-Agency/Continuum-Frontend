@@ -11,6 +11,8 @@
 // instead of throwing, because a missing poster degrades a card, while a thrown
 // error would lose the user's upload.
 
+import { type FrameRate, frameAtMs } from './commentExport';
+
 const POSTER_MAX_WIDTH = 640;
 const POSTER_WEBP_QUALITY = 0.82;
 // A frame from the very first moment of a clip is usually a fade-in, a black
@@ -282,12 +284,15 @@ export async function generateVideoPoster(
  * container, a missing video track, or a header carrying no duration. A null only
  * means the long-form skip cannot be applied; it never fails the upload.
  */
-export async function probeVideoDurationSec(file: Blob): Promise<number | null> {
+// Duration of a video OR audio file from its container header (no decode). Audio needs
+// it as much as video: analyze_media only takes the windowed long-form path when it knows
+// a recording is longer than 30 s.
+export async function probeMediaDurationSec(file: Blob): Promise<number | null> {
   try {
     const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
     const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
     try {
-      const track = await input.getPrimaryVideoTrack();
+      const track = (await input.getPrimaryVideoTrack()) ?? (await input.getPrimaryAudioTrack());
       if (!track) return null;
       const durationSec = await track.computeDuration().catch(() => null);
       return typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0
@@ -352,4 +357,64 @@ export async function attachVideoPoster(params: {
   const poster = await generateVideoPoster(params.file);
   if (!poster) return null;
   return persistVideoPoster({ brandId: params.brandId, assetId: params.assetId, poster });
+}
+
+// ─── Stage stills ──────────────────────────────────────────────────────────────
+// "Download still" saves the frame the reviewer is looking at. The detail player
+// registers its <video> here, so the download menu in the header grabs the very same
+// frame without a prop path through the modal.
+
+type StageVideo = { video: HTMLVideoElement; frameRate: FrameRate | null };
+let stageVideo: StageVideo | null = null;
+
+export function registerStageVideo(
+  video: HTMLVideoElement | null,
+  frameRate: FrameRate | null = null,
+): void {
+  stageVideo = video ? { video, frameRate } : null;
+}
+
+export function activeStageVideo(): HTMLVideoElement | null {
+  return stageVideo?.video ?? null;
+}
+
+/** The current frame at the decoded size of the bytes on stage, as PNG. The element
+ *  must be loaded with crossOrigin="anonymous", or the canvas is tainted and this throws. */
+export async function captureVideoStill(video: HTMLVideoElement): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const context = canvas.getContext('2d');
+  if (!context || canvas.width === 0 || canvas.height === 0) {
+    throw new Error('No frame has loaded yet.');
+  }
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('The frame could not be encoded.');
+  return blob;
+}
+
+/** `<stem>-still-<m>-<ss>-<ff>.png`, frames counted at the measured rate (30 when unknown). */
+export function videoStillFileName(
+  stem: string,
+  timeMs: number,
+  frameRate: FrameRate | null,
+): string {
+  const rate = frameRate ?? { num: 30, den: 1 };
+  const seconds = Math.floor(Math.max(0, timeMs) / 1000);
+  const frames = frameAtMs(timeMs, rate) - frameAtMs(seconds * 1000, rate);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${stem}-still-${Math.floor(seconds / 60)}-${two(seconds % 60)}-${two(frames)}.png`;
+}
+
+export async function downloadVideoStill(video: HTMLVideoElement, stem: string): Promise<void> {
+  const blob = await captureVideoStill(video);
+  const frameRate = stageVideo?.video === video ? stageVideo.frameRate : null;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = videoStillFileName(stem, video.currentTime * 1000, frameRate);
+  anchor.click();
+  // Firefox reads the blob after click() returns; revoking at once can cancel the save.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

@@ -1,43 +1,47 @@
 'use client';
 
-// One portfolio card for the Overview: what it buys and at what target, how it applies
-// moves, its daily budget, where it is in its flight, and whether anything waits on a
-// decision. Everything on it comes from the list read — no per-portfolio fetch.
-//
-// It also carries the one thing today's account read found INSIDE this portfolio, in the same
-// register as the account lead card above it: one sentence, one figure, the shared money line,
-// and no second opinion. A list of portfolios that says only "$500/day, 2 ad sets" makes the
-// reader open every one of them to discover which is the one worth opening.
+// One portfolio as ONE LINE of the Overview — Performance+ redesign, proposal O1
+// (docs/performance-plus-redesign/overview.html, the "Portafolios" block). The name and what
+// it buys on the left, then three figures over the window the latest cycle measured — cost
+// per result against its target, results, spend — and a chip that says how it sits against
+// that target. Every figure comes from `portfolioWindow()` in account/overviewModel, the same
+// rows the headline sentence is built from, so the row can be checked against the tiles.
 
 import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
-import {
-  ACCOUNT_DETECTOR_META,
-  clipLine,
-  getOptimizationMetricDefinition,
-  rankAccountCandidates,
-} from '@continuum/contracts';
-import { Badge } from '@/components/ui/badge';
+import { getOptimizationMetricDefinition, rankAccountCandidates } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
-import { StatusChip } from '../components/StatusChip';
-import { formatCpa, formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { StatusChip, type StatusTone } from '../components/StatusChip';
+import { type FigureUnit, figureProps, formatCpa, formatCurrency, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
-import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
-import { daysBetween, isIsoDate, todayIso } from './detail/rangeModel';
+import * as typeScale from '../typeScale';
+import {
+  type PortfolioWindow,
+  resultWords,
+  type TileState,
+  targetSide,
+  vsTargetLabel,
+} from './account/overviewModel';
+import { PlatformChip } from './platforms/PlatformChip';
+import { type AdPlatform, orderPlatforms } from './platforms/platformTabsModel';
+import { StalenessChips } from './StalenessChips';
 
 type PortfolioRowCardProps = {
   portfolio: PortfolioListItem;
   currency?: string | null;
   selected?: boolean;
   onSelect?: () => void;
-  // Warm the portfolio's detail reads on hover/focus so opening it paints from cache.
+  /** Warm the portfolio's detail reads on hover/focus so opening it paints from cache. */
   onPrefetch?: () => void;
-  /** Today's best finding inside this portfolio. Absent renders no band at all — a portfolio
-   *  with nothing to say says nothing, rather than an empty frame where a figure belongs. */
-  lead?: AccountCandidate | null;
-  /** True on the single portfolio holding the account's top finding: the one card whose rule
-   *  breathes. Twenty cards breathing at once is not a calm screen, it is a flicker. */
-  emphasis?: boolean;
+  /** This portfolio's 7-day window from `portfolioWindow()` in sections/account/overviewModel.ts.
+   *  Null/absent = no cycle yet: the three figures render as '—' and the chip says 'no cycle yet'. */
+  window?: PortfolioWindow | null;
+  /** The platform the portfolio buys on; the row names it in a chip before the objective.
+   *  Ignored when `platforms` is given. */
+  platform?: AdPlatform;
+  /** Every platform the portfolio holds members on (portfolioPlatforms.ts): one chip each,
+   *  Meta, Google, TikTok, whatever order they arrive in. Empty while they are being read. */
+  platforms?: readonly AdPlatform[];
 };
 
 /**
@@ -63,18 +67,66 @@ export function portfolioLeads(candidates: readonly AccountCandidate[]): {
   return { leads, emphasised };
 }
 
-/** Day X of N for a portfolio inside its flight; null outside one. */
-export function flightProgress(
-  portfolio: Pick<PortfolioListItem, 'period_start' | 'period_end'>,
-  today: string = todayIso(),
-): { day: number; days: number; pct: number } | null {
-  const start = portfolio.period_start;
-  const end = portfolio.period_end;
-  if (!isIsoDate(start) || !isIsoDate(end) || end < start) return null;
-  const days = daysBetween(start, end) + 1;
-  const day = daysBetween(start, today) + 1;
-  if (day < 1 || day > days) return null;
-  return { day, days, pct: Math.min(100, (day / days) * 100) };
+const CHIP_TONE: Record<TileState, StatusTone> = {
+  ok: 'success',
+  warn: 'warning',
+  bad: 'danger',
+  none: 'muted',
+};
+
+/** The cost figure wears the state's colour; the other two are plain facts. */
+const COST_TONE: Record<TileState, string> = {
+  ok: 'text-success',
+  warn: 'text-warning',
+  bad: 'text-destructive',
+  none: 'text-foreground',
+};
+
+/**
+ * "33% over" / "12% under" / "on target" — the distance to target without the word the chip's
+ * column already says. "0 results" outranks the target: a cost cannot be read from nothing.
+ * `null` window is a portfolio no cycle has measured yet. Built from the side as a value, never
+ * by parsing the label's words.
+ */
+export function stateChipLabel(window: PortfolioWindow | null | undefined): string {
+  if (!window) return 'no cycle yet';
+  if (window.results === 0) return '0 results';
+  if (window.target == null) return 'no target';
+  const side = targetSide(window.vsTargetPct);
+  if (side === 'over' || side === 'under') {
+    return `${Math.abs(window.vsTargetPct ?? 0)}% ${side}`;
+  }
+  return vsTargetLabel(window.vsTargetPct);
+}
+
+function decisionsSuffix(pending: number): string {
+  if (pending === 0) return '';
+  return ` · ${pending} ${pending === 1 ? 'decision' : 'decisions'}`;
+}
+
+type FigureProps = {
+  figureKey: string;
+  raw: number | null;
+  unit: FigureUnit;
+  currency: string | null | undefined;
+  text: string;
+  caption: string;
+  tone?: string;
+  testId: string;
+};
+
+function Figure({ figureKey, raw, unit, currency, text, caption, tone, testId }: FigureProps) {
+  return (
+    <div className="min-w-0 sm:text-right" data-testid={testId}>
+      <p
+        className={cn('font-mono font-semibold tabular-nums', typeScale.body, tone)}
+        {...figureProps(figureKey, raw, currency, 'd7', unit)}
+      >
+        {text}
+      </p>
+      <p className={cn('truncate text-muted-foreground', typeScale.caption)}>{caption}</p>
+    </div>
+  );
 }
 
 export function PortfolioRowCard({
@@ -83,101 +135,115 @@ export function PortfolioRowCard({
   selected,
   onSelect,
   onPrefetch,
-  lead = null,
-  emphasis = false,
+  window = null,
+  platform,
+  platforms,
 }: PortfolioRowCardProps) {
+  const chips = platforms ? orderPlatforms(platforms) : platform ? [platform] : [];
   const pending = pendingWorkCount(portfolio);
-  const metric = getOptimizationMetricDefinition(
-    (portfolio.target_metric ?? portfolio.objective) as Parameters<
-      typeof getOptimizationMetricDefinition
-    >[0],
-  );
-  const target =
-    portfolio.cpa_target != null && portfolio.cpa_target > 0
-      ? portfolio.cpa_target * metric.denominatorMultiplier
-      : null;
-  const flight = flightProgress(portfolio);
+  const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
+  const words = resultWords(window?.kind ?? metric.kpiField, metric.resultLabel);
+  const state: TileState = window?.state ?? 'none';
+  const figureKey = (name: string) => `portfolio-row.${portfolio.id}.${name}`;
+
+  const costCaption =
+    window == null
+      ? `per ${words.one}`
+      : window.target != null
+        ? `per ${words.one} · target ${formatCpa(window.target, currency)}`
+        : `per ${words.one} · no target`;
 
   return (
     <button
       className={cn(
         'flex w-full flex-col gap-2 rounded-lg border border-border/70 bg-card px-4 py-3 text-left transition-colors',
+        'sm:grid sm:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(5.5rem,auto))_auto] sm:items-center sm:gap-x-4',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         onSelect && 'hover:border-primary/50 hover:bg-accent/40',
         selected && 'border-primary ring-1 ring-primary',
       )}
+      data-portfolio-id={portfolio.id}
+      data-state={state}
+      data-testid="portfolio-row"
       onClick={onSelect}
       onFocus={onPrefetch}
       onMouseEnter={onPrefetch}
       type="button"
     >
-      <div className="flex w-full items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-sm tracking-tight">{portfolio.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-muted-foreground text-xs">
-            <span>{humanize(portfolio.objective)}</span>
-            <Badge className="text-3xs font-medium" variant="muted">
-              {portfolioLevelLabel(portfolio.level)}
-            </Badge>
-            <Badge className="text-3xs font-medium" variant="teal">
-              {humanize(portfolio.mode)}
-            </Badge>
-            <ApplyModePill
-              applyMode={portfolio.apply_mode}
-              autopilotPaused={portfolio.autopilot_paused}
-              scopes={portfolio.autopilot_scopes ?? null}
-            />
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="font-semibold text-sm tabular-nums">
-            {formatCurrency(portfolio.daily_total, currency)}
-          </p>
-          <p className="text-2xs text-muted-foreground">
-            /day · {portfolio.adset_count} ad {portfolio.adset_count === 1 ? 'set' : 'sets'}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex w-full flex-wrap items-center gap-1.5">
-        <StatusChip tone="muted">
-          {target != null
-            ? `${metric.targetLabel} ${formatCpa(target, currency)}`
-            : `${metric.costLabel} · no target`}
-        </StatusChip>
-        {flight ? (
-          <StatusChip hint={`Flight day ${flight.day} of ${flight.days}`} tone="info">
-            Flight · day {flight.day}/{flight.days}
-          </StatusChip>
-        ) : null}
-        {pending > 0 ? (
-          <StatusChip tone="warning">
-            {pending} {pending === 1 ? 'decision' : 'decisions'} waiting
-          </StatusChip>
-        ) : (
-          <StatusChip tone="success">clean</StatusChip>
-        )}
-      </div>
-      {flight ? (
-        <div aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-primary/60" style={{ width: `${flight.pct}%` }} />
-        </div>
-      ) : null}
-
-      {lead ? (
+      <div className="min-w-0">
+        <p className={cn('truncate font-semibold tracking-tight', typeScale.body)}>
+          {portfolio.name}
+        </p>
         <div
-          className="mt-1 w-full space-y-1 border-border/60 border-t pt-2"
-          data-detector={lead.detector}
-          data-testid="portfolio-lead"
+          className={cn(
+            'mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted-foreground',
+            typeScale.caption,
+          )}
         >
-          <p className="truncate text-2xs text-muted-foreground">
-            {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
-          </p>
-          <HeadlineFigure candidate={lead} currency={currency ?? null} size="row" />
-          <CalmRule play={emphasis} testId="portfolio-lead-rule" />
-          <MoneyLine candidate={lead} currency={currency ?? null} />
+          {chips.length > 0 ? (
+            <span
+              className="inline-flex flex-wrap items-center gap-1"
+              data-testid="portfolio-row-platforms"
+            >
+              {chips.map((held) => (
+                <PlatformChip key={held} platform={held} />
+              ))}
+            </span>
+          ) : null}
+          <span>{humanize(portfolio.objective)}</span>
+          <span aria-hidden>·</span>
+          <span>
+            {portfolio.adset_count} {portfolio.adset_count === 1 ? 'ad set' : 'ad sets'}
+          </span>
+          <span aria-hidden>·</span>
+          <span>{formatCurrency(portfolio.daily_total, currency)}/day</span>
+          <span aria-hidden>·</span>
+          <ApplyModePill
+            applyMode={portfolio.apply_mode}
+            autopilotPaused={portfolio.autopilot_paused}
+            scopes={portfolio.autopilot_scopes ?? null}
+          />
         </div>
-      ) : null}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 sm:contents">
+        <Figure
+          caption={costCaption}
+          currency={currency}
+          figureKey={figureKey('cost')}
+          raw={window?.costPerResult ?? null}
+          testId="portfolio-row-cost"
+          text={window ? formatCpa(window.costPerResult, currency) : '—'}
+          tone={COST_TONE[state]}
+          unit="currency"
+        />
+        <Figure
+          caption={`${words.many} 7d`}
+          currency={currency}
+          figureKey={figureKey('results')}
+          raw={window?.results ?? null}
+          testId="portfolio-row-results"
+          text={window ? window.results.toLocaleString('en-US') : '—'}
+          unit="count"
+        />
+        <Figure
+          caption={currency ? `${currency} 7d` : '7d'}
+          currency={currency}
+          figureKey={figureKey('spend')}
+          raw={window?.spend ?? null}
+          testId="portfolio-row-spend"
+          text={window ? formatCurrency(window.spend, currency) : '—'}
+          unit="currency"
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+        <StatusChip testId="portfolio-state-chip" tone={CHIP_TONE[state]}>
+          {stateChipLabel(window)}
+          {decisionsSuffix(pending)}
+        </StatusChip>
+        <StalenessChips portfolio={portfolio} />
+      </div>
     </button>
   );
 }

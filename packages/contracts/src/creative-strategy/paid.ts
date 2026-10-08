@@ -17,6 +17,7 @@
 // parse — same rule as analysis.ts and competitor-spy.
 
 import { z } from 'zod';
+import type { CreativeTarget, OptimizerGenerationContext } from '../headless-content/optimizer';
 import type { AdsetAudience } from '../paid/adNaming';
 import {
   paidCreativeAudienceEvidenceSchema,
@@ -126,7 +127,12 @@ export type CreativeWinRateFlag = z.infer<typeof creativeWinRateFlagSchema>;
 export const creativeWinRateDimensionSchema = z.enum([
   'asset_type',
   'hook_archetype',
+  // The labeller's free text: ~1.2 ads per value, so almost every bucket holds one ad.
   'angle',
+  // The closed GLOBAL_ANGLE_DEFINITIONS id, written by Jev behind `angle_vocab_version >= 1`.
+  // Measured 98.1% of ads in a bucket of >=3 against 14.1% for the free text — this is the
+  // angle dimension a win rate can actually be counted on.
+  'angle_id',
   'theme',
   'funnel_stage',
   'visual_style',
@@ -315,6 +321,16 @@ export const paidCreativeSourceCountsSchema = z.object({
 });
 export type PaidCreativeSourceCounts = z.infer<typeof paidCreativeSourceCountsSchema>;
 
+// 2-3 short concepts that summarise what the win-rate table has in common. Written
+// by a Flash-Lite pass at most every PAID_SYNOPSIS_TTL_DAYS and carried between
+// assemblies, so it reads as a standing theme rather than churning each sync.
+export const PAID_SYNOPSIS_TTL_DAYS = 3;
+export const paidCreativeSynopsisSchema = z.object({
+  themes: z.array(z.string()).min(1).max(3),
+  generatedAt: z.string(),
+});
+export type PaidCreativeSynopsis = z.infer<typeof paidCreativeSynopsisSchema>;
+
 export const paidCreativeReportSchema = z.object({
   brandId: z.string(),
   adAccountId: z.string().nullable().default(null),
@@ -325,6 +341,7 @@ export const paidCreativeReportSchema = z.object({
   liftRules: z.array(creativeLiftRuleSchema).default([]),
   verdicts: z.array(paidCreativeVerdictSchema).default([]),
   iterationBriefs: z.array(paidIterationBriefSchema).default([]),
+  synopsis: paidCreativeSynopsisSchema.nullable().default(null),
   sourceCounts: paidCreativeSourceCountsSchema.default({
     ads: 0,
     creatives: 0,
@@ -444,6 +461,8 @@ export type CreativeRequestBrief = z.infer<typeof creativeRequestBriefSchema>;
  *  contracts must not depend on the engine package. */
 export type CreativeVariationSeedInput = {
   adSetId: string;
+  target?: CreativeTarget;
+  generationContext?: OptimizerGenerationContext;
   winnerAdId?: string | null;
   winnerCreativeRowId?: string | null;
   winnerAssetId?: string | null;
@@ -464,6 +483,12 @@ export type CreativeVariationSeedInput = {
   angleId?: GlobalAngleId | null;
   /** The pipeline the portfolio nominated, if any. */
   pipelineId?: string | null;
+  /** The producer nominated by the portfolio; optimizer refreshes default to headless. */
+  producer?: 'image' | 'headless' | null;
+  /** Which headless formats to make (`autogen.headlessFormats`); absent follows the winner's assetType. */
+  headlessFormats?: Array<'reel' | 'stills'> | null;
+  /** The language the creative is written in (`autogen.language`); absent follows the winner's copy. */
+  language?: string | null;
   /** Parsed from the target ad set's own name — see audienceFromAdName. */
   audience?: AdsetAudience | null;
 };

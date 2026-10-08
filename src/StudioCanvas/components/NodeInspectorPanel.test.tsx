@@ -228,16 +228,20 @@ describe('NodeInspectorPanel', () => {
     render(<NodeInspectorPanel />);
 
     // The popover's own copy — proves the shared editor is mounted, not reimplemented.
-    expect(screen.getByText('Enforce brand book')).toBeTruthy();
     expect(screen.getByText(/What this generation is allowed to draw on/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Brand book/ }));
+    expect(screen.getByText('Enforce brand book')).toBeTruthy();
   });
 
   it('writes a brand-book toggle from inside the panel', () => {
     seed({ id: 'v1', type: 'videoGen', data: { model: 'veo-3.1-fast' } });
     render(<NodeInspectorPanel />);
 
-    // Enforcement is default-ON (`DEFAULT_BRAND_BOOK_PIECES`), so the first click
-    // clears it and the second puts the whole book back.
+    // Enforcement is default-ON (the light canvas book), so the first click clears it
+    // and the second puts the whole book on.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /Brand book/ }));
+    });
     act(() => {
       fireEvent.click(screen.getByText('Enforce brand book'));
     });
@@ -255,6 +259,7 @@ describe('NodeInspectorPanel', () => {
     render(<NodeInspectorPanel />);
 
     expect(screen.queryByText('Enforce brand book')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Brand book/ })).toBeNull();
   });
 
   it('summarises a multi-selection instead of editing one node', () => {

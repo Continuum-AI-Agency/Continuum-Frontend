@@ -3,31 +3,32 @@
 // the UI never pretends Reach (Meta) and Impressions (LinkedIn) are the same
 // series — comparison overlays only when each selected account exposes the ID.
 
-import { z } from "zod";
+import { z } from 'zod';
 
-import type { OrganicMetrics } from "./metrics";
+import type { OrganicMetrics } from './metrics';
 
 export const organicMetricPlatformSchema = z.enum([
-  "instagram",
-  "facebook",
-  "tiktok",
-  "youtube",
-  "linkedin",
+  'instagram',
+  'facebook',
+  'tiktok',
+  'youtube',
+  'linkedin',
+  'x',
 ]);
 export type OrganicMetricPlatform = z.infer<typeof organicMetricPlatformSchema>;
 
-export const organicMetricFormatSchema = z.enum(["count", "percent"]);
+export const organicMetricFormatSchema = z.enum(['count', 'percent']);
 export type OrganicMetricFormat = z.infer<typeof organicMetricFormatSchema>;
 
 // Semantic buckets for documentation / future grouping UI only. Never sum
 // across group members as if they were one metric.
 export const organicComparableGroupSchema = z.enum([
-  "attention",
-  "engagement",
-  "audience_growth",
-  "interactions",
-  "retention",
-  "inventory",
+  'attention',
+  'engagement',
+  'audience_growth',
+  'interactions',
+  'retention',
+  'inventory',
 ]);
 export type OrganicComparableGroup = z.infer<typeof organicComparableGroupSchema>;
 
@@ -46,195 +47,194 @@ export type OrganicMetricCatalogEntry = {
   defaultSelected?: boolean;
 };
 
-const META: readonly OrganicMetricPlatform[] = ["instagram", "facebook"];
+const META: readonly OrganicMetricPlatform[] = ['instagram', 'facebook'];
 const ALL: readonly OrganicMetricPlatform[] = [
-  "instagram",
-  "facebook",
-  "tiktok",
-  "youtube",
-  "linkedin",
+  'instagram',
+  'facebook',
+  'tiktok',
+  'youtube',
+  'linkedin',
+  'x',
 ];
 
 export const ORGANIC_METRIC_CATALOG: readonly OrganicMetricCatalogEntry[] = [
   {
-    id: "reach",
-    label: "Reach",
-    format: "count",
+    id: 'reach',
+    label: 'Reach',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
     defaultSelected: true,
   },
   {
-    id: "impressions",
-    label: "Impressions",
-    format: "count",
-    platforms: ["linkedin"],
+    id: 'impressions',
+    label: 'Impressions',
+    format: 'count',
+    platforms: ['linkedin'],
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
     defaultSelected: true,
   },
   {
-    id: "views",
-    label: "Views",
-    format: "count",
-    platforms: ["instagram", "facebook", "tiktok", "youtube"],
+    id: 'views',
+    label: 'Views',
+    format: 'count',
+    platforms: ['instagram', 'facebook', 'tiktok', 'youtube', 'x'],
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
     defaultSelected: true,
   },
   {
-    id: "accountsEngaged",
-    label: "Accounts engaged",
-    format: "count",
+    id: 'accountsEngaged',
+    label: 'Accounts engaged',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "engagement",
+    comparableGroup: 'engagement',
     defaultSelected: true,
   },
   {
-    id: "totalInteractions",
-    label: "Engagements",
-    format: "count",
-    platforms: ["linkedin"],
+    id: 'totalInteractions',
+    label: 'Engagements',
+    format: 'count',
+    platforms: ['linkedin'],
     summable: true,
-    comparableGroup: "engagement",
+    comparableGroup: 'engagement',
     defaultSelected: true,
   },
   {
-    id: "newFollowers",
-    label: "New followers",
-    format: "count",
-    platforms: ["instagram", "facebook", "youtube", "linkedin"],
+    id: 'newFollowers',
+    label: 'New followers',
+    format: 'count',
+    platforms: ['instagram', 'facebook', 'youtube', 'linkedin'],
     summable: true,
-    comparableGroup: "audience_growth",
+    comparableGroup: 'audience_growth',
     defaultSelected: true,
   },
   {
-    id: "subscribers",
-    label: "Followers",
-    format: "count",
-    platforms: ["tiktok", "youtube", "linkedin"],
+    id: 'subscribers',
+    label: 'Followers',
+    format: 'count',
+    platforms: ['tiktok', 'youtube', 'linkedin', 'x'],
     summable: false,
-    comparableGroup: "audience_growth",
+    comparableGroup: 'audience_growth',
   },
   {
-    id: "following",
-    label: "Following",
-    format: "count",
-    platforms: ["tiktok"],
+    id: 'following',
+    label: 'Following',
+    format: 'count',
+    platforms: ['tiktok'],
     summable: false,
-    comparableGroup: "inventory",
+    comparableGroup: 'inventory',
   },
   {
-    id: "videoCount",
-    label: "Videos",
-    format: "count",
-    platforms: ["tiktok", "youtube"],
+    id: 'videoCount',
+    label: 'Videos',
+    format: 'count',
+    platforms: ['tiktok', 'youtube'],
     summable: false,
-    comparableGroup: "inventory",
+    comparableGroup: 'inventory',
   },
   {
-    id: "reelsViews",
-    label: "Reels views",
-    format: "count",
+    id: 'reelsViews',
+    label: 'Reels views',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
   },
   {
-    id: "postViews",
-    label: "Post views",
-    format: "count",
+    id: 'postViews',
+    label: 'Post views',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
   },
   {
-    id: "storiesViews",
-    label: "Stories views",
-    format: "count",
+    id: 'storiesViews',
+    label: 'Stories views',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
   },
   {
-    id: "profileVisits24h",
-    label: "Profile 24h",
-    format: "count",
+    id: 'profileVisits24h',
+    label: 'Profile 24h',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "engagement",
+    comparableGroup: 'engagement',
   },
   {
-    id: "followerReach",
-    label: "Follower reach",
-    format: "count",
+    id: 'followerReach',
+    label: 'Follower reach',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
   },
   {
-    id: "nonFollowerReach",
-    label: "Non-follower reach",
-    format: "count",
+    id: 'nonFollowerReach',
+    label: 'Non-follower reach',
+    format: 'count',
     platforms: META,
     summable: true,
-    comparableGroup: "attention",
+    comparableGroup: 'attention',
   },
   {
-    id: "likes",
-    label: "Likes",
-    format: "count",
-    platforms: ["tiktok", "youtube", "linkedin"],
+    id: 'likes',
+    label: 'Likes',
+    format: 'count',
+    platforms: ['tiktok', 'youtube', 'linkedin', 'x'],
     summable: true,
-    comparableGroup: "interactions",
+    comparableGroup: 'interactions',
   },
   {
-    id: "comments",
-    label: "Comments",
-    format: "count",
+    id: 'comments',
+    label: 'Comments',
+    format: 'count',
     platforms: ALL,
     summable: true,
-    comparableGroup: "interactions",
+    comparableGroup: 'interactions',
   },
   {
-    id: "shares",
-    label: "Shares",
-    format: "count",
-    platforms: ["tiktok", "linkedin"],
+    id: 'shares',
+    label: 'Shares',
+    format: 'count',
+    platforms: ['tiktok', 'linkedin', 'x'],
     summable: true,
-    comparableGroup: "interactions",
+    comparableGroup: 'interactions',
   },
   {
-    id: "hookRate",
-    label: "Avg view %",
-    format: "percent",
-    platforms: ["youtube"],
+    id: 'hookRate',
+    label: 'Avg view %',
+    format: 'percent',
+    platforms: ['youtube'],
     summable: false,
-    comparableGroup: "retention",
+    comparableGroup: 'retention',
   },
   {
-    id: "avgRetentionRate",
-    label: "Avg retention",
-    format: "percent",
+    id: 'avgRetentionRate',
+    label: 'Avg retention',
+    format: 'percent',
     platforms: META,
     summable: false,
-    comparableGroup: "retention",
+    comparableGroup: 'retention',
   },
   {
-    id: "avgSkipRate",
-    label: "Typical skip",
-    format: "percent",
+    id: 'avgSkipRate',
+    label: 'Typical skip',
+    format: 'percent',
     platforms: META,
     summable: false,
-    comparableGroup: "retention",
+    comparableGroup: 'retention',
   },
 ] as const;
 
-const catalogById = new Map(
-  ORGANIC_METRIC_CATALOG.map((entry) => [entry.id, entry] as const),
-);
+const catalogById = new Map(ORGANIC_METRIC_CATALOG.map((entry) => [entry.id, entry] as const));
 
 export function getOrganicMetric(id: OrganicMetricId): OrganicMetricCatalogEntry | undefined {
   return catalogById.get(id);
@@ -248,9 +248,7 @@ export function isMetricAvailableOnPlatform(
   return entry ? entry.platforms.includes(platform) : false;
 }
 
-export function metricsForPlatform(
-  platform: OrganicMetricPlatform,
-): OrganicMetricCatalogEntry[] {
+export function metricsForPlatform(platform: OrganicMetricPlatform): OrganicMetricCatalogEntry[] {
   return ORGANIC_METRIC_CATALOG.filter((entry) => entry.platforms.includes(platform));
 }
 
@@ -265,6 +263,6 @@ export function kpiConfigForPlatform(
   return metricsForPlatform(platform).map((entry) => ({
     key: entry.id,
     label: entry.label,
-    format: entry.format === "percent" ? "percent" : undefined,
+    format: entry.format === 'percent' ? 'percent' : undefined,
   }));
 }

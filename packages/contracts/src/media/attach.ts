@@ -181,12 +181,28 @@ const ALL_MEDIA_SLOTS_CLEARED: Required<ClearedMediaOutputs> = {
   hyperframe: null,
 };
 
-/** Can these creatives actually publish as `format`? One video for a reel, two or more slides
- * for a carousel, exactly one asset for a single post. */
-function canPublishAs(format: PublishFormat, list: CreativeRef[]): boolean {
-  if (format === 'REEL') return list[0]?.kind === 'video';
-  if (format === 'CAROUSEL') return list.length > 1;
-  return list.length === 1;
+/** Can these kinds actually publish as `format`? One video for a reel, two or more slides
+ * for a carousel, exactly one asset for a single post or story. */
+function canPublishAs(format: PublishFormat, kinds: ReadonlyArray<string>): boolean {
+  if (format === 'REEL') return kinds[0] === 'video';
+  if (format === 'CAROUSEL') return kinds.length > 1;
+  return kinds.length === 1;
+}
+
+/**
+ * The format a draft carries once `kinds` are attached to it: its current format when the media
+ * can publish as that, otherwise the one the media can. The same tie-break `shapeUserSuppliedMedia`
+ * gives a caller-named format, for writers that hold the draft rather than the creatives.
+ *
+ * The current format has to be consulted, not just the kinds: inferring from the kinds alone turns
+ * a Story carrying one image into a Post. And it cannot be trusted alone either — that is how an
+ * image attached in the planner left the draft a Reel with no video, refused at publish.
+ */
+export function reconcileFormatWithAssetKinds(
+  current: PublishFormat | null | undefined,
+  kinds: ReadonlyArray<'image' | 'video'>,
+): PublishFormat {
+  return current && canPublishAs(current, kinds) ? current : publishFormatForAssetKinds(kinds);
 }
 
 /**
@@ -217,7 +233,9 @@ export function shapeUserSuppliedMedia(
     throw new Error(`shapeUserSuppliedMedia: ${multiVideo}`);
   }
   const primary = list[0];
-  const publishableKinds = list.flatMap((item) => (item.kind === 'file' ? [] : [item.kind]));
+  const publishableKinds = list.flatMap((item) =>
+    item.kind === 'image' || item.kind === 'video' ? [item.kind] : [],
+  );
   const inferred = publishFormatForAssetKinds(publishableKinds);
   // The caller's format is a TIE-BREAK, never an override. It exists for `[video, image]`,
   // which the assets genuinely cannot settle — reel-with-a-cover or mixed carousel. When the
@@ -228,8 +246,11 @@ export function shapeUserSuppliedMedia(
   // declared format) and into SINGLE IMAGE: four slides deleted, the post relabelled POST, no
   // error anywhere. A format that contradicts what is actually attached is stale metadata, and
   // the media is the fact.
+  const kinds = list.map((creative) => creative.kind);
   const format =
-    options?.format !== undefined && canPublishAs(options.format, list) ? options.format : inferred;
+    options?.format !== undefined && canPublishAs(options.format, kinds)
+      ? options.format
+      : inferred;
 
   // VIDEO / REEL — a single user video fills the reel slot.
   if (format === 'REEL' && primary.kind === 'video') {

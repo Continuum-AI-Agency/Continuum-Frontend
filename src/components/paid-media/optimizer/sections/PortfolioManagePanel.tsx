@@ -2,8 +2,8 @@
 
 // Inline management for one portfolio, organized into slot-in sections: Identity (name +
 // objective), Strategy (mode + autonomy tier + daily budget), Reporting period, Guardrails
-// (autopilot caps + kill-switch), an Advanced disclosure (target + period budget + velocity
-// cap), and the enrolled campaign→ad-set picker.
+// (autopilot caps + kill-switch), a daily limit per platform (./platformCaps), an Advanced
+// disclosure (target + period budget + velocity cap), and the enrolled campaign→ad-set picker.
 //
 // This is the screen an operator arms AUTOPILOT from, so two things are load-bearing:
 //
@@ -56,7 +56,7 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Archive, ChevronDown, Loader2, Pause, Play, SparklesIcon } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Control, useController, useForm } from 'react-hook-form';
 import { DateRangeField } from '@/components/shared/DateRangeField';
 import {
@@ -88,6 +88,7 @@ import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
+import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { applyModeExplainer, freezeLabel, parseReport } from '../reportModel';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../suggestInput';
@@ -101,6 +102,8 @@ import {
   useOptimizerPerformance,
 } from '../useOptimizerData';
 import { AutopilotScopesField } from './AutopilotScopesField';
+import { AttributionSection } from './attribution/AttributionSection';
+import type { HeroSetting } from './detail/heroHeaderModel';
 import { OBJECTIVES } from './suggestionModel';
 import {
   ANALOG_LABEL,
@@ -114,6 +117,7 @@ export { buildConversionDescriptor } from './wizard/conversionDescriptor';
 
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
 import { TierCards } from './fields/TierCards';
+import { PlatformCapsField } from './platformCaps/PlatformCapsField';
 import {
   buildPatch,
   createPortfolioFormSchema,
@@ -195,7 +199,7 @@ export function DriftedEnrollments({
   const label = drifted.length === 1 ? 'ad set is' : 'ad sets are';
   return (
     <div
-      className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-2xs"
+      className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs"
       role="status"
     >
       <p className="font-medium text-warning">
@@ -238,6 +242,20 @@ type PortfolioManagePanelProps = {
   portfolio: PortfolioListItem;
   currency?: string | null;
   onDone?: () => void;
+  /** A setting the portfolio header's chip asked to edit: scrolled to and focused on mount. */
+  focusSetting?: HeroSetting | null;
+  onFocusSettingDone?: () => void;
+};
+
+/** The field each header chip (or the goal-mismatch banner) opens — the id prefix of that
+ *  field's control below. */
+const SETTING_FIELD: Record<HeroSetting, string> = {
+  strategy: 'manage-mode',
+  objective: 'manage-objective',
+  target: 'manage-cpa',
+  budget: 'manage-budget-source',
+  window: 'manage-lookback',
+  roster: 'manage-roster',
 };
 
 export function PortfolioManagePanel({
@@ -246,6 +264,8 @@ export function PortfolioManagePanel({
   portfolio,
   currency,
   onDone,
+  focusSetting = null,
+  onFocusSettingDone,
 }: PortfolioManagePanelProps) {
   // A campaign portfolio edits campaigns, not ad sets: the level drives which snapshot
   // scope + picker mode the manage panel shows. Enroll/unenroll operate on the entity id
@@ -256,6 +276,14 @@ export function PortfolioManagePanel({
     adAccountId,
   );
   const enrolledRead = useOptimizerEnrolledAdsets(portfolio.id);
+
+  useEffect(() => {
+    if (!focusSetting) return;
+    const field = document.getElementById(`${SETTING_FIELD[focusSetting]}-${portfolio.id}`);
+    field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    field?.focus({ preventScroll: true });
+    onFocusSettingDone?.();
+  }, [focusSetting, portfolio.id, onFocusSettingDone]);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const inventoryRead = useOptimizerAdsetInventory(brandId, adAccountId, level === 'adset');
   // Who else holds each ad set's single active enrollment. Drives the picker's "In: X" badge
@@ -641,18 +669,18 @@ export function PortfolioManagePanel({
             <Label htmlFor={`manage-name-${portfolio.id}`}>Name</Label>
             <Input id={`manage-name-${portfolio.id}`} {...form.register('name')} />
             {form.formState.errors.name ? (
-              <p className="text-2xs text-destructive">{form.formState.errors.name.message}</p>
+              <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
             ) : null}
           </div>
           <div className="space-y-1.5">
-            <Label>Objective</Label>
+            <Label htmlFor={`manage-objective-${portfolio.id}`}>Objective</Label>
             <Select
               value={objective}
               onValueChange={(value) =>
                 form.setValue('objective', value as OptimizationObjective, { shouldDirty: true })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id={`manage-objective-${portfolio.id}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -663,12 +691,12 @@ export function PortfolioManagePanel({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Prices this portfolio on {descriptor?.result_label ?? metric.resultLabel} (
               {descriptor?.cost_label ?? metric.costLabel}).
             </p>
             {objectiveChanged && affectedAdsets.length > 0 ? (
-              <p className="text-2xs text-warning">
+              <p className="text-xs text-warning">
                 {affectedAdsets.length} of {enrolledIds.length} enrolled ad sets buy a different
                 result and will be held ({mismatchLabel}) until moved.
               </p>
@@ -678,7 +706,7 @@ export function PortfolioManagePanel({
             <div className="space-y-2.5 rounded-md border border-border/60 bg-background/60 p-3 sm:col-span-2">
               <div>
                 <p className="font-semibold text-xs tracking-tight">The conversion you buy</p>
-                <p className="mt-0.5 text-2xs text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   Nobody but you knows what this event is. Name it, and say how it behaves — it is
                   measured against whichever calibrated objective behaves the same way.
                 </p>
@@ -692,7 +720,7 @@ export function PortfolioManagePanel({
                     placeholder="offsite_conversion.fb_pixel_custom"
                     value={descriptorDraft.event_id}
                   />
-                  <p className="text-2xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     What the platform calls it, not what you call it.
                   </p>
                 </div>
@@ -704,7 +732,7 @@ export function PortfolioManagePanel({
                     placeholder="Demos booked"
                     value={descriptorDraft.result_label}
                   />
-                  <p className="text-2xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Every card on this account says this word instead of &ldquo;conversions&rdquo;.
                   </p>
                 </div>
@@ -778,9 +806,9 @@ export function PortfolioManagePanel({
                     </SelectContent>
                   </Select>
                   {descriptor ? (
-                    <p className="text-2xs text-muted-foreground">{analogNote(descriptor)}</p>
+                    <p className="text-xs text-muted-foreground">{analogNote(descriptor)}</p>
                   ) : (
-                    <p className="text-2xs text-warning">
+                    <p className="text-xs text-warning">
                       {'error' in builtDescriptor ? builtDescriptor.error : null}
                     </p>
                   )}
@@ -822,7 +850,7 @@ export function PortfolioManagePanel({
                 {metric.costLabel}
               </p>
             )}
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {allowedMetrics.length > 1
                 ? `Which cost the target is set in. Every ad set is scored on it.`
                 : `${humanize(objective)} is priced in ${metric.costLabel}.`}
@@ -834,7 +862,7 @@ export function PortfolioManagePanel({
             label={`${metric.targetLabel}${unit}`}
             name="cpa_target"
           >
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Scale mode grows the budget only while the portfolio beats this. Blank means the
               engine&rsquo;s default target, not &ldquo;no target&rdquo;.
             </p>
@@ -845,14 +873,14 @@ export function PortfolioManagePanel({
       <Section title="Strategy">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
-            <Label>Mode</Label>
+            <Label htmlFor={`manage-mode-${portfolio.id}`}>Mode</Label>
             <Select
               value={values.mode}
               onValueChange={(value) =>
                 form.setValue('mode', value as OptimizationModeDto, { shouldDirty: true })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id={`manage-mode-${portfolio.id}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -863,13 +891,13 @@ export function PortfolioManagePanel({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-2xs text-muted-foreground">{modeExplainer(values.mode)}</p>
+            <p className="text-xs text-muted-foreground">{modeExplainer(values.mode)}</p>
           </div>
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
             <Label>Autonomy tier</Label>
             <TierCards arming={arming} onSelect={handleApplyModeChange} value={applyMode} />
             {/* applyModeExplainer describes the selected tier and re-runs as the choice changes. */}
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {arming && !isArmed
                 ? 'Check the guardrails below, preview the cycle, then arm.'
                 : applyModeExplainer(applyMode)}
@@ -891,7 +919,7 @@ export function PortfolioManagePanel({
                 <SelectItem value="fixed">Fixed daily target</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {budgetSource === 'observed'
                 ? 'Reallocates within whatever the enrolled ad sets are spending now — increases and decreases cancel out.'
                 : 'Drives the portfolio toward the daily budget below, so the total can go up or down.'}
@@ -914,7 +942,7 @@ export function PortfolioManagePanel({
                 re-derived it when the picker changed membership, so a portfolio kept
                 conserving a months-old sum. */}
             {budgetSource === 'observed' && selectedBudgetSum > 0 ? (
-              <p className="text-2xs text-muted-foreground tabular-nums">
+              <p className="text-xs text-muted-foreground tabular-nums">
                 Currently {formatCurrency(selectedBudgetSum, currency)}/day across{' '}
                 {selectedAdsetIds.length} {selectedAdsetIds.length === 1 ? 'ad set' : 'ad sets'}.
               </p>
@@ -923,7 +951,7 @@ export function PortfolioManagePanel({
         </div>
         {values.mode === 'scale' ? (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/60 p-3">
-            <p className="text-2xs font-medium">
+            <p className="text-xs font-medium">
               Grow the budget{' '}
               <span className="text-foreground">
                 {scaleGrowth != null ? `${Math.round(scaleGrowth * 100)}%` : '…'}
@@ -970,7 +998,7 @@ export function PortfolioManagePanel({
                 label={`Up to (${symbol ? `${symbol}/day` : 'per day'}, optional)`}
                 name="scale_max_daily"
               >
-                <p className="text-2xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   A ceiling for the daily total. Blank means no ceiling.
                 </p>
               </NumberField>
@@ -1003,7 +1031,7 @@ export function PortfolioManagePanel({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-2xs text-muted-foreground">{lookbackHint.reason}</p>
+            <p className="text-xs text-muted-foreground">{lookbackHint.reason}</p>
             {lookbackHint.window !== lookbackWindow ? (
               <SuggestionChip
                 label={`Use ${LOOKBACK_LABEL[lookbackHint.window]}`}
@@ -1025,7 +1053,7 @@ export function PortfolioManagePanel({
               placeholder="No flight window"
               value={{ from: values.period_start ?? null, to: values.period_end ?? null }}
             />
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {values.period_start && values.period_end
                 ? `${flightLength} days. The budget below paces against these dates.`
                 : 'Set start and end dates to pace against the budget below.'}
@@ -1057,7 +1085,7 @@ export function PortfolioManagePanel({
                 variant="outline"
               >
                 {(Object.keys(GRANULARITY_LABEL) as BudgetGranularity[]).map((value) => (
-                  <ToggleGroupItem className="h-6 px-2 text-2xs" key={value} value={value}>
+                  <ToggleGroupItem className="h-6 px-2 text-xs" key={value} value={value}>
                     {GRANULARITY_LABEL[value]}
                   </ToggleGroupItem>
                 ))}
@@ -1086,7 +1114,7 @@ export function PortfolioManagePanel({
                       : undefined
                 }
               />
-              <p className="self-end pb-2 text-2xs text-muted-foreground tabular-nums">
+              <p className="self-end pb-2 text-xs text-muted-foreground tabular-nums">
                 {storedPeriodBudget != null && flightLength != null
                   ? `= ${formatCurrency(storedPeriodBudget, currency)} for the flight · ≈ ${formatCurrency(impliedDaily, currency)}/day`
                   : storedPeriodBudget != null
@@ -1120,12 +1148,19 @@ export function PortfolioManagePanel({
                 : 'Off — ad-set level only'}
             </Label>
           </div>
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {creativeAnalysis === 'on'
               ? 'This portfolio can flag a creative that is decaying, including in ad sets running a single creative — where there is nothing to compare against.'
               : 'Turn on to see which creatives are wearing out. Reversible at any time; nothing else about this portfolio changes.'}
           </p>
         </div>
+      </Section>
+
+      <Section
+        description="What this portfolio counts its results with. The source is named once, in the portfolio's header, and every cost carries it."
+        title="Attribution"
+      >
+        <AttributionSection brandId={brandId} portfolioId={portfolio.id} />
       </Section>
 
       {guardrailsRelevant ? (
@@ -1161,7 +1196,7 @@ export function PortfolioManagePanel({
           }
         >
           {isPaused && portfolio.apply_mode === 'autopilot' ? (
-            <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs text-amber-600 dark:text-amber-400">
+            <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
               Stopped — no autonomous budget writes until you resume. Ingest and scoring still run.
             </p>
           ) : null}
@@ -1176,10 +1211,14 @@ export function PortfolioManagePanel({
               }
               onChange={(scope, enabled) => {
                 setSavingScope(scope);
-                update.mutate(
-                  { portfolio_id: portfolio.id, patch: { autopilot_scopes: { [scope]: enabled } } },
-                  { onSettled: () => setSavingScope(null) },
-                );
+                // The promise goes back to the field so it can tell a key the database does
+                // not accept yet from an ordinary failure.
+                return update
+                  .mutateAsync({
+                    portfolio_id: portfolio.id,
+                    patch: { autopilot_scopes: { [scope]: enabled } },
+                  })
+                  .finally(() => setSavingScope(null));
               }}
               portfolioId={portfolio.id}
               savingScope={savingScope}
@@ -1230,6 +1269,13 @@ export function PortfolioManagePanel({
         </Section>
       ) : null}
 
+      <Section
+        title="Daily limit per platform"
+        description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound Meta, Google and TikTok writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
+      >
+        <PlatformCapsField portfolioId={portfolio.id} />
+      </Section>
+
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <CollapsibleTrigger
           render={
@@ -1251,7 +1297,7 @@ export function PortfolioManagePanel({
             label="Max move per ad set/cycle (%)"
             name="velocity_cap_pct"
           >
-            <p className="text-2xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Caps how far any single ad set&rsquo;s budget can move in one cycle.
             </p>
           </NumberField>
@@ -1361,39 +1407,45 @@ export function PortfolioManagePanel({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 outline-none" id={`manage-roster-${portfolio.id}`} tabIndex={-1}>
         <Label>{level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}</Label>
-        <CampaignAdsetPicker
-          entities={pickerEntities}
-          selectedAdsetIds={selectedAdsetIds}
-          onChange={setSelection}
+        <MultiPlatformPicker
           brandId={brandId}
-          accountId={adAccountId}
-          currency={currency}
-          disabled={saving}
-          isLoading={
-            snapshotsRead.isLoading ||
-            enrolledRead.isLoading ||
-            (level === 'adset' && inventoryRead.isLoading)
-          }
-          isError={snapshotsRead.isError}
-          mode={level}
-          inventoryFreshness={
-            level === 'adset'
-              ? {
-                  fetchedAt: inventoryRead.fetchedAt,
-                  refresh: inventoryRead.refresh,
-                  canRefresh: inventoryRead.canRefresh,
-                  isRefreshing: inventoryRead.isRefreshing,
-                  partial: inventoryRead.partial,
-                  truncated: inventoryRead.truncated,
-                  isError: inventoryRead.isError,
-                }
-              : undefined
-          }
-        />
+          metaAccount={adAccountId}
+          portfolioCurrency={currency ?? null}
+        >
+          <CampaignAdsetPicker
+            entities={pickerEntities}
+            selectedAdsetIds={selectedAdsetIds}
+            onChange={setSelection}
+            brandId={brandId}
+            accountId={adAccountId}
+            currency={currency}
+            disabled={saving}
+            isLoading={
+              snapshotsRead.isLoading ||
+              enrolledRead.isLoading ||
+              (level === 'adset' && inventoryRead.isLoading)
+            }
+            isError={snapshotsRead.isError}
+            mode={level}
+            inventoryFreshness={
+              level === 'adset'
+                ? {
+                    fetchedAt: inventoryRead.fetchedAt,
+                    refresh: inventoryRead.refresh,
+                    canRefresh: inventoryRead.canRefresh,
+                    isRefreshing: inventoryRead.isRefreshing,
+                    partial: inventoryRead.partial,
+                    truncated: inventoryRead.truncated,
+                    isError: inventoryRead.isError,
+                  }
+                : undefined
+            }
+          />
+        </MultiPlatformPicker>
         {toAdd.length > 0 || toRemove.length > 0 ? (
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {toAdd.length > 0 ? `+${toAdd.length} to add` : ''}
             {toAdd.length > 0 && toRemove.length > 0 ? ' · ' : ''}
             {toRemove.length > 0 ? `−${toRemove.length} to remove` : ''}
@@ -1505,7 +1557,7 @@ function ArmAutopilot({
 
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-background/60 p-3">
-      <p className="text-2xs font-medium">
+      <p className="text-xs font-medium">
         {capsSet
           ? 'Both caps are set. Preview the cycle autopilot would run before you arm it.'
           : 'Set both caps above to preview what autopilot would do.'}
@@ -1515,7 +1567,7 @@ function ArmAutopilot({
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 gap-1.5 text-2xs"
+          className="h-7 gap-1.5 text-xs"
           disabled={!canPreview || cyclePreview.isPending}
           onClick={() =>
             cyclePreview.mutate({
@@ -1538,7 +1590,7 @@ function ArmAutopilot({
         <Button
           type="button"
           size="sm"
-          className="h-7 text-2xs"
+          className="h-7 text-xs"
           disabled={outcome?.status !== 'ready'}
           onClick={onArm}
         >
@@ -1546,18 +1598,18 @@ function ArmAutopilot({
         </Button>
       </div>
       {capsSet && snapshots.length === 0 ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Enroll at least one ad set below — there is nothing for autopilot to reallocate yet.
         </p>
       ) : null}
       {outcome?.status === 'unavailable' ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           The optimizer preview service isn&rsquo;t reachable for this account, so autopilot
           can&rsquo;t be previewed right now.
         </p>
       ) : null}
       {outcome?.status === 'error' ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Couldn&rsquo;t run the preview just now. Try again in a moment.
         </p>
       ) : null}
@@ -1604,7 +1656,7 @@ function AutopilotForecastBody({
 
   if (forecast.poolOverCeiling) {
     return (
-      <p className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-2xs text-warning">
+      <p className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning">
         This portfolio&rsquo;s {formatCurrency(dailyTotal, currency)}/day pool is over the{' '}
         {formatCurrency(ceilingMajor, currency)} ceiling, so autopilot would write nothing at all.
         Raise the ceiling or lower the daily budget before arming.
@@ -1616,7 +1668,7 @@ function AutopilotForecastBody({
   const held = forecast.wouldHold.length;
   return (
     <div className="space-y-2">
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         On this cycle autopilot would have written{' '}
         <span className="font-medium text-foreground tabular-nums">{applied}</span>{' '}
         {applied === 1 ? 'budget change' : 'budget changes'} and held{' '}
@@ -1624,7 +1676,7 @@ function AutopilotForecastBody({
         your approval.
       </p>
       <ReallocationFlow items={flowItems} currency={currency} />
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         A preview only — the engine ran read-only and nothing was written to Meta.
       </p>
     </div>
@@ -1675,7 +1727,7 @@ function NumberField({
         <SuggestionChip label={suggestionLabel} onClick={() => accept(String(suggested))} />
       ) : null}
       {fieldState.error ? (
-        <p className="text-2xs text-destructive">{fieldState.error.message}</p>
+        <p className="text-xs text-destructive">{fieldState.error.message}</p>
       ) : null}
     </div>
   );
@@ -1699,7 +1751,7 @@ function Section({
         <div>
           <p className="text-xs font-semibold tracking-tight">{title}</p>
           {description ? (
-            <p className="mt-0.5 text-2xs text-muted-foreground">{description}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {action}
@@ -1717,7 +1769,7 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs text-muted-foreground transition-colors hover:bg-muted"
+      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
     >
       {label}
       <span aria-hidden="true" className="rounded border border-border/70 bg-background px-1">

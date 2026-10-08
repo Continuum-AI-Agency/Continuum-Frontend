@@ -70,7 +70,9 @@ export type ApiRenderFitState = z.infer<typeof apiRenderFitStateSchema>;
  * `rigged` is permanent: a rig fits the asset at render time, so no arithmetic here will ever
  * answer it and the judge is the instrument, forever. `unplaced` and `unsized` are a DATA gap —
  * a template nobody parsed, a layer with no footage size — and re-parsing repairs them.
- * `unpinned` is not a fault at all, just a slot nobody has chosen an asset for yet.
+ * `unpinned` is not a fault at all, just a slot nobody has chosen an asset for yet. `unlaid` is a
+ * TEXT the Live kit could not lay out (no kit for the layer, an expression that moves it) — the
+ * text counterpart of `rigged`, and like it only the finished frame can answer it.
  *
  * Measured on production 2026-09-19: of ten escalated renders, eight were `rigged` (the product
  * image) and two were `unplaced`. Both reported as "could not be measured", so the two
@@ -81,6 +83,7 @@ export const apiRenderFitUnknownReasonSchema = z.enum([
   'unplaced',
   'unsized',
   'unpinned',
+  'unlaid',
 ]);
 export type ApiRenderFitUnknownReason = z.infer<typeof apiRenderFitUnknownReasonSchema>;
 
@@ -95,6 +98,8 @@ export const apiRenderFitVerdictSchema = z
   .object({
     key: z.string(),
     state: apiRenderFitStateSchema,
+    /** What was placed. `text` is laid out exactly (the Live kit), so a text `clipped` is a fail. */
+    subject: z.enum(['media', 'text']).default('media'),
     shapeClass: shapeClassSchema.nullable().default(null),
     box: pixelBoxSchema.nullable().default(null),
     /** Pixels outside the canvas per edge: left, top, right, bottom. */
@@ -244,6 +249,7 @@ export function checkAssetSwap(args: {
 }): ApiRenderFitVerdict {
   const base = {
     key: args.key,
+    subject: 'media' as const,
     unknownReason: null,
     shapeClass: null,
     box: null,
@@ -310,6 +316,7 @@ export function checkAssetSwap(args: {
   return {
     key: args.key,
     state: clips ? 'clipped' : 'ok',
+    subject: 'media',
     unknownReason: null,
     shapeClass: klass,
     box: predicted.box,
@@ -324,14 +331,20 @@ export function checkAssetSwap(args: {
 }
 
 /**
- * Every media slot on a template, and whether the finished frame needs a judge.
+ * Every slot on a template — media placed by arithmetic, text laid out by the Live kit — and
+ * whether the finished frame needs a judge.
  *
- * The escalation rule is the point of this function: a frame whose every slot came back `ok` is
- * one the deterministic gate already answered, and judging it would buy an opinion we have. A
- * frame with an `unknown` is one nothing has answered. A frame with a `clipped` is one we have
- * an answer for and want confirmed against the pixels the worker actually produced — the
- * prediction is `estimated`, and a keyframed leaf or an off-centre anchor is exactly what makes
- * it wrong.
+ * Only what nothing but the pixels can answer goes to the judge: a slot a rig places with no kit
+ * to say where (`rigged`), text the kit could not lay out (`unlaid`), and verdicts too old to say
+ * why they were unknown. A predicted clip, a slot with no asset pinned, and a template gap a
+ * re-parse would clear are all ANSWERED — shown while the row is being filled — and judging them
+ * buys an opinion we already have.
+ *
+ * Measured on production 2026-09-29, 238 renders: the previous rule (every unknown, every clip)
+ * sent 77% of frames to the judge. It confirmed none of 61 predicted media clips, could not read
+ * 55 video frames sent for an unplaced slot, and passed 32 of 33 frames whose only unknown was an
+ * unpinned slot. Its real catches were text running past its panel — geometry, which the Live kit
+ * now answers per keystroke.
  */
 export function planFitCheck(args: {
   comp: { name: string; width: number; height: number } | null;
@@ -342,46 +355,60 @@ export function planFitCheck(args: {
   const of = (reason: ApiRenderFitUnknownReason) =>
     unknown.filter((slot) => slot.unknownReason === reason);
   const rigged = of('rigged');
+  const unlaid = of('unlaid');
   const repairable = unknown.filter(
-    (slot) =>
-      slot.unknownReason !== null && REPAIRABLE_FIT_REASONS.includes(slot.unknownReason),
+    (slot) => slot.unknownReason !== null && REPAIRABLE_FIT_REASONS.includes(slot.unknownReason),
   );
   const unpinned = of('unpinned');
-  // A verdict written before `unknownReason` existed carries null; it is still an unknown and
-  // still escalates, it just cannot be sorted into a bucket. Counting it as repairable would
-  // send someone to re-parse a template that is merely rigged.
+  // A verdict written before `unknownReason` existed carries null; it cannot be sorted into a
+  // bucket, so it is judged rather than guessed at. Counting it as repairable would send someone
+  // to re-parse a template that is merely rigged.
   const unclassified = unknown.filter((slot) => slot.unknownReason === null);
 
-  // Unchanged on purpose: what gets judged is a safety property, and this change is about what
-  // the report SAYS, not about quietly judging fewer frames.
-  const escalate = unknown.length > 0 || clipped.length > 0;
+  const escalate = rigged.length > 0 || unlaid.length > 0 || unclassified.length > 0;
 
   const plural = (n: number) => (n === 1 ? '' : 's');
-  const why = !escalate
-    ? args.slots.length === 0
-      ? 'this template has no media slots to place'
-      : 'every slot lands inside the canvas; the frame does not need a judge'
-    : [
-        clipped.length ? `${clipped.length} slot${plural(clipped.length)} would clip` : null,
-        rigged.length
-          ? `${rigged.length} rig-placed slot${plural(rigged.length)} can only be checked on the ` +
-            'finished frame (expected, not a fault)'
-          : null,
-        repairable.length
-          ? `${repairable.length} slot${plural(repairable.length)} (${repairable
-              .map((slot) => slot.key)
-              .join(', ')}) ${repairable.length === 1 ? 'has' : 'have'} no measured placement — ` +
-            're-parsing the template would clear this'
-          : null,
-        unpinned.length
-          ? `${unpinned.length} slot${plural(unpinned.length)} ${unpinned.length === 1 ? 'has' : 'have'} no asset pinned`
-          : null,
-        unclassified.length
-          ? `${unclassified.length} slot${plural(unclassified.length)} could not be measured`
-          : null,
-      ]
-        .filter(Boolean)
-        .join('; ') + ' — the finished frame goes to the judge';
+  const textClipped = clipped.filter((slot) => slot.subject === 'text');
+  const mediaClipped = clipped.filter((slot) => slot.subject !== 'text');
+  const judged = [
+    rigged.length
+      ? `${rigged.length} rig-placed slot${plural(rigged.length)} can only be checked on the ` +
+        'finished frame (expected, not a fault)'
+      : null,
+    unlaid.length
+      ? `${unlaid.length} text${unlaid.length === 1 ? '' : 's'} could not be laid out in code (${unlaid
+          .map((slot) => slot.key)
+          .join(', ')})`
+      : null,
+    unclassified.length
+      ? `${unclassified.length} slot${plural(unclassified.length)} could not be measured`
+      : null,
+  ];
+  const answered = [
+    textClipped.length
+      ? `${textClipped.length} text${textClipped.length === 1 ? ' does' : 's do'} not fit (${textClipped
+          .map((slot) => slot.key)
+          .join(', ')})`
+      : null,
+    mediaClipped.length
+      ? `${mediaClipped.length} slot${plural(mediaClipped.length)} would clip`
+      : null,
+    repairable.length
+      ? `${repairable.length} slot${plural(repairable.length)} (${repairable
+          .map((slot) => slot.key)
+          .join(', ')}) ${repairable.length === 1 ? 'has' : 'have'} no measured placement — ` +
+        're-parsing the template would clear this'
+      : null,
+    unpinned.length
+      ? `${unpinned.length} slot${plural(unpinned.length)} ${unpinned.length === 1 ? 'has' : 'have'} no asset pinned`
+      : null,
+  ];
+  const said = (lines: Array<string | null>) => lines.filter(Boolean).join('; ');
+  const why = escalate
+    ? `${said([...judged, ...answered])} — the finished frame goes to the judge`
+    : args.slots.length === 0
+      ? 'this template has nothing to place'
+      : `${said(answered) || 'every slot lands where the design puts it'}; the frame does not need a judge`;
 
   return {
     comp: args.comp,

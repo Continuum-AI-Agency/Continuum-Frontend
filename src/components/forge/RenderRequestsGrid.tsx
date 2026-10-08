@@ -10,12 +10,14 @@ import {
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
   apiRenderPreflightResponseSchema,
+  effectiveRenderValues,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
   type MediaAsset,
   readableLayerName,
+  type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
 import {
@@ -31,7 +33,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -46,6 +48,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
+import { previewFormats } from '@/components/forge/FormatPreview';
 import {
   ActionMenuItems,
   type GridActionContext,
@@ -53,8 +56,14 @@ import {
   selectionActions,
   takeFocusAfter,
 } from '@/components/forge/gridActions';
+import { useLiveFit } from '@/components/forge/livePreview';
 import { isStillsOnly } from '@/components/forge/OutputSettingsPanel';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  FORGE_STALE_MS,
+  forgeQueryKeys,
+  templateListQuery,
+  templateLoadQueries,
+} from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import { RenderReviewTray } from '@/components/forge/RenderReviewTray';
 import {
@@ -75,6 +84,7 @@ import {
   draftStorageKey,
   duplicateLabel,
   effectiveEncode,
+  effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   emptyHistory,
@@ -125,6 +135,7 @@ import {
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
+import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import {
   AlertDialog,
@@ -140,10 +151,19 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
+import {
+  fetchTemplateLineage,
+  fetchTemplateRevisionVariants,
+  fetchTemplateVariants,
+  saveTemplateVariables,
+} from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
-import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import {
+  describeRenderDiscoveryFailure,
+  needsTemplateRepair,
+} from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
 // Render requests as a spreadsheet.
 //
@@ -168,6 +188,14 @@ const RAIL_COLLAPSED_SIZE = '2.25rem';
 /** How long an edit settles before autosave writes it; how long after a failed save it retries. */
 const AUTOSAVE_MS = 1500;
 const AUTOSAVE_RETRY_MS = 5000;
+
+/**
+ * Whether saving the same rows again could succeed. A refusal (4xx) answers the same until
+ * something changes, so autosave stops re-sending it every few seconds; an outage, a dropped
+ * connection, an expired session or rate limit may clear by itself.
+ */
+const saveMayRecover = (error: unknown) =>
+  !(error instanceof ApiError) || error.status >= 500 || [401, 408, 429].includes(error.status);
 /** A third of a row per arrow press, so the keyboard reaches before, inside and after a row. */
 const KEYBOARD_DROP_STEP_PX = 12;
 
@@ -324,6 +352,9 @@ const HIDEABLE = (columnId: string) => !['drag', 'select', 'label'].includes(col
  * "Open this in Render": which template, and optionally which saved render set, to land on — and
  * whether to open the AI draft there, where its rows will land.
  */
+/** Open a template's settings on the Templates tab: its source asset, and the detail tab to show. */
+export type ForgeTemplateIntent = { assetId: string; tab?: string };
+
 export type ForgeRenderIntent = {
   templateKey: string;
   /**
@@ -339,6 +370,11 @@ export type ForgeRenderIntent = {
    * which could list heads but never aim a render at one, so every name on it was decoration.
    */
   templateRef?: string;
+  templateRevision?: TemplateRevisionRef;
+  /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
+  rowId?: string;
+  /** Select that row alone, so Render (and its review) is the next step. Never renders by itself. */
+  rerender?: boolean;
 };
 
 type NameRequest = {
@@ -355,6 +391,7 @@ export function RenderRequestsGrid({
   onFired,
   intent,
   onIntentConsumed,
+  onOpenTemplate,
   active = true,
 }: {
   brandId: string;
@@ -374,6 +411,8 @@ export function RenderRequestsGrid({
   intent?: ForgeRenderIntent;
   /** The grid has taken `intent`; the shell drops it so a remount never replays it. */
   onIntentConsumed?: () => void;
+  /** Jump to the template behind this set on the Templates tab (the shell switches tabs). */
+  onOpenTemplate?: (intent: ForgeTemplateIntent) => void;
 }) {
   const queryClient = useQueryClient();
   // A Final is the fleet's `test: false`; the backend refuses it to anyone but an owner or admin.
@@ -387,6 +426,7 @@ export function RenderRequestsGrid({
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
   // Which template, and optionally which saved set, the rows come from. A new object is a new
   // load, so an intent for another set of the same template still reloads.
+  const [templateRevision, setTemplateRevision] = useState<TemplateRevisionRef | null>(null);
   const [selection, setSelection] = useState<ForgeRenderIntent>({ templateKey: '' });
   const { templateKey } = selection;
   /**
@@ -402,29 +442,57 @@ export function RenderRequestsGrid({
     templates.find((template) => template.key === templateKey)?.bindingId ??
     null;
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
+  const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
+  const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
+  // The checkpoint this grid is pinned to, or null to follow whatever is live.
+  const [templateRef, setTemplateRef] = useState<string | null>(null);
+  // The template's history, for the checkpoint picker: which checkpoint renders, and the rest.
+  const sourceAssetId = contract?.template.sourceAssetId ?? null;
+  const lineage = useQuery({
+    queryKey: forgeQueryKeys.lineage(brandId, sourceAssetId ?? ''),
+    queryFn: () => fetchTemplateLineage(brandId, sourceAssetId as string),
+    enabled: sourceAssetId !== null,
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const checkpoints = useMemo(
+    () => (lineage.data ? checkpointGraph(lineage.data) : null),
+    [lineage.data],
+  );
+  // Every row's dry-run asked about the previous checkpoint; a new pin asks again, so a pin that
+  // cannot hold (live moved) shows on the rows now rather than at Render.
+  const pinCheckpoint = (ref: string | null) => {
+    setTemplateRef(ref);
+    setRows((current) =>
+      current.map((row) =>
+        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
+      ),
+    );
+  };
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
   /** What opening a set saved for an earlier template trimmed off; saving it makes that final. */
   const [rebaseDrops, setRebaseDrops] = useState<string[]>([]);
-  const [saveState, setSaveState] = useState<{ phase: 'idle' | 'saving' | 'failed' }>({
-    phase: 'idle',
-  });
+  const [saveState, setSaveState] = useState<
+    | { phase: 'idle' | 'saving' }
+    // `signature` is the rows that failed: a refusal is not re-sent until they change or Save.
+    | { phase: 'failed'; reason: string; retry: boolean; repair: boolean; signature: string }
+  >({ phase: 'idle' });
   /** Someone else's version of the open set, when it and the rows on screen changed one row two ways. */
   const [conflict, setConflict] = useState<ForgeRenderSet | null>(null);
   const [historyFor, setHistoryFor] = useState<ForgeRenderSet | null>(null);
-  /** The AI draft dialog: open for new rows (`parent: null`) or for variations of one row. */
+  /** Open for new rows (`parent: null`) or for variations of one row. */
   const [aiDraft, setAiDraft] = useState<{
     parent: AiDraftParent | null;
     varyKeys?: string[];
-    count?: number;
   } | null>(null);
   /** A menu-driven draft in flight: what the banner says, and what blocks a second click. */
   const [generating, setGenerating] = useState<{ count: number; of: string } | null>(null);
   /** A template whose Render tab was opened to draft with AI, until its contract has loaded. */
   const [draftFor, setDraftFor] = useState<string | null>(null);
   const [rows, setRows] = useState<RequestRow[]>([]);
+  const [emptyVariant, setEmptyVariant] = useState('');
   const [savedSignature, setSavedSignature] = useState('');
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [expanded, setExpanded] = useState<ExpandedState>(true);
@@ -451,6 +519,7 @@ export function RenderRequestsGrid({
   /** Where a menu's picked action wants focus once the menu has closed. */
   const menuFocus = useRef<(() => HTMLElement | null) | null>(null);
   const gridBox = useRef<HTMLDivElement>(null);
+  const draftAnchor = useRef<HTMLButtonElement>(null);
   /** A row just added, whose name field takes focus once it is on screen. */
   const focusRowId = useRef<string | null>(null);
 
@@ -525,12 +594,7 @@ export function RenderRequestsGrid({
     let cancelled = false;
     setBusy('loading');
     queryClient
-      .fetchQuery({
-        // No binding: one merged list of everything this brand may render, from every binding.
-        queryKey: forgeQueryKeys.templateList(brandId, null),
-        queryFn: () => apiRendersApi.listTemplates(brandId, null),
-        staleTime: FORGE_STALE_MS.lists,
-      })
+      .fetchQuery(templateListQuery(brandId))
       .then((response) => {
         if (cancelled) return;
         setTemplates(response.items);
@@ -604,6 +668,7 @@ export function RenderRequestsGrid({
     (next: RequestRow[], saved: RequestRow[] | null, forContract: ApiRenderTemplateContract) => {
       history.current = emptyHistory();
       setRows(next);
+      setEmptyVariant('');
       // A browser draft was never saved anywhere, so it starts out as unsaved edits.
       setSavedSignature(saved ? signatureOf(saved, forContract) : '');
       setRowSelection({});
@@ -625,12 +690,19 @@ export function RenderRequestsGrid({
       activeSetRef.current = set;
       savedBase.current = set.rows;
       setActiveSet(set);
+      setTemplateRevision(
+        set.templateRevision
+          ? {
+              templateId: set.templateRevision.templateId,
+              variantId: set.templateRevision.variantId,
+              revisionId: set.templateRevision.revisionId,
+            }
+          : null,
+      );
       setConflict(null);
       const loaded = fromRenderSetRows(set.rows);
-      const { rows: rebased, dropped } =
-        set.contractHash === forContract.template.contractHash
-          ? { rows: loaded, dropped: [] }
-          : rebaseRows(loaded, forContract);
+      // Published arrangement names can change without changing the reflected contract hash.
+      const { rows: rebased, dropped } = rebaseRows(loaded, forContract);
       setRebaseDrops(dropped);
       showRows(rebased, rebased, forContract);
     },
@@ -643,34 +715,23 @@ export function RenderRequestsGrid({
   useEffect(() => {
     if (!templateKey) {
       setContract(null);
+      setLayerSwitches([]);
+      setLinkedFields([]);
       setRows([]);
       return;
     }
     let cancelled = false;
+    const reads = templateLoadQueries(brandId, contractBindingId, templateKey);
     Promise.all([
-      queryClient.fetchQuery({
-        queryKey: forgeQueryKeys.contract(brandId, contractBindingId, templateKey),
-        queryFn: () => apiRendersApi.getContract(brandId, templateKey, contractBindingId),
-        staleTime: FORGE_STALE_MS.contract,
-      }),
-      queryClient
-        .fetchQuery({
-          queryKey: forgeQueryKeys.inputSets(brandId, templateKey),
-          queryFn: () => apiRendersApi.listInputSets(brandId, templateKey),
-          staleTime: FORGE_STALE_MS.lists,
-        })
-        .catch(() => ({ items: [] })),
-      queryClient
-        .fetchQuery({
-          queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
-          queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
-          staleTime: FORGE_STALE_MS.lists,
-        })
-        .catch(() => ({ items: [] })),
+      queryClient.fetchQuery(reads.contract),
+      queryClient.fetchQuery(reads.inputSets).catch(() => ({ items: [] })),
+      queryClient.fetchQuery(reads.renderSets).catch(() => ({ items: [] })),
     ])
       .then(([next, sets, savedSets]) => {
         if (cancelled) return;
         setContract(next);
+        setLayerSwitches(next.layerSwitchesNotAsked);
+        setLinkedFields(next.linkedFields ?? []);
         setInputSets(sets.items);
         // A set belongs to the environment it was saved in; one from another would refuse to render.
         const binding = bindingRef.current;
@@ -709,13 +770,17 @@ export function RenderRequestsGrid({
       record(coalesce ?? null);
       setRows((current) => {
         const affected = descendantsOf(current, [id]);
-        return current.map((row) =>
-          row.id === id
-            ? { ...patch(row), check: { state: 'idle' } }
-            : affected.has(row.id)
-              ? { ...row, check: { state: 'idle' } }
-              : row,
-        );
+        return current.map((row) => {
+          if (row.id !== id)
+            return affected.has(row.id) ? { ...row, check: { state: 'idle' } } : row;
+          const next = patch(row);
+          const evidence = Object.fromEntries(
+            Object.entries(next.evidence ?? {}).filter(
+              ([key]) => JSON.stringify(row.values[key]) === JSON.stringify(next.values[key]),
+            ),
+          );
+          return { ...next, evidence, check: { state: 'idle' } };
+        });
       });
     },
     [],
@@ -822,7 +887,14 @@ export function RenderRequestsGrid({
     () =>
       new Map(
         rows.map((row) => {
-          const errors = validateRow(variables ?? [], effectiveValues(rows, row.id));
+          // What the render will fill: a saved default satisfies a required field, and a headline
+          // split across layers needs exactly its lines — the render refuses otherwise.
+          const rendered = effectiveRenderValues(
+            [...(variables ?? []), ...linkedFields],
+            effectiveValues(rows, row.id),
+          );
+          const errors = validateRow(variables ?? [], rendered.values);
+          for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
           if (row.check.state === 'ready' || row.check.state === 'error')
             for (const finding of row.check.guardrails ?? []) {
               if (finding.severity === 'block')
@@ -831,7 +903,7 @@ export function RenderRequestsGrid({
           return [row.id, errors] as const;
         }),
       ),
-    [rows, variables],
+    [rows, variables, linkedFields],
   );
   const readiness = useMemo(() => {
     const findings = new Map<string, { message: string; rows: string[] }>();
@@ -885,9 +957,12 @@ export function RenderRequestsGrid({
     const pending = timers.current;
     for (const row of rows) {
       const snapshot = preflightSnapshot(rows, row.id);
+      // Armed for these values AND this checkpoint: a pin made while a dry-run waits must re-arm
+      // it, or it fires with the checkpoint it was armed under.
+      const armedFor = `${snapshot}|${templateRef ?? ''}`;
       const scheduled = pending.get(row.id);
       // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
-      if (scheduled?.snapshot === snapshot) continue;
+      if (scheduled?.snapshot === armedFor) continue;
       if (scheduled) {
         clearTimeout(scheduled.timer);
         pending.delete(row.id);
@@ -896,6 +971,7 @@ export function RenderRequestsGrid({
       if (Object.keys(clientErrors.get(row.id) ?? {}).length > 0) continue;
       const resolved = effectiveValues(rows, row.id);
       const encode = effectiveEncode(rows, row.id);
+      const outputIds = effectiveOutputIds(rows, row.id);
       // Both updates return `current` untouched when the row moved on: a no-op must not be a new
       // array, or every stale response re-renders the grid under the person typing in it.
       const settle = (next: RequestRow['check'], from: RequestRow['check']['state']) =>
@@ -920,7 +996,16 @@ export function RenderRequestsGrid({
             templateKey: key,
             contractHash,
             variables: resolved,
+            ...(outputIds.length ? { outputIds } : {}),
             ...(templateRef ? { templateRef } : {}),
+            ...(templateRevision ? { templateRevision } : {}),
+            ...(activeSet && signatureOf(rows, contract) === savedSignature
+              ? {
+                  renderSetId: activeSet.id,
+                  renderSetRowId: row.id,
+                  expectedRenderSetRevision: activeSet.revision,
+                }
+              : {}),
             ...(encode ? { encode } : {}),
           });
           check = {
@@ -946,9 +1031,19 @@ export function RenderRequestsGrid({
         }
         settle(check, 'checking');
       }, PREFLIGHT_DEBOUNCE_MS);
-      pending.set(row.id, { timer, snapshot });
+      pending.set(row.id, { timer, snapshot: armedFor });
     }
-  }, [rows, contract, clientErrors, brandId, bindingId]);
+  }, [
+    rows,
+    contract,
+    clientErrors,
+    brandId,
+    bindingId,
+    templateRef,
+    templateRevision,
+    activeSet,
+    savedSignature,
+  ]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -959,6 +1054,21 @@ export function RenderRequestsGrid({
   }, []);
 
   // --- row operations ---------------------------------------------------------------------
+  // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
+  const rowVariants = new Set(
+    rows.map((row) => {
+      const chosen = effectiveOutputIds(rows, row.id);
+      const ids = chosen.length ? chosen : allOutputIdsOf(contract);
+      return ids.length === allOutputIdsOf(contract).length &&
+        ids.every((id) => allOutputIdsOf(contract).includes(id))
+        ? ''
+        : ids.length === 1
+          ? ids[0]!
+          : null;
+    }),
+  );
+  const variant =
+    rowVariants.size > 1 ? null : rowVariants.size ? [...rowVariants][0] : emptyVariant;
   const appendRows = (added: RequestRow[]): boolean => {
     const current = latestRows.current;
     if (current.length + added.length > MAX_BATCH_ROWS) {
@@ -968,7 +1078,10 @@ export function RenderRequestsGrid({
       return false;
     }
     record();
-    latestRows.current = [...current, ...added];
+    latestRows.current = [
+      ...current,
+      ...added.map((row) => (variant && !row.parentId ? { ...row, outputIds: [variant] } : row)),
+    ];
     setRows(latestRows.current);
     return true;
   };
@@ -1076,6 +1189,147 @@ export function RenderRequestsGrid({
     focusRowId.current = added.id;
   };
 
+  const { data: sourceVariants } = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  // What each template was authored in, for the picker: the same one registry read the gallery makes.
+  const { data: brandRegistry } = useQuery({
+    queryKey: forgeQueryKeys.revisionVariants(brandId, 'all'),
+    queryFn: () => fetchTemplateRevisionVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const templateSourceKinds = useMemo(
+    () =>
+      brandRegistry
+        ? new Map(
+            brandRegistry.flatMap((variant) =>
+              variant.revisions.map(
+                (revision) => [revision.sourceAssetId, variant.sourceKind] as const,
+              ),
+            ),
+          )
+        : null,
+    [brandRegistry],
+  );
+  const { data: revisionVariants } = useQuery({
+    queryKey: [
+      ...forgeQueryKeys.revisionVariants(brandId, contract?.template.sourceAssetId ?? ''),
+      'history',
+    ],
+    queryFn: () => fetchTemplateRevisionVariants(brandId, contract!.template.sourceAssetId!, true),
+    enabled: !!contract?.template.sourceAssetId,
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const [pickedRevision, setPickedRevision] = useState('');
+  const [revisionChangeBusy, setRevisionChangeBusy] = useState(false);
+  const publishedRevisions =
+    revisionVariants
+      ?.filter((variant) => !variant.archivedAt)
+      .flatMap((variant) =>
+        variant.revisions
+          .filter((revision) => revision.publications.length > 0)
+          .flatMap((revision) =>
+            revision.publications.map((target) => ({
+              id: `${revision.id}:${target.bindingId}:${target.templateKey}`,
+              label: `${variant.name} · Revision ${revision.number}${revision.publications.length > 1 ? ` · ${target.templateKey}` : ''}`,
+              ref: {
+                templateId: variant.templateId,
+                variantId: variant.variantId,
+                revisionId: revision.id,
+              },
+              target,
+            })),
+          ),
+      ) ?? [];
+  const pinnedRevisionLabel = revisionVariants
+    ?.flatMap((variant) => variant.revisions.map((revision) => ({ variant, revision })))
+    .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
+  const changeRevision = async () => {
+    const picked = publishedRevisions.find((item) => item.id === pickedRevision);
+    if (!picked) return;
+    setRevisionChangeBusy(true);
+    try {
+      if (activeSet) {
+        const saved = await apiRendersApi.changeRenderSetTemplateRevision(activeSet.id, {
+          brandId,
+          expectedRevision: activeSet.revision,
+          templateRevision: picked.ref,
+          templateKey: picked.target.templateKey,
+          bindingId: picked.target.bindingId,
+        });
+        setTemplateRevision(
+          saved.templateRevision
+            ? {
+                templateId: saved.templateRevision.templateId,
+                variantId: saved.templateRevision.variantId,
+                revisionId: saved.templateRevision.revisionId,
+              }
+            : null,
+        );
+        const next = await apiRendersApi.getContract(brandId, saved.templateKey, saved.bindingId);
+        setContract(next);
+        setLayerSwitches(next.layerSwitchesNotAsked);
+        setLinkedFields(next.linkedFields ?? []);
+        adoptSet(saved, latestRows.current);
+        showRows(latestRows.current, latestRows.current, next);
+        queryClient.setQueryData<{ items: ForgeRenderSet[]; nextCursor: null }>(
+          forgeQueryKeys.renderSetList(brandId, saved.templateKey),
+          (current) => ({
+            items: [saved, ...(current?.items ?? []).filter((item) => item.id !== saved.id)],
+            nextCursor: null,
+          }),
+        );
+        setSelection({
+          templateKey: saved.templateKey,
+          bindingId: saved.bindingId,
+          renderSetId: saved.id,
+        });
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
+        toast.success('Set now uses the selected template revision.');
+      } else {
+        confirmDiscard(() => {
+          setTemplateRevision(picked.ref);
+          setTemplateRef(null);
+          setSelection({
+            templateKey: picked.target.templateKey,
+            bindingId: picked.target.bindingId,
+          });
+        });
+      }
+      setPickedRevision('');
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : 'Rows need attention before changing revision.',
+      );
+    } finally {
+      setRevisionChangeBusy(false);
+    }
+  };
+  const currentSource = sourceVariants?.find(
+    (item) => item.assetId === contract?.template.sourceAssetId,
+  );
+  const sourceRoot = currentSource?.rootAssetId;
+  const variantSources = new Set(
+    sourceVariants?.filter((item) => item.rootAssetId === sourceRoot).map((item) => item.assetId),
+  );
+  const publishedVariants = sourceRoot
+    ? templates.filter(
+        (item) =>
+          item.sourceAssetId &&
+          variantSources.has(item.sourceAssetId) &&
+          (!bindingId || item.bindingId === bindingId),
+      )
+    : [];
+
+  // One click from Render: a layer's Show switch becomes a column for every set of this
+  // template — the same edit as "Ask per row" in the template's Variables. Rows that never set
+  // it keep rendering what the file has.
+  const askSwitch = async (_variable: ApiRenderVariable) => {
+    toast.info('Open Edit layers to expose this field, save a template revision, then publish it.');
+  };
+
   const saveAsInputs = (id: string) => {
     const row = latestRows.current.find((item) => item.id === id);
     if (!contract || !row) return;
@@ -1113,7 +1367,11 @@ export function RenderRequestsGrid({
     if (!contract) return;
     const outputs = allOutputIdsOf(contract);
     const drafted = responses.flatMap((response) => rowsFromSuggestion(response, outputs));
-    const notes = responses.flatMap((response) => [...response.unfilled, ...response.dropped]);
+    const notes = responses.flatMap((response) => [
+      ...response.unfilled,
+      ...response.dropped,
+      ...(response.sourceWarnings ?? []),
+    ]);
     // Said, never assumed: the server reports a short answer in `dropped`, and a draft that
     // produced nothing is a failure the person has to see rather than an empty success toast.
     const described = notes.length
@@ -1144,7 +1402,11 @@ export function RenderRequestsGrid({
     ids,
     count,
     varyKeys,
-  }: { ids: string[]; count: number; varyKeys: string[] }) => {
+  }: {
+    ids: string[];
+    count: number;
+    varyKeys: string[];
+  }) => {
     if (!contract || generating || varyKeys.length === 0) return;
     const current = latestRows.current;
     const targets = ids.flatMap((id) => {
@@ -1176,6 +1438,9 @@ export function RenderRequestsGrid({
               ? `Vary only the ${what}. ${count} variations of this row, each clearly different.`
               : `${count} variations of this row, each clearly different from it and from each other.`,
             count,
+            autoCount: false,
+            documentIds: [],
+            mediaAssetIds: [],
             forksPerRow: 0,
             parent: {
               id: row.id,
@@ -1257,8 +1522,8 @@ export function RenderRequestsGrid({
     activeSet !== null &&
     activeSet.contractHash !== contract.template.contractHash;
   // Saving would make what the rebase dropped final, so that is the person's call.
-  const updateRequired = olderTemplate && rebaseDrops.length > 0;
-  const needsSave = dirty || olderTemplate;
+  const updateRequired = rebaseDrops.length > 0;
+  const needsSave = dirty || olderTemplate || updateRequired;
   const proposed = proposedIds(rows);
   // Autosave waits while a review signs the set's revision, while a conflict is unresolved, and
   // while the set waits on "Update set".
@@ -1284,8 +1549,12 @@ export function RenderRequestsGrid({
     setPendingDiscard(() => action);
   };
 
-  // The head this grid is pinned to, or null for the template's live pointer.
-  const [templateRef, setTemplateRef] = useState<string | null>(null);
+  // A row an intent named, held until its set's rows are on screen.
+  const [focusRow, setFocusRow] = useState<{
+    setId: string | undefined;
+    id: string;
+    select: boolean;
+  } | null>(null);
 
   // An intent is an event, taken once and handed back. Like every other way of replacing the rows
   // it saves or asks first; one for what is already open changes nothing.
@@ -1297,15 +1566,34 @@ export function RenderRequestsGrid({
     // than leaving it set — means switching template clears it, so a ref can never be carried
     // onto a template whose tree has never heard of it.
     setTemplateRef(intent.templateRef ?? null);
+    setTemplateRevision(intent.templateRevision ?? null);
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
     if (intent.draftWithAi) setDraftFor(intent.templateKey);
+    setFocusRow(
+      intent.rowId
+        ? { setId: intent.renderSetId, id: intent.rowId, select: intent.rerender === true }
+        : null,
+    );
     if (!alreadyOpen)
       confirmDiscard(() =>
-        setSelection({ templateKey: intent.templateKey, renderSetId: intent.renderSetId }),
+        setSelection({
+          templateKey: intent.templateKey,
+          bindingId: intent.bindingId,
+          renderSetId: intent.renderSetId,
+        }),
       );
   }, [intent]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: showRow reads the grid as it is now.
+  useEffect(() => {
+    if (!focusRow || (focusRow.setId && activeSet?.id !== focusRow.setId)) return;
+    if (!rows.some((row) => row.id === focusRow.id)) return;
+    setFocusRow(null);
+    if (focusRow.select) setRowSelection({ [focusRow.id]: true });
+    showRow(focusRow.id);
+  }, [rows, activeSet, focusRow]);
 
   // The draft opens once the template it was asked for is on screen, not over the previous one.
   useEffect(() => {
@@ -1322,6 +1610,15 @@ export function RenderRequestsGrid({
     activeSetRef.current = saved;
     savedBase.current = saved.rows;
     setActiveSet(saved);
+    setTemplateRevision(
+      saved.templateRevision
+        ? {
+            templateId: saved.templateRevision.templateId,
+            variantId: saved.templateRevision.variantId,
+            revisionId: saved.templateRevision.revisionId,
+          }
+        : null,
+    );
     if (saved.contractHash === contract?.template.contractHash) setRebaseDrops([]);
     setRenderSets((current) => [saved, ...current.filter((set) => set.id !== saved.id)]);
     setSavedSignature(signatureOf(savedRows, contract));
@@ -1332,7 +1629,18 @@ export function RenderRequestsGrid({
   const createSet = async (
     name: string,
     rowsToSave: RequestRow[],
-    { announce = true, description }: { announce?: boolean; description?: string | null } = {},
+    {
+      announce = true,
+      description,
+      revisionRef,
+      rethrow = false,
+    }: {
+      announce?: boolean;
+      description?: string | null;
+      revisionRef?: TemplateRevisionRef;
+      /** Hand a failure to the caller instead of toasting it: autosave reports in the toolbar. */
+      rethrow?: boolean;
+    } = {},
   ): Promise<ForgeRenderSet | null> => {
     if (!contract || !bindingId) return null;
     try {
@@ -1343,6 +1651,9 @@ export function RenderRequestsGrid({
         ...(description ? { description } : {}),
         templateKey: contract.template.key,
         contractHash: contract.template.contractHash,
+        ...((revisionRef ?? templateRevision)
+          ? { templateRevision: revisionRef ?? templateRevision! }
+          : {}),
         rows: toRenderSetRows(rowsToSave, allOutputIdsOf(contract)),
       });
       adoptSet(created, rowsToSave);
@@ -1350,7 +1661,8 @@ export function RenderRequestsGrid({
       if (announce) toast.success(`Saved “${created.name}”`);
       return created;
     } catch (error) {
-      toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+      if (rethrow) throw error;
+      toast.error(describeRenderDiscoveryFailure(error));
       return null;
     }
   };
@@ -1406,8 +1718,8 @@ export function RenderRequestsGrid({
       setSaveState({ phase: 'saving' });
       try {
         if (!set) {
-          const created = await createSet('Untitled set', submitted, { announce });
-          setSaveState({ phase: created ? 'idle' : 'failed' });
+          const created = await createSet('Untitled set', submitted, { announce, rethrow: true });
+          setSaveState({ phase: 'idle' });
           return created;
         }
         const saved = await apiRendersApi.updateRenderSet(set.id, {
@@ -1431,8 +1743,15 @@ export function RenderRequestsGrid({
           setSaveState({ phase: 'idle' });
           return merged;
         }
-        setSaveState({ phase: 'failed' });
-        if (announce) toast.error(describeRenderDiscoveryFailure(message));
+        const reason = describeRenderDiscoveryFailure(error);
+        setSaveState({
+          phase: 'failed',
+          reason,
+          retry: saveMayRecover(error),
+          repair: needsTemplateRepair(error),
+          signature: signatureOf(submitted, contract),
+        });
+        if (announce) toast.error(reason);
         return null;
       }
     })();
@@ -1445,10 +1764,17 @@ export function RenderRequestsGrid({
     }
   };
 
-  // Autosave: a second and a half after the last edit, five after a save that failed.
+  // Autosave: a second and a half after the last edit, five after a save that may recover. A
+  // refusal waits for the rows to change or for Save, so it is reported once, not every 5 s.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the signature stands for the rows.
   useEffect(() => {
     if (!needsSave || autosaveBlocked || saveState.phase === 'saving') return;
+    if (
+      saveState.phase === 'failed' &&
+      !saveState.retry &&
+      saveState.signature === signatureOf(rows, contract)
+    )
+      return;
     const timer = setTimeout(
       () => void saveRenderSet({ announce: false }),
       saveState.phase === 'failed' ? AUTOSAVE_RETRY_MS : AUTOSAVE_MS,
@@ -1566,11 +1892,32 @@ export function RenderRequestsGrid({
   /** A kept version as a new set. The set it came from is never written back over. */
   const restoreRevision = async (revision: ForgeRenderSetRevision) => {
     if (!contract) return;
-    const restored = rebaseRows(fromRenderSetRows(revision.rows), contract).rows;
+    if (
+      revision.templateRevision &&
+      (revision.templateRevision.templateKey !== contract.template.key ||
+        revision.templateRevision.bindingId !== bindingId)
+    ) {
+      toast.info('Load the historical template revision before restoring this set.');
+      return;
+    }
+    const restored = revision.templateRevision
+      ? fromRenderSetRows(revision.rows)
+      : rebaseRows(fromRenderSetRows(revision.rows), contract).rows;
     const created = await createSet(
       `${revision.name} (restored ${formatRelativeTime(revision.savedAt)})`,
       restored,
-      { announce: false },
+      {
+        announce: false,
+        ...(revision.templateRevision
+          ? {
+              revisionRef: {
+                templateId: revision.templateRevision.templateId,
+                variantId: revision.templateRevision.variantId,
+                revisionId: revision.templateRevision.revisionId,
+              },
+            }
+          : {}),
+      },
     );
     if (!created) return;
     showRows(restored, restored, contract);
@@ -1605,6 +1952,37 @@ export function RenderRequestsGrid({
   // --- the table --------------------------------------------------------------------------
   const columns = useMemo(() => buildColumns(contract), [contract]);
   const nestedRows = useMemo(() => nestRows(rows), [rows]);
+  // Does each value still fit the design — checked on the keystroke, from the Live kit.
+  const fitFormats = useMemo(
+    () =>
+      contract
+        ? previewFormats({ outputs: contract.outputs, ratios: contract.template.ratios })
+        : [],
+    [contract],
+  );
+  const fitOf = useLiveFit({
+    brandId,
+    environment: contract?.template.environment ?? null,
+    templateKey: templateKey || null,
+    formats: fitFormats,
+    enabled: Boolean(contract),
+  });
+  const liveFit = useMemo(
+    () =>
+      new Map(
+        fitOf
+          ? rows.map((row) => {
+              const media = effectiveMedia(rows, row.id);
+              const sizeOf = (key: string) => {
+                const dims = media[key];
+                return dims?.w && dims.h ? { w: dims.w, h: dims.h } : null;
+              };
+              return [row.id, fitOf(effectiveValues(rows, row.id), sizeOf)] as const;
+            })
+          : [],
+      ),
+    [fitOf, rows],
+  );
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
@@ -1615,10 +1993,12 @@ export function RenderRequestsGrid({
         contract,
         rows,
         clientErrors,
+        linkedFields,
         actions,
         selectedIds,
         hiddenColumns,
         generating: generating !== null,
+        liveFit,
       }
     : undefined;
   const table = useReactTable({
@@ -1765,7 +2145,9 @@ export function RenderRequestsGrid({
     setBusy('firing');
     try {
       const submittedSet =
-        activeSet && !needsSave ? activeSet : await saveRenderSet({ announce: false });
+        activeSet && signatureOf(rows, contract) === savedSignature
+          ? activeSet
+          : await saveRenderSet({ announce: false });
       if (!submittedSet) return;
       const current = latestRows.current;
       const signature = reviewSignature(
@@ -1920,10 +2302,49 @@ export function RenderRequestsGrid({
 
   // --- render -----------------------------------------------------------------------------
   const ready = rows.filter((row) => row.check.state === 'ready').length;
+  // The pinned revision's own file when the set pins one, else the template's source.
+  const settingsAssetId = pinnedRevisionLabel?.revision.sourceAssetId ?? sourceAssetId;
   const previewId = previewRowId ?? (selected.length === 1 ? selected[0]!.id : null);
   return (
     // Bounded by the tab: the toolbar stays put, the rows and the review tray share the rest.
     <div className="flex h-full min-h-0 flex-col gap-2">
+      {publishedRevisions.length || activeSet?.templateRevision ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {activeSet?.templateRevision ? (
+            <span>
+              {pinnedRevisionLabel
+                ? `${pinnedRevisionLabel.variant.name} · Revision ${pinnedRevisionLabel.revision.number}`
+                : `Revision ${activeSet.templateRevision.revisionId.slice(0, 8)}`}{' '}
+              · pinned to this set
+            </span>
+          ) : null}
+          <label className="flex items-center gap-2">
+            Template variant / revision
+            <select
+              aria-label="Published template revision"
+              className="h-8 max-w-64 rounded-md border bg-background px-2"
+              value={pickedRevision}
+              disabled={revisionChangeBusy || needsSave}
+              onChange={(event) => setPickedRevision(event.target.value)}
+            >
+              <option value="">Choose a published revision</option>
+              {publishedRevisions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={!pickedRevision || revisionChangeBusy || needsSave}
+            onClick={() => void changeRevision()}
+          >
+            {activeSet ? 'Change set template revision' : 'Load template revision'}
+          </Button>
+        </div>
+      ) : null}
       <RenderToolbar
         templates={templates}
         templateKey={templateKey}
@@ -1931,21 +2352,56 @@ export function RenderRequestsGrid({
         // The picker hands back the REF, not the key: two templates can share a key and only
         // the pair says which one was clicked.
         bindingId={bindingId}
+        onOpenTemplateSettings={
+          onOpenTemplate && settingsAssetId
+            ? () => onOpenTemplate({ assetId: settingsAssetId, tab: 'layers' })
+            : undefined
+        }
+        templateSourceKinds={templateSourceKinds}
+        onTemplateHighlight={(template) => {
+          const reads = templateLoadQueries(brandId, template.bindingId, template.key);
+          void queryClient.prefetchQuery(reads.contract);
+          void queryClient.prefetchQuery(reads.inputSets);
+          void queryClient.prefetchQuery(reads.renderSets);
+        }}
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
-          confirmDiscard(() =>
-            setSelection({ templateKey: picked.key, bindingId: picked.bindingId }),
-          );
+          // A checkpoint belongs to the template it was picked from; never carry it to another.
+          confirmDiscard(() => {
+            setTemplateRef(null);
+            setTemplateRevision(null);
+            setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
+          });
         }}
         ready={contract !== null}
+        sourceVariants={revisionVariants ? [] : sourceRoot ? publishedVariants : undefined}
+        variants={contract?.outputs}
+        variant={variant}
+        onVariantChange={(id) => {
+          setEmptyVariant(id);
+          editRows((current) =>
+            current.map((row) => ({
+              ...row,
+              outputIds: id ? [id] : allOutputIdsOf(contract),
+              check: { state: 'idle' },
+            })),
+          );
+        }}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
         onAddRow={addRow}
         onDraftWithAi={() => setAiDraft({ parent: null })}
+        draftAnchorRef={draftAnchor}
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
         }
+        // Only this brand's own upload can be changed from here; a granted template cannot.
+        layerSwitches={contract?.template.sourceAssetId ? layerSwitches : []}
+        onAskSwitch={(variable) => void askSwitch(variable)}
+        checkpoints={checkpoints}
+        templateRef={templateRef}
+        onTemplateRefChange={pinCheckpoint}
         onUpload={() => setImportOpen(true)}
         onDownloadTemplate={() =>
           contract &&
@@ -1963,7 +2419,17 @@ export function RenderRequestsGrid({
           saveState.phase === 'saving'
             ? { phase: 'saving' }
             : saveState.phase === 'failed'
-              ? { phase: 'failed' }
+              ? {
+                  phase: 'failed',
+                  reason: saveState.reason,
+                  retrying: saveState.retry,
+                  // The fix is on the template (publish, replace a file). The grid stays mounted
+                  // behind the Templates tab, so the unsaved rows wait here untouched.
+                  onRepair:
+                    saveState.repair && onOpenTemplate && settingsAssetId
+                      ? () => onOpenTemplate({ assetId: settingsAssetId, tab: 'variants' })
+                      : undefined,
+                }
               : activeSet
                 ? { phase: 'saved', at: activeSet.updatedAt }
                 : null
@@ -2178,7 +2644,7 @@ export function RenderRequestsGrid({
                 <ResizableHandle withHandle />
                 <ResizablePanel
                   id="render-grid"
-                  defaultSize="54%"
+                  defaultSize="60%"
                   minSize="40%"
                   className="min-w-0"
                 >
@@ -2230,7 +2696,7 @@ export function RenderRequestsGrid({
                 <ResizableHandle withHandle />
                 <ResizablePanel
                   id="render-preview"
-                  defaultSize="30%"
+                  defaultSize="24%"
                   minSize="20%"
                   className="min-w-0"
                 >
@@ -2239,15 +2705,17 @@ export function RenderRequestsGrid({
                       <RenderPreviewPanel
                         brandId={brandId}
                         contract={contract}
+                        templateRef={templateRef ?? undefined}
                         rows={rows}
                         rowId={previewId}
                         renderSetId={activeSet?.id ?? null}
+                        onRowChange={setPreviewRowId}
                       />
                     </div>
                     {/* The previewed row's fields at the pane's full width: room for long copy. */}
                     <section
                       aria-label="Fields"
-                      className="flex max-h-[55%] shrink-0 flex-col border-t border-border"
+                      className="flex max-h-[40%] shrink-0 flex-col border-t border-border"
                     >
                       <button
                         type="button"
@@ -2402,7 +2870,8 @@ export function RenderRequestsGrid({
           contract={contract}
           parent={aiDraft?.parent ?? null}
           initialVaryKeys={aiDraft?.varyKeys ?? null}
-          initialCount={aiDraft?.count ?? null}
+          maxRows={MAX_BATCH_ROWS - rows.length}
+          anchor={draftAnchor.current}
           onDrafted={acceptDraft}
         />
       ) : null}

@@ -1,6 +1,10 @@
 'use client';
 
-import type { JainaToolApprovalRequiredPayload } from '@continuum/contracts';
+import type {
+  JainaOperatorAction,
+  JainaPublicationMode,
+  JainaToolApprovalRequiredPayload,
+} from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -11,6 +15,7 @@ import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import {
   type CreativeArtifact,
   frontendCheckpointReportSchema,
@@ -110,6 +115,7 @@ type JainaMessageItemProps = {
    * `message.parts` into this shape, so a streaming turn and a reloaded one are the same object.
    */
   message: JainaChatMessage;
+  onCreativeReady?: (creative: CreativeArtifact) => void;
   onSuggestionClick?: (query: string) => void;
   onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
   /**
@@ -123,9 +129,19 @@ type JainaMessageItemProps = {
   onApprovalDecision?: (
     approval: JainaToolApprovalRequiredPayload,
     decision: ToolApprovalDecision,
+    publicationMode?: JainaPublicationMode,
   ) => void;
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
   optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
+  /**
+   * Opens a gate from a button with no model turn — the scaffold card's "Deploy paused". Must be
+   * referentially stable, like every handler here: this item is memoized.
+   */
+  onOperatorAction?: (
+    action: JainaOperatorAction,
+    displayText: string,
+    onSettled?: (outcome: OperatorActionOutcome) => void,
+  ) => void;
   /**
    * Opens the optimizer's account read — what a cited optimizer figure points at.
    *
@@ -139,12 +155,14 @@ type JainaMessageItemProps = {
 function JainaMessageItemImpl({
   message,
   onSuggestionClick,
+  onCreativeReady,
   onPlanFeedback,
   onRegenerate,
   regeneratePrompt,
   onFocusInput,
   onApprovalDecision,
   optimisticApprovalDecisions,
+  onOperatorAction,
   onOpenAccountRead,
 }: JainaMessageItemProps) {
   const isStreaming = message.status === 'streaming';
@@ -343,7 +361,9 @@ function JainaMessageItemImpl({
                     : null
                 }
                 isStreaming={isStreaming}
+                onRequestCreative={onSuggestionClick}
                 {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
+                {...(onOperatorAction ? { onDeploy: onOperatorAction } : {})}
               />
             ) : null}
 
@@ -413,14 +433,26 @@ function JainaMessageItemImpl({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               >
-                <CreativesSection creatives={allCreatives} />
+                <CreativesSection
+                  creatives={allCreatives}
+                  onRequestCreative={onSuggestionClick}
+                  disabled={isStreaming}
+                />
               </motion.div>
             ) : (
-              <CreativesSection creatives={allCreatives} />
+              <CreativesSection
+                creatives={allCreatives}
+                onRequestCreative={onSuggestionClick}
+                disabled={isStreaming}
+              />
             )}
 
             {paidCreativeRenders.map((render) => (
-              <PaidCreativeRenderStatus key={render.render_job_id} render={render} />
+              <PaidCreativeRenderStatus
+                key={render.render_job_id}
+                render={render}
+                onCreativeReady={onCreativeReady}
+              />
             ))}
 
             {spawnWorkerResults.length > 0 ? (

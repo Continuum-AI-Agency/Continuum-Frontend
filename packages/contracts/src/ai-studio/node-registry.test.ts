@@ -67,6 +67,7 @@ describe('derived sets', () => {
   it('replaces MEDIA_NODE_TYPES exactly', () => {
     expect(sorted(STUDIO_MEDIA_NODE_TYPES)).toEqual([
       'action',
+      'apiRender',
       'extendVideo',
       'frameExtract',
       'hyperframesAgent',
@@ -83,6 +84,7 @@ describe('derived sets', () => {
   it('replaces RUNNABLE_NODE_TYPES, including the three types it was missing', () => {
     expect(sorted(STUDIO_RUNNABLE_NODE_TYPES)).toEqual([
       'action',
+      'apiRender',
       'batch',
       'export',
       'extendVideo',
@@ -93,6 +95,7 @@ describe('derived sets', () => {
       'layerEditor',
       'nanoGen',
       'omniGen',
+      'plannerDraft',
       'router',
       'string',
       'timelineEditor',
@@ -105,10 +108,8 @@ describe('derived sets', () => {
 
   it('replaces PUBLISHER_NODE_KINDS exactly', () => {
     expect(STUDIO_PUBLISHER_NODE_KINDS).toEqual({
-      plannerDraft: 'organic',
       organicPublish: 'organic',
       paidPublisher: 'paid',
-      apiRender: 'render',
     });
   });
 

@@ -77,6 +77,7 @@ export const ACTION_IDS = [
   'image.crop',
   'image.pad',
   'image.text',
+  'image.cta',
   'image.overlay',
   'image.shader',
   'video.grade',
@@ -98,6 +99,7 @@ export const ACTION_IDS = [
   'video.longExposure',
   'video.overlay',
   'video.subtitles',
+  'video.editorialCaptions',
   'video.extractFrames',
   'video.frameGrid',
   'video.shader',
@@ -323,6 +325,125 @@ const textPlacementConfig = z.object({
    * colour or not exist".
    */
   fallbackInk: z.boolean().default(true),
+  /**
+   * A solid plate behind the block, snug to the words — what makes a CTA read as a button.
+   *
+   * Part of the TREATMENT, not a second layer: the contrast probe composites it before it
+   * measures, so a plated block clears on the plate's own contrast rather than walking a ladder
+   * built for a headline over a photo. The plate is black or white, whichever the ink reads on.
+   */
+  plate: z.enum(['none', 'pill', 'box', 'band', 'column']).default('none'),
+  /**
+   * The plate's colour — a brand or product colour the caller contrast-checked against the
+   * ink. Null keeps black or white. `band` is the split layout's colour block: full width, on to
+   * the nearer frame edge; `column` is the same block split the other way, full height, on to
+   * the nearer side edge.
+   */
+  plateHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
+  /** Paragraphs of a stack sit flush right (the reference headline) or centred on the column. */
+  align: z.enum(['right', 'center']).default('right'),
+  /**
+   * Type size against the calibrated reference headline; 1 IS the reference. The measure is not
+   * scaled, so a bigger headline breaks into more lines rather than overrunning its column. Up
+   * to 10 for one display word set at 70-90 % of the frame width.
+   */
+  scale: z.number().min(0.5).max(10).default(1),
+  /**
+   * The size of an all-light paragraph — a subhead under a cover headline — on the same scale.
+   * Null sizes it with `scale`, which is right for the reference headline and far too big under
+   * a 1.6x cover line.
+   */
+  subScale: z.number().min(0.5).max(4).nullable().default(null),
+  /**
+   * A face Continuum ships and Render serves, named by the step instead of read off the brand:
+   * the display face of a two-face layout (one giant word over a caption in the brand's face).
+   * Null reads the brand's face.
+   */
+  family: z.enum(['Anton', 'Montserrat', 'Inter', 'Cormorant Garamond']).nullable().default(null),
+  /**
+   * Refuse, rather than draw, a word the lines broke in two. Off (the canvas) keeps drawing;
+   * a headless still sets it, so a broken word fails the step instead of shipping.
+   */
+  refuseSplit: z.boolean().default(false),
+});
+
+/** The call-to-action components `image.cta` draws. */
+export const CTA_COMPONENTS = ['button', 'sticker', 'endline'] as const;
+export type CtaComponent = (typeof CTA_COMPONENTS)[number];
+
+/**
+ * Each component's box around its words, in ems of its type: the padding either side, the
+ * padding above and below, and the trailing mark (the button's arrow disc, the end line's arrow)
+ * with its gap. The renderer draws to these and a planner reserving the component's spot
+ * estimates with them, so the two cannot disagree about how wide a button is.
+ */
+/** Every component sets one line of type at this line height, in ems. */
+export const CTA_LINE_EM = 1.15;
+export const CTA_COMPONENT_EM = {
+  button: { padX: 0.8, padY: 0.5, trail: 1.65 },
+  sticker: { padX: 0.8, padY: 0.5, trail: 0 },
+  endline: { padX: 0, padY: 0.3, trail: 1.25 },
+} as const satisfies Record<CtaComponent, { padX: number; padY: number; trail: number }>;
+
+/**
+ * A call to action's words as the component sets them: one line, or two broken at the space
+ * that leaves the longer line shortest. A long offer ("¡Pídela ya, está fría!") on two lines is
+ * a button half as wide; the planner and the renderer break it at the same word.
+ */
+export function ctaLines(text: string, lines: 1 | 2): string[] {
+  const words = text.trim().split(/\s+/);
+  if (lines === 1 || words.length < 2) return [words.join(' ')];
+  let best: string[] = [words.join(' ')];
+  let longest = Number.POSITIVE_INFINITY;
+  for (let at = 1; at < words.length; at += 1) {
+    const pair = [words.slice(0, at).join(' '), words.slice(at).join(' ')];
+    const longer = Math.max(...pair.map((line) => [...line].length));
+    if (longer < longest) {
+      longest = longer;
+      best = pair;
+    }
+  }
+  return best;
+}
+
+/**
+ * `image.cta`: a call to action as a designed component rather than a plate behind a line of
+ * text. The words come in on `text-in` — the request's copy, never a default — and the component
+ * is HTML/CSS the page rasterises, so the canvas and Render's Chrome lane draw the same pixels.
+ */
+const ctaComponentConfig = z.object({
+  /** A button with depth, an offer sticker on a tilt, or an editorial end line under a rule. */
+  component: z.enum(CTA_COMPONENTS).default('button'),
+  anchor: burnInAnchorSchema.default('bottom-center'),
+  /** Nudge off the anchor, as a fraction of the frame's width and height. */
+  offsetX: z.number().min(-1).max(1).default(0),
+  offsetY: z.number().min(-1).max(1).default(0),
+  /** Clear space between the component and the frame edge, as a fraction of the axis it is on. */
+  marginFrac: z.number().min(0).max(0.45).default(0.07),
+  /** Type size against the calibrated reference headline's bold; 1 IS the reference. */
+  scale: z.number().min(0.3).max(3).default(1),
+  /** The widest the component may be, as a fraction of the frame width: the type shrinks to fit. */
+  maxWidth: z.number().min(0.1).max(1).default(0.9),
+  /** Set the words on two balanced lines (see `ctaLines`) instead of one. */
+  twoLines: z.boolean().default(false),
+  /** The button's face and the sticker's; the end line's rule. Null is near-black. */
+  fillHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
+  /** The words' ink. Null is black or white, whichever reads on the fill. */
+  inkHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
+  /** A face Continuum ships, named by the step; null reads the brand's. */
+  family: z.enum(['Anton', 'Montserrat', 'Inter', 'Cormorant Garamond']).nullable().default(null),
 });
 
 /** WHERE a mark sits and how strongly it reads. Shared by the still and the clip
@@ -492,6 +613,21 @@ export const ACTION_DEFS = {
     ],
     output: 'image',
     config: textPlacementConfig,
+  },
+  'image.cta': {
+    id: 'image.cta',
+    family: 'image',
+    label: 'Call To Action',
+    description:
+      'Sets a call to action over a still as a designed component: a button with depth, an offer sticker or an editorial end line, in the brand face. The words come from the text input.',
+    group: 'Overlay',
+    execution: 'sync',
+    inputs: [
+      { handle: 'in', modality: 'image', max: 1 },
+      { handle: 'text-in', modality: 'text', max: 1 },
+    ],
+    output: 'image',
+    config: ctaComponentConfig,
   },
   'image.overlay': {
     id: 'image.overlay',
@@ -835,6 +971,41 @@ export const ACTION_DEFS = {
         // only reader does Array.isArray(), which cannot tell null from undefined.
         .nullable()
         .default(null),
+    }),
+  },
+  'video.editorialCaptions': {
+    id: 'video.editorialCaptions',
+    family: 'video',
+    label: 'Editorial Captions',
+    description:
+      'Burns word-timed captions, editorial motion, an optional inset, and a styled CTA.',
+    group: 'Overlay',
+    execution: 'worker',
+    inputs: [
+      { handle: 'in', modality: 'video', max: 1 },
+      { handle: 'inset-in', modality: 'image', max: 1 },
+    ],
+    output: 'video',
+    config: z.object({
+      style: z
+        .enum(['focus_blur', 'paper_notes', 'neon_frame', 'editorial_split'])
+        .default('focus_blur'),
+      words: z
+        .array(
+          z
+            .object({
+              text: z.string().trim().min(1).max(80),
+              startSec: z.number().nonnegative(),
+              endSec: z.number().positive(),
+            })
+            .refine((word) => word.endSec > word.startSec),
+        )
+        .max(500)
+        .nullable()
+        .default(null),
+      emphasisPhrases: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+      cta: z.string().trim().max(400).nullable().default(null),
+      soundAccents: z.enum(['none', 'subtle']).default('subtle'),
     }),
   },
   'video.extractFrames': {

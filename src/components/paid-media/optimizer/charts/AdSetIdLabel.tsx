@@ -41,7 +41,7 @@ export function AdSetIdLabel({
             <span
               title={title}
               className={cn(
-                'block w-40 shrink-0 truncate text-2xs text-muted-foreground',
+                'block w-40 shrink-0 truncate text-xs text-muted-foreground',
                 !hasName && 'font-mono',
                 className,
               )}
@@ -51,7 +51,7 @@ export function AdSetIdLabel({
           }
         />
         <TooltipContent className="max-w-xs">
-          <span className="font-mono text-2xs">{detail}</span>
+          <span className="font-mono text-xs">{detail}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

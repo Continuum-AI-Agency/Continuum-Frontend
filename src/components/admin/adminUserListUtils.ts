@@ -301,6 +301,7 @@ export const ACCESS_PRODUCTS: ReadonlyArray<{ product: ProductCode; label: strin
 const PLAN_LABELS: Record<PlanCode, string> = {
   organic_studio: 'Organic Plus',
   paid_media: 'Performance Plus',
+  trends_plus: 'Trends+',
 };
 
 export function productGrant(

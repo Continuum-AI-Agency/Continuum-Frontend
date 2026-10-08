@@ -241,7 +241,7 @@ describe('addNodeCatalog', () => {
       .filter((row) => row.model !== undefined && getVideoGeneratorProvider(row.model) === 'google')
       .map((row) => row.model);
 
-    expect(googleModels[0]).toBe('veo-3.1-fast');
+    expect(googleModels[0]).toBe('gemini-omni-flash');
   });
 
   it('names the provider on every row, and blurbs every non-model row', () => {

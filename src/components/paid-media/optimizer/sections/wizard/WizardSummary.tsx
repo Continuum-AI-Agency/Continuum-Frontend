@@ -9,8 +9,16 @@ import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { SetupAdvisor } from '../../advisor/SetupAdvisor';
 import { formatCpa, formatCurrency, humanize } from '../../format';
 import { applyModePill } from '../../reportModel';
+import * as typeScale from '../../typeScale';
 import { TIER_COPY } from '../fields/TierCards';
-import { effectiveTargetMetric, MODE_COPY, planReadout, type WizardDraft } from './wizardModel';
+import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
+import {
+  effectiveTargetMetric,
+  MODE_COPY,
+  planReadout,
+  selectionByPlatform,
+  type WizardDraft,
+} from './wizardModel';
 
 type WizardSummaryProps = {
   draft: WizardDraft;
@@ -27,7 +35,7 @@ type WizardSummaryProps = {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-3xs text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className={`${typeScale.label} text-muted-foreground`}>{label}</p>
       <p className="text-xs text-foreground">{children}</p>
     </div>
   );
@@ -57,14 +65,42 @@ export function WizardSummary({
   return (
     <aside className="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-3">
       <p className="font-semibold text-sm tracking-tight">{draft.name.trim() || 'New portfolio'}</p>
-      <Row label="Manages">
-        {draft.adsetIds.length === 0
-          ? 'Nothing selected yet'
-          : draft.campaignIds.length > 0
-            ? `${draft.campaignIds.length} campaign${draft.campaignIds.length === 1 ? '' : 's'} · ${draft.adsetIds.length} ad sets`
-            : `${draft.adsetIds.length} ad set${draft.adsetIds.length === 1 ? '' : 's'}`}
-        {selectedBudgetSum > 0 ? ` · ${formatCurrency(selectedBudgetSum, currency)}/day today` : ''}
-      </Row>
+      {draft.proposedMembers.length > 0 ? (
+        <div className="space-y-0.5">
+          <p className={`${typeScale.label} text-muted-foreground`}>Manages</p>
+          {selectionByPlatform(draft).length === 0 ? (
+            <p className="text-xs text-foreground">Nothing selected yet</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {selectionByPlatform(draft).map((entry) => (
+                <li
+                  className="text-xs text-foreground"
+                  data-platform={entry.platform}
+                  data-testid="wizard-summary-platform"
+                  key={entry.platform}
+                >
+                  {PLATFORM_NAMES[entry.platform]} · {entry.label}
+                  {entry.platform === 'meta' && selectedBudgetSum > 0
+                    ? ` · ${formatCurrency(selectedBudgetSum, currency)}/day today`
+                    : ''}
+                  {entry.platform === 'meta' ? '' : ' · recommend-only'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <Row label="Manages">
+          {draft.adsetIds.length === 0
+            ? 'Nothing selected yet'
+            : draft.campaignIds.length > 0
+              ? `${draft.campaignIds.length} campaign${draft.campaignIds.length === 1 ? '' : 's'} · ${draft.adsetIds.length} ad sets`
+              : `${draft.adsetIds.length} ad set${draft.adsetIds.length === 1 ? '' : 's'}`}
+          {selectedBudgetSum > 0
+            ? ` · ${formatCurrency(selectedBudgetSum, currency)}/day today`
+            : ''}
+        </Row>
+      )}
       <Row label="Goal">
         {humanize(draft.objective)} · {metric.costLabel}
         {Number.isFinite(target) && target > 0

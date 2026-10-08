@@ -134,7 +134,7 @@ export function CitationChip({ resolved }: { resolved: ResolvedCitation }) {
           >
             <Badge
               variant="secondary"
-              className="h-4 min-w-4 rounded-full px-1 text-[0.625rem] font-medium leading-none"
+              className="h-4 min-w-4 rounded-full px-1 text-xs font-medium leading-none"
             >
               {index}
             </Badge>
@@ -144,7 +144,7 @@ export function CitationChip({ resolved }: { resolved: ResolvedCitation }) {
       <InlineCitationCardBody className="w-72 p-3">
         <InlineCitationSource title={title} description={description}>
           {citation.cache_key ? (
-            <p className="truncate font-mono text-[0.625rem] text-muted-foreground/70">
+            <p className="truncate font-mono text-xs text-muted-foreground/70">
               {citation.cache_key}
             </p>
           ) : null}

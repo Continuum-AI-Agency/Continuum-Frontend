@@ -25,6 +25,10 @@ const KPI_METRIC_KEY: Record<PaidEntityKpi, keyof PaidRankedEntity['metrics']> =
   conversions_value: 'conversionValue',
   cost_per_conversion: 'costPerConversion',
   roas: 'roas',
+  conversations: 'conversations',
+  cost_per_conversation: 'costPerConversation',
+  leads: 'leads',
+  cost_per_lead: 'costPerLead',
 };
 
 const KPI_UNIT: Record<PaidEntityKpi, PaidEntityKpiUnit> = {
@@ -38,6 +42,10 @@ const KPI_UNIT: Record<PaidEntityKpi, PaidEntityKpiUnit> = {
   conversions_value: 'currency',
   cost_per_conversion: 'currency',
   roas: 'multiplier',
+  conversations: 'number',
+  cost_per_conversation: 'currency',
+  leads: 'number',
+  cost_per_lead: 'currency',
 };
 
 const KPI_LABEL: Record<PaidEntityKpi, string> = Object.fromEntries(

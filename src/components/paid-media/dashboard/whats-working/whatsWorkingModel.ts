@@ -4,10 +4,13 @@
 // materialized paid_media.creative_reports row, so the funnel filter, the
 // labels, and the formatters live here rather than being duplicated per surface.
 
-import type {
-  CreativeWinRateFlag,
-  CreativeWinRateRow,
-  PaidCreativeVerdict,
+import {
+  type CreativeWinRateFlag,
+  type CreativeWinRateRow,
+  GLOBAL_ANGLE_LABELS,
+  type GlobalAngleId,
+  hasThinEvidence,
+  type PaidCreativeVerdict,
 } from '@continuum/contracts';
 
 // The funnel filter, the thin-evidence rule and the two selectors moved into
@@ -43,7 +46,8 @@ export const FLAG_TOOLTIP: Partial<Record<CreativeWinRateFlag, string>> = {
 
 export const DIMENSION_LABEL: Record<CreativeWinRateRow['dimension'], string> = {
   hook_archetype: 'Hook',
-  angle: 'Angle',
+  angle: 'Angle (free text)',
+  angle_id: 'Angle',
   asset_type: 'Asset',
   theme: 'Theme',
   funnel_stage: 'Funnel',
@@ -58,6 +62,12 @@ export const VERDICT_STYLE: Record<PaidCreativeVerdict['verdict'], string> = {
 };
 
 export const humanize = (value: string): string => value.replace(/_/g, ' ');
+
+/** A closed angle id reads by its display name; every other value is humanized. */
+export const categoryValueLabel = (row: Pick<CreativeWinRateRow, 'dimension' | 'value'>): string =>
+  row.dimension === 'angle_id' && row.value in GLOBAL_ANGLE_LABELS
+    ? GLOBAL_ANGLE_LABELS[row.value as GlobalAngleId]
+    : humanize(row.value);
 
 export const percent = (value: number | null): string =>
   value === null ? '—' : `${Math.round(value * 100)}%`;
@@ -81,3 +91,34 @@ export const cohortMultipleLabel = (verdict: PaidCreativeVerdict): string | null
   verdict.cpaVsCohortMedian === null || verdict.cpaVsCohortMedian === undefined
     ? null
     : `${verdict.cpaVsCohortMedian.toFixed(1)}x cohort median`;
+
+// Explorer sections, most-decision-worthy first. Free-text angle sits last: it is
+// the long tail (one ad per value, mostly) the closed `angle_id` replaced.
+const DIMENSION_ORDER: CreativeWinRateRow['dimension'][] = [
+  'angle_id',
+  'hook_archetype',
+  'theme',
+  'asset_type',
+  'visual_style',
+  'angle',
+];
+
+export type WinRateGroup = {
+  dimension: CreativeWinRateRow['dimension'];
+  rows: CreativeWinRateRow[];
+};
+
+/** Rows grouped by dimension; inside a group, trustworthy cohorts first, then win rate. */
+export function groupWinRatesByDimension(rows: CreativeWinRateRow[]): WinRateGroup[] {
+  return DIMENSION_ORDER.map((dimension) => ({
+    dimension,
+    rows: rows
+      .filter((row) => row.dimension === dimension)
+      .sort(
+        (a, b) =>
+          Number(hasThinEvidence(a)) - Number(hasThinEvidence(b)) ||
+          (b.winRate ?? -1) - (a.winRate ?? -1) ||
+          b.eligibleAds - a.eligibleAds,
+      ),
+  })).filter((group) => group.rows.length > 0);
+}

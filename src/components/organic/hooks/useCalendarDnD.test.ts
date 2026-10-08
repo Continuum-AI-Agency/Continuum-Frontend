@@ -91,6 +91,35 @@ describe('useCalendarDnD — multi-select drag', () => {
     expect(next.platforms).toEqual(['instagram']);
     expect(next.targetAccountId).toBe('acct-ig');
   });
+
+  // Production 2026-09-22: an Instagram draft dragged into the TikTok row kept its IG
+  // account, and every scheduled publish was refused as "not linked to this brand".
+  it("drops the source platform's account when the destination has no default", () => {
+    dragOntoCellId('planner-cell::2026-08-10::tiktok', ['d1']);
+
+    const updater = updateDraft.mock.calls[0]?.[1] as (
+      d: OrganicCalendarDraft,
+    ) => OrganicCalendarDraft;
+    const next = updater({
+      platforms: ['instagram'],
+      targetAccountId: 'acct-ig',
+    } as OrganicCalendarDraft);
+    expect(next.platforms).toEqual(['tiktok']);
+    expect(next.targetAccountId).toBeUndefined();
+  });
+
+  it('keeps a chosen account when the draft stays on its platform', () => {
+    dragOntoCell(['d1']);
+
+    const updater = updateDraft.mock.calls[0]?.[1] as (
+      d: OrganicCalendarDraft,
+    ) => OrganicCalendarDraft;
+    const next = updater({
+      platforms: ['instagram'],
+      targetAccountId: 'acct-ig-second',
+    } as OrganicCalendarDraft);
+    expect(next.targetAccountId).toBe('acct-ig-second');
+  });
 });
 
 // A month cell spans every platform, so its droppable id carries the day and no platform

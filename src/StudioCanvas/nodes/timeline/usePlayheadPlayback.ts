@@ -298,6 +298,15 @@ export function usePlayheadPlayback(params: {
     [isPlaying, setPlayhead],
   );
 
+  useEffect(() => {
+    if (isPlaying || isPreparing) return;
+    const video = videoRef.current;
+    const cue = () => seek(playheadRef.current);
+    video?.addEventListener('loadedmetadata', cue);
+    cue();
+    return () => video?.removeEventListener('loadedmetadata', cue);
+  }, [isPlaying, isPreparing, layout, mediaFor, seek]);
+
   const stop = useCallback(() => {
     playRequestRef.current += 1;
     if (rafRef.current !== null) {

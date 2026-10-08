@@ -11,6 +11,8 @@
 import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { canvasGraphChangeSetSchema } from '../ai-studio/canvas-graph-change';
+import { pipelineCapabilityV2Schema } from '../ai-studio/pipeline-manifest';
+import { pipelinePublicationRequestSchema } from '../ai-studio/pipeline-publication';
 import {
   IMAGE_VARIATION_LIMIT,
   studioEdgeSchema,
@@ -141,6 +143,22 @@ const composerProposalSchema = z.object({
 });
 
 /**
+ * A Pipeline the composer built and checked, awaiting the user's approval. Nothing is
+ * written until the user approves: the card POSTs `request` verbatim to
+ * `PIPELINE_PUBLICATIONS_ROUTE`, the same call the Save dialog makes. `capability` is the
+ * preview that publish would return, minus the server-assigned id and revision.
+ */
+const composerPipelineProposalSchema = z.object({
+  type: z.literal('composer.pipeline_proposal'),
+  data: z
+    .object({
+      request: pipelinePublicationRequestSchema,
+      capability: pipelineCapabilityV2Schema,
+    })
+    .strict(),
+});
+
+/**
  * The machine-readable reason on a `composer.warning`. Exported as a constant so the
  * emit side and any future reader share ONE literal — a warning code that exists only as
  * a string typed twice is a warning code that drifts.
@@ -189,6 +207,7 @@ const composerDoneSchema = z.object({
 });
 
 export type AiStudioComposerDoneFrame = z.infer<typeof composerDoneSchema>;
+export type AiStudioComposerPipelineProposalFrame = z.infer<typeof composerPipelineProposalSchema>;
 
 export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   composerStartedSchema,
@@ -196,6 +215,7 @@ export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   composerGraphSchema,
   composerPatchSchema,
   composerProposalSchema,
+  composerPipelineProposalSchema,
   composerWarningSchema,
   agentDelegatedFrameSchema,
   toolCallSchema,

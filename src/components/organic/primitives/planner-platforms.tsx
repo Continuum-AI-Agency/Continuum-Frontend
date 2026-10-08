@@ -76,7 +76,7 @@ const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate
 const PUBLISHABLE_PLATFORMS = new Set<string>(Object.keys(PLATFORM_CAPABILITIES));
 
 const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = (
-  ['instagram', 'linkedin', 'facebook', 'tiktok', 'youtube'] as OrganicPlatformTag[]
+  ['instagram', 'linkedin', 'facebook', 'tiktok', 'youtube', 'x'] as OrganicPlatformTag[]
 ).filter((platform) => PUBLISHABLE_PLATFORMS.has(platform));
 
 /** Whatever the planner can display but the backend cannot publish to. */

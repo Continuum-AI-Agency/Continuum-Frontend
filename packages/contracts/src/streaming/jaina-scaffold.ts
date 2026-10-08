@@ -17,6 +17,10 @@
  */
 
 import { z } from 'zod';
+import { paidScaffoldPlanSchema } from '../paid/scaffold-plan';
+
+export const jainaPublicationModeSchema = z.enum(['publish_and_enroll', 'publish_only']);
+export type JainaPublicationMode = z.infer<typeof jainaPublicationModeSchema>;
 
 // ---------------------------------------------------------------------------
 // Tool approval frames (shared mental model with Organic, which already emits
@@ -136,8 +140,25 @@ export const paidScaffoldProposedPayloadSchema = z
     parentScaffoldId: z.string().optional(),
     brandId: z.string().optional(),
     adAccountId: z.string().nullable().optional(),
+    // OPTIONAL AT THE WIRE, and only there: the Backend always emits version, contentHash,
+    // name and scaffoldPlan, but a `paid.scaffold_proposed` row written before they existed
+    // is replayed from run events on every reload and must still parse. A card missing them
+    // degrades — no Deploy button, no evidence table — rather than dropping the frame.
+    /** `paid_scaffold_versions.version` — 1 for a new scaffold, +1 per revision or canvas save. */
+    version: z.number().int().positive().optional(),
+    /** `paid_scaffold_versions.content_hash`. An operator-action deploy must carry it. */
+    contentHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    name: z.string().optional(),
     /** The proposed campaign → ad set → ad tree. Narrowed on the Frontend. */
     plan: z.unknown(),
+    /**
+     * The typed, data-backed plan — evidence, expected results, optimizer enrollment,
+     * blockers. The SAME object is persisted at `paid_scaffold_versions.manifest.plan`.
+     */
+    scaffoldPlan: paidScaffoldPlanSchema.optional(),
     /** Present when this proposal is gated behind a HITL approval. */
     approvalId: z.string().nullable().optional(),
     /** Counts for a one-line summary without walking `plan`. */
@@ -209,6 +230,17 @@ export const paidScaffoldReceiptPayloadSchema = z
       )
       .optional(),
     completedAt: z.string().optional(),
+    publicationMode: jainaPublicationModeSchema.optional(),
+    phase: z.string().optional(),
+    portfolios: z
+      .array(
+        z.object({
+          portfolio_id: z.string().uuid(),
+          adset_ids: z.array(z.string()),
+          enrollment_verified: z.boolean(),
+        }),
+      )
+      .optional(),
   })
   .passthrough();
 export type PaidScaffoldReceiptPayload = z.infer<typeof paidScaffoldReceiptPayloadSchema>;
@@ -254,6 +286,17 @@ export type JainaScaffoldAction = z.infer<typeof jainaScaffoldActionSchema>;
  * which is precisely what the gate exists to prevent. The gate row is the authority;
  * the SDK's signature is only a cheap second layer inside `execute`.
  */
+/** Both publication choices share this immutable, signed scope. Publish only narrows it. */
+export const paidScaffoldPublicationInputSchema = z.object({
+  scaffold_version_id: z.string().uuid(),
+  content_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  activate_path_keys: z.array(z.string().min(1)).min(1),
+  creative_assets: z
+    .array(z.object({ path_key: z.string().min(1), asset_id: z.string().min(1) }))
+    .min(1),
+});
+export type PaidScaffoldPublicationInput = z.infer<typeof paidScaffoldPublicationInputSchema>;
+
 export const jainaToolActionSchema = z.object({
   decision: z.enum(['approve', 'deny']),
   /** The SDK approval id from the `tool.approval_required` frame being answered. */
@@ -261,5 +304,7 @@ export const jainaToolActionSchema = z.object({
   /** Echoed back for correlation only; never trusted for authorization. */
   tool_call_id: z.string().min(1).optional(),
   reason: z.string().max(500).optional(),
+  /** Human-selected scope reduction for paid_scaffold_publish; never changes signed arguments. */
+  publication_mode: jainaPublicationModeSchema.optional(),
 });
 export type JainaToolAction = z.infer<typeof jainaToolActionSchema>;

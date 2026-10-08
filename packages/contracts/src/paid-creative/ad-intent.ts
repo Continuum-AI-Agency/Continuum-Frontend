@@ -1,6 +1,67 @@
 import { z } from 'zod';
 import { paidAdFormatSchema, paidAdFunnelStageSchema } from './brief';
 
+/** The exact reviewed slot a generated creative may replace. */
+export const paidScaffoldCreativeTargetSchema = z
+  .object({
+    scaffold_version_id: z.string().uuid(),
+    content_hash: z.string().regex(/^[0-9a-f]{64}$/),
+    path_key: z.string().min(1).max(200),
+    expected_asset_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type PaidScaffoldCreativeTarget = z.infer<typeof paidScaffoldCreativeTargetSchema>;
+
+export const paidCanvasCreativeTargetSchema = z
+  .object({
+    brand_id: z.string().uuid(),
+    ad_account_id: z.string().min(1),
+    node_id: z.string().min(1),
+    revision: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+export type PaidCanvasCreativeTarget = z.infer<typeof paidCanvasCreativeTargetSchema>;
+
+export const paidCanvasCreativeContextSchema = z
+  .object({
+    objective: z.string().min(1).max(120),
+    optimization_goal: z.string().min(1).max(120),
+    funnel_stage: paidAdFunnelStageSchema,
+    audience_context: z.string().max(6000),
+    daily_budget: z.number().nonnegative().nullable(),
+    budget_currency: z.string().max(8),
+    primary_text: z.string().max(6000),
+    headline: z.string().max(2000),
+    description: z.string().max(6000).nullable(),
+    cta: z.string().max(120),
+    destination_url: z.string().max(2000).nullable(),
+  })
+  .strict();
+export type PaidCanvasCreativeContext = z.infer<typeof paidCanvasCreativeContextSchema>;
+
+export const paidScaffoldCreativeAttachmentStatusSchema = z.enum([
+  'attached',
+  'stale_version',
+  'creative_changed',
+  'gate_locked',
+  'version_not_found',
+  'node_not_found',
+  'not_an_ad',
+  'asset_not_found',
+  'attachment_failed',
+]);
+export type PaidScaffoldCreativeAttachmentStatus = z.infer<
+  typeof paidScaffoldCreativeAttachmentStatusSchema
+>;
+
+export const paidScaffoldCreativeBindingSchema = z
+  .object({
+    target: paidScaffoldCreativeTargetSchema,
+    actor_id: z.string().uuid(),
+  })
+  .strict();
+export type PaidScaffoldCreativeBinding = z.infer<typeof paidScaffoldCreativeBindingSchema>;
+
 // The Library tag that marks a creative as ready to be launched as a paid ad. The
 // creative sub-agent applies it (Phase 1); the optimizer pulls creatives carrying
 // it when a human launches a PAUSED ad (Phase 2). Kept here so the sub-agent, the
@@ -37,6 +98,7 @@ export const adIntentSchema = z.object({
   sourceRunId: z.string().nullable().default(null),
   // For promotions: the winning organic media.assets id this ad reuses.
   sourceOrganicAssetId: z.string().nullable().default(null),
+  scaffoldBinding: paidScaffoldCreativeBindingSchema.optional(),
 });
 export type AdIntent = z.infer<typeof adIntentSchema>;
 

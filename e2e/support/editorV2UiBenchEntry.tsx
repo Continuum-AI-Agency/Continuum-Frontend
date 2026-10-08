@@ -5,6 +5,7 @@ import {
   type EditorProjectV2,
   editorProjectV2Schema,
 } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ToastProvider } from '../../src/components/ui/ToastProvider';
@@ -191,7 +192,7 @@ function Bench() {
       busy={false}
       canUndo={undo.length > 0}
       canRedo={redo.length > 0}
-      canRender={false}
+      renderBlockers={['Every shot needs a human-approved 1080p master.']}
       onApply={onApply}
       onUndo={onUndo}
       onRedo={onRedo}
@@ -208,7 +209,9 @@ declare global {
 
 window.__editorV2UiBench = { project: initialProject() };
 createRoot(document.getElementById('root') as HTMLElement).render(
-  <ToastProvider>
-    <Bench />
-  </ToastProvider>,
+  <QueryClientProvider client={new QueryClient()}>
+    <ToastProvider>
+      <Bench />
+    </ToastProvider>
+  </QueryClientProvider>,
 );

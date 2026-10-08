@@ -29,9 +29,11 @@ import {
 } from '../useOptimizerData';
 import { CboCampaigns } from './CboCampaigns';
 import { ProjectedConversions } from './ProjectedConversions';
+import { accountPlatform, connectedPlatforms } from './platforms/platformTabsModel';
 import { SignalReadinessCard } from './SignalReadinessCard';
 import { OBJECTIVES } from './suggestionModel';
 import { PortfolioWizard } from './wizard/PortfolioWizard';
+import { platformAccountNotes } from './wizard/wizardModel';
 
 // Explains an empty suggestion list precisely (Phase C diagnostic reason), so the wizard never
 // shows a bare "no suggestions yet". `hasProjections` keeps the all-CBO case from dead-ending:
@@ -112,6 +114,21 @@ export function PortfolioSetup({
   const suggestions = suggestRead.data?.suggestions ?? [];
   const diagnostics = suggestRead.data?.diagnostics ?? null;
   const suggestReason = suggestRead.data?.reason ?? null;
+  const platformCandidates = suggestRead.data?.platform_candidates;
+  // The selected account may be a Google one: then it has no Meta ad sets to pick.
+  const metaAvailable = account == null || accountPlatform(account) === 'meta';
+  const connected = connectedPlatforms(accounts);
+  const platformNotes = React.useMemo(
+    () =>
+      metaAvailable
+        ? platformAccountNotes(
+            suggestRead.data?.platform_accounts ?? [],
+            suggestions,
+            resolvedCurrency,
+          )
+        : [],
+    [metaAvailable, suggestRead.data?.platform_accounts, suggestions, resolvedCurrency],
+  );
 
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const snapshots = snapshotsRead.data;
@@ -147,12 +164,27 @@ export function PortfolioSetup({
         adAccountId={adAccountId}
         brandId={brandId}
         currency={resolvedCurrency}
+        candidatesKnown={platformCandidates !== undefined}
+        connectedPlatforms={(['meta', 'google_ads', 'tiktok_ads'] as const).filter(
+          (platform) => connected[platform],
+        )}
+        metaAvailable={metaAvailable}
         onCreated={onCreated}
+        platformCandidates={platformCandidates ?? []}
         snapshots={snapshots}
         snapshotsError={snapshotsRead.isError}
         snapshotsLoading={snapshotsRead.isLoading}
         startExtras={
           <div className="space-y-3">
+            {platformNotes.length > 0 ? (
+              <ul className="space-y-1" data-testid="suggest-platform-notes">
+                {platformNotes.map((note) => (
+                  <li className="text-muted-foreground text-xs" key={note}>
+                    {note}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <SignalReadinessCard
               action={
                 cboSections.length > 0 ? (
@@ -233,18 +265,18 @@ function AccountHeader({
       </div>
       <div className="flex items-center gap-1.5">
         {platform ? (
-          <Badge className="text-3xs" variant="outline">
+          <Badge className="text-xs" variant="outline">
             {humanize(platform)}
           </Badge>
         ) : null}
         {currency ? (
-          <Badge className="text-3xs" variant="secondary">
+          <Badge className="text-xs" variant="secondary">
             {currency}
           </Badge>
         ) : null}
         {status ? (
           <Badge
-            className="text-3xs"
+            className="text-xs"
             variant={status.toLowerCase() === 'active' ? 'success' : 'outline'}
           >
             {humanize(status)}
@@ -273,7 +305,7 @@ function TrackingGapBanner({
           objective — check the pixel/conversion tracking before enrolling.
         </p>
         {samples.length > 0 ? (
-          <p className="mt-1 font-mono text-2xs opacity-80">{samples.slice(0, 4).join(', ')}</p>
+          <p className="mt-1 font-mono text-xs opacity-80">{samples.slice(0, 4).join(', ')}</p>
         ) : null}
       </div>
     </div>

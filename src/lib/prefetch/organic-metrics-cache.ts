@@ -1,3 +1,4 @@
+import type { OrganicMetricPlatform } from '@continuum/contracts';
 import {
   fetchOrganicAnalytics,
   type OrganicAnalyticsRequest,
@@ -17,7 +18,7 @@ const cache = new Map<CacheKey, CacheEntry>();
 function buildKey(
   brandId: string,
   integrationAccountId: string,
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin',
+  platform: OrganicMetricPlatform,
   rangePreset: string,
   scope: string,
 ): CacheKey {
@@ -35,7 +36,7 @@ function isStale(entry: CacheEntry): boolean {
 export function prefetchMetricsDashboard(params: {
   brandId: string;
   integrationAccountId: string;
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  platform: OrganicMetricPlatform;
   rangePreset?: string;
 }): void {
   const { brandId, integrationAccountId, platform, rangePreset = 'last_7d' } = params;
@@ -78,7 +79,7 @@ export function prefetchMetricsDashboard(params: {
 export function consumePrefetched(
   brandId: string,
   integrationAccountId: string,
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin',
+  platform: OrganicMetricPlatform,
   rangePreset: string,
   scope: string,
 ): Promise<OrganicMetricsResponse> | null {

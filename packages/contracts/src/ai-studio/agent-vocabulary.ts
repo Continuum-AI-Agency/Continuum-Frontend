@@ -7,6 +7,7 @@ import {
   IMAGE_GENERATOR_MODELS,
   IMAGE_SIZES,
   imageSizesForModel,
+  PICKABLE_IMAGE_GENERATOR_MODELS,
   supportsImageSize,
 } from './image-size';
 import { STUDIO_NODE_REGISTRY } from './node-registry';
@@ -215,11 +216,15 @@ function describeActionOps(): string {
     'is { version: 1, effects: [{ effectId, enabled, parameters, keyframes }] }. Never write WGSL.',
     `Legal effectId values: ${SHADER_PRESET_IDS.join(', ')}.`,
     'Parameters: chroma_key=color tolerance softness; tint=color amount; pixelate=blockPx;',
-    'vignette, film_grain, chromatic_aberration and vhs=amount. Keyframes animate numeric',
+    'vignette, film_grain, dust, light_leaks, chromatic_aberration and vhs=amount. Keyframes animate numeric',
     'parameters with { id, property: "effect.parameter", parameterName, timeSec, value, interpolation }.',
   );
   return lines.join('\n');
 }
+
+const RETIRED_IMAGE_GENERATOR_MODELS = IMAGE_GENERATOR_MODELS.filter(
+  (model) => !PICKABLE_IMAGE_GENERATOR_MODELS.includes(model),
+);
 
 function describeVideoModels(): string {
   const rows = VIDEO_GENERATOR_MODELS.flatMap((model) => {
@@ -243,13 +248,18 @@ function describeVideoModels(): string {
     'from a prompt alone:',
     ...rows,
     '',
-    `IMAGE GENERATOR MODELS — the ONLY values a nanoGen \`data.model\` accepts: ${IMAGE_GENERATOR_MODELS.join(', ')}.`,
+    `IMAGE GENERATOR MODELS — the ONLY values a nanoGen \`data.model\` accepts: ${PICKABLE_IMAGE_GENERATOR_MODELS.join(', ')}.`,
+    ...(RETIRED_IMAGE_GENERATOR_MODELS.length > 0
+      ? [
+          `A saved nanoGen may also still carry a retired model (${RETIRED_IMAGE_GENERATOR_MODELS.join(', ')}) — leave it unless the user asks to change it.`,
+        ]
+      : []),
     'DO NOT set `model` on a nanoGen at all unless the user names one — the default',
     '(nano-banana-2) is the first-party model. gpt-image-* / flux-2-* are external',
     'paid providers reserved for an explicit user request.',
     '',
     'IMAGE SIZES — a nanoGen `data.imageSize` is only legal for the models that take one:',
-    ...IMAGE_GENERATOR_MODELS.map((model) =>
+    ...PICKABLE_IMAGE_GENERATOR_MODELS.map((model) =>
       supportsImageSize(model)
         ? `- ${model} — ${imageSizesForModel(model).join(' | ')}`
         : `- ${model} — takes NO imageSize; do not set one`,

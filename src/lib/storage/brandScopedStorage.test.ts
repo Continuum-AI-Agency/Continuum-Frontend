@@ -5,6 +5,7 @@ import {
   migrateLegacyKey,
   purgeAllForBrand,
   purgeOrphans,
+  purgeStorageForLogout,
   removeItem,
   setItem,
 } from './brandScopedStorage';
@@ -12,6 +13,7 @@ import {
 describe('brandScopedStorage', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('makeKey appends :b:<brandId> to the base key', () => {
@@ -88,5 +90,31 @@ describe('brandScopedStorage', () => {
 
     expect(getItem('draft', 'brand-a')).toBe('new');
     expect(window.localStorage.getItem('legacy:draft')).toBeNull();
+  });
+
+  it('purgeStorageForLogout clears brand and user-ephemeral keys but keeps auth and theme', () => {
+    setItem('draft', 'brand-a', '1');
+    window.localStorage.setItem('continuum:dashboard-prefs', '{}');
+    window.localStorage.setItem('continuum-account-selection', '{}');
+    window.localStorage.setItem('continuum.billing.lowCreditsNudged.brand-a', '1');
+    window.localStorage.setItem('continuum:auto-brand-insights:brand-a', '{}');
+    window.localStorage.setItem('organic-post-analytics-storage', '{}');
+    window.sessionStorage.setItem('continuum:warm-lease:b:brand-a', '1');
+    window.sessionStorage.setItem('approvals-storage', '{}');
+    window.localStorage.setItem('sb-project-auth-token', 'token');
+    window.localStorage.setItem('theme', 'dark');
+
+    purgeStorageForLogout();
+
+    expect(getItem('draft', 'brand-a')).toBeNull();
+    expect(window.localStorage.getItem('continuum:dashboard-prefs')).toBeNull();
+    expect(window.localStorage.getItem('continuum-account-selection')).toBeNull();
+    expect(window.localStorage.getItem('continuum.billing.lowCreditsNudged.brand-a')).toBeNull();
+    expect(window.localStorage.getItem('continuum:auto-brand-insights:brand-a')).toBeNull();
+    expect(window.localStorage.getItem('organic-post-analytics-storage')).toBeNull();
+    expect(window.sessionStorage.getItem('continuum:warm-lease:b:brand-a')).toBeNull();
+    expect(window.sessionStorage.getItem('approvals-storage')).toBeNull();
+    expect(window.localStorage.getItem('sb-project-auth-token')).toBe('token');
+    expect(window.localStorage.getItem('theme')).toBe('dark');
   });
 });

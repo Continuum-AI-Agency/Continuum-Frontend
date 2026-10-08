@@ -1,14 +1,15 @@
 // Canvas-side helpers for brand-book and creative-skill enforcement on
 // generation nodes. The stored values are `brandBookPieces` and `skillIds` on
 // node data; these helpers give brandBookPieces default-ON semantics (undefined
-// ⇒ the whole brand book) and the toggle logic the grounding popover uses for
-// both. The Backend renders the tagged pieces into an authoritative forced
-// block (App/ai-studio/services/brand-enforcement.ts).
+// ⇒ the canvas's light book: colors, type, logo) and the toggle logic the grounding
+// popover uses for both. The Backend renders the tagged pieces into an authoritative
+// forced block (App/ai-studio/services/brand-enforcement.ts).
 
 import {
   type BrandBookPieceKind,
   type BrandDirectionPiece,
   type BrandMdTokens,
+  CANVAS_DEFAULT_BRAND_BOOK_PIECES,
   type DesignSection,
   expandBrandBookPieces,
 } from '@continuum/contracts';
@@ -16,24 +17,63 @@ import { presentBrandBookPiece } from '@/lib/brands/generationConfigPresentation
 
 export { BRAND_BOOK_PIECE_LABELS } from '@/lib/brands/generationConfigPresentation';
 
-// Default-ON: a generation node with no explicit selection enforces the whole
-// brand book. An explicit empty array means the user turned enforcement off.
-export const DEFAULT_BRAND_BOOK_PIECES: BrandBookPieceKind[] = ['full'];
+// The whole book: what the master toggle and "Enforce brand book on selection" write.
+export const FULL_BRAND_BOOK_PIECES: BrandBookPieceKind[] = ['full'];
+
+// Default-ON, but light: a node a person built enforces the visual identity only.
+// An explicit empty array means the user turned enforcement off; agent-built nodes
+// arrive stamped `['full']` by the Backend composer.
+const CANVAS_DEFAULT_PIECES: BrandBookPieceKind[] = [...CANVAS_DEFAULT_BRAND_BOOK_PIECES];
 
 // The concrete pieces in canonical order (no "full"). Sourced from the contract so
 // FE and BE agree on the set.
 export const CONCRETE_BRAND_BOOK_PIECES = expandBrandBookPieces(['full']);
 
-// Compact one-line summary of a node's grounding for the chip label, e.g.
-// "Brand · Skills 2" (entire book), "Brand 3 · Skills 2" (partial), "Skills 2"
-// (brand off), or "Off" (nothing enforced). Pure — unit tested.
+export type BrandBookMode = 'full' | 'light' | 'off' | 'custom';
+
+export function brandBookMode(pieces: BrandBookPieceKind[] | undefined): BrandBookMode {
+  if (!isBrandEnforced(pieces)) return 'off';
+  if (isEntireBookEnforced(pieces)) return 'full';
+  // Both sides come back in canonical order, so the joined lists compare as sets.
+  return enforcedConcretePieces(pieces).join() === expandBrandBookPieces(CANVAS_DEFAULT_PIECES).join()
+    ? 'light'
+    : 'custom';
+}
+
+/** "Full" / "Light" / "Off" / "2 pieces" — short enough for the node chip. */
+export function brandBookModeLabel(pieces: BrandBookPieceKind[] | undefined): string {
+  const mode = brandBookMode(pieces);
+  if (mode === 'custom') {
+    const count = enforcedConcretePieces(pieces).length;
+    return `${count} ${count === 1 ? 'piece' : 'pieces'}`;
+  }
+  return { full: 'Full', light: 'Light', off: 'Off' }[mode];
+}
+
+const BRAND_BOOK_PIECE_LABELS_LOWER: Record<BrandBookPieceKind, string> = {
+  full: 'the whole brand book',
+  colors: 'colors',
+  typography: 'type',
+  voice: 'voice',
+  imagery: 'imagery',
+  personality: 'personality',
+  audience: 'audience',
+  logo: 'logo',
+};
+
+/** What the mode means, for a tooltip or a header's muted half. */
+export function brandBookModeDetail(pieces: BrandBookPieceKind[] | undefined): string {
+  const mode = brandBookMode(pieces);
+  if (mode === 'full') return 'the whole brand book';
+  if (mode === 'off') return 'no brand guidance';
+  return enforcedConcretePieces(pieces)
+    .map((piece) => BRAND_BOOK_PIECE_LABELS_LOWER[piece])
+    .join(', ');
+}
+
 /**
- * The label on the Style control.
- *
- * "Style" rather than "Brand": what this control governs is how the output LOOKS, and the
- * brand book is one of three sources feeding that — alongside creative direction and
- * creative skills. Naming it after one of its inputs made the other two look like
- * unrelated settings that happened to share a popover.
+ * The label on the node's grounding chip: the brand-book mode first ("Brand · Light"),
+ * then any narrowed creative direction and picked skills.
  *
  * `directionCount` is `null` when the caller expressed no preference, which is the
  * tri-state's "everything the plan admits" and needs no badge. A number means the user
@@ -44,23 +84,16 @@ export function groundingChipLabel(
   skillCount: number,
   directionCount: number | null = null,
 ): string {
-  const brandPart = isEntireBookEnforced(pieces)
-    ? 'Style'
-    : isBrandEnforced(pieces)
-      ? `Style ${enforcedConcretePieces(pieces).length}`
-      : null;
-  const directionPart = directionCount === null ? null : `Direction ${directionCount}`;
-  const skillPart = skillCount > 0 ? `Skills ${skillCount}` : null;
-  const parts = [brandPart, directionPart, skillPart].filter(
-    (part): part is string => part !== null,
-  );
-  return parts.length > 0 ? parts.join(' · ') : 'Off';
+  const parts = [`Brand · ${brandBookModeLabel(pieces)}`];
+  if (directionCount !== null) parts.push(`Direction ${directionCount}`);
+  if (skillCount > 0) parts.push(`Skills ${skillCount}`);
+  return parts.join(' · ');
 }
 
 export function effectiveBrandBookPieces(
   pieces: BrandBookPieceKind[] | undefined,
 ): BrandBookPieceKind[] {
-  return pieces ?? DEFAULT_BRAND_BOOK_PIECES;
+  return pieces ?? CANVAS_DEFAULT_PIECES;
 }
 
 export function isBrandEnforced(pieces: BrandBookPieceKind[] | undefined): boolean {
@@ -120,7 +153,7 @@ export function toggleBrandPiece(
   kind: BrandBookPieceKind,
 ): BrandBookPieceKind[] {
   if (kind === 'full') {
-    return isBrandEnforced(pieces) ? [] : DEFAULT_BRAND_BOOK_PIECES;
+    return isBrandEnforced(pieces) ? [] : FULL_BRAND_BOOK_PIECES;
   }
 
   const effective = effectiveBrandBookPieces(pieces);

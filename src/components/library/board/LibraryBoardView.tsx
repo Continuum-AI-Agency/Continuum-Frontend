@@ -1,9 +1,10 @@
 'use client';
 
-// Kanban board over ONE single-select dimension, with drag-between-lanes. The
-// dimension is the viewer's choice: review_status (the default — Unsorted →
-// draft → in review → needs changes → approved) or any of the brand's custom
-// single-select fields.
+// Kanban board over ONE dimension, with drag-between-lanes. The dimension is the
+// viewer's choice: review_status (the default — Unsorted → draft → in review → needs
+// changes → approved) or ANY of the brand's custom fields; the lane shapes per type live
+// in boardGrouping. Inside a collection the choice is saved to the collection's
+// view_config.
 //
 // The two are NOT the same write, and the board must never confuse them. A drop
 // on a review lane posts an audited review TRANSITION; a drop on a custom-field
@@ -12,13 +13,19 @@
 // dispatches on a decoded target rather than on a guess about what the string
 // meant.
 //
-// v1 fetches the brand's assets from the existing listing route and groups them
-// client-side. Grouping by a custom field additionally needs each asset's value
-// for that field: the listing route can filter by a field, so one request per
-// option builds the id → option map, and every asset it does not name is (by
-// definition) unset.
+// The board fetches the brand's assets from the existing listing route and groups
+// them client-side. A custom-field grouping also reads every asset's value for that
+// field in one request; an asset it does not name is (by definition) unset.
 
-import type { CustomField, CustomFieldFilter, MediaAsset } from '@continuum/contracts';
+import {
+  type CollectionViewConfig,
+  type CustomField,
+  type CustomFieldFilter,
+  type CustomFieldValue,
+  collectionViewConfigSchema,
+  type MediaAsset,
+  mediaReviewStatusSchema,
+} from '@continuum/contracts';
 import {
   DndContext,
   type DragEndEvent,
@@ -38,13 +45,28 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
-import { serializeFieldFilters, setAssetFieldValue } from '@/lib/library/customFields';
-import { isGroupableField } from '@/lib/library/customFieldValue';
-import { transitionReviewStatus } from '@/lib/library/review';
+import { updateLibraryCollectionOperation } from '@/lib/library/creativeOperations';
+import {
+  listFieldValuesByAsset,
+  serializeFieldFilters,
+  setAssetFieldValue,
+} from '@/lib/library/customFields';
+import { setAssetReviewState, transitionReviewStatus } from '@/lib/library/review';
 import { normalizeReviewStatus, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
+import { useLibraryAccess } from '@/lib/library/useBrandRole';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { useMentionTargets } from '../detail/useMentionTargets';
+import { useReviewCustomStates, useReviewStateLabels } from '../review/useReviewStateLabels';
 import { BoardCardContent } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
-import { type BoardGrouping, buildBoardLanes, decodeLaneId } from './boardGrouping';
+import {
+  type BoardGrouping,
+  boardAcceptsDrops,
+  buildBoardLanes,
+  decodeLaneId,
+  dropValue,
+} from './boardGrouping';
 
 const PAGE_SIZE = 96;
 const MAX_BOARD_ASSETS = 192;
@@ -123,27 +145,24 @@ async function fetchBoardAssets(
   return collected;
 }
 
-// assetId → the option it holds for `field`. One filtered listing per option:
-// the route already knows how to answer "which assets hold this option", and an
-// asset absent from every answer holds none.
-async function fetchOptionByAssetId(
+// assetId → the value it holds for `field`, in one read of the field's values. An asset
+// the map does not name is unset.
+function fetchValueByAssetId(brandId: string, field: CustomField) {
+  return listFieldValuesByAsset({ brandId, fieldId: field.id });
+}
+
+async function fetchCollectionViewConfig(
   brandId: string,
-  filters: LibraryBoardFilters,
-  field: CustomField,
-): Promise<Map<string, string>> {
-  const perOption = await Promise.all(
-    field.options.map(async (option) => {
-      const assets = await fetchBoardAssets(brandId, filters, [
-        { fieldId: field.id, operator: 'any_of', values: [option.id] },
-      ]);
-      return [option.id, assets] as const;
-    }),
-  );
-  const optionByAssetId = new Map<string, string>();
-  for (const [optionId, assets] of perOption) {
-    for (const asset of assets) optionByAssetId.set(asset.id, optionId);
-  }
-  return optionByAssetId;
+  collectionId: string,
+): Promise<CollectionViewConfig | null> {
+  const response = await fetch(`/api/library/collections?brandId=${encodeURIComponent(brandId)}`);
+  if (!response.ok) return null;
+  const payload = (await response.json()) as {
+    collections?: { id: string; viewConfig?: unknown }[];
+  };
+  const collection = payload.collections?.find((candidate) => candidate.id === collectionId);
+  const parsed = collectionViewConfigSchema.safeParse(collection?.viewConfig ?? {});
+  return parsed.success ? parsed.data : null;
 }
 
 function BoardSkeleton() {
@@ -175,14 +194,18 @@ export function LibraryBoardView({
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeAsset, setActiveAsset] = useState<MediaAsset | null>(null);
-  const [optionByAssetId, setOptionByAssetId] = useState<Map<string, string>>(new Map());
+  const [valueByAssetId, setValueByAssetId] = useState<Map<string, CustomFieldValue>>(new Map());
+  const { brandRole, canEdit } = useLibraryAccess(brandId, {
+    collectionId: filters.collectionId,
+  });
+  const acceptsDrops = boardAcceptsDrops(brandRole, canEdit);
+  const reviewLabels = useReviewStateLabels(brandId);
+  const customStates = useReviewCustomStates(brandId);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const groupableFields = useMemo(
-    () => (customFields ?? []).filter(isGroupableField),
-    [customFields],
-  );
+  // Every field can group the board; the lane shapes live in boardGrouping.
+  const groupableFields = customFields ?? [];
 
   // A field deleted (or made non-groupable) while it was the board's group-by
   // must not strand the board on a dimension that no longer exists.
@@ -229,13 +252,13 @@ export function LibraryBoardView({
   // the asset row, so the default board costs no extra request.
   useEffect(() => {
     if (!groupField) {
-      setOptionByAssetId(new Map());
+      setValueByAssetId(new Map());
       return;
     }
     let cancelled = false;
-    fetchOptionByAssetId(brandId, filters, groupField)
+    fetchValueByAssetId(brandId, groupField)
       .then((map) => {
-        if (!cancelled) setOptionByAssetId(map);
+        if (!cancelled) setValueByAssetId(map);
       })
       .catch((err: unknown) => {
         if (!cancelled) setLoadError((err as Error).message);
@@ -246,27 +269,130 @@ export function LibraryBoardView({
     // biome-ignore lint/correctness/useExhaustiveDependencies: filterKey serializes filters
   }, [brandId, filterKey, refreshKey, groupField]);
 
+  // Live, brand-wide: another member's field write or review move lands in this board's
+  // lanes as the row arrives — merged in place, no refetch and no reload.
+  const groupFieldId = groupField?.id ?? null;
+  useEffect(() => {
+    return subscribeToPostgresChanges({
+      label: `library-board-${brandId}`,
+      bindings: [
+        {
+          event: '*',
+          schema: 'media',
+          table: 'asset_field_values',
+          filter: `brand_id=eq.${brandId}`,
+          onRow: (row, meta) => {
+            const source = meta.eventType === 'DELETE' ? meta.old : row;
+            if (!groupFieldId || source.field_id !== groupFieldId) return;
+            const assetId = String(source.asset_id ?? '');
+            if (!assetId) return;
+            setValueByAssetId((prev) => {
+              const next = new Map(prev);
+              if (meta.eventType === 'DELETE') next.delete(assetId);
+              else next.set(assetId, row.value as CustomFieldValue);
+              return next;
+            });
+          },
+        },
+        {
+          event: 'UPDATE',
+          schema: 'media',
+          table: 'assets',
+          filter: `brand_id=eq.${brandId}`,
+          onRow: (row) => {
+            const reviewStatus = mediaReviewStatusSchema.safeParse(row.review_status);
+            if (!reviewStatus.success) return;
+            setAssets((prev) =>
+              prev
+                ? prev.map((item) =>
+                    item.id === row.id
+                      ? {
+                          ...item,
+                          reviewStatus: reviewStatus.data,
+                          reviewStateId:
+                            typeof row.review_state_id === 'string' ? row.review_state_id : null,
+                        }
+                      : item,
+                  )
+                : prev,
+            );
+          },
+        },
+      ],
+    });
+  }, [brandId, groupFieldId]);
+
+  const members = useMentionTargets(
+    groupField?.type === 'user' || groupField?.type === 'user_multi' ? brandId : null,
+  );
   const lanes = useMemo(
-    () => buildBoardLanes({ grouping, assets: assets ?? [], optionByAssetId }),
-    [grouping, assets, optionByAssetId],
+    () =>
+      buildBoardLanes({
+        grouping,
+        assets: assets ?? [],
+        valueByAssetId,
+        members: members ?? [],
+        reviewLabels,
+        customStates,
+      }),
+    [grouping, assets, valueByAssetId, members, reviewLabels, customStates],
   );
 
-  const setLocalOption = useCallback((assetId: string, optionId: string | null) => {
-    setOptionByAssetId((prev) => {
+  // Inside a collection the grouping is the collection's, not the viewer's: it is
+  // read from view_config when the collection opens and written back on change, so
+  // everyone who opens the board sees the same lanes.
+  const collectionId = filters.collectionId;
+  const [viewConfig, setViewConfig] = useState<CollectionViewConfig | null>(null);
+  useEffect(() => {
+    setViewConfig(null);
+    if (!collectionId) return;
+    let cancelled = false;
+    fetchCollectionViewConfig(brandId, collectionId).then((config) => {
+      if (cancelled || !config) return;
+      setViewConfig(config);
+      if (config.groupBy && config.groupBy !== groupBy) onGroupByChange(config.groupBy);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Read once per collection; groupBy changes are written, not re-read.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+  }, [brandId, collectionId]);
+
+  const chooseGroupBy = (next: string) => {
+    onGroupByChange(next);
+    if (!collectionId || !viewConfig || viewConfig.groupBy === next) return;
+    const nextConfig = { ...viewConfig, groupBy: next };
+    setViewConfig(nextConfig);
+    updateLibraryCollectionOperation(createSupabaseBrowserClient(), {
+      brandId,
+      collectionId,
+      viewConfig: nextConfig,
+    }).catch((err: unknown) => {
+      // A system view (or someone else's) cannot be re-configured; the board still
+      // regroups for this viewer.
+      console.warn('[LibraryBoardView] could not save the grouping', err);
+    });
+  };
+
+  const setLocalValue = useCallback((assetId: string, value: CustomFieldValue) => {
+    setValueByAssetId((prev) => {
       const next = new Map(prev);
-      if (optionId === null) next.delete(assetId);
-      else next.set(assetId, optionId);
+      if (value === null) next.delete(assetId);
+      else next.set(assetId, value);
       return next;
     });
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!acceptsDrops) return;
     const asset = (assets ?? []).find((candidate) => candidate.id === String(event.active.id));
     setActiveAsset(asset ?? null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveAsset(null);
+    if (!acceptsDrops) return;
     const { active, over } = event;
     if (!over) return;
 
@@ -277,41 +403,50 @@ export function LibraryBoardView({
     const asset = (assets ?? []).find((candidate) => candidate.id === assetId);
     if (!asset) return;
 
-    if (target.kind === 'review_status') {
-      const fromStatus = normalizeReviewStatus(asset.reviewStatus);
-      if (fromStatus === target.status) return;
-      const toStatus = target.status;
-      setAssets((prev) =>
-        prev
-          ? prev.map((item) => (item.id === assetId ? { ...item, reviewStatus: toStatus } : item))
-          : prev,
-      );
-      transitionReviewStatus({ brandId, assetId, toStatus }).catch((err: unknown) => {
+    if (target.kind === 'review_status' || target.kind === 'review_state') {
+      const from = {
+        reviewStatus: normalizeReviewStatus(asset.reviewStatus),
+        reviewStateId: asset.reviewStateId ?? null,
+      };
+      const to = {
+        reviewStatus: target.status,
+        reviewStateId: target.kind === 'review_state' ? target.stateId : null,
+      };
+      if (from.reviewStatus === to.reviewStatus && from.reviewStateId === to.reviewStateId) return;
+      const place = (fields: typeof from) =>
         setAssets((prev) =>
-          prev
-            ? prev.map((item) =>
-                item.id === assetId ? { ...item, reviewStatus: fromStatus } : item,
-              )
-            : prev,
+          prev ? prev.map((item) => (item.id === assetId ? { ...item, ...fields } : item)) : prev,
         );
+      place(to);
+      // A base lane is a plain transition; a custom-state lane goes through the
+      // library-review edge function, which records the state on the event.
+      const write =
+        target.kind === 'review_state'
+          ? setAssetReviewState({ brandId, assetId, stateId: target.stateId })
+          : transitionReviewStatus({ brandId, assetId, toStatus: target.status });
+      write.catch((err: unknown) => {
+        place(from);
         toast.error(`Move failed · ${(err as Error).message}`);
       });
       return;
     }
 
-    const fromOptionId = optionByAssetId.get(assetId) ?? null;
-    if (fromOptionId === target.optionId) return;
-    setLocalOption(assetId, target.optionId);
+    if (!groupField || target.fieldId !== groupField.id) return;
+    const current = valueByAssetId.get(assetId) ?? null;
+    const next = dropValue(groupField, target.optionId, current);
+    if (next === undefined) {
+      toast.info(`${groupField.name} lanes group by range — set the value on the asset`);
+      return;
+    }
+    if (JSON.stringify(next) === JSON.stringify(current)) return;
+    setLocalValue(assetId, next);
     // The unset lane is a real destination: dropping there CLEARS the value.
-    setAssetFieldValue({
-      brandId,
-      assetId,
-      fieldId: target.fieldId,
-      value: target.optionId,
-    }).catch((err: unknown) => {
-      setLocalOption(assetId, fromOptionId);
-      toast.error(`Move failed · ${(err as Error).message}`);
-    });
+    setAssetFieldValue({ brandId, assetId, fieldId: groupField.id, value: next }).catch(
+      (err: unknown) => {
+        setLocalValue(assetId, current);
+        toast.error(`Move failed · ${(err as Error).message}`);
+      },
+    );
   };
 
   if (assets === null) return <BoardSkeleton />;
@@ -322,7 +457,7 @@ export function LibraryBoardView({
         <GroupByPicker
           label={groupField?.name ?? REVIEW_GROUPING_LABEL}
           fields={groupableFields}
-          onSelect={(fieldId) => onGroupByChange(fieldId ?? 'review_status')}
+          onSelect={(fieldId) => chooseGroupBy(fieldId ?? 'review_status')}
         />
         {loadError ? <p className="text-2xs text-destructive">{loadError}</p> : null}
       </div>

@@ -235,45 +235,6 @@ export const brandInsightsStatusMessageSchema = z.object({
   createdAt: tolerantTimestampSchema('createdAt must be an ISO timestamp').optional(),
 });
 
-export const brandInsightsAudienceSegmentSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-});
-
-export const brandInsightsAudienceSchema = z.object({
-  summary: z.string().optional(),
-  painsAndFears: z.array(z.string()).optional(),
-  motivationsAndTriggers: z.array(z.string()).optional(),
-  segments: z.array(brandInsightsAudienceSegmentSchema).optional(),
-});
-
-export const brandInsightsCompetitorSchema = z.object({
-  name: z.string(),
-  strategy: z.string().optional(),
-  messaging: z.string().optional(),
-  urls: z.array(z.string()).optional(),
-});
-
-export const brandInsightsBrandVoiceSchema = z.object({
-  tone: z.string().optional(),
-  keywords: z.array(z.string()).optional(),
-  emojiUsage: z.string().optional(),
-  keyMessaging: z.array(z.string()).optional(),
-});
-
-export const brandInsightsProfileSchema = z.object({
-  status: z.enum(['success', 'onboarding_required']),
-  brandId: z.string().optional(),
-  brandSummary: z.string().optional(),
-  mission: z.string().optional(),
-  vision: z.string().optional(),
-  coreValues: z.array(z.string()).optional(),
-  niches: z.array(z.string()).optional(),
-  audience: brandInsightsAudienceSchema.optional(),
-  competitors: z.array(brandInsightsCompetitorSchema).optional(),
-  brandVoice: brandInsightsBrandVoiceSchema.optional(),
-});
-
 const isoDateOnlySchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'weekStartDate must be a YYYY-MM-DD date');
@@ -316,11 +277,6 @@ export type BrandInsightsGenerationResponse = z.infer<typeof brandInsightsGenera
 export type BrandInsightsTaskStatus = z.infer<typeof brandInsightsTaskStatusSchema>;
 export type BrandInsightsStatusResponse = z.infer<typeof brandInsightsStatusResponseSchema>;
 export type BrandInsightsStatusMessage = z.infer<typeof brandInsightsStatusMessageSchema>;
-export type BrandInsightsAudience = z.infer<typeof brandInsightsAudienceSchema>;
-export type BrandInsightsAudienceSegment = z.infer<typeof brandInsightsAudienceSegmentSchema>;
-export type BrandInsightsCompetitor = z.infer<typeof brandInsightsCompetitorSchema>;
-export type BrandInsightsBrandVoice = z.infer<typeof brandInsightsBrandVoiceSchema>;
-export type BrandInsightsProfile = z.infer<typeof brandInsightsProfileSchema>;
 export type BrandInsightsGenerationWindow = z.infer<typeof brandInsightsGenerationWindowSchema>;
 export type BrandInsightsGenerateInput = z.infer<typeof brandInsightsGenerateInputSchema>;
 

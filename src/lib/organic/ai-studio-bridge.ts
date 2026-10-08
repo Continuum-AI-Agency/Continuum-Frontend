@@ -12,18 +12,20 @@ export function brandStorageKeyAiStudioLastDraft(brandId: string): string {
 }
 
 export type OrganicPostType = 'post' | 'reel' | 'carousel';
-export type OrganicPlatformForStudio = 'instagram' | 'linkedin';
+export type OrganicPlatformForStudio = 'instagram' | 'linkedin' | 'tiktok';
 export type OrganicWorkflowConcept =
   | 'ig_post_single_image'
   | 'ig_reel_single_video'
   | 'ig_carousel_multi_image'
-  | 'li_post_single_image';
+  | 'li_post_single_image'
+  | 'tt_text';
 
 const workflowConceptSchema = z.enum([
   'ig_post_single_image',
   'ig_reel_single_video',
   'ig_carousel_multi_image',
   'li_post_single_image',
+  'tt_text',
 ]);
 
 export const plannerHandoffMediaSuggestionSchema = z
@@ -61,9 +63,11 @@ export type PlannerHandoffSlide = z.infer<typeof plannerHandoffSlideSchema>;
 export const plannerAiStudioHandoffSchema = z.object({
   schemaVersion: z.literal('planner_ai_handoff_v1'),
   draftId: z.string().min(1),
+  backendDraftId: z.string().optional(),
   brandProfileId: z.string().min(1),
+  sourceUpdatedAt: z.string().min(1),
   weekStartId: z.string().min(1),
-  platform: z.enum(['instagram', 'linkedin']),
+  platform: z.enum(['instagram', 'linkedin', 'tiktok']),
   postType: z.enum(['post', 'reel', 'carousel']),
   workflowConcept: workflowConceptSchema.optional(),
   format: z.string().min(1),
@@ -81,6 +85,48 @@ export const plannerAiStudioHandoffSchema = z.object({
 });
 
 export type PlannerAiStudioHandoff = z.infer<typeof plannerAiStudioHandoffSchema>;
+
+export function aiStudioHandoffIssue(draft: {
+  status: string;
+  platforms: string[];
+  format: string;
+  mediaStage?: string;
+  mediaSuggestion?: {
+    assetUrl?: string | null;
+    assetBase64?: string | null;
+    reel?: unknown;
+  } | null;
+  publishingAssets?: unknown[] | null;
+  backendDraftId?: string;
+  updatedAt?: string | null;
+}): string | null {
+  if (draft.status === 'streaming' || draft.status === 'placeholder')
+    return 'Wait for this draft to finish before opening AI Studio.';
+  if (draft.platforms.length !== 1) return 'Open one platform draft at a time in AI Studio.';
+  if (!draft.backendDraftId || !draft.updatedAt)
+    return 'Save this draft before opening it in AI Studio.';
+  const platform = draft.platforms[0];
+  if (platform === 'instagram') return null;
+  if (platform === 'linkedin') {
+    return normalizeDraftPostType(draft.format) === 'post'
+      ? null
+      : 'This LinkedIn format is not supported in AI Studio yet.';
+  }
+  if (platform === 'tiktok') {
+    if (normalizeDraftPostType(draft.format) !== 'post')
+      return 'This TikTok format is not supported in AI Studio yet.';
+    const hasMedia = Boolean(
+      draft.publishingAssets?.length ||
+        draft.mediaSuggestion?.assetUrl ||
+        draft.mediaSuggestion?.assetBase64 ||
+        draft.mediaSuggestion?.reel,
+    );
+    if (hasMedia || (draft.mediaStage && draft.mediaStage !== 'text_only'))
+      return 'TikTok media editing is not supported in AI Studio yet.';
+    return null;
+  }
+  return `${platform ?? 'This platform'} is not supported in AI Studio yet.`;
+}
 
 const applyAssetInputSchema = z.object({
   role: z.string().min(1),
@@ -110,6 +156,7 @@ export const plannerAiStudioApplyRequestSchema = z.object({
   schemaVersion: z.literal('planner_ai_apply_v1'),
   draftId: z.string().min(1),
   brandProfileId: z.string().min(1),
+  expectedUpdatedAt: z.string().min(1),
   postType: z.enum(['post', 'reel', 'carousel']),
   platform: z.enum(['instagram', 'linkedin']),
   overwrite: z.literal(true),
@@ -310,7 +357,7 @@ export function normalizeDraftPostType(format?: string): OrganicPostType {
 
 export type WorkflowConceptSpec = {
   concept: OrganicWorkflowConcept;
-  outputKind: 'image' | 'video';
+  outputKind: 'image' | 'video' | 'text';
   outputMode: 'single' | 'ordered';
   maxReferenceImages: number;
   requiresExplicitPickOnMultiOutput: boolean;
@@ -350,12 +397,21 @@ export const WORKFLOW_CONCEPT_SPECS: Record<OrganicWorkflowConcept, WorkflowConc
     requiresExplicitPickOnMultiOutput: true,
     defaultModel: 'nano-banana-2',
   },
+  tt_text: {
+    concept: 'tt_text',
+    outputKind: 'text',
+    outputMode: 'single',
+    maxReferenceImages: 0,
+    requiresExplicitPickOnMultiOutput: false,
+    defaultModel: 'nano-banana-2',
+  },
 };
 
 export function resolveWorkflowConcept(input: {
   platform: OrganicPlatformForStudio;
   postType: OrganicPostType;
 }): OrganicWorkflowConcept {
+  if (input.platform === 'tiktok') return 'tt_text';
   if (input.platform === 'linkedin') {
     return 'li_post_single_image';
   }

@@ -1,13 +1,27 @@
 'use client';
 
-import type { LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
+import type { CustomField, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { type DragEvent, useEffect, useRef } from 'react';
 import { stagger } from '@/components/ui/Motion';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { formatCustomFieldValue } from '@/lib/library/customFieldValue';
 import { cn } from '@/lib/utils';
-import { MediaCard } from './MediaCard';
+import { type CardFieldValue, MediaCard } from './MediaCard';
+import { assetIdsToDrag, writeAssetDrag } from './views/assetDrag';
+import { useMentionTargets } from './detail/useMentionTargets';
+import {
+  BUILT_IN_CARD_FIELDS,
+  CARD_DRAWN_FIELDS,
+  type CardViewOptions,
+  cardFieldValue,
+  cardGridTemplate,
+  isBuiltInCardField,
+  memberNameLookup,
+  visibleCardFields,
+} from './views/cardOptions';
+import { type FieldValuesByAsset, useAssetCommentCounts } from './views/useAssetFieldValues';
 
 type Props = {
   brandId: string;
@@ -24,6 +38,12 @@ type Props = {
   selectedAssetIds?: ReadonlySet<string>;
   onToggleSelected?: (asset: MediaAsset) => void;
   previewFrame?: LibraryPreviewFrame;
+  card?: CardViewOptions;
+  /** The custom fields the user chose to show on cards, in order. */
+  cardFields?: CustomField[];
+  fieldValues?: FieldValuesByAsset;
+  /** Cards become draggable and accept other cards, stacking them as new versions. */
+  onStackDrop?: (target: MediaAsset, sourceAssetIds: string[]) => void;
 };
 
 const cardVariants: Variants = {
@@ -59,9 +79,51 @@ export function MediaGrid({
   selectedAssetIds,
   onToggleSelected,
   previewFrame = 'native',
+  card,
+  cardFields = [],
+  fieldValues,
+  onStackDrop,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // MediaCard draws its own few facts; every other chosen built-in field joins the custom
+  // fields as a label row, in the order the user picked them.
+  const builtInRows = visibleCardFields(card).filter(
+    (key) => isBuiltInCardField(key) && !CARD_DRAWN_FIELDS.has(key),
+  );
+  const commentCount = useAssetCommentCounts(
+    assets.map((asset) => asset.id),
+    builtInRows.includes('comments'),
+  );
+  const needsMembers =
+    builtInRows.includes('uploader') ||
+    cardFields.some((field) => field.type === 'user' || field.type === 'user_multi');
+  const members = useMentionTargets(needsMembers ? brandId : null);
+  const memberName = memberNameLookup(members);
+  const customFieldValuesOf = (asset: MediaAsset): CardFieldValue[] => [
+    ...builtInRows.map((key) => ({
+      key,
+      label: BUILT_IN_CARD_FIELDS.find((field) => field.key === key)?.label ?? key,
+      value: cardFieldValue(asset, key, { commentCount, memberName }) ?? '',
+    })),
+    ...cardFields.map((field) => {
+      const value = fieldValues?.get(asset.id)?.get(field.id);
+      return {
+        key: field.id,
+        label: field.name,
+        value: value === undefined ? '' : formatCustomFieldValue(field, value, memberName),
+      };
+    }),
+  ];
+  const onDragAssetStart = onStackDrop
+    ? (event: DragEvent<HTMLElement>, asset: MediaAsset) =>
+        writeAssetDrag(
+          event,
+          brandId,
+          assetIdsToDrag(asset.id, selectedAssetIds ?? new Set<string>()),
+        )
+    : undefined;
 
   // assets.length is intentional: re-arm the IntersectionObserver after each loaded
   // page so the sentinel keeps firing as the grid grows.
@@ -97,11 +159,14 @@ export function MediaGrid({
   }
 
   const gridClass = previewFrame === 'native' ? GRID_CLASS : FRAME_GRID_CLASS[previewFrame];
+  // A chosen card size replaces the breakpoint column counts with a min card width.
+  const gridTemplate = cardGridTemplate(card?.size);
+  const gridStyle = gridTemplate ? { gridTemplateColumns: gridTemplate } : undefined;
 
   return (
     <div className="flex flex-col gap-4">
       {reduceMotion ? (
-        <div className={cn(gridClass, className)}>
+        <div className={cn(gridClass, className)} style={gridStyle}>
           {assets.map((asset, i) => (
             <MediaCard
               key={asset.id}
@@ -115,12 +180,17 @@ export function MediaGrid({
               selected={selectedAssetIds?.has(asset.id)}
               onToggleSelected={onToggleSelected}
               previewFrame={previewFrame}
+              card={card}
+              customFieldValues={customFieldValuesOf(asset)}
+              onDragAssetStart={onDragAssetStart}
+              onStackDrop={onStackDrop}
             />
           ))}
         </div>
       ) : (
         <motion.div
           className={cn(gridClass, className)}
+          style={gridStyle}
           variants={stagger}
           initial="hidden"
           animate="visible"
@@ -139,6 +209,10 @@ export function MediaGrid({
                   selected={selectedAssetIds?.has(asset.id)}
                   onToggleSelected={onToggleSelected}
                   previewFrame={previewFrame}
+                  card={card}
+                  customFieldValues={customFieldValuesOf(asset)}
+                  onDragAssetStart={onDragAssetStart}
+                  onStackDrop={onStackDrop}
                 />
               </motion.div>
             ))}

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { buildHeroView } from './heroModel';
+import { type CycleRunReport, getOptimizationMetricDefinition } from '@continuum/contracts';
+import formularios from '../../__fixtures__/optimizer-status-formularios.json';
+import { parseReport } from '../../reportModel';
+import { buildHeroView, ctaForCandidate, isQueueRowKey, queueRowKeyFor } from './heroModel';
+import { buildPortfolioNews } from './news/newsModel';
 
 const metric = {
   kpiField: 'leads',
@@ -101,12 +105,7 @@ describe('buildHeroView', () => {
       firstCycle: false,
     });
     expect(view.source).toBe('fallback');
-    expect(view.tiles.map((t) => [t.key, t.value])).toEqual([
-      ['spend', 3640],
-      ['results', 47],
-      ['cost', 77.45],
-    ]);
-    expect(view.tiles[2]?.note).toBe('11% over target');
+    expect(view.brief.growth).toMatchObject({ spend: 3640, results: 47, cost_per_result: 77.45 });
     expect(view.brief.hero).toMatchObject({ module: 'pause', impact_per_day: 120 });
     expect(view.cta).toEqual({
       kind: 'queue_row',
@@ -206,7 +205,7 @@ describe('buildHeroView', () => {
       flightPacing: { kind: 'no_flight' },
       metric,
       currency: 'USD',
-      portfolio: { ...portfolio, apply_mode: 'observe' } as never,
+      portfolio: { ...(portfolio as object), apply_mode: 'observe' } as never,
       target: 70,
       window: 'd7',
       firstCycle: false,
@@ -375,5 +374,110 @@ describe('a stored brief is read against the run it came from', () => {
     const view = build(pacingFromAFlight);
     expect(view.brief.growth.pacing.status).toBe('overpacing');
     expect(view.brief.growth_sentence).toContain('and is on track');
+  });
+});
+
+describe('the real FORMULARIOS // TODOS body — a pause that bought 8 leads', () => {
+  // Anonymised production body. The hero pauses "Ad set A" (production: ITESO // AGOSTO -
+  // RTG): 8 leads over 14 days at 75.65 each against a 35 target, engine interval 38.39 to
+  // 175.24. Its brief candidate says `results_per_day: null`, and the screen drew "no
+  // results to divide by" under "43.23 a day buying nothing".
+  const build = () => {
+    const report = parseReport(formularios as unknown as CycleRunReport);
+    const view = buildHeroView({
+      report,
+      recap: {
+        ...(recap as object),
+        series: [
+          { date: '2026-09-24', spend: 280, results: 6 },
+          { date: '2026-09-25', spend: 289, results: 7 },
+        ],
+      } as never,
+      flightPacing: null,
+      metric: getOptimizationMetricDefinition('lead'),
+      currency: 'MXN',
+      portfolio: (formularios as { portfolio: unknown }).portfolio as never,
+      target: 35,
+      window: 'd14',
+      firstCycle: false,
+    });
+    return { report, view };
+  };
+
+  it('hands the cards the cycle’s evidence: the daily series and the recommendations', () => {
+    const { view } = build();
+    expect(view.brief.hero.headline).toContain('Ad set A');
+    expect(view.series?.length).toBe(2);
+    expect(view.recommendations?.map((rec) => rec.evidence?.metric).sort()).toEqual([
+      'cpp',
+      'ctr',
+      'spend',
+    ]);
+  });
+
+  it('the lead card draws its cost against the reference, never "bought nothing"', () => {
+    const { report, view } = build();
+    const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
+    expect(news.lead?.visual.kind).toBe('cost_vs_reference');
+  });
+
+  it('draws the zero-conversion ad set (Ad set B) as spend that bought nothing', () => {
+    const { report, view } = build();
+    const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
+    const dead = news.insights.find((card) => card.claim.includes('Ad set B'));
+    expect(dead?.visual.kind).toBe('spend_blocks');
+  });
+});
+
+// The one resolver both the hero card and the asked-for rows use for where a CTA lands.
+describe('queueRowKeyFor', () => {
+  it('accepts only the two keys buildActionQueue mints', () => {
+    expect(isQueueRowKey('rec:abc')).toBe(true);
+    expect(isQueueRowKey('budget:120210')).toBe(true);
+    expect(isQueueRowKey('prop-1')).toBe(false);
+    expect(isQueueRowKey('audience:prop-1')).toBe(false);
+    expect(isQueueRowKey('rec:')).toBe(false);
+    expect(isQueueRowKey(null)).toBe(false);
+  });
+
+  it("takes the CTA's own target when it already is a row key", () => {
+    expect(queueRowKeyFor({ kind: 'queue_row', target_id: 'budget:120210' })).toBe('budget:120210');
+    expect(queueRowKeyFor({ kind: 'audience_card', target_id: 'rec:abc' })).toBe('rec:abc');
+  });
+
+  it('resolves a bare proposal id through the candidate, then the handoff — never as itself', () => {
+    const cta = { kind: 'audience_card' as const, target_id: 'prop-1' };
+    expect(queueRowKeyFor(cta, { candidateId: 'rec:a' })).toBe('rec:a');
+    expect(queueRowKeyFor(cta, { candidateId: 'audience:prop-1', recommendationId: 'r1' })).toBe(
+      'rec:r1',
+    );
+    expect(queueRowKeyFor(cta)).toBeNull();
+    expect(
+      queueRowKeyFor({ kind: 'manage', target_id: null }, { candidateId: 'rec:a' }),
+    ).toBeNull();
+  });
+});
+
+describe('ctaForCandidate', () => {
+  it('names Manage when the target cannot land on any row, instead of a button that focuses nothing', () => {
+    expect(
+      ctaForCandidate(
+        {
+          id: 'audience:prop-1',
+          module: 'audience',
+          cta: { kind: 'audience_card', target_id: 'prop-1' },
+        },
+        false,
+      ),
+    ).toEqual({ kind: 'manage', rowKey: null, label: 'Open Manage' });
+  });
+
+  it('lands an audience card on its recommendation row', () => {
+    expect(
+      ctaForCandidate(
+        { id: 'rec:a', module: 'audience', cta: { kind: 'audience_card', target_id: 'prop-1' } },
+        false,
+      ),
+    ).toEqual({ kind: 'audience_card', rowKey: 'rec:a', label: 'Open the audience proposal' });
   });
 });

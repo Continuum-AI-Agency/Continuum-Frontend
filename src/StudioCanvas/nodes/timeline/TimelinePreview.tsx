@@ -9,12 +9,11 @@ import { ensureCaptionFonts } from '@/lib/clips/captionFonts';
 import { captionFontFamiliesFor, resolveStyleWithPreset } from '@/lib/clips/captionPresets';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec, ResolvedTextOverlay } from '../../utils/render/effectSpec';
-import { hasShaderStack } from '../../utils/render/shaderStack';
 import type { CaptionCue } from '../../utils/splice/captionCues';
 import type { NestedPreviewGroup } from './nestedSequencePreview';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { TimelineOverlayPreviewLayers } from './TimelineOverlayPreviewLayers';
-import { TimelineShaderPreview } from './TimelineShaderPreview';
+import { needsCanvasPreview, TimelineShaderPreview } from './TimelineShaderPreview';
 
 function formatTime(sec: number): string {
   const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
@@ -127,6 +126,7 @@ export function TimelinePreview({
   playheadSec,
   totalSec,
   mediaStyle,
+  frameSize,
   shaderEffects,
   shaderTimeSec = 0,
   textOverlays,
@@ -153,6 +153,7 @@ export function TimelinePreview({
   // Effect CSS (filter/transform/opacity) for the active clip — the same spec
   // that the canvas export bakes in, so preview and output match.
   mediaStyle?: React.CSSProperties;
+  frameSize?: { width: number; height: number; backgroundColor?: string };
   shaderEffects?: ClipEffectSpec;
   shaderTimeSec?: number;
   textOverlays?: ResolvedTextOverlay[];
@@ -204,20 +205,26 @@ export function TimelinePreview({
     <div className="flex h-full flex-col gap-2">
       {/* containerType lets text overlays size via cqh (fraction of frame height). */}
       <div
-        className="relative flex-1 overflow-hidden rounded-lg border border-border/60 bg-black"
-        style={{ containerType: 'size' }}
+        className="relative flex-1 overflow-hidden rounded-lg border border-border/60"
+        style={{
+          containerType: 'size',
+          backgroundColor: frameSize?.backgroundColor ?? '#000000',
+          ...(frameSize ? { aspectRatio: frameSize.width / frameSize.height, flex: 'none' } : {}),
+        }}
       >
         <video
           ref={videoRef}
+          crossOrigin="anonymous"
           playsInline
           muted={false}
           className="absolute inset-0 h-full w-full object-contain transition-opacity"
           style={{
             ...mediaStyle,
-            opacity: showVideo && !hasShaderStack(shaderEffects) ? (mediaStyle?.opacity ?? 1) : 0,
+            opacity:
+              showVideo && !needsCanvasPreview(shaderEffects) ? (mediaStyle?.opacity ?? 1) : 0,
           }}
         />
-        {!showVideo && activeImageUrl && !hasShaderStack(shaderEffects) ? (
+        {!showVideo && activeImageUrl && !needsCanvasPreview(shaderEffects) ? (
           // biome-ignore lint/performance/noImgElement: in-memory still preview; next/image adds no value for canvas media
           <img
             src={activeImageUrl}
@@ -230,6 +237,7 @@ export function TimelinePreview({
           videoRef={videoRef}
           imageUrl={showVideo ? undefined : activeImageUrl}
           effects={shaderEffects}
+          canvasSize={frameSize}
           timeSec={shaderTimeSec}
           style={mediaStyle}
         />
@@ -253,6 +261,7 @@ export function TimelinePreview({
               },
             ]}
             isPlaying={isPlaying}
+            canvasSize={frameSize}
           />
         ) : null}
 
@@ -281,6 +290,7 @@ export function TimelinePreview({
 
         <TimelineOverlayPreviewLayers
           layers={overlayLayers ?? []}
+          canvasSize={frameSize}
           groups={nestedGroups}
           isPlaying={isPlaying}
         />
@@ -349,7 +359,7 @@ export function TimelinePreview({
           </div>
         ) : null}
 
-        {isEmpty ? (
+        {isEmpty && totalSec <= 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
             <Video className="h-7 w-7 opacity-30" />
             <span className="text-xs">Drag clips from the media bin onto the timeline</span>
@@ -363,7 +373,7 @@ export function TimelinePreview({
           size="icon"
           className="h-8 w-8"
           onClick={onTogglePlay}
-          disabled={isEmpty}
+          disabled={totalSec <= 0}
           aria-label={isPlaying || isPreparing ? 'Pause preview' : 'Play preview'}
         >
           {isPlaying || isPreparing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}

@@ -1,14 +1,19 @@
+import type { OrganicMetricPlatform } from '@continuum/contracts';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { ProductGate } from '@/components/billing/ProductGate';
 import type { OrganicAgentMentionContext } from '@/components/organic/agent/OrganicAgentPanel';
 import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
+import { OrganicExploreLazy } from '@/components/organic/OrganicExploreLazy';
 import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
 import { OrganicNoticeBridge } from '@/components/organic/OrganicNoticeBridge';
 import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs';
 import { OrganicCalendarWorkspace } from '@/components/organic/primitives/OrganicCalendarWorkspace';
 import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
 import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
+import { ReviewQueueLazy } from '@/components/organic/review/ReviewQueueLazy';
+import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
+import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
@@ -61,29 +66,44 @@ async function OrganicContent({
   }
   const brandName = brandSummaries?.find((b) => b.id === activeBrandId)?.name;
 
-  // Run all four in parallel — none depend on each other, only on activeBrandId.
-  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult] =
-    await Promise.allSettled([
-      ensureOnboardingState(activeBrandId),
-      fetchBrandIntegrationSummary(activeBrandId),
-      fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
-      (async () => {
-        const supabase = await createSupabaseServerClient();
-        const { data } = await supabase
-          .schema('brand_profiles')
-          .from('brand_documents')
-          .select('id, name, kind, text_excerpt')
-          .eq('brand_id', activeBrandId)
-          .eq('progress_step', 'ready')
-          .order('created_at', { ascending: false });
-        return (data ?? []) as Array<{
-          id: string;
-          name: string;
-          kind: string | null;
-          text_excerpt: string | null;
-        }>;
-      })(),
-    ]);
+  // These reads depend only on activeBrandId, so run them together.
+  const [
+    onboardingResult,
+    integrationSummaryResult,
+    insightsResult,
+    brandDocsResult,
+    brandTimeZoneResult,
+  ] = await Promise.allSettled([
+    ensureOnboardingState(activeBrandId),
+    fetchBrandIntegrationSummary(activeBrandId),
+    fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
+    (async () => {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase
+        .schema('brand_profiles')
+        .from('brand_documents')
+        .select('id, name, kind, text_excerpt')
+        .eq('brand_id', activeBrandId)
+        .eq('progress_step', 'ready')
+        .order('created_at', { ascending: false });
+      return (data ?? []) as Array<{
+        id: string;
+        name: string;
+        kind: string | null;
+        text_excerpt: string | null;
+      }>;
+    })(),
+    (async () => {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase
+        .schema('brand_profiles')
+        .from('brand_profiles')
+        .select('timezone')
+        .eq('id', activeBrandId)
+        .single();
+      return data?.timezone;
+    })(),
+  ]);
 
   if (onboardingResult.status === 'rejected') {
     throw onboardingResult.reason;
@@ -322,7 +342,7 @@ async function OrganicContent({
       tiktok: onboarding.connections.tiktok,
     },
   });
-  const initialMetricsPlatform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin' =
+  const initialMetricsPlatform: OrganicMetricPlatform =
     metricAccountsByPlatform.instagram.length > 0
       ? 'instagram'
       : metricAccountsByPlatform.tiktok.length > 0
@@ -331,7 +351,9 @@ async function OrganicContent({
           ? 'youtube'
           : metricAccountsByPlatform.linkedin.length > 0
             ? 'linkedin'
-            : 'facebook';
+            : metricAccountsByPlatform.x.length > 0
+              ? 'x'
+              : 'facebook';
 
   return (
     <>
@@ -342,6 +364,12 @@ async function OrganicContent({
       />
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
+        rulesSlot={
+          <CommentRulesWorkspace
+            brandId={brandProfileId}
+            instagramAccountId={metricAccountsByPlatform.instagram[0]?.integrationAccountId ?? null}
+          />
+        }
         plannerSlot={
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}
@@ -356,6 +384,9 @@ async function OrganicContent({
             maxTrendSelections={5}
             brandProfileId={brandProfileId}
             brandName={brandName}
+            brandTimeZone={
+              brandTimeZoneResult.status === 'fulfilled' ? brandTimeZoneResult.value : undefined
+            }
             initialSelectedDraftId={initialSelectedDraftId}
             initialWeekStart={initialWeekStart}
             initialView={initialView}
@@ -407,6 +438,9 @@ async function OrganicContent({
             initialSessionId={initialAgentSessionId}
           />
         }
+        exploreSlot={<OrganicExploreLazy brandId={brandProfileId} />}
+        reviewSlot={<ReviewQueueLazy brandId={brandProfileId} />}
+        stylesSlot={<StylesShelfLazy brandId={brandProfileId} />}
       />
     </>
   );

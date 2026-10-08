@@ -6,7 +6,7 @@ import {
   hyperframesAgentNodeDataSchema,
   hyperframesAgentTurnRequestSchema,
   hyperframesBrowserReviewRequestSchema,
-  hyperframesRenderCompleteRequestSchema,
+  hyperframesTemporalMetricsSchema,
 } from './hyperframes-agent';
 
 describe('HyperFrames agent contracts', () => {
@@ -27,6 +27,12 @@ describe('HyperFrames agent contracts', () => {
     });
   });
 
+  it('loads saved nodes from the previous model without changing the active model', () => {
+    expect(hyperframesAgentNodeDataSchema.parse({ model: 'gemini-3.8-flash' }).model).toBe(
+      HYPERFRAMES_AGENT_MODEL,
+    );
+  });
+
   it('accepts a turn containing only durable media identities', () => {
     const parsed = hyperframesAgentTurnRequestSchema.safeParse({
       canvasId: 'canvas_1',
@@ -41,6 +47,49 @@ describe('HyperFrames agent contracts', () => {
       durationSeconds: 15,
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it('accepts a 90-second launch brief but rejects 91 seconds', () => {
+    const request = {
+      canvasId: 'canvas_1',
+      nodeId: 'node_1',
+      prompt: 'Launch',
+      durationSeconds: 90,
+    };
+    expect(hyperframesAgentTurnRequestSchema.safeParse(request).success).toBe(true);
+    expect(
+      hyperframesAgentTurnRequestSchema.safeParse({ ...request, durationSeconds: 91 }).success,
+    ).toBe(false);
+  });
+
+  it('carries a 60 fps motion study from the node into its turn request', () => {
+    const node = hyperframesAgentNodeDataSchema.parse({ fps: 60, durationSeconds: 14 });
+    const turn = hyperframesAgentTurnRequestSchema.parse({
+      canvasId: 'canvas_1',
+      nodeId: 'node_1',
+      prompt: 'A continuous UI morph on a 120 BPM beat grid',
+      durationSeconds: node.durationSeconds,
+      fps: node.fps,
+    });
+    expect(turn.fps).toBe(60);
+    expect(hyperframesAgentTurnRequestSchema.safeParse({ ...turn, fps: 120 }).success).toBe(false);
+  });
+
+  it('keeps dense freeze intervals from a 90-second review', () => {
+    expect(
+      hyperframesTemporalMetricsSchema.safeParse({
+        sampleFps: 10,
+        adjacentFrameMad: [],
+        sceneChanges: 0,
+        duplicateFrameCount: 90,
+        longestFrozenSeconds: 0.1,
+        frozenIntervals: Array.from({ length: 90 }, (_, index) => ({
+          startSeconds: index,
+          durationSeconds: 0.1,
+        })),
+        entranceMotionSceneIds: [],
+      }).success,
+    ).toBe(true);
   });
 
   it('carries concise model feedback for every attached asset', () => {
@@ -85,20 +134,6 @@ describe('HyperFrames agent contracts', () => {
         },
       }).success,
     ).toBe(true);
-  });
-
-  it('accepts asset-only completion so a saved render can be finalized after a crash', () => {
-    expect(
-      hyperframesRenderCompleteRequestSchema.parse({
-        revisionId: 'revision_1',
-        fingerprint: 'f'.repeat(64),
-        assetId: 'asset_1',
-      }),
-    ).toEqual({
-      revisionId: 'revision_1',
-      fingerprint: 'f'.repeat(64),
-      assetId: 'asset_1',
-    });
   });
 
   it('carries a targeted scene revision and a durable quality summary', () => {

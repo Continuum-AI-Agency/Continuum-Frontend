@@ -85,4 +85,30 @@ describe('OrganicWorkspaceTabs', () => {
       `${window.location.pathname}?tab=planner`,
     );
   });
+
+  it('shows the Explore tab only when an explore slot is provided', () => {
+    searchParamState = 'tab=explore';
+
+    const { container } = renderWorkspaceTabs(
+      <OrganicWorkspaceTabs
+        plannerSlot={<div>Planner Slot</div>}
+        metricsSlot={<div>Metrics Slot</div>}
+        exploreSlot={<div>Explore Slot</div>}
+      />,
+    );
+
+    expect(findElementByExactText(container, 'Explore')).toBeTruthy();
+    expect(findElementByExactText(container, 'Explore Slot')).toBeTruthy();
+  });
+
+  it('omits the Explore tab without an explore slot', () => {
+    const { container } = renderWorkspaceTabs(
+      <OrganicWorkspaceTabs
+        plannerSlot={<div>Planner Slot</div>}
+        metricsSlot={<div>Metrics Slot</div>}
+      />,
+    );
+
+    expect(container.textContent?.includes('Explore')).toBe(false);
+  });
 });

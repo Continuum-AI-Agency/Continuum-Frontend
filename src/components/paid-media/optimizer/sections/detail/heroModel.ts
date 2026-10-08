@@ -1,11 +1,11 @@
-// The hero view: what the portfolio opens on. Growth tiles from the recap (the same
-// arithmetic the recap tiles use), the hero from the daily brief when it belongs to the
+// The hero view: what the portfolio opens on. Growth from the recap (the same arithmetic the
+// recap tiles use), the hero from the daily brief when it belongs to the
 // latest cycle — else the deterministic brief composed here from the report, so the screen
 // reads the same whether Jaina has written today's words yet or not.
 
 import type {
-  AccountChart,
   BriefCandidate,
+  BriefCta,
   BriefGrowth,
   CycleRunPacing,
   OptimizationMetricDefinition,
@@ -16,24 +16,8 @@ import type {
 import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { impactPerDay } from '../recQueueModel';
-import { heroChart, heroChartReading } from './heroChart';
 import { stripPaceClaim } from './paceClaim';
-import type { RecapModel } from './recapModel';
-
-export type HeroTile = {
-  key: 'spend' | 'results' | 'cost';
-  label: string;
-  value: number | null;
-  /** How to print the value: money or a count. */
-  format: 'currency' | 'count';
-  /** Fractional period delta; null when there is no previous period. */
-  delta: number | null;
-  /** For cost, a delta DOWN is good. */
-  goodWhenDown: boolean;
-  series: number[];
-  /** "12% over target" — cost tile only. */
-  note: string | null;
-};
+import type { RecapDay, RecapModel } from './recapModel';
 
 export type HeroCta = {
   /** `build` belongs to an ADOPTED asked-for suggestion that proposed something new: the
@@ -45,24 +29,62 @@ export type HeroCta = {
   label: string;
 };
 
+/** The only two shapes `buildActionQueue` keys a row by. A CTA that names anything else —
+ *  a bare audience-proposal id, a candidate id like `audience:<uuid>` — has nothing to land on. */
+const QUEUE_ROW_KEY = /^(rec|budget):.+/;
+
+export function isQueueRowKey(key: string | null | undefined): key is string {
+  return typeof key === 'string' && QUEUE_ROW_KEY.test(key);
+}
+
+/**
+ * The ONE resolver for where a CTA lands, shared by the hero card and the asked-for rows.
+ *
+ * A brief or an ad-hoc plan may point at a queue row directly (`queue_row`) or at an
+ * audience proposal (`audience_card`, whose `target_id` is the PROPOSAL id — the audience card
+ * renders nested inside its recommendation's row, so the proposal id itself is never a row
+ * key). The row is found in this order, and only a real key is ever returned:
+ *
+ *   1. the CTA's own `target_id`, when it already is a row key;
+ *   2. the candidate's id (`rec:<id>` on every candidate the deterministic brief mints);
+ *   3. the recommendation a handoff says the plan became (`rec:<recommendation_id>`).
+ *
+ * Null means the CTA cannot land anywhere the queue knows — the caller then offers a
+ * different door instead of a button that focuses nothing. Two resolvers used to disagree
+ * here (heroModel used the candidate id, askedForModel the bare proposal id); this is the
+ * function both call now.
+ */
+export function queueRowKeyFor(
+  cta: Pick<BriefCta, 'kind' | 'target_id'> | null | undefined,
+  fallback: { candidateId?: string | null; recommendationId?: string | null } = {},
+): string | null {
+  if (!cta || cta.kind === 'manage') return null;
+  if (isQueueRowKey(cta.target_id)) return cta.target_id;
+  if (isQueueRowKey(fallback.candidateId)) return fallback.candidateId;
+  if (fallback.recommendationId) return `rec:${fallback.recommendationId}`;
+  return null;
+}
+
 export type HeroView = {
   state: 'first_cycle' | 'ready';
-  /**
-   * The one chart the hero opens on, in place of the three tiles. Null when the window
-   * cannot honestly be drawn — the hero then shows the sentence alone, which is the
-   * correct outcome and not a degraded one. See heroChart.ts.
-   */
-  chart: AccountChart | null;
-  chartReading: string | null;
   /** 'brief' when Jaina wrote today's words; 'fallback' when composed here. */
   source: 'brief' | 'fallback';
-  tiles: HeroTile[];
   pacingLine: string | null;
   pacingTone: 'success' | 'warning' | 'muted';
   brief: PortfolioBrief;
   cta: HeroCta | null;
   observe: boolean;
   asOf: string | null;
+  /**
+   * The daily recap series, so the calm card can draw cost per result against the target
+   * across the window. Absent reads as no priced days. See ./news/cardVisual.
+   */
+  series?: readonly RecapDay[];
+  /**
+   * The cycle's recommendations: where each card's evidence lives (value, threshold, window),
+   * joined to its brief candidate by `rec:<id>`. Absent reads as no evidence.
+   */
+  recommendations?: ParsedCycleRunReport['recommendations'];
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -252,12 +274,12 @@ export function ctaForCandidate(
   observe: boolean,
 ): HeroCta {
   if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
-  const rowKey =
-    candidate.cta.kind === 'audience_card'
-      ? candidate.id
-      : candidate.cta.kind === 'queue_row'
-        ? candidate.cta.target_id
-        : null;
+  const rowKey = queueRowKeyFor(candidate.cta, { candidateId: candidate.id });
+  // A card whose target the queue cannot hold gets Manage, named as Manage — never a button
+  // labelled "Open the audience proposal" that switches tabs and focuses nothing.
+  if (candidate.cta.kind !== 'manage' && !rowKey) {
+    return { kind: 'manage', rowKey: null, label: 'Open Manage' };
+  }
   const label =
     candidate.module === 'pause'
       ? 'Review the pause'
@@ -304,43 +326,6 @@ export function buildHeroView(args: {
     latestRun: report?.latest_run ?? null,
     window: args.window,
   });
-  const tiles: HeroTile[] = [
-    {
-      key: 'spend',
-      label: 'Spend',
-      value: recap.current.spend,
-      format: 'currency',
-      delta: recap.delta.spend,
-      goodWhenDown: false,
-      series: recap.series.map((d) => d.spend),
-      note: null,
-    },
-    {
-      key: 'results',
-      label: metric.resultLabel,
-      value: recap.current.results,
-      format: 'count',
-      delta: recap.delta.results,
-      goodWhenDown: false,
-      series: recap.series.map((d) => d.results),
-      note: null,
-    },
-    {
-      key: 'cost',
-      label: metric.costLabel,
-      value: recap.current.costPerResult,
-      format: 'currency',
-      delta: recap.delta.costPerResult,
-      goodWhenDown: true,
-      series: recap.series.map((d) =>
-        d.results > 0 ? (d.spend / d.results) * metric.denominatorMultiplier : 0,
-      ),
-      note:
-        recap.vsTarget != null
-          ? `${Math.abs(Math.round(recap.vsTarget * 100))}% ${recap.vsTarget <= 0 ? 'under' : 'over'} target`
-          : null,
-    },
-  ];
   const pacing = pacingLineOf(args.flightPacing);
   const stored = report?.hero_brief ? readPortfolioBrief(report.hero_brief) : null;
   const latestRunId = report?.latest_run?.id ?? null;
@@ -360,25 +345,16 @@ export function buildHeroView(args: {
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),
         });
-  const heroCandidate = brief.candidates.find((c) => c.id === brief.hero.candidate_id) ?? null;
-  const chart = heroChart({
-    candidate: heroCandidate,
-    series: recap.series,
-    target: args.target,
-    resultLabel: metric.resultLabel,
-  });
-
   return {
     state: args.firstCycle ? 'first_cycle' : 'ready',
     source: briefIsCurrent ? 'brief' : 'fallback',
-    chart,
-    chartReading: heroChartReading(chart),
-    tiles,
     pacingLine: pacing.line,
     pacingTone: pacing.tone,
     brief,
     cta: ctaFor(brief, observe),
     observe,
     asOf: report?.latest_run?.cycle_ts ?? null,
+    series: recap.series,
+    recommendations: report?.recommendations ?? [],
   };
 }

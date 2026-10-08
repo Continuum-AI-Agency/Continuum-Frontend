@@ -54,7 +54,7 @@ function Body({ candidate, currency }: { candidate: AccountCandidate; currency: 
     <div className="min-w-0 space-y-1">
       <p className="font-semibold text-foreground text-sm">{meta.label}</p>
       <p className="text-muted-foreground text-xs">{meta.compares}</p>
-      <p className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground">
+      <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
         <span className="font-mono font-semibold text-base text-foreground tabular-nums">
           {formatCurrency(candidate.impact_per_day, currency)}
         </span>
@@ -62,15 +62,13 @@ function Body({ candidate, currency }: { candidate: AccountCandidate; currency: 
         <span>· {candidate.result_label}</span>
       </p>
       {candidate.capped_by ? (
-        <p className="text-3xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {candidate.capped_by === 'velocity'
             ? 'Capped by this objective’s per-cycle limit, not by the gap.'
             : 'Capped by a guardrail, not by the gap.'}
         </p>
       ) : (
-        <p className="text-3xs text-muted-foreground">
-          {IMPACT_CLASS_COPY[candidate.impact_class]}
-        </p>
+        <p className="text-xs text-muted-foreground">{IMPACT_CLASS_COPY[candidate.impact_class]}</p>
       )}
     </div>
   );
@@ -78,12 +76,12 @@ function Body({ candidate, currency }: { candidate: AccountCandidate; currency: 
 
 function Chart({ candidate, currency }: { candidate: AccountCandidate; currency: string | null }) {
   if (!candidate.chart) {
-    return <p className="text-2xs text-muted-foreground">No chart for this one.</p>;
+    return <p className="text-xs text-muted-foreground">No chart for this one.</p>;
   }
   return (
     <div className="min-w-0 space-y-1">
       <AccountChartView chart={candidate.chart} currency={currency} />
-      <p className="text-3xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {CHART_SHAPE_READING[chartShapeFor(candidate.detector)]}
       </p>
     </div>
@@ -111,13 +109,13 @@ function Cleared({
   // happen is a sentence about the finding. The detector's name holds the space.
   if (status === 'loading') {
     return (
-      <p className="text-2xs text-muted-foreground" data-testid="optimizer-pending">
+      <p className="text-xs text-muted-foreground" data-testid="optimizer-pending">
         <span className="font-mono">{candidateId.split(':')[0]}</span> — resolving…
       </p>
     );
   }
   return (
-    <p className="text-2xs text-muted-foreground" data-testid="optimizer-cleared">
+    <p className="text-xs text-muted-foreground" data-testid="optimizer-cleared">
       <span className="font-mono">{candidateId.split(':')[0]}</span> —{' '}
       {status === 'unavailable'
         ? CITATION_UNREACHABLE_NOTE
@@ -143,14 +141,14 @@ export function OptimizerCardBlock({
   // and rendering a half-strip would hide it. Say so instead.
   if (!citationIsWellFormed(card)) {
     return (
-      <p className="text-2xs text-muted-foreground" data-testid="optimizer-malformed">
+      <p className="text-xs text-muted-foreground" data-testid="optimizer-malformed">
         A citation arrived that does not match its size.
       </p>
     );
   }
 
   const foot = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-border/60 border-t bg-muted/30 px-4 py-2 text-3xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-border/60 border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
       <span>{readDate ? `read of ${readDate}` : 'from a stored read'}</span>
       {onOpenRead ? (
         <button

@@ -61,6 +61,7 @@ export async function assertOk(response: Response): Promise<void> {
 export type InstagramLookupErrorKind =
   | 'account_required'
   | 'permission_denied'
+  | 'facebook_login_required'
   | 'rate_limited'
   | 'lookup_unavailable'
   | 'not_found'
@@ -82,6 +83,7 @@ const REASON_KINDS: Record<string, InstagramLookupErrorKind> = {
   throttled: 'rate_limited',
   token_expired: 'lookup_unavailable',
   upstream: 'lookup_unavailable',
+  requires_facebook_login: 'facebook_login_required',
 };
 
 export function instagramLookupErrorKind(error: unknown): InstagramLookupErrorKind {

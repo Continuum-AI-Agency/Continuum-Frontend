@@ -1,0 +1,308 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "note": "Real Google Ads API v25 rows for Vivo 47 (customer 3710693645), run through the paid-media-metrics google handler's own compute (toRankableCampaign, rankEntities, aggregateTotals, summarizeMetrics). No figure is hand-written.",
+    "recording": "packages/optimization-engine/tests/fixtures/multiplatform/google-vivo47-campaigns30d.json",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "customerId": "3710693645",
+    "currency": "MXN"
+  },
+  "account_overview": {
+    "scope": "account_overview",
+    "metrics": {
+      "spend": 55205.2636,
+      "roas": 0.0022,
+      "impressions": 339076,
+      "clicks": 12713,
+      "ctr": 3.7493,
+      "cpc": 4.3424,
+      "cpa": 452.5914
+    },
+    "comparison": {
+      "spend": {
+        "current": 55205.2636,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "roas": {
+        "current": 0.0022,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "impressions": {
+        "current": 339076,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "clicks": {
+        "current": 12713,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "ctr": {
+        "current": 3.7493,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "cpc": {
+        "current": 4.3424,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "cpa": {
+        "current": 452.5914,
+        "previous": 0,
+        "percentageChange": null
+      }
+    },
+    "trends": [],
+    "range": {
+      "since": "2026-09-01",
+      "until": "2026-09-30",
+      "preset": "custom"
+    },
+    "previous_range": {
+      "since": "2026-08-02",
+      "until": "2026-08-31"
+    }
+  },
+  "top_campaigns": {
+    "scope": "top_campaigns",
+    "kpi": "spend",
+    "direction": "top",
+    "limit": 50,
+    "computed_at": "2026-10-01T23:30:49.313Z",
+    "total_rows_considered": 17,
+    "rows": [
+      {
+        "id": "20775796216",
+        "name": "VIVO 47-EKATAR",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "20775796216",
+            "name": "VIVO 47-EKATAR"
+          }
+        },
+        "path_label": "VIVO 47-EKATAR",
+        "labels": {
+          "channel_type": "SEARCH"
+        },
+        "metrics": {
+          "spend": 36997.0645,
+          "impressions": 161350,
+          "clicks": 4816,
+          "conversions": 26.0088,
+          "conversionValue": 26.0088,
+          "roas": 0.0007,
+          "cpa": 1422.4842,
+          "costPerConversion": 1422.4842,
+          "ctr": 2.9848,
+          "cpc": 7.6821,
+          "cpm": 229.297
+        },
+        "rank": 1,
+        "kpi": "spend",
+        "kpi_value": 36997.0645,
+        "kpi_unit": "currency"
+      },
+      {
+        "id": "21287529107",
+        "name": "Display",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "21287529107",
+            "name": "Display"
+          }
+        },
+        "path_label": "Display",
+        "labels": {
+          "channel_type": "DISPLAY"
+        },
+        "metrics": {
+          "spend": 5257.929,
+          "impressions": 62194,
+          "clicks": 3084,
+          "conversions": 21.9675,
+          "conversionValue": 21.9675,
+          "roas": 0.0042,
+          "cpa": 239.3506,
+          "costPerConversion": 239.3506,
+          "ctr": 4.9587,
+          "cpc": 1.7049,
+          "cpm": 84.5408
+        },
+        "rank": 2,
+        "kpi": "spend",
+        "kpi_value": 5257.929,
+        "kpi_unit": "currency"
+      },
+      {
+        "id": "19954538151",
+        "name": "Gourmetería",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "19954538151",
+            "name": "Gourmetería"
+          }
+        },
+        "path_label": "Gourmetería",
+        "labels": {
+          "channel_type": "SEARCH"
+        },
+        "metrics": {
+          "spend": 4399.821,
+          "impressions": 28426,
+          "clicks": 1199,
+          "conversions": 5.5,
+          "conversionValue": 5.5,
+          "roas": 0.0013,
+          "cpa": 799.9675,
+          "costPerConversion": 799.9675,
+          "ctr": 4.218,
+          "cpc": 3.6696,
+          "cpm": 154.7816
+        },
+        "rank": 3,
+        "kpi": "spend",
+        "kpi_value": 4399.821,
+        "kpi_unit": "currency"
+      },
+      {
+        "id": "21985307202",
+        "name": "Valle Real-Search",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "21985307202",
+            "name": "Valle Real-Search"
+          }
+        },
+        "path_label": "Valle Real-Search",
+        "labels": {
+          "channel_type": "SEARCH"
+        },
+        "metrics": {
+          "spend": 3316.0643,
+          "impressions": 33861,
+          "clicks": 1433,
+          "conversions": 2.5,
+          "conversionValue": 2.5,
+          "roas": 0.0008,
+          "cpa": 1326.4257,
+          "costPerConversion": 1326.4257,
+          "ctr": 4.232,
+          "cpc": 2.3141,
+          "cpm": 97.9317
+        },
+        "rank": 4,
+        "kpi": "spend",
+        "kpi_value": 3316.0643,
+        "kpi_unit": "currency"
+      },
+      {
+        "id": "22364972636",
+        "name": "Remarketing Gourmetería | Vivo 47 | 2025",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "22364972636",
+            "name": "Remarketing Gourmetería | Vivo 47 | 2025"
+          }
+        },
+        "path_label": "Remarketing Gourmetería | Vivo 47 | 2025",
+        "labels": {
+          "channel_type": "DISPLAY"
+        },
+        "metrics": {
+          "spend": 2390.5227,
+          "impressions": 24194,
+          "clicks": 625,
+          "conversions": 0,
+          "conversionValue": 0,
+          "roas": 0,
+          "cpa": 0,
+          "costPerConversion": 0,
+          "ctr": 2.5833,
+          "cpc": 3.8248,
+          "cpm": 98.8064
+        },
+        "rank": 5,
+        "kpi": "spend",
+        "kpi_value": 2390.5227,
+        "kpi_unit": "currency"
+      },
+      {
+        "id": "22706302206",
+        "name": "DP | VIVO 47 | Socios",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "22706302206",
+            "name": "DP | VIVO 47 | Socios"
+          }
+        },
+        "path_label": "DP | VIVO 47 | Socios",
+        "labels": {
+          "channel_type": "DISPLAY"
+        },
+        "metrics": {
+          "spend": 1436.1491,
+          "impressions": 9305,
+          "clicks": 751,
+          "conversions": 47.9997,
+          "conversionValue": 47.9997,
+          "roas": 0.0334,
+          "cpa": 29.92,
+          "costPerConversion": 29.92,
+          "ctr": 8.0709,
+          "cpc": 1.9123,
+          "cpm": 154.3417
+        },
+        "rank": 6,
+        "kpi": "spend",
+        "kpi_value": 1436.1491,
+        "kpi_unit": "currency"
+      },
+      {
+        "id": "22404522468",
+        "name": "Remarketing Valle Real | Vivo 47 | 2025",
+        "level": "campaign",
+        "hierarchy": {
+          "campaign": {
+            "id": "22404522468",
+            "name": "Remarketing Valle Real | Vivo 47 | 2025"
+          }
+        },
+        "path_label": "Remarketing Valle Real | Vivo 47 | 2025",
+        "labels": {
+          "channel_type": "DISPLAY"
+        },
+        "metrics": {
+          "spend": 1407.7129,
+          "impressions": 19746,
+          "clicks": 805,
+          "conversions": 18,
+          "conversionValue": 18,
+          "roas": 0.0128,
+          "cpa": 78.2063,
+          "costPerConversion": 78.2063,
+          "ctr": 4.0768,
+          "cpc": 1.7487,
+          "cpm": 71.291
+        },
+        "rank": 7,
+        "kpi": "spend",
+        "kpi_value": 1407.7129,
+        "kpi_unit": "currency"
+      }
+    ],
+    "range": {
+      "since": "2026-09-01",
+      "until": "2026-09-30",
+      "preset": "custom"
+    }
+  }
+}

@@ -3,24 +3,43 @@
 import {
   type ApiRenderInputSet,
   type ApiRenderTemplateSummary,
+  type ApiRenderVariable,
+  motionLabel,
+  readableLayerName,
+  TEMPLATE_SOURCE_KIND_LABELS,
+  type TemplateSourceKind,
   templateDisplayName,
   templateRefOf,
 } from '@continuum/contracts';
+import { defaultFilter } from 'cmdk';
 import {
+  Check,
   ChevronDown,
   ClipboardPaste,
   Download,
+  Eye,
   FolderOpen,
+  GitCommitHorizontal,
   Loader2,
   Play,
   Plus,
   Save,
+  Settings2,
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type ReactNode, type Ref, useMemo, useState } from 'react';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,9 +54,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import type { CheckpointGraph } from './templateCheckpoints';
+import { shortSha } from './templateVersion';
 
 // The Render tab's toolbar: four controls, left to right in the order a person uses them —
 // which template, add rows, import rows, save and render. Which set the rows belong to is the
@@ -46,6 +68,132 @@ import { cn } from '@/lib/utils';
 
 export const templateLabel = (template: ApiRenderTemplateSummary): string =>
   template.displayName ?? templateDisplayName(template.name);
+
+/**
+ * Which template, as a searchable list that scrolls: a brand holds dozens, and a menu of dozens has
+ * no way to the bottom. Matching reads the name and key only — the value is the REF, and a binding
+ * uuid's hex letters would otherwise match almost any search. Highlighting a row, by pointer or
+ * arrows, reports it, so its reads can start before the click lands.
+ */
+export function TemplatePicker({
+  templates,
+  currentRef,
+  placeholder,
+  onChange,
+  onHighlight,
+  sourceKinds = null,
+}: {
+  templates: ApiRenderTemplateSummary[];
+  currentRef: string;
+  /**
+   * What each template's upload was authored in, by source asset id — null until the registry
+   * answers, and until then rows carry no type rather than a guess.
+   */
+  sourceKinds?: ReadonlyMap<string, TemplateSourceKind> | null;
+  /** What the trigger says while nothing is chosen. */
+  placeholder: string;
+  /** Called with the REF (`bindingId:key`), never a bare key. */
+  onChange: (ref: string) => void;
+  onHighlight?: (template: ApiRenderTemplateSummary) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // Controlled because cmdk only reports a highlight change for a controlled value.
+  const [highlighted, setHighlighted] = useState('');
+  const byRef = useMemo(
+    () => new Map(templates.map((template) => [templateRefOf(template), template])),
+    [templates],
+  );
+  const current = byRef.get(currentRef);
+  // Grouped by what each was authored in, in the Templates filter's order. A template with no
+  // upload here came from the shared render workspace, which is a fact; one the registry does not
+  // know is Other, never After Effects by default.
+  const groups = useMemo(() => {
+    if (!sourceKinds) return [{ heading: null, templates }];
+    const order = [...Object.values(TEMPLATE_SOURCE_KIND_LABELS), 'Shared workspace'];
+    const byHeading = new Map<string, ApiRenderTemplateSummary[]>();
+    for (const template of templates) {
+      const kind = template.sourceAssetId ? sourceKinds.get(template.sourceAssetId) : undefined;
+      const heading = template.sourceAssetId
+        ? TEMPLATE_SOURCE_KIND_LABELS[kind ?? 'other']
+        : 'Shared workspace';
+      byHeading.set(heading, [...(byHeading.get(heading) ?? []), template]);
+    }
+    return [...byHeading]
+      .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+      .map(([heading, members]) => ({ heading, templates: members }));
+  }, [sourceKinds, templates]);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        disabled={templates.length === 0}
+        render={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-64 justify-between gap-1.5"
+            aria-label="Template"
+          >
+            <span className="truncate">{current ? templateLabel(current) : placeholder}</span>
+            <ChevronDown className="size-3.5 shrink-0" aria-hidden />
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-80 p-0">
+        <Command
+          filter={(_ref, search, keywords = []) => defaultFilter(keywords.join(' '), search)}
+          value={highlighted}
+          onValueChange={(ref) => {
+            setHighlighted(ref);
+            const template = byRef.get(ref);
+            if (template) onHighlight?.(template);
+          }}
+        >
+          <CommandInput placeholder="Search templates…" aria-label="Search templates" />
+          <CommandList>
+            <CommandEmpty>No template matches.</CommandEmpty>
+            {groups.map(({ heading, templates: members }) => (
+              <CommandGroup key={heading ?? 'all'} heading={heading ?? undefined}>
+                {/* Keyed and valued by the REF. Two templates can share a key — 133 exists in two
+                  sub-apps — and React silently drops the second child of a duplicated key, so a
+                  person would see one row where they hold two and render the wrong tenant's comp. */}
+                {members.map((template) => {
+                  const ref = templateRefOf(template);
+                  const facts = [template.ratios.join(' '), motionLabel(template.motion)]
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <CommandItem
+                      key={ref}
+                      value={ref}
+                      keywords={[templateLabel(template), template.key, heading ?? '']}
+                      onSelect={() => {
+                        setOpen(false);
+                        onChange(ref);
+                      }}
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate">{templateLabel(template)}</span>
+                        {facts ? (
+                          <span className="truncate text-2xs text-muted-foreground">{facts}</span>
+                        ) : null}
+                      </span>
+                      {/* Null means nobody checked, which must not read as "none missing". */}
+                      {template.fontsMissing ? (
+                        <Badge variant="warning">{template.fontsMissing} fonts missing</Badge>
+                      ) : null}
+                      {ref === currentRef ? <Check aria-hidden /> : null}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Marks one top-level control, so "at most five" is something a test can count. */
 function Control({ children, className }: { children: ReactNode; className?: string }) {
@@ -59,15 +207,28 @@ function Control({ children, className }: { children: ReactNode; className?: str
 export function RenderToolbar({
   templates,
   templateKey,
+  variants = [],
+  sourceVariants,
+  variant = '',
+  onVariantChange,
   templatesLoading,
   onTemplateChange,
+  onTemplateHighlight,
+  templateSourceKinds,
+  onOpenTemplateSettings,
   bindingId,
   ready,
   inputSets,
   canAddRows,
   onAddRow,
   onDraftWithAi,
+  draftAnchorRef,
   onAddFromInputs,
+  layerSwitches,
+  onAskSwitch,
+  checkpoints,
+  templateRef,
+  onTemplateRefChange,
   onUpload,
   onDownloadTemplate,
   dirty,
@@ -83,9 +244,18 @@ export function RenderToolbar({
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
+  variants?: Array<{ id: string; label: string }>;
+  sourceVariants?: ApiRenderTemplateSummary[];
+  variant?: string | null;
+  onVariantChange?: (id: string) => void;
   templatesLoading: boolean;
   /** Called with the template REF (`bindingId:key`), never a bare key. */
   onTemplateChange: (ref: string) => void;
+  /** A template the picker is pointing at, before it is chosen — so its reads can start early. */
+  onTemplateHighlight?: (template: ApiRenderTemplateSummary) => void;
+  templateSourceKinds?: ReadonlyMap<string, TemplateSourceKind> | null;
+  /** Open the chosen template's settings on the Templates tab; absent when its source is unknown. */
+  onOpenTemplateSettings?: () => void;
   /** The chosen template's binding, so a key held in two of them resolves to the right row. */
   bindingId: string | null;
   /** False until a template's contract is loaded; so are the controls after the picker. */
@@ -95,15 +265,27 @@ export function RenderToolbar({
   onAddRow: () => void;
   /** Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. */
   onDraftWithAi: () => void;
+  draftAnchorRef?: Ref<HTMLButtonElement>;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
+  /** The template's checkpoints (null until its history is read) and the one this render pins. */
+  checkpoints: CheckpointGraph | null;
+  templateRef: string | null;
+  onTemplateRefChange: (ref: string | null) => void;
+  /** Layer Show switches no row can change yet; picking one asks for it per row. */
+  layerSwitches: ApiRenderVariable[];
+  onAskSwitch: (variable: ApiRenderVariable) => void;
   onUpload: () => void;
   onDownloadTemplate: () => void;
   dirty: boolean;
   /**
-   * What autosave is doing: writing now, written at a time, or failed — then Save retries. Null
-   * while there is nothing saved and nothing to save.
+   * What autosave is doing: writing now, written at a time, or failed — with why, and whether it
+   * retries by itself or waits for a change or Save. Null while there is nothing saved or to save.
    */
-  saveStatus: { phase: 'saving' } | { phase: 'saved'; at: string } | { phase: 'failed' } | null;
+  saveStatus:
+    | { phase: 'saving' }
+    | { phase: 'saved'; at: string }
+    | { phase: 'failed'; reason: string; retrying: boolean; onRepair?: () => void }
+    | null;
   canSave: boolean;
   onSave: () => void;
   selectedCount: number;
@@ -118,54 +300,103 @@ export function RenderToolbar({
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
   );
   const currentRef = current ? templateRefOf(current) : '';
+  const siblings =
+    sourceVariants ??
+    (current?.sourceAssetId
+      ? templates.filter(
+          (item) =>
+            item.sourceAssetId === current.sourceAssetId && item.bindingId === current.bindingId,
+        )
+      : []);
   return (
     <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Render">
-      <Control>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            disabled={templates.length === 0}
-            render={
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-64 justify-between gap-1.5"
-                aria-label="Template"
-              >
-                <span className="truncate">
-                  {current
-                    ? templateLabel(current)
-                    : templatesLoading
-                      ? 'Loading templates…'
-                      : templates.length
-                        ? 'Choose a template'
-                        : 'No renderable templates yet'}
-                </span>
-                <ChevronDown className="size-3.5 shrink-0" aria-hidden />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-72">
-            {/* Keyed and valued by the REF. Two templates can share a key — 133 exists in two
-                sub-apps — and React silently drops the second child of a duplicated key, so a
-                person would see one row where they hold two and render the wrong tenant's comp. */}
-            <DropdownMenuRadioGroup value={currentRef} onValueChange={onTemplateChange}>
-              {templates.map((template) => (
-                <DropdownMenuRadioItem
-                  key={templateRefOf(template)}
-                  value={templateRefOf(template)}
+      <Control className="max-w-full min-w-0 flex-wrap">
+        <TemplatePicker
+          templates={templates}
+          currentRef={currentRef}
+          placeholder={
+            templatesLoading
+              ? 'Loading templates…'
+              : templates.length
+                ? 'Choose a template'
+                : 'No renderable templates yet'
+          }
+          onChange={onTemplateChange}
+          onHighlight={onTemplateHighlight}
+          sourceKinds={templateSourceKinds}
+        />
+        {onOpenTemplateSettings ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Template settings"
+                  onClick={onOpenTemplateSettings}
                 >
-                  <span className="truncate">{templateLabel(template)}</span>
-                  {template.ratios.length ? (
-                    <span className="ml-auto text-2xs text-muted-foreground">
-                      {template.ratios.join(' ')}
-                    </span>
-                  ) : null}
-                </DropdownMenuRadioItem>
+                  <Settings2 className="size-4" aria-hidden />
+                </Button>
+              }
+            />
+            <TooltipContent>Template settings — layers, variants, revisions</TooltipContent>
+          </Tooltip>
+        ) : null}
+        {ready && siblings.length > 0 ? (
+          <label className="flex items-center gap-1.5 text-xs">
+            Variant
+            <select
+              aria-label="Template source variant"
+              value={currentRef}
+              onChange={(event) => onTemplateChange(event.target.value)}
+              className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
+              disabled={busy !== null}
+            >
+              {siblings.map((item) => (
+                <option key={templateRefOf(item)} value={templateRefOf(item)}>
+                  {templateLabel(item)}
+                  {siblings.some(
+                    (other) => other !== item && templateLabel(other) === templateLabel(item),
+                  )
+                    ? ` · ${templateDisplayName(item.name)}`
+                    : ''}
+                </option>
               ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </select>
+          </label>
+        ) : null}
+        {ready && variants.length > 1 && onVariantChange ? (
+          <label className="flex items-center gap-1.5 text-xs">
+            Artboard / layer variant
+            <select
+              aria-label="Template variant"
+              value={variant === null ? 'mixed:' : variant}
+              onChange={(event) => onVariantChange(event.target.value)}
+              className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
+              disabled={busy !== null}
+            >
+              <option value="">All artboards / variants</option>
+              {variant === null ? (
+                <option value="mixed:" disabled>
+                  Mixed selections
+                </option>
+              ) : null}
+              {variants.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {checkpoints?.live ? (
+          <CheckpointPicker
+            graph={checkpoints}
+            templateRef={templateRef}
+            onChange={onTemplateRefChange}
+          />
+        ) : null}
       </Control>
 
       {ready ? (
@@ -174,7 +405,13 @@ export function RenderToolbar({
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <Button type="button" size="sm" variant="outline" className="gap-1.5">
+                  <Button
+                    ref={draftAnchorRef}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                  >
                     <Plus className="size-3.5" aria-hidden /> Add
                     <ChevronDown className="size-3.5" aria-hidden />
                   </Button>
@@ -199,6 +436,29 @@ export function RenderToolbar({
                     ))}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+                {layerSwitches.length > 0 ? (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Eye aria-hidden /> Switch a layer per row
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-64">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
+                          Adds a Shown / Hidden column to this template. Every row starts as
+                          designed.
+                        </DropdownMenuLabel>
+                        {layerSwitches.map((variable) => (
+                          <DropdownMenuItem
+                            key={variable.key}
+                            onClick={() => onAskSwitch(variable)}
+                          >
+                            <span className="truncate">{readableLayerName(variable.label)}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </Control>
@@ -238,18 +498,27 @@ export function RenderToolbar({
             <span
               role="status"
               aria-label="Save status"
-              className="text-2xs text-muted-foreground tabular-nums"
+              title={saveStatus?.phase === 'failed' ? saveStatus.reason : undefined}
+              className={cn(
+                'max-w-96 truncate text-2xs tabular-nums',
+                saveStatus?.phase === 'failed' ? 'text-destructive' : 'text-muted-foreground',
+              )}
             >
               {saveStatus?.phase === 'saving'
                 ? 'Saving…'
                 : saveStatus?.phase === 'failed'
-                  ? 'Couldn’t save. Save retries.'
+                  ? `Couldn’t save: ${saveStatus.reason}${saveStatus.retrying ? ' Retrying…' : ''}`
                   : dirty
                     ? 'Unsaved changes'
                     : saveStatus?.phase === 'saved'
                       ? `Saved · ${formatRelativeTime(saveStatus.at)}`
                       : null}
             </span>
+            {saveStatus?.phase === 'failed' && saveStatus.onRepair ? (
+              <Button type="button" size="xs" variant="outline" onClick={saveStatus.onRepair}>
+                Open template
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -350,5 +619,87 @@ function RenderButton({
         ) : null}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * Which checkpoint of the template this render uses — git's choice between following a branch and
+ * checking out a commit. "Follow live" renders whatever is live when the render runs; "Pin" sends
+ * the live checkpoint's name, and the preflight refuses if the template's live checkpoint has moved
+ * since. A checkpoint that is not live is listed but cannot be picked: the fleet renders one live
+ * checkpoint per template, so rendering another one means making it live first.
+ */
+function CheckpointPicker({
+  graph,
+  templateRef,
+  onChange,
+}: {
+  graph: CheckpointGraph;
+  templateRef: string | null;
+  onChange: (ref: string | null) => void;
+}) {
+  const live = graph.live;
+  if (!live) return null;
+  const others = graph.rows.filter((row) => !row.live);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 px-2 text-xs"
+            aria-label="Checkpoint"
+          >
+            <GitCommitHorizontal className="size-3.5" aria-hidden />
+            <span className="font-mono">{shortSha(live.id)}</span>
+            <span className="text-muted-foreground">{templateRef ? 'pinned' : 'live'}</span>
+            <ChevronDown className="size-3.5" aria-hidden />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-80">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
+            Which checkpoint of this template renders
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={templateRef ?? 'live'}
+            onValueChange={(value) => onChange(value === 'live' ? null : value)}
+          >
+            <DropdownMenuRadioItem value="live">
+              Follow live — whatever is live when it renders
+            </DropdownMenuRadioItem>
+            {graph.liveRef ? (
+              <DropdownMenuRadioItem value={graph.liveRef}>
+                Pin {live.kind.toLowerCase()} {shortSha(live.id)} — refuse if live moves
+              </DropdownMenuRadioItem>
+            ) : null}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        {others.length ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
+                Not live — make one live to render from it
+              </DropdownMenuLabel>
+              {others.map((row) => (
+                <DropdownMenuItem key={row.id} disabled>
+                  <span className="truncate">
+                    {row.kind}
+                    {row.branch ? ` · ${row.branch}` : ''}
+                  </span>
+                  <span className="ml-auto font-mono text-2xs text-muted-foreground">
+                    {shortSha(row.id)}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

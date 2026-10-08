@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
+import { LIBRARY_PROJECT_FILE_MAX_BYTES } from './asset-formats';
 import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
 
 /**
@@ -45,7 +46,7 @@ import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
  * empirically by pushing one byte over it and requiring the upload to refuse. Change this when
  * the dashboard changes and let the bench tell you if you are wrong.
  */
-export const FORGE_PROJECT_FILE_MAX_BYTES = 250 * 1024 * 1024;
+export const FORGE_PROJECT_FILE_MAX_BYTES = LIBRARY_PROJECT_FILE_MAX_BYTES;
 
 /** The same ceiling in whole MB, for the sentence a refusal shows a person. */
 export const FORGE_PROJECT_FILE_MAX_MB = Math.floor(FORGE_PROJECT_FILE_MAX_BYTES / (1024 * 1024));
@@ -57,6 +58,27 @@ export const templateSourceFamilySchema = z.enum([
   'photoshop',
 ]);
 export type TemplateSourceFamily = z.infer<typeof templateSourceFamilySchema>;
+
+/** What a template was authored in, as a person sorts by it — not the package family it arrived as. */
+export const templateSourceKindSchema = z.enum([
+  'photoshop',
+  'illustrator',
+  'after_effects',
+  'figma',
+  'hyperframes',
+  'other',
+]);
+export type TemplateSourceKind = z.infer<typeof templateSourceKindSchema>;
+
+/** How a person reads each kind, in the order the Templates filter lists them. */
+export const TEMPLATE_SOURCE_KIND_LABELS: Record<TemplateSourceKind, string> = {
+  photoshop: 'Photoshop',
+  illustrator: 'Illustrator',
+  after_effects: 'After Effects',
+  figma: 'Figma',
+  hyperframes: 'HyperFrames',
+  other: 'Other',
+};
 
 export const templateParseStateSchema = z.enum([
   'pending',
@@ -249,6 +271,8 @@ export const templateParseSchema = z
     filename: z.string().optional(),
     sizeBytes: z.number().int().nonnegative().optional(),
     checksum: z.string().optional(),
+    /** Number of distinct AEP projects in the uploaded package. */
+    projectCount: z.number().int().positive().optional(),
     comps: z.array(templateCompSchema).default([]),
     ratios: z.array(templateRatioSchema).default([]),
     slots: z.array(templateSlotSchema).default([]),
@@ -280,15 +304,131 @@ export const templateParseSchema = z
       )
       .default([]),
     warnings: z.array(z.string()).default([]),
+    /** Footage referenced by the AEP but absent from its uploaded package. */
+    missingFootage: z
+      .array(
+        z.object({
+          name: z.string().nullable(),
+          file: z.string(),
+          projectPath: z.string().optional(),
+          ascend: z
+            .object({ base: z.number().int().nonnegative(), target: z.number().int().positive() })
+            .optional(),
+        }),
+      )
+      .optional(),
   })
   .strip();
 export type TemplateParse = z.infer<typeof templateParseSchema>;
+
+export function publicationCompsOfParse<
+  T extends { name: string; isDelivery: boolean; durationSec?: number },
+>(
+  parse:
+    | { comps: T[]; slots?: ReadonlyArray<{ key: string; comps: readonly string[] }> }
+    | null
+    | undefined,
+): T[] {
+  const candidates = parse?.comps.filter((comp) => comp.isDelivery) ?? [];
+  const explicit = candidates.filter((comp) => /^RENDER\b/i.test(comp.name));
+  const delivery = explicit.length ? explicit : candidates;
+  if (isOneDesign(delivery, parse?.slots ?? [])) return [];
+  const identity = (name: string) => {
+    const label = name.replace(/^RENDER\s*/i, '').trim();
+    if (
+      /^(?:\d{1,4}[:x]\d{1,4}|story|square|portrait|landscape|vertical|horizontal|feed)$/i.test(
+        label,
+      )
+    )
+      return '';
+    return label
+      .replace(
+        /(?:[\s_(-]+(?:\d{1,4}[:x]\d{1,4}|story|square|portrait|landscape|vertical|horizontal|feed)\)?)+$/i,
+        '',
+      )
+      .trim()
+      .toLowerCase();
+  };
+  return delivery.length > 1 && new Set(delivery.map((comp) => identity(comp.name))).size > 1
+    ? delivery
+    : [];
+}
+
+/**
+ * Comps that carry exactly the same fields over the same timeline are ONE design shown several
+ * ways — a PSD whose artboards stack the same layers differently ("model in front" / "headline in
+ * front") — so they publish as one template whose rows pick the comp. Different fields (Inyogo
+ * Card A/B) or a different length (Animado vs Fijo, which would turn the stills into video) still
+ * split. Measured 2026-09-30 over every prod parse: no other multi-comp source qualifies.
+ */
+function isOneDesign(
+  comps: ReadonlyArray<{ name: string; durationSec?: number }>,
+  slots: ReadonlyArray<{ key: string; comps: readonly string[] }>,
+): boolean {
+  const fieldsOf = (comp: string) =>
+    slots
+      .filter((slot) => slot.comps.includes(comp))
+      .map((slot) => slot.key)
+      .sort()
+      .join('\n');
+  const [first] = comps;
+  if (comps.length < 2 || !first || !fieldsOf(first.name)) return false;
+  return comps.every(
+    (comp) =>
+      comp.durationSec === first.durationSec && fieldsOf(comp.name) === fieldsOf(first.name),
+  );
+}
+
+/** The AEP-to-Forge field review shown before and after publication. */
+export const templateMappingReviewSchema = z
+  .object({
+    state: z.enum(['ready', 'needs_review', 'unavailable']),
+    identityAvailable: z.boolean(),
+    slotCount: z.number().int().nonnegative(),
+    matchedSlots: z.number().int().nonnegative(),
+    fields: z.array(
+      z
+        .object({
+          key: z.string(),
+          label: z.string(),
+          kind: apiRenderVariableKindSchema,
+          slotKey: z.string().nullable(),
+          slotName: z.string().nullable(),
+          comps: z.array(z.string()),
+          sample: z.string().nullable(),
+          match: z.enum(['layer_id', 'name', 'forge_only', 'ambiguous']),
+        })
+        .strict(),
+    ),
+    unmatchedSlots: z.array(
+      z
+        .object({
+          key: z.string(),
+          name: z.string(),
+          kind: apiRenderVariableKindSchema,
+          comps: z.array(z.string()),
+        })
+        .strict(),
+    ),
+    ignoredSlots: z.array(
+      z
+        .object({
+          key: z.string(),
+          name: z.string(),
+          comps: z.array(z.string()),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type TemplateMappingReview = z.infer<typeof templateMappingReviewSchema>;
 
 /** The geometry a gallery card needs, without the full AEP parse document. */
 export const templatePreviewSchema = z
   .object({
     parser: z.string().min(1),
     sourceFamily: templateSourceFamilySchema,
+    missingFootage: templateParseSchema.shape.missingFootage,
     filename: z.string().optional(),
     comps: z.array(
       templateCompSchema.pick({
@@ -388,6 +528,39 @@ export const templateSourceSummarySchema = templateSourceSchema
   .extend({ parse: templatePreviewSchema.nullable().default(null) })
   .strict();
 export type TemplateSourceSummary = z.infer<typeof templateSourceSummarySchema>;
+
+/** One uploaded project can publish several independently rendered delivery compositions. */
+export const templateForgeBundleSchema = z
+  .object({
+    id: z.string().min(1),
+    sourceSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+    children: z
+      .array(
+        z
+          .object({
+            compId: z.number().int(),
+            compName: z.string().min(1),
+            runId: z.string().min(1),
+            templateKey: z.string().min(1),
+            state: z.string().min(1),
+            draftId: z.number().int().nullable().optional(),
+            smoke: z.unknown().nullable().optional(),
+            smokeFiles: z.array(z.string().url()).optional(),
+            needs: z.array(z.unknown()).optional(),
+            error: z.unknown().nullable().optional(),
+          })
+          .passthrough(),
+      )
+      .min(1),
+    approval: z
+      .object({ confirmation: z.string().min(1) })
+      .passthrough()
+      .nullable()
+      .optional(),
+    activation: z.object({ state: z.string() }).passthrough().nullable().optional(),
+  })
+  .passthrough();
+export type TemplateForgeBundle = z.infer<typeof templateForgeBundleSchema>;
 
 /** `PATCH /api/ai-studio/templates/:assetId` — rename the template's Library asset. */
 export const renameTemplateSourceRequestSchema = z
@@ -624,3 +797,37 @@ export function normalizeTemplateFontFamily(value: string): string {
     .toLowerCase()
     .replace(/[\s_-]+/g, '');
 }
+
+/** A text move is measured in the layer's own composition, not the browser's preview pixels. */
+export const templateTextMoveRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    expectedVersionId: z.string().uuid(),
+    moves: z
+      .array(
+        z
+          .object({
+            compId: z.number().int().positive(),
+            layerId: z.number().int().positive(),
+            dx: z.number().finite(),
+            dy: z.number().finite(),
+            dw: z.number().finite().optional(),
+            dh: z.number().finite().optional(),
+            font: z.string().trim().min(1).max(200).optional(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
+export type TemplateTextMoveRequest = z.infer<typeof templateTextMoveRequestSchema>;
+
+export const templateTextMoveResponseSchema = z
+  .object({
+    filename: z.string().min(1),
+    checksum: z.string().regex(/^[a-f0-9]{64}$/),
+    slotKeys: z.array(z.string().min(1)).min(1),
+    inlineBase64: z.string().min(1),
+  })
+  .strict();
+export type TemplateTextMoveResponse = z.infer<typeof templateTextMoveResponseSchema>;

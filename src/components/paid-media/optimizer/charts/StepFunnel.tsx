@@ -61,12 +61,12 @@ function StageRow({ stage, isFirst }: { stage: FunnelStageOut; isFirst: boolean 
             }}
           />
         </div>
-        <span className="w-12 shrink-0 text-right text-2xs text-muted-foreground tabular-nums">
+        <span className="w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
           {isFirst ? '—' : formatRate(rate)}
         </span>
       </div>
       {!isFirst && stage.dropOff != null && stage.dropOff > 0 ? (
-        <p className="text-3xs text-muted-foreground tabular-nums">
+        <p className="text-xs text-muted-foreground tabular-nums">
           {intFmt(stage.dropOff)} lost at this step
         </p>
       ) : null}
@@ -92,7 +92,7 @@ export function StepFunnel({ window, objective }: StepFunnelProps) {
         ))}
       </div>
 
-      <p className="border-border/60 border-t pt-2 text-2xs text-muted-foreground tabular-nums">
+      <p className="border-border/60 border-t pt-2 text-xs text-muted-foreground tabular-nums">
         {terminal ? (
           <>
             <span className="text-foreground">{formatRate(terminal.overallPct)}</span> of{' '}

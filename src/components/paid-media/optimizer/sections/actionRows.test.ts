@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
+  actionPlatform,
   actorLabel,
+  minorToMajor,
   readActionChange,
   readReceiptTrace,
   revertScopeOf,
@@ -101,10 +103,62 @@ describe('actorLabel', () => {
   });
 });
 
+describe('actionPlatform', () => {
+  it('reads the row platform, and Meta when it is absent or unknown', () => {
+    expect(actionPlatform(action({ platform: 'google_ads' }))).toBe('google_ads');
+    expect(actionPlatform(action({ platform: 'tiktok_ads' }))).toBe('tiktok_ads');
+    expect(actionPlatform(action())).toBe('meta');
+    expect(actionPlatform(action({ platform: 'snapchat' }))).toBe('meta');
+  });
+  // optimizer_list_actions sends no platform column; every Google and TikTok applier stamps
+  // its receipt with one, so the receipt is where the row's platform is read from.
+  it('reads the platform from the audit receipt when the row carries none', () => {
+    expect(
+      actionPlatform(
+        action({ receipt: { platform: 'google_ads', requestId: 'g-1', resourceNames: [] } }),
+      ),
+    ).toBe('google_ads');
+    expect(
+      actionPlatform(
+        action({ receipt: { platform: 'tiktok_ads', requestId: 't-1', scheduled: 'next_day' } }),
+      ),
+    ).toBe('tiktok_ads');
+  });
+
+  it('reads Meta for a Meta receipt and for a receipt that names no known platform', () => {
+    expect(actionPlatform(action({ receipt: { fbtrace_id: 'AbC1' } }))).toBe('meta');
+    expect(actionPlatform(action({ receipt: { platform: 42, requestId: 'x' } }))).toBe('meta');
+    expect(actionPlatform(action({ receipt: { platform: 'snapchat' } }))).toBe('meta');
+    expect(actionPlatform(action({ receipt: null }))).toBe('meta');
+  });
+});
+
 describe('readReceiptTrace', () => {
   it('finds the Meta trace id whichever key the applier stored it under', () => {
     expect(readReceiptTrace(action({ receipt: { fbtrace_id: 'AbC1' } }))).toBe('AbC1');
     expect(readReceiptTrace(action({ receipt: { fbtraceId: 'AbC2' } }))).toBe('AbC2');
+  });
+
+  it('reads the receipt of each platform under its own key', () => {
+    expect(
+      readReceiptTrace(action({ platform: 'google_ads', receipt: { requestId: 'g-1', id: 'x' } })),
+    ).toBe('g-1');
+    expect(
+      readReceiptTrace(action({ platform: 'tiktok_ads', receipt: { request_id: 't-1' } })),
+    ).toBe('t-1');
+    // A Google row never borrows Meta's fbtrace key.
+    expect(
+      readReceiptTrace(action({ platform: 'google_ads', receipt: { fbtrace_id: 'AbC1' } })),
+    ).toBeNull();
+  });
+
+  it('reads a Google or TikTok request id when only the receipt names the platform', () => {
+    expect(
+      readReceiptTrace(action({ receipt: { platform: 'google_ads', requestId: 'g-2', id: 'x' } })),
+    ).toBe('g-2');
+    expect(
+      readReceiptTrace(action({ receipt: { platform: 'tiktok_ads', requestId: 't-2' } })),
+    ).toBe('t-2');
   });
 
   it('is null when there is no receipt', () => {
@@ -149,5 +203,22 @@ describe('revertScopeOf', () => {
   it('switches the dialog to unpause copy on a status write only', () => {
     expect(revertScopeOf(action({ op: 'status' }))).toBe('adset_status');
     expect(revertScopeOf(action({ op: 'budget' }))).toBeNull();
+  });
+});
+
+describe("minorToMajor divides by the currency's own minor unit (ISO 4217)", () => {
+  it('two decimals for MXN and USD', () => {
+    expect(minorToMajor(95_768, 'MXN')).toBe(957.68);
+    expect(minorToMajor(5_341, 'usd')).toBe(53.41);
+  });
+
+  it('zero decimals for JPY, three for KWD', () => {
+    expect(minorToMajor(5_000, 'JPY')).toBe(5_000);
+    expect(minorToMajor(12_345, 'KWD')).toBe(12.345);
+  });
+
+  it('an unrecorded or malformed currency keeps the two-decimal reading', () => {
+    expect(minorToMajor(5_341, null)).toBe(53.41);
+    expect(minorToMajor(5_341, 'pesos')).toBe(53.41);
   });
 });

@@ -4,9 +4,15 @@
  * detail panel and back.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { TemplateSource } from '@continuum/contracts';
 import React from 'react';
+import * as realtime from '@/lib/supabase/realtime';
+
+const subscribe = spyOn(realtime, 'subscribeToPostgresChanges').mockImplementation(
+  () => () => undefined,
+);
+afterAll(() => subscribe.mockRestore());
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const ASSET = '55555555-5555-4555-8555-555555555555';
@@ -35,10 +41,16 @@ const SOURCE: TemplateSource = {
 const toastError = mock((_message: string) => undefined);
 let discovered: unknown[] = [];
 let fetchedSources: TemplateSource[] = [SOURCE];
-let uploadFinished: (() => void) | undefined;
+type UploadFinished = (result: { file: File; uploaded: { assetId: string } }) => void;
+let uploadFinished: UploadFinished | undefined;
 const fetchTemplateSources = mock(async () => fetchedSources);
 const fetchRenderWorkspaces = mock(async () => []);
 const discoverWorkspaceTemplates = mock(async () => ({ items: discovered }));
+const importDesignTemplate = mock(async (_brandId: string, _assetId: string) => ({
+  status: 'created' as const,
+  assetId: ASSET,
+  parseState: 'parsed' as const,
+}));
 const renameTemplateSource = mock(async (_brandId: string, _assetId: string, title: string) => ({
   ...SOURCE,
   displayName: title,
@@ -46,9 +58,13 @@ const renameTemplateSource = mock(async (_brandId: string, _assetId: string, tit
 
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateSources,
+  fetchTemplateVariants: async () => [],
+  fetchTemplateRevisionVariants: async () => [],
+  importDesignTemplate,
   renameTemplateSource,
   fetchRenderWorkspaces,
   discoverWorkspaceTemplates,
+  loadWorkspaceTemplates: async () => (await discoverWorkspaceTemplates()).items,
   setTemplateAdoption: async () => ({ granted: true }),
   fetchTemplateVariables: async () => ({ variables: [], edits: [], parseState: 'parsed' }),
   saveTemplateVariables: async () => undefined,
@@ -61,15 +77,13 @@ mock.module('motion/react', () => ({ ...motion, useReducedMotion: () => reducedM
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({ run: null, pushed: true, loading: false, refresh: async () => undefined }),
 }));
-mock.module('@/components/forge/PendingApprovals', () => ({ PendingApprovals: () => null }));
-mock.module('@/components/forge/LineagePanel', () => ({ LineagePanel: () => null }));
 mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({ OutputSettingsPanel: () => null }));
 mock.module('@/components/library/useMediaUpload', () => ({
   useMediaUpload: (
     _brandId: string,
     options?: {
-      onUploaded?: () => void;
+      onUploaded?: UploadFinished;
     },
   ) => {
     uploadFinished = options?.onUploaded;
@@ -103,6 +117,7 @@ beforeEach(() => {
   discoverWorkspaceTemplates.mockClear();
   renameTemplateSource.mockClear();
   toastError.mockClear();
+  importDesignTemplate.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -152,7 +167,7 @@ describe('ForgeWorkbench', () => {
     });
     try {
       fetchedSources = [{ ...SOURCE, parseState: 'pending' }];
-      uploadFinished?.();
+      uploadFinished?.({ file: new File(['x'], 'promo.aep'), uploaded: { assetId: 'asset-new' } });
 
       expect(await screen.findByText('Unpacking')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
@@ -220,10 +235,34 @@ describe('ForgeWorkbench', () => {
     expect(await screen.findByRole('button', { name: 'Open StarCraft Promo' })).toBeTruthy();
     // Its own build is the card above, not a second "shared" copy of it.
     expect(screen.getByRole('button', { name: /^Shared with you\s*1$/ })).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\[DRAFT|template \d+|Continuum_app/);
+  });
+
+  // Owner, 2026-10-05: one design's published builds are sub-entries of it, never rows of their own.
+  test('published delivery compositions are rows under the template they were built from', async () => {
+    fetchedSources = [{ ...SOURCE, templateKey: '99' }];
+    discovered = [
+      workspaceTemplate({
+        templateKey: '101',
+        name: 'Inyogo · Card A',
+        sourceAssetId: ASSET,
+        granted: true,
+      }),
+      workspaceTemplate({
+        templateKey: '102',
+        name: 'Inyogo · Card B',
+        sourceAssetId: ASSET,
+        granted: true,
+      }),
+    ];
+    renderWorkbench();
+    expect(await screen.findByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open Inyogo · Card A' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Untitled template' }));
+    expect(screen.getByRole('button', { name: 'Open Inyogo · Card A' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit Inyogo · Card B' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Remove Inyogo · Card B from / })).toBeTruthy();
   });
 
   test('a card opens into its detail panel through a transition, and Templates goes back', async () => {
@@ -260,4 +299,77 @@ describe('ForgeWorkbench', () => {
       transition.mockRestore();
     }
   });
+  test('a template intent from another tab opens its settings once, and is handed back', async () => {
+    const consumed = mock(() => undefined);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ForgeWorkbench
+          brandId={BRAND}
+          templateIntent={{ assetId: ASSET }}
+          onTemplateIntentConsumed={consumed}
+        />
+      </QueryClientProvider>,
+    );
+    const layers = await screen.findByRole('tab', { name: 'Edit layers' });
+    expect(layers.getAttribute('aria-selected')).toBe('true');
+    expect(consumed).toHaveBeenCalledTimes(1);
+
+    // Dropped by the shell, the intent does not come back: Templates stays on the gallery.
+    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ForgeWorkbench brandId={BRAND} onTemplateIntentConsumed={consumed} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByLabelText('Search templates')).toBeTruthy();
+    expect(consumed).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a link from the Library', () => {
+    const SET = '77777777-7777-4777-8777-777777777777';
+    const ROW = '88888888-8888-4888-8888-888888888888';
+    const at = (search: string) => window.history.replaceState(null, '', `/forge${search}`);
+    afterEach(() => at(''));
+
+    test('?template opens that template’s detail', async () => {
+      at(`?template=${ASSET}`);
+      renderWorkbench();
+      expect(await screen.findByRole('tab', { name: 'Variables' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
+    });
+
+    test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {
+      fetchedSources = [{ ...SOURCE, templateKey: '133' }];
+      at(`?template=${ASSET}&set=${SET}&row=${ROW}&rerender=1`);
+      const onOpenRender = mock((_intent: unknown) => undefined);
+      render(
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <ForgeWorkbench brandId={BRAND} brandName="StarCraft" onOpenRender={onOpenRender} />
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(onOpenRender).toHaveBeenCalledTimes(1));
+      expect(onOpenRender.mock.calls[0]?.[0]).toEqual({
+        templateKey: '133',
+        renderSetId: SET,
+        rowId: ROW,
+        rerender: true,
+      });
+    });
+  });
 });
+
+for (const extension of ['ai', 'psd']) {
+  test(`a direct ${extension.toUpperCase()} upload converts its saved asset and refreshes the gallery`, async () => {
+    renderWorkbench();
+    await waitFor(() => expect(uploadFinished).toBeDefined());
+    uploadFinished?.({
+      file: new File(['real upload handled elsewhere'], `design.${extension}`),
+      uploaded: { assetId: 'design-source' },
+    });
+    await waitFor(() => expect(importDesignTemplate).toHaveBeenCalledWith(BRAND, 'design-source'));
+    await waitFor(() => expect(fetchTemplateSources.mock.calls.length).toBeGreaterThan(1));
+  });
+}

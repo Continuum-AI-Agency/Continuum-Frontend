@@ -1,9 +1,11 @@
 import {
+  Bell,
   BookOpen,
   BookText,
   Building2,
   CreditCard,
   FolderKanban,
+  HardDrive,
   IdCard,
   Library,
   Link2,
@@ -39,6 +41,8 @@ export const ACCOUNT_SECTIONS = [
   { key: 'connections', label: 'Connections', icon: Link2, scope: 'account' },
   { key: 'activity', label: 'Activity', icon: ScrollText, scope: 'account' },
   { key: 'brands', label: 'Brands', icon: Building2, scope: 'account' },
+  { key: 'notifications', label: 'Notifications', icon: Bell, scope: 'account' },
+  { key: 'drive', label: 'Drive', icon: HardDrive, scope: 'account' },
 ] as const satisfies readonly SectionDef[];
 
 export const ALL_SECTION_KEYS = [
@@ -55,6 +59,8 @@ export const ALL_SECTION_KEYS = [
   'connections',
   'activity',
   'brands',
+  'notifications',
+  'drive',
 ] as const;
 
 export type SectionKey = (typeof ALL_SECTION_KEYS)[number];

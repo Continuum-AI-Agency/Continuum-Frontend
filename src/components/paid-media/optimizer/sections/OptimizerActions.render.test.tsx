@@ -126,3 +126,35 @@ describe('OptimizerActions — work pending', () => {
     expect(document.body.textContent).toContain('Nothing needs your decision');
   });
 });
+
+// Every portfolio group names the platforms it holds before its queue (frontend.html §7,
+// feature 02). Every portfolio the engine runs today is Meta's.
+describe('OptimizerActions — platform chips', () => {
+  it('heads each portfolio group with the chips of its platforms', () => {
+    renderActions([
+      portfolio({ id: 'p1', pending_recommendations: 2 }),
+      portfolio({ id: 'p2', pending_budget_moves: 1 }),
+    ]);
+
+    const groups = screen.getAllByTestId('actions-portfolio');
+    expect(groups).toHaveLength(2);
+    for (const group of groups) {
+      const chips = Array.from(group.querySelectorAll('[data-testid="platform-chip"]'));
+      expect(chips.map((chip) => chip.getAttribute('data-platform'))).toEqual(['meta']);
+      expect(chips.map((chip) => chip.textContent)).toEqual(['Meta']);
+      const queue = group.querySelector('[data-testid="portfolio-group"]');
+      expect(
+        Boolean(
+          chips[0] &&
+            queue &&
+            chips[0].compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('shows no chip when nothing is waiting', () => {
+    renderActions([portfolio()]);
+    expect(screen.queryByTestId('platform-chip')).toBeNull();
+  });
+});

@@ -4,16 +4,16 @@ import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
   type OneShotPostResponse,
   type PublishPlatform,
+  plannerDayIdInZone,
   resolvePlannerTimeZone,
 } from '@continuum/contracts';
 import { ChevronLeft, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -28,7 +28,10 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { pluralize } from '@/lib/format/pluralize';
 import { readSavedAccountSelection } from '@/lib/organic/account-selection';
-import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
+import {
+  aiStudioHandoffIssue,
+  brandStorageKeyAiStudioLastDraft,
+} from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
@@ -68,13 +71,13 @@ import {
   UNSCHEDULED_DAY_ID,
 } from './calendar-utils';
 import { DestructiveConfirmationProvider } from './DestructiveConfirmation';
-import { StatusBadge } from './DraftCardBadges';
 import {
   DraftDeletionConfirmationProvider,
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
+import { PostedContentPreview } from './PostedContentQuickLook';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
 import { usePlannerDateAnchors } from './planner-date-anchor';
@@ -89,6 +92,7 @@ import { TimeGridCanvas } from './TimeGridCanvas';
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
   OrganicCreationStep,
   OrganicEditorSlide,
   OrganicPlatformTag,
@@ -135,6 +139,7 @@ type OrganicCalendarWorkspaceClientProps = {
   maxTrendSelections?: number;
   brandProfileId?: string;
   brandName?: string;
+  brandTimeZone?: string;
   userId?: string;
   instagramAccountId?: string;
   initialWeekStart?: string | null;
@@ -171,6 +176,7 @@ function OrganicCalendarWorkspaceInner({
   maxTrendSelections,
   brandProfileId,
   brandName,
+  brandTimeZone,
   instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
@@ -298,6 +304,22 @@ function OrganicCalendarWorkspaceInner({
     expandPreview,
     isAutoSelectSuppressed,
   } = useCalendarSelection(calendarDays, { onDismiss: forgetDeepLinkedDraft });
+  const router = useRouter();
+  const [selectedPost, setSelectedPost] = React.useState<{
+    post: OrganicCalendarPostedContent;
+    metricsHref: string | null;
+  } | null>(null);
+  const handleSelectPost = React.useCallback(
+    (post: OrganicCalendarPostedContent, metricsHref: string | null) => {
+      clearAll();
+      setSelectedPost({ post, metricsHref });
+    },
+    [clearAll],
+  );
+  const closePreview = React.useCallback(() => {
+    setSelectedPost(null);
+    clearAll();
+  }, [clearAll]);
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
@@ -318,6 +340,9 @@ function OrganicCalendarWorkspaceInner({
   const { weekStart, setWeekStart, monthAnchorDate, setMonthAnchorDate } = usePlannerDateAnchors({
     initialWeekStart: initialWeekStart ?? undefined,
     persistedWeekStartId,
+    now: new Date(
+      `${plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date())}T12:00:00`,
+    ),
   });
   const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false);
 
@@ -471,11 +496,21 @@ function OrganicCalendarWorkspaceInner({
   }, [handleWeekChange, weekStart]);
 
   const handleToday = React.useCallback(() => {
-    const today = new Date();
+    const todayId =
+      plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date());
+    const today = new Date(`${todayId}T12:00:00`);
     clearAll();
     setWeekStart(startOfWeek(today));
-    setFocusedDayId(formatDayId(today));
-  }, [clearAll, setFocusedDayId, setWeekStart]);
+    setFocusedDayId(todayId);
+  }, [brandTimeZone, clearAll, setFocusedDayId, setWeekStart]);
+
+  const handleMonthToday = React.useCallback(() => {
+    const todayId =
+      plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date());
+    clearAll();
+    setMonthAnchorDate(new Date(`${todayId}T12:00:00`));
+    setFocusedDayId(todayId);
+  }, [brandTimeZone, clearAll, setFocusedDayId, setMonthAnchorDate]);
 
   const handlePreviousMonth = React.useCallback(() => {
     const prev = new Date(monthAnchorDate);
@@ -597,7 +632,9 @@ function OrganicCalendarWorkspaceInner({
   // panel silently blank until a reload. Gate on `selectedId` and bridge the
   // transient gap with the last-resolved draft so the panel never blanks and
   // re-renders with fresh content the moment the draft resolves again.
-  const hasSelection = Boolean(selectedId);
+  const previewPost = selectedId ? null : selectedPost;
+  const selectedPostMetricsHref = previewPost?.metricsHref;
+  const hasSelection = Boolean(selectedId || previewPost);
   // Selection keeps the workflow rail on the "review" stage; only an expanded
   // preview claims layout width.
   const isPreviewOpen = hasSelection && !isPreviewCollapsed;
@@ -612,6 +649,11 @@ function OrganicCalendarWorkspaceInner({
     (selectedId && lastResolvedDraftRef.current?.id === selectedId
       ? lastResolvedDraftRef.current
       : null);
+  const studioIssue = previewDraft ? aiStudioHandoffIssue(previewDraft) : null;
+
+  React.useEffect(() => {
+    if (selectedId) setSelectedPost(null);
+  }, [selectedId]);
 
   const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts]);
 
@@ -654,7 +696,7 @@ function OrganicCalendarWorkspaceInner({
 
     // No current selection -- try to restore from initial prop / localStorage,
     // unless the user just dismissed that very draft from the preview panel.
-    if (!selectedId && typeof window !== 'undefined') {
+    if (!selectedId && !selectedPost && typeof window !== 'undefined') {
       const preferredDraftId =
         initialSelectedDraftId ??
         (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
@@ -673,6 +715,7 @@ function OrganicCalendarWorkspaceInner({
     isAutoSelectSuppressed,
     isCalendarHydrated,
     selectedId,
+    selectedPost,
     selectedIds,
     setSelectedDraftId,
     setSelectedDraftIds,
@@ -1242,7 +1285,13 @@ function OrganicCalendarWorkspaceInner({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: planner root is a keyboard-shortcut surface for the whole grid (delete/select), not a single control */}
       <div
         className="@container/organic relative h-full min-h-0 w-full overflow-hidden focus:outline-none"
-        onKeyDown={handleKeyDown}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && selectedPost) {
+            closePreview();
+            return;
+          }
+          handleKeyDown(event);
+        }}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so grid-level key handlers fire without a child holding focus
         tabIndex={0}
       >
@@ -1276,11 +1325,8 @@ function OrganicCalendarWorkspaceInner({
               isPreviewOpen ? (
                 <motion.aside
                   role="complementary"
-                  aria-label="Draft preview"
+                  aria-label={previewPost ? 'Published post preview' : 'Draft preview'}
                   tabIndex={-1}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === 'Escape') clearAll();
-                  }}
                   initial={{ opacity: 0, x: 28, scale: 0.98 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   transition={previewTransition}
@@ -1289,6 +1335,11 @@ function OrganicCalendarWorkspaceInner({
                   <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Post Preview
+                      {previewDraft?.dateLabel
+                        ? ` · ${previewDraft.dateLabel}`
+                        : previewPost
+                          ? ` · ${previewPost.post.dayId}`
+                          : ''}
                     </p>
                     <div className="flex items-center gap-1.5">
                       {previewDraft?.mediaSuggestion?.reel?.composition &&
@@ -1305,7 +1356,7 @@ function OrganicCalendarWorkspaceInner({
                             : 'Ready to render'}
                         </Button>
                       ) : null}
-                      <TooltipProvider>
+                      {previewDraft ? <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger
                             render={
@@ -1314,10 +1365,12 @@ function OrganicCalendarWorkspaceInner({
                                   type="button"
                                   variant="secondary"
                                   size="sm"
-                                  disabled={!brandProfileId || !previewDraft}
+                                  disabled={
+                                    !brandProfileId || !previewDraft || Boolean(studioIssue)
+                                  }
                                   onClick={handleOpenInAiStudio}
                                   style={
-                                    !brandProfileId || !previewDraft
+                                    !brandProfileId || !previewDraft || studioIssue
                                       ? { pointerEvents: 'none' }
                                       : undefined
                                   }
@@ -1329,38 +1382,37 @@ function OrganicCalendarWorkspaceInner({
                               </span>
                             }
                           />
-                          {!brandProfileId ? (
-                            <TooltipContent>Select a brand to use AI Studio</TooltipContent>
+                          {!brandProfileId || studioIssue ? (
+                            <TooltipContent>
+                              {!brandProfileId ? 'Select a brand to use AI Studio' : studioIssue}
+                            </TooltipContent>
                           ) : null}
                         </Tooltip>
-                      </TooltipProvider>
+                      </TooltipProvider> : null}
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
                         aria-label="Close preview"
-                        onClick={clearAll}
+                        onClick={closePreview}
                       >
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
 
-                  {/* The preview's status reads from the same presentation map as the card's
-                      pill — one status, one hue, one word, wherever it is shown. */}
-                  {previewDraft ? (
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline">{previewDraft.platforms[0] ?? 'Unassigned'}</Badge>
-                      <StatusBadge status={previewDraft.status} format={previewDraft.format} />
-                      <Badge variant="outline">
-                        {previewDraft.dateLabel || 'Unscheduled'} ·{' '}
-                        {previewDraft.timeLabel || 'No time'}
-                      </Badge>
-                    </div>
-                  ) : null}
-
                   <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                    {previewDraft ? (
+                    {previewPost ? (
+                      <PostedContentPreview
+                        post={previewPost.post}
+                        className="h-full w-full overflow-y-auto border-0"
+                        onViewMetrics={
+                          selectedPostMetricsHref
+                            ? () => router.push(selectedPostMetricsHref)
+                            : undefined
+                        }
+                      />
+                    ) : previewDraft ? (
                       <OrganicDraftPreview
                         draft={previewDraft}
                         brandName={brandName}
@@ -1393,9 +1445,12 @@ function OrganicCalendarWorkspaceInner({
             }
             workspace={
               <section className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-                <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
+                {viewMode !== 'month' && (
+                  <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
+                )}
                 <div>
                   <CalendarToolbar
+                    compact={viewMode === 'month'}
                     viewMode={viewMode}
                     onViewModeChange={handleViewModeChange}
                     dateRange={dateRange}
@@ -1490,11 +1545,15 @@ function OrganicCalendarWorkspaceInner({
                         <OrganicMonthlyCalendar
                           days={gridDays}
                           monthAnchorDate={monthAnchorDate}
+                          todayId={
+                            plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? undefined
+                          }
                           platforms={plannerPlatforms}
                           postedContent={postedContent}
                           selectedDraftId={selectedId}
                           selectedDraftIds={selectedIds}
                           onSelectDraft={(id) => handleSelect(id, false)}
+                          onSelectPost={handleSelectPost}
                           onToggleSelection={(id) => handleSelect(id, true)}
                           onCreatePost={({ dayId, platformKey, status, mode, format }) =>
                             handleGoDraft({
@@ -1507,6 +1566,7 @@ function OrganicCalendarWorkspaceInner({
                           }
                           onPreviousMonth={handlePreviousMonth}
                           onNextMonth={handleNextMonth}
+                          onToday={handleMonthToday}
                           onRegenerate={handleRegenerate}
                           onDeleteDraft={(id) => requestDraftDeletion([id], bulkDeleteDrafts)}
                         />

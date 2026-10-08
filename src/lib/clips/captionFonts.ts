@@ -13,6 +13,8 @@
 // own document.fonts registration plus every repeat render; the second job would post a
 // detached buffer. ~145KB cloned per job is noise beside the video Blob it travels with.
 
+import { type DesignSystemFontEmbed, fontEmbedFaceCss } from '@continuum/contracts';
+
 export type CaptionFontSpec = {
   family: string;
   /** Public path, fetched same-origin. */
@@ -48,6 +50,12 @@ export const CAPTION_FONTS: Readonly<Record<string, CaptionFontSpec>> = {
     url: '/fonts/JetBrainsMonoVariable.woff2',
     weightRange: '100 800',
   },
+  'Cormorant Garamond': {
+    family: 'Cormorant Garamond',
+    url: '/fonts/CormorantGaramond-Bold.woff2',
+    weightRange: '700',
+  },
+  Allura: { family: 'Allura', url: '/fonts/Allura-Regular.woff2', weightRange: '400' },
 };
 
 /** True when a family name has a real file behind it — the honest answer for brand fonts. */
@@ -155,7 +163,6 @@ export async function ensureCaptionFonts(families: readonly string[]): Promise<s
   return registerCaptionFonts(await loadCaptionFonts(families));
 }
 
-
 /**
  * One family as an `@font-face` rule with the woff2 inlined as a data URI.
  *
@@ -197,9 +204,48 @@ export function captionFontFaceCss(family: string | undefined): Promise<string |
   return pending;
 }
 
+/**
+ * A brand's own faces, carried as bytes with the request (`BrandTypeInputs.fontEmbeds`), made real
+ * on BOTH sides: registered on this thread's FontFaceSet for the canvas measure, and returned as
+ * `@font-face` rules for the SVG draw. Null when no embed survives its contract or registration.
+ */
+const brandRegistered = new Set<string>();
+
+export async function embedBrandFonts(
+  embeds: readonly DesignSystemFontEmbed[],
+): Promise<string | null> {
+  const fonts = fontFaceSet();
+  const css: string[] = [];
+  for (const embed of embeds) {
+    const rule = fontEmbedFaceCss(embed);
+    if (!rule) continue;
+    const key = `${embed.family}|${embed.weight ?? 'any'}|${embed.style ?? 'normal'}`;
+    if (fonts && typeof FontFace !== 'undefined' && !brandRegistered.has(key)) {
+      try {
+        const binary = atob(embed.base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        const face = new FontFace(embed.family, bytes.buffer, {
+          weight: embed.weight === undefined ? '1 1000' : String(embed.weight),
+          style: embed.style ?? 'normal',
+        });
+        await face.load();
+        fonts.add(face);
+        brandRegistered.add(key);
+      } catch {
+        // A face that will not parse draws nothing and measures nothing: leave it out of both.
+        continue;
+      }
+    }
+    css.push(rule);
+  }
+  return css.length ? css.join('\n') : null;
+}
+
 /** Test seam: forget every cached byte buffer and registration. */
 export function resetCaptionFontsForTest(): void {
   byteCache.clear();
   registered.clear();
   faceCssCache.clear();
+  brandRegistered.clear();
 }

@@ -10,7 +10,11 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { ApiRenderJob, ApiRenderTemplateSummary } from '@continuum/contracts';
+import type {
+  ApiRenderJob,
+  ApiRenderTemplateSummary,
+  ForgeOutputLibraryState,
+} from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 const HOUR = 3_600_000;
@@ -144,6 +148,10 @@ const environment = (bindingId: string, workspace: string, isDefault: boolean) =
 });
 
 let jobsFixture: ApiRenderJob[] = [];
+const prepareMasterDownload = mock(async () => ({
+  path: '/api/ai-studio/renders/master-downloads/test',
+}));
+const masterDownloadStatus = mock(async () => ({ status: 'failed' as const }));
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
@@ -158,9 +166,9 @@ const getJob = mock(async (_brandId: string, id: string) =>
   jobsFixture.find((job) => job.id === id),
 );
 const listEnvironments = mock(async () => ({ items: environmentsFixture }));
-const shareBatch = mock(async (_brandId: string, batchId: string) => ({
-  url: `https://api.example.com/api/ai-studio/renders/shared/hero.zip?token=${batchId}`,
-  expiresAt: '2026-10-19T00:00:00.000Z',
+let libraryStateFixture: ForgeOutputLibraryState[] = [];
+const libraryState = mock(async (_brandId: string, assetIds: string[]) => ({
+  items: libraryStateFixture.filter((item) => assetIds.includes(item.assetId)),
 }));
 const listTemplates = mock(async (_brandId: string, bindingId?: string | null) => ({
   items: bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
@@ -174,7 +182,9 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     listRenderSets: async () => ({ items: [], nextCursor: null }),
     listEnvironments,
     listTemplates,
-    shareBatch,
+    libraryState,
+    prepareMasterDownload,
+    masterDownloadStatus,
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -203,7 +213,14 @@ const rowOrder = () => {
 
 /** The brand's ledger opens on batches; its "Pieces" cell is what makes a row read as one. */
 const findBatchRow = async () =>
-  (await screen.findAllByText(/^\d+ renders? · \d+ files?$/))[0]?.closest('tr') as HTMLElement;
+  waitFor(() => {
+    const row = screen
+      .getAllByText(/^\d+ renders? · \d+ files?$/)
+      .map((element) => element.closest('tr'))
+      .find((element): element is HTMLTableRowElement => element !== null);
+    if (!row) throw new Error('Batch row is not in the table yet');
+    return row;
+  });
 
 /**
  * Every fixture shares one batch, so the job-level assertions below run inside it: the list a
@@ -229,7 +246,7 @@ async function renderLedger(
   return view;
 }
 
-// happy-dom never fetches an image, so every <img> reads as finished with no pixels — exactly what
+// happy-dom never fetches an image, so every image element reads as finished with no pixels — exactly what
 // a broken image looks like to the ledger's pre-commit check. Here images decode; the broken-file
 // test fires the error itself.
 let imagePrototype: object | null = null;
@@ -247,16 +264,19 @@ afterAll(() => {
 
 beforeEach(() => {
   realtime = undefined;
-  shareBatch.mockClear();
+  libraryState.mockClear();
   listJobs.mockClear();
   getJob.mockClear();
   listEnvironments.mockClear();
   listTemplates.mockClear();
+  prepareMasterDownload.mockClear();
+  masterDownloadStatus.mockClear();
 });
 
 afterEach(() => {
   cleanup();
   clientTemplatesFixture = [];
+  libraryStateFixture = [];
   environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
 });
 
@@ -329,39 +349,43 @@ describe('RenderJobsGrid', () => {
     expect(screen.queryByText('Madrid')).toBeNull();
   }, 30_000);
 
-  test('Copy link mints the batch’s share link without opening the batch; no files, no zip', async () => {
-    const writeText = mock(async (_text: string) => undefined);
-    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    try {
-      const OTHER = '99999999-9999-4999-8999-999999999992';
-      const queued: ApiRenderJob = { ...PROMO, batchId: OTHER, status: 'queued', outputs: [] };
-      await renderLedger([MADRID, queued], [TEMPLATE], undefined, { open: false });
+  test('each batch reads its outputs’ Library review in one read: approved of total, toned by the furthest behind', async () => {
+    const OTHER = '99999999-9999-4999-8999-999999999992';
+    const asset = (n: number) => `77777777-7777-4777-8777-77777777778${n}`;
+    const output = (n: number) => ({ ...MADRID.outputs[0]!, id: `o${n}`, assetId: asset(n) });
+    const later: ApiRenderJob = {
+      ...PROMO,
+      batchId: OTHER,
+      status: 'finished',
+      outputs: [output(1), output(2), output(3)],
+    };
+    const state = (n: number, reviewStatus: ForgeOutputLibraryState['reviewStatus']) => ({
+      assetId: asset(n),
+      reviewStatus,
+      versionNumber: 1,
+      versionCount: 1,
+      commentCount: 0,
+    });
+    libraryStateFixture = [
+      state(1, 'approved'),
+      state(2, 'approved'),
+      state(3, 'in_review'),
+      { ...state(0, 'needs_changes'), assetId: MADRID.outputs[0]!.assetId! },
+    ];
+    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, { open: false });
 
-      const finishedRow = within(
-        screen.getByText('1 render · 1 file').closest('tr') as HTMLElement,
-      );
-      fireEvent.click(finishedRow.getByRole('button', { name: /Copy link/ }));
-      await waitFor(() =>
-        expect(writeText).toHaveBeenCalledWith(
-          `https://api.example.com/api/ai-studio/renders/shared/hero.zip?token=${BATCH}`,
-        ),
-      );
-      expect(shareBatch).toHaveBeenCalledWith(BRAND, BATCH);
-      // The click stayed on the button: the ledger is still on its batches.
-      expect(screen.queryByText('Madrid')).toBeNull();
-
-      const queuedRow = within(screen.getByText('1 render · 0 files').closest('tr') as HTMLElement);
-      expect(
-        (queuedRow.getByRole('button', { name: /Copy link/ }) as HTMLButtonElement).disabled,
-      ).toBe(true);
-      expect((queuedRow.getByRole('button', { name: /Zip/ }) as HTMLButtonElement).disabled).toBe(
-        true,
-      );
-    } finally {
-      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
-      else Reflect.deleteProperty(navigator, 'clipboard');
-    }
+    const laterRow = within(screen.getByText('1 render · 3 files').closest('tr') as HTMLElement);
+    const pill = await laterRow.findByText('2/3 approved');
+    expect(pill.closest('[title]')?.getAttribute('title')).toBe('Library review: In review');
+    const firstRow = within(screen.getByText('2 renders · 1 file').closest('tr') as HTMLElement);
+    expect(
+      (await firstRow.findByText('0/1 approved')).closest('[title]')?.getAttribute('title'),
+    ).toBe('Library review: Needs changes');
+    // Every output on the page, in one call.
+    expect(libraryState).toHaveBeenCalledTimes(1);
+    expect([...(libraryState.mock.calls[0]?.[1] ?? [])].sort()).toEqual(
+      [asset(1), asset(2), asset(3), MADRID.outputs[0]!.assetId!].sort(),
+    );
   }, 30_000);
 
   test('the Template version column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
@@ -579,6 +603,25 @@ describe('RenderJobsGrid', () => {
     expect(rowOrder()).toEqual(['Promo B', 'Roma', 'Madrid']);
   }, 30_000);
 
+  test('a job’s detail says where each output stands in the Library and links to its thread', async () => {
+    const assetId = MADRID.outputs[0]!.assetId!;
+    libraryStateFixture = [
+      { assetId, reviewStatus: 'in_review', versionNumber: 3, versionCount: 3, commentCount: 2 },
+    ];
+    await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
+    fireEvent.click(screen.getByText('Madrid'));
+
+    const library = within(await screen.findByRole('list', { name: 'In the Library' }));
+    expect(library.getByText('madrid_1080x1920.png')).toBeTruthy();
+    expect(await library.findByText('In review')).toBeTruthy();
+    expect(library.getByTitle('Comments in the Library').textContent).toBe('2 comments');
+    expect(library.getByText('v3').getAttribute('title')).toBe('Version 3 of 3');
+    const href = library.getByRole('link', { name: /Open in Library/ }).getAttribute('href') ?? '';
+    expect(href.startsWith('/library?')).toBe(true);
+    expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(assetId);
+    expect(libraryState.mock.calls.at(-1)?.[1]).toEqual([assetId]);
+  }, 30_000);
+
   test('a refresh that only changes the approval updates the badge', async () => {
     // Deciding an approval writes render_approvals, not ad_render_jobs.updated_at: the re-read job
     // ties on updatedAt with the one on screen, and the re-read must win the tie.
@@ -670,7 +713,7 @@ describe('RenderJobsGrid', () => {
     expect(rowOrder()).toEqual(['Promo B']);
   }, 30_000);
 
-  test('one template’s ledger: filtered by the server, grouped by set, its thumbnail the first format’s file', async () => {
+  test('one template’s ledger: filtered by the server, grouped by set, its thumbnail the first available format’s file', async () => {
     const file = (fileName: string) => ({
       id: `hash-${fileName}`,
       kind: 'image' as const,
@@ -704,6 +747,7 @@ describe('RenderJobsGrid', () => {
     };
     jobsFixture = [launch, loose];
     const formats = [
+      { id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null },
       { id: '1:1', label: '1:1', ratio: '1:1', width: null, height: null },
       { id: '16:9', label: '16:9', ratio: '16:9', width: null, height: null },
     ];
@@ -731,6 +775,12 @@ describe('RenderJobsGrid', () => {
     expect(thumbnail?.getAttribute('src')).toBe(
       'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
     );
+    fireEvent.click(screen.getByText('Launch'));
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('img')?.getAttribute('src')).toBe(
+      'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'All renders' }));
 
     // Another template's row changing is not this ledger's business.
     const calls = listJobs.mock.calls.length;
@@ -739,6 +789,93 @@ describe('RenderJobsGrid', () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(listJobs.mock.calls.length).toBe(calls);
     view.unmount();
+  }, 30_000);
+
+  test('an unmatched rendered file remains the ledger and detail preview', async () => {
+    const fileName = 'rendered_asset.jpg';
+    const job: ApiRenderJob = {
+      ...MADRID,
+      label: 'UTEC 4:5',
+      labelPath: ['UTEC 4:5'],
+      outputs: [
+        {
+          ...MADRID.outputs[0]!,
+          fileName,
+          url: `https://cdn.test/${fileName}`,
+        },
+      ],
+    };
+    jobsFixture = [job];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[{ id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null }]}
+        />
+      </QueryClientProvider>,
+    );
+    expect((await findBatchRow()).querySelector('img')?.getAttribute('src')).toBe(
+      `https://cdn.test/${fileName}`,
+    );
+    fireEvent.click(await findBatchRow());
+    const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
+    expect(row.querySelector('img')?.getAttribute('src')).toBe(`https://cdn.test/${fileName}`);
+    fireEvent.click(row);
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('img')?.getAttribute('src')).toBe(`https://cdn.test/${fileName}`);
+    expect(screen.getByRole('link', { name: 'Download JPG' }).getAttribute('href')).toBe(
+      `https://cdn.test/${fileName}`,
+    );
+  }, 30_000);
+  test('previews the Library asset when a 4:5 job lists a non-asset file first', async () => {
+    const job: ApiRenderJob = {
+      ...MADRID,
+      label: 'UTEC 4:5',
+      outputs: [
+        {
+          ...MADRID.outputs[0]!,
+          id: 'preview',
+          fileName: 'preview_4_5.jpg',
+          url: 'https://cdn.test/preview.jpg',
+          assetId: null,
+          versionId: null,
+        },
+        {
+          ...MADRID.outputs[0]!,
+          id: 'asset',
+          fileName: '_crl3e9n.jpg',
+          url: 'https://cdn.test/asset.jpg',
+        },
+      ],
+    };
+    jobsFixture = [job];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[
+            {
+              id: '4:5',
+              label: '4:5',
+              ratio: '4:5',
+              width: null,
+              height: null,
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
+    expect(row.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/asset.jpg');
+    fireEvent.click(row);
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('[aria-pressed="true"]')?.textContent).toContain('4:5');
+    expect(preview.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/asset.jpg');
   }, 30_000);
   test('a failed render reads its whole sentence, a broken thumbnail falls back to the tile, and Proof and Final are marked', async () => {
     const sentence =
@@ -817,10 +954,22 @@ describe('RenderJobsGrid', () => {
       outputs: [
         clip('Story_9_16_ab12cd.mxf', 'application/mxf'),
         clip('Story_9_16_ab12cd.mov', 'video/quicktime'),
-        clip('Story_9_16_ab12cd.mp4', 'video/mp4'),
+        {
+          ...clip('Story_9_16_ab12cd.mp4', 'video/mp4'),
+          posterUrl: 'https://cdn.test/poster.jpg',
+          libraryUrl: 'https://library.test/Story_9_16_ab12cd.mp4?download=',
+        },
       ],
     };
-    jobsFixture = [reel];
+    // A second render whose poster is not made yet.
+    const pending: ApiRenderJob = {
+      ...reel,
+      id: '11111111-1111-4111-8111-111111111142',
+      label: 'Fresh reel',
+      labelPath: ['Fresh reel'],
+      outputs: [clip('Story_9_16_ef34gh.mp4', 'video/mp4')],
+    };
+    jobsFixture = [reel, pending];
     const story = { name: 'Story 9:16', width: 1080, height: 1920 };
     const formats = [
       { id: 'story', label: 'Story', ratio: '9:16', comp: story, width: 1080, height: 1920 },
@@ -840,18 +989,32 @@ describe('RenderJobsGrid', () => {
       ),
     ).toBeTruthy();
 
+    // The ledger row draws the video's poster still and never the video: a player per row
+    // downloaded every render to paint a thumbnail. No poster yet is a plain tile, still no video.
+    const row = screen.getByText('Reel').closest('tr') as HTMLElement;
+    expect(row.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/poster.jpg');
+    const freshRow = screen.getByText('Fresh reel').closest('tr') as HTMLElement;
+    expect(freshRow.querySelector('img')).toBeNull();
+    expect(document.querySelectorAll('tbody video')).toHaveLength(0);
+
     fireEvent.click(screen.getByText('Reel'));
     await screen.findByRole('heading', { name: 'Reel' });
     const preview = screen.getByRole('group', { name: 'Render preview' });
+    // It plays the Library copy (storage behind a CDN), not the fleet's far bucket.
     expect(preview.querySelector('video')?.getAttribute('src')).toBe(
-      'https://cdn.test/Story_9_16_ab12cd.mp4',
+      'https://library.test/Story_9_16_ab12cd.mp4?download=',
+    );
+    // Opened, the frame shows at once while the video buffers behind it.
+    expect(preview.querySelector('video')?.getAttribute('poster')).toBe(
+      'https://cdn.test/poster.jpg',
     );
     expect(
       ['MP4', 'MOV', 'MXF'].map((type) =>
         screen.getByRole('link', { name: `Download ${type}` }).getAttribute('href'),
       ),
     ).toEqual([
-      'https://cdn.test/Story_9_16_ab12cd.mp4',
+      'https://library.test/Story_9_16_ab12cd.mp4?download=',
+      // Masters stay in the fleet's bucket: no Library copy, so their own address.
       'https://cdn.test/Story_9_16_ab12cd.mov',
       'https://cdn.test/Story_9_16_ab12cd.mxf',
     ]);
@@ -861,5 +1024,154 @@ describe('RenderJobsGrid', () => {
       within(preview).getByText('This browser can’t play this file. Download it below.'),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Download MXF' })).toBeTruthy();
+  }, 30_000);
+
+  test('an MP4-only render offers on-demand MOV and MXF downloads for that exact output', async () => {
+    const output = {
+      id: 'mp4-output',
+      kind: 'video' as const,
+      fileName: 'Story_9_16_ab12cd.mp4',
+      mimeType: 'video/mp4',
+      url: 'https://cdn.test/Story_9_16_ab12cd.mp4',
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Card 1', labelPath: ['Card 1'] }];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[{ id: 'story', label: 'Story', ratio: '9:16', width: 1080, height: 1920 }]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Card 1'));
+    await screen.findByRole('heading', { name: 'Card 1' });
+    expect(screen.getByRole('link', { name: 'Download MP4' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate MOV download' }));
+    await waitFor(() =>
+      expect(prepareMasterDownload).toHaveBeenCalledWith(BASE.id, {
+        brandId: BRAND,
+        outputId: output.id,
+        format: 'mov',
+      }),
+    );
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'MOV conversion failed. Try again.',
+    );
+  }, 30_000);
+
+  test('the finished Base render shows its labeled Card A MP4 and master download actions', async () => {
+    const fileName = 'RENDER_Card_A_(Pre-Match)_qxlkb1c.mp4';
+    const output = {
+      id: 'card-a',
+      kind: 'video' as const,
+      fileName,
+      mimeType: 'video/mp4',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
+    const formats = [
+      {
+        id: 'format-a',
+        label: 'RENDER Card A (Pre-Match)',
+        ratio: null,
+        mediaType: 'MP4 Video (RGB)',
+        width: null,
+        height: null,
+      },
+      {
+        id: 'format-b',
+        label: 'RENDER Card B (Halftime)',
+        ratio: null,
+        mediaType: 'MP4 Video (RGB)',
+        width: null,
+        height: null,
+      },
+    ];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid brandId={BRAND} formats={formats} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Base'));
+    await screen.findByRole('heading', { name: 'Base' });
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(
+      output.url,
+    );
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'RENDER Card B (Halftime)' }));
+    expect(preview.textContent).toContain('This job did not render this format.');
+  }, 30_000);
+
+  test('a finished file remains previewable and downloadable when no template format matches', async () => {
+    const fileName = 'Unexpected_Card_A_qxlkb1c.mp4';
+    const output = {
+      id: 'unmatched-video',
+      kind: 'video' as const,
+      fileName,
+      mimeType: 'video/mp4',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[
+            {
+              id: 'card-a',
+              label: 'RENDER Card A (Pre-Match)',
+              ratio: null,
+              width: null,
+              height: null,
+            },
+            {
+              id: 'card-b',
+              label: 'RENDER Card B (Halftime)',
+              ratio: null,
+              width: null,
+              height: null,
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Base'));
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(
+      output.url,
+    );
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'RENDER Card A (Pre-Match)' }));
+    expect(preview.textContent).toContain('Select the rendered file tab above.');
+    fireEvent.click(screen.getByRole('button', { name: fileName }));
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
   }, 30_000);
 });

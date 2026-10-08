@@ -103,3 +103,84 @@ describe('AssetDetailModal download affordance', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 });
+
+describe('AssetDetailModal prev/next navigation', () => {
+  function mountWithNav(onPrev?: () => void, onNext?: () => void) {
+    mount(
+      <AssetDetailModal
+        brandId="brand-1"
+        asset={libraryAsset()}
+        onClose={() => {}}
+        onPrev={onPrev}
+        onNext={onNext}
+      />,
+    );
+    return screen.getByRole('dialog');
+  }
+
+  it('steps with the chevrons and disables the missing end', () => {
+    let next = 0;
+    mountWithNav(undefined, () => {
+      next += 1;
+    });
+    const prevButton = screen.getByTestId('asset-detail-prev') as HTMLButtonElement;
+    expect(prevButton.disabled).toBe(true);
+    fireEvent.click(screen.getByTestId('asset-detail-next'));
+    expect(next).toBe(1);
+  });
+
+  it('renders no chevrons when neither neighbour exists', () => {
+    mountWithNav();
+    expect(screen.queryByTestId('asset-detail-prev')).toBeNull();
+    expect(screen.queryByTestId('asset-detail-next')).toBeNull();
+  });
+
+  it('steps with ArrowLeft / ArrowRight on the dialog', () => {
+    const calls: string[] = [];
+    const dialog = mountWithNav(
+      () => calls.push('prev'),
+      () => calls.push('next'),
+    );
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    fireEvent.keyDown(dialog, { key: 'ArrowRight', metaKey: true });
+    // ⌥/Alt + arrow is the path on a video, whose player owns the plain arrows.
+    fireEvent.keyDown(dialog, { key: 'ArrowRight', altKey: true });
+    expect(calls).toEqual(['next', 'prev', 'next']);
+  });
+
+  it('steps with ⌥ + arrow even from a focused player, which ignores Alt', () => {
+    const calls: string[] = [];
+    const dialog = mountWithNav(
+      () => calls.push('prev'),
+      () => calls.push('next'),
+    );
+    const video = document.createElement('video');
+    dialog.append(video);
+    fireEvent.keyDown(video, { key: 'ArrowRight' });
+    fireEvent.keyDown(video, { key: 'ArrowRight', altKey: true });
+    expect(calls).toEqual(['next']);
+  });
+
+  it('leaves arrow keys to a text field, a player, and a nested dialog', () => {
+    const calls: string[] = [];
+    const dialog = mountWithNav(
+      () => calls.push('prev'),
+      () => calls.push('next'),
+    );
+    const textarea = document.createElement('textarea');
+    const video = document.createElement('video');
+    dialog.append(textarea, video);
+    fireEvent.keyDown(textarea, { key: 'ArrowRight' });
+    fireEvent.keyDown(video, { key: 'ArrowRight' });
+
+    const nested = document.createElement('div');
+    nested.setAttribute('role', 'dialog');
+    const nestedButton = document.createElement('button');
+    nested.append(nestedButton);
+    dialog.append(nested);
+    fireEvent.keyDown(nestedButton, { key: 'ArrowLeft' });
+
+    expect(calls).toEqual([]);
+  });
+});

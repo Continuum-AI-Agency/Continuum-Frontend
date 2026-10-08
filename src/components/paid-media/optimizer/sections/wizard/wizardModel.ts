@@ -12,8 +12,12 @@ import type {
   BudgetGranularity,
   OptimizationModeDto,
   OptimizationObjective,
+  PlatformCandidateAccount,
+  PlatformId,
   PortfolioConfig,
   PortfolioSuggestion,
+  SuggestionMember,
+  SuggestResult,
   TargetMetric,
 } from '@continuum/contracts';
 import {
@@ -23,6 +27,7 @@ import {
   getOptimizationMetricDefinition,
   toMinorUnits,
 } from '@continuum/contracts';
+import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
   buildConversionDescriptor,
   type ConversionDescriptorDraft,
@@ -60,6 +65,15 @@ export type WizardDraft = {
   adsetIds: string[];
   /** Whole campaigns chosen in campaign mode (their ad sets also land in adsetIds). */
   campaignIds: string[];
+  /**
+   * The members on other platforms the Assets step lists, ticked or not: what a suggestion
+   * proposed ("Leads // All platforms", "Leads // Google Ads only"), or — from scratch — every
+   * campaign the brand's other accounts could put in a portfolio. Empty for a Meta-only
+   * suggestion and for a brand with Meta only.
+   */
+  proposedMembers: SuggestionMember[];
+  /** Which of `proposedMembers` are selected, by memberKey. All of them, until unticked. */
+  memberKeys: string[];
   /** Typed daily total; blank = match the selection's live sum. */
   dailyTotal: string;
   flightFrom: string | null;
@@ -110,6 +124,8 @@ export function emptyDraft(): WizardDraft {
     assetMode: 'adset',
     adsetIds: [],
     campaignIds: [],
+    proposedMembers: [],
+    memberKeys: [],
     dailyTotal: '',
     flightFrom: null,
     flightTo: null,
@@ -122,6 +138,89 @@ export function emptyDraft(): WizardDraft {
     scaleCadenceDays: '',
     scaleMaxDaily: '',
   };
+}
+
+/** From scratch: every eligible campaign on the brand's other accounts, none ticked. */
+export function draftFromScratch(candidates: readonly PlatformCandidateAccount[]): WizardDraft {
+  return {
+    ...emptyDraft(),
+    source: 'scratch',
+    proposedMembers: scratchMembers(candidates),
+  };
+}
+
+/** The from-scratch list as members, in the order the accounts and campaigns arrived. */
+export function scratchMembers(
+  candidates: readonly PlatformCandidateAccount[],
+): SuggestionMember[] {
+  return candidates.flatMap((account) =>
+    account.candidates.map((candidate) => ({
+      platform: account.platform,
+      account_id: account.account_id,
+      entity_id: candidate.entity_id,
+      level: 'campaign' as const,
+      ...(candidate.name?.trim() ? { name: candidate.name.trim() } : {}),
+      ...(account.currency ? { currency: account.currency } : {}),
+      daily_budget: candidate.daily_budget,
+    })),
+  );
+}
+
+const normCurrency = (currency: string | null | undefined) =>
+  currency?.trim().toUpperCase() || null;
+
+/**
+ * The one currency the selection bills in so far, or null when nothing priced is selected.
+ * A portfolio holds one currency — optimizer_add_portfolio_members refuses a second — so the
+ * first ticked member (or the Meta account, once a Meta ad set is ticked) fixes it.
+ */
+export function selectionCurrency(
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  metaCurrency: string | null | undefined,
+): string | null {
+  if (hasMetaSelection(draft) && normCurrency(metaCurrency)) return normCurrency(metaCurrency);
+  for (const member of selectedMembers(draft)) {
+    const currency = normCurrency(member.currency);
+    if (currency) return currency;
+  }
+  return null;
+}
+
+/** Why a member cannot join the selection, or null when it can: it bills in another currency
+ *  than what is already selected. A ticked member is never blocked — it can always be unticked. */
+export function memberBlockReason(
+  member: SuggestionMember,
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  metaCurrency: string | null | undefined,
+): string | null {
+  if (draft.memberKeys.includes(memberKey(member))) return null;
+  const fixed = selectionCurrency(draft, metaCurrency);
+  const own = normCurrency(member.currency);
+  if (!fixed || !own || own === fixed) return null;
+  return `Bills in ${own}; this portfolio is in ${fixed}.`;
+}
+
+/** The selection's currencies when it holds more than one — the step refuses it. */
+function mixedCurrencies(
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  metaCurrency: string | null | undefined,
+): string[] {
+  const currencies = new Set<string>();
+  if (hasMetaSelection(draft) && normCurrency(metaCurrency)) {
+    currencies.add(normCurrency(metaCurrency) as string);
+  }
+  for (const member of selectedMembers(draft)) {
+    const currency = normCurrency(member.currency);
+    if (currency) currencies.add(currency);
+  }
+  return currencies.size > 1 ? [...currencies] : [];
+}
+
+/** The ticked members' daily budgets, in the selection's one currency. */
+export function selectedMembersBudget(
+  draft: Pick<WizardDraft, 'proposedMembers' | 'memberKeys'>,
+): number {
+  return selectedMembers(draft).reduce((sum, member) => sum + (member.daily_budget ?? 0), 0);
 }
 
 function num(value: string): number | null {
@@ -148,8 +247,151 @@ export function draftFromSuggestion(suggestion: PortfolioSuggestion): WizardDraf
     assetMode: suggestion.level === 'campaign' ? 'campaign' : 'adset',
     adsetIds: suggestion.level === 'campaign' ? [] : [...suggestion.adset_ids],
     campaignIds: suggestion.level === 'campaign' ? [...suggestion.adset_ids] : [],
+    // Meta members are adset_ids above; the other platforms' are pre-selected here.
+    proposedMembers: otherPlatformMembers(suggestion),
+    memberKeys: otherPlatformMembers(suggestion).map(memberKey),
     dailyTotal: '',
   };
+}
+
+/** One member's identity across platforms: the same id can exist on two of them. */
+export function memberKey(member: Pick<SuggestionMember, 'platform' | 'account_id' | 'entity_id'>) {
+  return `${member.platform}:${member.account_id}:${member.entity_id}`;
+}
+
+/** A suggestion's members that live outside Meta. */
+export function otherPlatformMembers(suggestion: PortfolioSuggestion): SuggestionMember[] {
+  return (suggestion.members ?? []).filter((member) => member.platform !== 'meta');
+}
+
+/** The proposed members still ticked, in the order the suggestion gave them. */
+export function selectedMembers(
+  draft: Pick<WizardDraft, 'proposedMembers' | 'memberKeys'>,
+): SuggestionMember[] {
+  const keys = new Set(draft.memberKeys);
+  return draft.proposedMembers.filter((member) => keys.has(memberKey(member)));
+}
+
+/** True when a Meta ad set or campaign is selected — what decides which create the wizard calls. */
+export function hasMetaSelection(draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds'>): boolean {
+  return draft.adsetIds.length > 0 || draft.campaignIds.length > 0;
+}
+
+/** The members as optimizer_add_portfolio_members takes them: the neutral level (a Google
+ *  campaign is a campaign, a Meta-shaped 'adset' is a group) and the name the person saw. */
+export function memberPayload(members: readonly SuggestionMember[]): {
+  platform: PlatformId;
+  account_id: string;
+  entity_id: string;
+  level: 'campaign' | 'group';
+  name?: string;
+}[] {
+  return members.map((member) => ({
+    platform: member.platform,
+    account_id: member.account_id,
+    entity_id: member.entity_id,
+    level: member.level === 'campaign' ? 'campaign' : 'group',
+    ...(member.name?.trim() ? { name: member.name.trim() } : {}),
+  }));
+}
+
+/** The account a portfolio with no Meta ad set is hosted on: the first ticked member's.
+ *  Null whenever Meta is selected — that portfolio is hosted on the Meta account as always. */
+export function platformHost(
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+): { platform: PlatformId; account_id: string } | null {
+  if (hasMetaSelection(draft)) return null;
+  const first = selectedMembers(draft)[0];
+  return first ? { platform: first.platform, account_id: first.account_id } : null;
+}
+
+function counted(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/** What the portfolio will hold, per platform, in each platform's own unit. */
+export function selectionByPlatform(
+  draft: Pick<
+    WizardDraft,
+    'adsetIds' | 'campaignIds' | 'assetMode' | 'proposedMembers' | 'memberKeys'
+  >,
+): { platform: PlatformId; label: string }[] {
+  const out: { platform: PlatformId; label: string }[] = [];
+  if (draft.campaignIds.length > 0) {
+    out.push({
+      platform: 'meta',
+      label: `${counted(draft.campaignIds.length, 'campaign', 'campaigns')} · ${counted(draft.adsetIds.length, 'ad set', 'ad sets')}`,
+    });
+  } else if (draft.adsetIds.length > 0) {
+    out.push({ platform: 'meta', label: counted(draft.adsetIds.length, 'ad set', 'ad sets') });
+  }
+  const counts = new Map<PlatformId, number>();
+  for (const member of selectedMembers(draft)) {
+    counts.set(member.platform, (counts.get(member.platform) ?? 0) + 1);
+  }
+  for (const [platform, count] of counts) {
+    out.push({ platform, label: counted(count, 'campaign', 'campaigns') });
+  }
+  return out;
+}
+
+/** The Create button: the Meta ad sets as before, plus each other platform's campaigns. */
+export function enrollLabel(
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+): string {
+  const parts: string[] = [];
+  if (draft.adsetIds.length > 0 || draft.proposedMembers.length === 0) {
+    parts.push(counted(draft.adsetIds.length, 'ad set', 'ad sets'));
+  }
+  const counts = new Map<PlatformId, number>();
+  for (const member of selectedMembers(draft)) {
+    counts.set(member.platform, (counts.get(member.platform) ?? 0) + 1);
+  }
+  for (const [platform, count] of counts) {
+    parts.push(`${count} ${PLATFORM_NAMES[platform]} ${count === 1 ? 'campaign' : 'campaigns'}`);
+  }
+  return `Create & enroll ${parts.join(' + ')}`;
+}
+
+/** `proposedMembers` grouped by platform account, in the order the suggestion gave them. */
+export function membersByAccount(members: readonly SuggestionMember[]): {
+  platform: PlatformId;
+  accountId: string;
+  members: SuggestionMember[];
+}[] {
+  const groups: { platform: PlatformId; accountId: string; members: SuggestionMember[] }[] = [];
+  for (const member of members) {
+    const group = groups.find(
+      (entry) => entry.platform === member.platform && entry.accountId === member.account_id,
+    );
+    if (group) group.members.push(member);
+    else
+      groups.push({ platform: member.platform, accountId: member.account_id, members: [member] });
+  }
+  return groups;
+}
+
+/** What a cross-platform suggestion card counts per platform ("Meta · 9 ad sets"), or null for
+ *  a Meta-only suggestion — whose card is unchanged. */
+export function suggestionPlatformCounts(
+  suggestion: PortfolioSuggestion,
+): { platform: PlatformId; count: number; label: string }[] | null {
+  if (!suggestion.by_platform || suggestion.by_platform.length === 0) return null;
+  const counts = new Map<PlatformId, number>();
+  for (const entry of suggestion.by_platform) {
+    counts.set(entry.platform, (counts.get(entry.platform) ?? 0) + entry.members);
+  }
+  return [...counts.entries()].map(([platform, count]) => {
+    const adsets = platform === 'meta' && suggestion.level !== 'campaign';
+    const noun = adsets
+      ? count === 1
+        ? 'ad set'
+        : 'ad sets'
+      : count === 1
+        ? 'campaign'
+        : 'campaigns';
+    return { platform, count, label: `${count} ${noun}` };
+  });
 }
 
 /** The objective's own metric unless a still-allowed alternative was chosen. */
@@ -165,6 +407,8 @@ export type StepContext = {
   selectedBudgetSum: number;
   /** Selected ad sets held by a portfolio the operator cannot release. */
   blockedCount: number;
+  /** The Meta account's currency, which a selected Meta ad set bills in. */
+  metaCurrency?: string | null;
 };
 
 /** What still blocks leaving a step, in the operator's words. Empty = the step is complete. */
@@ -175,11 +419,24 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
       if (draft.source == null) issues.push('Pick a suggestion or start from scratch.');
       break;
     case 'assets':
-      if (draft.adsetIds.length === 0) issues.push('Select at least one ad set.');
+      // A cross-platform suggestion may become a portfolio with no Meta ad set at all.
+      if (draft.proposedMembers.length === 0) {
+        if (draft.adsetIds.length === 0) issues.push('Select at least one ad set.');
+      } else if (draft.adsetIds.length === 0 && selectedMembers(draft).length === 0) {
+        issues.push('Select at least one ad set or campaign.');
+      }
       if (ctx.blockedCount > 0) {
         issues.push(
           `${ctx.blockedCount} selected ${ctx.blockedCount === 1 ? 'ad set is' : 'ad sets are'} held by a portfolio you cannot edit.`,
         );
+      }
+      {
+        const mixed = mixedCurrencies(draft, ctx.metaCurrency);
+        if (mixed.length > 0) {
+          issues.push(
+            `A portfolio holds one currency, and this selection bills in ${mixed.join(' and ')}. Untick one side.`,
+          );
+        }
       }
       break;
     case 'goal': {
@@ -212,7 +469,11 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
           issues.push('A monthly budget needs a flight window to pace over.');
       }
       if (hasFlight && amount == null) issues.push('Give the flight a budget, or clear the dates.');
-      if (draft.applyMode === 'autopilot') {
+      if (draft.applyMode === 'autopilot' && platformHost(draft) != null) {
+        issues.push(
+          'Autopilot writes only to Meta: a portfolio with no Meta ad set runs on recommendations.',
+        );
+      } else if (draft.applyMode === 'autopilot') {
         if (num(draft.maxDailyApply) == null) issues.push('Autopilot needs a daily spend ceiling.');
         if (num(draft.maxChangePct) == null) issues.push('Autopilot needs a per-cycle change cap.');
       }
@@ -255,6 +516,10 @@ export function buildCreateConfig(draft: WizardDraft, ctx: CreateContext): Portf
 
   const conversion =
     draft.objective === 'custom' ? buildConversionDescriptor(draft.conversion) : null;
+  // No Meta ad set: the portfolio holds campaigns on a platform nothing applies to, so it is
+  // created recommend-only whatever the draft says.
+  const metaHosted = platformHost(draft) == null;
+  const applyMode: ApplyMode = metaHosted ? draft.applyMode : 'recommend';
 
   return {
     name: draft.name.trim(),
@@ -264,9 +529,9 @@ export function buildCreateConfig(draft: WizardDraft, ctx: CreateContext): Portf
     ...(conversion && 'descriptor' in conversion
       ? { conversion_descriptor: conversion.descriptor }
       : {}),
-    level: ctx.level === 'campaign' ? 'adset' : 'adset',
+    level: metaHosted ? 'adset' : 'campaign',
     mode: draft.mode,
-    apply_mode: draft.applyMode,
+    apply_mode: applyMode,
     daily_total: Math.round(dailyTotal * 100) / 100,
     // A typed daily total or a plan is a deliberate target; matching the selection is not.
     budget_source: typedDaily != null || plan.daily_total != null ? 'fixed' : 'observed',
@@ -288,7 +553,7 @@ export function buildCreateConfig(draft: WizardDraft, ctx: CreateContext): Portf
           ...(ceiling != null ? { scale_max_daily: ceiling } : {}),
         }
       : {}),
-    ...(draft.applyMode === 'autopilot' && maxDaily != null && maxPct != null
+    ...(applyMode === 'autopilot' && maxDaily != null && maxPct != null
       ? {
           max_daily_apply_minor: toMinorUnits(maxDaily, ctx.currency),
           max_change_pct_per_cycle: maxPct / 100,
@@ -324,4 +589,62 @@ export function suggestedGuardrails(dailyTotal: number): {
     maxDailyApply: dailyTotal > 0 ? String(Math.round(dailyTotal * 1.5)) : '',
     maxChangePct: DEFAULT_MAX_CHANGE_PCT,
   };
+}
+
+const ACCOUNT_TITLE: Record<PlatformId, string> = {
+  meta: 'Meta',
+  google_ads: 'Google Ads',
+  tiktok_ads: 'TikTok',
+};
+
+/**
+ * One line per other-platform account the suggestions did not combine with this Meta account,
+ * saying why — instead of a Google account silently missing from them. Joined accounts say
+ * nothing; an account with a suggestion of its own says where it went.
+ */
+export function platformAccountNotes(
+  accounts: NonNullable<SuggestResult['platform_accounts']>,
+  suggestions: readonly PortfolioSuggestion[],
+  metaCurrency: string | null | undefined,
+): string[] {
+  const notes: string[] = [];
+  for (const account of accounts) {
+    if (account.status === 'joined') continue;
+    const name = `${ACCOUNT_TITLE[account.platform]} account ${account.account_id}`;
+    const alone = suggestions.some(
+      (suggestion) =>
+        !hasMetaMembers(suggestion) &&
+        (suggestion.by_platform ?? []).some(
+          (entry) => entry.platform === account.platform && entry.account_id === account.account_id,
+        ),
+    );
+    const where = alone
+      ? 'it has a suggestion of its own'
+      : 'its campaigns are under Start from scratch';
+    switch (account.status) {
+      case 'no_shared_objective':
+        notes.push(`${name} buys different results than this Meta account, so ${where}.`);
+        break;
+      case 'currency_mismatch':
+        notes.push(
+          `${name} bills in ${account.currency ?? 'another currency'}${
+            metaCurrency ? ` and this Meta account in ${metaCurrency}` : ''
+          }, and a portfolio holds one currency, so ${where}.`,
+        );
+        break;
+      case 'currency_unknown':
+        notes.push(
+          `${name} or this Meta account did not report its currency, so they are not combined.`,
+        );
+        break;
+      case 'read_failed':
+        notes.push(`${name} could not be read just now, so its campaigns are missing here.`);
+        break;
+    }
+  }
+  return notes;
+}
+
+function hasMetaMembers(suggestion: PortfolioSuggestion): boolean {
+  return suggestion.adset_ids.length > 0;
 }

@@ -100,7 +100,7 @@ export function AdsetCreativeMosaic({
   if (!adsetId) {
     return (
       <div className="grid h-full min-h-0 place-items-center rounded-md border border-border/60 border-dashed">
-        <p className="text-2xs text-muted-foreground">Select an ad set to see its creatives.</p>
+        <p className="text-xs text-muted-foreground">Select an ad set to see its creatives.</p>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export function AdsetCreativeMosaic({
 
   if (adsQuery.isError) {
     return (
-      <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-6 text-center text-2xs text-warning">
+      <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-6 text-center text-xs text-warning">
         Couldn&rsquo;t load the ads in this ad set.
       </p>
     );
@@ -129,7 +129,7 @@ export function AdsetCreativeMosaic({
 
   if (adsQuery.data.length === 0) {
     return (
-      <p className="rounded-md border border-border/60 px-3 py-6 text-center text-2xs text-muted-foreground">
+      <p className="rounded-md border border-border/60 px-3 py-6 text-center text-xs text-muted-foreground">
         No ads in this ad set.
       </p>
     );
@@ -179,7 +179,7 @@ export function AdsetCreativeMosaic({
                   </span>
                 ) : (
                   <span
-                    className="grid w-full place-items-center bg-muted text-3xs text-muted-foreground"
+                    className="grid w-full place-items-center bg-muted text-xs text-muted-foreground"
                     style={{ aspectRatio: '4 / 5' }}
                     aria-hidden="true"
                   >
@@ -187,16 +187,16 @@ export function AdsetCreativeMosaic({
                   </span>
                 )}
                 <div className="space-y-1 p-2">
-                  <p className="truncate text-2xs text-foreground" title={label}>
+                  <p className="truncate text-xs text-foreground" title={label}>
                     {label}
                   </p>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-3xs tabular-nums text-muted-foreground">
+                    <span className="text-xs tabular-nums text-muted-foreground">
                       {formatCurrency(spend, currency)}
                       {cpm != null ? ` · CPM ${formatCpa(cpm, currency)}` : ''}
                     </span>
                     {angle ? (
-                      <Badge className="shrink-0 text-3xs" variant="secondary">
+                      <Badge className="shrink-0 text-xs" variant="secondary">
                         {humanize(angle.angle)}
                       </Badge>
                     ) : null}
@@ -208,7 +208,7 @@ export function AdsetCreativeMosaic({
         })}
       </div>
       {trendsQuery.data.length === 0 ? (
-        <p className="px-1 pt-1 text-3xs text-muted-foreground">
+        <p className="px-1 pt-1 text-xs text-muted-foreground">
           Per-creative spend appears once daily metrics load — hover a creative for its angle and
           trend.
         </p>

@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'bun:test';
-import { agentAttachmentSchema } from './agent-references';
+import { agentAttachmentSchema, agentMentionReferenceSchema } from './agent-references';
+
+describe('agentMentionReferenceSchema', () => {
+  it('accepts a stored Organic published post reference', () => {
+    expect(
+      agentMentionReferenceSchema.parse({
+        id: 'platform-post-1',
+        type: 'organic_post',
+        label: 'Launch post',
+        source: 'organic',
+        metadata: { platform: 'instagram' },
+      }).type,
+    ).toBe('organic_post');
+  });
+});
 
 describe('agentAttachmentSchema', () => {
   it('accepts a Library-backed attachment with durable asset identity', () => {

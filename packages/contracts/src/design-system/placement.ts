@@ -240,6 +240,12 @@ export interface LineBreakOptions {
   readonly boldSizePx: number;
   readonly orphanFraction?: number;
   readonly orphanPenalty?: number;
+  /**
+   * Break a word wider than the measure mid-word (the default, the canvas's old behaviour) or
+   * keep it whole and report it in `overlong` — a stills planner steps its size down instead,
+   * because "descuent / o" shipped to a client.
+   */
+  readonly splitOverlong?: boolean;
 }
 
 export interface BrokenLine {
@@ -256,6 +262,10 @@ export interface LineBreakResult {
   readonly cost: number;
   /** Distinct `(i, j)` segment widths actually computed. Evidence the memo is working. */
   readonly measurements: number;
+  /** Words wider than the measure that were broken mid-word. */
+  readonly splitWords: readonly string[];
+  /** Words wider than the measure kept whole (`splitOverlong: false`): the lines overrun. */
+  readonly overlong: readonly string[];
 }
 
 /**
@@ -369,12 +379,21 @@ export function breakLines(
   });
 
   const words: HeadlineToken[] = [];
+  const splitWords: string[] = [];
+  const overlong: string[] = [];
   for (const token of tokens) {
     const style = styleFor(token.weight);
     for (const raw of token.text.split(/\s+/)) {
       if (!raw) continue;
       if (measure(raw, style) > limit) {
-        for (const piece of splitWord(raw, measure, style, limit)) {
+        if (opts.splitOverlong === false) {
+          overlong.push(raw);
+          words.push({ text: raw, weight: token.weight });
+          continue;
+        }
+        const pieces = splitWord(raw, measure, style, limit);
+        if (pieces.length > 1) splitWords.push(raw);
+        for (const piece of pieces) {
           words.push({ text: piece, weight: token.weight });
         }
       } else {
@@ -387,7 +406,16 @@ export function breakLines(
   // An empty headline is no lines. The reference returns one empty line here and advances the
   // cursor by a full line step for it; in a plan that is a phantom line a renderer would honour.
   if (n === 0) {
-    return { lines: [], measure: limit, minimumLines: 0, greedyFallback: false, cost: 0, measurements: 0 };
+    return {
+      lines: [],
+      measure: limit,
+      minimumLines: 0,
+      greedyFallback: false,
+      cost: 0,
+      measurements: 0,
+      splitWords,
+      overlong,
+    };
   }
 
   let measurements = 0;
@@ -466,6 +494,8 @@ export function breakLines(
     greedyFallback,
     cost: scoreBreaks(widths, { measure: limit, minimumLines: target, orphanFraction, orphanPenalty }),
     measurements,
+    splitWords,
+    overlong,
   };
 }
 

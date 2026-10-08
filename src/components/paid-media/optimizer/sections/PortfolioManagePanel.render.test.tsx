@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -91,6 +91,40 @@ mock.module('../useOptimizerData', () => ({
   }),
 }));
 
+// The Attribution section reads optimizer_get_portfolio_metrics. Spread the real module for the
+// same reason as above; each test sets the state it needs.
+let portfolioMetricsState: import('./detail/usePortfolioMetrics').PortfolioMetricsState = {
+  status: 'unavailable',
+};
+const realPortfolioMetrics = await import('./detail/usePortfolioMetrics');
+mock.module('./detail/usePortfolioMetrics', () => ({
+  ...realPortfolioMetrics,
+  usePortfolioMetrics: () => portfolioMetricsState,
+  useInvalidatePortfolioMetrics: () => () => {},
+}));
+
+// The per-platform daily limits read optimizer_get_portfolio_platform_caps. Spread the real
+// module for the same reason as above; each test sets the state it needs.
+let platformCapsState: import('./platformCaps/usePortfolioPlatformCaps').PlatformCapsState = {
+  status: 'ready',
+  caps: [],
+};
+const setPlatformCapMutateAsync = mock(async (_input: unknown) => null);
+const realPlatformCaps = await import('./platformCaps/usePortfolioPlatformCaps');
+mock.module('./platformCaps/usePortfolioPlatformCaps', () => ({
+  ...realPlatformCaps,
+  usePortfolioPlatformCaps: () => platformCapsState,
+  useSetPortfolioPlatformCap: () => ({ mutateAsync: setPlatformCapMutateAsync, isPending: false }),
+}));
+
+// The picker's Google half reads paid-media-metrics; this suite is about the Meta form, so the
+// brand has no Google account here (the Google group has its own suite under picker/).
+const realGoogleInventory = await import('../picker/useGooglePickerInventory');
+mock.module('../picker/useGooglePickerInventory', () => ({
+  ...realGoogleInventory,
+  useGooglePickerInventory: () => ({ status: 'none' }),
+}));
+
 // The picker is a heavy virtualized tree; stub it so this suite is only about the config form.
 mock.module('../picker/CampaignAdsetPicker', () => ({
   CampaignAdsetPicker: ({
@@ -129,6 +163,9 @@ beforeEach(() => {
   performanceData = null;
   cyclePreviewOutcome = undefined;
   cyclePreviewMutate.mockClear();
+  portfolioMetricsState = { status: 'unavailable' };
+  platformCapsState = { status: 'ready', caps: [] };
+  setPlatformCapMutateAsync.mockClear();
 });
 afterEach(cleanup);
 
@@ -520,3 +557,143 @@ describe('the custom conversion an advertiser names', () => {
     expect(sent.patch.conversion_descriptor?.analog).toBe('lead');
   });
 });
+
+describe('PortfolioManagePanel — Attribution', () => {
+  it('shows the three source cards, the default in use, and no note on a Meta-only portfolio', () => {
+    renderPanel();
+    expect(screen.getByText('Attribution')).toBeDefined();
+    const cards = screen.getAllByTestId('attribution-card');
+    expect(cards.map((card) => card.dataset.kind)).toEqual(['platform', 'ga4', 'spreadsheet']);
+    expect(cards[0]?.dataset.inUse).toBe('true');
+    expect(cards[0]?.textContent).toContain('default');
+    expect(screen.queryByTestId('multiplatform-unavailable')).toBeNull();
+  });
+
+  it('says the read is not available yet on a portfolio that holds a member off Meta', () => {
+    platformCapsState = {
+      status: 'ready',
+      caps: [
+        { platform: 'meta', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
+        { platform: 'google_ads', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
+      ],
+    };
+    renderPanel();
+    expect(screen.getByTestId('multiplatform-unavailable')).toBeDefined();
+  });
+
+  it('marks a spreadsheet in use with its last read and coverage', async () => {
+    const { portfolioMetricsFixture } = await import(
+      './attribution/__fixtures__/portfolioMetricsFixture'
+    );
+    portfolioMetricsState = {
+      status: 'ready',
+      metrics: portfolioMetricsFixture({ used: 'spreadsheet' }),
+    };
+    renderPanel();
+    const sheet = screen
+      .getAllByTestId('attribution-card')
+      .find((card) => card.dataset.kind === 'spreadsheet');
+    expect(sheet?.dataset.inUse).toBe('true');
+    expect(screen.getByTestId('sheet-status').textContent).toContain('92% covered');
+    expect(screen.getByRole('button', { name: 'Re-read now' })).toBeDefined();
+  });
+});
+
+// One optional daily limit per platform among the members, each in that platform account's
+// own currency — never one figure summed across currencies. The portfolio's own guardrails
+// (change cap, spend ceiling) apply on every platform; the copy says so.
+describe('PortfolioManagePanel — per-platform daily limits', () => {
+  const threePlatforms = () => {
+    platformCapsState = {
+      status: 'ready',
+      caps: [
+        { platform: 'meta', currency: 'MXN', dailyCapMinor: 50000, accounts: 1 },
+        { platform: 'google_ads', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
+        { platform: 'tiktok_ads', currency: 'USD', dailyCapMinor: 2500, accounts: 2 },
+      ],
+    };
+  };
+
+  it('lists one field per platform, each in its own account currency', () => {
+    threePlatforms();
+    renderPanel();
+    expect(input(/^Daily limit on Meta \(MXN\)$/).value).toBe('500');
+    expect(input(/^Daily limit on Google \(MXN\)$/).value).toBe('');
+    expect(input(/^Daily limit on TikTok \(USD\)$/).value).toBe('25');
+    expect(screen.getByText(/Applies to each of the 2 TikTok accounts on its own/)).toBeTruthy();
+  });
+
+  it('says the portfolio guardrails apply the same on every platform', () => {
+    threePlatforms();
+    renderPanel();
+    expect(
+      screen.getByText(/guardrails on this portfolio apply the same way on every platform/i),
+    ).toBeTruthy();
+  });
+
+  it('saves one platform in minor units of its currency, and a blank as no limit', async () => {
+    threePlatforms();
+    renderPanel();
+    const google = input(/^Daily limit on Google \(MXN\)$/);
+    fireEvent.change(google, { target: { value: '600' } });
+    fireEvent.click(saveButtonFor(google));
+    await waitFor(() =>
+      expect(setPlatformCapMutateAsync).toHaveBeenCalledWith({
+        platform: 'google_ads',
+        dailyCapMinor: 60000,
+      }),
+    );
+    const meta = input(/^Daily limit on Meta \(MXN\)$/);
+    fireEvent.change(meta, { target: { value: '' } });
+    fireEvent.click(saveButtonFor(meta));
+    await waitFor(() =>
+      expect(setPlatformCapMutateAsync).toHaveBeenCalledWith({
+        platform: 'meta',
+        dailyCapMinor: null,
+      }),
+    );
+  });
+
+  it('refuses a negative limit before it reaches the database', () => {
+    threePlatforms();
+    renderPanel();
+    const tiktok = input(/^Daily limit on TikTok \(USD\)$/);
+    fireEvent.change(tiktok, { target: { value: '-3' } });
+    expect(saveButtonFor(tiktok).disabled).toBe(true);
+    expect(screen.getByText('A limit cannot be negative.')).toBeTruthy();
+    expect(setPlatformCapMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('shows the database refusal when a save fails', async () => {
+    threePlatforms();
+    setPlatformCapMutateAsync.mockImplementationOnce(async () => {
+      throw new Error('optimizer: access denied for brand b1');
+    });
+    renderPanel();
+    const google = input(/^Daily limit on Google \(MXN\)$/);
+    fireEvent.change(google, { target: { value: '100' } });
+    fireEvent.click(saveButtonFor(google));
+    expect(await screen.findByText('optimizer: access denied for brand b1')).toBeTruthy();
+  });
+
+  it('cannot type one limit for accounts in two currencies', () => {
+    platformCapsState = {
+      status: 'ready',
+      caps: [{ platform: 'google_ads', currency: null, dailyCapMinor: null, accounts: 2 }],
+    };
+    renderPanel();
+    expect(input(/^Daily limit on Google$/).disabled).toBe(true);
+    expect(screen.getByText(/use more than one currency/)).toBeTruthy();
+  });
+
+  it('says the limits are not available yet while the RPC is not deployed', () => {
+    platformCapsState = { status: 'unavailable' };
+    renderPanel();
+    expect(screen.getByText(/Per-platform limits aren.t available yet/)).toBeTruthy();
+  });
+});
+
+function saveButtonFor(field: HTMLInputElement): HTMLButtonElement {
+  const row = field.parentElement as HTMLElement;
+  return within(row).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+}

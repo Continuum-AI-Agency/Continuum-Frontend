@@ -23,6 +23,7 @@ import {
   projectTranscriptMessage,
   reasoningEntriesOf,
   reportOf,
+  scaffoldOf,
   type TranscriptProjectionInputs,
   textOf,
   toJainaChatMessage,
@@ -502,16 +503,17 @@ describe('the plan part', () => {
     ).toBeUndefined();
   });
 
-  // The screenshot this pins: before the answer arrived, the last thought was the whole markdown
-  // plan, and the content ladder printed it as the reply.
-  it('headlines a streaming turn with the plan title, never a thought', () => {
+  // Two screenshots this pins: before the answer arrived, the last thought was the whole markdown
+  // plan, and the content ladder printed it as the reply; later the plan title — the chat title,
+  // written from the user's question — printed the question back at them over "Thinking…".
+  it('leaves a streaming turn with only a plan and thoughts without prose', () => {
     const projected = toJainaChatMessage(
       uiMessage([planPart(objectivePlan), reasoning('Reading the account now.')]),
       { isStreaming: true },
     );
 
     expect(projected.plan?.title).toBe('Scale the winners');
-    expect(projected.content).toBe('Scale the winners');
+    expect(projected.content).toBe('');
   });
 });
 
@@ -920,5 +922,45 @@ describe('a scaffold card for a turn that never proposed', () => {
       isStreaming: false,
     });
     expect(projected.scaffold).toBeUndefined();
+  });
+});
+
+describe('scaffoldOf', () => {
+  const VERSION_ID = '11111111-1111-4111-8111-111111111111';
+
+  it('keeps a pre-wave proposal that has no version, hash, name or typed plan', () => {
+    const scaffold = scaffoldOf(
+      uiMessage([
+        data(JAINA_UI_DATA_PART.scaffold, 'run_1:scaffold:proposed', {
+          scaffoldId: VERSION_ID,
+          plan: { campaigns: [{ name: 'Summer' }] },
+          summary: { campaigns: 1, adSets: 2, ads: 4 },
+        }),
+      ]),
+    );
+    expect(scaffold).toMatchObject({
+      scaffoldId: VERSION_ID,
+      plan: { campaigns: [{ name: 'Summer' }] },
+      scaffoldPlan: null,
+      summary: { campaigns: 1, adSets: 2, ads: 4 },
+    });
+    expect(scaffold?.contentHash).toBeUndefined();
+    expect(scaffold?.version).toBeUndefined();
+    expect(scaffold?.name).toBeUndefined();
+  });
+
+  it('carries the version, hash and name of a current proposal', () => {
+    const scaffold = scaffoldOf(
+      uiMessage([
+        data(JAINA_UI_DATA_PART.scaffold, 'run_1:scaffold:proposed', {
+          scaffoldId: VERSION_ID,
+          plan: {},
+          version: 3,
+          contentHash: 'a'.repeat(64),
+          name: 'Summer',
+        }),
+      ]),
+    );
+    expect(scaffold).toMatchObject({ version: 3, contentHash: 'a'.repeat(64), name: 'Summer' });
   });
 });

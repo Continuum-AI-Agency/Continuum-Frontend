@@ -5,7 +5,13 @@
 // (plain JSON, no React) so it serializes into the canvas node blob + the
 // splice worker message, and so it is unit-testable.
 
-import { type ShaderStackV1, sampleNumericTrack } from '@continuum/contracts';
+import {
+  type EditorCrop,
+  type EditorParentPositionTrack,
+  type ShaderStackV1,
+  sampleNumericTrack,
+  sampleParentPositionTracks,
+} from '@continuum/contracts';
 
 export interface ClipAdjustments {
   /** 1 = unchanged. Maps to CSS/canvas `brightness()`. */
@@ -33,6 +39,9 @@ export interface ClipTransform {
   scaleX?: number;
   /** Independent Y scale. Wins over `scale` when set. */
   scaleY?: number;
+  /** Transform pivot as a fraction of the target frame; omitted means center. */
+  anchorX?: number;
+  anchorY?: number;
   /** Fraction of frame width, 0 = centered. Maps to CSS translate %. */
   offsetX?: number;
   /** Fraction of frame height, 0 = centered. */
@@ -45,6 +54,8 @@ export interface ClipTransform {
 }
 
 export type ResolvedClipTransform = {
+  anchorX?: number;
+  anchorY?: number;
   scale: number;
   scaleX: number;
   scaleY: number;
@@ -102,6 +113,8 @@ export interface ClipEffectSpec {
   adjustments?: ClipAdjustments;
   /** A named look, applied under the manual adjustments. */
   filterPreset?: FilterPreset;
+  filterStrength?: number;
+  crop?: EditorCrop;
   /**
    * Colour temperature, −1 (cold) … +1 (warm).
    *
@@ -129,6 +142,10 @@ export interface ClipEffectSpec {
   opacityStops?: ClipPropertyStop[];
   /** Independent geometric channels. Win over bundled `keyframes` when present. */
   motionChannels?: ClipMotionChannels;
+  /** Original automation clock in seconds; absent for legacy normalized specs. */
+  motionDurationSec?: number;
+  keyframeOffsetSec?: number;
+  parentPositionTracks?: EditorParentPositionTrack[];
   /** Playback rate, 1 = normal. >1 faster, <1 slower. Video only. */
   speed?: number;
   text?: TextOverlay[];
@@ -178,6 +195,10 @@ export interface ClipEffectSpec {
   vignette?: { amount: number };
   /** Additive hashed noise, animated across the clip. 0..1. */
   filmGrain?: { amount: number };
+  /** Sparse moving film flecks; source alpha is preserved. 0..1. */
+  dust?: { amount: number };
+  /** Warm, slowly moving edge exposure; source alpha is preserved. 0..1. */
+  lightLeaks?: { amount: number };
   /** Mosaic block size in SOURCE pixels. >= 2. */
   pixelate?: { blockPx: number };
   /** Radial R/B channel split, the way a lens fringes toward its edge. 0..1. */
@@ -204,6 +225,7 @@ export interface ClipPropertyStop {
   interpolation?: 'hold' | 'linear' | 'bezier' | 'spring';
   easing?: { x1: number; y1: number; x2: number; y2: number };
   spring?: { bounce: number };
+  expression?: string;
 }
 
 export type ClipMotionChannel =
@@ -266,7 +288,16 @@ export function resolveAdjustments(spec: ClipEffectSpec | undefined): ClipAdjust
     spec.filterPreset && spec.filterPreset !== 'none'
       ? FILTER_PRESETS[spec.filterPreset]
       : undefined;
-  const base = preset ? { ...warmth, ...preset } : warmth;
+  const strength = Math.max(0, Math.min(1, spec.filterStrength ?? 1));
+  const blended =
+    preset &&
+    Object.fromEntries(
+      Object.entries(preset).map(([key, value]) => {
+        const neutral = ['brightness', 'contrast', 'saturation'].includes(key) ? 1 : 0;
+        return [key, neutral + (value - neutral) * strength];
+      }),
+    );
+  const base = blended ? { ...warmth, ...blended } : warmth;
   // An untouched clip must still resolve to `undefined`, not `{}` — `hasVisualEffects`
   // and the preview both read "no adjustments" off that.
   if (Object.keys(base).length === 0) return spec.adjustments;
@@ -301,21 +332,31 @@ function resolveTransform(transform: ClipTransform | undefined): ResolvedClipTra
     rotateX: transform?.rotateX ?? 0,
     rotateY: transform?.rotateY ?? 0,
     perspective: transform?.perspective ?? 0,
+    ...(transform?.anchorX !== undefined ? { anchorX: transform.anchorX } : {}),
+    ...(transform?.anchorY !== undefined ? { anchorY: transform.anchorY } : {}),
   };
 }
 
-function sampleStops(stops: ClipPropertyStop[] | undefined, u: number, fallback: number): number {
+function sampleStops(
+  stops: ClipPropertyStop[] | undefined,
+  u: number,
+  fallback: number,
+  spec?: ClipEffectSpec,
+): number {
+  const duration = spec?.motionDurationSec ?? 1;
   if (!stops?.length) return fallback;
   return sampleNumericTrack(
     stops.map((stop) => ({
-      timeSec: stop.t,
+      timeSec: stop.t * duration,
       value: stop.value,
       interpolation: stop.interpolation ?? 'linear',
       ...(stop.easing ? { easing: stop.easing } : {}),
       ...(stop.spring ? { spring: stop.spring } : {}),
+      ...(stop.expression ? { expression: stop.expression } : {}),
     })),
-    u,
+    u * duration,
     fallback,
+    spec?.keyframeOffsetSec,
   );
 }
 
@@ -330,7 +371,7 @@ export function opacityFor(spec: ClipEffectSpec | undefined, u = 0): number {
   const fallback = spec?.opacity;
   const base = fallback === undefined ? 1 : Math.max(0, Math.min(1, fallback));
   const stops = spec?.motionChannels?.opacity ?? spec?.opacityStops;
-  return Math.max(0, Math.min(1, sampleStops(stops, u, base)));
+  return Math.max(0, Math.min(1, sampleStops(stops, u, base, spec)));
 }
 
 /**
@@ -354,10 +395,16 @@ function lerpTransform(
     rotateX: lerp(a.rotateX, b.rotateX, k),
     rotateY: lerp(a.rotateY, b.rotateY, k),
     perspective: lerp(a.perspective, b.perspective, k),
+    ...(a.anchorX !== undefined || b.anchorX !== undefined
+      ? { anchorX: lerp(a.anchorX ?? 0.5, b.anchorX ?? 0.5, k) }
+      : {}),
+    ...(a.anchorY !== undefined || b.anchorY !== undefined
+      ? { anchorY: lerp(a.anchorY ?? 0.5, b.anchorY ?? 0.5, k) }
+      : {}),
   };
 }
 
-export function resolveTransformAt(
+function resolveLocalTransformAt(
   spec: ClipEffectSpec | undefined,
   u: number,
 ): ResolvedClipTransform {
@@ -374,17 +421,18 @@ export function resolveTransformAt(
   );
   if (hasGeometricChannels) {
     const base = resolveTransform(spec?.transform);
-    const scaleX = sampleStops(channels?.scaleX, clamped, base.scaleX);
-    const scaleY = sampleStops(channels?.scaleY, clamped, base.scaleY);
+    const scaleX = sampleStops(channels?.scaleX, clamped, base.scaleX, spec);
+    const scaleY = sampleStops(channels?.scaleY, clamped, base.scaleY, spec);
     return {
+      ...base,
       scale: Math.max(Math.abs(scaleX), Math.abs(scaleY)),
       scaleX,
       scaleY,
-      offsetX: sampleStops(channels?.offsetX, clamped, base.offsetX),
-      offsetY: sampleStops(channels?.offsetY, clamped, base.offsetY),
-      rotate: sampleStops(channels?.rotate, clamped, base.rotate),
-      rotateX: sampleStops(channels?.rotateX, clamped, base.rotateX),
-      rotateY: sampleStops(channels?.rotateY, clamped, base.rotateY),
+      offsetX: sampleStops(channels?.offsetX, clamped, base.offsetX, spec),
+      offsetY: sampleStops(channels?.offsetY, clamped, base.offsetY, spec),
+      rotate: sampleStops(channels?.rotate, clamped, base.rotate, spec),
+      rotateX: sampleStops(channels?.rotateX, clamped, base.rotateX, spec),
+      rotateY: sampleStops(channels?.rotateY, clamped, base.rotateY, spec),
       perspective: base.perspective,
     };
   }
@@ -412,6 +460,20 @@ export function resolveTransformAt(
     return lerpTransform(from, to, k);
   }
   return resolveTransform(spec?.transform);
+}
+
+/** Child geometry and inherited parent motion share the preview/export evaluator. */
+export function resolveTransformAt(
+  spec: ClipEffectSpec | undefined,
+  u: number,
+): ResolvedClipTransform {
+  const local = resolveLocalTransformAt(spec, u);
+  if (!spec?.parentPositionTracks?.length) return local;
+  const parent = sampleParentPositionTracks(
+    spec.parentPositionTracks,
+    Math.max(0, Math.min(1, u)) * (spec.motionDurationSec ?? 1),
+  );
+  return { ...local, offsetX: local.offsetX + parent.x, offsetY: local.offsetY + parent.y };
 }
 
 /** CSS/canvas filter string (same syntax on both). Empty when nothing to apply. */
@@ -468,6 +530,7 @@ export function resolveTextOverlays(spec: ClipEffectSpec | undefined): ResolvedT
 export type ClipEffectCss = {
   filter?: string;
   transform?: string;
+  transformOrigin?: string;
   opacity?: number;
   // A `BlendMode` value is a subset of CSS `mix-blend-mode`, so this is directly
   // assignable to React.CSSProperties.
@@ -510,6 +573,9 @@ export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): C
   return {
     filter,
     transform,
+    ...(t.anchorX !== undefined || t.anchorY !== undefined
+      ? { transformOrigin: `${(t.anchorX ?? 0.5) * 100}% ${(t.anchorY ?? 0.5) * 100}%` }
+      : {}),
     opacity: opacity === 1 ? undefined : opacity,
     mixBlendMode,
     borderRadius,
@@ -530,8 +596,8 @@ export function applyCanvasTransform(
   targetHeight: number,
   flip?: { h?: boolean; v?: boolean },
 ): void {
-  const cx = targetWidth / 2;
-  const cy = targetHeight / 2;
+  const cx = targetWidth * (transform.anchorX ?? 0.5);
+  const cy = targetHeight * (transform.anchorY ?? 0.5);
   ctx.translate(cx + transform.offsetX * targetWidth, cy + transform.offsetY * targetHeight);
   if (transform.rotate) ctx.rotate((transform.rotate * Math.PI) / 180);
   const sx = transform.scaleX * (flip?.h ? -1 : 1);
@@ -592,11 +658,13 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
   return Boolean(
     (spec.opacity !== undefined && spec.opacity !== 1) ||
       filterString(resolveAdjustments(spec)) ||
+      spec.crop ||
       spec.transform ||
       spec.flipH ||
       spec.flipV ||
       (spec.blendMode && spec.blendMode !== 'normal') ||
       spec.kenBurns ||
+      spec.parentPositionTracks?.length ||
       (spec.keyframes && spec.keyframes.length >= 2) ||
       spec.text?.length ||
       // EVERY draw-time effect must be listed here or `drawClipFrame` takes its
@@ -608,6 +676,8 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       cornerRadiusFracFor(spec) > 0 ||
       (spec.vignette && spec.vignette.amount > 0) ||
       (spec.filmGrain && spec.filmGrain.amount > 0) ||
+      (spec.dust && spec.dust.amount > 0) ||
+      (spec.lightLeaks && spec.lightLeaks.amount > 0) ||
       (spec.pixelate && spec.pixelate.blockPx >= 2) ||
       (spec.chromaticAberration && spec.chromaticAberration.amount > 0) ||
       (spec.vhs && spec.vhs.amount > 0) ||
@@ -621,6 +691,8 @@ export type UnpreviewableEffect =
   | 'tint'
   | 'vignette'
   | 'filmGrain'
+  | 'dust'
+  | 'lightLeaks'
   | 'pixelate'
   | 'chromaticAberration'
   | 'vhs';
@@ -645,6 +717,8 @@ export function unpreviewableEffects(
   if (spec.tint && spec.tint.amount > 0) missing.push('tint');
   if (spec.vignette && spec.vignette.amount > 0) missing.push('vignette');
   if (spec.filmGrain && spec.filmGrain.amount > 0) missing.push('filmGrain');
+  if (spec.dust && spec.dust.amount > 0) missing.push('dust');
+  if (spec.lightLeaks && spec.lightLeaks.amount > 0) missing.push('lightLeaks');
   if (spec.pixelate && spec.pixelate.blockPx >= 2) missing.push('pixelate');
   if (spec.chromaticAberration && spec.chromaticAberration.amount > 0) {
     missing.push('chromaticAberration');

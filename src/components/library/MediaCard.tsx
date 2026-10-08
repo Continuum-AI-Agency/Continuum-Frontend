@@ -3,11 +3,13 @@
 import type { LibraryAspectRatioBin, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
 import { libraryAspectRatioBin, placementPreviewCrops } from '@continuum/contracts';
 import {
+  AudioLines,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
   FileIcon,
+  FileText,
   ImageOff,
   Layers,
   Loader2,
@@ -17,11 +19,12 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { type DragEvent, useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { formatUsesCompanionPreview } from '@/lib/library/previewPlayable';
+import { formatUsesCompanionPreview, officeDocumentType } from '@/lib/library/previewPlayable';
+import { normalizeReviewStatus } from '@/lib/library/reviewStatus';
 import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
@@ -35,7 +38,26 @@ import { useClipCaptionPreference } from './hooks/useClipCaptionPreference';
 import { useClipQualityPreference } from './hooks/useClipQualityPreference';
 import { useGenerateClips } from './hooks/useGenerateClips';
 import { MediaBoundingBoxes } from './MediaBoundingBoxes';
+import { OfficeDocumentIcon } from './OfficeDocumentIcon';
 import { QuickReformatMenu } from './reformat/QuickReformatMenu';
+import { reviewDisplay } from './review/reviewDisplay';
+import { useReviewCustomStates, useReviewStateLabels } from './review/useReviewStateLabels';
+import { useCardScrub } from './ScrubSprite';
+import {
+  assetDragInFlight,
+  assetDragInFlightIncludes,
+  endAssetDrag,
+  isAssetDrag,
+  readAssetDrag,
+} from './views/assetDrag';
+import {
+  type CardViewOptions,
+  cardAspectClass as chosenAspectClass,
+  formatDurationMs,
+  visibleCardFields,
+} from './views/cardOptions';
+
+export type CardFieldValue = { key: string; label: string; value: string };
 
 type Props = {
   brandId: string;
@@ -49,6 +71,14 @@ type Props = {
   onToggleSelected?: (asset: MediaAsset) => void;
   /** Cover-crop into a device frame. Native uses the asset's own ratio. */
   previewFrame?: LibraryPreviewFrame;
+  /** The user's saved card presentation (size is the grid's concern, not the card's). */
+  card?: CardViewOptions;
+  /** Values of the custom fields the user chose to show, already formatted. */
+  customFieldValues?: CardFieldValue[];
+  /** Makes the card draggable; the caller writes the drag payload (it knows the selection). */
+  onDragAssetStart?: (event: DragEvent<HTMLElement>, asset: MediaAsset) => void;
+  /** Makes the card a drop target: other cards dropped here stack onto it as new versions. */
+  onStackDrop?: (target: MediaAsset, sourceAssetIds: string[]) => void;
 };
 
 const BADGE_BASE =
@@ -73,8 +103,14 @@ const FRAME_ASPECT_CLASS: Record<Exclude<LibraryPreviewFrame, 'native'>, string>
   landscape: 'aspect-video',
 };
 
-function cardAspectClass(asset: MediaAsset, previewFrame: LibraryPreviewFrame): string {
+function cardAspectClass(
+  asset: MediaAsset,
+  previewFrame: LibraryPreviewFrame,
+  card: CardViewOptions | undefined,
+): string {
   if (previewFrame !== 'native') return FRAME_ASPECT_CLASS[previewFrame];
+  const chosen = chosenAspectClass(card?.aspect);
+  if (chosen) return chosen;
   const bin = asset.aspectRatio ?? libraryAspectRatioBin(asset.width, asset.height) ?? 'other';
   return NATIVE_ASPECT_CLASS[bin];
 }
@@ -107,7 +143,8 @@ const HOVER_CHROME_BUTTON =
 // `preload="none"` plus a withheld `src` — until the pointer enters, at which
 // point the real video mounts and plays over the still. A video WITHOUT a poster
 // keeps the old behavior (lazy src + preload="metadata"), so un-postered assets
-// are unchanged rather than broken.
+// are unchanged rather than broken. Once the clip's scrub sprite is known, hovering
+// scrubs through it by pointer x instead of playing the video at all.
 function VideoThumbnail({
   asset,
   priority,
@@ -125,6 +162,12 @@ function VideoThumbnail({
   const hoveredRef = useRef(false);
   const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority && !posterUrl);
   const src = !posterUrl || hovered ? activeSrc : undefined;
+  const scrub = useCardScrub(asset);
+
+  // The first hover plays while the sprite is still being looked up; it stops once known.
+  useEffect(() => {
+    if (scrub.sprite) videoRef.current?.pause();
+  }, [scrub.sprite, videoRef]);
 
   return (
     <>
@@ -142,18 +185,23 @@ function VideoThumbnail({
           if (!posterUrl && videoRef.current) seekVideoPreviewFrame(videoRef.current);
         }}
         onLoadedData={() => {
-          if (hoveredRef.current) void videoRef.current?.play();
+          if (hoveredRef.current && !scrub.sprite) void videoRef.current?.play();
         }}
-        onPointerEnter={() => {
+        onPointerEnter={(event) => {
           hoveredRef.current = true;
+          scrub.arm(event);
+          if (scrub.sprite) return;
           setHovered(true);
           if (src) void videoRef.current?.play();
         }}
+        onPointerMove={scrub.track}
         onPointerLeave={() => {
           hoveredRef.current = false;
+          scrub.release();
           videoRef.current?.pause();
         }}
       />
+      {scrub.overlay}
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 p-1.5 text-white transition-opacity group-hover:opacity-0">
         <Play className="size-3 fill-current" />
       </div>
@@ -224,6 +272,9 @@ function Thumbnail({
   priority: boolean;
 }) {
   const [mediaError, setMediaError] = useState(false);
+  // A small derivative that fails to load (e.g. a transform quota) still has the
+  // original behind it; only give up once the original fails too.
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
 
   const companionFormat = formatUsesCompanionPreview(asset.fileName, asset.mimeType);
@@ -249,6 +300,60 @@ function Thumbnail({
         className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
         onError={() => setMediaError(true)}
       />
+    );
+  }
+
+  const officeType = officeDocumentType(asset.fileName, asset.mimeType);
+  if (officeType) {
+    const ext = fileExtension(asset.fileName);
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <OfficeDocumentIcon
+          type={officeType}
+          className="size-8 text-muted-foreground/50"
+          strokeWidth={1.5}
+        />
+        {ext && (
+          <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
+            {ext}
+          </span>
+        )}
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+        <span data-testid="card-no-preview" className="text-2xs text-muted-foreground/60">
+          No preview — download to open
+        </span>
+      </div>
+    );
+  }
+
+  if (asset.mimeType === 'application/pdf') {
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <FileText className="size-8 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
+        <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
+          PDF
+        </span>
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+      </div>
+    );
+  }
+
+  if (asset.kind === 'audio') {
+    const duration = formatDurationMs(asset.durationMs);
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <AudioLines className="size-8 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
+        {duration ? (
+          <span className="text-2xs tabular-nums text-muted-foreground">{duration}</span>
+        ) : null}
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+      </div>
     );
   }
 
@@ -304,16 +409,25 @@ function Thumbnail({
     );
   }
 
+  // The thumbnail comes first: for an image with no rendition, `preview` is the full
+  // original, and a grid of ~3 MB originals is what the thumbnail exists to avoid.
+  const cardSrc = asset.thumbnailUrl ?? preview?.signedUrl;
   return (
     <>
       <Image
-        src={preview?.signedUrl ?? asset.signedUrl}
+        src={(thumbnailFailed ? null : cardSrc) ?? asset.signedUrl}
         alt={asset.title ?? asset.fileName}
         fill
         sizes={IMAGE_SIZES}
         priority={priority}
         className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-        onError={() => setMediaError(true)}
+        onError={() => {
+          if (!thumbnailFailed && cardSrc) {
+            setThumbnailFailed(true);
+          } else {
+            setMediaError(true);
+          }
+        }}
       />
       {showBoundingBoxes && asset.detectedObjects.length > 0 && (
         <MediaBoundingBoxes objects={asset.detectedObjects} />
@@ -446,7 +560,7 @@ function MediaCardHoverDetail({
     <HoverCardContent side="right" align="start" className="z-40 w-80">
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-          {asset.signedUrl && asset.kind === 'image' ? (
+          {asset.signedUrl && asset.kind === 'image' && asset.mimeType !== 'application/pdf' ? (
             <Image
               src={asset.signedUrl}
               alt={asset.title ?? asset.fileName}
@@ -580,8 +694,24 @@ export function MediaCard({
   selected = false,
   onToggleSelected,
   previewFrame = 'native',
+  card,
+  customFieldValues = [],
+  onDragAssetStart,
+  onStackDrop,
 }: Props) {
   const reduceMotion = useReducedMotion();
+  const [stackTarget, setStackTarget] = useState(false);
+  const fields = visibleCardFields(card);
+  const reviewStatus = normalizeReviewStatus(asset.reviewStatus);
+  const reviewLabels = useReviewStateLabels(asset.brandId);
+  const customStates = useReviewCustomStates(asset.brandId);
+  const review = reviewDisplay(reviewStatus, asset.reviewStateId, reviewLabels, customStates);
+  const duration = formatDurationMs(asset.durationMs);
+  const metaFacts = [
+    fields.includes('size') && asset.sizeBytes ? formatBytes(asset.sizeBytes) : null,
+    fields.includes('duration') ? duration : null,
+    fields.includes('review') && reviewStatus !== 'none' ? review.label : null,
+  ].filter((fact): fact is string => !!fact);
   const { generate, isGenerating, progress } = useGenerateClips();
   const { quality, setQuality } = useClipQualityPreference();
   const { captionsEnabled, setCaptionsEnabled } = useClipCaptionPreference();
@@ -611,13 +741,57 @@ export function MediaCard({
     onOpen?.(asset);
   };
 
+  // A hover card is portalled over the neighbouring cards: during a drag it would sit on top
+  // of the very cards and collections the user is aiming at, so none opens mid-drag.
   const handleHoverDetailOpenChange = (open: boolean) => {
-    if (open && suppressHoverDetailRef.current) return;
+    if (open && (suppressHoverDetailRef.current || assetDragInFlight())) return;
     setHoverDetailOpen(open);
   };
 
+  // A card never accepts itself — including when it is part of the dragged selection.
+  const acceptsStack = (event: DragEvent<HTMLElement>) =>
+    !!onStackDrop && isAssetDrag(event) && !assetDragInFlightIncludes(asset.id);
+
   return (
-    <>
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag source/target wrapper; the card inside is the keyboard-accessible control
+    <div
+      data-testid="media-card"
+      data-asset-id={asset.id}
+      data-drop-target={stackTarget ? 'stack' : undefined}
+      className="relative"
+      draggable={!!onDragAssetStart}
+      onDragStart={
+        onDragAssetStart
+          ? (event) => {
+              setHoverDetailOpen(false);
+              onDragAssetStart(event, asset);
+            }
+          : undefined
+      }
+      onDragEnd={endAssetDrag}
+      onDragOver={(event) => {
+        if (!acceptsStack(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setStackTarget(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setStackTarget(false);
+        }
+      }}
+      onDrop={(event) => {
+        setStackTarget(false);
+        if (!onStackDrop) return;
+        const payload = readAssetDrag(event);
+        if (!payload || payload.brandId !== brandId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        endAssetDrag();
+        const sources = payload.assetIds.filter((id) => id !== asset.id);
+        if (sources.length > 0) onStackDrop(asset, sources);
+      }}
+    >
       <HoverCard
         open={hoverDetailOpen}
         onOpenChange={handleHoverDetailOpenChange}
@@ -657,9 +831,10 @@ export function MediaCard({
               transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
             >
               <div
+                data-card-media
                 className={cn(
                   'relative w-full overflow-hidden bg-muted',
-                  cardAspectClass(asset, previewFrame),
+                  cardAspectClass(asset, previewFrame, card),
                 )}
               >
                 {previewFrame !== 'native' &&
@@ -738,9 +913,11 @@ export function MediaCard({
               </div>
 
               <div className="flex flex-col gap-1.5 p-3">
-                <p className="truncate text-sm font-medium leading-snug text-balance">
-                  {asset.title ?? asset.fileName}
-                </p>
+                {fields.includes('title') ? (
+                  <p className="truncate text-sm font-medium leading-snug text-balance">
+                    {asset.title ?? asset.fileName}
+                  </p>
+                ) : null}
 
                 {asset.description && (
                   <div className="flex items-start gap-1">
@@ -751,8 +928,23 @@ export function MediaCard({
                   </div>
                 )}
 
+                {metaFacts.length > 0 ? (
+                  <p className="truncate text-xs tabular-nums text-muted-foreground">
+                    {metaFacts.join(' · ')}
+                  </p>
+                ) : null}
+
+                {customFieldValues.map((entry) => (
+                  <p key={entry.key} className="truncate text-xs text-muted-foreground">
+                    <span className="text-muted-foreground/60">{entry.label} </span>
+                    {entry.value || '—'}
+                  </p>
+                ))}
+
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
+                  <p className="text-xs tabular-nums text-muted-foreground/60">
+                    {fields.includes('created') ? formattedDate : null}
+                  </p>
                   {canGenerateClips && !activeProgress && (
                     <div className="flex items-center gap-1.5">
                       <ClipCaptionToggle
@@ -787,6 +979,11 @@ export function MediaCard({
         />
         <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
       </HoverCard>
-    </>
+      {stackTarget ? (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 p-3 text-center text-xs font-medium text-primary backdrop-blur-[1px]">
+          Drop to stack as a new version
+        </div>
+      ) : null}
+    </div>
   );
 }

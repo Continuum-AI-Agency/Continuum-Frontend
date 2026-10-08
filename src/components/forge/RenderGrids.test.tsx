@@ -8,7 +8,7 @@
  * row logic has its own test, the tray its own, and the Render ledger (RenderJobsGrid) its own.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { useEffect } from 'react';
 
 const TEMPLATE = {
@@ -203,6 +203,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
       fonts: [],
       layout: null,
       divergence: [],
+      layerSwitchesNotAsked: [],
       ...contractOverrides,
     }),
     listInputSets: async () => ({ items: [], nextCursor: null }),
@@ -240,8 +241,10 @@ const HERO_ASSET = {
   thumbnailUrl: 'https://cdn.test/hero.png',
   headVersionId: null,
 };
+/** What the stand-in picker hands back next; HERO_ASSET unless a test says otherwise. */
+let pickedAsset: Record<string, unknown> = HERO_ASSET;
 // The Library picker drags the whole media stack in; the cell only needs its anchor, and opening
-// it picks HERO_ASSET the way a person choosing one would.
+// it picks `pickedAsset` the way a person choosing one would.
 mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   MediaSelectPopover: ({
     anchor,
@@ -254,10 +257,50 @@ mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   }) => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: a pick per opening, like the real picker.
     useEffect(() => {
-      if (open) onAttachAssets([HERO_ASSET]);
+      if (open) onAttachAssets([pickedAsset]);
     }, [open]);
     return <>{anchor}</>;
   },
+}));
+
+// Spread over the real module for the same reason: only the save the Render tab makes is faked.
+const templateSources = await import('@/lib/library/templateSources');
+const saveTemplateVariablesMock = mock(
+  async (
+    _brandId: string,
+    _assetId: string,
+    _slots: Array<{ slotKey: string; exposed?: boolean | null }>,
+  ) => {},
+);
+const UPLOAD = '881c3036'.padEnd(64, '0');
+const fetchTemplateLineageMock = mock(async (_brandId: string, _assetId: string) => ({
+  connected: true,
+  known: true,
+  master: UPLOAD,
+  currentMaster: UPLOAD,
+  pinnedToOlderMaster: false,
+  roots: [
+    {
+      sha: 'c'.repeat(64),
+      id: 'b'.repeat(64),
+      tool: 'forge ratio',
+      reason: 'geometry',
+      base: UPLOAD,
+      refs: ['utec277/9:16/base'],
+      tags: {},
+      children: [],
+    },
+  ],
+  log: [{ id: UPLOAD, parent: null, tool: 'intake', reason: 'intake', checkout: { blob: UPLOAD } }],
+  worktrees: [],
+  refs: { 'Continuum_app/277@published': UPLOAD },
+  cachedAt: null,
+  unavailable: null,
+}));
+mock.module('@/lib/library/templateSources', () => ({
+  ...templateSources,
+  saveTemplateVariables: saveTemplateVariablesMock,
+  fetchTemplateLineage: fetchTemplateLineageMock,
 }));
 
 // The grid reads the person's brand role from the brand provider; outside one, this file is an
@@ -323,6 +366,7 @@ afterEach(() => {
   batchPreflightMock.mockClear();
   extraTemplates = [];
   contractOverrides = {};
+  pickedAsset = HERO_ASSET;
   brandRole = 'owner';
 });
 
@@ -353,9 +397,7 @@ const closeAnyMenu = async () => {
       expect(document.querySelectorAll('[role="menu"][data-open]').length).toBeLessThan(3 - level),
     );
   }
-  await waitFor(() =>
-    expect(document.querySelectorAll('[role="menu"][data-open]').length).toBe(0),
-  );
+  await waitFor(() => expect(document.querySelectorAll('[role="menu"][data-open]').length).toBe(0));
 };
 
 const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
@@ -372,6 +414,41 @@ const openSetName = () =>
     ?.replace(/^Open /, '');
 
 describe('RenderRequestsGrid', () => {
+  test('includes the saved output selection when checking a saved row', async () => {
+    const outputId = '77777777-7777-4777-8777-777777777771';
+    const savedRow = NEWEST.rows[0];
+    if (!savedRow) throw new Error('Missing saved row');
+    contractOverrides = {
+      outputs: [{ id: outputId, label: 'Card A', ratio: '16:9', mediaType: 'video' }],
+    };
+    listRenderSetsMock.mockImplementation(async () => ({
+      items: [
+        {
+          ...NEWEST,
+          rows: [{ ...savedRow, overrides: { headline: 'Hola mundo' }, outputIds: [outputId] }],
+        },
+      ],
+      nextCursor: null,
+    }));
+    preflightMock.mockImplementation(async (input) => {
+      if (
+        'renderSetId' in input &&
+        (!('outputIds' in input) || JSON.stringify(input.outputIds) !== JSON.stringify([outputId]))
+      ) {
+        throw new ApiError('render_set_row_snapshot_mismatch', 409);
+      }
+      return READY_RESPONSE;
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await waitFor(() => expect(preflightMock).toHaveBeenCalled());
+    expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      renderSetId: NEWEST.id,
+      renderSetRowId: savedRow.id,
+      outputIds: [outputId],
+    });
+    await screen.findByText('Ready');
+  });
+
   test('associates an authoritative guardrail refusal with its row and cell', async () => {
     preflightMock.mockImplementationOnce(async () => {
       throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
@@ -422,6 +499,108 @@ describe('RenderRequestsGrid', () => {
     // The blank cell is not painted as an error; the row says what it waits for.
     expect(headline.classList.contains('border-destructive')).toBe(false);
     expect(screen.getByText('0 of 1 row ready to render · 1 needs input')).toBeTruthy();
+  });
+
+  // UTEC 2026-09-29: a switch read Off whether the file had the layer on or not, and said
+  // nothing about what Off meant. A layer switch says Shown/Hidden; any other checkbox On/Off.
+  test('a layer switch says Shown or Hidden; another checkbox On or Off; unknown says As designed', async () => {
+    contractOverrides = {
+      variables: [
+        ...VARIABLES,
+        variable({
+          key: 'show_carrera',
+          label: 'Show Carrera',
+          kind: 'boolean',
+          sample: 'false',
+          sourceSlotKey: 'boolean__show-carrera',
+        }),
+        variable({
+          key: 'dark_mode',
+          label: 'Dark mode',
+          kind: 'boolean',
+          sample: 'true',
+          sourceSlotKey: 'boolean__dark-mode',
+        }),
+        variable({
+          key: 'show_badge',
+          label: 'Show Badge',
+          kind: 'boolean',
+          sample: null,
+          sourceSlotKey: 'boolean__show-badge',
+        }),
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const carrera = await screen.findByRole('switch', { name: 'Show Carrera' });
+    const cell = carrera.parentElement as HTMLElement;
+    expect(within(cell).getByText('Hidden')).toBeTruthy();
+    fireEvent.click(carrera);
+    await waitFor(() => expect(within(cell).getByText('Shown')).toBeTruthy());
+    const dark = screen.getByRole('switch', { name: 'Dark mode' }).parentElement as HTMLElement;
+    expect(within(dark).getByText('On')).toBeTruthy();
+    const badge = screen.getByRole('switch', { name: 'Show Badge' }).parentElement as HTMLElement;
+    expect(within(badge).getByText('As designed')).toBeTruthy();
+  });
+
+  // UTEC 2026-09-29: the career switch was hidden from Render and found by SQL. A layer switch
+  // no row can change is offered from Add, and one click makes it a column that starts as designed.
+  test('a hidden layer switch requires a saved template revision instead of mutating published bytes', async () => {
+    const carrera = variable({
+      key: 'show_carrera',
+      label: 'Show Carrera',
+      kind: 'boolean',
+      sample: 'true',
+      sourceSlotKey: 'boolean__show-carrera',
+      exposed: false,
+    });
+    const withSource = { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' };
+    contractOverrides = { template: withSource, layerSwitchesNotAsked: [carrera] };
+    const messages: string[] = [];
+    const unsubscribe = registerToastSink(({ title }) => {
+      messages.push(String(title));
+    });
+    messages.length = 0;
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByLabelText('Headline');
+    expect(screen.queryByRole('switch', { name: 'Show Carrera' })).toBeNull();
+
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Add' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Switch a layer per row/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Show Carrera' }));
+
+    expect(saveTemplateVariablesMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole('switch', { name: 'Show Carrera' })).toBeNull();
+    expect(messages).toContain(
+      'Open Edit layers to expose this field, save a template revision, then publish it.',
+    );
+    unsubscribe();
+  });
+
+  // A template is a git history: the picker says which checkpoint renders (live, found by bytes),
+  // lists the forks that are not live without letting them be picked, and pins by name.
+  test('the checkpoint picker shows what renders, keeps non-live forks unpickable, and pins by name', async () => {
+    contractOverrides = {
+      template: { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' },
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const picker = await screen.findByRole('button', { name: 'Checkpoint' });
+    expect(picker.textContent).toContain('881c303600');
+    expect(picker.textContent).toContain('live');
+
+    fireEvent.click(picker);
+    const fork = await screen.findByRole('menuitem', { name: /Size · 9:16\/base/ });
+    expect(fork.getAttribute('aria-disabled') ?? fork.getAttribute('data-disabled')).not.toBeNull();
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /Pin upload/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Checkpoint' }).textContent).toContain('pinned'),
+    );
+    await waitFor(() =>
+      expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
+        templateRef: 'Continuum_app/277@published',
+      }),
+    );
   });
 
   test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
@@ -500,6 +679,7 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
     expect(preflightMock).toHaveBeenCalledTimes(1);
     expect(preflightMock.mock.calls[0]?.[0].variables).toEqual({ headline: 'Hola mundo' });
+    expect(preflightMock.mock.calls[0]?.[0]).not.toHaveProperty('outputIds');
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
   });
@@ -687,6 +867,48 @@ describe('RenderRequestsGrid', () => {
     }
   });
 
+  // 2026-10-05: a refused first save toasted its raw code and re-sent itself every 5 s.
+  // 2026-10-06 (Inyogo Card B): it also said "more than one published revision" when there were
+  // none. Zero publications now reads as unpublished, with the template one click away.
+  test('a refused autosave says why in the toolbar once, without a toast or a retry loop', async () => {
+    const code = 'template_revision_unpublished';
+    const sourceAssetId = '55555555-5555-4555-8555-555555555555';
+    contractOverrides = { template: { ...TEMPLATE, sourceAssetId } };
+    createRenderSetMock.mockImplementationOnce(async () => {
+      throw new ApiError(code, 409, undefined, {
+        error: code,
+        detail: 'This template has no published revision for this render workspace.',
+      });
+    });
+    const toasts: string[] = [];
+    const unregister = registerToastSink(({ title }) => {
+      toasts.push(String(title));
+    });
+    toasts.length = 0;
+    const onOpenTemplate = mock((_intent: { assetId: string; tab?: string }) => undefined);
+    try {
+      render(<RenderRequestsGrid brandId={BRAND} onOpenTemplate={onOpenTemplate} />);
+      fireEvent.change(await screen.findByDisplayValue('Hola mundo'), {
+        target: { value: 'Hola de nuevo' },
+      });
+      const status = await screen.findByRole('status', { name: 'Save status' });
+      await waitFor(() => expect(status.textContent).toContain('no published revision'), {
+        timeout: 4000,
+      });
+      expect(status.textContent).not.toContain(code);
+      expect(status.textContent).not.toContain('more than one');
+      expect(status.textContent).not.toContain('Retrying');
+      expect(toasts).toEqual([]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open template' }));
+      expect(onOpenTemplate).toHaveBeenCalledWith({ assetId: sourceAssetId, tab: 'variants' });
+      // Repairing the template never costs the rows that could not be saved.
+      expect(screen.getByDisplayValue('Hola de nuevo')).toBeTruthy();
+    } finally {
+      unregister();
+    }
+  });
+
   test('keeps the draft row after submitting its immutable set snapshot, saved as Untitled set', async () => {
     const onFired = mock((_jobIds: string[]) => undefined);
     render(<RenderRequestsGrid brandId={BRAND} onFired={onFired} />);
@@ -778,6 +1000,46 @@ describe('RenderRequestsGrid', () => {
     }
   });
 
+  test('a video slot states the clip length it demands, and says when one runs out early', async () => {
+    contractOverrides = {
+      variables: [
+        ...VARIABLES,
+        variable({
+          key: 'background',
+          label: 'Background',
+          kind: 'video',
+          clip: { fromSec: 0, toSec: 10, playsSec: 6.25 },
+        }),
+      ],
+    };
+    // Most Library videos store no length, so the cell reads it off the file itself.
+    pickedAsset = {
+      ...HERO_ASSET,
+      id: '88888888-8888-4888-8888-888888888888',
+      kind: 'video',
+      fileName: 'bg-loop.mp4',
+      durationMs: null,
+      signedUrl: 'https://cdn.test/bg-loop.mp4',
+    };
+    const view = render(<RenderRequestsGrid brandId={BRAND} />);
+    const choose = await screen.findByRole('button', { name: 'Choose Background' });
+    // "\u226510.0s", not a bare "10.0s": the number is the minimum the clip must be, not its length.
+    expect(within(choose).getByText('\u226510.0s')).toBeTruthy();
+    expect(choose.getAttribute('title')).toContain('Plays 0.0s\u201310.0s of the clip');
+
+    fireEvent.click(choose);
+    await screen.findByRole('button', { name: 'Change Background' });
+    expect(screen.queryByText('Short')).toBeNull();
+    const probe = view.container.querySelector<HTMLVideoElement>(
+      'video[src="https://cdn.test/bg-loop.mp4"]',
+    )!;
+    Object.defineProperty(probe, 'duration', { configurable: true, value: 6 });
+    fireEvent.loadedMetadata(probe);
+
+    const short = await screen.findByText('Short');
+    expect(short.getAttribute('title')).toContain('runs out 4.0s early');
+  });
+
   test('a picked asset reads by name on one line with its clear control; a fork keeps both', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
@@ -828,6 +1090,35 @@ describe('RenderRequestsGrid', () => {
     expect(screen.queryByDisplayValue('Newest row')).toBeNull();
   });
 
+  test('an intent naming a row brings it into view, and with rerender selects it alone for Render', async () => {
+    withSavedSets();
+    const scrolled: string[] = [];
+    const scrollIntoView = spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (
+      this: Element,
+    ) {
+      scrolled.push((this as HTMLElement).dataset.rowId ?? '');
+    });
+    try {
+      const { rerender } = render(<RenderRequestsGrid brandId={BRAND} />);
+      expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();
+
+      const rowId = OLDER.rows[0]!.id;
+      rerender(
+        <RenderRequestsGrid
+          brandId={BRAND}
+          intent={{ templateKey: '133', renderSetId: OLDER.id, rowId, rerender: true }}
+        />,
+      );
+      expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
+      await waitFor(() => expect(screen.getByText('1 selected')).toBeTruthy());
+      const [box] = screen.getAllByLabelText<HTMLButtonElement>('Select row');
+      expect(box?.getAttribute('aria-checked')).toBe('true');
+      expect(scrolled).toContain(rowId);
+    } finally {
+      scrollIntoView.mockRestore();
+    }
+  });
+
   test('a new intent saves the edits on screen, then loads its set, and is handed back', async () => {
     withSavedSets();
     const onIntentConsumed = mock(() => undefined);
@@ -851,11 +1142,10 @@ describe('RenderRequestsGrid', () => {
 
   test('choosing another template saves the edits on screen first', async () => {
     extraTemplates = [{ ...TEMPLATE, key: '134', displayName: 'Summer Promo' }];
-    // A radio item keeps its menu open, so the trigger is only pressed when the menu is closed.
+    // The picker closes on a pick, so each pick opens it again.
     const pickTemplate = async (name: RegExp) => {
-      if (!screen.queryByRole('menu'))
-        fireEvent.click(screen.getByRole('button', { name: 'Template' }));
-      fireEvent.click(await screen.findByRole('menuitemradio', { name }));
+      fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+      fireEvent.click(await screen.findByRole('option', { name }));
     };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByText('Choose a template');
@@ -1279,7 +1569,9 @@ describe('RenderRequestsGrid', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Row actions for Base' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Generate with AI' }));
-    const presets = (await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim());
+    const presets = (await screen.findAllByRole('menuitem')).map((item) =>
+      item.textContent?.trim(),
+    );
     expect(presets).toEqual(
       expect.arrayContaining(['3 variations', '6 variations', '12 variations', 'With a brief…']),
     );
@@ -1416,7 +1708,7 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText('Brief'), { target: { value: 'Summer' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
 
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
@@ -1451,7 +1743,7 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText('Brief'), { target: { value: 'Summer' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     fireEvent.click(within(banner).getByRole('button', { name: 'Discard all' }));
@@ -1597,6 +1889,114 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByRole('button', { name: 'Render 2 rows · 4 files' })).toBeTruthy();
   });
 
+  // EasyFit 2026-09-30: one PSD, two artboards of one size stacked differently ("model in front" /
+  // "headline in front"). A ratio chip alone would read "4:5 4:5"; each row picks its arrangement.
+  test('arrangements of one size are told apart by name, and a row can pick one', async () => {
+    contractOverrides = {
+      template: { ...TEMPLATE, ratios: ['4:5'] },
+      outputs: [
+        { id: 'Model in front', label: 'Model in front', ratio: '4:5' },
+        { id: 'Headline in front', label: 'Headline in front', ratio: '4:5' },
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Formats Model in front, Headline in front' }),
+    );
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Headline in front/ }));
+    expect(await screen.findByRole('button', { name: 'Formats Model in front' })).toBeTruthy();
+  });
+
+  test('the template variant picker applies to the set and newly added rows', async () => {
+    contractOverrides = {
+      template: { ...TEMPLATE, ratios: ['4:5'] },
+      outputs: [
+        { id: 'Model', label: 'Model', ratio: '4:5' },
+        { id: 'Headline', label: 'Headline', ratio: '4:5' },
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.change(screen.getByLabelText('Template variant'), {
+      target: { value: 'Headline' },
+    });
+    expect(await screen.findByRole('button', { name: 'Formats Headline' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Blank row' }));
+    expect(screen.getAllByRole('button', { name: 'Formats Headline' })).toHaveLength(2);
+  });
+
+  test('published sub-variants are selected within the same source and workspace', async () => {
+    const sourceAssetId = '55555555-5555-4555-8555-555555555555';
+    extraTemplates = [
+      { ...TEMPLATE, key: '134', sourceAssetId, displayName: 'Child A' },
+      { ...TEMPLATE, key: '135', sourceAssetId, displayName: 'Child B' },
+      {
+        ...TEMPLATE,
+        key: '136',
+        sourceAssetId,
+        bindingId: '44444444-4444-4444-8444-444444444449',
+        displayName: 'Other workspace',
+      },
+    ];
+    render(
+      <RenderRequestsGrid
+        brandId={BRAND}
+        intent={{ templateKey: '134', bindingId: TEMPLATE.bindingId }}
+      />,
+    );
+    await screen.findByDisplayValue('Hola mundo');
+    const picker = await screen.findByLabelText('Template source variant');
+    expect(within(picker).getByRole('option', { name: 'Child B' })).toBeTruthy();
+    expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
+    fireEvent.change(picker, { target: { value: `${TEMPLATE.bindingId}:135` } });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Template', exact: true }).textContent).toContain(
+        'Child B',
+      ),
+    );
+  });
+
+  test('a removed variant requires review even when the contract hash stays the same', async () => {
+    listRenderSetsMock.mockImplementation(async () => ({
+      items: [{ ...NEWEST, rows: [{ ...NEWEST.rows[0]!, outputIds: ['Removed variant'] }] }],
+      nextCursor: null,
+    }));
+    contractOverrides = { outputs: [{ id: 'Current', label: 'Current', ratio: '4:5' }] };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Newest row');
+    expect(screen.getByRole('region', { name: 'Older template' }).textContent).toContain(
+      'Removed variant format',
+    );
+    expect(screen.getByRole('button', { name: 'Update set' })).toBeTruthy();
+  });
+
+  // A two-line headline set on two layers: one box takes both lines, and a count that does not
+  // fit is named on the field before any render is spent.
+  test('a field split across layers takes its lines in one box and names a count that does not fit', async () => {
+    contractOverrides = {
+      linkedFields: [
+        variable({
+          key: 'front_line',
+          label: 'Front line',
+          kind: 'text',
+          exposed: false,
+          derivedFrom: { key: 'headline', line: 2 },
+        }),
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const headline = await screen.findByLabelText(
+      'Headline — one line each for Headline, Front line',
+    );
+    expect(headline.tagName).toBe('TEXTAREA');
+    // The seeded sample is one line: the split cannot fill Front line.
+    await waitFor(() => expect(headline.getAttribute('title')).toContain('Headline needs 2 lines'));
+    fireEvent.change(headline, { target: { value: 'TRAIN HARD\nFEEL STRONG' } });
+    await waitFor(() => expect(headline.getAttribute('title')).toBeNull());
+  });
+
   test('an edit after review sends the tray back to Review; Re-check saves it and reviews again', async () => {
     const renderable = {
       ...NEWEST,
@@ -1639,4 +2039,60 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     expect(screen.getByRole('columnheader', { name: 'Output' })).toBeTruthy();
   });
+});
+
+test('published source variants select their own template key across independent source assets', async () => {
+  const root = '55555555-5555-4555-8555-555555555555';
+  const child = '66666666-6666-4666-8666-666666666666';
+  extraTemplates = [
+    { ...TEMPLATE, key: '134', sourceAssetId: root, displayName: 'Original design' },
+    {
+      ...TEMPLATE,
+      key: '135',
+      name: 'Reordered portrait',
+      sourceAssetId: child,
+      displayName: 'Reordered design',
+    },
+    {
+      ...TEMPLATE,
+      key: '137',
+      name: 'Reordered square',
+      sourceAssetId: child,
+      displayName: 'Reordered design',
+    },
+    {
+      ...TEMPLATE,
+      key: '136',
+      sourceAssetId: child,
+      bindingId: '44444444-4444-4444-8444-444444444449',
+      displayName: 'Other workspace',
+    },
+  ];
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(forgeQueryKeys.templateVariants(BRAND), [
+    { assetId: root, rootAssetId: root, parentAssetId: null },
+    { assetId: child, rootAssetId: root, parentAssetId: root },
+  ]);
+  render(
+    <RenderRequestsGrid
+      brandId={BRAND}
+      intent={{ templateKey: '134', bindingId: TEMPLATE.bindingId }}
+    />,
+    client,
+  );
+  await screen.findByDisplayValue('Hola mundo');
+  const picker = await screen.findByLabelText('Template source variant');
+  expect(
+    within(picker).getByRole('option', { name: 'Reordered design · Reordered portrait' }),
+  ).toBeTruthy();
+  expect(
+    within(picker).getByRole('option', { name: 'Reordered design · Reordered square' }),
+  ).toBeTruthy();
+  expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
+  fireEvent.change(picker, { target: { value: `${TEMPLATE.bindingId}:135` } });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Template', exact: true }).textContent).toContain(
+      'Reordered design',
+    ),
+  );
 });

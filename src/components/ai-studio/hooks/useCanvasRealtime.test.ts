@@ -157,6 +157,27 @@ describe('useCanvasRealtime', () => {
     );
   });
 
+  // A recreated channel (a soft navigation that re-renders the canvas) used to inherit the old
+  // channel's SUBSCRIBED, so presence was tracked on a channel that had not joined yet: an
+  // unhandled "tried to push 'presence' ... before joining".
+  it('never tracks presence on a recreated channel before it has joined', async () => {
+    const { rerender } = renderHook(({ room }) => useCanvasRealtime('brand-1', room), {
+      initialProps: { room: 'room-1' },
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(mockChannel.track).toHaveBeenCalled();
+
+    mockChannel.track.mockClear();
+    subscribeStatusSequence = [];
+    await act(async () => {
+      rerender({ room: 'room-2' });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(mockChannel.track).not.toHaveBeenCalled();
+  });
+
   it('should throttle cursor updates', async () => {
     const { result } = renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
 

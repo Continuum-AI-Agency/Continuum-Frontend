@@ -51,9 +51,9 @@ export const clientRenderJobInputSchema = z
   .strict();
 export type ClientRenderJobInput = z.infer<typeof clientRenderJobInputSchema>;
 
+// Empty is a real manifest: a text-only edit fetches nothing and draws on its background.
 export const clientRenderJobInputManifestSchema = z
   .array(clientRenderJobInputSchema)
-  .min(1)
   .max(100)
   .superRefine((inputs, context) => {
     const positions = new Set<number>();
@@ -326,44 +326,3 @@ export const releaseClientRenderJobRequestSchema = z
   .strict();
 
 export const clientRenderMutationResponseSchema = z.object({ job: clientRenderJobSchema }).strict();
-
-export const hyperframesClientRenderWorkSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('finalize'),
-      revisionId: databaseUuidSchema,
-      fingerprint: z.string().length(64),
-      assetId: databaseUuidSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('review'),
-      revisionId: databaseUuidSchema,
-      fingerprint: z.string().length(64),
-      timestampsSeconds: z.array(z.number().nonnegative()).min(1).max(5),
-      pass: z.number().int().nonnegative(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('render'),
-      revisionId: databaseUuidSchema,
-      fingerprint: z.string().length(64),
-    })
-    .strict(),
-  z.object({ kind: z.literal('waiting') }).strict(),
-  z
-    .object({
-      kind: z.literal('completed'),
-      resultAssetIds: z.array(databaseUuidSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('failed'),
-      message: z.string().min(1),
-    })
-    .strict(),
-]);
-export type HyperframesClientRenderWork = z.infer<typeof hyperframesClientRenderWorkSchema>;

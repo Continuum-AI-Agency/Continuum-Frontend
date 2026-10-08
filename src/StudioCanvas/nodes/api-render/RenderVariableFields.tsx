@@ -14,6 +14,7 @@ import {
 import { Handle, Position } from '@xyflow/react';
 import { Check, ImageIcon, Library, Lock, Video, X } from 'lucide-react';
 import { useState } from 'react';
+import { BrandColorField } from '@/components/forge/BrandColorField';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -353,6 +354,15 @@ function VariableField({
           checked={value === true}
           onCheckedChange={(next) => onChange(variable.key, next)}
         />
+      ) : variable.kind === 'color' ? (
+        <div className="nodrag">
+          <BrandColorField
+            brandId={brandId ?? ''}
+            label={apiRenderVariableLabel(variable)}
+            value={typeof value === 'string' && value ? value : null}
+            onChange={(hex) => onChange(variable.key, hex)}
+          />
+        </div>
       ) : variable.kind === 'enum' && variable.options.length > 0 ? (
         // Only when the value set actually crossed the boundary. The legacy reflection strips
         // it (`options: []`) and an AE dropdown arrives here as bare text; a picker in that

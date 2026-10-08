@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Check,
+  Columns2,
   FolderInput,
   FolderOpen,
   Layers,
@@ -18,10 +19,11 @@ import {
   Loader2,
   Tag,
   Trash2,
+  UserCheck,
   Workflow,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,15 +53,25 @@ import {
 } from '@/components/ui/select';
 import { createElement, elementsQueryKey } from '@/lib/ai-studio/elements';
 import {
+  BULK_CHUNK_SIZE,
+  fetchAllMatchingAssetIds,
+  writeInChunksSkippingVanished,
+} from '@/lib/library/bulkSelection';
+import {
   bulkDeleteAssetsOperation,
   bulkSetAssetFieldValueOperation,
   bulkTransitionAssetReviewOperation,
   bulkUpdateAssetTagsOperation,
   mutateCollectionMembershipOperation,
 } from '@/lib/library/creativeOperations';
+import { createCustomField } from '@/lib/library/customFields';
 import { createShareLink } from '@/lib/library/share';
+import { mediaSchema } from '@/lib/media/supabase-media';
+import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { CompareAssetsDialog } from './detail/compare/CompareAssetsDialog';
+import { CustomFieldValueEditor } from './fields/CustomFieldValueEditor';
 import { ShareBoxDialog } from './ShareBoxDialog';
 
 /** Sentinel value for the inline "New project…" row; never a real project id. */
@@ -98,11 +110,26 @@ export function LibraryBulkToolbar({
   const [tag, setTag] = useState('');
   const [reviewStatus, setReviewStatus] = useState('');
   const [fieldId, setFieldId] = useState('');
-  const [fieldValue, setFieldValue] = useState('');
+  const [fieldValue, setFieldValue] = useState<CustomFieldValue>(null);
+  const [assignFieldId, setAssignFieldId] = useState('');
+  const [assignee, setAssignee] = useState<CustomFieldValue>(null);
+  // "Select all matching" widens the target past what the grid has loaded; any change
+  // to the hand-picked selection narrows it back.
+  const [matchingIds, setMatchingIds] = useState<string[] | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const selectionKey = assetIds.join(',');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectionKey is the selection
+  useEffect(() => setMatchingIds(null), [selectionKey]);
+  const targetIds = matchingIds ?? assetIds;
+  const { canEdit } = useLibraryAccess(brandId, { collectionId: currentCollectionId });
+  const userFields = customFields.filter((field) => field.type === 'user');
+  const assignField =
+    userFields.find((field) => field.id === assignFieldId) ?? userFields[0] ?? null;
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const queryClient = useQueryClient();
   const client = () => createSupabaseBrowserClient();
   // Tagging is what makes the Library's Project filter mean anything: without it the filter
@@ -113,12 +140,44 @@ export function LibraryBulkToolbar({
     create: createProject,
   } = useProjectMutations(brandId);
   const selectedField = customFields.find((field) => field.id === fieldId) ?? null;
-  const fieldPayload: CustomFieldValue =
-    selectedField?.type === 'multi_select'
-      ? fieldValue
-        ? [fieldValue]
-        : null
-      : fieldValue || null;
+
+  // How many assets the last chunked write actually reached; run() reports it.
+  const writtenCount = useRef<number | null>(null);
+
+  // A chunk refused because a teammate deleted one of its assets is rewritten without it.
+  const writeChunked = async (write: (chunk: string[]) => Promise<unknown>) => {
+    writtenCount.current = await writeInChunksSkippingVanished(
+      targetIds,
+      write,
+      async (chunk) => {
+        const { data } = await mediaSchema(client())
+          .from('assets')
+          .select('id')
+          .in('id', chunk)
+          .is('deleted_at', null);
+        return ((data ?? []) as { id: string }[]).map((row) => row.id);
+      },
+      (count, total) => setProgress(total > BULK_CHUNK_SIZE ? `${count} / ${total}` : null),
+    );
+  };
+
+  async function selectAllMatching() {
+    setBusy('Selecting');
+    setMessage(null);
+    try {
+      const ids = await fetchAllMatchingAssetIds({
+        brandId,
+        search: window.location.search,
+        collectionId: currentCollectionId,
+      });
+      setMatchingIds(ids);
+      setMessage(`All ${ids.length} matching selected`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Selecting failed');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   /**
    * Create the project and tag the selection in ONE gesture.
@@ -159,26 +218,169 @@ export function LibraryBulkToolbar({
   async function run(label: string, operation: () => Promise<unknown>) {
     setBusy(label);
     setMessage(null);
+    writtenCount.current = null;
     try {
       await operation();
-      setMessage(`${label} complete`);
+      const count = writtenCount.current ?? targetIds.length;
+      setMessage(`${label} · ${count} ${count === 1 ? 'asset' : 'assets'}`);
       onCompleted();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : `${label} failed`);
     } finally {
       setBusy(null);
+      setProgress(null);
     }
+  }
+
+  // Two hand-picked assets can be compared side by side; comparing is a read, so a viewer
+  // gets it too.
+  const compare =
+    assetIds.length === 2 && matchingIds === null ? (
+      <>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-testid="bulk-compare"
+          onClick={() => setCompareOpen(true)}
+        >
+          <Columns2 className="size-3.5" />
+          Compare
+        </Button>
+        <CompareAssetsDialog
+          brandId={brandId}
+          assetIds={assetIds}
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+        />
+      </>
+    ) : null;
+
+  // Every write here is one the dispatcher refuses a viewer, so a viewer gets the
+  // selection and the read-only Compare.
+  if (!canEdit) {
+    return (
+      <div className="sticky top-0 z-20 flex items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-sm backdrop-blur">
+        <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
+          <Check className="size-3.5 text-primary" aria-hidden />
+          {targetIds.length} selected
+        </span>
+        <span className="flex-1 text-xs text-muted-foreground">
+          View only — your role cannot change these assets.
+        </span>
+        {compare}
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          onClick={onClear}
+          aria-label="Clear selection"
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+    );
   }
 
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-sm backdrop-blur">
       <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
         <Check className="size-3.5 text-primary" aria-hidden />
-        {assetIds.length} selected
+        {targetIds.length} selected
       </span>
+      {matchingIds === null ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 text-xs"
+          disabled={Boolean(busy)}
+          onClick={() => void selectAllMatching()}
+        >
+          Select all matching
+        </Button>
+      ) : null}
+      <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
+        <UserCheck className="size-3.5 text-muted-foreground" aria-hidden />
+        {userFields.length > 1 ? (
+          <Select value={assignField?.id ?? ''} onValueChange={setAssignFieldId}>
+            <SelectTrigger
+              size="sm"
+              className="h-7 w-24 border-0 shadow-none"
+              aria-label="Assign field"
+            >
+              <SelectValue
+                placeholder="Field"
+                items={Object.fromEntries(userFields.map((field) => [field.id, field.name]))}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {userFields.map((field) => (
+                <SelectItem key={field.id} value={field.id}>
+                  {field.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+        {assignField ? (
+          <>
+            <div className="w-36">
+              <CustomFieldValueEditor
+                field={assignField}
+                value={assignee}
+                disabled={Boolean(busy)}
+                onChange={setAssignee}
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              disabled={Boolean(busy)}
+              onClick={() =>
+                void run(assignee ? 'Assigned' : 'Unassigned', () =>
+                  writeChunked((chunk) =>
+                    bulkSetAssetFieldValueOperation(client(), {
+                      brandId,
+                      assetIds: chunk,
+                      fieldId: assignField.id,
+                      value: assignee,
+                    }),
+                  ),
+                )
+              }
+            >
+              Assign
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            disabled={Boolean(busy)}
+            onClick={() =>
+              void run('Assignee field added', async () => {
+                await createCustomField({ brandId, name: 'Assignee', type: 'user' });
+              })
+            }
+          >
+            Add an Assignee field
+          </Button>
+        )}
+      </div>
       <Select value={collectionId} onValueChange={setCollectionId}>
         <SelectTrigger size="sm" className="h-8 w-44" aria-label="Destination collection">
-          <SelectValue placeholder="Choose collection" />
+          <SelectValue
+            placeholder="Choose collection"
+            items={Object.fromEntries(
+              collections.map((collection) => [collection.id, collection.name]),
+            )}
+          />
         </SelectTrigger>
         <SelectContent>
           {collections
@@ -197,12 +399,14 @@ export function LibraryBulkToolbar({
         disabled={!collectionId || Boolean(busy)}
         onClick={() =>
           void run('Added to collection', () =>
-            mutateCollectionMembershipOperation(client(), {
-              brandId,
-              collectionId,
-              assetIds,
-              mode: 'add',
-            }),
+            writeChunked((chunk) =>
+              mutateCollectionMembershipOperation(client(), {
+                brandId,
+                collectionId,
+                assetIds: chunk,
+                mode: 'add',
+              }),
+            ),
           )
         }
       >
@@ -217,12 +421,14 @@ export function LibraryBulkToolbar({
           disabled={Boolean(busy)}
           onClick={() =>
             void run('Removed from collection', () =>
-              mutateCollectionMembershipOperation(client(), {
-                brandId,
-                collectionId: currentCollectionId,
-                assetIds,
-                mode: 'remove',
-              }),
+              writeChunked((chunk) =>
+                mutateCollectionMembershipOperation(client(), {
+                  brandId,
+                  collectionId: currentCollectionId,
+                  assetIds: chunk,
+                  mode: 'remove',
+                }),
+              ),
             )
           }
         >
@@ -237,7 +443,13 @@ export function LibraryBulkToolbar({
         <FolderOpen className="size-3.5 text-muted-foreground" aria-hidden />
         <Select value={projectId} onValueChange={onProjectChange}>
           <SelectTrigger size="sm" className="h-7 w-32 border-0 shadow-none" aria-label="Project">
-            <SelectValue placeholder="Project" />
+            <SelectValue
+              placeholder="Project"
+              items={{
+                ...Object.fromEntries(projects.map((project) => [project.id, project.name])),
+                [NEW_PROJECT]: 'New project…',
+              }}
+            />
           </SelectTrigger>
           <SelectContent>
             {projects.map((project) => (
@@ -334,11 +546,10 @@ export function LibraryBulkToolbar({
           disabled={!tag.trim() || Boolean(busy)}
           onClick={() =>
             void run('Tags updated', async () => {
-              await bulkUpdateAssetTagsOperation(client(), {
-                brandId,
-                assetIds,
-                addTags: [tag.trim()],
-              });
+              const addTags = [tag.trim()];
+              await writeChunked((chunk) =>
+                bulkUpdateAssetTagsOperation(client(), { brandId, assetIds: chunk, addTags }),
+              );
               setTag('');
             })
           }
@@ -354,7 +565,15 @@ export function LibraryBulkToolbar({
             className="h-7 w-32 border-0 shadow-none"
             aria-label="Review status"
           >
-            <SelectValue placeholder="Review status" />
+            <SelectValue
+              placeholder="Review status"
+              items={{
+                draft: 'Draft',
+                in_review: 'In review',
+                needs_changes: 'Needs changes',
+                approved: 'Approved',
+              }}
+            />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="draft">Draft</SelectItem>
@@ -371,11 +590,13 @@ export function LibraryBulkToolbar({
           disabled={!reviewStatus || Boolean(busy)}
           onClick={() =>
             void run('Review status updated', () =>
-              bulkTransitionAssetReviewOperation(client(), {
-                brandId,
-                assetIds,
-                toStatus: reviewStatus as 'draft' | 'in_review' | 'needs_changes' | 'approved',
-              }),
+              writeChunked((chunk) =>
+                bulkTransitionAssetReviewOperation(client(), {
+                  brandId,
+                  assetIds: chunk,
+                  toStatus: reviewStatus as 'draft' | 'in_review' | 'needs_changes' | 'approved',
+                }),
+              ),
             )
           }
         >
@@ -389,7 +610,7 @@ export function LibraryBulkToolbar({
             value={fieldId}
             onValueChange={(value) => {
               setFieldId(value);
-              setFieldValue('');
+              setFieldValue(null);
             }}
           >
             <SelectTrigger
@@ -397,7 +618,10 @@ export function LibraryBulkToolbar({
               className="h-7 w-28 border-0 shadow-none"
               aria-label="Custom field"
             >
-              <SelectValue placeholder="Field" />
+              <SelectValue
+                placeholder="Field"
+                items={Object.fromEntries(customFields.map((field) => [field.id, field.name]))}
+              />
             </SelectTrigger>
             <SelectContent>
               {customFields.map((field) => (
@@ -407,47 +631,32 @@ export function LibraryBulkToolbar({
               ))}
             </SelectContent>
           </Select>
-          {selectedField?.type === 'single_select' || selectedField?.type === 'multi_select' ? (
-            <Select value={fieldValue} onValueChange={setFieldValue}>
-              <SelectTrigger
-                size="sm"
-                className="h-7 w-28 border-0 shadow-none"
-                aria-label="Field value"
-              >
-                <SelectValue placeholder="Value" />
-              </SelectTrigger>
-              <SelectContent>
-                {selectedField.options.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : selectedField ? (
-            <input
-              type={selectedField.type === 'date' ? 'date' : 'text'}
-              value={fieldValue}
-              onChange={(event) => setFieldValue(event.target.value)}
-              placeholder="Value"
-              aria-label="Field value"
-              className="h-7 w-28 bg-transparent px-2 text-xs outline-none"
-            />
+          {selectedField ? (
+            <div className="w-40">
+              <CustomFieldValueEditor
+                field={selectedField}
+                value={fieldValue}
+                disabled={Boolean(busy)}
+                onChange={setFieldValue}
+              />
+            </div>
           ) : null}
           <Button
             type="button"
             size="sm"
             variant="ghost"
             className="h-7"
-            disabled={!selectedField || !fieldValue || Boolean(busy)}
+            disabled={!selectedField || fieldValue === null || Boolean(busy)}
             onClick={() =>
               void run('Field updated', () =>
-                bulkSetAssetFieldValueOperation(client(), {
-                  brandId,
-                  assetIds,
-                  fieldId,
-                  value: fieldPayload,
-                }),
+                writeChunked((chunk) =>
+                  bulkSetAssetFieldValueOperation(client(), {
+                    brandId,
+                    assetIds: chunk,
+                    fieldId,
+                    value: fieldValue,
+                  }),
+                ),
               )
             }
           >
@@ -483,6 +692,7 @@ export function LibraryBulkToolbar({
         <Link2 className="size-3.5" />
         Share box
       </Button>
+      {compare}
       <Button
         type="button"
         size="sm"
@@ -534,7 +744,9 @@ export function LibraryBulkToolbar({
               onClick={() => {
                 setConfirmingDelete(false);
                 void run('Deleted', async () => {
-                  await bulkDeleteAssetsOperation(client(), { brandId, assetIds });
+                  await writeChunked((chunk) =>
+                    bulkDeleteAssetsOperation(client(), { brandId, assetIds: chunk }),
+                  );
                   onClear();
                 });
               }}
@@ -548,7 +760,14 @@ export function LibraryBulkToolbar({
         className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground"
         role="status"
       >
-        {busy ? <Loader2 className="ml-auto size-3.5 animate-spin" /> : message}
+        {busy ? (
+          <span className="inline-flex items-center gap-1.5">
+            {progress}
+            <Loader2 className="size-3.5 animate-spin" />
+          </span>
+        ) : (
+          message
+        )}
       </span>
       <Button
         type="button"

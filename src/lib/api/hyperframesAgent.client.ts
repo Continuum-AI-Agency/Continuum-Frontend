@@ -1,14 +1,13 @@
 import {
   type HyperframesAgentTurnRequest,
   type HyperframesAgentTurnResponse,
-  type HyperframesBrowserReviewRequest,
-  type HyperframesRenderCompleteRequest,
-  type HyperframesReviewUploadRequest,
-  type HyperframesReviewUploadResponse,
+  type HyperframesStoryAngle,
+  type HyperframesStoryboard,
+  type HyperframesStoryPlanRequest,
   hyperframesAgentTurnResponseSchema,
-  hyperframesClientRenderWorkSchema,
   hyperframesCompositionRevisionSchema,
-  hyperframesReviewUploadResponseSchema,
+  hyperframesStoryAnglesSchema,
+  hyperframesStoryboardSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { http } from './http';
@@ -27,19 +26,12 @@ const revisionResponseSchema = z.object({
   ),
 });
 
-const completeResponseSchema = z.object({ ok: z.boolean(), signedUrl: z.string().url() });
-const workResponseSchema = z.object({ work: hyperframesClientRenderWorkSchema }).strict();
-
 export type HyperframesRevisionResponse = z.infer<typeof revisionResponseSchema>;
-export type HyperframesClientRenderWorkResponse = z.infer<typeof workResponseSchema>;
 
 const base = (runId?: string): string =>
   runId
     ? `/api/ai-studio/hyperframes-agent/runs/${encodeURIComponent(runId)}`
     : '/api/ai-studio/hyperframes-agent';
-
-const leaseHeaders = (leaseToken?: string): Record<string, string> =>
-  leaseToken ? { 'x-client-render-lease': leaseToken } : {};
 
 export function startHyperframesTurn(
   brandId: string,
@@ -54,10 +46,33 @@ export function startHyperframesTurn(
   });
 }
 
+export function getHyperframesStoryAngles(
+  request: HyperframesStoryPlanRequest,
+): Promise<{ angles: HyperframesStoryAngle[] }> {
+  return http.request({
+    path: `${base()}/story-angles`,
+    method: 'POST',
+    body: request,
+    schema: hyperframesStoryAnglesSchema,
+    cache: 'no-store',
+  });
+}
+
+export function getHyperframesStoryboard(
+  request: HyperframesStoryPlanRequest,
+): Promise<{ storyboard: HyperframesStoryboard }> {
+  return http.request({
+    path: `${base()}/storyboard`,
+    method: 'POST',
+    body: request,
+    schema: z.object({ storyboard: hyperframesStoryboardSchema }),
+    cache: 'no-store',
+  });
+}
+
 export function getHyperframesRevision(
   runId: string,
   signal?: AbortSignal,
-  leaseToken?: string,
 ): Promise<HyperframesRevisionResponse> {
   return http.request({
     path: `${base(runId)}/revision`,
@@ -65,90 +80,6 @@ export function getHyperframesRevision(
     schema: revisionResponseSchema,
     cache: 'no-store',
     signal,
-    headers: leaseHeaders(leaseToken),
-  });
-}
-
-export function getHyperframesClientRenderWork(
-  runId: string,
-  leaseToken: string,
-  signal?: AbortSignal,
-): Promise<HyperframesClientRenderWorkResponse> {
-  return http.request({
-    path: `${base(runId)}/client-render-work`,
-    method: 'GET',
-    schema: workResponseSchema,
-    cache: 'no-store',
-    signal,
-    headers: leaseHeaders(leaseToken),
-  });
-}
-
-export function createHyperframesReviewUploads(
-  runId: string,
-  body: HyperframesReviewUploadRequest,
-  signal?: AbortSignal,
-  leaseToken?: string,
-): Promise<HyperframesReviewUploadResponse> {
-  return http.request({
-    path: `${base(runId)}/review-uploads`,
-    method: 'POST',
-    body,
-    schema: hyperframesReviewUploadResponseSchema,
-    cache: 'no-store',
-    signal,
-    headers: leaseHeaders(leaseToken),
-  });
-}
-
-export function submitHyperframesReview(
-  runId: string,
-  body: HyperframesBrowserReviewRequest,
-  signal?: AbortSignal,
-  leaseToken?: string,
-): Promise<{ ok: boolean }> {
-  return http.request({
-    path: `${base(runId)}/review`,
-    method: 'POST',
-    body,
-    schema: z.object({ ok: z.boolean() }),
-    cache: 'no-store',
-    signal,
-    headers: leaseHeaders(leaseToken),
-  });
-}
-
-export function reportHyperframesProgress(
-  runId: string,
-  body: { revisionId: string; progress: number },
-  signal?: AbortSignal,
-  leaseToken?: string,
-): Promise<{ ok: boolean }> {
-  return http.request({
-    path: `${base(runId)}/progress`,
-    method: 'POST',
-    body,
-    schema: z.object({ ok: z.boolean() }),
-    cache: 'no-store',
-    signal,
-    headers: leaseHeaders(leaseToken),
-  });
-}
-
-export function completeHyperframesRender(
-  runId: string,
-  body: HyperframesRenderCompleteRequest,
-  signal?: AbortSignal,
-  leaseToken?: string,
-): Promise<z.infer<typeof completeResponseSchema>> {
-  return http.request({
-    path: `${base(runId)}/complete`,
-    method: 'POST',
-    body,
-    schema: completeResponseSchema,
-    cache: 'no-store',
-    signal,
-    headers: leaseHeaders(leaseToken),
   });
 }
 
@@ -158,20 +89,5 @@ export function cancelHyperframesRun(runId: string): Promise<{ cancelled: boolea
     method: 'POST',
     schema: z.object({ cancelled: z.boolean() }),
     cache: 'no-store',
-  });
-}
-
-export function failHyperframesRun(
-  runId: string,
-  message: string,
-  leaseToken?: string,
-): Promise<{ ok: boolean }> {
-  return http.request({
-    path: `${base(runId)}/fail`,
-    method: 'POST',
-    body: { message },
-    schema: z.object({ ok: z.boolean() }),
-    cache: 'no-store',
-    headers: leaseHeaders(leaseToken),
   });
 }

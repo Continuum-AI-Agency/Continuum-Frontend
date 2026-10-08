@@ -1,3 +1,8 @@
+import {
+  type EditorAudioFadeClock,
+  type NumericKeyframe,
+  nestedChildTimeSec,
+} from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   type ClipEffectSpec,
@@ -13,10 +18,12 @@ import {
   overlapInSecFor,
   tailFadeFor,
 } from '../render/transitions';
+import { calibratedAacConfig, trimAacPadding } from './aacTiming';
 import { appendRange, appendStill, loadMediabunny, throwIfAborted } from './appendRange';
 import { type AudioPlanItem, feedMixdown, mixdownTimelineAudio } from './audioMix';
 import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './captionCues';
 import { appendOverlapTransition, type CrossDissolveClip } from './crossDissolve';
+import { drawActiveCaption } from './drawCaptions';
 import { drawEffectFrame } from './frameDraw';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 import { resolveTimelineAudioEnvelope } from './timelineAudioEnvelope';
@@ -46,6 +53,9 @@ export type TimelineRenderItem = {
   // Per-clip audio gain (1 = unchanged) and manual audio fades, applied in the
   // mixdown on top of any transition crossfade.
   volume?: number;
+  volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   // Per-clip visual/audio effects (color, opacity, transform, Ken Burns, speed,
@@ -82,13 +92,35 @@ export type TimelineAudioRenderItem = {
   trimEndSec?: number;
   speed?: number;
   volume?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   fadeInSec?: number;
   fadeOutSec?: number;
+  /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
+  volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
+};
+
+/** Child-local layers, rasterized transparently before applying the host instance. */
+export type TimelineNestedRenderGroup = {
+  itemId: string;
+  startSec: number;
+  durationSec: number;
+  sourceInSec: number;
+  playbackRate: number;
+  childDurationSec: number;
+  width: number;
+  height: number;
+  effects?: ClipEffectSpec;
+  overlays: TimelineOverlayRenderItem[];
+  captionCues: CaptionCue[];
 };
 
 export type ComposeTimelineOptions = {
   items: TimelineRenderItem[];
   overlays?: TimelineOverlayRenderItem[];
+  groups?: TimelineNestedRenderGroup[];
   audioTracks?: TimelineAudioRenderItem[];
   videoBitrate?: number;
   audioBitrate?: number;
@@ -97,13 +129,16 @@ export type ComposeTimelineOptions = {
   // aac, so 'webm' pairs with vp9 video and opus audio.
   videoCodec?: 'avc' | 'hevc' | 'vp9';
   container?: 'mp4' | 'webm';
-  // Nominal encoded packet cadence. Mediabunny uses this to resample source
-  // cadence (including VFR inputs) into the requested constant-rate track.
+  // Exact output cadence. Append helpers sample the source at these ticks;
+  // Mediabunny's track metadata snaps timestamps but does not fill missing frames.
   frameRate?: number;
+  /** Render one composed PNG instead of encoding the timeline. */
+  frameTimeSec?: number;
   // Export-preset frame size. When both are set the timeline is letterboxed into
   // these dimensions (aspect conversion); otherwise the first clip's size is used.
   targetWidth?: number;
   targetHeight?: number;
+  backgroundColor?: string;
   // Editable caption cues (already in OUTPUT time) take precedence over the
   // flat-word compatibility input.
   captionCues?: CaptionCue[];
@@ -132,6 +167,13 @@ type PreparedOverlay = {
   dispose: () => void;
 };
 
+type PreparedGroup = {
+  spec: TimelineNestedRenderGroup;
+  canvas: OffscreenCanvas;
+  context: OffscreenCanvasRenderingContext2D;
+  overlays: PreparedOverlay[];
+};
+
 type MediabunnyModule = Awaited<ReturnType<typeof loadMediabunny>>;
 type MbInput = InstanceType<MediabunnyModule['Input']>;
 
@@ -144,6 +186,11 @@ export type PreparedTimelineAudio = {
   gain: number;
   fadeInSec: number;
   fadeOutSec: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 };
 
 export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPlanItem[] {
@@ -154,8 +201,18 @@ export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPla
     speed: item.speed,
     outputStartSec: item.outputStartSec,
     gain: item.gain,
+    audioFadeClock: item.audioFadeClock,
     fadeInSec: item.fadeInSec,
     fadeOutSec: item.fadeOutSec,
+    ...(item.volumeKeyframes?.length
+      ? { volumeKeyframes: item.volumeKeyframes, keyframeOffsetSec: item.keyframeOffsetSec }
+      : {}),
+    ...(item.groupVolumeKeyframes?.length
+      ? {
+          groupVolumeKeyframes: item.groupVolumeKeyframes,
+          groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+        }
+      : {}),
   }));
 }
 
@@ -272,6 +329,100 @@ async function prepareOverlays(
   return prepared;
 }
 
+async function drawPreparedOverlays(
+  context: OffscreenCanvasRenderingContext2D,
+  overlays: PreparedOverlay[],
+  sec: number,
+  width: number,
+  height: number,
+): Promise<void> {
+  for (const overlay of overlays) {
+    const local = sec - overlay.startSec;
+    if (local < 0 || local >= overlay.outputDurationSec) continue;
+    const frame = await overlay.frameAt(
+      overlay.kind === 'video' ? overlay.sourceStartSec + local * overlay.speed : 0,
+    );
+    if (!frame) continue;
+    await drawEffectFrame(
+      context,
+      frame.image,
+      frame.width,
+      frame.height,
+      width,
+      height,
+      overlay.effects,
+      local / overlay.outputDurationSec,
+      1,
+      local,
+    );
+    drawTextOverlays(context, resolveTextOverlays(overlay.effects), width, height);
+  }
+}
+
+function disposeGroup(group: PreparedGroup): void {
+  for (const overlay of group.overlays) overlay.dispose();
+  group.canvas.width = 0;
+  group.canvas.height = 0;
+}
+
+async function prepareGroup(
+  mb: MediabunnyModule,
+  spec: TimelineNestedRenderGroup,
+): Promise<PreparedGroup> {
+  const canvas = new OffscreenCanvas(spec.width, spec.height);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error(`Nested group "${spec.itemId}": no 2D canvas.`);
+  const group: PreparedGroup = { spec, canvas, context, overlays: [] };
+  try {
+    group.overlays.push(...(await prepareOverlays(mb, spec.overlays)));
+    return group;
+  } catch (error) {
+    disposeGroup(group);
+    throw error;
+  }
+}
+
+async function drawPreparedGroups(
+  context: OffscreenCanvasRenderingContext2D,
+  groups: PreparedGroup[],
+  sec: number,
+  width: number,
+  height: number,
+  captionStyle: CaptionStyle | undefined,
+): Promise<void> {
+  for (const group of groups) {
+    const { spec, canvas, context: childContext } = group;
+    const local = sec - spec.startSec;
+    if (local < 0 || local >= spec.durationSec) continue;
+    const childSec = nestedChildTimeSec(
+      {
+        timelineStartSec: spec.startSec,
+        sourceInSec: spec.sourceInSec,
+        playbackRate: spec.playbackRate,
+      },
+      spec.childDurationSec,
+      sec,
+    );
+    childContext.clearRect(0, 0, spec.width, spec.height);
+    await drawPreparedOverlays(childContext, group.overlays, childSec, spec.width, spec.height);
+    for (const cue of spec.captionCues)
+      if (childSec >= cue.startSec && childSec < cue.endSec)
+        drawActiveCaption(childContext, cue, childSec, spec.width, spec.height, captionStyle);
+    await drawEffectFrame(
+      context,
+      canvas,
+      spec.width,
+      spec.height,
+      width,
+      height,
+      spec.effects,
+      local / spec.durationSec,
+      1,
+      local,
+    );
+  }
+}
+
 export async function composeTimeline(options: ComposeTimelineOptions): Promise<SpliceResult> {
   const { items, signal } = options;
   if (items.length < 1) {
@@ -291,6 +442,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
 
   const prepared: PreparedItem[] = [];
   const preparedOverlays: PreparedOverlay[] = [];
+  const preparedGroups: PreparedGroup[] = [];
   const preparedAudio: PreparedTimelineAudio[] = [];
   let targetWidth = 0;
   let targetHeight = 0;
@@ -386,11 +538,17 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     output.addVideoTrack(videoSource, {
       ...(options.frameRate !== undefined ? { frameRate: options.frameRate } : {}),
     });
-    const audioSource = new mb.AudioSampleSource({
-      codec: options.container === 'webm' ? 'opus' : 'aac',
-      bitrate: options.audioBitrate ?? DEFAULT_AUDIO_BITRATE,
-      transform: { numberOfChannels: TARGET_CHANNEL_COUNT, sampleRate: TARGET_SAMPLE_RATE },
-    });
+    const audioBitrate = options.audioBitrate ?? DEFAULT_AUDIO_BITRATE;
+    const audioConfig =
+      options.container === 'webm'
+        ? {
+            codec: 'opus' as const,
+            bitrate: audioBitrate,
+            transform: { numberOfChannels: TARGET_CHANNEL_COUNT, sampleRate: TARGET_SAMPLE_RATE },
+          }
+        : await calibratedAacConfig(mb, audioBitrate);
+    throwIfAborted(signal);
+    const audioSource = new mb.AudioSampleSource(audioConfig);
     output.addAudioTrack(audioSource);
 
     await output.start();
@@ -401,7 +559,8 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     if (options.overlays && options.overlays.length > 0) {
       preparedOverlays.push(...(await prepareOverlays(mb, options.overlays)));
     }
-    for (const bed of options.audioTracks ?? []) {
+    for (const group of options.groups ?? []) preparedGroups.push(await prepareGroup(mb, group));
+    for (const bed of options.frameTimeSec === undefined ? (options.audioTracks ?? []) : []) {
       const input = new mb.Input({
         source: new mb.BlobSource(bed.blob),
         formats: mb.ALL_FORMATS,
@@ -425,39 +584,35 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         speed: typeof bed.speed === 'number' && bed.speed > 0 ? bed.speed : 1,
         outputStartSec: Math.max(0, bed.startSec),
         gain: typeof bed.volume === 'number' && bed.volume >= 0 ? bed.volume : 1,
+        audioFadeClock: bed.audioFadeClock,
         fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
         fadeOutSec: Math.max(0, bed.fadeOutSec ?? 0),
+        groupVolumeKeyframes: bed.groupVolumeKeyframes,
+        groupKeyframeOffsetSec: bed.groupKeyframeOffsetSec,
+        ...(bed.volumeKeyframes?.length
+          ? { volumeKeyframes: bed.volumeKeyframes, keyframeOffsetSec: bed.keyframeOffsetSec }
+          : {}),
       });
     }
     const compositeOverlays: CompositeOverlays | undefined =
-      preparedOverlays.length === 0
+      preparedOverlays.length === 0 && preparedGroups.length === 0
         ? undefined
         : async (overlayCtx, outputTimestampSec) => {
-            for (const overlay of preparedOverlays) {
-              const local = outputTimestampSec - overlay.startSec;
-              if (local < 0 || local >= overlay.outputDurationSec) continue;
-              const sourceSec =
-                overlay.kind === 'video' ? overlay.sourceStartSec + local * overlay.speed : 0;
-              const frame = await overlay.frameAt(sourceSec);
-              if (!frame) continue;
-              const t = overlay.outputDurationSec > 0 ? local / overlay.outputDurationSec : 0;
-              await drawEffectFrame(
-                overlayCtx,
-                frame.image,
-                frame.width,
-                frame.height,
-                targetWidth,
-                targetHeight,
-                overlay.effects,
-                t,
-                1,
-                local,
-              );
-              const textOverlays = resolveTextOverlays(overlay.effects);
-              if (textOverlays.length > 0) {
-                drawTextOverlays(overlayCtx, textOverlays, targetWidth, targetHeight);
-              }
-            }
+            await drawPreparedOverlays(
+              overlayCtx,
+              preparedOverlays,
+              outputTimestampSec,
+              targetWidth,
+              targetHeight,
+            );
+            await drawPreparedGroups(
+              overlayCtx,
+              preparedGroups,
+              outputTimestampSec,
+              targetWidth,
+              targetHeight,
+              captionStyle,
+            );
           };
 
     // Cross-dissolves overlap adjacent clips, so output placement (and the total)
@@ -487,6 +642,14 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             effects: item.effects,
           };
 
+    if (
+      options.frameTimeSec !== undefined &&
+      (!Number.isFinite(options.frameTimeSec) ||
+        options.frameTimeSec < 0 ||
+        options.frameTimeSec >= totalDuration)
+    ) {
+      throw new Error('Snapshot time must be within the composed timeline.');
+    }
     let processedDuration = 0;
 
     for (let i = 0; i < prepared.length; i += 1) {
@@ -515,7 +678,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             audioSource,
             targetWidth,
             targetHeight,
+            backgroundColor: options.backgroundColor,
             cumulativeOffset: place.soloStartSec,
+            frameTimeSec: options.frameTimeSec,
             effects: item.effects,
             headFade: item.headFade,
             tailFade: item.tailFade,
@@ -539,7 +704,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             audioSource,
             targetWidth,
             targetHeight,
+            backgroundColor: options.backgroundColor,
             cumulativeOffset: place.soloStartSec,
+            frameTimeSec: options.frameTimeSec,
             muteAudio: item.muteAudio,
             frameRate: options.frameRate,
             effects: item.effects,
@@ -564,12 +731,14 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
           videoSource,
           targetWidth,
           targetHeight,
+          backgroundColor: options.backgroundColor,
           // The overlap between clip i and i+1 is driven by i+1's incoming transition.
           type: items[i + 1]?.transition?.type ?? 'crossDissolve',
           outgoing: toCrossClip(item),
           incoming: toCrossClip(prepared[i + 1]),
           overlapOutputSec: place.outOverlapSec,
           outputStart: place.soloEndSec,
+          frameTimeSec: options.frameTimeSec,
           compositeOverlays,
           cues: captionCues,
           captionStyle,
@@ -585,6 +754,17 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       });
     }
 
+    if (options.frameTimeSec !== undefined) {
+      const blob = await offscreen.convertToBlob({ type: 'image/png' });
+      return {
+        blob,
+        objectUrl: URL.createObjectURL(blob),
+        durationSec: totalDuration,
+        width: targetWidth,
+        height: targetHeight,
+      };
+    }
+
     // Audio: one PCM mixdown for the whole timeline. Base video clips build the
     // plan here; overlay + bed tracks add themselves in later waves. Cross-dissolve
     // overlaps sum via complementary fade envelopes (= a crossfade); color-ramp
@@ -598,6 +778,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       const place = placements[i];
       const envelope = resolveTimelineAudioEnvelope({
         gain: src.volume,
+        audioFadeClock: src.audioFadeClock,
         manualFadeInSec: src.audioFadeInSec,
         manualFadeOutSec: src.audioFadeOutSec,
         transitionFadeInSec: Math.max(place.inOverlapSec, item.headFade?.durationSec ?? 0),
@@ -609,6 +790,8 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         sourceEndSec: item.range.endSec,
         speed: item.range.durationSec / item.outputDurationSec,
         outputStartSec: place.outputStartSec,
+        volumeKeyframes: src.volumeKeyframes,
+        keyframeOffsetSec: src.keyframeOffsetSec,
         ...envelope,
       });
     }
@@ -640,7 +823,11 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     }
 
     const mimeType = await output.getMimeType().catch(() => 'video/mp4');
-    const blob = new Blob([buffer], { type: mimeType });
+    const encoded =
+      options.container === 'webm'
+        ? buffer
+        : await trimAacPadding(mb, buffer, totalDuration, signal);
+    const blob = new Blob([encoded], { type: mimeType });
     const objectUrl = URL.createObjectURL(blob);
 
     options.onProgress?.({
@@ -674,6 +861,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     for (const overlay of preparedOverlays) {
       overlay.dispose();
     }
+    for (const group of preparedGroups) disposeGroup(group);
     for (const audio of preparedAudio) {
       disposeInput(audio.input);
     }

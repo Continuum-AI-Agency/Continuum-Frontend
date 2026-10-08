@@ -45,7 +45,12 @@ export function buildStudioLibraryBrowseParams(
   if (filters.destination === 'elements') return null;
   const kind = toContractKind(filters.kind);
   const source = toContractSource(filters.source);
-  const destination = filters.destination;
+  // Home is recent image/video only, so Home + Audio or + Project files listed nothing:
+  // a kind Home can never hold is browsed across the whole Library instead.
+  const destination =
+    filters.destination === 'home' && (kind === 'audio' || kind === 'file')
+      ? 'everything'
+      : filters.destination;
   const mediaType = destination === 'sources' ? 'project_file' : kindToMediaType(kind ?? null);
   const createdWith =
     destination === 'canvas' ? (source ? [source] : ['canvas' as const]) : source ? [source] : [];
@@ -58,6 +63,11 @@ export function buildStudioLibraryBrowseParams(
       placements: [],
       tags: [],
       reviewStatuses: [],
+      reviewStateIds: [],
+      families: [],
+      fieldFilters: [],
+      fieldRanges: [],
+      thenBy: [],
       ownerIds: [],
       campaignIds: [],
       projectIds: [],

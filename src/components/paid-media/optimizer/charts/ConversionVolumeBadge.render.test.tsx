@@ -36,6 +36,24 @@ describe('conversion volume', () => {
     expect(text).toContain('Cold Lookalike');
     expect(text).toContain('To raise it: Consolidate a1.');
   });
+  it('states a goal mismatch plainly, without the "To raise it" lead-in', () => {
+    const mismatch = {
+      ...confidence,
+      actionables: [
+        { code: 'kpi_mismatch', adsetIds: ['a1'], message: '1 of 1 ad sets bid for purchases.' },
+      ],
+    };
+    const { container } = render(
+      <ConversionVolumePanel
+        confidence={mismatch}
+        nameById={new Map()}
+        resultLabel="conversations"
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('1 of 1 ad sets bid for purchases.');
+    expect(text).not.toContain('To raise it');
+  });
   it('says so when there is no scored cycle', () => {
     const { container } = render(<ConversionVolumeBadge confidence={null} />);
     expect(container.textContent).toContain('no scored cycle yet');

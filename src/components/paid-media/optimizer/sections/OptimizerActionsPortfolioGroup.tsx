@@ -1,4 +1,5 @@
 'use client';
+import type { CreativeOutputManifest } from '@continuum/contracts';
 
 // One portfolio's UNIFIED actionable queue. The portfolio's performance report carries
 // two kinds of work a human decides on: budget moves (cycle_items — held, approved, or a
@@ -25,16 +26,12 @@ import {
   type ConvertCboResponse,
   type CreativeSwapJobRow,
   type CycleItemRow,
-  explainFlashUnfit,
-  flashPipelineCandidate,
   GLOBAL_ANGLE_LABELS,
   type GlobalAngleId,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
-  type PipelineCapabilityV2,
   type PortfolioLevel,
   type PortfolioListItem,
-  pickFlashPipelines,
   type RecommendationRow,
 } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
@@ -55,7 +52,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { fetchPipelineCapabilities, publishPipeline } from '@/lib/ai-studio/pipelines';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
@@ -63,7 +59,7 @@ import { attributeTransfers, type TransferAttribution } from '../charts/chartDat
 import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
-import { formatCurrency } from '../format';
+import { figureProps, formatCurrency } from '../format';
 import {
   actionRoute,
   applyModeExplainer,
@@ -74,6 +70,7 @@ import {
   severityBadgeVariant,
   severityRank,
 } from '../reportModel';
+import * as typeScale from '../typeScale';
 import {
   fetchAdsetAds,
   type PortfolioAudienceRow,
@@ -94,20 +91,29 @@ import {
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
-import { audienceCardView, isAudienceRecommendation } from './audienceCardModel';
+import {
+  type AudienceActionHandlers,
+  audienceCardView,
+  carriedRecommendation,
+  isAudienceRecommendation,
+  type PortfolioAdsetSpec,
+  portfolioSpecsFrom,
+} from './audienceCardModel';
+import { CostIntervalLine } from './CostIntervalLine';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
+import { BudgetMoveQueueRow } from './crossPlatformMove/BudgetMoveQueueRow';
+import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
+import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
 import {
-  flashBriefFor,
-  flashPromptsFor,
-  flashWantFor,
-  type ImplementTarget,
-  implementTargets,
-  predecessorAdIn,
-  referenceAssetIdsFor,
-} from './flashCreativesModel';
+  isBudgetMoveRecommendation,
+  type QueuedMove,
+  readQueuedMove,
+} from './crossPlatformMove/queuedMoveModel';
+import { type ImplementTarget, implementTargets, predecessorAdIn } from './flashCreativesModel';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { isStale, rosterLine, staleLine } from './portfolioStaleness';
 import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
@@ -123,6 +129,7 @@ import {
   settingsPatchOf,
   triggerWords,
 } from './recQueueModel';
+import { StalenessChips } from './StalenessChips';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
  *  or a scored change not yet written (recommend mode). */
@@ -168,16 +175,28 @@ type EvidenceContext = {
   /** Why the last request for a row could not be placed (no workflow fits, RPC failed). */
   generateNotes: ReadonlyMap<string, string>;
   /** Put a finished variant beside the current ad of an ad set (this one or another). */
-  implementCreative: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
+  implementCreative: (
+    job: CreativeSwapJobRow,
+    assetId: string,
+    target: ImplementTarget,
+    manifest: CreativeOutputManifest,
+  ) => void;
+  retryCreative: (job: CreativeSwapJobRow) => void;
   implementingKey: string | null;
   audiences: readonly PortfolioAudienceRow[];
+  /** Every enrolled ad set's live targeting, for the audience card's "qué es nuevo". */
+  portfolioSpecs: readonly PortfolioAdsetSpec[];
   currency: string | null;
   /** The objective's result, lower-cased, for the creative comparison chart. */
   resultWord: string;
   /** Audience proposals for the brand and the actions the audience card takes on them. */
   audienceProposals: readonly AudienceProposalRow[];
   audienceActions: {
-    request: (recId: string) => void;
+    /** Ask Jaina for a proposal. `onDone` receives the id the RPC returned — the SAME row
+     *  when a re-ask inside the hour was throttled — so the card can say so. */
+    request: (recId: string, handlers?: AudienceActionHandlers) => void;
+    /** Re-run the Meta write a failed row stopped at (optimizer_retry_audience_proposal). */
+    retry: (proposalId: string, handlers?: AudienceActionHandlers) => void;
     approve: (input: {
       proposalId: string;
       budgetMinorUnits: number;
@@ -191,12 +210,18 @@ type EvidenceContext = {
   };
   audienceBusy: {
     requestingRecId: string | null;
+    retryingId: string | null;
     approvingId: string | null;
     busyId: string | null;
     convertingCbo: boolean;
   };
   cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
 };
+
+/** The audience card's actions and their busy flags, as `useAudienceCardActions` hands them
+ *  out — to this queue's rows and to the asked-for row that opens its proposal in place. */
+export type AudienceCardActions = EvidenceContext['audienceActions'];
+export type AudienceCardBusy = EvidenceContext['audienceBusy'];
 
 type SettingsActions = {
   busy: boolean;
@@ -235,11 +260,12 @@ export function isSelectableRow(row: QueueRow): boolean {
 export function buildActionQueue(
   report: ParsedCycleRunReport | null,
   nameById?: Map<string, string> | null,
+  carried: readonly RecommendationRow[] = [],
 ): QueueRow[] {
-  if (!report) return [];
+  if (!report && carried.length === 0) return [];
   const rows: QueueRow[] = [];
 
-  for (const item of report.latest_items) {
+  for (const item of report?.latest_items ?? []) {
     const status = item.apply_status ?? null;
     const changed = (item.change_abs ?? 0) !== 0;
     // A held item (autopilot over-cap), an approved item (awaiting drain), or a scored move
@@ -257,7 +283,9 @@ export function buildActionQueue(
     });
   }
 
-  for (const rec of report.recommendations) {
+  for (const rec of report?.recommendations ?? []) {
+    // A cross-platform move is its own row with its own three buttons (buildMoveQueue).
+    if (isBudgetMoveRecommendation(rec)) continue;
     // Budget is never a recommendation route (budget moves are cycle_items), so the rec route
     // is one of pause | fatigue | hidden — narrow it so the row's union type is exact.
     const route = actionRoute(rec.kind);
@@ -277,10 +305,51 @@ export function buildActionQueue(
     });
   }
 
+  // Recommendations an asked-for handoff points at that the report no longer lists (see
+  // carriedRecommendation in ./audienceCardModel). "Open the audience proposal" resolves to
+  // `rec:<id>` and lands HERE, so the row has to exist for as long as the row that opened it
+  // does — otherwise the press switches tabs and focuses nothing. A rec the report does list
+  // is not duplicated.
+  const present = new Set(rows.map((row) => row.key));
+  for (const rec of carried) {
+    if (isBudgetMoveRecommendation(rec)) continue;
+    const key = `rec:${rec.id}`;
+    if (present.has(key)) continue;
+    present.add(key);
+    const route = actionRoute(rec.kind);
+    rows.push({
+      key,
+      route: route === 'budget' ? 'fatigue' : route,
+      adsetId: rec.adset_id,
+      name: resolveAdsetName(rec, nameById),
+      rec,
+      approved: false,
+    });
+  }
+
   // Within a band, the money decides: two medium pauses are not equal when one drains
   // $500/day and the other $20/day.
   return rows.sort(
     (a, b) => queueRank(a) - queueRank(b) || rowImpactPerDay(b) - rowImpactPerDay(a),
+  );
+}
+
+/** A cross-platform move waiting on a person (pending) or on its write (approved). */
+export type MoveQueueRow = { key: string; rec: RecommendationRow; move: QueuedMove };
+
+/** The portfolio's cross-platform moves, biggest first. A row whose action does not parse
+ *  against the contract is left out rather than shown with legs it cannot vouch for. */
+export function buildMoveQueue(report: ParsedCycleRunReport | null): MoveQueueRow[] {
+  const rows: MoveQueueRow[] = [];
+  for (const rec of report?.recommendations ?? []) {
+    if (rec.status !== 'pending' && rec.status !== 'approved') continue;
+    const move = readQueuedMove(rec);
+    if (move) rows.push({ key: `rec:${rec.id}`, rec, move });
+  }
+  return rows.sort(
+    (a, b) =>
+      Number(a.rec.status === 'approved') - Number(b.rec.status === 'approved') ||
+      b.move.amountMinor - a.move.amountMinor,
   );
 }
 
@@ -323,6 +392,64 @@ export function buildCounterparties(
   return byAdset;
 }
 
+const FOCUS_PIN_INTERVAL_MS = 200;
+const FOCUS_PIN_DURATION_MS = 3_000;
+/** How long a focus key may go unmatched before the queue says so out loud. */
+const FOCUS_MISSING_DELAY_MS = 3_000;
+const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+
+/**
+ * Bring a row into view and keep it there while the panel settles.
+ *
+ * The panels above this queue (the ask cards, the day's read) may still be loading when the
+ * row is first brought into view, and each one that lands pushes the row back out of it — a
+ * smooth scroll started on mount is cancelled by that very relayout. So after the first
+ * smooth scroll the row is re-centred whenever it has left the panel's visible box, for a
+ * few seconds at most, and never past the person's own first scroll, which is theirs to keep.
+ * Returns the stop function.
+ */
+function pinRowInView(rowKey: string): () => void {
+  const node = () =>
+    document.querySelector<HTMLElement>(`[data-row-key="${selectorValue(rowKey)}"]`);
+  const frame = requestAnimationFrame(() =>
+    node()?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
+  );
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    clearInterval(pin);
+    clearTimeout(release);
+    for (const event of USER_SCROLL_EVENTS) window.removeEventListener(event, stop);
+  };
+  const pin = setInterval(() => {
+    const row = node();
+    if (row && !isInScrollView(row)) row.scrollIntoView({ block: 'start', behavior: 'auto' });
+  }, FOCUS_PIN_INTERVAL_MS);
+  const release = setTimeout(stop, FOCUS_PIN_DURATION_MS);
+  for (const event of USER_SCROLL_EVENTS) window.addEventListener(event, stop, { passive: true });
+  return stop;
+}
+
+/** Whether a row's top edge sits inside the visible box of the panel that scrolls it — the
+ *  tab panel when the queue is inside one, else the window. The row is aligned to the top
+ *  (`block: 'start'`, with the `scroll-mt-2` on the row as its margin) rather than centred:
+ *  an expanded card is often taller than the panel, and centring it hides the headline. */
+function isInScrollView(node: HTMLElement): boolean {
+  const box = node.getBoundingClientRect();
+  const panel = node.closest<HTMLElement>('[role="tabpanel"]');
+  const frame = panel
+    ? panel.getBoundingClientRect()
+    : { top: 0, bottom: window.innerHeight || document.documentElement.clientHeight };
+  return box.top >= frame.top - 1 && box.top < frame.bottom;
+}
+
+/** A row key inside an attribute selector. `CSS.escape` where the platform has it; the
+ *  quote-and-backslash escape otherwise (happy-dom in tests has no `CSS`). */
+function selectorValue(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&');
+}
+
 /** Sort key: needs-decision first, approved-awaiting-execute next, hidden last; within the
  *  needs-decision band, higher-severity recs rise. */
 function rowImpactPerDay(row: QueueRow): number {
@@ -343,7 +470,109 @@ type OptimizerActionsPortfolioGroupProps = {
   /** A row the hero asked to land on: filters clear, the row expands and scrolls into view. */
   focusRowKey?: string | null;
   onFocusRowConsumed?: () => void;
+  /** Recommendations the portfolio's asked-for handoffs point at. One the report no longer
+   *  lists is carried into the queue from its audience proposal (see buildActionQueue). */
+  askedRecommendationIds?: readonly string[];
+  /** After this long with a `focusRowKey` no row matches, the queue prints a note instead of
+   *  staying silent. The default is the real wait; tests shorten it. */
+  focusMissingDelayMs?: number;
 };
+
+/**
+ * The audience card's actions, wired once to the brand's proposal mutations and the CBO
+ * conversion, with the busy flags each button reads. The queue rows use it through the
+ * evidence context; the asked-for row that opens its proposal in place uses it directly,
+ * so both surfaces press the same RPCs and never wire a second copy of the same request.
+ * `noteFor` receives the recommendation id and the message when a request fails.
+ */
+export function useAudienceCardActions(
+  brandId: string,
+  adAccountId: string,
+  noteFor: (recId: string, message: string) => void,
+): {
+  actions: AudienceCardActions;
+  busy: AudienceCardBusy;
+  cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
+} {
+  const audienceMutations = useAudienceProposalMutations(brandId);
+  const convertCboMutation = useConvertCbo(brandId);
+  const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
+    ReadonlyMap<string, ConvertCboResponse>
+  >(new Map());
+  const [requestingRecId, setRequestingRecId] = React.useState<string | null>(null);
+  const [retryingId, setRetryingId] = React.useState<string | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const actions = React.useMemo<AudienceCardActions>(
+    () => ({
+      request: (recId, handlers) => {
+        setRequestingRecId(recId);
+        audienceMutations.request.mutate(recId, {
+          onSuccess: (proposalId) => handlers?.onDone?.(proposalId),
+          onError: (error) => {
+            const message = error instanceof Error ? error.message : 'Could not ask Jaina.';
+            noteFor(recId, message);
+            handlers?.onError?.(message);
+          },
+          onSettled: () => setRequestingRecId(null),
+        });
+      },
+      retry: (proposalId, handlers) => {
+        setRetryingId(proposalId);
+        audienceMutations.retry.mutate(proposalId, {
+          onSuccess: () => handlers?.onDone?.(proposalId),
+          onError: (error) =>
+            handlers?.onError?.(
+              error instanceof Error ? error.message : 'Could not retry in Meta.',
+            ),
+          onSettled: () => setRetryingId(null),
+        });
+      },
+      approve: (input) => {
+        setBusyId(input.proposalId);
+        audienceMutations.approve.mutate(input, { onSettled: () => setBusyId(null) });
+      },
+      cancel: (proposalId) => {
+        setBusyId(proposalId);
+        audienceMutations.cancel.mutate(proposalId, { onSettled: () => setBusyId(null) });
+      },
+      activate: (proposalId) => {
+        setBusyId(proposalId);
+        audienceMutations.activate.mutate(proposalId, { onSettled: () => setBusyId(null) });
+      },
+      undo: (proposalId) => {
+        setBusyId(proposalId);
+        audienceMutations.undo.mutate(proposalId, { onSettled: () => setBusyId(null) });
+      },
+      convertCbo: (campaignId, dryRun) => {
+        convertCboMutation.mutate(
+          { brandId, accountId: adAccountId, campaignId, dryRun },
+          {
+            onSuccess: (data: ConvertCboResponse | null) => {
+              if (data) setCboPreviewByCampaign((prev) => new Map(prev).set(campaignId, data));
+            },
+          },
+        );
+      },
+    }),
+    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
+  );
+  const approving = audienceMutations.approve.isPending;
+  const convertingCbo = convertCboMutation.isPending;
+  return React.useMemo(
+    () => ({
+      actions,
+      busy: {
+        requestingRecId,
+        retryingId,
+        approvingId: approving ? busyId : null,
+        busyId,
+        convertingCbo,
+      },
+      cboPreviewByCampaign,
+    }),
+    [actions, requestingRecId, retryingId, approving, busyId, convertingCbo, cboPreviewByCampaign],
+  );
+}
 
 export function OptimizerActionsPortfolioGroup({
   brandId,
@@ -351,6 +580,8 @@ export function OptimizerActionsPortfolioGroup({
   portfolio,
   focusRowKey = null,
   onFocusRowConsumed,
+  askedRecommendationIds,
+  focusMissingDelayMs = FOCUS_MISSING_DELAY_MS,
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
@@ -389,21 +620,6 @@ export function OptimizerActionsPortfolioGroup({
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [routeFilters, setRouteFilters] = React.useState<Set<QueueRow['route']>>(new Set());
-  // The hero's CTA: clear whatever narrows the list, open the row, bring it into view.
-  React.useEffect(() => {
-    if (!focusRowKey) return;
-    setSearch('');
-    setRouteFilters(new Set());
-    setExpanded(focusRowKey);
-    const timer = setTimeout(() => {
-      const node = document.querySelector<HTMLElement>(
-        `[data-row-key="${CSS.escape(focusRowKey)}"]`,
-      );
-      node?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      onFocusRowConsumed?.();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [focusRowKey, onFocusRowConsumed]);
   const [executeNote, setExecuteNote] = React.useState<string | null>(null);
   const [failedAdsets, setFailedAdsets] = React.useState<Set<string>>(new Set());
   const [confirm, setConfirm] = React.useState<null | 'budget' | 'pause'>(null);
@@ -413,13 +629,84 @@ export function OptimizerActionsPortfolioGroup({
     () => new Map(enrolledQuery.data.map((row) => [row.adset_id, row.adset_name ?? ''])),
     [enrolledQuery.data],
   );
-  const rows = React.useMemo(() => buildActionQueue(report, nameById), [report, nameById]);
+  const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
+  // The recommendations the asked-for rows hand off to that the report does not carry any
+  // more, rebuilt from the proposal each one opened. Empty unless the workspace named some.
+  const carriedRecs = React.useMemo(() => {
+    if (!askedRecommendationIds || askedRecommendationIds.length === 0) return [];
+    const wanted = new Set(askedRecommendationIds);
+    const listed = new Set((report?.recommendations ?? []).map((rec) => rec.id));
+    const out: RecommendationRow[] = [];
+    for (const proposal of audienceProposalsQuery.data) {
+      const id = proposal.recommendation_id;
+      if (!id || !wanted.has(id) || listed.has(id)) continue;
+      const rec = carriedRecommendation(proposal, nameById.get(proposal.adset_id) ?? null);
+      if (rec) out.push(rec);
+    }
+    return out;
+  }, [askedRecommendationIds, audienceProposalsQuery.data, nameById, report?.recommendations]);
+  const rows = React.useMemo(
+    () => buildActionQueue(report, nameById, carriedRecs),
+    [report, nameById, carriedRecs],
+  );
+  const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
+  const [decidingMove, setDecidingMove] = React.useState<string | null>(null);
+  const decideMove = (rec: RecommendationRow, status: 'approved' | 'rejected') => {
+    setDecidingMove(rec.id);
+    setStatus.mutate(
+      { recommendation_id: rec.id, status },
+      { onSettled: () => setDecidingMove(null) },
+    );
+  };
+  // A CTA's row, in two steps. First, the moment the key arrives: clear whatever narrows the
+  // list and open the row. Then — only once the row is actually in the queue and painted —
+  // bring it into view and hand the key back. Consuming before the row exists (the queue may
+  // still be reading) is how a press used to expand nothing: the key was cleared on a timer
+  // while the list was still empty. The second step keys on a boolean, not on `rows`, so a
+  // re-derived row list never re-runs the reset.
+  React.useEffect(() => {
+    if (!focusRowKey) return;
+    setSearch('');
+    setRouteFilters(new Set());
+    setExpanded(focusRowKey);
+  }, [focusRowKey]);
+  const focusRowPresent =
+    focusRowKey != null &&
+    (rows.some((row) => row.key === focusRowKey) ||
+      moveRows.some((row) => row.key === focusRowKey));
+  // A key with no row for a while is a pressed button that did nothing, and silence there is
+  // the dead end the read rows exist to close, wearing another hat. After the delay the queue
+  // says so in words, and keeps saying it until the row arrives (a build's row lands with the
+  // next fetch of the report) or the key is dropped.
+  const [focusMissing, setFocusMissing] = React.useState(false);
+  React.useEffect(() => {
+    if (!focusRowKey || focusRowPresent) {
+      setFocusMissing(false);
+      return;
+    }
+    const timer = setTimeout(() => setFocusMissing(true), focusMissingDelayMs);
+    return () => clearTimeout(timer);
+  }, [focusRowKey, focusRowPresent, focusMissingDelayMs]);
+  // The pin outlives the key on purpose: handing the key back re-runs this effect with null,
+  // and a pin tied to the effect's cleanup died there — right after a first smooth scroll
+  // that the still-loading panels above had already cancelled.
+  const pinRef = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => () => pinRef.current?.(), []);
+  React.useEffect(() => {
+    if (!focusRowKey || !focusRowPresent) return;
+    pinRef.current?.();
+    pinRef.current = pinRowInView(focusRowKey);
+    const frame = requestAnimationFrame(() => onFocusRowConsumed?.());
+    return () => cancelAnimationFrame(frame);
+  }, [focusRowKey, focusRowPresent, onFocusRowConsumed]);
 
   const runId = (report?.latest_run as { id?: string } | null)?.id ?? null;
   const asOf = asOfLine(
     (report?.latest_run as { cycle_ts?: string } | null)?.cycle_ts ?? null,
     portfolio.next_realloc_at ?? null,
+    isStale(portfolio),
   );
+  const unwell = staleLine(portfolio) !== null || rosterLine(portfolio) !== null;
   const summary = React.useMemo(
     () => queueSummary(report?.recommendations ?? []),
     [report?.recommendations],
@@ -501,55 +788,12 @@ export function OptimizerActionsPortfolioGroup({
       return next;
     });
   }, []);
-  /** Place the request on the given pipelines. When none fits, publish the simplest flow
-   *  that can (one generator, open prompt / negative / reference ports) on the brand and
-   *  run on it — the person asked for variants, not for a workflow. */
-  const placeGeneration = React.useCallback(
-    async (
-      rec: RecommendationRow,
-      name: string | null,
-      ads: readonly AdsetAd[],
-      capabilities: readonly PipelineCapabilityV2[],
-    ): Promise<void> => {
-      const want = flashWantFor(rec, ads);
-      let [fit] = pickFlashPipelines(capabilities, want);
-      if (!fit) {
-        noteFor(rec.id, 'Setting up a flash-creative flow for this brand…');
-        const { capability } = await publishPipeline(
-          flashPipelineCandidate({
-            brandProfileId: brandId,
-            withReference: want.hasReference,
-            ratio: want.ratio,
-          }),
-        );
-        flash.refreshPipelines();
-        [fit] = pickFlashPipelines([capability], want);
-        if (!fit) {
-          const why = explainFlashUnfit(capability, want) ?? 'it cannot run unattended';
-          throw new Error(`The flow was published as “${capability.name}” but ${why}.`);
-        }
-      }
-      const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
-      const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
-      const prompts = flashPromptsFor(brief);
-      await flash.request.mutateAsync({
-        recommendationId: rec.id,
-        pipelineId: fit.capability.pipeline_id,
-        prompt: prompts.positive,
-        negativePrompt: prompts.negative,
-        referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
-        count: want.count,
-      });
-      noteFor(rec.id, null);
-    },
-    [brandId, currency, flash, noteFor, snapshotById],
-  );
   const requestGeneration = React.useCallback(
-    (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => {
+    (rec: RecommendationRow, _name: string | null, _ads: readonly AdsetAd[]) => {
       setGeneratingIds((prev) => new Set(prev).add(rec.id));
       noteFor(rec.id, null);
-      fetchPipelineCapabilities(brandId)
-        .then((capabilities) => placeGeneration(rec, name, ads, capabilities))
+      flash.generate
+        .mutateAsync(rec.id)
         .catch((error: unknown) => {
           noteFor(
             rec.id,
@@ -565,10 +809,15 @@ export function OptimizerActionsPortfolioGroup({
           void swapJobsQuery.refetch();
         });
     },
-    [brandId, noteFor, placeGeneration, swapJobsQuery],
+    [flash.generate, noteFor, swapJobsQuery],
   );
   const implementCreative = React.useCallback(
-    (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => {
+    (
+      job: CreativeSwapJobRow,
+      assetId: string,
+      target: ImplementTarget,
+      manifest: CreativeOutputManifest,
+    ) => {
       const key = `${job.id}:${assetId}`;
       setImplementingKey(key);
       const run = async () => {
@@ -583,6 +832,7 @@ export function OptimizerActionsPortfolioGroup({
         await flash.implement.mutateAsync({
           jobId: job.id,
           assetId,
+          manifest,
           targetAdsetId: target.adsetId,
           predecessorAdId,
         });
@@ -601,52 +851,22 @@ export function OptimizerActionsPortfolioGroup({
     },
     [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
   );
-  const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
-  const audienceMutations = useAudienceProposalMutations(brandId);
-  const convertCboMutation = useConvertCbo(brandId);
-  const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
-    ReadonlyMap<string, ConvertCboResponse>
-  >(new Map());
-  const [audienceRequestingRecId, setAudienceRequestingRecId] = React.useState<string | null>(null);
-  const [audienceBusyId, setAudienceBusyId] = React.useState<string | null>(null);
-  const audienceActions = React.useMemo<EvidenceContext['audienceActions']>(
-    () => ({
-      request: (recId) => {
-        setAudienceRequestingRecId(recId);
-        audienceMutations.request.mutate(recId, {
-          onError: (error) =>
-            noteFor(recId, error instanceof Error ? error.message : 'Could not ask Jaina.'),
-          onSettled: () => setAudienceRequestingRecId(null),
-        });
-      },
-      approve: (input) => {
-        setAudienceBusyId(input.proposalId);
-        audienceMutations.approve.mutate(input, { onSettled: () => setAudienceBusyId(null) });
-      },
-      cancel: (proposalId) => {
-        setAudienceBusyId(proposalId);
-        audienceMutations.cancel.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
-      },
-      activate: (proposalId) => {
-        setAudienceBusyId(proposalId);
-        audienceMutations.activate.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
-      },
-      undo: (proposalId) => {
-        setAudienceBusyId(proposalId);
-        audienceMutations.undo.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
-      },
-      convertCbo: (campaignId, dryRun) => {
-        convertCboMutation.mutate(
-          { brandId, accountId: adAccountId, campaignId, dryRun },
-          {
-            onSuccess: (data: ConvertCboResponse | null) => {
-              if (data) setCboPreviewByCampaign((prev) => new Map(prev).set(campaignId, data));
-            },
-          },
-        );
-      },
-    }),
-    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
+  const retryCreative = React.useCallback(
+    (job: CreativeSwapJobRow) => {
+      flash.retry.mutate(job.id, {
+        onError: (error) => noteFor(job.recommendation_id ?? job.id, error.message),
+      });
+    },
+    [flash.retry, noteFor],
+  );
+  const audienceCard = useAudienceCardActions(brandId, adAccountId, noteFor);
+  const portfolioSpecs = React.useMemo(
+    () =>
+      portfolioSpecsFrom(
+        snapshotsQuery.targeting,
+        (adsetId) => snapshotById.get(adsetId)?.name ?? null,
+      ),
+    [snapshotsQuery.targeting, snapshotById],
   );
   const evidenceContext = React.useMemo<EvidenceContext>(
     () => ({
@@ -662,19 +882,16 @@ export function OptimizerActionsPortfolioGroup({
       generatingIds,
       generateNotes,
       implementCreative,
+      retryCreative,
       implementingKey,
       audiences: audiencesQuery.data,
+      portfolioSpecs,
       currency,
       resultWord: metric.resultLabel.toLowerCase(),
       audienceProposals: audienceProposalsQuery.data,
-      audienceActions,
-      audienceBusy: {
-        requestingRecId: audienceRequestingRecId,
-        approvingId: audienceMutations.approve.isPending ? audienceBusyId : null,
-        busyId: audienceBusyId,
-        convertingCbo: convertCboMutation.isPending,
-      },
-      cboPreviewByCampaign,
+      audienceActions: audienceCard.actions,
+      audienceBusy: audienceCard.busy,
+      cboPreviewByCampaign: audienceCard.cboPreviewByCampaign,
     }),
     [
       snapshotById,
@@ -689,17 +906,14 @@ export function OptimizerActionsPortfolioGroup({
       generatingIds,
       generateNotes,
       implementCreative,
+      retryCreative,
       implementingKey,
       audiencesQuery.data,
+      portfolioSpecs,
       currency,
       metric.resultLabel,
       audienceProposalsQuery.data,
-      audienceActions,
-      audienceRequestingRecId,
-      audienceMutations.approve.isPending,
-      audienceBusyId,
-      convertCboMutation.isPending,
-      cboPreviewByCampaign,
+      audienceCard,
     ],
   );
 
@@ -730,7 +944,7 @@ export function OptimizerActionsPortfolioGroup({
       />
     );
   }
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && moveRows.length === 0) return null;
 
   const clearTransient = () => {
     setSelected(new Set());
@@ -874,15 +1088,15 @@ export function OptimizerActionsPortfolioGroup({
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+        <h3 className="flex items-center gap-2.5 text-base font-semibold tracking-tight">
           {portfolio.name}
-          <Badge variant="secondary" className="text-3xs">
-            {selectableVisible.length || rows.length}
+          <Badge variant="secondary" className="text-xs">
+            {(selectableVisible.length || rows.length) + moveRows.length}
           </Badge>
         </h3>
         <Input
           aria-label={`Search ${portfolio.name} actions`}
-          className="h-7 w-full max-w-56 text-xs sm:w-56"
+          className="h-8 w-full max-w-72 text-sm sm:w-72"
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search name, id, kind, reason"
           value={search}
@@ -892,15 +1106,23 @@ export function OptimizerActionsPortfolioGroup({
       {/* Is this queue current? One line, before anything in it is read. Every pending row
           belongs to the latest cycle (older ones are superseded server-side), so the cycle's
           time IS the queue's time. */}
-      {asOf ? <p className="text-2xs text-muted-foreground">{asOf}</p> : null}
+      {asOf ? <p className="text-xs text-muted-foreground">{asOf}</p> : null}
+
+      {/* A queue whose portfolio has missed a cycle, or whose roster left Meta, says so before
+          its rows — the rows below are from the last cycle that landed, however long ago. */}
+      {unwell ? (
+        <div className="flex flex-wrap items-center gap-1.5" data-testid="queue-staleness">
+          <StalenessChips portfolio={portfolio} />
+        </div>
+      ) : null}
 
       {/* What is in the queue, by reason, biggest money first — the summary a reader wants
           before ten rows that each say "Pause ad set · HIGH". */}
       {summary.length > 1 ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Queue summary">
+        <ul className="flex flex-wrap gap-2" aria-label="Queue summary">
           {summary.map((group) => (
             <li
-              className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-2xs"
+              className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-1.5 text-xs"
               key={`${group.kind}:${group.trigger}`}
             >
               <span className="font-medium">
@@ -909,7 +1131,18 @@ export function OptimizerActionsPortfolioGroup({
               <span className="text-muted-foreground">· {triggerWords(group.trigger)}</span>
               {group.impactPerDay > 0 ? (
                 <span className="text-muted-foreground tabular-nums">
-                  · {formatCurrency(group.impactPerDay, currency)}/day
+                  ·{' '}
+                  <span
+                    className="font-semibold text-foreground"
+                    {...figureProps(
+                      `queue.summary.${group.kind}:${group.trigger}.impact`,
+                      group.impactPerDay,
+                      currency,
+                    )}
+                  >
+                    {formatCurrency(group.impactPerDay, currency)}
+                  </span>
+                  /day
                 </span>
               ) : null}
             </li>
@@ -946,13 +1179,13 @@ export function OptimizerActionsPortfolioGroup({
       />
 
       {writesBlocked ? (
-        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-2xs text-warning">
+        <p className="rounded-md border border-warning/40 bg-warning/5 px-4 py-2.5 text-xs text-warning">
           {applyModeExplainer(portfolio.apply_mode)}
         </p>
       ) : null}
 
       {executeNote ? (
-        <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-1.5 text-2xs text-muted-foreground">
+        <p className="rounded-md border border-border/60 bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
           {executeNote}
         </p>
       ) : null}
@@ -973,6 +1206,33 @@ export function OptimizerActionsPortfolioGroup({
         </div>
       ) : null}
 
+      {focusMissing ? (
+        <p
+          className="mb-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-foreground text-sm"
+          data-testid="queue-focus-missing"
+          role="status"
+        >
+          The row that button points at isn't in the queue yet. If it was just created, it shows up
+          with the cycle's next read.
+        </p>
+      ) : null}
+      {/* Cross-platform moves lead the queue: the biggest decision, and the one a person
+          should take even when autopilot could (decision 18). */}
+      {moveRows.length > 0 ? (
+        <ul className="space-y-2" data-testid="budget-move-queue">
+          {moveRows.map(({ key, rec, move }) => (
+            <BudgetMoveQueueRow
+              busy={decidingMove === rec.id}
+              key={key}
+              move={move}
+              onApproveMove={() => decideMove(rec, 'approved')}
+              onDismiss={() => decideMove(rec, 'rejected')}
+              rec={rec}
+              writesBlocked={writesBlocked}
+            />
+          ))}
+        </ul>
+      ) : null}
       <ul className="space-y-2">
         {visibleRows.map((row, index) => (
           <React.Fragment key={row.key}>
@@ -1080,21 +1340,29 @@ function PortfolioRecentActions({
   const actionsQuery = useOptimizerActions(brandId);
   // A failed or empty action read must not push an error into the queue — the queue's own work
   // is unaffected by it. The full feed reports its own outage in Activity → Actions.
-  const recent = actionsQuery.data
-    .filter((row) => row.portfolio_id === portfolioId && row.family === 'money')
-    .slice(0, RECENT_ACTION_LIMIT);
+  // Grouped before the cut, so a move's legs never split across the limit.
+  const recent = groupActionFeed(
+    actionsQuery.data.filter((row) => row.portfolio_id === portfolioId && row.family === 'money'),
+  ).slice(0, RECENT_ACTION_LIMIT);
 
   if (recent.length === 0) return null;
 
   return (
-    <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Recently applied
-      </p>
+    <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-4 py-3">
+      <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Recently applied</p>
       <ul className="space-y-2">
-        {recent.map((row) => (
-          <ActionRow key={row.id} row={row} brandId={brandId} currency={currency} />
-        ))}
+        {recent.map((item) =>
+          item.kind === 'move' ? (
+            <MoveDecisionCard
+              brandId={brandId}
+              currency={currency}
+              key={item.key}
+              move={item.move}
+            />
+          ) : (
+            <ActionRow key={item.row.id} row={item.row} brandId={brandId} currency={currency} />
+          ),
+        )}
       </ul>
     </div>
   );
@@ -1208,8 +1476,8 @@ function QueueToolbar({
   writesBlocked: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5">
-      <span className="flex items-center gap-1.5 pl-1 text-2xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5">
+      <span className="flex items-center gap-2 pl-1 text-xs text-muted-foreground">
         <Checkbox
           aria-label="Select all actionable"
           checked={allSelected}
@@ -1219,13 +1487,13 @@ function QueueToolbar({
         All
       </span>
 
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {ROUTE_FILTERS.map((option) => (
           <button
             key={option.route}
             aria-pressed={activeFilters.has(option.route)}
             className={cn(
-              'rounded-md border px-1.5 py-0.5 text-3xs font-medium transition-colors',
+              'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
               activeFilters.has(option.route)
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
@@ -1238,19 +1506,22 @@ function QueueToolbar({
         ))}
       </div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         {/* A cycle's budget moves are conserved as a set, so approving a strict subset moves
             total spend. Sum the selection and say by how much rather than warning abstractly. */}
         {selectionNetDelta == null ? null : Math.abs(selectionNetDelta) < 0.5 ? (
-          <span className="text-2xs text-muted-foreground">Spend stays flat</span>
+          <span className="text-xs text-muted-foreground">Spend stays flat</span>
         ) : (
-          <span className="text-2xs text-warning tabular-nums">
+          <span className="text-xs text-warning tabular-nums">
             Net {selectionNetDelta > 0 ? '+' : '−'}
-            {formatCurrency(Math.abs(selectionNetDelta), currency)}/day
+            <span {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}>
+              {formatCurrency(Math.abs(selectionNetDelta), currency)}
+            </span>
+            /day
           </span>
         )}
         <Button
-          className="h-7 px-2.5 text-xs"
+          className="h-8 px-4 text-sm"
           disabled={writesBlocked || !hasSelection || busyApprove}
           onClick={onApproveSelected}
           size="sm"
@@ -1261,7 +1532,7 @@ function QueueToolbar({
           Approve selected
         </Button>
         <Button
-          className="h-7 px-2.5 text-xs"
+          className="h-8 px-4 text-sm"
           disabled={writesBlocked || selectableCount === 0 || busyApprove}
           onClick={onApproveAll}
           size="sm"
@@ -1272,7 +1543,7 @@ function QueueToolbar({
         </Button>
         {applyBudgetCount > 0 ? (
           <Button
-            className="h-7 px-2.5 text-xs"
+            className="h-8 px-4 text-sm"
             disabled={writesBlocked || applyApprovedPending}
             onClick={onExecuteBudgets}
             size="sm"
@@ -1284,7 +1555,7 @@ function QueueToolbar({
         ) : null}
         {approvedPauseCount > 0 ? (
           <Button
-            className="h-7 px-2.5 text-xs"
+            className="h-8 px-4 text-sm"
             disabled={writesBlocked || pausePending}
             onClick={onExecutePauses}
             size="sm"
@@ -1337,7 +1608,7 @@ function BudgetTransferHeader({
         : `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this is not a flat reallocation.`;
 
   return (
-    <li className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+    <li className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3.5">
       <div className="flex items-start gap-2.5">
         <Checkbox
           aria-label="Select all budget moves in this cycle"
@@ -1347,7 +1618,7 @@ function BudgetTransferHeader({
           onCheckedChange={onToggleGroup}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold tracking-tight">
+          <p className="text-base font-semibold tracking-tight">
             {pair ? (
               <>
                 Moving <span className="tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
@@ -1361,7 +1632,7 @@ function BudgetTransferHeader({
               </>
             )}
           </p>
-          <p className="mt-0.5 text-2xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {conservation} These moves are one decision — approving only some of them changes the
             total.
           </p>
@@ -1385,7 +1656,7 @@ function CounterpartyLine({
   const rest = entry.parties.length - shown.length;
   if (shown.length === 0) return null;
   return (
-    <span className="text-3xs text-muted-foreground">
+    <span className="text-xs text-muted-foreground">
       {entry.direction === 'funds' ? '→ funds ' : '← funded by '}
       {shown
         .map((party) => `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency)}`)
@@ -1431,7 +1702,7 @@ function QueueRowView({
     // biome-ignore lint/a11y/useKeyWithClickEvents: the whole-row click is a pointer convenience; the accessible, keyboard-operable selection control is the Checkbox inside. Making the <li> a role=button would nest interactive controls (checkbox, expander, hover card).
     <li
       className={cn(
-        'rounded-lg border bg-card px-3 py-2 transition-colors',
+        'scroll-mt-2 rounded-lg border bg-card px-4 py-3.5 transition-colors',
         selected ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40' : 'border-border/70',
         selectable && !writesBlocked && 'cursor-pointer hover:bg-muted/30',
       )}
@@ -1456,24 +1727,24 @@ function QueueRowView({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <RowHeadline row={row} brandId={brandId} currency={currency} />
             {row.approved ? (
-              <Badge variant="secondary" className="text-3xs uppercase">
+              <Badge variant="secondary" className={typeScale.label}>
                 Approved
               </Badge>
             ) : null}
             {approving ? (
-              <span className="inline-flex items-center gap-1 text-3xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2Icon className="size-3 animate-spin" /> approving
               </span>
             ) : null}
             {failed ? (
-              <Badge variant="destructive" className="text-3xs uppercase">
+              <Badge variant="destructive" className={typeScale.label}>
                 Failed
               </Badge>
             ) : null}
           </div>
           {row.route === 'budget' && row.item.reason ? (
             <p
-              className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground"
+              className="mt-0.5 line-clamp-2 text-xs text-muted-foreground"
               title={row.item.reason}
             >
               <span className="font-medium text-foreground">Why:</span> {row.item.reason}
@@ -1482,17 +1753,12 @@ function QueueRowView({
           {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {row.route === 'settings' ? (
-              <span className="text-3xs text-muted-foreground uppercase tracking-wide">
-                Portfolio setting
-              </span>
+              <span className={`${typeScale.label} text-muted-foreground`}>Portfolio setting</span>
             ) : (
-              <AdSetIdLabel id={row.adsetId} />
+              <AdSetIdLabel className="text-xs" id={row.adsetId} />
             )}
             {row.route !== 'budget' && row.rec.severity ? (
-              <Badge
-                variant={severityBadgeVariant(row.rec.severity)}
-                className="text-3xs uppercase"
-              >
+              <Badge variant={severityBadgeVariant(row.rec.severity)} className={typeScale.label}>
                 {row.rec.severity}
               </Badge>
             ) : null}
@@ -1545,11 +1811,28 @@ function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: 
   const money = impactLabel(rec, currency);
   if (!line && !rec.reason) return null;
   return (
-    <div className="mt-0.5 space-y-0.5 text-2xs text-muted-foreground">
+    <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
       {line ? (
         <p className="tabular-nums">
-          <span className="font-medium text-foreground">{line}</span>
-          {money ? <span> · {money}</span> : null}
+          <span className="font-semibold text-foreground">{line}</span>
+          {money ? (
+            <span>
+              {' · '}
+              <span
+                className="font-semibold text-foreground"
+                {...figureProps(
+                  `queue.${rec.id}.at-stake`,
+                  impactPerDay(rec),
+                  currency,
+                  'none',
+                  'per-period',
+                )}
+              >
+                {money.replace(/ at stake$/, '')}
+              </span>{' '}
+              at stake
+            </span>
+          ) : null}
         </p>
       ) : null}
       {rec.reason ? (
@@ -1573,12 +1856,47 @@ function RowHeadline({
   if (row.route === 'budget') {
     const changePct = row.item.change_pct != null ? row.item.change_pct * 100 : null;
     return (
-      <span className="text-sm font-semibold tracking-tight">
+      <span className="text-base font-semibold tracking-tight">
         {row.name ?? 'Budget move'}{' '}
-        <span className="font-normal text-muted-foreground">
-          {formatCurrency(row.item.current_budget ?? 0, currency)} →{' '}
-          {formatCurrency(row.item.final_budget ?? 0, currency)}
-          {changePct != null ? ` (${changePct > 0 ? '+' : ''}${changePct.toFixed(0)}%)` : ''}
+        <span className="font-normal tabular-nums text-muted-foreground">
+          <span
+            {...figureProps(
+              `queue.${row.item.adset_id}.now`,
+              row.item.current_budget ?? 0,
+              currency,
+            )}
+          >
+            {formatCurrency(row.item.current_budget ?? 0, currency)}
+          </span>{' '}
+          →{' '}
+          <span
+            className="font-semibold text-foreground"
+            {...figureProps(
+              `queue.${row.item.adset_id}.proposed`,
+              row.item.final_budget ?? 0,
+              currency,
+            )}
+          >
+            {formatCurrency(row.item.final_budget ?? 0, currency)}
+          </span>
+          {changePct != null ? (
+            <>
+              {' ('}
+              <span
+                {...figureProps(
+                  `queue.${row.item.adset_id}.change`,
+                  Number(changePct.toFixed(0)),
+                  null,
+                  'none',
+                  'percent-signed',
+                )}
+              >
+                {changePct > 0 ? '+' : ''}
+                {changePct.toFixed(0)}%
+              </span>
+              {')'}
+            </>
+          ) : null}
         </span>
       </span>
     );
@@ -1586,13 +1904,13 @@ function RowHeadline({
   if (row.route === 'hidden') {
     const { label, glyph } = recommendationLabel(row.rec.kind);
     return (
-      <span className="text-sm font-semibold tracking-tight text-muted-foreground">
+      <span className="text-base font-semibold tracking-tight text-muted-foreground">
         {glyph} {label}
       </span>
     );
   }
   return (
-    <span className="text-sm font-semibold tracking-tight">
+    <span className="text-base font-semibold tracking-tight">
       <RecommendationInsight
         adsetId={row.adsetId}
         brandId={brandId}
@@ -1620,7 +1938,7 @@ function RowDetail({
   evidence: EvidenceContext;
 }) {
   return (
-    <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
+    <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
       {row.route === 'budget' ? (
         <BudgetDetail item={row.item} currency={currency} counterparty={counterparty} />
       ) : row.route !== 'settings' && isAudienceRecommendation(row.rec) ? (
@@ -1630,20 +1948,7 @@ function RowDetail({
           <CreativeCardHost evidence={evidence} name={row.name} rec={row.rec} />
           {row.route === 'hidden' ? (
             <p className="mt-2">{notImplementedMessage(row.rec.kind)}</p>
-          ) : row.route === 'creative' ? null : (
-            <div className="mt-2 border-border/50 border-t pt-2">
-              <RecEvidenceChart
-                currency={currency}
-                denominatorMultiplier={evidence.denominatorMultiplier}
-                item={evidence.itemById.get(row.adsetId) ?? null}
-                kpiField={evidence.kpiField}
-                maxCpa={evidence.maxCpa}
-                name={row.name}
-                rec={row.rec}
-                snapshot={evidence.snapshotById.get(row.adsetId) ?? null}
-              />
-            </div>
-          )}
+          ) : null}
         </>
       ) : row.route === 'hidden' ? (
         <p>{notImplementedMessage(row.rec.kind)}</p>
@@ -1697,6 +2002,7 @@ function CreativeCardHost({
   );
   return (
     <CreativeRecommendationCard
+      adAccountId={evidence.adAccountId}
       ads={ads}
       adsLoading={adsQuery.isLoading}
       adsetName={name}
@@ -1707,10 +2013,13 @@ function CreativeCardHost({
       generating={evidence.generatingIds.has(rec.id)}
       implementingKey={evidence.implementingKey}
       jobs={evidence.swapJobs}
+      kpiField={evidence.kpiField}
       onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
       onImplement={evidence.implementCreative}
+      onRetry={evidence.retryCreative}
       rec={rec}
       resultWord={evidence.resultWord}
+      snapshot={snapshot}
       standing={standing}
       targets={targets}
     />
@@ -1738,6 +2047,7 @@ function AudienceCardHost({
     <AudienceRecommendationCard
       adAccountId={evidence.adAccountId}
       adsetName={name}
+      brandId={evidence.brandId}
       approving={proposalId !== null && evidence.audienceBusy.approvingId === proposalId}
       busy={proposalId !== null && evidence.audienceBusy.busyId === proposalId}
       cboPreview={campaignId ? (evidence.cboPreviewByCampaign.get(campaignId) ?? null) : null}
@@ -1756,11 +2066,14 @@ function AudienceCardHost({
       }
       onCancel={() => proposalId && evidence.audienceActions.cancel(proposalId)}
       onConvertCbo={evidence.audienceActions.convertCbo}
-      onRequest={() => evidence.audienceActions.request(rec.id)}
+      onRequest={(handlers) => evidence.audienceActions.request(rec.id, handlers)}
+      onRetry={(handlers) => proposalId && evidence.audienceActions.retry(proposalId, handlers)}
       onUndo={() => proposalId && evidence.audienceActions.undo(proposalId)}
+      portfolioSpecs={evidence.portfolioSpecs}
       rec={rec}
       requesting={evidence.audienceBusy.requestingRecId === rec.id}
       resultWord={evidence.resultWord}
+      retrying={proposalId !== null && evidence.audienceBusy.retryingId === proposalId}
       snapshot={evidence.snapshotById.get(rec.adset_id) ?? null}
       view={view}
     />
@@ -1869,12 +2182,12 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
           ) : null}
           <div className="min-w-0 space-y-1">
             {angleLabel ? (
-              <Badge className="text-3xs" variant="teal">
+              <Badge className="text-xs" variant="teal">
                 {angleLabel}
               </Badge>
             ) : null}
             {!inLibrary ? (
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Not in the Library yet — import it from the ad account to generate from it.
               </p>
             ) : null}
@@ -1892,7 +2205,7 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
       {rec.ad_id ? (
         <p>
           <span className="font-medium text-foreground">Winning ad:</span>{' '}
-          <code className="text-3xs">{rec.ad_id}</code>
+          <code className="text-xs">{rec.ad_id}</code>
         </p>
       ) : null}
     </div>
@@ -1932,8 +2245,6 @@ function BudgetDetail({
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
 }) {
   const windowText = scoreWindows(item);
-  const ci = item.diagnostics?.ci ?? null;
-  const cpa = typeof ci?.cpa === 'number' && Number.isFinite(ci.cpa) ? ci.cpa : null;
 
   return (
     <>
@@ -1944,23 +2255,28 @@ function BudgetDetail({
       ) : null}
       <p>
         <span className="font-medium text-foreground">Before → after:</span>{' '}
-        {formatCurrency(item.current_budget ?? 0, currency)} →{' '}
-        {formatCurrency(item.final_budget ?? 0, currency)}
+        <span
+          {...figureProps(`queue.${item.adset_id}.detail.now`, item.current_budget ?? 0, currency)}
+        >
+          {formatCurrency(item.current_budget ?? 0, currency)}
+        </span>{' '}
+        →{' '}
+        <span
+          {...figureProps(
+            `queue.${item.adset_id}.detail.proposed`,
+            item.final_budget ?? 0,
+            currency,
+          )}
+        >
+          {formatCurrency(item.final_budget ?? 0, currency)}
+        </span>
       </p>
       {windowText ? (
         <p>
           <span className="font-medium text-foreground">Score:</span> {windowText}
         </p>
       ) : null}
-      {cpa != null ? (
-        <p>
-          <span className="font-medium text-foreground">Cost:</span> {formatCurrency(cpa, currency)}
-          {typeof ci?.lo === 'number' && typeof ci?.hi === 'number'
-            ? ` (likely ${formatCurrency(ci.lo, currency)}–${formatCurrency(ci.hi, currency)})`
-            : ''}
-          {typeof ci?.events === 'number' ? ` from ${ci.events} events` : ''}
-        </p>
-      ) : null}
+      <CostIntervalLine adsetId={item.adset_id} ci={item.diagnostics?.ci} currency={currency} />
       {counterparty ? (
         <p>
           <CounterpartyLine currency={currency} entry={counterparty} limit={2} />
@@ -1979,7 +2295,7 @@ function RecDetail({ rec }: { rec: RecommendationRow }) {
         </p>
       ) : null}
       <p>
-        <Badge variant="outline" className="text-3xs">
+        <Badge variant="outline" className="text-xs">
           {rec.trigger}
         </Badge>
       </p>

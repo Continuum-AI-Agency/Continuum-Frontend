@@ -244,7 +244,11 @@ export function RenderReviewTray({
   const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
   const [firing, setFiring] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [fired, setFired] = useState<ApiRenderJob[]>([]);
+  // Each fired job beside the row it rendered, so a row the render API refused can be sent again.
+  const [firedRows, setFiredRows] = useState<Array<{ job: ApiRenderJob; row: number }>>([]);
+  const fired = firedRows.map((item) => item.job);
+  // Failed with no task: the render API never took it (UTEC 09-29: a 503 on row 18 of 24).
+  const unsent = firedRows.filter((item) => item.job.status === 'failed' && !item.job.taskUid);
   // The same read ApprovalDestinationsField makes, so the one-line summary can name the rooms.
   const rooms =
     useQuery({
@@ -418,12 +422,14 @@ export function RenderReviewTray({
   ].join(' · ');
   const summary = `${plural(fileCount, 'file')} · ${deliveryLine}`;
 
-  const confirm = async () => {
+  /** Fires every row, or — to resend what the render API refused — only the rows named. */
+  const confirm = async (only?: number[]) => {
     // The records below are rebuilt from the rows on screen; a review of other rows signs nothing.
     if (stale) {
       setStep('review');
       return;
     }
+    const indexes = only ?? rows.map((_, index) => index);
     setFiring(true);
     setProblem(null);
     setApprovalWarning(null);
@@ -434,7 +440,9 @@ export function RenderReviewTray({
         templateKey,
         contractHash,
         ...(templateRef ? { templateRef } : {}),
-        records: records.map(({ delivery: _delivery, ...record }, index) => {
+        records: indexes.flatMap((index) => {
+          if (!records[index]) return [];
+          const { delivery: _delivery, ...record } = records[index];
           const row = rows[index];
           if (!row?.delivery) return record;
           return row.delivery.action === 'replace'
@@ -458,8 +466,13 @@ export function RenderReviewTray({
       // Not awaited: the jobs are already cached above, and the lists can follow.
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) });
-      toast.success(`${plural(batch.jobs.length, 'render')} queued`);
-      setFired(batch.jobs);
+      const refused = batch.jobs.filter((job) => job.status === 'failed' && !job.taskUid).length;
+      if (refused > 0) toast.warning(`${batch.jobs.length - refused} queued · ${refused} not sent`);
+      else toast.success(`${plural(batch.jobs.length, 'render')} queued`);
+      const submitted = batch.jobs.map((job, k) => ({ job, row: indexes[k] ?? k }));
+      setFiredRows((previous) =>
+        only ? [...previous.filter((item) => !only.includes(item.row)), ...submitted] : submitted,
+      );
       setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
@@ -618,6 +631,26 @@ export function RenderReviewTray({
             >
               <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-hidden />
               {approvalWarning}
+            </p>
+          ) : null}
+          {unsent.length > 0 ? (
+            <p
+              role="status"
+              className="flex items-center gap-2 border-b border-dashed border-destructive/60 bg-destructive/10 px-[var(--card-pad)] py-1"
+            >
+              <AlertTriangle className="size-3.5 shrink-0 text-destructive" aria-hidden />
+              {plural(unsent.length, 'row')} not sent — the render service refused{' '}
+              {unsent.length === 1 ? 'it' : 'them'}.
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="ml-auto"
+                disabled={firing}
+                onClick={() => void confirm(unsent.map((item) => item.row))}
+              >
+                Retry {unsent.length}
+              </Button>
             </p>
           ) : null}
           <RunningStep

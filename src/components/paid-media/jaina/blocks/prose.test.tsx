@@ -2,13 +2,15 @@ import { afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
 import { cleanup, render } from '@testing-library/react';
 
 // The real SafeMarkdown is lazy (next/dynamic + Streamdown). What is under test here is what
-// this module places BETWEEN the markdown runs, so each run renders as its own text node.
+// this module places BETWEEN the markdown runs, so each run renders as its own text node —
+// trimmed, because markdown trims a block's edges and that is what ate the spaces beside a mark.
 mock.module('@/components/ui/SafeMarkdownLazy', () => ({
-  SafeMarkdown: ({ content, className }: { content: string; className?: string }) => (
-    <span className={className} data-testid="md">
-      {content}
-    </span>
-  ),
+  SafeMarkdown: ({ content, className }: { content: string; className?: string }) =>
+    content.trim() ? (
+      <span className={className} data-testid="md">
+        {content.trim()}
+      </span>
+    ) : null,
 }));
 
 let InlineProse: typeof import('./prose')['InlineProse'];
@@ -100,6 +102,32 @@ describe('JainaProse', () => {
     expect(container.querySelector('[data-prose-mark="watch"]')?.textContent).toBe('24%');
     expect(container.textContent).toContain('1');
     expect(container.textContent).not.toContain('[cite:');
+  });
+
+  // The screenshot this pins: "un costo de1386.70 MXN per conversionen Cursos" and
+  // "durantethis_yearpor baja conversión".
+  it('keeps the spaces that join a mark to the words on either side of it', () => {
+    const { container } = render(
+      <JainaProse content="Un costo de [risk: 1386.70 MXN por conversión] en **Cursos** durante [window: this_year] por baja conversión." />,
+    );
+    expect(container.textContent).toBe(
+      'Un costo de 1386.70 MXN por conversión en **Cursos** durante este año por baja conversión.',
+    );
+  });
+
+  it('keeps the single space between two marks', () => {
+    const { container } = render(<JainaProse content="[risk: 1.15% CTR] [window: last 7 days]" />);
+    expect(container.textContent).toBe('1.15% CTR last 7 days');
+  });
+
+  it('writes a date preset copied into a window mark as words in the answer language', () => {
+    const english = render(<JainaProse content="Spend rose over [window: last_30d]." />);
+    expect(english.container.textContent).toBe('Spend rose over last 30 days.');
+    english.unmount();
+    const spanish = render(
+      <JainaProse content="El gasto de la cuenta subió durante [window: this_month]." />,
+    );
+    expect(spanish.container.textContent).toBe('El gasto de la cuenta subió durante este mes.');
   });
 
   it('renders nothing for empty prose', () => {

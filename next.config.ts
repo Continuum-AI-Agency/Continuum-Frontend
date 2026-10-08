@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
   // cookies and local Supabase host match. Keep Turbopack HMR quiet there.
   ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ['127.0.0.1'] } : {}),
   images: {
+    // Every remote image here is a Supabase signed URL, and every signing mints a new
+    // token, so the optimizer can never cache-hit: each view is billed as a fresh source
+    // image. That exhausted the Vercel quota and 402'd every library card. Small
+    // previews come from Supabase transforms instead (lib/media/signed-urls.ts).
+    unoptimized: true,
     // Next 16 rejects private IPs in the optimizer by default. Local Supabase
     // signed URLs are intentionally private and only available in development.
     ...(process.env.NODE_ENV === 'development' ? { dangerouslyAllowLocalIP: true } : {}),
@@ -84,6 +89,10 @@ const nextConfig: NextConfig = {
     // <ViewTransition> now works in the App Router with no configuration.
     // lucide-react is already in Next's built-in optimizePackageImports list.
     optimizePackageImports: ['@phosphor-icons/react'],
+  },
+  webpack(config) {
+    config.module.rules.push({ test: /\.wgsl$/, loader: '@vgpu/wgsl/loader-webpack' });
+    return config;
   },
   turbopack: {
     root: workspaceRoot,

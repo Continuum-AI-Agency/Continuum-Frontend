@@ -75,13 +75,13 @@ function Frame({ brandId, frame }: { brandId: string; frame: JainaHyperframe }) 
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center p-4">
-            <p className="text-center text-2xs text-muted-foreground">
+            <p className="text-center text-xs text-muted-foreground">
               {state === 'loading' ? 'Drawing…' : HYPERFRAME_UNREACHABLE_NOTE}
             </p>
           </div>
         )}
       </div>
-      <figcaption className="mt-1.5 text-3xs text-muted-foreground">{label}</figcaption>
+      <figcaption className="mt-1.5 text-xs text-muted-foreground">{label}</figcaption>
     </figure>
   );
 }
@@ -103,7 +103,7 @@ export function JainaOptimizerHyperframes({ sets }: JainaOptimizerHyperframesPro
               <Frame brandId={brandId} frame={frame} key={frame.candidate_id} />
             ))}
           </div>
-          <p className="mt-1.5 text-3xs text-muted-foreground">
+          <p className="mt-1.5 text-xs text-muted-foreground">
             {set.read_day
               ? `compiled from the read of ${set.read_day}`
               : 'compiled from a stored read'}

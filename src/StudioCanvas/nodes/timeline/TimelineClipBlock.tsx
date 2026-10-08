@@ -14,6 +14,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
+import { speedFor } from '../../utils/render/effectSpec';
 import { ClipWaveform } from './ClipWaveform';
 import { useClipMediaPreview } from './useClipMediaPreview';
 import type { ClipLayout } from './useTimelineEditorModel';
@@ -61,7 +62,15 @@ export function TimelineClipBlock({
 
   const isVideo = clip.item.kind === 'video';
   const hasAudio = isVideo && !clip.item.muteAudio;
-  const { thumbnails, peaks } = useClipMediaPreview({ url: previewUrl, isVideo, hasAudio });
+  const { thumbnails, peaks } = useClipMediaPreview({
+    url: previewUrl,
+    isVideo,
+    hasAudio,
+    sourceStartSec: Math.max(0, clip.item.trimStartSec ?? 0),
+    sourceEndSec:
+      clip.item.trimEndSec ??
+      Math.max(0, clip.item.trimStartSec ?? 0) + clip.durationSec * speedFor(clip.item.effects),
+  });
 
   const startTrim = useCallback(
     (edge: 'start' | 'end') => (event: React.PointerEvent) => {

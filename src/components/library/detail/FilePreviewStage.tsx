@@ -3,25 +3,55 @@
 // Stage for kind === 'file' assets (source files, no renderable preview):
 // file identity + metadata and a signed-URL download, minted on demand
 // through `downloadLibraryAsset` — the one sign-and-save every Library
-// surface shares.
+// surface shares. A PDF skips all of that: the browser's own viewer renders it
+// straight from its signed URL (PdfPreview). An Office document has no converter,
+// so it says exactly that and offers the download — no companion upload, no wait.
+// A 3D model, an HTML bundle or an InDesign file goes to its FamilyViewer, and this card
+// is only its fallback (a ZIP that turns out to be a plain archive).
 
-import type { MediaAsset } from '@continuum/contracts';
-import { Download, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
+import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { Download, ExternalLink, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
+import { officeDocumentType } from '@/lib/library/previewPlayable';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { OfficeDocumentIcon } from '../OfficeDocumentIcon';
+import { FamilyViewer, type ViewerReview, viewerFamily } from '../viewers';
 import { fileExtension, formatBytes } from './assetFileMeta';
+
+export function PdfPreview({ src, title }: { src: string; title: string }) {
+  return (
+    <div className="flex size-full flex-col">
+      <iframe src={src} title={title} data-testid="pdf-preview" className="min-h-0 w-full flex-1" />
+      <div className="flex shrink-0 justify-center p-2">
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={buttonVariants({ size: 'sm', variant: 'ghost' })}
+        >
+          <ExternalLink className="size-4" />
+          Open PDF
+        </a>
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   brandId: string;
   asset: MediaAsset;
+  /** The version on stage (head or older); the viewers read its bytes. */
+  version?: MediaAssetVersion | null;
+  /** Comment wiring for the viewers (orbit and page pins). */
+  review?: ViewerReview;
   onPreviewChanged?: () => void;
 };
 
-export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
+export function FilePreviewStage({ brandId, asset, version, review, onPreviewChanged }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +60,7 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
   const isAfterEffects = ext === 'AEP';
   const isPremiere = ext === 'PRPROJ';
   const isMxf = ext === 'MXF';
+  const officeType = officeDocumentType(asset.fileName, asset.mimeType);
 
   const download = async () => {
     setDownloading(true);
@@ -69,7 +100,7 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
     }
   };
 
-  return (
+  const card = (
     <div className="flex size-full flex-col items-center justify-center gap-4 p-8">
       <div className="relative">
         {isAfterEffects ? (
@@ -80,6 +111,12 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
           <span className="flex size-20 items-center justify-center rounded-2xl bg-[#2d1b4e] text-2xl font-semibold tracking-tight text-[#c9a0ff] shadow-sm">
             Pr
           </span>
+        ) : officeType ? (
+          <OfficeDocumentIcon
+            type={officeType}
+            className="size-16 text-muted-foreground/40"
+            strokeWidth={1.25}
+          />
         ) : (
           <FileIcon className="size-16 text-muted-foreground/40" strokeWidth={1.25} />
         )}
@@ -112,30 +149,38 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
           })}
           {asset.createdBy ? ` · Uploader ${asset.createdBy.slice(0, 8)}` : ''}
         </p>
-        <p className="text-xs text-muted-foreground/60">
-          {asset.preview?.errorCode === 'proxy_transcode_pending'
-            ? 'Building an H.264 proxy, or drop a same-stem MP4 (clip.mxf + clip.mp4).'
-            : asset.preview?.state === 'awaiting_companion'
-              ? 'Add a PNG, JPEG, WebP, or MP4 companion to review this source in Continuum.'
-              : 'No preview is available yet. The original remains downloadable.'}
-        </p>
+        {officeType ? (
+          <p data-testid="stage-no-preview" className="text-xs text-muted-foreground/60">
+            No preview — download to open
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground/60">
+            {asset.preview?.errorCode === 'proxy_transcode_pending'
+              ? 'Building an H.264 proxy, or drop a same-stem MP4 (clip.mxf + clip.mp4).'
+              : asset.preview?.state === 'awaiting_companion'
+                ? 'Add a PNG, JPEG, WebP, or MP4 companion to review this source in Continuum.'
+                : 'No preview is available yet. The original remains downloadable.'}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => previewInputRef.current?.click()}
-          disabled={uploadingPreview}
-        >
-          {uploadingPreview ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <ImagePlus className="size-4" />
-          )}
-          Add preview
-        </Button>
+        {officeType ? null : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => previewInputRef.current?.click()}
+            disabled={uploadingPreview}
+          >
+            {uploadingPreview ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <ImagePlus className="size-4" />
+            )}
+            Add preview
+          </Button>
+        )}
         <Button type="button" size="sm" onClick={() => void download()} disabled={downloading}>
           {downloading ? (
             <Loader2 className="size-4 animate-spin" />
@@ -155,5 +200,16 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
 
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
+  );
+
+  if (!viewerFamily(version ?? asset)) return card;
+  return (
+    <FamilyViewer
+      asset={asset}
+      version={version ?? null}
+      surface="detail"
+      review={review}
+      fallback={card}
+    />
   );
 }

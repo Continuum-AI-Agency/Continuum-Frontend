@@ -1,11 +1,11 @@
 import {
   type FigmaFile,
+  type FigmaFolder,
   type FigmaFrame,
   type FigmaImportedAsset,
-  type FigmaProject,
   figmaFilesResponseSchema,
+  figmaFoldersResponseSchema,
   figmaFramesResponseSchema,
-  figmaProjectsResponseSchema,
   importFigmaFramesRequestSchema,
   importFigmaFramesResponseSchema,
 } from '@continuum/contracts';
@@ -62,19 +62,19 @@ export async function beginFigmaConnection(input: {
   return String(payload.url);
 }
 
-export async function listFigmaProjects(
+/** A team's top-level folders, or a folder's direct subfolders. */
+export async function listFigmaFolders(
   brandId: string,
-  teamId: string,
+  parent: { teamId: string } | { folderId: string },
   tokenResolver?: () => Promise<string>,
-): Promise<FigmaProject[]> {
-  const query = new URLSearchParams({ brandId, teamId });
-  return figmaProjectsResponseSchema.parse(
-    await requestJson(`/projects?${query}`, {}, tokenResolver),
-  ).projects;
+): Promise<FigmaFolder[]> {
+  const query = new URLSearchParams({ brandId, ...parent });
+  return figmaFoldersResponseSchema.parse(await requestJson(`/folders?${query}`, {}, tokenResolver))
+    .folders;
 }
 
-export async function listFigmaFiles(brandId: string, projectId: string): Promise<FigmaFile[]> {
-  const query = new URLSearchParams({ brandId, projectId });
+export async function listFigmaFiles(brandId: string, folderId: string): Promise<FigmaFile[]> {
+  const query = new URLSearchParams({ brandId, folderId });
   return figmaFilesResponseSchema.parse(await requestJson(`/files?${query}`)).files;
 }
 

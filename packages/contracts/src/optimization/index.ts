@@ -26,17 +26,35 @@ export * from './flash-creatives';
 export * from './flash-pipeline-template';
 export * from './insight-approval';
 export * from './jaina-card';
+// A compiled optimizer card: the pointer to a filed document, not a citation.
 export * from './jaina-hyperframe';
 // Which trailing window a portfolio's read surfaces report on, and how to recommend one.
 export * from './lookback';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
 export * from './mcp';
+// Money in a sentence: the one symbol/code/digit rule for prose the Backend, the engine and a
+// prompted model compose, mirroring the Frontend's formatCurrency exactly.
+export * from './money';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
 export * from './portfolio-brief';
+// The one reporting range: presets, custom windows, and how a spec resolves to dates.
+export * from './range';
+// The title (entity + figure + comparison) and the typed action beside it, for every
+// recommendation and account candidate — composed from figures, never from prose.
+export * from './recommendation-title';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';
 export * from './stored-account-read';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';
+// Optimizer multiplatform (vendored from the monorepo): actions, neutral snapshot, metrics, sheet attribution.
+export * from './action';
+export * from './multiplatform-snapshot';
+export * from './portfolio-metrics';
+export * from './attribution-sheet';
+export * from './account-platform-metrics';
+export * from './platform-card';
+// Platform-only signals the Google and TikTok rules read (search terms, keywords, bids, assets, creatives).
+export * from './platform-signals';

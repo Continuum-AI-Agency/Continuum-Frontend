@@ -57,7 +57,7 @@ function Bar({
   const clamped = Math.max(0, Math.min(100, pct));
   return (
     <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-2 text-2xs">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-muted-foreground">{label}</span>
         <span className="font-medium text-foreground tabular-nums">{detail}</span>
       </div>
@@ -130,7 +130,7 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
           pct={(model.dayIndex / model.periodDays) * 100}
           tone="time"
         />
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Spend to date is not known yet — it arrives with the next scored cycle (the daily series
           does not reach back to {fmtDate(model.start)}).
         </p>
@@ -150,7 +150,7 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
             tone="spend"
           />
         ) : null}
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Ended {fmtDate(model.end)}. Set a new flight to keep pacing.
         </p>
       </div>
@@ -164,7 +164,7 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
         <StatusChip hint={STATUS_HINT[model.status]} tone={tone}>
           {STATUS_LABEL[model.status]}
         </StatusChip>
-        <span className="text-2xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {fmtDate(model.start)} → {fmtDate(model.end)}
           {model.source === 'client' ? ' · estimated from spend' : ''}
         </span>
@@ -181,7 +181,7 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
         pct={model.spentPct}
         tone="spend"
       />
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>
           At this pace:{' '}
           <b className="text-foreground">{formatCurrency(model.projectedEnd, currency)}</b> by{' '}

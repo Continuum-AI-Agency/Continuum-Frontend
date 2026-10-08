@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'bun:test';
 import {
+  isLayerSwitch,
+  layerSwitchName,
+  renderClientKeyFor,
   TEMPLATE_KEY_MAX,
   templateDisplayName,
   templateKeyFor,
   templateKeyFromName,
-  renderClientKeyFor,
   templateNameBudget,
   templateNameProblem,
 } from './template-name';
@@ -44,7 +46,9 @@ describe('templateKeyFor — the tenant prefix', () => {
     expect(templateKeyFor('Summer Sale', 'starcraft')).toBe('starcraft_summer_sale');
     expect(templateKeyFor('Summer Sale', 'vivo47')).toBe('vivo47_summer_sale');
     // ...and those are different tables, which is the whole point
-    expect(templateKeyFor('Summer Sale', 'starcraft')).not.toBe(templateKeyFor('Summer Sale', 'vivo47'));
+    expect(templateKeyFor('Summer Sale', 'starcraft')).not.toBe(
+      templateKeyFor('Summer Sale', 'vivo47'),
+    );
   });
 
   it('charges the prefix against the same 40 characters', () => {
@@ -128,5 +132,45 @@ describe('templateDisplayName', () => {
     expect(templateDisplayName(null)).toBe('Untitled template');
     expect(templateDisplayName(undefined)).toBe('Untitled template');
     expect(templateDisplayName('[DRAFT/agent]   ')).toBe('Untitled template');
+  });
+});
+
+// The prod shape, 2026-09-29: a design import's switch is named for its slug, and the slug lost
+// the accent; the layer's own text slot kept what the designer typed.
+describe('layerSwitchName', () => {
+  const slots = [
+    {
+      key: 'text__carrera-de-administraci-n-y-negocios-digitales',
+      name: 'Carrera de Administración y Negocios Digitales   ',
+    },
+    {
+      key: 'boolean__show-carrera-de-administraci-n-y-negocios-digitales',
+      name: 'show-carrera-de-administraci-n-y-negocios-digitales',
+    },
+    { key: 'boolean__show-layer-0', name: 'show-layer-0' },
+    { key: 'boolean__dark-mode', name: 'Dark mode' },
+    { key: 'image__picnic-person', name: 'Picnic Person' },
+    { key: 'boolean__show-picnic-person', name: 'show-picnic-person' },
+  ];
+
+  test('a Show switch borrows its layer’s own name', () => {
+    expect(
+      layerSwitchName('boolean__show-carrera-de-administraci-n-y-negocios-digitales', slots),
+    ).toBe('Show Carrera de Administración y Negocios Digitales');
+  });
+
+  test('a Show switch reads its layer without the Picnic marker', () => {
+    expect(layerSwitchName('boolean__show-picnic-person', slots)).toBe('Show Person');
+  });
+
+  test('with no layer slot beside it, the slug reads back as words', () => {
+    expect(layerSwitchName('boolean__show-layer-0', slots)).toBe('Show layer 0');
+  });
+
+  test('any other checkbox is not a layer switch and keeps its own name', () => {
+    expect(layerSwitchName('boolean__dark-mode', slots)).toBeNull();
+    expect(isLayerSwitch('boolean__dark-mode')).toBe(false);
+    expect(isLayerSwitch('boolean__show-layer-0')).toBe(true);
+    expect(isLayerSwitch(null)).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import {
   Share2Icon,
   Table2Icon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
@@ -19,9 +19,13 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { http } from '@/lib/api/http';
 import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { answerLanguage } from '../answerLanguage';
+import { AnswerLanguageProvider } from '../answerLanguageContext';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
+import { EntityNamesProvider, entityNamesOf } from '../blocks/entityNames';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { narrativeThreeOf } from '../blocks/narrativeShape';
 import { JainaProse } from '../blocks/prose';
 import { normalizeJainaMarkdownTables } from '../jainaUtils';
 import { JAINA_ANSWER_PROSE, JAINA_EVIDENCE_PROSE } from '../reading';
@@ -35,6 +39,17 @@ import {
   openJainaReportMailDraft,
   shareJainaReportFile,
 } from '../reportExport';
+import {
+  isAnswerTemplateBlock,
+  TemplateExecutive,
+  TemplateJustification,
+} from '../templates/TemplateBlock';
+import {
+  JainaJustificationSection,
+  partitionReportBlocks,
+  SectionLabel,
+  stratumOfBlock,
+} from './JainaJustificationSection';
 import { SaveDashboardButton } from './SaveDashboardButton';
 
 const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
@@ -72,7 +87,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
               <li key={objective.id} className="flex items-start gap-2 text-xs">
                 <span
                   className={cn(
-                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium capitalize',
+                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium capitalize',
                     OBJECTIVE_STATUS_STYLE[objective.status],
                   )}
                 >
@@ -160,12 +175,26 @@ export function JainaReportV2({
     () => orderedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
     [hiddenBlockIds, orderedBlocks],
   );
+  // Presentation only: the answer's own blocks stay with the answer, the figures it rests
+  // on go under the justification. Each keeps the order above; exports, saved dashboards
+  // and the module toggles still read the full `visibleBlocks` / `report.blocks`.
+  const sections = useMemo(() => partitionReportBlocks(visibleBlocks), [visibleBlocks]);
+  const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
+  // A templated answer's J2 narrative is built from its found and why sections, so those two
+  // steps drop their sentence under the evidence and keep their visual.
+  const narrated = visibleBlocks.some(
+    (block) => block.category === 'narrative' && narrativeThreeOf(block) !== null,
+  );
+  // One language per answer: the labels around the blocks follow the report, never the app.
+  const language = answerLanguage(report);
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   // Derived from the rendered blocks rather than `_meta.has_citations` (the FE
   // report meta schema does not carry that flag), so the badge reflects exactly
   // the citations the report can surface.
   const citationCount = useMemo(() => countBlockCitations(report.blocks), [report.blocks]);
+  // Names, never ids: every entity the report's own blocks put a name to, for the titles.
+  const entityNames = useMemo(() => entityNamesOf(report.blocks), [report.blocks]);
   const acknowledgeDelivery = useCallback(
     async (kind: 'live_render' | 'hydration_replay' | 'pdf', status: 'success' | 'fallback') => {
       if (!runId) return;
@@ -295,24 +324,64 @@ export function JainaReportV2({
          *  table cells, so that one class muted the entire answer: every `###`, every
          *  figure, every row. `JAINA_ANSWER_PROSE` is the one constant both routes now
          *  share, so the answer reads the same whether the turn shipped a report or not. */}
-        {report.executive_summary ? (
-          <JainaProse
-            content={normalizeJainaMarkdownTables(report.executive_summary)}
-            className={JAINA_ANSWER_PROSE}
-            mode={isStreaming ? 'streaming' : 'static'}
-          />
-        ) : null}
-
-        {/* The evidence under the answer, marked as such. Without a rule here the blocks
-         *  read as further paragraphs of the same statement rather than as what they are —
-         *  the figures it rests on. */}
-        {visibleBlocks.length > 0 ? (
-          <div className="space-y-4 border-l border-border/50 pl-3">
-            {visibleBlocks.map((block) => (
-              <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
-            ))}
+        {/* A templated answer's sentence IS the executive answer: printing Phase B's summary
+         *  above it would state the answer twice, in two sets of words and possibly two sets
+         *  of numbers. Only a report with no (visible) template block keeps the summary. */}
+        {report.executive_summary && templateBlocks.length === 0 ? (
+          <div data-report-part="sentence">
+            <JainaProse
+              content={normalizeJainaMarkdownTables(report.executive_summary)}
+              className={JAINA_ANSWER_PROSE}
+              mode={isStreaming ? 'streaming' : 'static'}
+            />
           </div>
         ) : null}
+
+        {/* The rest of the answer — the reading, the moves — set as part of it. */}
+        {sections.answer.length > 0 ? (
+          <div data-report-section="answer" className="space-y-4">
+            {/* A templated answer puts its sentence and chart here and its steps under the
+             *  justification below — the same answer/justification split as every block.
+             *
+             *  Each stratum is labelled where it BEGINS — Why over the reading, Action over
+             *  the moves — and the blocks stay in the Backend's order; a label is inserted
+             *  when the stratum changes, never a block moved to sit under one. The J2 card's
+             *  own parts (the window line, the tiles, a three-box narrative) label themselves
+             *  and take none: see `stratumOfBlock`. */}
+            {sections.answer.map((block, index) => {
+              const stratum = stratumOfBlock(block);
+              const previous = index > 0 ? stratumOfBlock(sections.answer[index - 1]) : null;
+              return (
+                <Fragment key={block.block_id}>
+                  {stratum !== 'answer' && stratum !== previous ? (
+                    <SectionLabel stratum={stratum} language={language} />
+                  ) : null}
+                  {isAnswerTemplateBlock(block) ? (
+                    <TemplateExecutive block={block} />
+                  ) : (
+                    <BlockRenderer block={block} isStreaming={isStreaming} />
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* The evidence under the answer, marked as such. Without a heading and a rule the
+         *  figures read as further paragraphs of the same statement rather than as what they
+         *  are — the data it rests on. */}
+        <JainaJustificationSection
+          blocks={sections.justification}
+          language={language}
+          renderBlock={(block) => <BlockRenderer block={block} isStreaming={isStreaming} />}
+          leading={
+            templateBlocks.length > 0
+              ? templateBlocks.map((block) => (
+                  <TemplateJustification key={block.block_id} block={block} narrated={narrated} />
+                ))
+              : undefined
+          }
+        />
 
         {/* Chrome, so it sits under the thing it controls. A row of toggles named after
          *  every block used to be the first element in the report — the reader met the
@@ -347,20 +416,6 @@ export function JainaReportV2({
 
         {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
       </div>
-
-      {report.follow_up_questions.length > 0 ? (
-        <div className="space-y-2 pt-2">
-          <Suggestions className="pb-1">
-            {report.follow_up_questions.map((question, index) => (
-              <Suggestion
-                key={`${question}-${index}`}
-                suggestion={question}
-                onClick={onSuggestionClick}
-              />
-            ))}
-          </Suggestions>
-        </div>
-      ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
         <span className="text-xs text-muted-foreground">
@@ -419,10 +474,35 @@ export function JainaReportV2({
           </Button>
         </div>
       </footer>
+
+      {/* Follow-ups LAST. The J2 card ends where the reader's next question begins: the
+       *  sentence, the tiles, the reading, the evidence and the chrome all come before the
+       *  chips that start another turn. */}
+      {report.follow_up_questions.length > 0 ? (
+        <div className="space-y-2 pt-2" data-report-section="follow-ups">
+          <Suggestions className="pb-1">
+            {report.follow_up_questions.map((question, index) => (
+              <Suggestion
+                key={`${question}-${index}`}
+                suggestion={question}
+                onClick={onSuggestionClick}
+              />
+            ))}
+          </Suggestions>
+        </div>
+      ) : null}
     </section>
   );
 
-  if (!hasMedia) return content;
+  // The blocks that print a word of their own (the tile's read, the narrative's three
+  // labels) read the language from here, through `BlockRenderer`'s lazy boundary.
+  const localized = <AnswerLanguageProvider language={language}>{content}</AnswerLanguageProvider>;
 
-  return <MediaMapProvider mediaMap={report.media_map}>{content}</MediaMapProvider>;
+  if (!hasMedia) return localized;
+
+  return (
+    <MediaMapProvider mediaMap={report.media_map}>
+      <EntityNamesProvider names={entityNames}>{localized}</EntityNamesProvider>
+    </MediaMapProvider>
+  );
 }

@@ -30,7 +30,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
-import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { figureProps, formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import {
   useOptimizerAccountRead,
@@ -39,8 +39,10 @@ import {
 } from '../useOptimizerData';
 import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
 import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
-import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 import { portfolioLeads } from './PortfolioRowCard';
+import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
+import { rosterLine, staleLine } from './portfolioStaleness';
+import { StalenessChips } from './StalenessChips';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
  *  every portfolio the brand owns, grouped by account. */
@@ -95,32 +97,42 @@ function PortfolioCard({
       )}
     >
       <div className="flex w-full items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
-          <span className="truncate">{portfolio.name}</span>
-          <Badge variant="muted" className="text-3xs">
-            {portfolioLevelLabel(portfolio.level)}
-          </Badge>
-          <Badge variant="teal" className="text-3xs">
-            {humanize(portfolio.mode)}
-          </Badge>
-          <ApplyModePill
-            applyMode={portfolio.apply_mode}
-            autopilotPaused={portfolio.autopilot_paused}
-          />
-          {pendingWorkCount(portfolio) > 0 ? (
-            <Badge variant="secondary" className="text-3xs">
-              {pendingWorkCount(portfolio)} pending
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
+            <span className="truncate">{portfolio.name}</span>
+            <Badge variant="muted" className="text-xs">
+              {portfolioLevelLabel(portfolio.level)}
             </Badge>
+            <Badge variant="teal" className="text-xs">
+              {humanize(portfolio.mode)}
+            </Badge>
+            <ApplyModePill
+              applyMode={portfolio.apply_mode}
+              autopilotPaused={portfolio.autopilot_paused}
+            />
+            {pendingWorkCount(portfolio) > 0 ? (
+              <Badge variant="secondary" className="text-xs">
+                {pendingWorkCount(portfolio)} pending
+              </Badge>
+            ) : null}
+          </p>
+          <p className="mt-1 text-muted-foreground text-xs tabular-nums">
+            {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
+            {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+            <span
+              {...figureProps(`portfolios.${portfolio.id}.daily`, portfolio.daily_total, currency)}
+            >
+              {formatCurrency(portfolio.daily_total, currency)}
+            </span>
+            /d
+          </p>
+          {staleLine(portfolio) || rosterLine(portfolio) ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <StalenessChips portfolio={portfolio} />
+            </div>
           ) : null}
-        </p>
-        <p className="mt-1 text-muted-foreground text-xs tabular-nums">
-          {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
-          {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-          {formatCurrency(portfolio.daily_total, currency)}/d
-        </p>
-      </div>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </div>
 
       {lead ? (
@@ -129,12 +141,21 @@ function PortfolioCard({
           data-detector={lead.detector}
           data-testid="portfolio-lead"
         >
-          <p className="truncate text-2xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
           </p>
-          <HeadlineFigure candidate={lead} currency={currency ?? null} size="row" />
+          <HeadlineFigure
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolios.${portfolio.id}.lead`}
+            size="row"
+          />
           <CalmRule play={emphasis} testId="portfolio-lead-rule" />
-          <MoneyLine candidate={lead} currency={currency ?? null} />
+          <MoneyLine
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolios.${portfolio.id}.lead`}
+          />
         </div>
       ) : null}
     </button>
@@ -177,7 +198,16 @@ function ArchivedPortfolios({
               <p className="text-muted-foreground text-xs">
                 {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
                 {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-                {formatCurrency(portfolio.daily_total, currency)}/d
+                <span
+                  {...figureProps(
+                    `portfolios.archived.${portfolio.id}.daily`,
+                    portfolio.daily_total,
+                    currency,
+                  )}
+                >
+                  {formatCurrency(portfolio.daily_total, currency)}
+                </span>
+                /d
               </p>
             </div>
             <Button

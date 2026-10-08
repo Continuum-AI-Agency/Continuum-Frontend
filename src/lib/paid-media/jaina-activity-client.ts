@@ -19,12 +19,15 @@
  * physically cannot persist the result, so "propose via Jaina" is the only way forward.
  */
 
+import { type PaidScaffoldPlan, paidScaffoldPlanSchema } from '@continuum/contracts';
 import { fetchBrandAuthors } from '@/lib/library/commentAuthors';
 import { displayNameFromEmail } from '@/lib/library/comments';
+import { mediaSchema } from '@/lib/media/supabase-media';
 import {
   fetchPaidScaffoldTreeRows,
   type PaidScaffoldTreeRead,
 } from '@/lib/paid-media/scaffold-tree-client';
+import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /* -- gates ---------------------------------------------------------------------- */
@@ -91,6 +94,8 @@ export type ScaffoldSummary = {
 };
 
 export type ScaffoldVersionSummary = {
+  contentHash?: string;
+  budgetCurrency?: string;
   id: string;
   version: number;
   /** `proposed` | `building` | `built` | `populating` | `populated` | … */
@@ -131,7 +136,9 @@ export async function fetchScaffoldVersions(params: {
   const { data, error } = await supabase
     .schema('brand_profiles')
     .from('paid_scaffold_versions')
-    .select('id,version,lifecycle,created_at')
+    .select(
+      'id,version,lifecycle,created_at,content_hash,budget_currency:manifest->budget_evidence->>currency',
+    )
     .eq('scaffold_id', params.scaffoldId)
     .order('version', { ascending: false });
 
@@ -143,6 +150,8 @@ export async function fetchScaffoldVersions(params: {
       id: String(raw.id ?? ''),
       version: typeof raw.version === 'number' ? raw.version : 0,
       lifecycle: String(raw.lifecycle ?? 'proposed'),
+      contentHash: String(raw.content_hash ?? ''),
+      budgetCurrency: typeof raw.budget_currency === 'string' ? raw.budget_currency : undefined,
       createdAt: String(raw.created_at ?? ''),
     };
   });
@@ -195,6 +204,11 @@ export type AudienceGroupRead = {
   /** Member keys the manifest includes — the canvas shows them as custom audiences. */
   includedKeys: string[];
   gate: CanvasGate | null;
+  /**
+   * `audience_group_versions.status` of the current version. `ready` is PUBLISHED: every
+   * member exists on Meta, which is the only state a scaffold can compile targeting from.
+   */
+  versionStatus: string | null;
 };
 
 /**
@@ -235,6 +249,7 @@ export async function fetchBrandAudienceGroups(params: {
       targeting: {},
       includedKeys: [],
       gate: null,
+      versionStatus: null,
     }));
   }
 
@@ -243,7 +258,7 @@ export async function fetchBrandAudienceGroups(params: {
       supabase
         .schema('brand_profiles')
         .from('audience_group_versions')
-        .select('id,manifest')
+        .select('id,manifest,status')
         .in('id', versionIds),
       supabase
         .schema('brand_profiles')
@@ -260,9 +275,11 @@ export async function fetchBrandAudienceGroups(params: {
   if (gateError) throw new Error(`Could not load the audience approvals: ${gateError.message}`);
 
   const manifestById = new Map<string, Record<string, unknown>>();
+  const statusById = new Map<string, string | null>();
   for (const entry of versionData ?? []) {
     const raw = entry as unknown as Record<string, unknown>;
     manifestById.set(String(raw.id ?? ''), asRecord(raw.manifest));
+    statusById.set(String(raw.id ?? ''), asNullableString(raw.status));
   }
 
   const gateBySubjectId = new Map<string, CanvasGate>();
@@ -292,9 +309,31 @@ export async function fetchBrandAudienceGroups(params: {
       targeting: asRecord(manifest.targeting),
       includedKeys,
       gate: versionId ? (gateBySubjectId.get(versionId) ?? null) : null,
+      versionStatus: versionId ? (statusById.get(versionId) ?? null) : null,
     };
   });
 }
+
+/**
+ * The audience groups an ad set can target right now: those whose current version is
+ * PUBLISHED (`ready`). A group still awaiting approval, or partly published, would be
+ * refused at save — offering it in a picker would only defer that refusal.
+ *
+ * ponytail: only each group's CURRENT version is considered; a group whose newest
+ * version is unpublished hides an older published one. Read every `ready` version if a
+ * picker ever needs to pin an older one.
+ */
+export async function fetchPublishedAudienceGroups(params: {
+  brandId: string;
+}): Promise<AudienceGroupRead[]> {
+  const nameOf = await fetchBrandMemberNames({ brandId: params.brandId });
+  const groups = await fetchBrandAudienceGroups({ brandId: params.brandId, nameOf });
+  return groups.filter(isPublishedGroup);
+}
+
+/** A group an ad set can target: it has a current version, and that version is published. */
+export const isPublishedGroup = (group: Pick<AudienceGroupRead, 'versionId' | 'versionStatus'>) =>
+  group.versionId !== null && group.versionStatus === 'ready';
 
 /* -- brand members -------------------------------------------------------------- */
 
@@ -326,7 +365,94 @@ export type CanvasScaffoldRead = {
   tree: PaidScaffoldTreeRead;
   gates: Partial<Record<ScaffoldGateName, CanvasGate>>;
   audiences: AudienceGroupRead[];
+  /** `paid_scaffold_versions.content_hash` — what the approval of this version covers. */
+  contentHash: string;
+  /**
+   * `manifest.plan`, parsed against the shared contract. Null for a version proposed
+   * before plans existed, or whose plan no longer parses: hydration then reads the rows.
+   */
+  plan: PaidScaffoldPlan | null;
+  /**
+   * Each creative asset's media type, read off `media.assets`. A carousel card is stored as an
+   * asset id alone, so its kind — image or video — is the asset's, never a guess.
+   */
+  assetKinds: Record<string, 'image' | 'video'>;
+  /** `paid_scaffold_versions.special_ad_categories` — the ONE list the build applies. */
+  specialAdCategories: string[];
 };
+
+/** The one version's hash and typed plan. Selected apart from the list: manifests are large. */
+async function fetchScaffoldVersionDetail(params: { versionId: string }): Promise<{
+  contentHash: string;
+  plan: PaidScaffoldPlan | null;
+  specialAdCategories: string[];
+}> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema('brand_profiles')
+    .from('paid_scaffold_versions')
+    .select('content_hash,manifest,special_ad_categories')
+    .eq('id', params.versionId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load the scaffold version: ${error.message}`);
+
+  const raw = asRecord(data);
+  const parsed = paidScaffoldPlanSchema.safeParse(asRecord(raw.manifest).plan);
+  return {
+    contentHash: String(raw.content_hash ?? ''),
+    plan: parsed.success ? parsed.data : null,
+    specialAdCategories: Array.isArray(raw.special_ad_categories)
+      ? raw.special_ad_categories.filter((value): value is string => typeof value === 'string')
+      : [],
+  };
+}
+
+/** Every asset a version's creatives name: the plan's cards and the rows' current attachments. */
+export function creativeAssetIdsOf(
+  rows: PaidScaffoldNodeRow[],
+  plan: PaidScaffoldPlan | null,
+): string[] {
+  const ids = new Set<string>();
+  for (const ad of plan?.ads ?? []) {
+    for (const card of ad.creative?.cards ?? []) ids.add(card.asset_id);
+  }
+  for (const row of rows) {
+    if (row.creativeAssetId) ids.add(row.creativeAssetId);
+    const cards = asRecord(row.creativeMedia).cards;
+    if (!Array.isArray(cards)) continue;
+    for (const card of cards) {
+      const id = asRecord(card).asset_id;
+      if (typeof id === 'string' && id) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
+/** id → image | video for the brand's own assets, under RLS. Unreadable ids are left out. */
+export async function fetchAssetKinds(params: {
+  brandId: string;
+  assetIds: string[];
+}): Promise<Record<string, 'image' | 'video'>> {
+  if (params.assetIds.length === 0) return {};
+  const { data, error } = await mediaSchema(createSupabaseBrowserClient())
+    .from('assets')
+    .select('id,kind,mime_type')
+    .eq('brand_id', params.brandId)
+    .in('id', params.assetIds);
+  // Best-effort: a kind that cannot be read leaves the card's stored kind in charge.
+  if (error) return {};
+  const kinds: Record<string, 'image' | 'video'> = {};
+  for (const entry of (data ?? []) as {
+    id: string;
+    kind: string | null;
+    mime_type: string | null;
+  }[]) {
+    const video = entry.kind === 'video' || (entry.mime_type ?? '').startsWith('video/');
+    kinds[entry.id] = video ? 'video' : 'image';
+  }
+  return kinds;
+}
 
 /**
  * Everything the canvas needs to render one scaffold as a graph.
@@ -339,22 +465,75 @@ export async function fetchCanvasScaffoldRead(params: {
   brandId: string;
   scaffold: ScaffoldSummary;
 }): Promise<CanvasScaffoldRead> {
-  const [versions, nameOf] = await Promise.all([
+  const readParent = async (): Promise<ScaffoldSummary> => {
+    const { data, error } = await createSupabaseBrowserClient()
+      .schema('brand_profiles')
+      .from('paid_scaffolds')
+      .select('id,name,ad_account_id,current_version_id,created_at')
+      .eq('brand_id', params.brandId)
+      .eq('id', params.scaffold.id)
+      .is('archived_at', null)
+      .maybeSingle();
+    if (error) throw new Error(`Could not refresh the scaffold: ${error.message}`);
+    if (!data) throw new Error('That scaffold is unavailable for this brand.');
+    const raw = data as unknown as Record<string, unknown>;
+    return {
+      id: String(raw.id),
+      name: String(raw.name ?? 'Untitled scaffold'),
+      adAccountId: String(raw.ad_account_id ?? ''),
+      currentVersionId: asNullableString(raw.current_version_id),
+      createdAt: String(raw.created_at ?? ''),
+    };
+  };
+  const [scaffold, initialVersions, nameOf] = await Promise.all([
+    readParent(),
     fetchScaffoldVersions({ scaffoldId: params.scaffold.id }),
     fetchBrandMemberNames({ brandId: params.brandId }),
   ]);
-
-  const version =
-    versions.find((entry) => entry.id === params.scaffold.currentVersionId) ?? versions[0];
-  if (!version) {
-    throw new Error(`"${params.scaffold.name}" has no versions to load.`);
+  let versions = initialVersions;
+  if (
+    scaffold.currentVersionId &&
+    !versions.some((entry) => entry.id === scaffold.currentVersionId)
+  ) {
+    // A proposal can advance the parent while its version list is being read.
+    versions = await fetchScaffoldVersions({ scaffoldId: scaffold.id });
   }
+  const version = scaffold.currentVersionId
+    ? versions.find((entry) => entry.id === scaffold.currentVersionId)
+    : versions[0];
+  if (!version)
+    throw new Error(
+      `"${scaffold.name}" has no current version to load. Retry after the proposal finishes.`,
+    );
 
-  const [tree, gates, audiences] = await Promise.all([
+  const [tree, gates, audiences, detail] = await Promise.all([
     fetchPaidScaffoldTreeRows({ scaffoldVersionId: version.id }),
     fetchScaffoldGates({ versionId: version.id, nameOf }),
     fetchBrandAudienceGroups({ brandId: params.brandId, nameOf }),
+    fetchScaffoldVersionDetail({ versionId: version.id }),
   ]);
+  const assetKinds = await fetchAssetKinds({
+    brandId: params.brandId,
+    assetIds: creativeAssetIdsOf(tree.rows, detail.plan),
+  });
 
-  return { scaffold: params.scaffold, version, versions, tree, gates, audiences };
+  const refreshed = await readParent();
+  if (
+    refreshed.currentVersionId !== scaffold.currentVersionId ||
+    refreshed.adAccountId !== scaffold.adAccountId
+  ) {
+    throw new Error(
+      'The proposal changed while loading. Select it again to load the current version.',
+    );
+  }
+  return {
+    scaffold: refreshed,
+    version,
+    versions,
+    tree,
+    gates,
+    audiences,
+    ...detail,
+    assetKinds,
+  };
 }

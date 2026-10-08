@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { z } from 'zod';
 import { parseStudioVideoView } from '@/lib/ai-studio/studioVideoHref';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -7,7 +8,7 @@ import { VideoStudioWorkspace } from '@/StudioCanvas/nodes/timeline/VideoProduct
 const projectIdSchema = z.string().uuid();
 const originSchema = z.enum(['canvas', 'library']);
 
-export default async function VideoStudioPage({
+async function VideoStudioContent({
   params,
   searchParams,
 }: {
@@ -33,9 +34,19 @@ export default async function VideoStudioPage({
     <VideoStudioWorkspace
       projectId={projectId.data}
       brandId={data.brand_id}
-      pool={[]}
       origin={origin.data}
       view={view}
     />
+  );
+}
+
+export default function VideoStudioPage(props: {
+  params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ origin?: string; view?: string }>;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <VideoStudioContent {...props} />
+    </Suspense>
   );
 }

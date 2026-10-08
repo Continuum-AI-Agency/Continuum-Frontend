@@ -20,8 +20,6 @@ mock.module('motion/react', () => {
 });
 
 import type { AccountChart } from '@continuum/contracts';
-import { chartArgues } from '@continuum/contracts';
-import { heroChart } from '../detail/heroChart';
 import { AccountChartView } from './AccountChartView';
 
 afterEach(cleanup);
@@ -268,87 +266,5 @@ describe('AccountChartView — interval says what the interval is, and what the 
   it('draws the point estimate when the candidate carries one, and says it first', () => {
     const { getByTestId } = draw({ ...interval, estimate: 560, no_results: false });
     expect(getByTestId('interval-readout').textContent).toBe('$560, between $420 and $840');
-  });
-});
-
-// The settled rule for the portfolio's news card: a chart appears only when it ARGUES. A
-// trend and an interval each tell a reader something the sentence cannot. The other five
-// shapes draw the arithmetic the sentence already made, and drawing it again is paid for
-// out of the space the justification needed.
-//
-// The rule is `chartArgues` in the contract; the gate is `heroChart`, which is where the
-// news card's chart is chosen. Both run here against the real renderer, so "renders no
-// chart" is asserted on the thing that renders.
-describe('the news card draws a chart only when the chart argues', () => {
-  const slot = (chart: AccountChart | null) =>
-    render(<div>{chart ? <AccountChartView chart={chart} currency="USD" /> : null}</div>);
-
-  const day = (date: string, spend: number, results: number) => ({ date, spend, results });
-  const budgetMove = {
-    id: 'rec:1',
-    module: 'budget',
-    kind: 'budget_move',
-    trigger: 'solver',
-    adset_id: null,
-    adset_name: null,
-    impact_per_day: 80,
-    impact_unit: 'currency',
-    results_per_day: null,
-    impact_basis: 'two budget moves this cycle',
-    reason: null,
-    cta: { kind: 'manage', target_id: null },
-  } as unknown as Parameters<typeof heroChart>[0]['candidate'];
-
-  it('a trend and an interval argue; the five arithmetic shapes do not', () => {
-    expect(chartArgues(rates())).toBe(true);
-    expect(
-      chartArgues({
-        shape: 'interval',
-        unit: 'currency',
-        value_label: null,
-        estimate: null,
-        low: 1,
-        high: 2,
-        reference: null,
-        reference_label: null,
-        at_stake_per_day: null,
-        no_results: true,
-      }),
-    ).toBe(true);
-    expect(
-      chartArgues({
-        shape: 'transfer',
-        unit: 'currency',
-        from: { label: 'A', cost_per_result: 90, spend_per_day: 100 },
-        to: { label: 'B', cost_per_result: 60, spend_per_day: 40 },
-        movable_per_day: 60,
-        saving_per_day: 20,
-      }),
-    ).toBe(false);
-    expect(chartArgues(null)).toBe(false);
-  });
-
-  it('renders no chart when a budget move has only its own arithmetic to show', () => {
-    // One priced day is no trend, and a budget move's argument — move this much, keep the
-    // difference — is complete as a sentence. Nothing here argues, so nothing is drawn.
-    const chart = heroChart({
-      candidate: budgetMove,
-      series: [day('2026-09-19', 160, 2)],
-      target: 70,
-      resultLabel: 'Leads',
-    });
-    expect(chart).toBeNull();
-    expect(slot(chart).container.textContent).toBe('');
-  });
-
-  it('and draws it as soon as there is a trend to argue with', () => {
-    const chart = heroChart({
-      candidate: budgetMove,
-      series: [day('2026-09-17', 166, 2), day('2026-09-18', 158, 2), day('2026-09-19', 149, 2)],
-      target: 70,
-      resultLabel: 'Leads',
-    });
-    expect(chart?.shape).toBe('rates');
-    expect(slot(chart).container.textContent).toContain('Cost per leads');
   });
 });

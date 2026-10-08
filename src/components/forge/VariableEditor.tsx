@@ -4,13 +4,16 @@ import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import {
   type ApiRenderVariableKind,
   apiRenderVariableLabel,
+  classifyLibraryFile,
+  clipRequirement,
+  isLayerSwitch,
   readableLayerName,
   SLOT_ROLE_KIND,
   SLOT_ROLES,
   type SlotRole,
 } from '@continuum/contracts';
-import { Image as ImageIcon, Info, Loader2, Save, Type, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Image as ImageIcon, Info, Loader2, Save, Type, Upload, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import { KIND_ICONS } from '@/components/forge/DataGrid';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -28,8 +31,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast-imperative';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 
 // Editing what a variable IS, not what it says this render.
@@ -65,7 +70,7 @@ function rolesForKind(kind: string): SlotRole[] {
 
 const roleLabel = (role: string) => role.replace(/_/g, ' ');
 
-function DefaultValueControl({
+export function DefaultValueControl({
   variable,
   label,
   value,
@@ -79,11 +84,51 @@ function DefaultValueControl({
   onChange: (next: unknown) => void;
 }) {
   const [picking, setPicking] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [draggingFile, setDraggingFile] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const uploadDefaultFile = async (file: File) => {
+    const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+    if (!format.accepted || format.originalKind !== variable.kind) {
+      toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const uploaded = await uploadMediaAsset({ file, brandId });
+      onChange({ assetId: uploaded.assetId, versionId: uploaded.versionId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (variable.kind === 'image' || variable.kind === 'video') {
     const pinned = value as { assetId?: string } | null;
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <fieldset
+        className={cn(
+          'flex flex-wrap items-center gap-2 rounded border border-dashed p-2',
+          draggingFile ? 'border-primary bg-primary/10' : 'border-input',
+        )}
+        aria-label={`Default ${variable.kind} for ${label}`}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files') || uploading) return;
+          event.preventDefault();
+          setDraggingFile(true);
+        }}
+        onDragLeave={() => setDraggingFile(false)}
+        onDrop={(event) => {
+          setDraggingFile(false);
+          const file = event.dataTransfer.files[0];
+          if (!file || uploading) return;
+          event.preventDefault();
+          void uploadDefaultFile(file);
+        }}
+      >
+        <span className="text-xs text-muted-foreground">Drop {variable.kind} here</span>
         <MediaSelectPopover
           brandProfileId={brandId}
           open={picking}
@@ -95,11 +140,13 @@ function DefaultValueControl({
             if (!asset) return;
             // Version-pinned like every other Library reference on the render path: an unpinned
             // default silently changes what renders the next time someone uploads a new version.
-            onChange(
-              asset.headVersionId
-                ? { assetId: asset.id, versionId: asset.headVersionId }
-                : { assetId: asset.id },
-            );
+            if (!asset.headVersionId) {
+              toast.error(
+                'This file has no saved Library version. Upload it again before using it as a default.',
+              );
+              return;
+            }
+            onChange({ assetId: asset.id, versionId: asset.headVersionId });
             setPicking(false);
           }}
           anchor={
@@ -109,6 +156,33 @@ function DefaultValueControl({
             </Button>
           }
         />
+        <input
+          ref={fileInput}
+          type="file"
+          accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
+          aria-label={`Upload ${label} default`}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void uploadDefaultFile(file);
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="gap-1.5"
+          disabled={uploading}
+          onClick={() => fileInput.current?.click()}
+        >
+          {uploading ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Upload className="size-3.5" aria-hidden />
+          )}
+          Upload here
+        </Button>
         {pinned?.assetId ? (
           <>
             <span className="text-xs text-muted-foreground">A Library {variable.kind} is set</span>
@@ -124,7 +198,7 @@ function DefaultValueControl({
             </Button>
           </>
         ) : null}
-      </div>
+      </fieldset>
     );
   }
 
@@ -140,12 +214,18 @@ function DefaultValueControl({
   }
 
   if (variable.kind === 'boolean') {
+    const [on, off] = switchWords(variable);
     return (
-      <Switch
-        checked={value === true}
-        onCheckedChange={(next) => onChange(next)}
-        aria-label={`${label} default`}
-      />
+      <span className="flex items-center gap-2">
+        <Switch
+          checked={value === true}
+          onCheckedChange={(next) => onChange(next)}
+          aria-label={`${label} default`}
+        />
+        <span className="text-xs text-muted-foreground">
+          {value === true ? on : value === false ? off : 'As designed'}
+        </span>
+      </span>
     );
   }
 
@@ -206,6 +286,80 @@ function DefaultValueControl({
  * Module-level and pure: everything it reads is an argument. Inside the component it would be a
  * new function every render, which a memo depending on it could never skip.
  */
+const OWN_VALUE = '__own__';
+const WHOLE_TEXT = 'whole';
+type SlotLink = { source: string; path: string; line?: number };
+
+/**
+ * Where a field's value comes from: typed per row, or another field's — whole (a fill and its
+ * outline copy) or one line of it (a two-line headline set on two layers). A link also stops the
+ * form asking for the field: the server fills it on every render and preview.
+ */
+function FillFromControl({
+  variable,
+  sources,
+  link,
+  onChange,
+}: {
+  variable: TemplateVariable;
+  /** Fields of the same kind that are not themselves filled from another. */
+  sources: TemplateVariable[];
+  link: SlotLink | null;
+  onChange: (change: Partial<TemplateSlotEdit>) => void;
+}) {
+  if (!sources.length) return null;
+  const source = sources.find((other) => other.key === link?.path);
+  const bind = (path: string, line?: number) =>
+    onChange({ binding: { source: 'slot', path, ...(line ? { line } : {}) }, exposed: false });
+  return (
+    <Field orientation="horizontal" className="w-auto gap-2 pb-1">
+      <span className="text-xs">Fill from</span>
+      <Select
+        value={link?.path ?? OWN_VALUE}
+        onValueChange={(next) => {
+          if (next === OWN_VALUE) onChange({ binding: null, exposed: true });
+          else if (typeof next === 'string') bind(next, link?.line);
+        }}
+      >
+        <SelectTrigger size="sm" aria-label={`${variable.label} fills from`}>
+          <SelectValue>{source?.label ?? 'Its own value'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={OWN_VALUE}>Its own value</SelectItem>
+          {sources.map((other) => (
+            <SelectItem key={other.key} value={other.key}>
+              {other.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {link && variable.kind === 'text' ? (
+        <Select
+          value={link.line ? String(link.line) : WHOLE_TEXT}
+          onValueChange={(next) =>
+            bind(
+              link.path,
+              next === WHOLE_TEXT || typeof next !== 'string' ? undefined : Number(next),
+            )
+          }
+        >
+          <SelectTrigger size="sm" aria-label={`Which part of ${source?.label ?? 'it'}`}>
+            <SelectValue>{link.line ? `Line ${link.line}` : 'Whole text'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={WHOLE_TEXT}>Whole text</SelectItem>
+            {[2, 3, 4, 5].map((line) => (
+              <SelectItem key={line} value={String(line)}>
+                Line {line}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+    </Field>
+  );
+}
+
 function resolve<K extends keyof TemplateSlotEdit>(
   edits: Draft,
   variable: TemplateVariable,
@@ -234,13 +388,23 @@ function settleDraft(current: Draft, submitted: Draft): Draft {
   return next;
 }
 
-type VariableFilter = 'all' | 'unassigned' | 'media' | 'text';
+type VariableFilter = 'all' | 'unassigned' | 'media' | 'text' | 'off';
+
+/**
+ * What a switch's two states are called. A layer's Show switch hides or shows that layer; any
+ * other After Effects checkbox is only on or off — calling it "Hidden" would claim a layer.
+ */
+const switchWords = (variable: TemplateVariable): [string, string] =>
+  isLayerSwitch(variable.key) ? ['Shown', 'Hidden'] : ['On', 'Off'];
 
 const FILTERS: Array<{ value: VariableFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unassigned', label: 'Unassigned' },
   { value: 'media', label: 'Media' },
   { value: 'text', label: 'Text' },
+  // A design import brings every layer of the file; most start not asked. "Not asked", never
+  // "Off": a hidden layer is a switch's VALUE, and this filter is about the row form.
+  { value: 'off', label: 'Not asked' },
 ];
 
 /** What a closed row shows for its default: the copy in mono, a swatch, or that a picture is set. */
@@ -262,7 +426,10 @@ function DefaultPreview({ variable, value }: { variable: TemplateVariable; value
       </span>
     );
   }
-  if (typeof value === 'boolean') return <span>{value ? 'On' : 'Off'}</span>;
+  if (typeof value === 'boolean') {
+    const [on, off] = switchWords(variable);
+    return <span>{value ? on : off}</span>;
+  }
   return <span className="truncate font-mono">{String(value)}</span>;
 }
 
@@ -270,6 +437,7 @@ export function VariableEditor({
   brandId,
   variables,
   savedDefaults,
+  savedBindings = {},
   parseState,
   saving,
   onSave,
@@ -278,6 +446,8 @@ export function VariableEditor({
   variables: TemplateVariable[];
   /** Saved defaults by slot key — the variables response's `edits`, which is where they persist. */
   savedDefaults: Record<string, unknown>;
+  /** Saved bindings by slot key, from the same `edits`. */
+  savedBindings?: Record<string, TemplateSlotEdit['binding']>;
   parseState: string;
   saving: boolean;
   /** Resolves true once the server has the edits; the draft is kept on anything else. */
@@ -346,10 +516,17 @@ export function VariableEditor({
     );
   const roleOf = (variable: TemplateVariable) =>
     resolve(draft, variable, 'role', variable.role) as string | null;
+  const exposedOf = (variable: TemplateVariable) =>
+    resolve(draft, variable, 'exposed', variable.exposed ?? true) !== false;
+  const linkOf = (variable: TemplateVariable): SlotLink | null => {
+    const binding = resolve(draft, variable, 'binding', savedBindings[variable.key] ?? null);
+    return binding?.source === 'slot' ? binding : null;
+  };
   const shown = variables.filter((variable) => {
     if (filter === 'unassigned') return roleOf(variable) === null;
     if (filter === 'media') return variable.kind === 'image' || variable.kind === 'video';
     if (filter === 'text') return variable.kind === 'text' || variable.kind === 'enum';
+    if (filter === 'off') return !exposedOf(variable);
     return true;
   });
   const openKey = selectedKey === undefined ? variables[0]!.key : (selectedKey ?? '');
@@ -389,7 +566,9 @@ export function VariableEditor({
           const name = nameOf(variable);
           const role = roleOf(variable);
           const clash = role !== null && claimed.has(role);
-          const required = resolve(draft, variable, 'required', variable.required) === true;
+          const exposed = exposedOf(variable);
+          const required =
+            exposed && resolve(draft, variable, 'required', variable.required) === true;
           const budget = resolve(draft, variable, 'charBudget', variable.charBudget) as
             | number
             | null;
@@ -400,13 +579,17 @@ export function VariableEditor({
             savedDefaults[variable.key] ?? null,
           );
           const textLike = variable.kind === 'text' || variable.kind === 'enum';
+          const clipShown = clipRequirement(variable.clip);
           return (
             <AccordionItem key={variable.key} value={variable.key} render={<li />}>
               {/* The stock trigger adds chevrons and an underline; this row IS the trigger. */}
               <AccordionPrimitive.Header className="flex">
                 <AccordionPrimitive.Trigger className="grid h-8 w-full min-w-0 grid-cols-[1rem_minmax(6rem,12rem)_minmax(5rem,8rem)_minmax(0,24rem)_3.5rem_0.75rem] items-center justify-start gap-2 px-[var(--card-pad)] text-left text-xs outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-panel-open:bg-muted/40">
                   <Icon className="size-3.5 text-muted-foreground" aria-hidden />
-                  <span className="truncate">{name}</span>
+                  <span className={cn('truncate', !exposed && 'text-muted-foreground')}>
+                    {name}
+                    {exposed ? null : <span className="ml-1.5 text-2xs uppercase">Not asked</span>}
+                  </span>
                   <span className="flex min-w-0">
                     {role ? (
                       <Pill
@@ -420,8 +603,11 @@ export function VariableEditor({
                     )}
                   </span>
                   <DefaultPreview variable={variable} value={defaultValue} />
-                  <span className="text-right font-mono tabular-nums text-muted-foreground">
-                    {textLike && budget !== null ? `${budget} ch` : null}
+                  <span
+                    className="text-right font-mono tabular-nums text-muted-foreground"
+                    title={clipShown?.detail}
+                  >
+                    {textLike && budget !== null ? `${budget} ch` : (clipShown?.chip ?? null)}
                   </span>
                   <span className="flex justify-end">
                     {required ? (
@@ -500,6 +686,16 @@ export function VariableEditor({
                       value={defaultValue}
                       onChange={(next) => patch(variable.key, { defaultValue: next })}
                     />
+                    {isLayerSwitch(variable.key) ? (
+                      <FieldDescription className="text-xs">
+                        Hidden makes this layer invisible in the render. Nothing moves into its
+                        place — the rest of the design stays where it was put.
+                      </FieldDescription>
+                    ) : (
+                      <FieldDescription className="text-xs">
+                        A row that leaves this empty renders the default.
+                      </FieldDescription>
+                    )}
                   </Field>
 
                   <div className="flex items-end gap-6">
@@ -531,10 +727,38 @@ export function VariableEditor({
                         </InputGroup>
                       </Field>
                     ) : null}
+                    <FillFromControl
+                      variable={variable}
+                      sources={variables.filter(
+                        (other) =>
+                          other.key !== variable.key &&
+                          other.kind === variable.kind &&
+                          !linkOf(other),
+                      )}
+                      link={linkOf(variable)}
+                      onChange={(change) => patch(variable.key, change)}
+                    />
+                    <Field orientation="horizontal" className="w-auto gap-2 pb-1">
+                      <Switch
+                        id={`variable-exposed-${variable.key}`}
+                        checked={exposed}
+                        disabled={linkOf(variable) !== null}
+                        onCheckedChange={(next) => patch(variable.key, { exposed: next })}
+                      />
+                      <FieldLabel htmlFor={`variable-exposed-${variable.key}`} className="text-xs">
+                        Ask per row
+                      </FieldLabel>
+                      {exposed ? null : (
+                        <span className="text-xs text-muted-foreground">
+                          Every row renders what the file has
+                        </span>
+                      )}
+                    </Field>
                     <Field orientation="horizontal" className="w-auto gap-2 pb-1">
                       <Switch
                         id={`variable-required-${variable.key}`}
                         checked={required}
+                        disabled={!exposed}
                         onCheckedChange={(next) => patch(variable.key, { required: next })}
                       />
                       <FieldLabel htmlFor={`variable-required-${variable.key}`} className="text-xs">

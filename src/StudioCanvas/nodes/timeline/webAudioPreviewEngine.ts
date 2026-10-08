@@ -1,3 +1,5 @@
+import { editorAudioFadeGainAt } from '@continuum/contracts';
+import { audioGainAt } from '../../utils/splice/timelineAudioEnvelope';
 import type {
   TimelinePreviewAudioEvent,
   TimelinePreviewAudioPlan,
@@ -5,6 +7,8 @@ import type {
 
 const SCHEDULE_LEAD_SEC = 0.03;
 const EPSILON_SEC = 0.000_001;
+/** Spacing of the gain points a keyed volume is ramped through (linear between them). */
+const VOLUME_STEP_SEC = 0.02;
 
 export interface DecodedPreviewAudioChunk {
   buffer: AudioBuffer;
@@ -29,13 +33,61 @@ function clamp01(value: number): number {
 }
 
 export function fadeInGainAt(event: TimelinePreviewAudioEvent, timelineSec: number): number {
-  if (event.fadeInSec <= 0) return 1;
-  return clamp01((timelineSec - event.outputStartSec) / event.fadeInSec);
+  const localSec = timelineSec - event.outputStartSec;
+  return Math.min(
+    editorAudioFadeGainAt(
+      { ...event, durationSec: event.outputEndSec - event.outputStartSec },
+      localSec,
+      'in',
+    ),
+    (event.transitionFadeInSec ?? 0) > 0 ? clamp01(localSec / event.transitionFadeInSec!) : 1,
+  );
 }
 
 export function fadeOutGainAt(event: TimelinePreviewAudioEvent, timelineSec: number): number {
-  if (event.fadeOutSec <= 0) return 1;
-  return clamp01((event.outputEndSec - timelineSec) / event.fadeOutSec);
+  const localSec = timelineSec - event.outputStartSec;
+  return Math.min(
+    editorAudioFadeGainAt(
+      { ...event, durationSec: event.outputEndSec - event.outputStartSec },
+      localSec,
+      'out',
+    ),
+    (event.transitionFadeOutSec ?? 0) > 0
+      ? clamp01((event.outputEndSec - timelineSec) / event.transitionFadeOutSec!)
+      : 1,
+  );
+}
+
+/**
+ * The gain points (timeline seconds) that play an event's `audio.volume` keyframes from
+ * `fromTimelineSec`: every key inside the window plus a 20 ms grid, each valued by the
+ * same sampler the export mixer uses, so ramping linearly through them follows the curve.
+ */
+export function volumeAutomation(
+  event: TimelinePreviewAudioEvent,
+  fromTimelineSec: number,
+): { timelineSec: number; value: number }[] {
+  const keys = event.volumeKeyframes;
+  if (!keys?.length && !event.groupVolumeKeyframes?.length) return [];
+  const start = Math.max(fromTimelineSec, event.outputStartSec);
+  const end = event.outputEndSec;
+  if (end <= start) return [];
+  const times = new Set<number>([start, end]);
+  for (let at = start + VOLUME_STEP_SEC; at < end; at += VOLUME_STEP_SEC) times.add(at);
+  for (const [track, offset] of [
+    [keys, event.keyframeOffsetSec],
+    [event.groupVolumeKeyframes, event.groupKeyframeOffsetSec],
+  ] as const)
+    for (const key of track ?? []) {
+      const at = event.outputStartSec + key.timeSec - (offset ?? 0);
+      if (at > start && at < end) times.add(at);
+    }
+  return [...times]
+    .sort((left, right) => left - right)
+    .map((timelineSec) => ({
+      timelineSec,
+      value: audioGainAt(event, timelineSec - event.outputStartSec),
+    }));
 }
 
 export function buildPreviewAudioSchedule(input: {
@@ -121,24 +173,47 @@ function scheduleLinearEnvelope(input: {
   const toContextTime = (timelineSec: number) =>
     contextStartSec + Math.max(0, timelineSec - fromTimelineSec);
 
+  const duration = activeEnd - event.outputStartSec;
+  const offset = event.audioFadeClock?.offsetSec ?? 0;
+  const originalDuration = event.audioFadeClock?.durationSec ?? duration;
+  const manual = edge === 'in' ? event.fadeInSec : event.fadeOutSec;
+  const transition = (edge === 'in' ? event.transitionFadeInSec : event.transitionFadeOutSec) ?? 0;
+  const localTimes =
+    edge === 'in'
+      ? [
+          -offset,
+          manual - offset,
+          transition,
+          manual !== transition ? (-offset * transition) / (transition - manual) : 0,
+        ]
+      : [
+          originalDuration - offset - manual,
+          originalDuration - offset,
+          duration - transition,
+          manual !== transition
+            ? (manual * duration - transition * (originalDuration - offset)) / (manual - transition)
+            : 0,
+        ];
+  const times = [
+    ...new Set([
+      activeStart,
+      activeEnd,
+      ...localTimes
+        .map((time) => event.outputStartSec + time)
+        .filter((time) => time > activeStart && time < activeEnd),
+    ]),
+  ].sort((a, b) => a - b);
+  const sample = edge === 'in' ? fadeInGainAt : fadeOutGainAt;
   param.cancelScheduledValues(contextStartSec);
-  if (edge === 'in') {
-    const fadeEnd = Math.min(activeEnd, event.outputStartSec + event.fadeInSec);
-    param.setValueAtTime(fadeInGainAt(event, activeStart), toContextTime(activeStart));
-    if (fadeEnd > activeStart) param.linearRampToValueAtTime(1, toContextTime(fadeEnd));
-    return;
-  }
-
-  const fadeStart = Math.max(event.outputStartSec, event.outputEndSec - event.fadeOutSec);
-  param.setValueAtTime(fadeOutGainAt(event, activeStart), toContextTime(activeStart));
-  if (fadeStart > activeStart) param.setValueAtTime(1, toContextTime(fadeStart));
-  if (activeEnd > Math.max(activeStart, fadeStart)) {
-    param.linearRampToValueAtTime(0, toContextTime(activeEnd));
+  for (const [index, time] of times.entries()) {
+    const gain = sample(event, time);
+    if (index === 0) param.setValueAtTime(gain, toContextTime(time));
+    else param.linearRampToValueAtTime(gain, toContextTime(time));
   }
 }
 
 export class TimelineWebAudioPreviewEngine {
-  private context: AudioContext | null = null;
+  private context: AudioContext | OfflineAudioContext | null;
   private masterGain: GainNode | null = null;
   private readonly decodedCache = new Map<string, Promise<DecodedPreviewAudioAsset>>();
   private activeSources: AudioBufferSourceNode[] = [];
@@ -149,17 +224,21 @@ export class TimelineWebAudioPreviewEngine {
   private contextEpochSec = 0;
   private totalDurationSec = 0;
 
+  constructor(context?: AudioContext | OfflineAudioContext) {
+    this.context = context ?? null;
+  }
+
   isSupported(): boolean {
-    return typeof globalThis.AudioContext !== 'undefined';
+    return this.context !== null || typeof globalThis.AudioContext !== 'undefined';
   }
 
   isPlaying(): boolean {
     return this.playing;
   }
 
-  private ensureContext(): AudioContext {
-    if (this.context) return this.context;
-    const context = new AudioContext({ latencyHint: 'interactive' });
+  private ensureContext(): AudioContext | OfflineAudioContext {
+    if (this.context && this.masterGain) return this.context;
+    const context = this.context ?? new AudioContext({ latencyHint: 'interactive' });
     const masterGain = context.createGain();
     masterGain.connect(context.destination);
     this.context = context;
@@ -197,7 +276,7 @@ export class TimelineWebAudioPreviewEngine {
     this.playing = false;
 
     const context = this.ensureContext();
-    if (context.state === 'suspended') await context.resume();
+    if ('baseLatency' in context && context.state === 'suspended') await context.resume();
 
     const decodedBySource = new Map<string, DecodedPreviewAudioAsset>();
     const uniqueEvents = new Map(plan.events.map((event) => [event.sourceKey, event]));
@@ -211,7 +290,8 @@ export class TimelineWebAudioPreviewEngine {
     for (const entry of decoded) decodedBySource.set(entry.sourceKey, entry.asset);
 
     const safeFrom = Math.max(0, Math.min(fromTimelineSec, plan.totalDurationSec));
-    const latencyLead = Math.max(SCHEDULE_LEAD_SEC, context.baseLatency || 0);
+    const latencyLead =
+      'baseLatency' in context ? Math.max(SCHEDULE_LEAD_SEC, context.baseLatency || 0) : 0;
     const contextStartSec = context.currentTime + latencyLead;
     const schedule = buildPreviewAudioSchedule({
       plan,
@@ -233,7 +313,13 @@ export class TimelineWebAudioPreviewEngine {
         const constant = context.createGain();
         const fadeIn = context.createGain();
         const fadeOut = context.createGain();
-        constant.gain.value = scheduled.event.gain;
+        const automation = volumeAutomation(scheduled.event, safeFrom);
+        if (automation.length === 0) constant.gain.value = scheduled.event.gain;
+        for (const [index, point] of automation.entries()) {
+          const at = contextStartSec + Math.max(0, point.timelineSec - safeFrom);
+          if (index === 0) constant.gain.setValueAtTime(point.value, at);
+          else constant.gain.linearRampToValueAtTime(point.value, at);
+        }
         constant.connect(fadeIn);
         fadeIn.connect(fadeOut);
         fadeOut.connect(this.masterGain!);
@@ -282,7 +368,8 @@ export class TimelineWebAudioPreviewEngine {
     this.generation += 1;
     this.stopSources();
     this.playing = false;
-    if (this.context?.state === 'running') void this.context.suspend();
+    if (this.context && 'baseLatency' in this.context && this.context.state === 'running')
+      void this.context.suspend();
     return timelineSec;
   }
 
@@ -298,6 +385,6 @@ export class TimelineWebAudioPreviewEngine {
     const context = this.context;
     this.context = null;
     this.masterGain = null;
-    if (context && context.state !== 'closed') await context.close();
+    if (context && 'close' in context && context.state !== 'closed') await context.close();
   }
 }

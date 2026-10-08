@@ -29,17 +29,23 @@ import {
   type BrandTypeInputs,
   type BrandTypeSource,
   type BurnInAnchor,
-  type DesignSection,
-  type DesignToken,
+  breakLines,
+  contrastRatio,
+  type DesignSystemFontEmbed,
   darkPercentileContrast,
   deriveLegibleInk,
+  embedsFor,
+  FALLBACK_INK_DARK,
+  FALLBACK_INK_LIGHT,
   type FractionalBox,
   FULL_FRAME,
   type HeadlineToken,
   hasAnyBrandShape,
+  headlineWeights,
   isLiteralHex,
   type MeasureText,
   type PixelBuffer,
+  type PlacementOptions,
   type PlacementPlan,
   type PlacementTreatment,
   type ProbeContrast,
@@ -49,21 +55,19 @@ import {
   resolveBrandInk,
   resolveBrandType,
   type Size,
-  sectionForToken,
   type TextStyle,
   type TreatmentStep,
+  VERNE_TITLE_BOLD_SIZE,
+  VERNE_TITLE_LIGHT_SIZE,
 } from '@continuum/contracts';
-import { captionFontFaceCss, ensureCaptionFonts } from '@/lib/clips/captionFonts';
-import { blockRect, headlineBlockExtent, placementOptionsFor } from './burnInPlacement';
+import {
+  captionFontFaceCss,
+  captionFontSpec,
+  embedBrandFonts,
+  ensureCaptionFonts,
+} from '@/lib/clips/captionFonts';
+import { type BlockExtent, blockOrigin, blockRect, headlineBlockExtent } from './burnInPlacement';
 import type { DrawableImage } from './imageOps';
-
-// Type comes from typography. This was a config field once — a `designSectionSchema` enum that
-// offered `motion`, `voice`, `radii` and `iconography` as the source of a headline face, purely
-// so the generic Zod panel had something to render. It is a constant because there is no second
-// right answer, and a question with one right answer and eleven wrong ones is not a setting.
-// The ink's own section died with it: `resolveBrandInk` walks the brand's shapes and names the
-// one it read, which is strictly more than a section name ever said.
-const TYPE_SECTION: DesignSection = 'typography';
 
 // ── Ink ──────────────────────────────────────────────────────────────────────────────────
 
@@ -161,21 +165,10 @@ export interface HeadlineFaces {
 
 const FALLBACK_STACK = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 
-const bareName = (name: string): string => name.trim().toLowerCase().replace(/^--/, '');
-
 /** A family name safe to interpolate into a font shorthand and an XML attribute. */
 const quoteFamily = (family: string): string | null => {
   const clean = family.trim().replace(/^['"]|['"]$/g, '');
   return /^[^'"(){};\\\r\n<>&]+$/.test(clean) && clean.length > 0 ? `'${clean}'` : null;
-};
-
-const weightFrom = (tokens: readonly DesignToken[], match: RegExp): number | null => {
-  for (const token of tokens) {
-    if (!match.test(bareName(token.name))) continue;
-    const value = Number.parseInt((token.resolvedValue ?? token.value).trim(), 10);
-    if (Number.isFinite(value) && value >= 1 && value <= 1000) return value;
-  }
-  return null;
 };
 
 /**
@@ -185,20 +178,39 @@ const weightFrom = (tokens: readonly DesignToken[], match: RegExp): number | nul
  * anything else that has to name the face read the same rung. WHAT WEIGHTS is still a design
  * system question: `w-light` / `w-bold` are type-scale tokens and no other brand shape carries
  * them, so a brand resolved off its brand book gets the 300/700 defaults rather than a weight
- * invented from a family name.
+ * invented from a family name — moved to the weights an embed of the family actually holds
+ * (`headlineWeights`, shared with the Backend planner that measures the same file).
  */
 export function resolveHeadlineFaces(inputs: BrandTypeInputs): HeadlineFaces {
   const type = resolveBrandType(inputs);
   const family = quoteFamily(type.display);
-  const scale = (inputs.designSystem?.tokens ?? []).filter(
-    (token) => sectionForToken(token) === TYPE_SECTION,
-  );
+  const weights = headlineWeights(inputs, type.display);
   return {
     stack: family ? `${family}, ${FALLBACK_STACK}` : FALLBACK_STACK,
-    lightWeight: weightFrom(scale, /light|thin/) ?? 300,
-    boldWeight: weightFrom(scale, /bold|black|heavy/) ?? 700,
+    lightWeight: weights.light,
+    boldWeight: weights.bold,
     family: type.display,
     source: type.source,
+  };
+}
+
+/**
+ * A face this product ships, named by the step rather than read off the brand: the display face
+ * of a two-face layout (one giant word in Anton over a caption in the brand's face). Its weights
+ * are the ones the file actually holds — Anton has only 400, and asking it for 700 draws a faux
+ * bold — and it reports the `fallback` rung, which is exactly "a face Continuum ships".
+ */
+export function shippedFaces(family: string): HeadlineFaces {
+  const weights = (captionFontSpec(family)?.weightRange ?? '400').split(' ').map(Number);
+  const clamp = (weight: number) =>
+    Math.min(Math.max(weight, Math.min(...weights)), Math.max(...weights));
+  const quoted = quoteFamily(family);
+  return {
+    stack: quoted ? `${quoted}, ${FALLBACK_STACK}` : FALLBACK_STACK,
+    lightWeight: clamp(300),
+    boldWeight: clamp(700),
+    family,
+    source: 'fallback',
   };
 }
 
@@ -308,6 +320,88 @@ const pastelOf = (ink: Rgb): string =>
 type Ctx2d = OffscreenCanvasRenderingContext2D;
 
 /**
+ * `textPlacementConfig.plate`: a solid shape behind the block, or nothing. `band` is the colour
+ * block of a split layout: full width, and on to whichever frame edge (top or bottom) is nearer.
+ * `column` is the same block split the other way — full height, on to the nearer SIDE edge — so a
+ * split can take the photo's negative space without cutting the subject at the waist.
+ */
+export type TextPlate = 'none' | 'pill' | 'box' | 'band' | 'column';
+
+/** A plate as drawn: its shape, the body size its padding is measured in, and its colour. */
+export interface PlateSpec {
+  readonly shape: Exclude<TextPlate, 'none'>;
+  /** The block's largest body size in px. Padding is in ems, never a share of the block. */
+  readonly emPx: number;
+  /** A chosen colour (brand or palette). Null is black or white, whichever the ink reads on. */
+  readonly fill?: Rgb | null;
+}
+
+/** Where the first line's glyphs start below its em-box top: the cap height, roughly. */
+const CAP_OFFSET_EM = 0.3;
+const PLATE_PAD_Y_EM = { pill: 0.5, box: 0.4, band: 0.9, column: 0 } as const;
+const PLATE_PAD_X_EM = { pill: 0.9, box: 0.5, band: 0, column: 0.9 } as const;
+/** Clear space between two stacked plates, so they read as two shapes rather than one. */
+const PLATE_GAP_EM = 0.2;
+/** Between two unplated paragraphs: more than the line step, so the break reads as a break. */
+const PARAGRAPH_GAP_EM = 0.45;
+
+export const plateSpecFor = (
+  plate: TextPlate,
+  emPx: number,
+  fill: Rgb | null = null,
+): PlateSpec | null => (plate === 'none' ? null : { shape: plate, emPx, fill });
+
+/**
+ * The plate's rectangle, padded off the WORDS rather than the em box: the first line's glyphs
+ * start about 0.3 em below the block top and the last baseline IS the block bottom, so the same
+ * pad above the caps and below the baseline centres the type on its plate.
+ */
+export function plateRect(
+  frame: Size,
+  box: FractionalBox,
+  plate: PlateSpec,
+): { x: number; y: number; width: number; height: number; radius: number } {
+  const rect = resolveBox(frame, box);
+  const padY = plate.emPx * PLATE_PAD_Y_EM[plate.shape];
+  const padX = plate.emPx * PLATE_PAD_X_EM[plate.shape];
+  const y = rect.y + plate.emPx * CAP_OFFSET_EM - padY;
+  const height = rect.y + rect.height + padY - y;
+  if (plate.shape === 'band') {
+    // Edge to edge, and on to the nearer frame edge: a block that sits low runs to the bottom.
+    const low = rect.y + rect.height / 2 > frame.height / 2;
+    return low
+      ? { x: 0, y, width: frame.width, height: frame.height - y, radius: 0 }
+      : { x: 0, y: 0, width: frame.width, height: y + height, radius: 0 };
+  }
+  if (plate.shape === 'column') {
+    // Top to bottom, and on to the nearer side edge: a block set on the right runs to the right.
+    const right = rect.x + rect.width / 2 > frame.width / 2;
+    return right
+      ? {
+          x: rect.x - padX,
+          y: 0,
+          width: frame.width - rect.x + padX,
+          height: frame.height,
+          radius: 0,
+        }
+      : { x: 0, y: 0, width: rect.x + rect.width + padX, height: frame.height, radius: 0 };
+  }
+  return {
+    x: rect.x - padX,
+    y,
+    width: rect.width + 2 * padX,
+    height,
+    radius: plate.shape === 'pill' ? height / 2 : plate.emPx * 0.25,
+  };
+}
+
+/** Black or white, whichever the ink reads on: the plate's colour when none was chosen. */
+export const plateFill = (ink: Rgb): Rgb =>
+  contrastRatio(ink, FALLBACK_INK_LIGHT) >= contrastRatio(ink, FALLBACK_INK_DARK)
+    ? FALLBACK_INK_LIGHT
+    : FALLBACK_INK_DARK;
+
+/**
  * Composite the treatment onto a frame that already holds the photo — BEHIND THE HEADLINE ONLY:
  * `box` plus the feather ring around it, and not one pixel further.
  *
@@ -340,6 +434,11 @@ type Ctx2d = OffscreenCanvasRenderingContext2D;
  *
  * The steps are applied from the pristine photo, in order, and there is at most one veil among
  * them — `resolveTreatment` raises a floor rather than adding a layer.
+ *
+ * THE PLATE IS THE LAST STEP, and it lives here rather than beside the glyph draw so the probe
+ * sees it: a CTA on a plate is measured against the plate, clears at rung 0, and the ladder never
+ * veils a photo to rescue type that was never over the photo. Solid, unfeathered and unclipped —
+ * a button with a blurred edge reads as a smudge.
  */
 export function applyTreatment(
   ctx: Ctx2d,
@@ -347,8 +446,9 @@ export function applyTreatment(
   frame: Size,
   ink: Rgb,
   box: FractionalBox,
+  plate: PlateSpec | null = null,
 ): void {
-  if (steps.length === 0) return;
+  if (steps.length === 0 && !plate) return;
   const rect = resolveBox(frame, box);
   const reach = scrimReachPx(frame, box);
   const feather = reach / 2;
@@ -379,10 +479,26 @@ export function applyTreatment(
     ctx.fillRect(core.x, core.y, core.width, core.height);
     ctx.restore();
   }
+  if (!plate) return;
+  const shape = plateRect(frame, box, plate);
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.filter = 'none';
+  ctx.fillStyle = rgbToHex(plate.fill ?? plateFill(ink));
+  ctx.beginPath();
+  ctx.roundRect(shape.x, shape.y, shape.width, shape.height, shape.radius);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** The scratch frame the probe re-composites on, and the pixels it reads back. */
-function createProbe(image: DrawableImage, frame: Size, ink: Rgb): ProbeContrast {
+export function createProbe(
+  image: DrawableImage,
+  frame: Size,
+  ink: Rgb,
+  plate: PlateSpec | null = null,
+): ProbeContrast {
   const canvas = new OffscreenCanvas(frame.width, frame.height);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser could not create a 2D canvas context to probe pixels');
@@ -391,7 +507,7 @@ function createProbe(image: DrawableImage, frame: Size, ink: Rgb): ProbeContrast
     ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, frame.width, frame.height);
     ctx.drawImage(image, 0, 0, frame.width, frame.height);
-    applyTreatment(ctx, state.treatments, frame, ink, box);
+    applyTreatment(ctx, state.treatments, frame, ink, box, plate);
     return boxContrast(readBox(ctx, frame, box), ink);
   };
 }
@@ -426,6 +542,7 @@ export function deriveHeadlineInk(
     frame,
     measureText: createMeasurer(faces, 0),
     measureFraction: settings.measure,
+    scale: settings.scale,
   });
   // `blockRect`, not `placementOptionsFor`: the same fractional box the panel draws the drag
   // rectangle from, so the ink is measured over exactly the pixels the user placed the type on.
@@ -460,7 +577,7 @@ const boxContrast = (pixels: PixelBuffer, ink: Rgb): number =>
 
 // ── The SVG ──────────────────────────────────────────────────────────────────────────────
 
-const escapeXml = (value: string): string =>
+export const escapeXml = (value: string): string =>
   value.replace(
     /[&<>"']/g,
     (char) =>
@@ -529,20 +646,22 @@ export function headlineSvg(
  * either and the piece breaks in the direction that is hardest to see — a plan measured in
  * Montserrat and drawn in Helvetica breaks its own lines in the wrong places.
  *
- * Null for a family we do not hold bytes for, which today is every brand face.
- *
- * CEILING, unchanged and now stated where it bites: an SVG rasterised as an image cannot fetch
- * a webfont, so a BRAND family that is not installed on this machine still resolves to
- * `FALLBACK_STACK` in both paths. Consistent, and not yet the brand's face. `HeadlineFaces.source`
- * is honest about which SHAPE named the family; it does not claim the bytes were found. The
- * upgrade is a byte source for brand faces (`designSystemFontEmbedSchema` already describes the
- * shape) — and when it lands it plugs in exactly here.
+ * A brand face travels as bytes with the request (`BrandTypeInputs.fontEmbeds`, which the server
+ * lanes fill): when `embeds` carry the family, THOSE bytes are registered and inlined. Otherwise a
+ * face we ship is, and null for a family we hold no bytes for — which then resolves to
+ * `FALLBACK_STACK` in both paths: consistent, and not the brand's face. `HeadlineFaces.source` is
+ * honest about which SHAPE named the family; it does not claim the bytes were found.
  *
  * Exported for the benches that call `renderHeadline` directly to read back a plan: they have to
  * feed it the SAME face this op fed it, or the frame they grade is not the frame the op drew.
  */
-export async function embedFace(family: string): Promise<string | null> {
+export async function embedFace(
+  family: string,
+  embeds?: readonly DesignSystemFontEmbed[] | null,
+): Promise<string | null> {
   try {
+    const own = embedsFor(embeds, family);
+    if (own.length) return await embedBrandFonts(own);
     const [css] = await Promise.all([captionFontFaceCss(family), ensureCaptionFonts([family])]);
     return css;
   } catch {
@@ -563,14 +682,15 @@ export async function embedFace(family: string): Promise<string | null> {
 export const headlineSvgDataUri = (svg: string): string =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-async function drawSvg(ctx: Ctx2d, svg: string, frame: Size): Promise<void> {
+/** Rasterise a frame-sized SVG over the canvas. `image.cta` draws its component through it too. */
+export async function drawSvg(ctx: Ctx2d, svg: string, frame: Size): Promise<void> {
   if (typeof Image === 'undefined') {
     throw new Error('Setting type needs a document to rasterise the glyph run');
   }
   const image = new Image(frame.width, frame.height);
   const loaded = new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error('The headline could not be rasterised'));
+    image.onerror = () => reject(new Error('The type could not be rasterised'));
   });
   image.src = headlineSvgDataUri(svg);
   await loaded;
@@ -601,6 +721,20 @@ export interface ImageTextSettings {
   readonly fallbackType: boolean;
   /** May the ink be MEASURED off the photo? Off restores a hard refusal. */
   readonly fallbackInk: boolean;
+  /** A solid plate behind the block. Anything but `none` also shrinks the measure to the words. */
+  readonly plate: TextPlate;
+  /** The plate's colour, when one was chosen; null keeps black or white. */
+  readonly plateHex: string | null;
+  /** How the paragraphs of a stack line up: flush right (the reference), or centred. */
+  readonly align: 'right' | 'center';
+  /** Type size against the calibrated reference headline; 1 is the reference. */
+  readonly scale: number;
+  /** The size of an all-light paragraph (a subhead); null sizes it with {@link scale}. */
+  readonly subScale: number | null;
+  /** A face Continuum ships, named by the step; null reads the brand's (see {@link shippedFaces}). */
+  readonly family: string | null;
+  /** Throw on a word the lines broke in two instead of drawing it (headless stills set this). */
+  readonly refuseSplit: boolean;
 }
 
 /** `textPlacementConfig`, already parsed by `parseActionConfig`, read as the shape it is. */
@@ -616,10 +750,194 @@ export const readSettings = (config: Record<string, unknown>): ImageTextSettings
   escalate: config.escalate as boolean,
   fallbackType: config.fallbackType !== false,
   fallbackInk: config.fallbackInk !== false,
+  plate:
+    config.plate === 'pill' ||
+    config.plate === 'box' ||
+    config.plate === 'band' ||
+    config.plate === 'column'
+      ? config.plate
+      : 'none',
+  plateHex: typeof config.plateHex === 'string' ? config.plateHex : null,
+  align: config.align === 'center' ? 'center' : 'right',
+  scale: typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1,
+  subScale: typeof config.subScale === 'number' && config.subScale > 0 ? config.subScale : null,
+  family: typeof config.family === 'string' && config.family.trim() ? config.family : null,
+  refuseSplit: config.refuseSplit === true,
 });
 
+/**
+ * The measure a PLATED block breaks to: its own widest line, not the composition measure.
+ *
+ * The block is the measure box and the type is right-aligned inside it, so a short CTA on the
+ * default 0.61 measure would sit at the right end of a plate twice its width. Breaking once at
+ * the configured measure and then taking the widest line makes the box hug the words, which is
+ * also what lets `bottom-center` actually centre them. One px of slack keeps the re-break from
+ * wrapping a line that measured exactly at the edge.
+ */
+export function snugMeasure(
+  headline: string,
+  frame: Size,
+  measureText: MeasureText,
+  measureFraction: number,
+  scale = 1,
+): number {
+  const broken = breakLines(parseHeadline(headline), measureText, {
+    measure: frame.width * measureFraction,
+    lightSizePx: frame.width * VERNE_TITLE_LIGHT_SIZE * scale,
+    boldSizePx: frame.width * VERNE_TITLE_BOLD_SIZE * scale,
+  });
+  const widest = Math.max(0, ...broken.lines.map((line) => line.width));
+  return Math.min(measureFraction, (widest + 1) / frame.width);
+}
+
+/**
+ * The largest scale, up to `scale`, at which every word fits the measure whole. `breakLines`
+ * splits a word wider than the measure mid-word, and the Easy Fit stills shipped "descuent / o"
+ * and "anualida / d": a paragraph shrinks instead, however narrow its column.
+ */
+export function wordFitScale(
+  tokens: readonly HeadlineToken[],
+  frame: Size,
+  measureText: MeasureText,
+  measureFraction: number,
+  scale: number,
+): number {
+  const limit = frame.width * measureFraction;
+  const widest = (at: number) =>
+    Math.max(
+      0,
+      ...tokens.flatMap((token) => {
+        const size = token.weight === 'bold' ? VERNE_TITLE_BOLD_SIZE : VERNE_TITLE_LIGHT_SIZE;
+        const style = { weight: token.weight, sizePx: frame.width * size * at };
+        return token.text.split(/\s+/).map((word) => (word ? measureText(word, style) : 0));
+      }),
+    );
+  const wide = widest(scale);
+  if (wide <= limit) return scale;
+  // Advance is near-linear in size; a real font's hinting can still round a word over, so step down.
+  let fit = (scale * limit) / wide;
+  while (fit > 0.01 && widest(fit) > limit) fit *= 0.98;
+  return fit;
+}
+
+/** One paragraph of the stack: its words, its body size, and the box it is planned into. */
+export interface StackedParagraph {
+  readonly text: string;
+  readonly tokens: HeadlineToken[];
+  /** The type scale this paragraph is planned at: `subScale` for a subhead, else `scale`. */
+  readonly scale: number;
+  readonly emPx: number;
+  readonly options: Required<
+    Pick<PlacementOptions, 'rightMarginFraction' | 'boxTop' | 'boxBottom' | 'measureFraction'>
+  >;
+}
+
+/**
+ * A newline starts a new paragraph, and paragraphs STACK: one right-aligned column, each
+ * paragraph on its own lines, placed as one block at the anchor.
+ *
+ * Why a paragraph and not just a second `image.text` step: the second block's position depends
+ * on how many lines the first one broke into, which only the measurer here knows. Merging a
+ * headline and a subhead into one flowing run is the other option, and it wraps the headline's
+ * last word onto the subhead's line — "The jeans I live / in High rise, dark" — which reads as
+ * one broken sentence.
+ *
+ * One paragraph reduces EXACTLY to the old single-block placement: no gap, the same origin, the
+ * same right margin and box. Each paragraph is planned on its own, so each gets its own
+ * contrast probe, treatment and (when plated) its own plate.
+ */
+export function stackParagraphs(args: {
+  text: string;
+  frame: Size;
+  measureText: MeasureText;
+  settings: ImageTextSettings;
+}): StackedParagraph[] {
+  const { frame, measureText, settings } = args;
+  // A column is a panel, not a plate that hugs the words: it keeps the measure it was given and
+  // the paragraph gaps of unplated type, and every paragraph paints the same full-height panel.
+  const plated = settings.plate !== 'none' && settings.plate !== 'column';
+  const blocks = args.text
+    .split('\n')
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((text) => {
+      const tokens = parseHeadline(text);
+      const bold = tokens.some((token) => token.weight === 'bold');
+      // A subhead is the all-light paragraph, and it is sized on its own: at a cover headline's
+      // scale it would be body copy set as big as a headline. No word breaks mid-word.
+      const scale = wordFitScale(
+        tokens,
+        frame,
+        measureText,
+        settings.measure,
+        !bold && settings.subScale ? settings.subScale : settings.scale,
+      );
+      const measureFraction = plated
+        ? snugMeasure(text, frame, measureText, settings.measure, scale)
+        : settings.measure;
+      const extent = headlineBlockExtent({ tokens, frame, measureText, measureFraction, scale });
+      const size = bold ? VERNE_TITLE_BOLD_SIZE : VERNE_TITLE_LIGHT_SIZE;
+      return { text, tokens, extent, scale, emPx: frame.width * size * scale };
+    });
+  if (blocks.length === 0) return [];
+
+  const padY = plated ? PLATE_PAD_Y_EM[settings.plate] : 0;
+  const gapFrac = blocks.map((block, index) => {
+    if (index === 0) return 0;
+    const upper = blocks[index - 1]!;
+    const px = plated
+      ? padY * upper.emPx + (padY - CAP_OFFSET_EM + PLATE_GAP_EM) * block.emPx
+      : PARAGRAPH_GAP_EM * block.emPx;
+    return px / frame.height;
+  });
+  const combined: BlockExtent = {
+    widthFrac: Math.max(...blocks.map((block) => block.extent.widthFrac)),
+    heightFrac: blocks.reduce(
+      (sum, block, index) => sum + block.extent.heightFrac + (gapFrac[index] ?? 0),
+      0,
+    ),
+    lines: blocks.reduce((sum, block) => sum + block.extent.lines, 0),
+  };
+  const origin = blockOrigin(
+    {
+      anchor: settings.anchor,
+      offsetX: settings.offsetX,
+      offsetY: settings.offsetY,
+      marginFrac: settings.marginFrac,
+    },
+    combined,
+  );
+  const rightEdge = origin.x + combined.widthFrac;
+  const centre = origin.x + combined.widthFrac / 2;
+  let top = origin.y;
+  return blocks.map((block, index) => {
+    // Centred stacks centre each paragraph on the column; flush-right ones share its edge.
+    const right = settings.align === 'center' ? centre + block.extent.widthFrac / 2 : rightEdge;
+    const rightMarginFraction = Math.max(0, 1 - right);
+    top += gapFrac[index] ?? 0;
+    const boxTop = top;
+    top += block.extent.heightFrac;
+    return {
+      text: block.text,
+      tokens: block.tokens,
+      scale: block.scale,
+      emPx: block.emPx,
+      options: {
+        measureFraction: block.extent.widthFrac,
+        rightMarginFraction,
+        boxTop,
+        // A block taller than the frame is clamped rather than allowed to describe a box the
+        // probe would read off the end of the pixel buffer.
+        boxBottom: Math.min(1, boxTop + block.extent.heightFrac),
+      },
+    };
+  });
+}
+
 export interface HeadlineRender {
+  /** The first paragraph's plan: the whole plan when the text is one paragraph. */
   readonly plan: PlacementPlan;
+  readonly plans: readonly PlacementPlan[];
   readonly svg: string;
   readonly canvas: OffscreenCanvas;
 }
@@ -660,48 +978,71 @@ export async function renderHeadline(args: {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser could not create a 2D canvas context to set type');
 
-  const tokens = parseHeadline(args.headline);
   const measureText = createMeasurer(args.faces, 0);
-  const extent = headlineBlockExtent({
-    tokens,
-    frame,
-    measureText,
-    measureFraction: args.settings.measure,
-  });
-  const placement = placementOptionsFor(
-    {
-      anchor: args.settings.anchor,
-      offsetX: args.settings.offsetX,
-      offsetY: args.settings.offsetY,
-      marginFrac: args.settings.marginFrac,
-    },
-    extent,
-  );
-
-  const probe = createProbe(args.image, frame, args.ink);
   const escalate = args.settings.escalate;
-  const planned = planPlacement({
-    tokens,
+  const planned = stackParagraphs({
+    text: args.headline,
     frame,
     measureText,
-    probeContrast: probe,
-    options: {
-      ...placement,
-      ink: args.ink,
-      // escalate:false pins the piece at rung 0. A zero bar makes the ladder return `direct`
-      // after ONE probe instead of walking eight it is forbidden to use; the ratio it carries
-      // is the real measurement, and `cleared` is restated below against the real bar so a
-      // piece that falls short says so rather than inheriting a bar it never faced.
-      minContrast: escalate ? args.settings.minContrast : 0,
-    },
+    settings: args.settings,
+  }).map((paragraph) => {
+    const plate = plateSpecFor(
+      args.settings.plate,
+      paragraph.emPx,
+      args.settings.plateHex ? parseHexColour(args.settings.plateHex) : null,
+    );
+    const plan = planPlacement({
+      tokens: paragraph.tokens,
+      frame,
+      measureText,
+      probeContrast: createProbe(args.image, frame, args.ink, plate),
+      options: {
+        ...paragraph.options,
+        scale: paragraph.scale,
+        ink: args.ink,
+        // escalate:false pins the piece at rung 0. A zero bar makes the ladder return `direct`
+        // after ONE probe instead of walking eight it is forbidden to use; the ratio it carries
+        // is the real measurement, and `cleared` is restated below against the real bar so a
+        // piece that falls short says so rather than inheriting a bar it never faced.
+        minContrast: escalate ? args.settings.minContrast : 0,
+      },
+    });
+    return {
+      plan: escalate ? plan : pinnedToRungZero(plan, args.settings.minContrast),
+      plate,
+    };
   });
-  const plan = escalate ? planned : pinnedToRungZero(planned, args.settings.minContrast);
+  const first = planned[0];
+  if (!first) throw new Error('Nothing is connected to this action\'s "text-in" input');
+  if (args.settings.refuseSplit) refuseSplitWords(args.headline, planned.map(({ plan }) => plan));
 
+  // Every treatment and plate first, then every glyph run: a lower paragraph's plate must never
+  // be painted over the words of the one above it.
   ctx.drawImage(args.image, 0, 0, frame.width, frame.height);
-  applyTreatment(ctx, plan.treatment.steps, frame, args.ink, plan.treatment.box);
-  const svg = headlineSvg(plan, args.faces, args.ink, args.fontFaceCss);
-  await drawSvg(ctx, svg, frame);
-  return { plan, svg, canvas };
+  for (const { plan, plate } of planned)
+    applyTreatment(ctx, plan.treatment.steps, frame, args.ink, plan.treatment.box, plate);
+  const svgs = planned.map(({ plan }) => headlineSvg(plan, args.faces, args.ink, args.fontFaceCss));
+  for (const svg of svgs) await drawSvg(ctx, svg, frame);
+  return {
+    plan: first.plan,
+    plans: planned.map(({ plan }) => plan),
+    svg: svgs[0] ?? '',
+    canvas,
+  };
+}
+
+/**
+ * Throw when any drawn word is no whole word of the text: a word the lines broke in two. Opt-in
+ * (`refuseSplit`) — a headless still refuses the frame and tries its next layout, where the canvas
+ * keeps drawing. `wordFitScale` should make this unreachable; this is what makes it certain.
+ */
+export function refuseSplitWords(text: string, plans: readonly PlacementPlan[]): void {
+  const whole = new Set(parseHeadline(text.replace(/\n/g, ' ')).flatMap((token) => token.text.split(/\s+/)));
+  const pieces = plans.flatMap((plan) =>
+    plan.lines.flatMap((line) => line.words.map((word) => word.text)),
+  );
+  const broken = pieces.filter((piece) => piece && !whole.has(piece));
+  if (broken.length) throw new Error(`layout_fault:split_word:${broken.join(' / ')}`);
 }
 
 function pinnedToRungZero(plan: PlacementPlan, minContrast: number): PlacementPlan {
@@ -737,8 +1078,9 @@ export async function setImageText(args: {
 
   const brand = args.brand ?? {};
   const settings = readSettings(args.config);
-  const faces = resolveHeadlineFaces(brand);
-  if (faces.source === 'fallback' && !settings.fallbackType) {
+  const faces = settings.family ? shippedFaces(settings.family) : resolveHeadlineFaces(brand);
+  // A face the step names is a choice, not a fallback the brand was denied.
+  if (faces.source === 'fallback' && !settings.fallbackType && !settings.family) {
     throw new Error(
       'This brand names no typeface — not in a design system, a brand book, a brand kit or a ' +
         'website — and "Use a fallback typeface" is switched off for this action. Switch it on ' +
@@ -748,7 +1090,7 @@ export async function setImageText(args: {
 
   // The face has to be registered BEFORE anything measures: `createMeasurer` reads this
   // thread's font set at call time, and the ink is chosen over the box those metrics produce.
-  const fontFaceCss = await embedFace(faces.family);
+  const fontFaceCss = await embedFace(faces.family, brand.fontEmbeds);
 
   // A HAND-PICKED INK SKIPS THE LADDER ENTIRELY, and has to: every rung below exists to answer
   // "the brand did not carry the colour we asked for", which a literal hex cannot be. Running

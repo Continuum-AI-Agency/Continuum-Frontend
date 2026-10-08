@@ -22,6 +22,14 @@
 
 import { z } from 'zod';
 import { percentBasisSchema } from './dataset';
+import { answerTemplatePayloadShape } from './jaina-templates/core';
+import {
+  type FigureUnit,
+  formatFigure,
+  renderFigureRefs,
+  type TemplateFigure,
+} from './jaina-templates/figure';
+import { validateTemplateBlock } from './jaina-templates/validate';
 
 // ---------------------------------------------------------------------------
 // Shared item schemas referenced by multiple block variants
@@ -48,6 +56,41 @@ export const citationSchema = z.object({
 export type Citation = z.infer<typeof citationSchema>;
 
 // ---------------------------------------------------------------------------
+// Claim grounding — what a sentence is ABOUT, and whether the turn could know it.
+//
+// Jaina's `summary`, `rationale`, `title` and `action` are free strings, and a report can
+// say "the video hook is weak" after a turn that read nothing but spend and CPA. A word
+// ban would be wrong here: Jaina CAN read creative copy (`get_ad_creative_details`,
+// `analyze_creative_image`) and audiences (`get_ad_sets`, `get_audience_demographics`).
+// So the rule is not "never mention the hook" — it is that a creative or audience claim
+// must sit on a tool call OF THAT KIND in the same turn, and cite it. The claim kinds
+// below are what the Backend maps its tool names onto; the violation shape is what a
+// block carries so the Frontend can show which sentence stands on nothing.
+// ---------------------------------------------------------------------------
+
+/**
+ * `breakdown` is the finer cut of `audience`: a SEGMENT SHARE ("18–24 is 41% of spend",
+ * "mujeres concentran el 58% del gasto") that only a breakdown read produces. A targeting
+ * read (`get_ad_sets`) vouches for an audience claim and never for a share — the golden
+ * bench printed age bands and a gender split from a turn that read targeting and key
+ * metrics only (JG-breakdown-without-tool).
+ */
+export const CLAIM_KINDS = ['creative', 'audience', 'breakdown', 'landing', 'figure'] as const;
+export const claimKindSchema = z.enum(CLAIM_KINDS);
+export type ClaimKind = z.infer<typeof claimKindSchema>;
+
+export const GROUNDING_VIOLATION_REASONS = ['claim_without_source', 'claim_uncited'] as const;
+export const groundingViolationSchema = z.object({
+  kind: claimKindSchema,
+  /** The sentence that makes the claim, as the block carries it. */
+  span: z.string().min(1),
+  /** `claim_without_source`: no tool of that kind ran this turn. `claim_uncited`: one
+   *  did, and the row still carries no `cite_ids`. */
+  reason: z.enum(GROUNDING_VIOLATION_REASONS),
+});
+export type GroundingViolation = z.infer<typeof groundingViolationSchema>;
+
+// ---------------------------------------------------------------------------
 // Block base + enums
 // ---------------------------------------------------------------------------
 
@@ -63,8 +106,84 @@ export const blockCategorySchema = z.enum([
   'actions',
   'goal_pacing',
   'survey',
+  // A templated answer: composed by code from the turn's reads, narrated through figure refs.
+  'answer_template',
 ]);
 export type BlockCategory = z.infer<typeof blockCategorySchema>;
+
+/**
+ * Where a block sits on the page: in the answer itself, or under the
+ * justification that holds the figures the answer rests on. A presentation
+ * grouping only — it never reorders `report.blocks`, whose order the backend
+ * emits (`J2_BLOCK_ORDER`) and grades (`data_scope_not_first`) and each section keeps.
+ *
+ * The J2 card (docs/performance-plus-redesign/jaina.html, "Ficha Prism") reads: the
+ * sentence, the window line under it (`data_scope`), the tiles (`metric_grid`), the three
+ * boxes (`narrative`), the action — and only then the evidence, folded. So the frame and
+ * the grid are part of the ANSWER, not of the justification under it.
+ */
+export type JainaReportSection = 'answer' | 'justification';
+
+const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
+  data_scope: 'answer',
+  answer_template: 'answer',
+  metric_grid: 'answer',
+  narrative: 'answer',
+  insight_list: 'answer',
+  actions: 'answer',
+  chart: 'justification',
+  survey: 'justification',
+  data_table: 'justification',
+  comparison: 'justification',
+  goal_pacing: 'justification',
+};
+
+export function sectionOfBlockCategory(category: BlockCategory): JainaReportSection {
+  return SECTION_OF_BLOCK_CATEGORY[category];
+}
+
+/**
+ * The order a finished report's blocks are emitted in — the J2 card top to bottom. The
+ * Backend sorts by it at the emit boundary (`withJ2BlockOrder`) and the Frontend renders
+ * `report.blocks` as given, never re-sorting; two blocks of one category keep their order.
+ * `survey` (the reading chosen for an ambiguous word) is evidence, so it closes the card.
+ */
+export const J2_BLOCK_ORDER: ReadonlyArray<BlockCategory> = [
+  'data_scope',
+  'answer_template',
+  'metric_grid',
+  'narrative',
+  'insight_list',
+  'actions',
+  'goal_pacing',
+  'comparison',
+  'chart',
+  'data_table',
+  'survey',
+];
+
+const J2_RANK: ReadonlyMap<BlockCategory, number> = new Map(
+  J2_BLOCK_ORDER.map((category, index) => [category, index]),
+);
+
+/** Where a category sits in the J2 order; an unknown category sorts last. */
+export const j2RankOf = (category: string): number =>
+  J2_RANK.get(category as BlockCategory) ?? J2_BLOCK_ORDER.length;
+
+/**
+ * The blocks in J2 order. A stable sort by category rank only: nothing is added, dropped
+ * or rewritten, and blocks of one category keep the order they came in. Returns the SAME
+ * array when it is already in order, so a caller can tell whether anything moved.
+ */
+export function withJ2BlockOrder<B extends { category: string }>(
+  blocks: ReadonlyArray<B>,
+): ReadonlyArray<B> {
+  const sorted = blocks
+    .map((block, index) => ({ block, index }))
+    .sort((a, b) => j2RankOf(a.block.category) - j2RankOf(b.block.category) || a.index - b.index)
+    .map((entry) => entry.block);
+  return sorted.every((block, index) => block === blocks[index]) ? blocks : sorted;
+}
 
 export const blockPrioritySchema = z.enum(['primary', 'secondary', 'supplementary']);
 export type BlockPriority = z.infer<typeof blockPrioritySchema>;
@@ -106,6 +225,14 @@ export const blockBaseSchema = z.object({
   priority: blockPrioritySchema.default('secondary'),
   provenance: blockProvenanceSchema.nullable().default(null),
   evidence_refs: z.array(z.string().min(1)).optional(),
+  /**
+   * Claims in this block that stand on no tool call of their kind this turn, or on one
+   * they never cite. Written by the Backend's grounding pass on the array the Frontend
+   * renders; null on a block nothing was flagged in and on every legacy block. A flagged
+   * block still ships — the violation is a reason to fix the emitter, never to hide a
+   * block a reader would otherwise have had.
+   */
+  grounding: z.array(groundingViolationSchema).nullable().default(null),
 });
 
 // ---------------------------------------------------------------------------
@@ -114,7 +241,23 @@ export const blockBaseSchema = z.object({
 
 export const narrativeBlockSchema = blockBaseSchema.extend({
   category: z.literal('narrative'),
+  /**
+   * The whole justification as one text. Kept for one release beside the three fields
+   * below: a renderer that has all three shows the boxes and not the body; one that has
+   * only the body (a persisted pre-J2 report) still has the words.
+   */
   body: z.string().min(1),
+  /**
+   * The J2 card's three boxes (docs/performance-plus-redesign/jaina.html, "Ficha Prism"):
+   * what happened — the entity, its figure and its comparison; what it means — the gap
+   * against the target or the prior and the entity that explains it; what to do — a move
+   * that names an entity and a sizing (an amount, a percentage, a pause). Null on a report
+   * written before J2; `validateReport` refuses a finished report missing any of them
+   * (`narrative_fields_missing`, `now_what_unsized`).
+   */
+  what: z.string().nullable().default(null),
+  so_what: z.string().nullable().default(null),
+  now_what: z.string().nullable().default(null),
   highlights: z.array(insightItemSchema).default([]),
   citations: z.array(citationSchema).default([]),
 });
@@ -123,6 +266,56 @@ export type NarrativeBlock = z.infer<typeof narrativeBlockSchema>;
 // ---------------------------------------------------------------------------
 // Metric grid block
 // ---------------------------------------------------------------------------
+
+/**
+ * The one-word read of a tile: which way the figure moved against its target or its
+ * prior, in the direction the business wants. `sin_comparacion` is the explicit "no
+ * comparison" the content rules require in place of a silent blank — a metric with no
+ * comparable prior says so, it never shows a delta against another window.
+ */
+export const METRIC_READS = ['mejor', 'peor', 'igual', 'sin_comparacion'] as const;
+export const metricReadSchema = z.enum(METRIC_READS);
+export type MetricRead = z.infer<typeof metricReadSchema>;
+
+/** Which way a metric should move: down for every cost and for frequency, up for the rest. */
+export type MetricPolarity = 'higher_is_better' | 'lower_is_better';
+
+const LOWER_IS_BETTER_LABEL =
+  /(?:^|[^\p{L}])(?:cost|costo|coste|cpc|cpm|cpa|cpl|cpr|frequency|frecuencia)(?![\p{L}])/iu;
+
+/** A metric's polarity from its label; spend and every count or rate read as higher-is-better. */
+export const metricPolarityOf = (label: string): MetricPolarity =>
+  LOWER_IS_BETTER_LABEL.test(label) ? 'lower_is_better' : 'higher_is_better';
+
+/** Under this relative move a figure reads `igual`. */
+export const METRIC_READ_FLAT_BAND = 0.005;
+
+const numberOf = (value: unknown): number | null => {
+  const parsed =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * The read of a figure against its prior: `sin_comparacion` with no numeric prior, `igual`
+ * inside the flat band, else `mejor` or `peor` by the metric's polarity. A prior of 0 with a
+ * figure above it is a move from nothing — read by direction, with no percentage.
+ */
+export const metricReadOf = (
+  value: unknown,
+  prior: unknown,
+  polarity: MetricPolarity,
+): MetricRead => {
+  const now = numberOf(value);
+  const before = numberOf(prior);
+  if (now === null || before === null) return 'sin_comparacion';
+  if (before === 0 && now === 0) return 'igual';
+  const relative =
+    before === 0 ? Number.POSITIVE_INFINITY : Math.abs(now - before) / Math.abs(before);
+  if (relative < METRIC_READ_FLAT_BAND) return 'igual';
+  const rising = now > before;
+  return (polarity === 'higher_is_better') === rising ? 'mejor' : 'peor';
+};
 
 export const metricItemSchema = z.object({
   label: z.string(),
@@ -133,6 +326,19 @@ export const metricItemSchema = z.object({
   percent_basis: percentBasisSchema.nullable().default(null),
   change: z.number().nullable().default(null),
   change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
+  /** The same figure over `prior_label`'s window, in the metric's own unit/format (a money
+   *  prior keeps `unit`'s currency). `change` is the percent move from it; null when the
+   *  prior is 0 — a move from nothing has no percentage. Null = no prior period was read. */
+  prior_value: z.union([z.number(), z.string()]).nullable().default(null),
+  /** The window `prior_value` covers, e.g. "2026-09-13 → 2026-09-19". */
+  prior_label: z.string().nullable().default(null),
+  /**
+   * The one-word read (`metricReadOf`), derived by the Backend from `prior_value` and the
+   * metric's polarity — never typed by a model. `sin_comparacion` goes with a null prior;
+   * `mejor` / `peor` / `igual` with a prior and its label. Null only on a report written
+   * before J2; `validateReport` refuses a finished report with one (`metric_read_missing`).
+   */
+  read: metricReadSchema.nullable().default(null),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
 });
 export type MetricItem = z.infer<typeof metricItemSchema>;
@@ -468,12 +674,27 @@ export const actionEvidenceSchema = z.object({
 });
 export type ActionEvidence = z.infer<typeof actionEvidenceSchema>;
 
+/**
+ * Where an action's entity sits in the Meta hierarchy. Resolved server-side against the
+ * entities the turn's tool calls actually returned (`resolveBlockEntities` on the Backend),
+ * never taken on the model's word alone: a row whose text names a campaign while its
+ * entity is the account is the defect this field exists to make visible. `account` is a
+ * legitimate value for an account-wide move — and the value a renderer must NOT deep-link,
+ * because there is nothing under it to open.
+ */
+export const ACTION_ENTITY_LEVELS = ['account', 'campaign', 'adset', 'ad'] as const;
+export const actionEntityLevelSchema = z.enum(ACTION_ENTITY_LEVELS);
+export type ActionEntityLevel = z.infer<typeof actionEntityLevelSchema>;
+
 export const actionRowSchema = z.object({
   priority: z.enum(['P1', 'P2', 'P3']),
   entity: z.object({
+    /** The Meta id of the entity the move is about; null when the turn never saw it. */
     id: z.string().nullable().default(null),
     name: z.string().min(1),
     kind: z.string().nullable().default(null),
+    /** Null when unresolved — a renderer treats null exactly like `account`: no link. */
+    level: actionEntityLevelSchema.nullable().default(null),
   }),
   action: z.string().min(1),
   /** The size of the move: "+$500/day", "pause", "−30%", "~$890/day recoverable". */
@@ -527,6 +748,18 @@ export const surveyBlockSchema = blockBaseSchema.extend({
 });
 export type SurveyBlock = z.infer<typeof surveyBlockSchema>;
 
+// ---------------------------------------------------------------------------
+// Answer template — a whole answer in one block: the executive sentence and its chart, the
+// justification sections, and the figures both read from (`jaina-templates/`). Every number
+// is a figure with a source; prose holds `{figure_id}` refs, never digits of its own.
+// ---------------------------------------------------------------------------
+
+export const answerTemplateBlockSchema = blockBaseSchema.extend({
+  category: z.literal('answer_template'),
+  ...answerTemplatePayloadShape,
+});
+export type AnswerTemplateBlock = z.infer<typeof answerTemplateBlockSchema>;
+
 const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockSchema,
   metricGridBlockSchema,
@@ -538,6 +771,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   actionsBlockSchema,
   goalPacingBlockSchema,
   surveyBlockSchema,
+  answerTemplateBlockSchema,
 ]);
 
 export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
@@ -622,12 +856,1132 @@ export type ReportViolation = {
     | 'percent_basis_missing'
     | 'currency_missing'
     | 'table_truncation_undeclared'
-    | 'table_totals_missing';
+    | 'table_totals_missing'
+    | 'action_entity_is_account'
+    | 'claim_without_source'
+    | 'claim_uncited'
+    | 'answer_template_invalid'
+    // The J2 card: every tile carries its read and, with it, its prior; the narrative carries
+    // what / so_what / now_what, and now_what names an entity and a sizing.
+    | 'metric_read_missing'
+    | 'metric_read_prior_mismatch'
+    | 'narrative_fields_missing'
+    | 'now_what_unsized';
   block_id: string | null;
   message: string;
 };
 
 type AnyBlock = z.infer<typeof checkpointBlockV2UnionSchema>;
+
+// ---------------------------------------------------------------------------
+// Entity naming — shared by the Backend resolver and the validator below, so the rule
+// that grades a row and the rule that fixes it cannot disagree about what "names" means.
+// ---------------------------------------------------------------------------
+
+/** An entity a turn's evidence actually carried: a campaign, ad set or ad by name. */
+export type ReportEntity = {
+  level: ActionEntityLevel;
+  id: string | null;
+  name: string;
+};
+
+/** Case-, width- and whitespace-insensitive; diacritics are kept (CAÑADAS ≠ CANADAS). */
+export const normalizeEntityName = (name: string): string =>
+  name.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** Names too short to be a mention rather than a coincidence ("A", "B", "Q3"). */
+const MIN_ENTITY_NAME_CHARS = 3;
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** True when `text` mentions `name` as a whole token, not as the inside of a longer word. */
+export const textNamesEntity = (text: string, name: string): boolean => {
+  const needle = normalizeEntityName(name);
+  if (needle.length < MIN_ENTITY_NAME_CHARS) return false;
+  const haystack = normalizeEntityName(text);
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(needle)}(?=$|[^\\p{L}\\p{N}])`, 'u').test(
+    haystack,
+  );
+};
+
+/**
+ * The account, however the model spelled it: the `account-<id>` label the tool layer
+ * mints, the `act_<id>` Meta id, a bare id, or the word itself.
+ */
+export const isAccountEntityName = (name: string): boolean =>
+  /^(?:the\s+)?(?:ad\s+)?account$/i.test(name.trim()) ||
+  /^(?:account[-_ ]?|act_)?\d{6,}$/i.test(name.trim());
+
+/** Every `**bold**` run in a clause — the model bolds the entity it is talking about. */
+export const boldSpans = (text: string): string[] =>
+  [...text.matchAll(/\*\*([^*\n]+?)\*\*/g)].map((match) => match[1].trim());
+
+/**
+ * The entities from `entities` that `text` names, in the order the text names them.
+ * Bold spans come first because they are the model's own declaration of its subject;
+ * plain mentions follow by position. A name mentioned twice is listed once.
+ */
+export const entitiesNamedIn = (
+  text: string,
+  entities: ReadonlyArray<ReportEntity>,
+): ReportEntity[] => {
+  const named = entities.filter((entity) => entity.level !== 'account');
+  const bolded = boldSpans(text).flatMap((span) =>
+    named.filter((entity) => normalizeEntityName(entity.name) === normalizeEntityName(span)),
+  );
+  const haystack = normalizeEntityName(text);
+  const mentioned = named
+    .filter((entity) => textNamesEntity(text, entity.name))
+    .sort(
+      (a, b) =>
+        haystack.indexOf(normalizeEntityName(a.name)) -
+        haystack.indexOf(normalizeEntityName(b.name)),
+    );
+  const seen = new Set<string>();
+  return [...bolded, ...mentioned].filter((entity) => {
+    const key = `${entity.level}|${entity.id ?? normalizeEntityName(entity.name)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Claim classifier — the kind a sentence is about, in the two languages the reports are
+// written in (the clients are Mexican; the evidence is English). Vocabulary, not a
+// model: a word list is honest about what it can see, and both sides can pin it.
+// ---------------------------------------------------------------------------
+
+const wordPattern = (alternatives: string): RegExp =>
+  new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${alternatives})(?=$|[^\\p{L}\\p{N}])`, 'iu');
+
+/**
+ * Metric NAMES that happen to contain a claim word. "Video views fell 20%" reads a
+ * figure off the insights API and says nothing about the video; "landing page views"
+ * and "hook rate" are Meta metrics, not a read of the page or the hook. Removed before
+ * the vocabulary is matched, so a report that only quotes them is not asked for a
+ * creative read it never needed.
+ */
+const METRIC_PHRASES = new RegExp(
+  [
+    'video (?:views?|plays?|completions?|average[\\p{L} ]*)',
+    'thru ?plays?',
+    'cost per thru ?play',
+    'costo por thru ?play',
+    'reproducciones(?: de)? v[ií]deos?',
+    'visualizaciones(?: de)? v[ií]deos?',
+    'landing page views?',
+    'visitas a (?:la )?p[áa]gina de destino',
+    'vistas de (?:la )?p[áa]gina de destino',
+    'hook rates?',
+    'hold rates?',
+    'tasa de gancho',
+    'link clicks?',
+    'clics? en el enlace',
+  ].join('|'),
+  'giu',
+);
+
+const CLAIM_VOCABULARY: ReadonlyArray<{ kind: Exclude<ClaimKind, 'figure'>; pattern: RegExp }> = [
+  {
+    kind: 'creative',
+    pattern: wordPattern(
+      [
+        'hooks?',
+        'ganchos?',
+        'copy',
+        'ad copy',
+        'headlines?',
+        'titular(?:es)?',
+        'creatives?',
+        'creativ[oa]s?',
+        'creatividad(?:es)?',
+        'v[ií]deos?',
+        'images?',
+        'im[áa]gen(?:es)?',
+        'visual(?:es)?',
+        'angles?',
+        '[áa]ngulos?',
+        'captions?',
+        'thumbnails?',
+        'miniaturas?',
+        'carousels?',
+        'carrusel(?:es)?',
+        'reels?',
+        'primary text',
+        'texto principal',
+        'ugc',
+        'testimonials?',
+        'testimonios?',
+        'cta',
+        'fatiga creativa',
+      ].join('|'),
+    ),
+  },
+  {
+    kind: 'audience',
+    pattern: wordPattern(
+      [
+        'audiences?',
+        'audiencias?',
+        'p[úu]blicos?',
+        'targeting',
+        'segmentaci[óo]n',
+        'segmentos?',
+        'age',
+        'age ranges?',
+        'edad(?:es)?',
+        'rangos? de edad',
+        'gender',
+        'g[ée]nero',
+        'interests?',
+        'inter[ée]s(?:es)?',
+        'lookalikes?',
+        'retargeting',
+        'remarketing',
+        'demographics?',
+        'demogr[áa]fic[oa]s?',
+        'placements?',
+        'ubicaciones',
+        'women',
+        'men',
+        'mujeres',
+        'hombres',
+      ].join('|'),
+    ),
+  },
+  {
+    kind: 'landing',
+    pattern: wordPattern(
+      [
+        'landing pages?',
+        'landing',
+        'p[áa]ginas? de destino',
+        'p[áa]ginas? de aterrizaje',
+        'destination urls?',
+        'urls? de destino',
+        'links? de destino',
+      ].join('|'),
+    ),
+  },
+];
+
+/**
+ * A breakdown claim is a segment WITH a measure beside it. The segment words are the
+ * dimensions Meta breaks delivery down by and the values those dimensions take; the
+ * measure is a share or a metric. Either alone is an audience claim ("targeting women
+ * 25-34" reads a targeting spec); together they are a split only a breakdown read shows.
+ */
+const BREAKDOWN_SEGMENT = wordPattern(
+  [
+    'age',
+    'age (?:bands?|ranges?|groups?)',
+    'edad(?:es)?',
+    '(?:rangos?|franjas?|grupos?) de edad',
+    'gender',
+    'g[ée]nero',
+    'women',
+    'men',
+    'female',
+    'male',
+    'mujeres',
+    'hombres',
+    'placements?',
+    'ubicaci(?:ón|on|ones)',
+    'devices?',
+    'dispositivos?',
+    'platforms?',
+    'plataformas?',
+    'countr(?:y|ies)',
+    'pa[ií]s(?:es)?',
+    'regions?',
+    'regi(?:ón|on|ones)',
+    'cit(?:y|ies)',
+    'ciudad(?:es)?',
+    '\\d{2}\\s?(?:[-–—]|to|a)\\s?\\d{2}',
+    '\\d{2}\\+',
+  ].join('|'),
+);
+const BREAKDOWN_MEASURE = new RegExp(
+  [
+    '%',
+    '(?:^|[^\\p{L}\\p{N}])(?:' +
+      [
+        'percent',
+        'por ciento',
+        'share',
+        'cuota',
+        'participaci[óo]n',
+        'accounts? for',
+        'concentran?',
+        'representan?',
+        'spend',
+        'gasto',
+        'gast[óo]',
+        'results?',
+        'resultados?',
+        'conversions?',
+        'conversiones',
+        'leads?',
+        'purchases?',
+        'compras',
+        'revenue',
+        'ingresos',
+        'cpa',
+        'roas',
+        'cpc',
+        'cpm',
+        'ctr',
+        'costs?',
+        'costos?',
+        'impressions?',
+        'impresiones',
+        'clicks?',
+        'clics?',
+        'reach',
+        'alcance',
+        'frequency',
+        'frecuencia',
+      ].join('|') +
+      ')(?=$|[^\\p{L}\\p{N}])',
+  ].join('|'),
+  'iu',
+);
+
+/** A calendar date — `2026-09-14`, `14/09/2026` — whose digit pairs read as an age band. */
+const CALENDAR_DATE = /\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/g;
+
+const isBreakdownClaim = (judged: string): boolean => {
+  const undated = judged.replace(CALENDAR_DATE, ' ');
+  return BREAKDOWN_SEGMENT.test(undated) && BREAKDOWN_MEASURE.test(undated);
+};
+
+export type Claim = { kind: ClaimKind; span: string };
+
+const SENTENCE_BOUNDARY = /(?<=[.!?])\s+|\n+/u;
+
+/**
+ * The sentence with everything that is not a claim taken out of it: bold spans (the
+ * entity the model is talking about — a campaign named "VIDEO Q3" is not a video claim),
+ * the entities the turn saw, citation markers, prose-mark brackets and the metric names
+ * above. What remains is judged by vocabulary.
+ */
+const claimableText = (sentence: string, entities: ReadonlyArray<ReportEntity>): string => {
+  let text = stripProseMarks(sentence)
+    .replace(/\*\*[^*\n]+?\*\*/g, ' ')
+    .replace(/\[cite:[^\]]*\]/gi, ' ');
+  for (const entity of entities) {
+    const needle = normalizeEntityName(entity.name);
+    if (needle.length < MIN_ENTITY_NAME_CHARS) continue;
+    text = text.replace(new RegExp(escapeRegExp(needle), 'giu'), ' ');
+  }
+  return text.replace(METRIC_PHRASES, ' ');
+};
+
+/**
+ * Every claim `text` makes, one per sentence per kind. A sentence carrying a number is
+ * also a `figure` claim, graded by `groundingViolationsOf` against the turn's figures
+ * exactly as a rendered cell is (JG-prose-figures-ungraded: the same invented revenue
+ * that is a violation in a cell was invisible one block over, in a sentence).
+ */
+export const classifyClaims = (
+  text: string,
+  options: { entities?: ReadonlyArray<ReportEntity> } = {},
+): Claim[] => {
+  const entities = options.entities ?? [];
+  const claims: Claim[] = [];
+  for (const raw of text.split(SENTENCE_BOUNDARY)) {
+    const sentence = raw.trim();
+    if (sentence.length === 0) continue;
+    const judged = claimableText(sentence, entities);
+    for (const { kind, pattern } of CLAIM_VOCABULARY) {
+      if (pattern.test(judged)) claims.push({ kind, span: sentence });
+      if (kind === 'audience' && isBreakdownClaim(judged)) {
+        claims.push({ kind: 'breakdown', span: sentence });
+      }
+    }
+    if (/\d/.test(judged)) claims.push({ kind: 'figure', span: sentence });
+  }
+  return claims;
+};
+
+export type GroundingOptions = {
+  /** The claim kinds the turn's tool calls could vouch for — the Backend maps tool names. */
+  toolKinds: ReadonlyArray<ClaimKind>;
+  entities?: ReadonlyArray<ReportEntity>;
+  /**
+   * Every number the turn's tool results carry. When given, a figure a block RENDERS — a
+   * table cell, a grid value, a comparison leg, a chart point — or STATES in prose that
+   * none of them matches is `claim_without_source`; when absent, figures are not graded,
+   * because there is no evidence to grade them against. The Backend derives it from the
+   * run cache, the one place a tool result is kept whole.
+   */
+  figures?: ReadonlyArray<number>;
+};
+
+type ClaimSource = { text: string; citeIds: ReadonlyArray<string> | null };
+
+const stringOf = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const citeIdsOf = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+
+const recordsOf = (value: unknown): Record<string, unknown>[] =>
+  Array.isArray(value)
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          item !== null && typeof item === 'object' && !Array.isArray(item),
+      )
+    : [];
+
+// ---------------------------------------------------------------------------
+// Numbers as a report prints them — every way a model writes 73,712.61 — and every value
+// a block renders. Lifted from the golden grader (`eval/golden/grade.ts`) so the grounding
+// gate and the grader walk the SAME cells with the SAME readings: a figure a cell prints
+// is graded here against the turn's tool outputs and there against the live account.
+// ---------------------------------------------------------------------------
+
+const NUMBER_TOKEN = /(?<![\w.,])(\d[\d.,]*\d|\d)\s?(k|K|M|mil|million|millones)?(?![\w])/gu;
+
+/** One reading of a printed number and the precision it was printed at: "24.9k" is 24,900 to the hundred (decimals −2). */
+export type NumberReading = { value: number; decimals: number };
+
+/**
+ * The numeric readings of one token. A token with both separators reads the last one as
+ * the decimal mark ("73,712.61" and "73.712,61" both become 73712.61). A lone comma with
+ * three-digit groups is a thousands mark; a lone dot with three-digit groups is AMBIGUOUS
+ * (English "73.712" is a decimal, Spanish is a thousands group) so both readings are kept.
+ */
+export const numberReadingsOfToken = (digits: string, suffix?: string): NumberReading[] => {
+  const scale =
+    suffix === undefined
+      ? 1
+      : /^(k|mil)$/i.test(suffix)
+        ? 1_000
+        : /^(m|million|millones)$/i.test(suffix)
+          ? 1_000_000
+          : 1;
+  const hasComma = digits.includes(',');
+  const hasDot = digits.includes('.');
+  const readings: NumberReading[] = [];
+  const push = (text: string): void => {
+    const value = Number(text);
+    if (!Number.isFinite(value)) return;
+    const point = text.indexOf('.');
+    const fractionDigits = point < 0 ? 0 : text.length - point - 1;
+    readings.push({ value: value * scale, decimals: fractionDigits - Math.log10(scale) });
+  };
+  if (hasComma && hasDot) {
+    const decimalIsComma = digits.lastIndexOf(',') > digits.lastIndexOf('.');
+    push(decimalIsComma ? digits.replace(/\./g, '').replace(',', '.') : digits.replace(/,/g, ''));
+  } else if (hasComma) {
+    if (/^\d{1,3}(,\d{3})+$/.test(digits)) push(digits.replace(/,/g, ''));
+    else push(digits.replace(',', '.'));
+  } else if (hasDot) {
+    if (/^\d{1,3}(\.\d{3})+$/.test(digits)) {
+      push(digits.replace(/\./g, ''));
+      push(digits);
+    } else push(digits);
+  } else push(digits);
+  return readings;
+};
+
+export const readingsOfNumberToken = (digits: string, suffix?: string): number[] =>
+  numberReadingsOfToken(digits, suffix).map((reading) => reading.value);
+
+/** Each printed number in `text` with its readings — one entry per token, several readings when the token is ambiguous. */
+export const numberTokensInText = (text: string): NumberReading[][] => {
+  const out: NumberReading[][] = [];
+  for (const match of text.matchAll(NUMBER_TOKEN)) {
+    out.push(numberReadingsOfToken(match[1], match[2]));
+  }
+  return out;
+};
+
+export const numbersInText = (text: string): number[] =>
+  numberTokensInText(text).flatMap((readings) => readings.map((reading) => reading.value));
+
+/**
+ * One value a block shows, where (`top-ads.rows[2].cost`), under which label, in which
+ * format. The address never carries a cell's text, so an entity name in one column cannot
+ * leak into a verdict about another; the format says whether the cell is a measurement
+ * (`currency`, `number`, `percent`, `multiplier`) or a name (`text`, `creative`).
+ */
+export type BlockCell = {
+  value: unknown;
+  where: string;
+  label: string | null;
+  format: string | null;
+};
+
+const looseRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const looseArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+const formatOf = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback;
+
+/** A template figure's unit in the cell formats the other blocks use. */
+const CELL_FORMAT_OF_FIGURE_UNIT: Readonly<Record<FigureUnit, string>> = {
+  money: 'currency',
+  count: 'number',
+  ratio: 'number',
+  percent: 'percent',
+  multiple: 'multiplier',
+  days: 'number',
+};
+
+/** A figure as far as printing it needs, read loosely off an unvalidated block. */
+const looseFigureOf = (raw: unknown): TemplateFigure | null => {
+  const figure = looseRecord(raw);
+  if (typeof figure.id !== 'string' || typeof figure.unit !== 'string') return null;
+  if (!(figure.unit in CELL_FORMAT_OF_FIGURE_UNIT)) return null;
+  return {
+    ...(figure as unknown as TemplateFigure),
+    value: typeof figure.value === 'number' ? figure.value : null,
+    currency: typeof figure.currency === 'string' ? figure.currency : null,
+  };
+};
+
+/**
+ * What an `answer_template` block prints: each figure as the renderer formats it
+ * (`formatFigure` — "32.19 MXN", "12.1%"), then the executive sentence and every section and
+ * item text with its refs rendered. A templated answer carries no number anywhere else, so a
+ * walk that skipped the block left its figures invisible to the golden grader's figure and
+ * currency checks.
+ */
+const answerTemplateCellsOf = (block: Record<string, unknown>, id: string): BlockCell[] => {
+  const out: BlockCell[] = [];
+  const figures = looseArray(block.figures).flatMap((raw) => {
+    const figure = looseFigureOf(raw);
+    return figure ? [figure] : [];
+  });
+  figures.forEach((figure, i) => {
+    out.push({
+      value: formatFigure(figure),
+      where: `${id}.figures[${i}]`,
+      label: typeof figure.label === 'string' ? figure.label : figure.id,
+      format: CELL_FORMAT_OF_FIGURE_UNIT[figure.unit],
+    });
+  });
+  const prose = (text: unknown, where: string): void => {
+    if (typeof text !== 'string' || text.trim().length === 0) return;
+    out.push({
+      value: renderFigureRefs(text, figures, formatFigure, { onUnresolved: 'mark' }).text,
+      where,
+      label: null,
+      format: 'text',
+    });
+  };
+  prose(looseRecord(block.executive).sentence, `${id}.executive.sentence`);
+  looseArray(looseRecord(block.justification).sections).forEach((raw, i) => {
+    const section = looseRecord(raw);
+    prose(section.text, `${id}.justification.sections[${i}].text`);
+    looseArray(section.items).forEach((item, j) => {
+      prose(looseRecord(item).text, `${id}.justification.sections[${i}].items[${j}].text`);
+    });
+  });
+  return out;
+};
+
+/** Every value a block carries where a renderer would show it: grid values, cells, pairs, evidence, chart points, pacing, template figures and prose. */
+export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
+  const out: BlockCell[] = [];
+  for (const raw of blocks) {
+    const block = looseRecord(raw);
+    const id = String(block.block_id ?? block.category ?? '?');
+    switch (block.category) {
+      case 'metric_grid':
+        looseArray(block.metrics).forEach((metric, i) => {
+          const item = looseRecord(metric);
+          out.push({
+            value: item.value,
+            where: `${id}.metrics[${i}].value`,
+            label: typeof item.label === 'string' ? item.label : null,
+            format: formatOf(item.format, 'number'),
+          });
+        });
+        break;
+      case 'data_table': {
+        const columns = looseArray(block.columns).map(looseRecord);
+        const columnOf = (key: string) => columns.find((column) => column.key === key);
+        looseArray(block.rows).forEach((row, i) => {
+          for (const [key, cell] of Object.entries(looseRecord(row))) {
+            const column = columnOf(key);
+            out.push({
+              value: cell,
+              where: `${id}.rows[${i}].${key}`,
+              label: typeof column?.label === 'string' ? column.label : key,
+              format: formatOf(column?.format, 'text'),
+            });
+          }
+        });
+        break;
+      }
+      case 'comparison':
+        looseArray(block.pairs).forEach((pair, i) => {
+          const rec = looseRecord(pair);
+          for (const leg of ['before', 'after', 'baseline'] as const) {
+            out.push({
+              value: rec[leg],
+              where: `${id}.pairs[${i}].${leg}`,
+              label: typeof rec.label === 'string' ? rec.label : leg,
+              format: formatOf(rec.format, 'number'),
+            });
+          }
+        });
+        break;
+      case 'actions':
+        looseArray(block.rows).forEach((row, i) => {
+          const evidence = looseRecord(looseRecord(row).evidence);
+          out.push({
+            value: evidence.value,
+            where: `${id}.rows[${i}].evidence.value`,
+            label: typeof evidence.metric === 'string' ? evidence.metric : 'evidence',
+            format: null,
+          });
+        });
+        break;
+      case 'chart': {
+        const categoryKey = typeof block.category_key === 'string' ? block.category_key : null;
+        looseArray(block.data).forEach((point, i) => {
+          for (const [key, cell] of Object.entries(looseRecord(point))) {
+            out.push({
+              value: cell,
+              where: `${id}.data[${i}].${key}`,
+              label: key,
+              // The category axis is a date or a name, never a measurement.
+              format: key === categoryKey ? 'text' : formatOf(block.value_format, 'number'),
+            });
+          }
+        });
+        break;
+      }
+      case 'goal_pacing':
+        out.push({ value: block.budget, where: `${id}.budget`, label: 'budget', format: null });
+        out.push({ value: block.spent, where: `${id}.spent`, label: 'spent', format: null });
+        out.push({
+          value: block.projected_end,
+          where: `${id}.projected_end`,
+          label: 'projected_end',
+          format: null,
+        });
+        break;
+      case 'answer_template':
+        out.push(...answerTemplateCellsOf(block, id));
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+};
+
+/** The headings a renderer prints over those values: column labels, metric and pair labels, chart axes. */
+export const headersOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
+  const out: BlockCell[] = [];
+  for (const raw of blocks) {
+    const block = looseRecord(raw);
+    const id = String(block.block_id ?? block.category ?? '?');
+    const labelled = (items: unknown[], field: string): void => {
+      items.forEach((item, i) => {
+        out.push({
+          value: looseRecord(item).label,
+          where: `${id}.${field}[${i}].label`,
+          label: null,
+          format: 'text',
+        });
+      });
+    };
+    if (block.category === 'data_table') labelled(looseArray(block.columns), 'columns');
+    if (block.category === 'metric_grid') labelled(looseArray(block.metrics), 'metrics');
+    if (block.category === 'comparison') labelled(looseArray(block.pairs), 'pairs');
+    if (block.category === 'chart') {
+      out.push({
+        value: block.x_axis_label,
+        where: `${id}.x_axis_label`,
+        label: null,
+        format: 'text',
+      });
+      out.push({
+        value: block.y_axis_label,
+        where: `${id}.y_axis_label`,
+        label: null,
+        format: 'text',
+      });
+    }
+  }
+  return out;
+};
+
+/** A cell whose format says it is a measurement, not a name — the only cells a figure verdict reads. */
+const isMeasuredCell = (cell: BlockCell): boolean =>
+  cell.format !== 'text' && cell.format !== 'creative';
+
+const decimalsOf = (value: number): number => {
+  const text = String(value);
+  if (/e/i.test(text)) return 6;
+  const point = text.indexOf('.');
+  return point < 0 ? 0 : text.length - point - 1;
+};
+
+/** The printed numbers of one cell, one entry per token; a numeric cell is one token at its own precision. */
+const numberTokensOfCell = (value: unknown): NumberReading[][] => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return [[{ value, decimals: decimalsOf(value) }]];
+  }
+  if (typeof value === 'string') return numberTokensInText(value);
+  return [];
+};
+
+/** A rendered figure may be rounded to its printed precision or to half a percent, and a ratio may be printed as a percent. */
+const FIGURE_RELATIVE_TOLERANCE = 0.005;
+
+const hasFigureNear = (
+  sorted: ReadonlyArray<number>,
+  value: number,
+  tolerance: number,
+): boolean => {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (sorted[mid] < value - tolerance) low = mid + 1;
+    else high = mid;
+  }
+  return low < sorted.length && sorted[low] <= value + tolerance;
+};
+
+const readingIsMeasured = (reading: NumberReading, sorted: ReadonlyArray<number>): boolean =>
+  [
+    reading,
+    // A fraction the tool returned, printed as a percent — and the reverse.
+    { value: reading.value / 100, decimals: reading.decimals + 2 },
+    { value: reading.value * 100, decimals: reading.decimals - 2 },
+  ].some(({ value, decimals }) => {
+    const tolerance =
+      Math.max(0.5 * 10 ** -decimals, Math.abs(value) * FIGURE_RELATIVE_TOLERANCE) + 1e-9;
+    return hasFigureNear(sorted, value, tolerance);
+  });
+
+/** The turn's figures, deduplicated and sorted once, so every cell and sentence is searched by bisection. */
+const figureIndexOf = (figures: ReadonlyArray<number>): number[] =>
+  [...new Set(figures)].sort((left, right) => left - right);
+
+/**
+ * Whether every positive number among `tokens` has one reading among the turn's figures.
+ * A zero is an absence, never an invention, and a text with no positive figure states
+ * nothing to ground.
+ */
+const printsOnlyMeasuredFigures = (
+  tokens: ReadonlyArray<NumberReading[]>,
+  sorted: ReadonlyArray<number>,
+): boolean =>
+  tokens
+    .filter((readings) => readings.some((reading) => reading.value > 0))
+    .every((readings) => readings.some((reading) => readingIsMeasured(reading, sorted)));
+
+/** A column whose values add up across rows: spend, cost, revenue, counts of results. */
+const ADDITIVE_COLUMN =
+  /(?:^|_)(?:spend|amount_spent|cost|revenue|value|impressions|clicks|purchases|leads|conversions|conversations|results|installs|registrations|add_to_cart|checkouts|video_views|thruplays|engagements)$/;
+/** A rate, ratio or average: CPC, CTR, a cost per result, ROAS — its sum is no figure at all. */
+const RATE_COLUMN =
+  /(?:^|_)(?:cpc|cpm|cpa|cpl|cpp|cpr|cpv|ctr|cvr|roas|frequency|rate|ratio|share|pct|percent|avg|average|median|per)(?:_|$)/;
+
+/**
+ * Whether a table column sums across its rows — what a totals row may add up. Read off the
+ * column key: `spend`, `cost`, `revenue`, `messaging_conversations` do; `cpc`, `ctr`,
+ * `cost_per_messaging_conversation`, `roas` and `reach` (people, deduplicated) do not.
+ */
+export const isAdditiveTableColumn = (column: { key: string; format?: string | null }): boolean =>
+  (column.format === 'currency' || column.format === 'number') &&
+  ADDITIVE_COLUMN.test(column.key.toLowerCase()) &&
+  !RATE_COLUMN.test(column.key.toLowerCase());
+
+/** A row that labels itself the table's total — the same test `validateReport` applies. */
+const isTotalsRow = (row: Record<string, unknown>): boolean =>
+  Object.values(row).some((value) => typeof value === 'string' && /^total/i.test(value));
+
+/**
+ * The `where` paths of a table's totals cells that add up their column: an additive column
+ * whose every other row prints one number, summed, within the rounding of the printed cells
+ * (half a unit of each cell's own precision) or half a percent. Those cells are computed
+ * from the cells above them, not read from a tool, so they are not held to the figure set.
+ */
+const summedTotalsCellsOf = (block: Record<string, unknown>): Set<string> => {
+  const out = new Set<string>();
+  if (block.category !== 'data_table') return out;
+  const id = String(block.block_id ?? block.category ?? '?');
+  const rows = looseArray(block.rows).map(looseRecord);
+  const totals = rows.flatMap((row, index) => (isTotalsRow(row) ? [index] : []));
+  if (totals.length === 0) return out;
+  for (const column of looseArray(block.columns).map(looseRecord)) {
+    const key = typeof column.key === 'string' ? column.key : null;
+    if (!key || !isAdditiveTableColumn({ key, format: formatOf(column.format, 'text') })) continue;
+    let sum = 0;
+    let slack = 0;
+    let readable = true;
+    rows.forEach((row, index) => {
+      if (totals.includes(index) || row[key] === null || row[key] === undefined) return;
+      const tokens = numberTokensOfCell(row[key]);
+      const reading = tokens.length === 1 ? tokens[0][0] : undefined;
+      if (!reading) {
+        readable = false;
+        return;
+      }
+      sum += reading.value;
+      slack += 0.5 * 10 ** -reading.decimals;
+    });
+    if (!readable) continue;
+    for (const index of totals) {
+      const tokens = numberTokensOfCell(rows[index][key]);
+      if (tokens.length !== 1) continue;
+      const tolerance = Math.max(slack, Math.abs(sum) * FIGURE_RELATIVE_TOLERANCE);
+      if (
+        tokens[0].some(
+          (reading) => Math.abs(reading.value - sum) <= tolerance + 0.5 * 10 ** -reading.decimals,
+        )
+      ) {
+        out.add(`${id}.rows[${index}].${key}`);
+      }
+    }
+  }
+  return out;
+};
+
+/**
+ * The rendered cells of one block whose printed figures the turn's tool outputs do not
+ * carry. The span is what the reader sees: the cell's own text, or `label: value` for a
+ * bare number.
+ */
+const unmeasuredCellsOf = (
+  block: Record<string, unknown>,
+  sorted: ReadonlyArray<number>,
+): Array<{ span: string }> => {
+  const out: Array<{ span: string }> = [];
+  // A template's figures are COMPUTED from the turn's datasets (a cost per result, a gap, an
+  // interval) and each carries its source and derivation, held by `validateTemplateBlock`;
+  // matching them against raw tool numbers would flag every derived ratio.
+  if (block.category === 'answer_template') return out;
+  const summed = summedTotalsCellsOf(block);
+  for (const cell of cellsOfBlocks([block])) {
+    if (!isMeasuredCell(cell) || summed.has(cell.where)) continue;
+    if (printsOnlyMeasuredFigures(numberTokensOfCell(cell.value), sorted)) continue;
+    out.push({
+      span:
+        typeof cell.value === 'string' ? cell.value : `${cell.label ?? cell.where}: ${cell.value}`,
+    });
+  }
+  return out;
+};
+
+const CHANGE_WORDS = [
+  'up',
+  'down',
+  'rose',
+  'fell',
+  'grew',
+  'dropped',
+  'climbed',
+  'slid',
+  'jumped',
+  'declined',
+  'increased',
+  'decreased',
+  'improved',
+  'worsened',
+  'gained',
+  'lost',
+  'higher',
+  'lower',
+  'more',
+  'less',
+  'better',
+  'worse',
+  'above',
+  'below',
+  'subi[oó]',
+  'baj[oó]',
+  'creci[oó]',
+  'cay[oó]',
+  'aument[oó]',
+  'disminuy[oó]',
+  'mejor[oó]',
+  'empeor[oó]',
+  'm[áa]s',
+  'menos',
+  'mayor',
+  'menor',
+  'arriba',
+  'abajo',
+  'por encima',
+  'por debajo',
+].join('|');
+
+const COUNTED_NOUNS = [
+  'campaigns?',
+  'campa[ñn]as?',
+  'ad ?sets?',
+  'conjuntos?(?: de anuncios)?',
+  'ads?',
+  'anuncios?',
+  'creatives?',
+  'creativ[oa]s?',
+  'audiences?',
+  'audiencias?',
+  'placements?',
+  'ubicaciones',
+  'segments?',
+  'segmentos?',
+  'rows?',
+  'filas?',
+  'items?',
+  'accounts?',
+  'cuentas?',
+  'objectives?',
+  'objetivos?',
+].join('|');
+
+const WINDOW_UNITS =
+  'd|days?|d[ií]as?|wks?|weeks?|semanas?|months?|meses|mes|hours?|hrs?|horas?|years?|a[ñn]os?|min(?:ute)?s?|minutos?';
+
+const FIGURE = String.raw`\d[\d.,]*\s?(?:%|pp|pts?|puntos|points|x|×)?`;
+
+/**
+ * The verbs a proposal moves budget with, EN and ES stems. A percentage one of them
+ * proposes is arithmetic on a read ("reallocate 20%"); a money amount it proposes is not
+ * matched here, because "shift 1500 MXN" must be a figure some read returned.
+ */
+const PROPOSAL_VERBS = [
+  'realloca\\w*',
+  'allocat\\w*',
+  'shift\\w*',
+  'mov(?:e|es|ed|ing)',
+  'cut\\w*',
+  'reduc\\w*',
+  'increas\\w*',
+  'decreas\\w*',
+  'rais\\w*',
+  'lower\\w*',
+  'scal(?:e|es|ed|ing)',
+  'boost\\w*',
+  'trim\\w*',
+  'redirect\\w*',
+  'reassign\\w*',
+  'reasign\\w*',
+  'redistribu\\w*',
+  'asign\\w*',
+  'destin\\w*',
+  'traslad\\w*',
+  'mov(?:er|emos|amos|iendo)',
+  'muev\\w*',
+  'recort\\w*',
+  'sub(?:ir|imos|amos|iendo|a|e)',
+  'baj(?:ar|amos|emos|ando|a|e)',
+  'aument\\w*',
+  'increment\\w*',
+  'escal\\w*',
+].join('|');
+
+const PERCENT = String.raw`\d[\d.,]*\s?%`;
+
+/** A word between a proposal verb and its percentage: "budget", "el presupuesto". */
+const FILLER_WORD = String.raw`[^\s\d.,;:!?]+`;
+
+const THRESHOLD_METRICS = 'roas|cpa|ctr|cpc|cpm|cpl|cvr|cac|cost per \\w+|costo por \\w+';
+
+const THRESHOLD_COMPARATORS = [
+  'below',
+  'under',
+  'above',
+  'over',
+  'less than',
+  'more than',
+  'at least',
+  'at most',
+  'por debajo de',
+  'por encima de',
+  'menos de',
+  'm[áa]s de',
+  'inferior(?:es)? a',
+  'superior(?:es)? a',
+  'al menos',
+  'como m[áa]ximo',
+].join('|');
+
+const CURRENCY = String.raw`(?:MXN|USD|EUR|COP|ARS|CLP|PEN|BRL|GBP|CAD|\$|€|pesos?|d[oó]lares|dollars?)`;
+
+const MONEY_UNIT = String.raw`(?:\s?${CURRENCY})?`;
+
+/** An amount that is money on its face: "$1,500", "1500 MXN", "200 pesos". */
+const MONEY_AMOUNT = String.raw`(?:[$€]\s?${FIGURE}|${FIGURE}\s?${CURRENCY})`;
+
+/**
+ * The figures a sentence COMPUTES rather than reads, masked before its numbers are held
+ * to the turn: the window it names ("last 30 days", "L14D", a date, a year, a time), the
+ * rank or count of the entities it lists ("top 3", "#1", "3 campaigns"), a share of a
+ * whole ("41% of spend"), a delta it derives ("up 12%", "+8 pp", "2x higher"), a
+ * percentage a proposal moves ("reallocate 20%", "subir 10%") and a threshold it states
+ * as a rule ("sub-1.0 ROAS", "por debajo de 1.0 de ROAS", "menos de 30 MXN por lead"),
+ * a money cut-off included ("consuming over 1500 MXN", "que gastan menos de 200 MXN") — but
+ * only when a comparative stands directly before the amount. No tool returns them and no
+ * model invents them — they are the reason prose figures were once left ungraded at all. A
+ * money amount a proposal moves ("shift 1500 MXN") or a sentence plainly states ("spent
+ * 1,500 MXN") is NOT computed: it stays graded and must be a figure some read returned.
+ */
+const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
+  new RegExp(String.raw`\d+[\s-]?(?:${WINDOW_UNITS})\b`, 'giu'),
+  /\b[Ll]\d+[Dd]\b/gu,
+  /\b\d{4}-\d{2}(?:-\d{2})?\b/gu,
+  /\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/gu,
+  /\b(?:19|20)\d{2}\b/gu,
+  /\b\d{1,2}:\d{2}\b/gu,
+  /\b[Qq][1-4]\b/gu,
+  /#\d+|\b\d+(?:st|nd|rd|th|º|ª|er|d[oa]|r[oa]|t[oa]|v[oa]|m[oa])\b/giu,
+  /\b(?:top|bottom|first|only|all|los|las)\s?\d+\b/giu,
+  new RegExp(String.raw`\b\d+\s?(?:${COUNTED_NOUNS})\b`, 'giu'),
+  /\d[\d.,]*\s?%\s+(?:of|del?)\b/giu,
+  new RegExp(String.raw`[+\-−]\s?${FIGURE}`, 'gu'),
+  new RegExp(
+    String.raw`\b(?:${CHANGE_WORDS})\s+(?:by\s+|a\s+|de\s+|un\s+|en\s+|about\s+|roughly\s+|around\s+|nearly\s+|~)?${FIGURE}`,
+    'giu',
+  ),
+  new RegExp(String.raw`${FIGURE}\s+(?:${CHANGE_WORDS})\b`, 'giu'),
+  new RegExp(
+    String.raw`\b(?:${PROPOSAL_VERBS})(?:\s+${FILLER_WORD}){0,2}?\s+(?:by\s+|un\s+|en\s+|a\s+)?${PERCENT}`,
+    'giu',
+  ),
+  new RegExp(String.raw`\bsub-?\s?\d[\d.,]*\s?(?:${THRESHOLD_METRICS})\b`, 'giu'),
+  new RegExp(
+    String.raw`\b(?:${THRESHOLD_COMPARATORS})\s+\$?${FIGURE}${MONEY_UNIT}\s?(?:de\s+)?(?:${THRESHOLD_METRICS}|(?:per|por)\s+\w+)\b`,
+    'giu',
+  ),
+  new RegExp(
+    String.raw`\b(?:${THRESHOLD_METRICS})\s+(?:of\s+|de\s+|is\s+|es\s+)?(?:${THRESHOLD_COMPARATORS})\s+\$?${FIGURE}${MONEY_UNIT}`,
+    'giu',
+  ),
+  new RegExp(String.raw`\b(?:${THRESHOLD_COMPARATORS})\s+${MONEY_AMOUNT}`, 'giu'),
+];
+
+/**
+ * Whether every figure a sentence states — with the entities it names and the numbers it
+ * computes taken out — has one reading among the turn's figures, the same test a rendered
+ * cell passes. "Revenue: 26000" on a turn whose only read carried `purchase_value: 0` is
+ * as invented in a sentence as in a cell (JG-prose-figures-ungraded).
+ */
+const proseFiguresAreMeasured = (
+  sentence: string,
+  entities: ReadonlyArray<ReportEntity>,
+  sorted: ReadonlyArray<number>,
+): boolean => {
+  const stated = COMPUTED_PROSE_FIGURES.reduce(
+    (text, pattern) => text.replace(pattern, ' '),
+    claimableText(sentence, entities),
+  );
+  return printsOnlyMeasuredFigures(numberTokensInText(stated), sorted);
+};
+
+/**
+ * The prose a block carries, each piece with the `cite_ids` slot it has (null where the
+ * contract gives it none — a narrative body cites at block level only). Read loosely on
+ * purpose: the Backend runs this on the array before its final parse.
+ */
+const claimSourcesOf = (block: Record<string, unknown>): ClaimSource[] => {
+  switch (block.category) {
+    case 'narrative':
+      return [
+        { text: stringOf(block.body), citeIds: null },
+        ...recordsOf(block.highlights).map((item) => ({
+          text: stringOf(item.text),
+          citeIds: null,
+        })),
+      ];
+    case 'insight_list':
+      return recordsOf(block.items).map((item) => ({
+        text: [item.title, item.summary, item.rationale, item.impact].map(stringOf).join('\n'),
+        citeIds: citeIdsOf(item.cite_ids),
+      }));
+    case 'actions':
+      return recordsOf(block.rows).map((row) => ({
+        text: stringOf(row.action),
+        citeIds: citeIdsOf(row.cite_ids),
+      }));
+    default:
+      return [];
+  }
+};
+
+/**
+ * The claims in one block that the turn cannot stand behind. A creative, audience,
+ * breakdown or landing-page claim whose kind no tool call of this turn read is
+ * `claim_without_source`; one whose kind WAS read, on a row that still cites nothing, is
+ * `claim_uncited`. A figure is a measurement wherever it appears, and when `figures` is
+ * given every rendered cell AND every figure a sentence states is held to the turn's tool
+ * outputs: a revenue cell on a leads account that no tool result carries is
+ * `claim_without_source` of kind `figure` (JG-invented-revenue), and so is "Revenue: 26000"
+ * in the narrative beside it (JG-prose-figures-ungraded). What a sentence computes — its
+ * window, its entity count, its delta — is masked first (`COMPUTED_PROSE_FIGURES`), and
+ * without `figures` no figure is graded. Nothing is fabricated: a missing citation is
+ * reported, not filled, and a flagged cell is annotated, never rewritten.
+ */
+export const groundingViolationsOf = (
+  block: Record<string, unknown>,
+  options: GroundingOptions,
+): GroundingViolation[] => {
+  const read = new Set(options.toolKinds);
+  const entities = options.entities ?? [];
+  const sorted = options.figures ? figureIndexOf(options.figures) : null;
+  const out: GroundingViolation[] = [];
+  const seen = new Set<string>();
+  const report = (violation: GroundingViolation): void => {
+    const key = `${violation.kind}|${violation.reason}|${violation.span}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(violation);
+  };
+  for (const source of claimSourcesOf(block)) {
+    for (const claim of classifyClaims(source.text, { entities })) {
+      if (claim.kind === 'figure') {
+        if (sorted !== null && !proseFiguresAreMeasured(claim.span, entities, sorted)) {
+          report({ kind: 'figure', span: claim.span, reason: 'claim_without_source' });
+        }
+        continue;
+      }
+      const reason = !read.has(claim.kind)
+        ? 'claim_without_source'
+        : source.citeIds !== null && source.citeIds.length === 0
+          ? 'claim_uncited'
+          : null;
+      if (reason === null) continue;
+      report({ kind: claim.kind, span: claim.span, reason });
+    }
+  }
+  if (sorted !== null) {
+    for (const cell of unmeasuredCellsOf(block, sorted)) {
+      report({ kind: 'figure', span: cell.span, reason: 'claim_without_source' });
+    }
+  }
+  return out;
+};
+
+export type ValidateReportOptions = {
+  /**
+   * The campaigns, ad sets and ads this turn's evidence carried. Without them the
+   * account rule can only read the row's own bold spans; with them it can tell that
+   * "shift budget into CAÑADAS" names a campaign the turn actually fetched.
+   */
+  entities?: ReadonlyArray<ReportEntity>;
+  /**
+   * The claim kinds this turn's tool calls read. When given, every creative, audience
+   * and landing-page sentence is graded against it (`claim_without_source`,
+   * `claim_uncited`); when absent the free text is not graded, because without the
+   * turn's tool calls there is nothing honest to grade it against.
+   */
+  toolKinds?: ReadonlyArray<ClaimKind>;
+};
 
 const mentionsTruncation = (notes: string | null): boolean =>
   typeof notes === 'string' && /truncat|top \d+|first \d+|showing \d+/i.test(notes);
@@ -635,9 +1989,142 @@ const mentionsTruncation = (notes: string | null): boolean =>
 const hasTotalsRow = (rows: Record<string, string | number | null>[]): boolean =>
   rows.some((row) => Object.values(row).some((v) => typeof v === 'string' && /^total/i.test(v)));
 
-export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
+// ---------------------------------------------------------------------------
+// The J2 card's own rules — exported so the Backend's answer rules and the golden grader
+// read the same function the validator does.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every tile of a metric grid carries its read, and the read agrees with the prior it was
+ * derived from: `sin_comparacion` beside no prior, `mejor` / `peor` / `igual` beside a prior
+ * and its label. A tile that shows a delta with no word, or a word with no delta, is a tile
+ * the reader has to re-derive.
+ */
+export const metricReadViolationsOf = (
+  block: Pick<MetricGridBlock, 'block_id' | 'metrics'>,
+): ReportViolation[] => {
+  const out: ReportViolation[] = [];
+  for (const m of block.metrics) {
+    if (m.read == null) {
+      out.push({
+        code: 'metric_read_missing',
+        block_id: block.block_id,
+        message: `Metric "${m.label}" carries no read (mejor / peor / igual / sin_comparacion).`,
+      });
+      continue;
+    }
+    const hasPrior = m.prior_value != null && m.prior_label != null;
+    if (m.read === 'sin_comparacion' ? m.prior_value != null : !hasPrior) {
+      out.push({
+        code: 'metric_read_prior_mismatch',
+        block_id: block.block_id,
+        message:
+          m.read === 'sin_comparacion'
+            ? `Metric "${m.label}" reads sin_comparacion but carries a prior value.`
+            : `Metric "${m.label}" reads ${m.read} with no prior value or prior label to read against.`,
+      });
+    }
+  }
+  return out;
+};
+
+/** The nouns a sizing can be counted in, beside a bare figure: "6 conversaciones", "3 días". */
+const SIZING_NOUNS = [
+  'conversaciones',
+  'conversaci[oó]n',
+  'conversations?',
+  'leads?',
+  'compras?',
+  'purchases?',
+  'clics?',
+  'clicks?',
+  'resultados?',
+  'results?',
+  'mensajes',
+  'messages?',
+  'd[ií]as?',
+  'days?',
+  'semanas?',
+  'weeks?',
+  'campa[ñn]as?',
+  'campaigns?',
+  'anuncios?',
+  'ads?',
+  'conjuntos?',
+  'ad sets?',
+].join('|');
+
+/**
+ * A move's size: a money amount, a percentage, a multiplier, a counted noun — or a pause,
+ * which is the whole of the entity and needs no figure. A `{figure_id}` ref counts too: a
+ * template's text carries its figures as refs until they are rendered.
+ */
+const SIZING_IN_TEXT = new RegExp(
+  String.raw`(?:[$€]\s?${FIGURE}|${FIGURE}\s?(?:${CURRENCY}|%|x|×|pp|pts?|puntos|points)(?![\p{L}])|${FIGURE}\s?(?:${SIZING_NOUNS})(?![\p{L}])|\{[a-z][a-z0-9_]*\}|(?<![\p{L}])(?:paus\p{L}*|apag\p{L}*|switch(?:ed|ing)? off|turn(?:ed|ing)? off|detener|deten\p{L}*)(?![\p{L}]))`,
+  'iu',
+);
+
+/** The account as the entity a move is about: "la cuenta", "the account", "this account". */
+const ACCOUNT_WORD_IN_TEXT =
+  /(?<![\p{L}])(?:la|the|esta|this|toda la|the whole)\s+(?:ad\s+)?(?:cuenta|account)(?![\p{L}])/iu;
+
+/** True when `text` names a move's entity: a turn entity, a bold span, or the account. */
+export const namesMoveEntity = (text: string, entities: ReadonlyArray<ReportEntity>): boolean =>
+  entitiesNamedIn(text, entities).length > 0 ||
+  boldSpans(text).length > 0 ||
+  ACCOUNT_WORD_IN_TEXT.test(text);
+
+/** True when `text` states a sizing for its move. */
+export const statesMoveSizing = (text: string): boolean => SIZING_IN_TEXT.test(text);
+
+const isFilled = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * The narrative carries the J2 card's three boxes, and the third names its entity and its
+ * size. A `supplementary` narrative is the fail-visible placeholder a block that could not
+ * render degrades to (`degradeToNarrativeBlockV2`); it is a note, not the answer, and is
+ * not held to this.
+ */
+export const narrativeThreePartViolationsOf = (
+  block: Pick<NarrativeBlock, 'block_id' | 'priority' | 'what' | 'so_what' | 'now_what'>,
+  entities: ReadonlyArray<ReportEntity> = [],
+): ReportViolation[] => {
+  if (block.priority === 'supplementary') return [];
+  const missing = (['what', 'so_what', 'now_what'] as const).filter(
+    (field) => !isFilled(block[field]),
+  );
+  if (missing.length > 0) {
+    return [
+      {
+        code: 'narrative_fields_missing',
+        block_id: block.block_id,
+        message: `The narrative carries no ${missing.join(', ')}; a finished answer carries what, so_what and now_what.`,
+      },
+    ];
+  }
+  const nowWhat = block.now_what as string;
+  const lacks = [
+    ...(namesMoveEntity(nowWhat, entities) ? [] : ['an entity']),
+    ...(statesMoveSizing(nowWhat) ? [] : ['a sizing']),
+  ];
+  if (lacks.length === 0) return [];
+  return [
+    {
+      code: 'now_what_unsized',
+      block_id: block.block_id,
+      message: `now_what names ${lacks.join(' or ')} nowhere; a move names the entity it is on and how big it is.`,
+    },
+  ];
+};
+
+export function validateReport(
+  blocks: readonly AnyBlock[],
+  options: ValidateReportOptions = {},
+): ReportViolation[] {
   const out: ReportViolation[] = [];
   if (blocks.length === 0) return out;
+  const entities = options.entities ?? [];
 
   const scopeIndex = blocks.findIndex((b) => b.category === 'data_scope');
   if (scopeIndex < 0) {
@@ -670,7 +2157,9 @@ export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
   }
 
   for (const b of blocks) {
+    if (b.category === 'narrative') out.push(...narrativeThreePartViolationsOf(b, entities));
     if (b.category === 'metric_grid') {
+      out.push(...metricReadViolationsOf(b));
       for (const m of b.metrics) {
         if (m.format === 'percent' && m.percent_basis == null) {
           out.push({
@@ -714,6 +2203,15 @@ export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
         });
       }
     }
+    if (b.category === 'answer_template') {
+      for (const violation of validateTemplateBlock(b)) {
+        out.push({
+          code: 'answer_template_invalid',
+          block_id: b.block_id,
+          message: `${violation.rule}: ${violation.message}`,
+        });
+      }
+    }
     if (b.category === 'chart' && b.value_format === 'percent' && b.value_basis == null) {
       out.push({
         code: 'percent_basis_missing',
@@ -730,6 +2228,43 @@ export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
             message: `Comparison "${pair.label}" is a percent with no basis.`,
           });
         }
+      }
+    }
+    // The card built to be clicked must name something to click on. A row whose entity
+    // is the account while its own clause names a campaign or ad set is graded, never
+    // rewritten here: the Backend resolver is the fix, this is the witness.
+    if (b.category === 'actions') {
+      for (const row of b.rows) {
+        const isAccount = row.entity.level === 'account' || isAccountEntityName(row.entity.name);
+        if (!isAccount) continue;
+        const named = entitiesNamedIn(row.action, entities).map((entity) => entity.name);
+        const boldedOther = boldSpans(row.action).filter((span) => !isAccountEntityName(span));
+        const names = [...new Set([...named, ...boldedOther])];
+        if (names.length === 0) continue;
+        out.push({
+          code: 'action_entity_is_account',
+          block_id: b.block_id,
+          message: `Action "${row.action.slice(0, 60)}" names ${names.join(', ')} but its entity is the account (${row.entity.name}).`,
+        });
+      }
+    }
+    // Free text is graded against what the turn READ, never against a word list alone:
+    // "the video hook is weak" is a finding after `analyze_creative_image` ran and a
+    // fabrication after a turn of spend and CPA. The Backend's grounding pass writes the
+    // same verdict onto `block.grounding`; this is the witness that names it by rule.
+    if (options.toolKinds) {
+      for (const violation of groundingViolationsOf(b as unknown as Record<string, unknown>, {
+        toolKinds: options.toolKinds,
+        entities,
+      })) {
+        out.push({
+          code: violation.reason,
+          block_id: b.block_id,
+          message:
+            violation.reason === 'claim_without_source'
+              ? `A ${violation.kind} claim, "${violation.span.slice(0, 60)}", with no ${violation.kind}-reading tool call this turn.`
+              : `A ${violation.kind} claim, "${violation.span.slice(0, 60)}", on a row that cites nothing.`,
+        });
       }
     }
   }

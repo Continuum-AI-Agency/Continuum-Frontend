@@ -1,21 +1,14 @@
 'use client';
 
-// Image stage with Figma-style annotated comments: drag a region to open a
-// composer anchored to it; existing annotated threads render as numbered pins
-// whose boxes outline on hover/selection.
+// Image stage with Frame.io-style annotated comments: drop a pin (its composer
+// opens beside it), or draw marks (arrow, line, box, freehand) in a colour with
+// undo/redo and comment in the strip below the image. Existing annotated threads
+// render as numbered pins whose marks re-render in place on hover/selection, or
+// all at once with "View all annotations". The still zooms (see zoom/ZoomStage).
 
-import type { CommentAnnotation } from '@continuum/contracts';
-import { BoxSelect, ImageOff, MousePointer2, Pencil } from 'lucide-react';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  AnnotationOverlay,
-  type AnnotationTool,
-  type OverlayPin,
-  type SpatialAnnotation,
-} from './AnnotationOverlay';
-import { CommentComposer } from './CommentComposer';
-import { useStageGeometry } from './useStageGeometry';
+import type { OverlayPin, SpatialAnnotation } from './AnnotationOverlay';
+import { ImageReviewStage } from './annotation/ImageReviewStage';
+import { CommentComposer, type ComposerExtras } from './CommentComposer';
 
 type Props = {
   src: string | null;
@@ -25,7 +18,7 @@ type Props = {
   posting: boolean;
   /** Brand context enables @mention autocomplete in the annotation composer. */
   brandId?: string;
-  onPostAnnotated: (body: string, annotation: SpatialAnnotation) => void;
+  onPostAnnotated: (body: string, annotation: SpatialAnnotation, extras: ComposerExtras) => void;
 };
 
 export function ImageAnnotationLayer({
@@ -37,93 +30,30 @@ export function ImageAnnotationLayer({
   brandId,
   onPostAnnotated,
 }: Props) {
-  const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
-  const [tool, setTool] = useState<AnnotationTool>('point');
-  const [draftAnnotation, setDraftAnnotation] = useState<SpatialAnnotation | null>(null);
-  const [mediaError, setMediaError] = useState(false);
-
-  if (!src || mediaError) {
-    return (
-      <div className="flex size-full items-center justify-center text-muted-foreground">
-        <ImageOff className="size-8 text-muted-foreground/40" />
-      </div>
-    );
-  }
-
   return (
-    <div ref={containerRef} className="relative size-full select-none">
-      <div
-        className="absolute left-3 top-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur"
-        role="toolbar"
-        aria-label="Image annotation tools"
-      >
-        {(
-          [
-            { value: 'point', label: 'Point', icon: MousePointer2 },
-            { value: 'box', label: 'Rectangle', icon: BoxSelect },
-            { value: 'freehand', label: 'Freehand', icon: Pencil },
-          ] as const satisfies ReadonlyArray<{
-            value: Exclude<CommentAnnotation['kind'], 'time'>;
-            label: string;
-            icon: typeof MousePointer2;
-          }>
-        ).map(({ value, label, icon: Icon }) => (
-          <Button
-            key={value}
-            type="button"
-            size="icon"
-            variant={tool === value ? 'secondary' : 'ghost'}
-            className="size-8"
-            aria-label={`${label} annotation`}
-            aria-pressed={tool === value}
-            title={label}
-            onClick={() => {
-              setTool(value);
-              setDraftAnnotation(null);
+    <ImageReviewStage
+      src={src}
+      alt={alt}
+      pins={pins}
+      onSelectPin={onSelectPin}
+      renderComposer={({ annotation, docked, clear }) =>
+        docked || annotation ? (
+          <CommentComposer
+            placeholder={docked ? 'Comment on these marks...' : 'Comment on this spot...'}
+            busy={posting}
+            autoFocus={!docked}
+            brandId={brandId}
+            reviewOptions={Boolean(brandId)}
+            submitDisabled={!annotation}
+            onSubmit={(body, extras) => {
+              if (!annotation) return;
+              onPostAnnotated(body, annotation, extras);
+              clear();
             }}
-          >
-            <Icon className="size-3.5" />
-          </Button>
-        ))}
-      </div>
-      {/* Signed storage URL rendered at natural fit for pixel-accurate annotation geometry; next/image transforms would skew the measured intrinsic size. */}
-      {/* biome-ignore lint/performance/noImgElement: annotation math needs the untransformed intrinsic frame */}
-      <img
-        src={src}
-        alt={alt}
-        draggable={false}
-        className="absolute inset-0 size-full object-contain"
-        onLoad={(e) => {
-          const el = e.currentTarget;
-          setNaturalSize({ width: el.naturalWidth, height: el.naturalHeight });
-        }}
-        onError={() => setMediaError(true)}
-      />
-      <AnnotationOverlay
-        containerSize={containerSize}
-        contentRect={contentRect}
-        pins={pins}
-        onSelectPin={onSelectPin}
-        drawEnabled
-        tool={tool}
-        draftAnnotation={draftAnnotation}
-        onDraftAnnotation={setDraftAnnotation}
-        composer={
-          draftAnnotation ? (
-            <CommentComposer
-              placeholder="Comment on this annotation..."
-              busy={posting}
-              autoFocus
-              brandId={brandId}
-              onSubmit={(body) => {
-                onPostAnnotated(body, draftAnnotation);
-                setDraftAnnotation(null);
-              }}
-              onCancel={() => setDraftAnnotation(null)}
-            />
-          ) : undefined
-        }
-      />
-    </div>
+            onCancel={annotation ? clear : undefined}
+          />
+        ) : null
+      }
+    />
   );
 }

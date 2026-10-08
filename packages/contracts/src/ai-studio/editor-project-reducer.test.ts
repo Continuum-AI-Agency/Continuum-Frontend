@@ -5,6 +5,7 @@ import {
   createEditorProjectV2,
   type EditorCommandBatch,
   editorProjectSourceSlots,
+  editorTextClipSchema,
 } from './index';
 
 const user = { actorId: 'user-1', actorType: 'user' as const };
@@ -580,6 +581,57 @@ describe('editor project reducer', () => {
     expect(removed.durationSec).toBe(0);
   });
 
+  test('video split preserves the authored gain and fade clock on both pieces', () => {
+    let project = projectWithTimeline();
+    const clip = project.tracks[0]!.clips[0]!;
+    project = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'upsert_clip',
+        trackId: 'video-main',
+        clip: { ...clip, volume: 0.6, fadeInSec: 3, fadeOutSec: 3 },
+      }),
+    );
+    const split = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'split_clip',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        splitAtSec: 2,
+        rightClipId: 'audio-right',
+      }),
+    );
+    expect(split.tracks[0]!.clips[0]).toMatchObject({
+      volume: 0.6,
+      fadeInSec: 3,
+      fadeOutSec: 3,
+      audioFadeClock: { offsetSec: 0, durationSec: 4 },
+    });
+    expect(split.tracks[0]!.clips[1]).toMatchObject({
+      volume: 0.6,
+      fadeInSec: 3,
+      fadeOutSec: 3,
+      audioFadeClock: { offsetSec: 2, durationSec: 4 },
+    });
+    const old = projectWithTimeline();
+    const unchanged = applyEditorCommandBatch(
+      old,
+      command(old, {
+        commandType: 'split_clip',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        splitAtSec: 2,
+        rightClipId: 'old-right',
+      }),
+    );
+    for (const part of unchanged.tracks[0]!.clips.slice(0, 2)) {
+      expect('volume' in part).toBe(false);
+      expect('fadeInSec' in part).toBe(false);
+      expect('fadeOutSec' in part).toBe(false);
+    }
+  });
+
   test('splits source time and keyframes while keeping the outgoing transition at the real cut', () => {
     let project = projectWithTimeline();
     project = applyEditorCommandBatch(
@@ -620,14 +672,18 @@ describe('editor project reducer', () => {
     const clips = split.tracks[0]?.clips ?? [];
 
     expect(clips[0]).toMatchObject({ id: 'clip-left', durationSec: 2, sourceInSec: 0 });
-    expect(clips[0]?.keyframes).toEqual([expect.objectContaining({ id: 'key-left', timeSec: 1 })]);
+    expect(clips[0]?.keyframes).toEqual([
+      expect.objectContaining({ id: 'key-left', timeSec: 1 }),
+      expect.objectContaining({ id: 'key-right', timeSec: 3 }),
+    ]);
     expect(clips[1]).toMatchObject({
       id: 'clip-middle',
       timelineStartSec: 2,
       durationSec: 2,
       sourceInSec: 2,
     });
-    expect(clips[1]?.keyframes).toEqual([expect.objectContaining({ id: 'key-right', timeSec: 1 })]);
+    expect(clips[1]?.keyframes).toEqual(clips[0]?.keyframes);
+    expect(clips[1]?.keyframeOffsetSec).toBe(2);
     expect(split.transitions[0]).toMatchObject({
       fromClipId: 'clip-middle',
       toClipId: 'clip-right',
@@ -1166,5 +1222,117 @@ describe('editor project reducer', () => {
         }),
       ),
     ).toThrow('cannot contain another nested sequence');
+  });
+});
+
+test('text split, start trim, end trim and move preserve independent title and keyframe clocks', () => {
+  let project = createEditorProjectV2({
+    projectId: 'text-clocks',
+    title: 'Titles',
+    width: 360,
+    height: 640,
+  });
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'add_track',
+      track: {
+        id: 'titles',
+        name: 'Titles',
+        kind: 'text',
+        order: 0,
+        enabled: true,
+        locked: false,
+        muted: false,
+        solo: false,
+        clips: [],
+      },
+    }),
+  );
+  const title = editorTextClipSchema.parse({
+    id: 'title',
+    kind: 'text',
+    timelineStartSec: 0,
+    durationSec: 4,
+    text: 'Keep the clock',
+    style: { fontFamily: 'Arial', fontSizePx: 64, fontWeight: 700, color: '#ffffff' },
+    animationIn: 'typewriter',
+    animationOut: 'wipe',
+    keyframes: [
+      {
+        id: 'opacity',
+        property: 'transform.opacity',
+        timeSec: 3,
+        value: 0.5,
+        interpolation: 'linear',
+      },
+    ],
+  });
+  expect(title.textAnimationClock).toBeUndefined();
+  expect(() =>
+    editorTextClipSchema.parse({
+      ...title,
+      textAnimationClock: { offsetSec: Infinity, durationSec: 4 },
+    }),
+  ).toThrow();
+  expect(() =>
+    editorTextClipSchema.parse({ ...title, textAnimationClock: { offsetSec: 0, durationSec: 0 } }),
+  ).toThrow();
+  project = applyEditorCommandBatch(
+    project,
+    command(project, { commandType: 'upsert_clip', trackId: 'titles', clip: title }),
+  );
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'split_clip',
+      trackId: 'titles',
+      clipId: 'title',
+      splitAtSec: 2,
+      rightClipId: 'right',
+    }),
+  );
+  expect(project.tracks[0]?.clips[0]).toMatchObject({
+    textAnimationClock: { offsetSec: 0, durationSec: 4 },
+  });
+  expect(project.tracks[0]?.clips[1]).toMatchObject({
+    textAnimationClock: { offsetSec: 2, durationSec: 4 },
+    keyframeOffsetSec: 2,
+  });
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'trim_clip',
+      trackId: 'titles',
+      clipId: 'right',
+      timelineStartSec: 2.5,
+      durationSec: 1,
+    }),
+  );
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'trim_clip',
+      trackId: 'titles',
+      clipId: 'right',
+      durationSec: 0.5,
+    }),
+  );
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'move_clip',
+      clipId: 'right',
+      fromTrackId: 'titles',
+      toTrackId: 'titles',
+      timelineStartSec: 0,
+    }),
+  );
+  expect(project.tracks[0]?.clips.find((clip) => clip.id === 'right')).toMatchObject({
+    timelineStartSec: 0,
+    durationSec: 0.5,
+    textAnimationClock: { offsetSec: 2.5, durationSec: 4 },
+    keyframeOffsetSec: 2.5,
+    keyframes: title.keyframes,
   });
 });

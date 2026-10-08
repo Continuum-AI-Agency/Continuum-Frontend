@@ -76,6 +76,9 @@ export function TimelineMarkerStrip<M extends TimeMarker>({
               title={marker.title}
               aria-label={label}
               data-time-ms={marker.timeMs}
+              data-end-ms={marker.endMs ?? undefined}
+              data-marker-kind="range"
+              data-marker-id={marker.id}
               disabled={readOnly}
               onClick={() => onSelect(marker)}
               className={cn(
@@ -112,6 +115,8 @@ export function TimelineMarkerStrip<M extends TimeMarker>({
             title={marker.title}
             aria-label={label}
             data-time-ms={marker.timeMs}
+            data-marker-kind="point"
+            data-marker-id={marker.id}
             disabled={readOnly}
             onClick={() => onSelect(marker)}
             className={cn(

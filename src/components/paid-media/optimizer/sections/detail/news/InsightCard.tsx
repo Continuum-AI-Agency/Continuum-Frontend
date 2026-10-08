@@ -1,54 +1,66 @@
 'use client';
 
-// An insight: the same vocabulary at half the volume. Two of these sit under the lead.
-//
-// It is deliberately the SAME JustificationBlock, at `size="insight"`. The alternative —
-// a second, smaller card designed on its own — is how two cards on one screen end up
-// arguing in two different registers about the same account.
+// An insight: the same card as the lead, in the same vocabulary — chips, claim, the band with
+// its own evidence and figure, the why, the action. It gets a visual exactly like the lead
+// does; an insight with no chart slot is how two of the three cards in a row ended up able to
+// draw nothing bigger than a 6px rule.
 //
 // Its box is the row's column — the same `CARD_FRAME` the lead gets, so the three cards in a
-// row share a width and a height, and the floor on the frame keeps the box inside the aspect
-// band at any column width. See ./cardShape.
+// row share a width and a height. See ./cardShape.
 
-import * as React from 'react';
-import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { HeroCta } from '../heroModel';
+import { CardBand } from './CardBand';
 import { CARD_FRAME } from './cardShape';
-import { JustificationBlock } from './JustificationBlock';
-import type { NewsCardModel } from './justification';
-import type { NewsTier } from './NewsCard';
+import { CardChips, type NewsTier } from './NewsCard';
+import type { NewsCardModel } from './newsModel';
 
 export type InsightCardProps = {
   card: NewsCardModel;
   currency: string | null;
+  /** The objective's own result word ("leads", "conversations"). */
+  resultLabel: string;
   tier: NewsTier;
   onCta: (cta: HeroCta) => void;
 };
 
-export function InsightCard({ card, currency, tier, onCta }: InsightCardProps) {
+export function InsightCard({ card, currency, resultLabel, tier, onCta }: InsightCardProps) {
   const cta = card.cta;
   return (
     <article
-      className={cn('flex-col gap-2.5 rounded-lg border border-border/60 bg-card p-3', CARD_FRAME)}
+      className={cn(
+        'flex-col gap-1.5 overflow-hidden rounded-lg border border-border/60 bg-card px-4 pt-3.5 pb-3',
+        CARD_FRAME,
+      )}
       data-testid="portfolio-news-insight"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Pill className="uppercase tracking-wide">{card.eyebrow}</Pill>
-        {tier ? <Pill variant={tier.tone}>{tier.label}</Pill> : null}
-      </div>
-      <h3 className="max-w-[65ch] text-balance font-medium text-foreground text-sm leading-snug">
+      <CardChips card={card} tier={tier} />
+      {card.subject ? (
+        <p className="truncate text-muted-foreground text-xs" data-testid="news-subject">
+          {card.subject}
+        </p>
+      ) : null}
+      <h3 className="line-clamp-2 text-balance font-semibold text-base text-foreground leading-snug">
         {card.claim}
       </h3>
-      <JustificationBlock card={card} currency={currency} size="insight" />
+
+      <CardBand
+        currency={currency}
+        figure={card.figure}
+        id={card.id}
+        resultLabel={resultLabel}
+        tone={card.tone}
+        visual={card.visual}
+      />
+
       {card.reason ? (
-        <p className="max-w-[65ch] text-2xs text-muted-foreground">{card.reason}</p>
+        <p className="line-clamp-2 text-muted-foreground text-sm leading-snug">{card.reason}</p>
       ) : null}
       {cta ? (
-        <div className="mt-auto">
+        <div className="pt-0.5">
           <Button
-            className="h-7 px-2 text-2xs"
+            className="h-8 px-2 text-xs"
             onClick={() => onCta(cta)}
             size="sm"
             type="button"

@@ -21,15 +21,20 @@ export const pipelineAgentGuideDraftResponseSchema = z
   .object({
     description: z.string().min(1).max(1_000),
     agent_guide: pipelineAgentGuideSchema,
+    /**
+     * `fallback`: the writer model failed or stayed vague twice, so the guide was derived from
+     * the public contract by rule. Absent from a pre-rule Backend.
+     */
+    source: z.enum(['model', 'fallback']).optional(),
   })
   .strict();
-export type PipelineAgentGuideDraftResponse = z.infer<
-  typeof pipelineAgentGuideDraftResponseSchema
->;
+export type PipelineAgentGuideDraftResponse = z.infer<typeof pipelineAgentGuideDraftResponseSchema>;
 
 export const pipelinePublicationRequestSchema = pipelinePublicationCandidateSchema.extend({
   description: z.string().trim().min(1).max(1_000),
   agent_guide: pipelineAgentGuideSchema,
+  /** Provenance only: who assembled the request. The Save dialog, or the canvas agent's proposal card. */
+  created_via: z.enum(['canvas_ui', 'canvas_agent']).optional(),
 });
 export type PipelinePublicationRequest = z.infer<typeof pipelinePublicationRequestSchema>;
 

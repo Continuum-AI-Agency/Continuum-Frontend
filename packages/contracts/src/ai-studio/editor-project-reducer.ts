@@ -1,4 +1,9 @@
 import {
+  editorClipAtSourceIn,
+  editorClipWithRetainedFades,
+  editorTextWithRetainedAnimation,
+} from './editor-clip-edits';
+import {
   type EditorActorRef,
   type EditorClip,
   type EditorCommand,
@@ -11,6 +16,7 @@ import {
   editorCommandBatchSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
+import { type EditorClipOrigin, retainParentMotionForEdit } from './motion-parent';
 import { compileMotionStyle, trimStyleInstance } from './motion-styles';
 
 export class EditorProjectConflictError extends Error {
@@ -472,15 +478,32 @@ const upsertKeyframe = (
 };
 
 const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip => {
-  const keyframed =
-    'keyframes' in clip
-      ? { ...clip, keyframes: clip.keyframes.filter((keyframe) => keyframe.timeSec <= durationSec) }
-      : clip;
-  if (keyframed.kind === 'audio') {
+  const retained =
+    (clip.kind === 'audio' || clip.kind === 'video') && clip.durationSec !== durationSec
+      ? editorClipWithRetainedFades(clip)
+      : clip.kind === 'text' && clip.durationSec !== durationSec
+        ? editorTextWithRetainedAnimation(clip)
+        : clip;
+  const keyframed = { ...retained, durationSec };
+  if (keyframed.kind === 'audio' || keyframed.kind === 'video') {
     return {
       ...keyframed,
-      fadeInSec: Math.min(keyframed.fadeInSec, durationSec),
-      fadeOutSec: Math.min(keyframed.fadeOutSec, durationSec),
+      ...(keyframed.fadeInSec !== undefined
+        ? {
+            fadeInSec: Math.min(
+              keyframed.fadeInSec,
+              keyframed.audioFadeClock?.durationSec ?? durationSec,
+            ),
+          }
+        : {}),
+      ...(keyframed.fadeOutSec !== undefined
+        ? {
+            fadeOutSec: Math.min(
+              keyframed.fadeOutSec,
+              keyframed.audioFadeClock?.durationSec ?? durationSec,
+            ),
+          }
+        : {}),
     };
   }
   if (keyframed.kind === 'caption') {
@@ -501,31 +524,35 @@ const splitClip = (
 ): [EditorClip, EditorClip] => {
   const rightDurationSec = clip.durationSec - splitAtSec;
   const sourceOffset = splitAtSec * ('playbackRate' in clip ? clip.playbackRate : 1);
-  const leftKeyframes =
-    'keyframes' in clip
-      ? clip.keyframes.filter((keyframe) => keyframe.timeSec <= splitAtSec)
-      : undefined;
-  const rightKeyframes =
-    'keyframes' in clip
-      ? clip.keyframes
-          .filter((keyframe) => keyframe.timeSec >= splitAtSec)
-          .map((keyframe) => ({ ...keyframe, timeSec: keyframe.timeSec - splitAtSec }))
-      : undefined;
+  const leftKeyframes = 'keyframes' in clip ? clip.keyframes : undefined;
+  const rightKeyframes = leftKeyframes;
   const left = trimClipInternals(
     {
-      ...clip,
+      ...(clip.kind === 'audio' || clip.kind === 'video'
+        ? editorClipWithRetainedFades(clip)
+        : clip.kind === 'text'
+          ? editorTextWithRetainedAnimation(clip)
+          : clip),
       durationSec: splitAtSec,
       ...('keyframes' in clip ? { keyframes: leftKeyframes ?? [] } : {}),
     } as EditorClip,
     splitAtSec,
   );
   let right = {
-    ...clip,
+    ...(clip.kind === 'audio' || clip.kind === 'video'
+      ? editorClipWithRetainedFades(clip, splitAtSec)
+      : clip.kind === 'text'
+        ? editorTextWithRetainedAnimation(clip, splitAtSec)
+        : clip),
     id: rightClipId,
     timelineStartSec: clip.timelineStartSec + splitAtSec,
     durationSec: rightDurationSec,
+
     ...('sourceInSec' in clip ? { sourceInSec: (clip.sourceInSec ?? 0) + sourceOffset } : {}),
     ...('keyframes' in clip ? { keyframes: rightKeyframes ?? [] } : {}),
+    ...('keyframes' in clip && clip.keyframes.length
+      ? { keyframeOffsetSec: (clip.keyframeOffsetSec ?? 0) + splitAtSec }
+      : {}),
   } as EditorClip;
   if (right.kind === 'caption') {
     right = {
@@ -560,7 +587,7 @@ const OVERLAP_TRANSITION_TYPES = new Set(['crossfade', 'slide', 'wipe', 'zoom', 
 
 const assertCanonicalTransitionGeometry = (project: EditorProjectV2): void => {
   const primary = project.tracks
-    .filter((track) => track.kind === 'video' && track.enabled && !track.muted)
+    .filter((track) => track.kind === 'video' && track.enabled)
     .sort((left, right) => left.order - right.order)[0];
   if (!primary) {
     throw new EditorProjectConflictError(
@@ -787,12 +814,27 @@ const applyTimelineCommand = (
               clip.id === command.clipId
                 ? trimClipInternals(
                     {
-                      ...clip,
-                      durationSec: command.durationSec,
-                      timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
                       ...('sourceInSec' in clip && command.sourceInSec !== undefined
-                        ? { sourceInSec: command.sourceInSec }
-                        : {}),
+                        ? editorClipAtSourceIn(clip, command.sourceInSec)
+                        : clip.kind === 'text' &&
+                            command.timelineStartSec !== undefined &&
+                            command.timelineStartSec !== clip.timelineStartSec
+                          ? {
+                              ...editorTextWithRetainedAnimation(
+                                clip,
+                                command.timelineStartSec - clip.timelineStartSec,
+                              ),
+                              ...(clip.keyframes.length
+                                ? {
+                                    keyframeOffsetSec:
+                                      (clip.keyframeOffsetSec ?? 0) +
+                                      command.timelineStartSec -
+                                      clip.timelineStartSec,
+                                  }
+                                : {}),
+                            }
+                          : clip),
+                      timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
                     } as EditorClip,
                     command.durationSec,
                   )
@@ -893,7 +935,7 @@ const applyTimelineCommand = (
       const compiled = compileMotionStyle({
         styleId: command.styleId,
         instanceId: command.instanceId,
-        timelineOffsetSec: command.timelineOffsetSec,
+        timelineOffsetSec: command.timelineOffsetSec + (clip.keyframeOffsetSec ?? 0),
         durationSec: command.durationSec,
         base: clip.transform,
       });
@@ -939,8 +981,8 @@ const applyTimelineCommand = (
                     keyframes: trimStyleInstance(
                       candidate.keyframes,
                       command.instanceId,
-                      command.startSec,
-                      command.endSec,
+                      command.startSec + (candidate.keyframeOffsetSec ?? 0),
+                      command.endSec + (candidate.keyframeOffsetSec ?? 0),
                     ),
                   }
                 : candidate,
@@ -960,7 +1002,21 @@ const applyTimelineCommand = (
           'invalid_command',
         );
       }
-      return updateTrack(
+      let parentId: string | null | undefined = command.parentClipId;
+      const seen = new Set<string>([command.clipId]);
+      while (parentId) {
+        if (seen.has(parentId)) {
+          throw new EditorProjectConflictError(
+            'Clip parenting cannot create a cycle.',
+            'invalid_command',
+          );
+        }
+        seen.add(parentId);
+        parentId = project.tracks
+          .flatMap((track) => track.clips as EditorClip[])
+          .find((clip) => clip.id === parentId)?.parentClipId;
+      }
+      const updated = updateTrack(
         project,
         command.trackId,
         (track) =>
@@ -976,6 +1032,20 @@ const applyTimelineCommand = (
             ),
           }) as typeof track,
       );
+      return {
+        ...updated,
+        tracks: updated.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((clip) =>
+            clip.id === command.clipId ||
+            clip.parentMotionBinding?.ancestors.some(
+              (ancestor) => ancestor.clipId === command.clipId,
+            )
+              ? { ...clip, parentMotionBinding: undefined }
+              : clip,
+          ),
+        })),
+      } as EditorProjectV2;
     }
     case 'remove_keyframes': {
       const { clip } = requireEditableClip(project, command.trackId, command.clipId);
@@ -1036,15 +1106,24 @@ const applyTimelineCommand = (
         transitions: project.transitions.filter((value) => value.id !== command.transitionId),
       };
     }
-    case 'restore_timeline_snapshot':
+    case 'restore_timeline_snapshot': {
       requireUser(command.actor);
-      return {
+      const restored = {
         ...project,
         durationSec: command.snapshot.durationSec,
         tracks: command.snapshot.tracks,
         transitions: command.snapshot.transitions,
         nestedSequences: command.snapshot.nestedSequences,
+        canvas: command.snapshot.canvas ?? project.canvas,
+        exportSettings: command.snapshot.exportSettings ?? project.exportSettings,
+        markers: command.snapshot.markers ?? project.markers,
       };
+      if (command.snapshot.brief === undefined) return restored;
+      const { brief: _current, ...withoutBrief } = restored;
+      return command.snapshot.brief
+        ? { ...withoutBrief, brief: command.snapshot.brief }
+        : withoutBrief;
+    }
     case 'set_nested_sequence': {
       if (command.sequence.tracks.some((track) => track.kind === 'nested_sequence')) {
         throw new EditorProjectConflictError(
@@ -1262,6 +1341,15 @@ const applyTimelineCommand = (
         ...project,
         markers: project.markers.filter((marker) => marker.id !== command.markerId),
       };
+    case 'set_markers':
+      return {
+        ...project,
+        markers: [...command.markers].sort((left, right) => left.timeSec - right.timeSec),
+      };
+    case 'set_brief': {
+      const { brief: _previous, ...rest } = project;
+      return command.brief ? { ...rest, brief: command.brief } : rest;
+    }
     default:
       return project;
   }
@@ -1433,7 +1521,71 @@ export function applyEditorCommandBatch(
     );
   }
   let next = project;
-  for (const command of batch.commands) next = applyProductionCommand(next, command);
+  const origins = new Map<string, EditorClipOrigin>(
+    project.tracks.flatMap((track) =>
+      track.clips.map((clip) => [clip.id, { clipId: clip.id, offsetSec: 0 }] as const),
+    ),
+  );
+  const reparented = new Set<string>();
+  let retainsParentMotion = false;
+  for (const command of batch.commands) {
+    if (command.commandType === 'split_clip') {
+      const origin = origins.get(command.clipId);
+      if (origin)
+        origins.set(command.rightClipId, {
+          ...origin,
+          offsetSec: origin.offsetSec + command.splitAtSec,
+        });
+      retainsParentMotion = true;
+    } else if (command.commandType === 'trim_clip') {
+      const clip = next.tracks
+        .flatMap((track) => track.clips as EditorClip[])
+        .find((clip) => clip.id === command.clipId);
+      const origin = origins.get(command.clipId);
+      if (clip && origin) {
+        const offset =
+          'sourceInSec' in clip && command.sourceInSec !== undefined
+            ? (command.sourceInSec - (clip.sourceInSec ?? 0)) /
+              ('playbackRate' in clip ? clip.playbackRate : 1)
+            : clip.kind === 'text'
+              ? (command.timelineStartSec ?? clip.timelineStartSec) - clip.timelineStartSec
+              : 0;
+        origins.set(clip.id, { ...origin, offsetSec: origin.offsetSec + offset });
+      }
+      retainsParentMotion = true;
+    } else if (command.commandType === 'move_clip') {
+      const clip = next.tracks
+        .flatMap((track) => track.clips as EditorClip[])
+        .find((clip) => clip.id === command.clipId);
+      const origin = origins.get(command.clipId);
+      if (clip && origin && !command.preserveParentMotion)
+        origins.set(clip.id, {
+          ...origin,
+          motionShiftSec:
+            (origin.motionShiftSec ?? 0) + command.timelineStartSec - clip.timelineStartSec,
+        });
+      if (command.preserveParentMotion) retainsParentMotion = true;
+    } else if (command.commandType === 'remove_clip' || command.commandType === 'remove_track') {
+      retainsParentMotion = true;
+    } else if (command.commandType === 'set_clip_parent') {
+      reparented.add(command.clipId);
+    } else if (command.commandType === 'upsert_clip' || command.commandType === 'add_track') {
+      const supplied = command.commandType === 'upsert_clip' ? [command.clip] : command.track.clips;
+      for (const clip of supplied) {
+        if (!clip.parentMotionBinding) continue;
+        const original = project.tracks
+          .flatMap((track) => track.clips as EditorClip[])
+          .find((candidate) => candidate.id === clip.id);
+        // Range planners carry explicit slice provenance in freshly computed bindings.
+        if (
+          JSON.stringify(clip.parentMotionBinding) !== JSON.stringify(original?.parentMotionBinding)
+        )
+          origins.delete(clip.id);
+      }
+    }
+    next = applyProductionCommand(next, command);
+  }
+  if (retainsParentMotion) next = retainParentMotionForEdit(project, next, origins, reparented);
   if (
     next.transitions.length > 0 ||
     batch.commands.some(

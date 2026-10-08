@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
-import { resolveStageMedia, stageKindForMimeType } from './stageMedia';
+import type { LibraryPlaybackRung, MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { pickPlaybackRung, resolveStageMedia, stageKindForMimeType } from './stageMedia';
 
 const HEAD_ASSET: MediaAsset = {
   id: 'asset-1',
@@ -47,7 +47,9 @@ describe('stageKindForMimeType', () => {
   it('reads the kind off the mime type of the bytes actually being shown', () => {
     expect(stageKindForMimeType('image/png')).toBe('image');
     expect(stageKindForMimeType('video/quicktime')).toBe('video');
-    expect(stageKindForMimeType('application/pdf')).toBe('file');
+    expect(stageKindForMimeType('audio/mpeg')).toBe('audio');
+    expect(stageKindForMimeType('application/pdf')).toBe('pdf');
+    expect(stageKindForMimeType('application/zip')).toBe('file');
   });
 });
 
@@ -187,5 +189,275 @@ describe('resolveStageMedia — the head follows its version row, not the stale 
     });
     expect(stage.src).toBe('https://storage.test/original.mp4');
     expect(stage.key).toBe('head-asset-1');
+  });
+
+  it('keeps the same key when the version list arrives for the same head bytes', () => {
+    // The modal keys the stage on this; a flip here remounts the annotation layer
+    // mid-drawing and drops the draft's first mark.
+    const asset = { ...HEAD_ASSET, headVersionId: 'v1' };
+    const beforeList = resolveStageMedia({ asset, viewedVersion: null, headVersion: null });
+    const afterList = resolveStageMedia({
+      asset,
+      viewedVersion: null,
+      headVersion: version({ id: 'v1', isHead: true }),
+    });
+    expect(afterList.key).toBe(beforeList.key);
+  });
+});
+
+describe('resolveStageMedia — which bytes play', () => {
+  const PROXY = {
+    assetVersionId: '11111111-1111-4111-8111-111111111111',
+    renditionId: '33333333-3333-4333-8333-333333333333',
+    state: 'ready' as const,
+    kind: 'video' as const,
+    role: 'preview_video' as const,
+    signedUrl: 'https://storage.test/proxy-720p.mp4',
+  };
+  const POSTER = {
+    assetVersionId: '11111111-1111-4111-8111-111111111111',
+    renditionId: '44444444-4444-4444-8444-444444444444',
+    state: 'ready' as const,
+    kind: 'image' as const,
+    role: 'poster' as const,
+    signedUrl: 'https://storage.test/poster.jpg',
+  };
+
+  it('plays a ready 720p proxy over the original on the head', () => {
+    const stage = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true, preview: PROXY }),
+    });
+    expect(stage).toMatchObject({
+      kind: 'video',
+      src: 'https://storage.test/proxy-720p.mp4',
+      sourceRole: 'preview_video',
+      durationMs: 18000,
+    });
+  });
+
+  it('waits on the proxy for an MKV instead of handing the raw file to <video>', () => {
+    const mkv = version({
+      id: 'v3',
+      isHead: true,
+      fileName: 'interview.mkv',
+      mimeType: 'video/x-matroska',
+    });
+    expect(
+      resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: mkv }),
+    ).toMatchObject({
+      kind: 'file',
+      src: null,
+    });
+    expect(
+      resolveStageMedia({
+        asset: HEAD_ASSET,
+        viewedVersion: null,
+        headVersion: { ...mkv, preview: PROXY },
+      }),
+    ).toMatchObject({ kind: 'video', sourceRole: 'preview_video' });
+  });
+
+  it('plays a ready proxy for an older version too', () => {
+    const stage = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: version({ id: 'version-1', preview: PROXY }),
+    });
+    expect(stage.sourceRole).toBe('preview_video');
+    expect(stage.src).toBe('https://storage.test/proxy-720p.mp4');
+  });
+
+  it('plays the original when there is no proxy', () => {
+    const stage = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true }),
+    });
+    expect(stage.sourceRole).toBe('original');
+    expect(stage.src).toBe('https://storage.test/v1.mp4');
+  });
+
+  it('never swaps a playable video for its poster still', () => {
+    const fromVersion = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true, preview: POSTER }),
+    });
+    const fromSnapshot = resolveStageMedia({
+      asset: { ...HEAD_ASSET, preview: POSTER },
+      viewedVersion: null,
+    });
+    for (const stage of [fromVersion, fromSnapshot]) {
+      expect(stage.kind).toBe('video');
+      expect(stage.sourceRole).toBe('original');
+    }
+  });
+
+  it('shows the ready WebP for a HEIC or TIFF original, which only Safari paints', () => {
+    const webp = {
+      assetVersionId: '11111111-1111-4111-8111-111111111111',
+      renditionId: '55555555-5555-4555-8555-555555555555',
+      state: 'ready' as const,
+      kind: 'image' as const,
+      role: 'preview_image' as const,
+      signedUrl: 'https://storage.test/preview.webp',
+    };
+    for (const [fileName, mimeType] of [
+      ['photo.heic', 'image/heic'],
+      ['scan.tiff', 'image/tiff'],
+    ] as const) {
+      const head = version({ id: 'v2', isHead: true, fileName, mimeType, preview: webp });
+      expect(
+        resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: head }),
+      ).toMatchObject({
+        kind: 'image',
+        src: 'https://storage.test/preview.webp',
+        sourceRole: 'preview_image',
+      });
+    }
+  });
+
+  it('plays the proxy for an MXF original the browser cannot decode', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, fileName: 'camera.mxf', mimeType: 'application/mxf', preview: PROXY },
+      viewedVersion: null,
+    });
+    expect(stage).toMatchObject({ kind: 'video', sourceRole: 'preview_video' });
+  });
+
+  it('puts audio and PDF originals on their native stages', () => {
+    const audio = resolveStageMedia({
+      asset: {
+        ...HEAD_ASSET,
+        kind: 'audio',
+        fileName: 'vo.mp3',
+        mimeType: 'audio/mpeg',
+        signedUrl: 'https://storage.test/vo.mp3',
+      },
+      viewedVersion: null,
+    });
+    expect(audio).toMatchObject({ kind: 'audio', src: 'https://storage.test/vo.mp3' });
+
+    const pdf = resolveStageMedia({
+      asset: {
+        ...HEAD_ASSET,
+        kind: 'file',
+        fileName: 'brief.pdf',
+        mimeType: 'application/pdf',
+        signedUrl: 'https://storage.test/brief.pdf',
+      },
+      viewedVersion: null,
+    });
+    expect(pdf).toMatchObject({ kind: 'pdf', src: 'https://storage.test/brief.pdf' });
+  });
+});
+
+describe('resolveStageMedia — the version on stage', () => {
+  it('names the head version row once the list has loaded', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, headVersionId: 'v1' },
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true }),
+    });
+    expect(stage.assetVersionId).toBe('v2');
+  });
+
+  it('falls back to the asset’s head version id before the list loads', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, headVersionId: 'v1' },
+      viewedVersion: null,
+    });
+    expect(stage.assetVersionId).toBe('v1');
+  });
+
+  it('names the older version a reviewer picked, not the head', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, headVersionId: 'v2' },
+      viewedVersion: version({ id: 'v1' }),
+      headVersion: version({ id: 'v2', isHead: true }),
+    });
+    expect(stage.assetVersionId).toBe('v1');
+  });
+
+  it('is null for an asset that has never had a version', () => {
+    expect(resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null }).assetVersionId).toBeNull();
+  });
+});
+
+describe('pickPlaybackRung', () => {
+  function rung(
+    role: LibraryPlaybackRung['role'],
+    width: number | null,
+    height: number | null,
+    hdr = false,
+  ): LibraryPlaybackRung {
+    return {
+      role,
+      label: role,
+      width,
+      height,
+      sizeBytes: null,
+      mimeType: 'video/mp4',
+      hdr,
+      signedUrl: `https://storage.test/${role}.mp4`,
+    };
+  }
+  // Largest first, HDR last — the order the playback route returns.
+  const LADDER = [
+    rung('proxy_2160', 3840, 2160),
+    rung('proxy_1080', 1920, 1080),
+    rung('preview_video', 1280, 720),
+    rung('proxy_540', 960, 540),
+    rung('proxy_360', 640, 360),
+    rung('hdr_proxy', 1920, 1080, true),
+  ];
+  const SDR = { hdrDisplay: false, hevcMain10: false };
+
+  it('plays the smallest SDR rung that still fills the stage', () => {
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 700 })?.role).toBe('preview_video');
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 720 })?.role).toBe('preview_video');
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 721 })?.role).toBe('proxy_1080');
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 100 })?.role).toBe('proxy_360');
+  });
+
+  it('falls back to the largest SDR rung when the stage outgrows them all', () => {
+    const noUhd = LADDER.filter((r) => r.role !== 'proxy_2160');
+    expect(pickPlaybackRung(noUhd, { ...SDR, stageShortSidePx: 4000 })?.role).toBe('proxy_1080');
+  });
+
+  it('measures a portrait rung by its short side (the width)', () => {
+    const portrait = [rung('proxy_1080', 1080, 1920), rung('preview_video', 720, 1280)];
+    expect(pickPlaybackRung(portrait, { ...SDR, stageShortSidePx: 800 })?.role).toBe('proxy_1080');
+  });
+
+  it('reads the ladder’s nominal size for a rung with no dimensions', () => {
+    const unsized = [rung('proxy_1080', null, null), rung('proxy_540', null, null)];
+    expect(pickPlaybackRung(unsized, { ...SDR, stageShortSidePx: 500 })?.role).toBe('proxy_540');
+  });
+
+  it('plays the HDR proxy only on an HDR display that decodes HEVC Main 10', () => {
+    const stage = { stageShortSidePx: 700 };
+    expect(pickPlaybackRung(LADDER, { hdrDisplay: true, hevcMain10: true, ...stage })?.role).toBe(
+      'hdr_proxy',
+    );
+    expect(pickPlaybackRung(LADDER, { hdrDisplay: true, hevcMain10: false, ...stage })?.role).toBe(
+      'preview_video',
+    );
+    expect(pickPlaybackRung(LADDER, { hdrDisplay: false, hevcMain10: true, ...stage })?.role).toBe(
+      'preview_video',
+    );
+  });
+
+  it('never hands an SDR screen the HDR proxy, even when it is all there is', () => {
+    expect(
+      pickPlaybackRung([LADDER[5] as LibraryPlaybackRung], { ...SDR, stageShortSidePx: 700 }),
+    ).toBeNull();
+  });
+
+  it('is null for an empty ladder', () => {
+    expect(
+      pickPlaybackRung([], { hdrDisplay: true, hevcMain10: true, stageShortSidePx: 700 }),
+    ).toBeNull();
   });
 });

@@ -87,6 +87,8 @@ describe('ClipInspector effect controls', () => {
     'Blur',
     'Vignette',
     'Film grain',
+    'Dust',
+    'Light leaks',
     'Chromatic aberration',
     'VHS',
     'Pixelate',

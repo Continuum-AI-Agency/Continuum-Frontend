@@ -2,11 +2,13 @@
  * PendingApprovals against a mocked approvals client: a Forge package's variations under one
  * header with its expiry (a batch with no package keeps its own card), who decided and where,
  * `approved` read as publishing and re-read until the plugin's outcome lands, `expired` and
- * `failed` with their reason, and a refused decision shown in the backend's words.
+ * `failed` with their reason, and a refused decision shown in the backend's words. The section
+ * opens while something waits on a person and starts folded when every row is already decided.
  */
 
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import type {
+  ApiRenderJob,
   ApprovalBatchDecisionResponse,
   RenderApproval,
   RenderApprovalDecisionResponse,
@@ -121,6 +123,7 @@ const decideApprovals = mock(
 );
 mock.module('@/lib/library/approvalDecisions', () => ({ decideApprovals }));
 
+import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { APPROVAL_RELAY_POLL_MS, approvalPollInterval, PendingApprovals } from './PendingApprovals';
 
@@ -136,21 +139,56 @@ beforeEach(() => {
 afterEach(() => {
   unregisterToasts();
   cleanup();
+  ledgerJobs = [];
   fetchRenderApprovals.mockClear();
   decideRenderApproval.mockClear();
   decideApprovals.mockClear();
 });
 
+const ASSET = '77777777-7777-4777-8777-777777777771';
+// The ledger's first page, which the cards read their Library asset from. Seeded fresh, so no test
+// here reaches the jobs API.
+let ledgerJobs: ApiRenderJob[] = [];
+
 const renderApprovals = (
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-) =>
-  render(
+) => {
+  client.setQueryData(forgeQueryKeys.renderJobList(BRAND, 50), {
+    items: ledgerJobs,
+    nextCursor: null,
+  });
+  return render(
     <QueryClientProvider client={client}>
       <PendingApprovals brandId={BRAND} />
     </QueryClientProvider>,
   );
+};
 
 const card = (text: string) => screen.getByText(text).closest('div.rounded-lg') as HTMLElement;
+const sectionToggle = () => screen.getByRole('button', { name: /^Pending approvals/ });
+
+test('open while something waits, and folds away on a click', async () => {
+  renderApprovals();
+  await screen.findByText('Waiting on you');
+  expect(sectionToggle().getAttribute('aria-expanded')).toBe('true');
+
+  fireEvent.click(sectionToggle());
+  await waitFor(() => expect(screen.queryByText('Waiting on you')).toBeNull());
+  expect(sectionToggle().getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByText('Pending approvals (1)')).toBeTruthy();
+});
+
+test('a folded list opens itself when something new waits', async () => {
+  approvals = [row(ID, { status: 'rejected', decidedAt: '2026-09-15T00:05:00.000Z' })];
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  renderApprovals(client);
+  await screen.findByText('Pending approvals');
+  expect(sectionToggle().getAttribute('aria-expanded')).toBe('false');
+
+  approvals = [pending];
+  await client.invalidateQueries({ queryKey: ['forge', BRAND, 'approvals'] });
+  expect(await screen.findByText('Waiting on you')).toBeTruthy();
+});
 
 test('reuses a fresh approval list and invalidates it after a decision', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -218,6 +256,10 @@ test('approved reads as publishing; expired and failed say why; the decider and 
     }),
   ];
   renderApprovals();
+  // Nothing waits on a person, so the list of decisions starts folded.
+  await screen.findByText('Pending approvals');
+  expect(screen.queryByText('Publishing…')).toBeNull();
+  fireEvent.click(sectionToggle());
   await screen.findByText('Publishing…');
   expect(card('Publishing…').textContent).toContain('Decided by ana@vivo47.com via Forge');
   expect(card('Expired').textContent).toContain('Nobody decided before the package expired.');
@@ -329,4 +371,43 @@ test('a package with one variation waiting has no batch buttons', async () => {
   renderApprovals();
   await screen.findByRole('region', { name: 'Approval package, 1 variation' });
   expect(screen.queryAllByRole('button', { name: /all/ })).toHaveLength(0);
+});
+
+test('a card links to its render’s thread in the Library, found by the task it ran as', async () => {
+  const output = {
+    id: 'o1',
+    kind: 'image',
+    fileName: 'render.png',
+    mimeType: 'image/png',
+    url: 'https://example.com/render.png',
+    width: 1080,
+    height: 1920,
+  };
+  ledgerJobs = [
+    {
+      taskUid: 'task-2',
+      outputs: [{ ...output, assetId: '77777777-7777-4777-8777-777777777779', versionId: null }],
+    },
+    {
+      taskUid: pending.taskUid,
+      outputs: [
+        { ...output, id: 'o0', assetId: null, versionId: null },
+        { ...output, assetId: ASSET, versionId: null },
+      ],
+    },
+  ] as ApiRenderJob[];
+  renderApprovals();
+  await screen.findByText('Waiting on you');
+  const href =
+    within(card('Waiting on you'))
+      .getByRole('link', { name: /Open in Library/ })
+      .getAttribute('href') ?? '';
+  expect(href.startsWith('/library?')).toBe(true);
+  expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(ASSET);
+});
+
+test('a card whose render is not on the ledger’s page has no Library link', async () => {
+  renderApprovals();
+  await screen.findByText('Waiting on you');
+  expect(within(card('Waiting on you')).queryByRole('link', { name: /Open in Library/ })).toBeNull();
 });

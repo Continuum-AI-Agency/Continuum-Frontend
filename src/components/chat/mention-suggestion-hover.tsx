@@ -5,7 +5,7 @@
  * detail (What's Working creatives, KPI 7d sparklines, packs, media enlarge).
  */
 
-import { getOrganicMetric } from '@continuum/contracts';
+import { getOrganicMetric, type OrganicMetricPlatform } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import {
   BookOpen,
@@ -26,16 +26,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { OPTIMIZATION_PACKS } from '@/lib/agent/kpi-mentions';
 import type { AgentMentionReference, AgentMentionSuggestion } from '@/lib/agent-references';
 import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
-import type { OrganicPlatform } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
 
 export type MentionAnalyticsContext = {
   brandId?: string;
   integrationAccountId?: string | null;
-  platform?: Extract<
-    OrganicPlatform,
-    'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'
-  > | null;
+  platform?: OrganicMetricPlatform | null;
 };
 
 function readString(meta: Record<string, unknown> | undefined, key: string): string | null {
@@ -60,6 +56,8 @@ function typeLabel(type: AgentMentionReference['type']): string {
       return 'Media';
     case 'canvas_node':
       return 'Canvas';
+    case 'pipeline':
+      return 'Pipeline';
     default:
       return type.replace(/_/g, ' ');
   }
@@ -71,6 +69,7 @@ function TypeIcon({ type }: { type: AgentMentionReference['type'] }) {
     case 'media_asset':
       return <ImageIcon className={cls} />;
     case 'canvas_node':
+    case 'pipeline':
       return <Workflow className={cls} />;
     case 'skill':
       return <Sparkles className={cls} />;

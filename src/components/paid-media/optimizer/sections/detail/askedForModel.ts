@@ -20,6 +20,14 @@
 // `optimizer_request_audience_proposal` unchanged), and afterwards the row says what was
 // made and that it is not delivering. No second inbox and no second write path — the card
 // that asked the question is the card that finishes it.
+//
+// NOR DOES IT END AT THE HANDOFF. A handoff that opened an audience proposal is a pointer
+// to a row that keeps changing — queued, read by Jaina, ready, blocked, failed — and the row
+// that asked reads that state off the proposals query rather than repeating "being built"
+// forever (`handoffProposal`). MENSAJES // TODOS, 2026-09-29: suggestion 1f2426b1 was
+// adopted, its handoff opened proposal e2310011, the worker failed it with a 40-line Zod
+// dump in `error.message`, and the row said "being built". It now says "Failed" with a
+// one-line reason and offers to ask again.
 
 import type {
   AdhocSuggestionCategory,
@@ -27,6 +35,9 @@ import type {
   AdhocSuggestionHandoff,
   AdhocSuggestionPlan,
   AdhocSuggestionRow,
+  AudienceProposalBlock,
+  AudienceProposalCardState,
+  AudienceProposalRow,
   HeroModule,
   ImpactTier,
 } from '@continuum/contracts';
@@ -38,11 +49,18 @@ import {
   HERO_MODULE_COPY,
   IMPACT_TIER_COPY,
   impactTier,
+  proposalForRecommendation,
   readAdhocHandoff,
   readAdhocSuggestion,
+  readProposalBlock,
 } from '@continuum/contracts';
+import {
+  AUDIENCE_PROPOSAL_STATE_LABEL,
+  audienceCardStateFor,
+  proposalFailureReason,
+} from '../audienceCardModel';
 import type { DailyReadRow } from './dailyReadModel';
-import type { HeroCta } from './heroModel';
+import { type HeroCta, queueRowKeyFor } from './heroModel';
 
 /** A suggestion row, as the shared list sees it. Every field `DailyReadRow` has, plus what
  *  only an asked-for row can offer: the steps, its own figures, and the single-use grant
@@ -57,6 +75,9 @@ export type AskedForRow = DailyReadRow & {
   adoptToken: string | null;
   /** What implementing built, once it has been. Null before the build. */
   handoff: AdhocSuggestionHandoff | null;
+  /** The audience proposal the handoff opened, as the proposals query has it right now.
+   *  Null before the build, for the other categories, and until the query has the row. */
+  proposal: HandoffProposal | null;
   /** The sentence under the control: what pressing it will do and that nothing goes live,
    *  or — once built — what exists now and that it is not delivering. Null when the row has
    *  nothing to add beyond its own basis line. */
@@ -103,12 +124,127 @@ function waitingRow(row: AdhocSuggestionRow): AskedForRow {
     figures: [],
     adoptToken: null,
     handoff: null,
+    proposal: null,
     nextNote: null,
     cta: { kind: 'manage', rowKey: null, label: 'Working…' },
   };
 }
 
-function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefined): AskedForRow {
+/** What the asked-for rows read besides their own rows: the brand's audience proposals, so
+ *  a handoff that opened a proposal can say what became of it. */
+export type AskedForContext = {
+  proposals?: readonly AudienceProposalRow[];
+};
+
+/** The proposal a handoff opened, read once for the row, the panel and the retry. */
+export type HandoffProposal = {
+  row: AudienceProposalRow;
+  /** The card's own state for the row (`audienceCardStateFor`), so the asked-for row and
+   *  the card it opens can never disagree about what the proposal is. */
+  state: AudienceProposalCardState;
+  block: AudienceProposalBlock | null;
+  /** One line a person can read: the block's message, or why the build failed. Null for the
+   *  states that need no reason. Never a raw error dump — see `proposalFailureReason`. */
+  reason: string | null;
+  /** True once the cycle superseded it — the trigger stopped firing, so the recommendation
+   *  it belonged to was expired in the same pass (public.optimizer_supersede_
+   *  recommendations). Both facts come from the proposal row; nothing here is inferred. */
+  closed: boolean;
+  /** Whether asking again is on offer: a failed or blocked proposal on a recommendation the
+   *  cycle has not closed. The request RPC is the existing one, keyed by recommendation. */
+  retryable: boolean;
+};
+
+export function handoffProposal(
+  handoff: AdhocSuggestionHandoff | null,
+  proposals: readonly AudienceProposalRow[] | undefined,
+): HandoffProposal | null {
+  if (!handoff?.proposal_id || !proposals) return null;
+  const opened = proposals.find((candidate) => candidate.id === handoff.proposal_id);
+  if (!opened) return null;
+  // The handoff names the proposal it OPENED, but asking again supersedes that row and opens
+  // a new one on the same recommendation (MENSAJES // TODOS, 2026-09-29: e2310011 went to
+  // superseded / "refreshed" when 1e89d5e7 replaced it). Follow the row the card reads, so
+  // the two agree; a proposal the cycle closed has no successor and stays the answer.
+  const row =
+    proposalForRecommendation(proposals, {
+      id: opened.recommendation_id ?? handoff.recommendation_id ?? '',
+      adset_id: opened.adset_id,
+      trigger: opened.trigger,
+    }) ?? opened;
+  const state = audienceCardStateFor(row);
+  const block = readProposalBlock(row);
+  const closed = row.status === 'superseded';
+  const blocked = state === 'blocked' || state === 'blocked_cbo';
+  const reason = blocked
+    ? (block?.message ?? null)
+    : state === 'failed'
+      ? proposalFailureReason(row.error)
+      : null;
+  return {
+    row,
+    state,
+    block,
+    reason,
+    closed,
+    retryable: (blocked || state === 'failed') && !closed,
+  };
+}
+
+/** The badge on the row: the proposal's state in the card's own words, or "Closed" for a
+ *  proposal the cycle closed without ever giving it a body. */
+export function proposalStateLabel(proposal: HandoffProposal): string {
+  if (proposal.state === 'none' && proposal.closed) return 'Closed';
+  return AUDIENCE_PROPOSAL_STATE_LABEL[proposal.state];
+}
+
+const SIGNAL_STOPPED = 'The signal stopped firing.';
+const CLOSED_NOTE = 'The cycle closed the recommendation it opened.';
+
+/**
+ * The sentence under the row once the proposal exists: what state it is in and, for a
+ * blocked or failed one, why. Null for the states the built note already covers.
+ */
+export function proposalNote(proposal: HandoffProposal): string | null {
+  const closedTail = proposal.closed
+    ? ` ${proposalFailureReason(proposal.row.error) ?? SIGNAL_STOPPED} ${CLOSED_NOTE}`
+    : '';
+  switch (proposal.state) {
+    case 'queued':
+      return 'Queued: Jaina picks it up in under a minute.';
+    case 'proposing':
+      return 'Jaina is reading the audience, the catalogue and the creatives…';
+    case 'ready':
+      return 'Ready: open it to compare the audiences and create the new ad set (paused).';
+    case 'blocked':
+    case 'blocked_cbo':
+      return `Blocked — ${proposal.reason ?? "The proposal couldn't be put together."}${closedTail}`;
+    case 'failed':
+      return `Failed — ${proposal.reason ?? 'The proposal could not be built.'}`;
+    case 'approved':
+      return 'Approved: the worker creates the ad set in under a minute.';
+    case 'executing':
+      return 'Creating the ad set and its ads in Meta…';
+    case 'executed':
+      return 'Created in Meta. Activate it from the proposal.';
+    case 'switching':
+      return 'Activating the new ad set…';
+    case 'undoing':
+      return 'Undoing…';
+    case 'undone':
+      return 'Undone: the new ad set was left paused.';
+    case 'none':
+      return proposal.closed
+        ? `${proposalFailureReason(proposal.row.error) ?? SIGNAL_STOPPED} ${CLOSED_NOTE}`
+        : null;
+  }
+}
+
+function settledRow(
+  row: AdhocSuggestionRow,
+  dailyTotal: number | null | undefined,
+  context: AskedForContext,
+): AskedForRow {
   const copy = ADHOC_SUGGESTION_CATEGORY_COPY[row.category];
   const plan = readAdhocSuggestion(row);
   const module = MODULE_BY_CATEGORY[row.category];
@@ -139,6 +275,7 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
       figures: [],
       adoptToken: null,
       handoff: null,
+      proposal: null,
       nextNote: null,
       cta: { kind: 'manage', rowKey: null, label: 'Open Manage' },
     };
@@ -150,6 +287,7 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
   const tier: ImpactTier = sized ? impactTier(plan.impact_per_day ?? 0, dailyTotal) : 'low';
   const adopted = row.status === 'adopted';
   const handoff = readAdhocHandoff(row);
+  const proposal = handoffProposal(handoff, context.proposals);
 
   return {
     id: `asked:${row.id}`,
@@ -160,9 +298,11 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
     category: copy.label,
     tier,
     tierLabel: adopted
-      ? handoff
-        ? 'Handed off'
-        : 'Taken on'
+      ? proposal
+        ? proposalStateLabel(proposal)
+        : handoff
+          ? 'Handed off'
+          : 'Taken on'
       : sized
         ? IMPACT_TIER_COPY[tier]
         : 'Not sized',
@@ -176,7 +316,12 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
     detail: { steps: plan.steps, figures: plan.figures },
     adoptToken: adopted ? null : (plan.adopt?.token ?? null),
     handoff,
-    nextNote: nextNoteFor(row.category, plan, handoff, adopted),
+    proposal,
+    // The proposal's own state outranks the "being built" promise: the row that asked must
+    // say what actually became of the ask, not what the build was going to be.
+    nextNote:
+      (proposal ? proposalNote(proposal) : null) ??
+      nextNoteFor(row.category, plan, handoff, adopted),
     cta: ctaFor(plan, module, row.category, adopted, handoff),
   };
 }
@@ -211,7 +356,9 @@ function nextNoteFor(
  *    on the row that already exists, not twice. This outranks everything below, including
  *    the build: a suggestion that recognised work the cycle already scored must never mint
  *    a second copy of it.
- * 2. IT HAS BEEN BUILT. Land on what the build made, by the queue's own row key.
+ * 2. IT HAS BEEN BUILT. Land on what the build made, by the queue's own row key. A handoff
+ *    that opened an audience proposal is an `audience_card` CTA: the proposal opens on the
+ *    row itself, and the key still names the recommendation row it belongs to.
  * 3. IT WAS ADOPTED AND NAMES AN AD SET. Offer the build. This is the case that used to
  *    dead-end on "Open Manage".
  * 4. Otherwise: take it on, or — adopted with nothing to build from — say so in `nextNote`
@@ -225,19 +372,27 @@ function ctaFor(
   handoff: AdhocSuggestionHandoff | null,
 ): HeroCta {
   const cta = plan.cta;
-  if (cta?.kind === 'queue_row' && cta.target_id) {
+  // ONE resolver with the hero card (heroModel.queueRowKeyFor). An `audience_card` CTA
+  // carries the PROPOSAL id and no queue row is keyed by it — the card renders nested inside
+  // its recommendation's row — so the key is the CTA's own only when it already is a row
+  // key, else the recommendation the handoff says the plan became. Nothing else is a key.
+  const rowKey = queueRowKeyFor(cta, { recommendationId: handoff?.recommendation_id ?? null });
+  if (cta?.kind === 'queue_row' && rowKey) {
     return {
       kind: 'queue_row',
-      rowKey: cta.target_id,
+      rowKey,
       label: module === 'budget' ? 'Review the budget moves' : 'Open it in the queue',
     };
   }
-  if (cta?.kind === 'audience_card' && cta.target_id) {
-    return { kind: 'audience_card', rowKey: cta.target_id, label: 'Open the audience proposal' };
+  if (cta?.kind === 'audience_card' && rowKey) {
+    return { kind: 'audience_card', rowKey, label: ADHOC_HANDOFF_COPY.audience.open };
   }
 
   if (handoff) {
     const rowKey = adhocHandoffRowKey(handoff, plan);
+    if (rowKey && handoff.kind === 'audience_proposal' && handoff.proposal_id) {
+      return { kind: 'audience_card', rowKey, label: ADHOC_HANDOFF_COPY.audience.open };
+    }
     if (rowKey) {
       return { kind: 'queue_row', rowKey, label: ADHOC_HANDOFF_COPY[category].open };
     }
@@ -266,14 +421,27 @@ function ctaFor(
 export function buildAskedForRows(
   rows: readonly AdhocSuggestionRow[],
   dailyTotal: number | null | undefined,
+  context: AskedForContext = {},
 ): AskedForRow[] {
   return rows
     .filter((row) => SHOWN.has(row.status))
     .map((row) =>
       row.status === 'queued' || row.status === 'proposing'
         ? waitingRow(row)
-        : settledRow(row, dailyTotal),
+        : settledRow(row, dailyTotal, context),
     );
+}
+
+/** The recommendations the asked-for handoffs point at. The queue is built from the cycle's
+ *  PENDING recommendations, so one a later cycle expired is absent from it while the row that
+ *  opened it still says "Open the audience proposal" — the queue carries these ids so that
+ *  press always has a row to land on (see buildActionQueue). */
+export function askedRecommendationIds(rows: readonly AskedForRow[]): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.handoff?.recommendation_id) ids.add(row.handoff.recommendation_id);
+  }
+  return [...ids];
 }
 
 /** The one line above the list saying what the day's read and the asks add up to. */

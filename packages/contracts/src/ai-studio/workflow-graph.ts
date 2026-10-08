@@ -17,6 +17,7 @@ import {
   OMNI_GENERATOR_NODE_BOUNDS,
   VIDEO_GENERATOR_NODE_BOUNDS,
 } from './node-sizing';
+import { OMNI_GEN_BACKEND_MODEL } from './omni-gen';
 
 // Canonical AI Studio canvas graph rules — node-type vocabulary, handle
 // compatibility, connection limits, and media↔handle compatibility. Ported from
@@ -169,15 +170,23 @@ export const VIDEO_GENERATOR_MODELS = [
   'kling-omni',
   'pixverse-v6',
   'seedance-2.0',
+  'gemini-omni-flash',
   'veo-3.1-fast',
   'veo-3.1-lite',
   'veo-3.1',
 ] as const;
 export type VideoGeneratorModel = (typeof VIDEO_GENERATOR_MODELS)[number];
 
-export const DEFAULT_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = 'veo-3.1-fast';
+/**
+ * What a NEW video node is born with. A saved node with no model is not a new node — it
+ * has always rendered on Veo 3.1 Fast, so `resolveVideoGeneratorModel` keeps it there
+ * rather than re-gating its handles (and dropping its frame edges) on the next load.
+ */
+export const DEFAULT_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = 'gemini-omni-flash';
+const LEGACY_UNSET_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = 'veo-3.1-fast';
 
 export const VIDEO_GENERATOR_MODEL_LABELS: Record<VideoGeneratorModel, string> = {
+  'gemini-omni-flash': 'Omni 1.1 Flash',
   'veo-3.1': 'Veo 3.1',
   'veo-3.1-fast': 'Veo 3.1 Fast',
   'veo-3.1-lite': 'Veo 3.1 Lite',
@@ -198,6 +207,7 @@ export const VIDEO_GENERATOR_PROVIDER_LABELS: Record<VideoGeneratorProvider, str
 };
 
 const VIDEO_GENERATOR_PROVIDER_BY_MODEL: Record<VideoGeneratorModel, VideoGeneratorProvider> = {
+  'gemini-omni-flash': 'google',
   'veo-3.1': 'google',
   'veo-3.1-fast': 'google',
   'veo-3.1-lite': 'google',
@@ -243,6 +253,7 @@ export const VIDEO_GENERATOR_MODEL_GROUPS: readonly VideoGeneratorModelGroup[] =
  */
 export const VIDEO_MODEL_INFO: Record<VideoGeneratorModel, { status: ModelStatus; note?: string }> =
   {
+    'gemini-omni-flash': { status: 'available' },
     'veo-3.1': { status: 'available' },
     'veo-3.1-fast': { status: 'available' },
     'veo-3.1-lite': { status: 'available' },
@@ -310,13 +321,23 @@ const VIDEO_RESOLUTIONS_REQUIRING_8S = new Set(['1080p', '2K', '4K']);
 const canonicalVideoResolution = (value: unknown): string =>
   typeof value === 'string' ? value.replace(/k$/, 'K') : '';
 
-/** Only the Google-hosted (Veo) models tie duration to resolution; fal models do not. */
+/** The duration ladder is Veo's own: fal models take 3-15s, and Omni picks its own length. */
+const isVeoModel = (model: VideoGeneratorModel): boolean => model.startsWith('veo-');
+
+/** Veo 3.1, Veo 3.1 Fast and Omni reach 4K; every other model on the roster tops out at 1080p. */
+export function getVideoGeneratorResolutions(
+  model: VideoGeneratorModel,
+): readonly ('720p' | '1080p' | '4k')[] {
+  return model === 'veo-3.1' || model === 'veo-3.1-fast' || model === 'gemini-omni-flash'
+    ? ['720p', '1080p', '4k']
+    : ['720p', '1080p'];
+}
+
 export const videoResolutionRequiresEightSeconds = (
   model: VideoGeneratorModel,
   resolution: unknown,
 ): boolean =>
-  getVideoGeneratorProvider(model) === 'google' &&
-  VIDEO_RESOLUTIONS_REQUIRING_8S.has(canonicalVideoResolution(resolution));
+  isVeoModel(model) && VIDEO_RESOLUTIONS_REQUIRING_8S.has(canonicalVideoResolution(resolution));
 
 /**
  * The SECOND thing that pins a Veo render to 8s: a reference. Veo only renders the
@@ -328,12 +349,13 @@ export const videoResolutionRequiresEightSeconds = (
 export const videoReferencesRequireEightSeconds = (
   model: VideoGeneratorModel,
   hasReferences: unknown,
-): boolean => getVideoGeneratorProvider(model) === 'google' && hasReferences === true;
+): boolean => isVeoModel(model) && hasReferences === true;
 
 /**
  * The length this node will ACTUALLY render at. `undefined` means the model has no
- * fixed ladder (the fal models take 3-15s), so the requested value is left alone
- * rather than silently clamped down to something the provider never asked for.
+ * fixed ladder (the fal models take 3-15s; Omni decides its own length), so the
+ * requested value is left alone rather than silently clamped down to something the
+ * provider never asked for.
  */
 export function coerceVideoGeneratorDuration(
   model: VideoGeneratorModel,
@@ -341,7 +363,7 @@ export function coerceVideoGeneratorDuration(
   requested: unknown,
   hasReferences?: unknown,
 ): VideoGeneratorDurationSeconds | undefined {
-  if (getVideoGeneratorProvider(model) !== 'google') return undefined;
+  if (!isVeoModel(model)) return undefined;
   if (videoResolutionRequiresEightSeconds(model, resolution)) return 8;
   if (videoReferencesRequireEightSeconds(model, hasReferences)) return 8;
   const value = Number(requested);
@@ -406,6 +428,7 @@ const REFERENCE_MODES_BY_MODEL: Record<
   'veo-3.1': ['images', 'frames'],
   'veo-3.1-fast': ['frames', 'images'],
   'veo-3.1-lite': ['frames'],
+  'gemini-omni-flash': ['images'],
   'kling-omni': ['omni'],
   'pixverse-v6': ['images'],
   'seedance-2.0': ['images'],
@@ -468,7 +491,7 @@ export function resolveVideoGeneratorModel(node: {
   if (isVideoGeneratorModel(model)) return model;
   if (node.type === 'veoFast') return 'veo-3.1-fast';
   if (node.type === 'veoDirector') return 'veo-3.1';
-  return DEFAULT_VIDEO_GENERATOR_MODEL;
+  return LEGACY_UNSET_VIDEO_GENERATOR_MODEL;
 }
 
 /** The model's DEFAULT mode. Use `resolveVideoGeneratorReferenceMode` when you hold a node. */
@@ -574,6 +597,7 @@ export function getVideoGeneratorImageLimit(
   hasReferenceVideo: boolean,
 ): number | undefined {
   if (model === 'veo-3.1' || model === 'veo-3.1-fast') return 3;
+  if (model === 'gemini-omni-flash') return 6;
   if (model === 'kling-omni') return hasReferenceVideo ? 4 : 7;
   if (model === 'pixverse-v6') return 1;
   if (model === 'seedance-2.0') return 9;
@@ -581,6 +605,7 @@ export function getVideoGeneratorImageLimit(
 }
 
 export function getVideoGeneratorBackendModel(model: VideoGeneratorModel): string {
+  if (model === 'gemini-omni-flash') return OMNI_GEN_BACKEND_MODEL;
   if (model === 'veo-3.1-fast') return 'veo-3.1-fast-generate-preview';
   if (model === 'veo-3.1-lite') return 'veo-3.1-lite-generate-preview';
   if (model === 'kling-omni') return 'kling-omni';
@@ -644,6 +669,8 @@ const isVideoGeneratorNode = (node: GraphNodeLike): boolean => isVideoGeneratorN
 // `sourceModality` (below, hoisted) answers for those; the `sourceHandle` argument is
 // OPTIONAL so every existing caller and every existing type behaves exactly as before.
 const isVideoProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
+  (node.type === 'apiRender' &&
+    (sourceHandle === 'video' || /^render-video-\d+$/.test(sourceHandle ?? ''))) ||
   node.type === 'video' ||
   node.type === 'extendVideo' ||
   node.type === 'timelineEditor' ||
@@ -653,6 +680,8 @@ const isVideoProducingSource = (node: GraphNodeLike, sourceHandle?: string | nul
   sourceModality(node, sourceHandle) === 'video';
 
 const isImageProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
+  (node.type === 'apiRender' &&
+    (sourceHandle === 'image' || /^render-image-\d+$/.test(sourceHandle ?? ''))) ||
   node.type === 'image' ||
   node.type === 'nanoGen' ||
   node.type === 'frameExtract' ||
@@ -798,6 +827,20 @@ function sourceModality(
   sourceHandle?: string | null,
 ): StudioEmittedModality | undefined {
   switch (node.type) {
+    case 'apiRender': {
+      if (sourceHandle === 'image' || /^render-image-\d+$/.test(sourceHandle ?? '')) return 'image';
+      if (sourceHandle === 'video' || /^render-video-\d+$/.test(sourceHandle ?? '')) return 'video';
+      if (sourceHandle === 'collection' && Array.isArray(node.data?.renderOutputs)) {
+        const kinds = new Set(
+          node.data.renderOutputs.map((value: unknown) => (value as { kind?: unknown })?.kind),
+        );
+        if (kinds.size === 1) {
+          const kind = [...kinds][0];
+          return kind === 'image' || kind === 'video' ? kind : undefined;
+        }
+      }
+      return undefined;
+    }
     case 'action':
       return actionOutputModality(node.data?.actionId);
     case 'router':
@@ -1075,6 +1118,22 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
       return ['video'];
     case 'omniGen':
       return ['video'];
+    case 'apiRender': {
+      const outputs = Array.isArray(node.data?.renderOutputs)
+        ? (node.data.renderOutputs as { kind: string }[])
+        : [];
+      const counts = { image: 0, video: 0 };
+      return [
+        'image',
+        'video',
+        'collection',
+        ...outputs.flatMap((output) =>
+          output.kind === 'image' || output.kind === 'video'
+            ? [`render-${output.kind}-${++counts[output.kind]}`]
+            : [],
+        ),
+      ];
+    }
     case 'plannerDraft':
       return [DRAFT_OUTPUT_HANDLE];
     case 'action':
@@ -1823,7 +1882,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
           delivery: null,
           status: 'idle',
         },
-        style: { width: 380, height: 520 },
+        style: { width: 320, height: 220 },
       };
     case 'videoGen':
     case 'veoDirector':
@@ -1885,7 +1944,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
             { id: newSlotId(2), order: 1 },
           ],
         },
-        style: { width: 340, height: 420 },
+        style: { width: 320, height: 220 },
       };
     case 'paidPublisher':
       return {
@@ -1896,10 +1955,10 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
             { id: newSlotId(2), order: 1 },
           ],
         },
-        style: { width: 320, height: 300 },
+        style: { width: 320, height: 220 },
       };
     case 'organicPublish':
-      return { data: { schedule: 'now' }, style: { width: 300, height: 260 } };
+      return { data: { schedule: 'now' }, style: { width: 320, height: 220 } };
     case 'omniGen':
       // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
       // 16:9 lands on the historical 512x360.
@@ -2071,9 +2130,7 @@ function coerceVideoGeneratorConfig(
 
   const model = isVideoGeneratorModel(next.model)
     ? next.model
-    : isVideoGeneratorModel(current.model)
-      ? current.model
-      : defaultModelForVideoNodeType(type);
+    : resolveVideoGeneratorModel({ type, data: current });
 
   if ('referenceMode' in next || 'model' in next) {
     const requested = 'referenceMode' in next ? next.referenceMode : current.referenceMode;

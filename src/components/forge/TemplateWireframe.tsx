@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplatePreview } from '@continuum/contracts';
+import { readableLayerName, type TemplatePreview } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutTemplate } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
@@ -16,9 +16,17 @@ type Box = [number, number, number, number];
 
 export type WireframeFrame = {
   ratio: string;
+  comp: string;
   width: number;
   height: number;
-  boxes: Array<{ key: string; kind: string; box: Box }>;
+  /** `label` is the layer a person would recognise, shown when the box is hovered. */
+  boxes: Array<{
+    key: string;
+    kind: string;
+    label: string;
+    box: Box;
+    instance?: { compId: number; layerId: number; compSize: [number, number] };
+  }>;
 };
 
 /** A box measured in a comp of one size, drawn on a frame of another. */
@@ -44,7 +52,7 @@ function scaleBox(
 export function wireframeFrames(parse: TemplatePreview | null | undefined): WireframeFrame[] {
   if (!parse) return [];
   const targets = parse.ratios.length
-    ? parse.ratios.map((entry) => ({ ...entry, comp: entry.comps[0] }))
+    ? parse.ratios.flatMap((entry) => entry.comps.map((comp) => ({ ...entry, comp })))
     : parse.comps
         .filter((comp) => comp.isDelivery)
         .map((comp) => ({ ratio: `${comp.width}×${comp.height}`, ...comp, comp: comp.name }));
@@ -52,23 +60,33 @@ export function wireframeFrames(parse: TemplatePreview | null | undefined): Wire
     const frame: Box = [0, 0, width, height];
     return {
       ratio,
+      comp,
       width,
       height,
       boxes: parse.slots.flatMap((slot) => {
-        const instance = slot.instances?.find((entry) => entry.comp === comp && entry.box);
+        const instances = slot.instances?.filter((entry) => entry.comp === comp && entry.box) ?? [];
         const placement = slot.placement?.comp === comp ? slot.placement : null;
         const bare =
           !slot.instances?.length && (targets.length === 1 || slot.comps.join() === comp)
             ? slot.box
             : undefined;
-        const box = instance?.box
-          ? scaleBox(instance.box, instance.compSize, frame)
-          : placement
+        const fallback = placement
             ? scaleBox(placement.box, placement.compSize, frame)
             : bare
               ? scaleBox(bare, null, frame)
               : null;
-        return box ? [{ key: slot.key, kind: slot.kind, box }] : [];
+        if (instances.length) return instances.map((instance) => ({
+          key: slot.key,
+          kind: slot.kind,
+          label: readableLayerName(slot.name || slot.key),
+          box: scaleBox(instance.box!, instance.compSize, frame),
+          ...(!Array.isArray(instance.via) || instance.via.length === 0
+            ? { instance: { compId: instance.compId, layerId: instance.layerId,
+                compSize: (instance.compSize ?? [width, height]) as [number, number] } }
+            : {}),
+        }));
+        return fallback ? [{ key: slot.key, kind: slot.kind,
+          label: readableLayerName(slot.name || slot.key), box: fallback }] : [];
       }),
     };
   });
@@ -120,6 +138,7 @@ export function useLatestRenderFrame(
 export function TemplateWireframe({
   parse,
   ratio,
+  comp,
   className,
 }: {
   brandId: string;
@@ -128,10 +147,12 @@ export function TemplateWireframe({
   parse: TemplatePreview | null;
   /** Draw this ratio's wireframe. Omitted: the first ratio. */
   ratio?: string;
+  comp?: string;
   className?: string;
 }) {
   const frames = wireframeFrames(parse);
-  const frame = frames.find((entry) => entry.ratio === ratio) ?? frames[0];
+  const frame = frames.find((entry) => entry.comp === comp) ??
+    frames.find((entry) => entry.ratio === ratio) ?? frames[0];
 
   return (
     <div className={cn('flex items-center justify-center overflow-hidden bg-muted/40', className)}>
@@ -149,7 +170,7 @@ export function TemplateWireframe({
             strokeWidth={1.5}
             vectorEffect="non-scaling-stroke"
           />
-          {frame.boxes.map(({ key, kind, box }) => (
+          {frame.boxes.map(({ key, kind, label, box }) => (
             <rect
               key={key}
               x={box[0]}
@@ -157,10 +178,16 @@ export function TemplateWireframe({
               width={Math.max(0, box[2] - box[0])}
               height={Math.max(0, box[3] - box[1])}
               rx={Math.min(frame.width, frame.height) * 0.01}
-              className={KIND_STYLE[kind] ?? 'fill-muted-foreground/10 stroke-muted-foreground/50'}
+              className={cn(
+                KIND_STYLE[kind] ?? 'fill-muted-foreground/10 stroke-muted-foreground/50',
+                'cursor-help hover:stroke-foreground',
+              )}
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
-            />
+            >
+              {/* The browser's own tooltip: which variable this box is, without a library. */}
+              <title>{`${label} · ${kind}`}</title>
+            </rect>
           ))}
         </svg>
       ) : (

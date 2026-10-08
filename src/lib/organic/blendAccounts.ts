@@ -226,6 +226,7 @@ const PLATFORM_LABELS: Record<OrganicMetricPlatform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
   linkedin: 'LinkedIn',
+  x: 'X',
 };
 
 export function buildSeriesSet(input: {

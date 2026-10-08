@@ -1,7 +1,9 @@
 import {
+  formatFigure,
   type JainaSheetsExportRequest,
   type JainaSheetsExportResponse,
   jainaSheetsExportRequestSchema,
+  renderFigureRefs,
   stripProseMarks,
 } from '@continuum/contracts';
 import { ApiError } from '@/lib/api/errors';
@@ -12,6 +14,7 @@ import type {
   FrontendCheckpointReport,
 } from '@/lib/jaina/schemas';
 import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
+import { narrativeThreeOf } from './blocks/narrativeShape';
 import type { ExportDocumentHandle } from './export/renderExportDocument';
 
 /** Grace period before an unprinted export frame is reclaimed. */
@@ -135,24 +138,37 @@ export function buildLegacyJainaSheetsExportRequest({
 
 function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandidate {
   switch (block.category) {
-    case 'narrative':
+    case 'narrative': {
+      // The three fields are the reading when the block carries them; the body is the same
+      // reading in one paragraph and is kept for one release, so a sheet gets one or the other.
+      const three = narrativeThreeOf(block);
       return {
         title: block.title,
         rows: [
-          ['Summary', block.body],
+          ...(three
+            ? [
+                ['What', three.what],
+                ['So what', three.so_what],
+                ['Now what', three.now_what],
+              ]
+            : [['Summary', block.body]]),
           ...block.highlights.map((item) => [item.category || 'Highlight', item.text]),
         ],
       };
+    }
     case 'metric_grid':
       return {
         title: block.title,
         rows: [
-          ['Metric', 'Value', 'Unit', 'Change'],
+          ['Metric', 'Value', 'Unit', 'Change', 'Prior', 'Prior window', 'Read'],
           ...block.metrics.map((metric) => [
             metric.label,
             metric.value,
             metric.unit ?? null,
             metric.change ?? null,
+            metric.prior_value ?? null,
+            metric.prior_label ?? null,
+            metric.read ?? null,
           ]),
         ],
       };
@@ -251,6 +267,29 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ['Term', block.term],
           ['Used', block.used],
           ...block.alternatives.map((alt) => ['Alternative', alt]),
+        ],
+      };
+    // The sentence as the reader saw it, then every figure it rests on with its read.
+    case 'answer_template':
+      return {
+        title: block.title,
+        rows: [
+          [
+            'Answer',
+            renderFigureRefs(block.executive.sentence, block.figures, formatFigure, {
+              onUnresolved: 'mark',
+            }).text,
+          ],
+          ['Figure', 'Value', 'Unit', 'Currency', 'Window', 'Source', 'Derivation'],
+          ...block.figures.map((figure) => [
+            figure.label,
+            figure.value,
+            figure.unit,
+            figure.currency,
+            `${figure.window.since} → ${figure.window.until}`,
+            `${figure.source.tool} · ${figure.source.datasetId}`,
+            figure.derivation,
+          ]),
         ],
       };
   }

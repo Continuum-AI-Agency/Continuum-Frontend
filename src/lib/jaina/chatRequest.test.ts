@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { buildJainaChatStreamRequest } from './chatRequest';
+import { jainaChatRequestSchema as frontendMirrorSchema } from './schemas';
 
 describe('buildJainaChatStreamRequest', () => {
   it('preserves Google platform identity for a single or mixed selection', () => {
@@ -103,5 +104,99 @@ describe('buildJainaChatStreamRequest', () => {
     expect(request.context.dataScope?.campaigns?.ids).toEqual(['campaign-1']);
     expect(request.context.dataScope?.groups?.ids).toEqual([]);
     expect(request.context.dataScope?.ads?.ids).toEqual([]);
+  });
+
+  it('carries an operator action through BOTH request schemas — the stripping one included', () => {
+    const operatorAction = {
+      tool: 'pause_meta_entity',
+      input: {
+        entity_id: '120000000000000001',
+        level: 'campaign',
+        reason: 'Paused from Scale › Campaigns',
+        dry_run: false,
+        expected_status: 'ACTIVE',
+      },
+    } as const;
+    const request = buildJainaChatStreamRequest(
+      { query: 'Pause campaign Summer', adAccountId: 'act_1', brandId: 'brand-1', operatorAction },
+      'America/Denver',
+    );
+
+    expect(request.operator_action).toEqual(operatorAction);
+    // The Frontend mirror is a stripping z.object: an undeclared field would vanish silently.
+    expect(frontendMirrorSchema.parse(request).operator_action).toEqual(operatorAction);
+  });
+
+  it('refuses an operator action whose prior status cannot be what it changes', () => {
+    expect(() =>
+      buildJainaChatStreamRequest(
+        {
+          query: 'Pause it',
+          adAccountId: 'act_1',
+          brandId: 'brand-1',
+          operatorAction: {
+            tool: 'pause_meta_entity',
+            input: {
+              entity_id: '1',
+              level: 'ad',
+              reason: 'r',
+              dry_run: false,
+              expected_status: 'PAUSED' as 'ACTIVE',
+            },
+          },
+        },
+        'America/Denver',
+      ),
+    ).toThrow();
+  });
+
+  it('scopes the account to the platform it lives on, and keeps Meta the default', () => {
+    const cases = [
+      { platform: 'google_ads' as const, expected: 'google_ads' },
+      { platform: 'tiktok_ads' as const, expected: 'tiktok' },
+    ];
+    for (const { platform, expected } of cases) {
+      const request = buildJainaChatStreamRequest(
+        {
+          query: 'Which search terms bring leads?',
+          adAccountId: '6619636193',
+          brandId: 'b',
+          platform,
+        },
+        'UTC',
+      );
+      expect(request.context.dataScope).toEqual({
+        schemaVersion: 1,
+        accounts: [{ platform: expected, accountId: '6619636193' }],
+      });
+      expect(request.context.adAccountIds).toEqual(['6619636193']);
+    }
+
+    const meta = buildJainaChatStreamRequest(
+      { query: 'Summarize', adAccountId: 'act_1', brandId: 'b', platform: 'meta' },
+      'UTC',
+    );
+    expect(meta.context.dataScope).toBeUndefined();
+
+    const several = buildJainaChatStreamRequest(
+      { query: 'Compare', adAccountId: 'act_1', adAccountIds: ['act_1', 'act_2'], brandId: 'b' },
+      'UTC',
+    );
+    expect(several.context.dataScope?.accounts.map((account) => account.platform)).toEqual([
+      'meta',
+      'meta',
+    ]);
+  });
+
+  it('lets explicit accounts keep their own platforms over the stated one', () => {
+    const accounts = [
+      { platform: 'meta' as const, accountId: 'act_1' },
+      { platform: 'google_ads' as const, accountId: '6619636193' },
+    ];
+    const request = buildJainaChatStreamRequest(
+      { query: 'Compare', adAccountId: 'act_1', accounts, platform: 'tiktok_ads', brandId: 'b' },
+      'UTC',
+    );
+    expect(request.context.dataScope?.accounts).toEqual(accounts);
   });
 });

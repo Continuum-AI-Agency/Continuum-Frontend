@@ -10,6 +10,7 @@ import { runActionInWorker } from '../../workers/spliceWorkerClient';
 import { parseDataUrl } from '../dataUrl';
 import { parseAspectRatio } from '../pixel/cropPad';
 import { parseActionConfig } from './actionConfig';
+import { setImageCta } from './ctaComponent';
 import { buildFrameGrid, extractFrames, extractSceneChangeFrames } from './extractFrames';
 import {
   applyBlur,
@@ -158,7 +159,9 @@ async function bakeImageShader(
   }
   const image = await loadImage(input);
   try {
-    const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+    const { renderShaderStackFrame } = await import(
+      '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+    );
     const bitmap = await renderShaderStackFrame({
       source: image,
       width: image.width,
@@ -347,6 +350,15 @@ const SYNC_OPS: Partial<Record<ActionId, SyncOp>> = {
         headline: inputFor(args, 'text-in').text ?? '',
       }),
     ),
+  'image.cta': async (args, config) =>
+    imageOutput(
+      await setImageCta({
+        brand: args.brand,
+        config,
+        image: await loadImage(inputFor(args, 'in')),
+        text: inputFor(args, 'text-in').text ?? '',
+      }),
+    ),
 
   // Sync because the OUTPUT is a still: the frames decode in the page, the blend
   // accumulates on a canvas, and there is nothing for the splicer worker to re-encode.
@@ -470,6 +482,8 @@ const WORKER_OPS_WITH_ENGINES = new Set<ActionId>([
 const ORCHESTRATED_OPS: Partial<Record<ActionId, SyncOp>> = {
   'video.subtitles': (args, config) =>
     import('./subtitlesOp').then((m) => m.runSubtitlesAction(args, config)),
+  'video.editorialCaptions': (args, config) =>
+    import('./editorialCaptionsOp').then((m) => m.runEditorialCaptionsAction(args, config)),
   // Both cutout ops sit here rather than in SYNC_OPS/WORKER_OPS because the matting
   // runs on a GPU in Cloud Run: the runner's whole job is an authenticated call and
   // an SSE read. Note `image.removeBackground` declares `execution: 'sync'` to satisfy

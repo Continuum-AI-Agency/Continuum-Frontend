@@ -6,6 +6,7 @@ import {
   MAX_FIELD_TEXT_LENGTH,
   matchesFieldFilter,
   parseFieldFiltersParam,
+  resolveViewerToken,
   serializeFieldFilters,
   validateFieldValue,
 } from './customFields';
@@ -210,5 +211,72 @@ describe('parseFieldFiltersParam', () => {
 
   it('rejects an unknown operator', () => {
     expect(parseFieldFiltersParam('[{"fieldId":"f1","operator":"greater_than"}]').ok).toBe(false);
+  });
+});
+
+describe('matchesFieldFilter — the non-string types', () => {
+  it('matches numbers, booleans and ratings through their string form', () => {
+    expect(matchesFieldFilter(4, { fieldId: 'f', operator: 'any_of', values: ['4', '5'] })).toBe(
+      true,
+    );
+    expect(matchesFieldFilter(3, { fieldId: 'f', operator: 'any_of', values: ['4', '5'] })).toBe(
+      false,
+    );
+    expect(matchesFieldFilter(12.5, { fieldId: 'f', operator: 'is', values: ['12.5'] })).toBe(true);
+    expect(matchesFieldFilter(false, { fieldId: 'f', operator: 'is', values: ['false'] })).toBe(
+      true,
+    );
+    expect(matchesFieldFilter(true, { fieldId: 'f', operator: 'is', values: ['false'] })).toBe(
+      false,
+    );
+  });
+
+  it('does not treat an unchecked checkbox as empty', () => {
+    expect(matchesFieldFilter(false, { fieldId: 'f', operator: 'is_empty', values: [] })).toBe(
+      false,
+    );
+  });
+});
+
+describe('resolveViewerToken', () => {
+  it('replaces @me with the viewer and leaves other values alone', () => {
+    const filters: CustomFieldFilter[] = [
+      { fieldId: 'assignee', operator: 'any_of', values: ['@me', 'someone'] },
+      { fieldId: 'stage', operator: 'any_of', values: ['done'] },
+    ];
+    expect(resolveViewerToken(filters, 'viewer-1')).toEqual([
+      { fieldId: 'assignee', operator: 'any_of', values: ['viewer-1', 'someone'] },
+      { fieldId: 'stage', operator: 'any_of', values: ['done'] },
+    ]);
+  });
+});
+
+describe('validateFieldValue — user_multi and long_text', () => {
+  const PEOPLE: FieldValueSpec = { type: 'user_multi', options: [] };
+  const LONG: FieldValueSpec = { type: 'long_text', options: [] };
+  const ANA = '11111111-1111-4111-8111-111111111111';
+  const BO = '22222222-2222-4222-8222-222222222222';
+
+  it('keeps distinct member ids in order and reads an empty list as cleared', () => {
+    expect(accepted(PEOPLE, [ANA, BO, ANA])).toEqual([ANA, BO]);
+    expect(accepted(PEOPLE, [])).toBeNull();
+  });
+
+  it('rejects a bare id, a non-uuid and more than 50 people', () => {
+    expect(reason(PEOPLE, ANA)).toContain('list of user ids');
+    expect(reason(PEOPLE, ['ana'])).toContain('not a user id');
+    const many = Array.from(
+      { length: 51 },
+      (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    );
+    expect(reason(PEOPLE, many)).toContain('At most 50');
+  });
+
+  it('holds text past the plain-text limit, trimmed, up to 20 000 characters', () => {
+    const long = 'x'.repeat(MAX_FIELD_TEXT_LENGTH + 500);
+    expect(accepted(LONG, `  ${long}  `)).toBe(long);
+    expect(accepted(LONG, '   ')).toBeNull();
+    expect(reason(LONG, 'y'.repeat(20_001))).toContain('longer than 20000');
+    expect(reason(LONG, 5)).toContain('takes text');
   });
 });

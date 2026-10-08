@@ -105,11 +105,11 @@ export function CreativeHoverCard({
           <div className="min-w-0 space-y-1">
             <p className="truncate font-medium text-sm">{ad.name ?? ad.id}</p>
             {angle ? (
-              <Badge className="text-3xs" variant="secondary">
+              <Badge className="text-xs" variant="secondary">
                 {humanize(angle.angle)}
               </Badge>
             ) : null}
-            {ad.status ? <p className="text-3xs text-muted-foreground">{ad.status}</p> : null}
+            {ad.status ? <p className="text-xs text-muted-foreground">{ad.status}</p> : null}
           </div>
         </div>
 
@@ -119,7 +119,7 @@ export function CreativeHoverCard({
 
         {confidence != null ? (
           <div className="space-y-1">
-            <div className="flex justify-between text-3xs text-muted-foreground">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>Angle confidence</span>
               <span className="tabular-nums">{Math.round(confidence * 100)}%</span>
             </div>
@@ -135,13 +135,13 @@ export function CreativeHoverCard({
         {virality || outcome ? (
           <div className="flex flex-wrap gap-1 border-border/60 border-t pt-2">
             {virality ? (
-              <Badge className="text-3xs" variant="secondary">
+              <Badge className="text-xs" variant="secondary">
                 Virality {virality.predicted_overall} · {virality.grade}
                 {virality.prediction_only ? ' · prediction' : ' · observed'}
               </Badge>
             ) : null}
             {outcome ? (
-              <Badge className="text-3xs" variant="outline">
+              <Badge className="text-xs" variant="outline">
                 {humanize(outcome.decision_kind)} ·{' '}
                 {outcome.result ?? `${outcome.delivery_days}/7d`}
               </Badge>
@@ -151,7 +151,7 @@ export function CreativeHoverCard({
 
         {series.length >= 2 ? (
           <div className="space-y-1 border-border/60 border-t pt-2">
-            <div className="flex items-center justify-between text-3xs text-muted-foreground tabular-nums">
+            <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
               <span>Last {series.length}d</span>
               <span>
                 spend {formatCurrency(spend, currency)} · CPA {formatCpa(lastCpa, currency)}
@@ -160,7 +160,7 @@ export function CreativeHoverCard({
             <Sparkline values={series.map((point) => point.spend)} />
           </div>
         ) : (
-          <p className="text-3xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Per-day creative trend appears once daily metrics load.
           </p>
         )}

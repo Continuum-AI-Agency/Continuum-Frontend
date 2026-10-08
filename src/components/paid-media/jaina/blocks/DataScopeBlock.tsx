@@ -4,6 +4,8 @@
 // Never buried — a number without its scope is a number the reader cannot trust.
 
 import type { DataScopeBlockV2 } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
+import { JAINA_TYPE } from '../reading';
 
 type DataScopeBlockProps = { block: DataScopeBlockV2; isStreaming: boolean };
 
@@ -17,7 +19,7 @@ const SOURCE_LABEL: Record<DataScopeBlockV2['source'], string> = {
 export default function DataScopeBlock({ block }: DataScopeBlockProps) {
   return (
     <div
-      className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs"
+      className={cn('rounded-md border border-border/60 bg-muted/20 px-3 py-2', JAINA_TYPE.table)}
       data-testid="data-scope-block"
     >
       <p className="text-foreground">

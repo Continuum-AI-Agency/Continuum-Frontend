@@ -20,6 +20,17 @@ import type { OptimizationObjective } from './engine-contracts';
 // side erases, so there is no runtime cycle — the same arrangement account-chart already uses.
 // Keep the direction: a value import both ways would deadlock module init.
 import { insightStateSchema } from './insight-approval';
+import { normalizeCurrencyCode } from './money';
+import { OptimizerActionSchema } from './action';
+import { PlatformCardSchema } from './platform-card';
+import {
+  type ActionVerb,
+  formatMoneyCode,
+  type RecommendationAction,
+  type RecommendationTitle,
+  recommendationActionSchema,
+  recommendationTitleSchema,
+} from './recommendation-title';
 import { DAYS_PER_MONTH } from './targetMetric';
 
 export const accountDetectorSchema = z.enum([
@@ -405,6 +416,14 @@ export const accountCandidateSchema = z.object({
    * not adopted the vocabulary yet compiling untouched.
    */
   headline: candidateHeadlineSchema.nullable().default(null),
+  /**
+   * The title: entity + figure + comparison, composed from `headline`, `evidence` and the
+   * money by `accountCandidateTitle` — never from the prose. Null when the detector holds
+   * no headline figure to lead with; the card then leads with the money, as before.
+   */
+  title: recommendationTitleSchema.nullable().default(null),
+  /** The verb the button says, sized by the money per day — see `accountCandidateAction`. */
+  action: recommendationActionSchema.nullable().default(null),
   /** 0..1 from sample size and consistency — the same reading the engine already makes. */
   confidence: z.number().min(0).max(1).default(1),
   /** The formula, code-authored: "M × (1 − CPA_b / CPA_a) over $420/day movable". */
@@ -453,6 +472,27 @@ export const accountCandidateSchema = z.object({
    * autopilot, sees nothing happen, and stops trusting the switch.
    */
   state_lowered: z.boolean().default(false),
+  /**
+   * The platform-specific card this candidate renders as — Google budget-limited, a PMax
+   * asset group, a read-only Video campaign, TikTok fatigue or a scheduled decrease, a move
+   * between platforms (platform-card.ts). Absent on every row written before it and on every
+   * Meta detector: the card is then the generic one, unchanged.
+   */
+  platform_card: PlatformCardSchema.nullable().optional(),
+  /**
+   * The action a platform card hands to a person (frontend.html §7, feature 09): the pending
+   * optimizer.recommendations row it came from, its portfolio, and the contract-valid action
+   * the service runs on approval. Absent on Meta detectors and on every read-only card
+   * (video, delivery, policy, PMax asset group): the card then shows no control.
+   */
+  card_action: z
+    .object({
+      recommendation_id: z.string().uuid(),
+      portfolio_id: z.string().uuid(),
+      action: OptimizerActionSchema,
+    })
+    .nullable()
+    .optional(),
   /** Where the card sends a person. */
   cta: z
     .object({
@@ -503,6 +543,314 @@ export function accountGuards(candidates: readonly AccountCandidate[]): AccountC
 /** Detectors worth recomputing on this day's run. */
 export function detectorsForCadence(cadence: DetectorCadence): AccountDetector[] {
   return DETECTOR_ORDER.filter((detector) => ACCOUNT_DETECTOR_META[detector].cadence === cadence);
+}
+
+// ---------------------------------------------------------------------------
+// The title: the card's sentence, composed from the figures the candidate already carries.
+//
+// `ACCOUNT_DETECTOR_META.label` is a READING — "The auction moved, not the ad", "Spending on
+// nothing" — and a reading is the second line, not the first. The first line is the entity,
+// the detector's own headline figure with its unit, and the comparison the detector fired on:
+// "ALEIRA // AGOSTO - LKL: 96 MXN por día sin resultados, 96 MXN por día recuperables". Every
+// word after the figure comes from this table, keyed by the same enum as the catalogue so a
+// detector cannot exist without its Spanish; every number comes from `headline`,
+// `evidence` and `impact_per_day`, never from prose.
+// ---------------------------------------------------------------------------
+
+/** How a headline's `from → to` pair is printed: the two sides of the comparison are priced,
+ *  counted, or percentages, and each detector declares which. */
+export type TitleSidesKind = 'money' | 'count' | 'percent';
+
+export type AccountDetectorTitle = {
+  /** The words after the headline figure, in Spanish. A money headline gets the ISO code
+   *  in front of these ("MXN por día sin resultados"); a percentage glues to "%". */
+  readonly unit: string;
+  readonly sides: TitleSidesKind;
+  /** The nouns each side of `from → to` carries: "3 nuevos esta semana frente a 5 agotándose". */
+  readonly a: string;
+  readonly b: string;
+  readonly verb: ActionVerb;
+};
+
+export const ACCOUNT_DETECTOR_TITLE: Record<AccountDetector, AccountDetectorTitle> = {
+  portfolio_reallocation: {
+    unit: 'más barato por resultado',
+    sides: 'money',
+    a: 'por resultado en el origen',
+    b: 'en el destino',
+    verb: 'reallocate',
+  },
+  structure_consolidation: {
+    unit: 'resultados por semana en conjunto',
+    sides: 'count',
+    a: 'en conjunto',
+    b: 'del umbral de aprendizaje',
+    verb: 'consolidate',
+  },
+  funnel_coverage: {
+    unit: 'del gasto en la parte alta del embudo',
+    sides: 'percent',
+    a: '',
+    b: 'de referencia',
+    verb: 'reallocate',
+  },
+  optimization_event: {
+    unit: 'conjuntos optimizando otro evento',
+    sides: 'count',
+    a: '',
+    b: '',
+    verb: 'settings',
+  },
+  creative_supply: {
+    unit: 'creativos agotándose',
+    sides: 'count',
+    a: 'nuevos esta semana',
+    b: 'agotándose',
+    verb: 'creative_refresh',
+  },
+  audience_overlap: {
+    unit: 'portafolios sobre una misma audiencia',
+    sides: 'count',
+    a: '',
+    b: '',
+    verb: 'consolidate',
+  },
+  account_pacing: {
+    unit: 'respecto al plan',
+    sides: 'money',
+    a: 'proyectados',
+    b: 'de plan',
+    verb: 'settings',
+  },
+  scale_readiness: {
+    unit: 'por debajo del objetivo',
+    sides: 'money',
+    a: 'por resultado',
+    b: 'de objetivo',
+    verb: 'settings',
+  },
+  dead_tail: { unit: 'por día sin resultados', sides: 'money', a: '', b: '', verb: 'pause' },
+  delivery_collapse: {
+    unit: 'por día planeado y no gastado',
+    sides: 'money',
+    a: 'entregados',
+    b: 'de presupuesto',
+    verb: 'restore_delivery',
+  },
+  measurement_integrity: {
+    unit: 'campañas sin eventos registrados',
+    sides: 'count',
+    a: '',
+    b: '',
+    verb: 'review',
+  },
+  bid_strategy: {
+    unit: 'por día sin entregar',
+    sides: 'money',
+    a: 'entregados',
+    b: 'de presupuesto',
+    verb: 'settings',
+  },
+  decision_window: {
+    unit: 'de los resultados llegan después',
+    sides: 'count',
+    a: 'contados al día siguiente',
+    b: 'contados a los 7 días',
+    verb: 'settings',
+  },
+  placement_mix: {
+    unit: 'más barato por resultado',
+    sides: 'money',
+    a: 'en la ubicación cara',
+    b: 'en la barata',
+    verb: 'reallocate',
+  },
+  format_gap: {
+    unit: 'más barato por resultado',
+    sides: 'money',
+    a: 'en el formato caro',
+    b: 'en el barato',
+    verb: 'reallocate',
+  },
+  market_allocation: {
+    unit: 'más barato por resultado',
+    sides: 'money',
+    a: 'en el mercado caro',
+    b: 'en el barato',
+    verb: 'reallocate',
+  },
+  seasonality: {
+    unit: 'frente al mismo periodo del año pasado',
+    sides: 'percent',
+    a: '',
+    b: '',
+    verb: 'review',
+  },
+  post_click: {
+    unit: 'por debajo de la tasa mediana',
+    sides: 'percent',
+    a: 'de conversión',
+    b: 'mediana',
+    verb: 'review',
+  },
+  account_saturation: {
+    unit: 'más gasto sobre las mismas personas',
+    sides: 'percent',
+    a: '',
+    b: '',
+    verb: 'audience_expand',
+  },
+  new_vs_returning: {
+    unit: 'del gasto en gente que ya conocía la marca',
+    sides: 'percent',
+    a: '',
+    b: '',
+    verb: 'reallocate',
+  },
+  angle_concentration: {
+    unit: 'del gasto en un solo ángulo',
+    sides: 'percent',
+    a: '',
+    b: '',
+    verb: 'creative_refresh',
+  },
+  testing_discipline: {
+    unit: 'del gasto en pruebas',
+    sides: 'percent',
+    a: '',
+    b: '',
+    verb: 'seed_experiment',
+  },
+  auction_pressure: {
+    unit: 'más por cada mil impresiones',
+    sides: 'money',
+    a: 'de CPM antes',
+    b: 'ahora',
+    verb: 'review',
+  },
+  guardrail_bottleneck: {
+    unit: 'de los ciclos decididos por un tope',
+    sides: 'count',
+    a: 'ciclos con tope',
+    b: 'ciclos',
+    verb: 'settings',
+  },
+  platform_diversification: {
+    unit: 'del gasto en una sola plataforma',
+    sides: 'percent',
+    a: '',
+    b: '',
+    verb: 'reallocate',
+  },
+  target_economics: {
+    unit: 'por encima de lo que rinde un resultado',
+    sides: 'money',
+    a: 'de objetivo',
+    b: 'de margen',
+    verb: 'settings',
+  },
+};
+
+/** The money's class, as the words after "por día" when no `from → to` pair is held. */
+const IMPACT_CLASS_TITLE: Record<ImpactClass, string> = {
+  recoverable: 'recuperables',
+  better_price: 'por más resultados',
+  deferred: 'en riesgo',
+};
+
+/** One side of a `from → to`, in the detector's declared side unit. */
+function titleSide(kind: TitleSidesKind, value: number, currency: string | null): string {
+  if (kind === 'money') return formatMoneyCode(value, currency);
+  if (kind === 'percent') return `${value}%`;
+  return value.toLocaleString('en-US');
+}
+
+/**
+ * Who the title is about. Detectors name the portfolio or the ad set they implicate under a
+ * handful of evidence keys; the whole account when they name none.
+ */
+function titleEntity(evidence: AccountCandidate['evidence']): string {
+  for (const key of ['portfolio', 'worst', 'adset', 'campaign']) {
+    const value = evidence[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return 'Cuenta';
+}
+
+/** The window the title's figure was measured over: the detector's own when it says, its cadence otherwise. */
+function titleWindow(candidate: AccountCandidate): RecommendationTitle['window'] {
+  const declared = candidate.evidence.window_days;
+  if (declared === 3) return 'd3';
+  if (declared === 7) return 'd7';
+  if (declared === 14) return 'd14';
+  return ACCOUNT_DETECTOR_META[candidate.detector].cadence === 'daily' ? 'd7' : 'd14';
+}
+
+const squeeze = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+/**
+ * The card's title, from figures the candidate already holds.
+ *
+ * Null when the detector declared no headline: the figure it would lead with is exactly the
+ * one it refused to invent, and a title with no figure is a label. The comparison is the
+ * headline's own `from → to` when the detector held two sides, and the money per day with
+ * its class otherwise — both figures, neither prose.
+ */
+export function accountCandidateTitle(
+  candidate: AccountCandidate,
+  currency: string | null,
+): RecommendationTitle | null {
+  const headline = candidate.headline;
+  if (!headline) return null;
+  const words = ACCOUNT_DETECTOR_TITLE[candidate.detector];
+  const code = normalizeCurrencyCode(currency);
+  const unit =
+    headline.unit === 'percent'
+      ? `% ${words.unit}`
+      : headline.unit === 'currency_per_day'
+        ? squeeze(`${code ?? ''} ${words.unit}`)
+        : words.unit;
+  const comparator =
+    headline.from != null && headline.to != null
+      ? squeeze(
+          `${titleSide(words.sides, headline.from, code)} ${words.a} frente a ${titleSide(words.sides, headline.to, code)} ${words.b}`,
+        )
+      : `${formatMoneyCode(candidate.impact_per_day, code)} por día ${IMPACT_CLASS_TITLE[candidate.impact_class]}`;
+  return {
+    entity: titleEntity(candidate.evidence),
+    figure: headline.value,
+    unit,
+    comparator,
+    window: titleWindow(candidate),
+  };
+}
+
+/** The button: the detector's verb, sized by the money per day the card is priced in. */
+export function accountCandidateAction(
+  candidate: AccountCandidate,
+  currency: string | null,
+): RecommendationAction {
+  return {
+    verb: ACCOUNT_DETECTOR_TITLE[candidate.detector].verb,
+    sizing: {
+      perDay: candidate.impact_per_day,
+      from: null,
+      to: null,
+      currency: normalizeCurrencyCode(currency),
+    },
+  };
+}
+
+/** The candidate with its title and action filled — what the runner stamps before the read is composed. */
+export function withCandidateTitle(
+  candidate: AccountCandidate,
+  currency: string | null,
+): AccountCandidate {
+  return {
+    ...candidate,
+    title: accountCandidateTitle(candidate, currency),
+    action: accountCandidateAction(candidate, currency),
+  };
 }
 
 /**

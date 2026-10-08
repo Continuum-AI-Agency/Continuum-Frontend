@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-export const figmaProjectSchema = z
-  .object({ id: z.string().min(1), name: z.string().min(1), fileCount: z.number().int().nonnegative() })
+/** A Figma folder (REST v2; formerly "project"). Top-level folders have no parent. */
+export const figmaFolderSchema = z
+  .object({ id: z.string().min(1), name: z.string().min(1), parentFolderId: z.string().nullable() })
   .strict();
 export const figmaFileSchema = z
   .object({
@@ -22,10 +23,17 @@ export const figmaFrameSchema = z
   })
   .strict();
 
-export const figmaProjectsResponseSchema = z.object({ projects: z.array(figmaProjectSchema) }).strict();
+export const figmaFoldersResponseSchema = z
+  .object({ folders: z.array(figmaFolderSchema) })
+  .strict();
 export const figmaFilesResponseSchema = z.object({ files: z.array(figmaFileSchema) }).strict();
 export const figmaFramesResponseSchema = z
-  .object({ fileKey: z.string(), fileName: z.string(), modifiedAt: z.string().nullable(), frames: z.array(figmaFrameSchema) })
+  .object({
+    fileKey: z.string(),
+    fileName: z.string(),
+    modifiedAt: z.string().nullable(),
+    frames: z.array(figmaFrameSchema),
+  })
   .strict();
 
 export const importFigmaFramesRequestSchema = z
@@ -70,7 +78,7 @@ export const importFigmaFramesResponseSchema = z
   .object({ assets: z.array(figmaImportedAssetSchema) })
   .strict();
 
-export type FigmaProject = z.infer<typeof figmaProjectSchema>;
+export type FigmaFolder = z.infer<typeof figmaFolderSchema>;
 export type FigmaFile = z.infer<typeof figmaFileSchema>;
 export type FigmaFrame = z.infer<typeof figmaFrameSchema>;
 export type FigmaImportedAsset = z.infer<typeof figmaImportedAssetSchema>;

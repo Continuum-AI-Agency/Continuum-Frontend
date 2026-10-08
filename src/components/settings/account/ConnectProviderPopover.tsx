@@ -4,11 +4,13 @@ import { Plus, RefreshCw, TriangleAlert, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { FigmaIcon } from '@/components/shared/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
+  type MetaSyncMode,
   useStartGoogleAccountChooserSync,
   useStartGoogleSync,
   useStartLinkedInSync,
@@ -21,6 +23,7 @@ import type {
   ProviderReconnectPrompt,
   UserIntegrationSummary,
 } from '@/lib/integrations/userIntegrations';
+import { beginFigmaConnection } from '@/lib/library/figma';
 import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
 import { cn } from '@/lib/utils';
 import {
@@ -33,9 +36,13 @@ import {
 } from '../shell/platformIcons';
 import { OpenAiAdsConnectDialog } from './OpenAiAdsConnectDialog';
 
+type ConnectTarget = ProviderGroup | 'figma';
+
 type ConnectProviderPopoverProps = {
   integrations: UserIntegrationSummary;
   reconnectPrompts?: ProviderReconnectPrompt[];
+  /** Connected Figma accounts. Figma is a design source with no ad assets, so the summary never shows it. */
+  figmaAccounts?: string[];
   /** Single element: it becomes the popover trigger via Base UI `render`. */
   children?: React.ReactElement;
 };
@@ -43,6 +50,7 @@ type ConnectProviderPopoverProps = {
 export function ConnectProviderPopover({
   integrations,
   reconnectPrompts = [],
+  figmaAccounts = [],
   children,
 }: ConnectProviderPopoverProps) {
   const { show } = useToast();
@@ -60,7 +68,10 @@ export function ConnectProviderPopover({
   const linkedinSync = useStartLinkedInSync();
   const xSync = useStartXSync();
 
-  const buildCallbackUrl = (provider: ProviderGroup) => {
+  const labelFor = (provider: ConnectTarget) =>
+    provider === 'figma' ? 'Figma' : PROVIDER_GROUP_LABELS[provider];
+
+  const buildCallbackUrl = (provider: ConnectTarget) => {
     const origin =
       typeof window !== 'undefined' && window.location?.origin
         ? window.location.origin
@@ -72,8 +83,12 @@ export function ConnectProviderPopover({
   };
 
   const handleConnect = (
-    provider: ProviderGroup,
-    options?: { forceAccountChooser?: boolean; linkedinMode?: 'paid' | 'organic' },
+    provider: ConnectTarget,
+    options?: {
+      forceAccountChooser?: boolean;
+      linkedinMode?: 'paid' | 'organic';
+      metaMode?: MetaSyncMode;
+    },
   ) => {
     if (isProviderComingSoon(provider)) return;
     // OpenAI Ads is the one provider with no consent screen: the credential is a partner
@@ -99,13 +114,20 @@ export function ConnectProviderPopover({
                 : provider === 'x'
                   ? xSync
                   : metaSync;
+        if (provider === 'figma' && !activeBrandId) {
+          throw new Error('Choose a brand first: Figma connects to the brand you import into.');
+        }
         const syncResponse =
-          provider === 'linkedin'
-            ? await linkedinSync.mutateAsync({
-                callbackUrl,
-                mode: options?.linkedinMode ?? 'paid',
-              })
-            : await sync.mutateAsync(callbackUrl);
+          provider === 'figma'
+            ? { url: await beginFigmaConnection({ brandId: activeBrandId, callbackUrl }) }
+            : provider === 'linkedin'
+              ? await linkedinSync.mutateAsync({
+                  callbackUrl,
+                  mode: options?.linkedinMode ?? 'paid',
+                })
+              : provider === 'facebook'
+                ? await metaSync.mutateAsync({ callbackUrl, mode: options?.metaMode })
+                : await sync.mutateAsync(callbackUrl);
         const expectedState = 'state' in syncResponse ? syncResponse.state : null;
 
         const popup = openCenteredPopup(
@@ -114,7 +136,9 @@ export function ConnectProviderPopover({
             ? 'Connect LinkedIn Organic'
             : provider === 'linkedin'
               ? 'Connect LinkedIn Ads'
-              : `Connect ${PROVIDER_GROUP_LABELS[provider]}`,
+              : provider === 'facebook' && options?.metaMode === 'instagram'
+                ? 'Connect Instagram'
+                : `Connect ${labelFor(provider)}`,
         );
         if (!popup) {
           show({
@@ -226,7 +250,7 @@ export function ConnectProviderPopover({
               ? options?.linkedinMode === 'organic'
                 ? 'LinkedIn Organic'
                 : 'LinkedIn Ads'
-              : PROVIDER_GROUP_LABELS[provider];
+              : labelFor(provider);
           show({
             title: 'Connected',
             description: `${linkedInLabel} accounts synced.`,
@@ -343,6 +367,18 @@ export function ConnectProviderPopover({
                             Organic
                           </Button>
                         ) : null}
+                        {providerId === 'facebook' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            title="Connect an Instagram account that has no Facebook Page"
+                            onClick={() => handleConnect(providerId, { metaMode: 'instagram' })}
+                            disabled={isPending}
+                          >
+                            Instagram only
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -357,6 +393,29 @@ export function ConnectProviderPopover({
                           disabled={isPending}
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : providerId === 'facebook' ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          onClick={() => handleConnect(providerId)}
+                          disabled={isPending}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Facebook
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          title="Connect an Instagram account that has no Facebook Page"
+                          onClick={() => handleConnect(providerId, { metaMode: 'instagram' })}
+                          disabled={isPending}
+                        >
+                          Instagram only
                         </Button>
                       </div>
                     ) : providerId === 'linkedin' ? (
@@ -408,6 +467,49 @@ export function ConnectProviderPopover({
                 </div>
               );
             })}
+            <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <FigmaIcon className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-medium text-foreground">Figma</p>
+                  {figmaAccounts.length ? (
+                    <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
+                      Connected
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {figmaAccounts.length
+                    ? figmaAccounts.join(', ')
+                    : 'Frames and Motion as editable templates'}
+                </p>
+              </div>
+              {figmaAccounts.length ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="Reconnect Figma"
+                  onClick={() => handleConnect('figma')}
+                  disabled={isPending}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => handleConnect('figma')}
+                  disabled={isPending}
+                >
+                  <Plus className="h-3 w-3" />
+                  Connect
+                </Button>
+              )}
+            </div>
           </div>
         </PopoverContent>
       </Popover>

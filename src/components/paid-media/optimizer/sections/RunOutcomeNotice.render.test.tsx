@@ -113,6 +113,23 @@ describe('RunOutcomeNotice', () => {
     expect(text).toContain('logs');
   });
 
+  // optimizer_record_cycle keeps one run per portfolio per UTC day. A second Run now returns
+  // today's run — nothing new was scored, and "Cycle complete" would imply fresh cards.
+  it('says the portfolio was already scored today when the run is the one on screen', () => {
+    renderOutcome({ status: 'ran', run: RUN, alreadyScoredToday: true });
+    const text = screen.getByRole('status').textContent ?? '';
+    expect(text).toContain('Already scored today');
+    expect(text).toContain('00:00 UTC');
+    expect(text).not.toContain('Cycle complete');
+  });
+
+  it('says a malformed answer was an answer, not an unreachable service', () => {
+    renderOutcome({ status: 'unavailable', kind: 'malformed' });
+    const text = screen.getByRole('status').textContent ?? '';
+    expect(text).toContain('answered with something this screen cannot read');
+    expect(text.toLowerCase()).not.toContain('reach');
+  });
+
   it('shows a busy state while the cycle is running', () => {
     renderOutcome(undefined, true);
     expect(screen.getByRole('status').textContent).toContain('Running a cycle');

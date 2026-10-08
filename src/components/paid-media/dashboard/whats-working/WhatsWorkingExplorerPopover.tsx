@@ -9,33 +9,38 @@
 // de-emphasised, because "100%, 1/1 ads" is arithmetically true and practically
 // empty, and reading it as a proud winner is the actual failure mode here. The
 // numbers are the assembler's; only their prominence is ours.
+//
+// Grouped by dimension (Angle, Hook, Theme, ...) with the top few per section and
+// a "show all" per group, under a short themes synopsis — one flat sortable table
+// of every dimension x value x funnel stage read as a wall, not an answer.
 
 import type { CreativeWinRateFlag, CreativeWinRateRow } from '@continuum/contracts';
 import { Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import {
-  type InsightColumn,
-  InsightDataTable,
-} from '@/components/dashboard/datatable/InsightDataTable';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
 import { cn } from '@/lib/utils';
+import { WhatsWorkingSynopsis } from './WhatsWorkingSynopsis';
 import {
+  categoryValueLabel,
   DIMENSION_LABEL,
   FLAG_LABEL,
   FLAG_TOOLTIP,
   FUNNEL_TABS,
   type FunnelTab,
+  groupWinRatesByDimension,
   hasThinEvidence,
-  humanize,
   MIN_TRUSTWORTHY_COHORT,
   money,
   percent,
   selectWinRateRows,
+  type WinRateGroup,
 } from './whatsWorkingModel';
+
+const ROWS_PER_GROUP = 4;
 
 const GENERIC_FLAG_TOOLTIP = 'Treat this win-rate with care — see the attribution note below.';
 
@@ -56,80 +61,83 @@ function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
   );
 }
 
-function buildColumns(): InsightColumn<CreativeWinRateRow>[] {
-  return [
-    {
-      id: 'category',
-      header: 'Category',
-      cell: (row) => (
-        <span className="flex items-center gap-1.5">
-          <span className="rounded bg-muted px-1 py-px text-3xs text-muted-foreground">
-            {DIMENSION_LABEL[row.dimension]}
-          </span>
-          <span className="truncate text-xs text-foreground">{humanize(row.value)}</span>
+function WinRateLine({ row, showFunnel }: { row: CreativeWinRateRow; showFunnel: boolean }) {
+  const thin = hasThinEvidence(row);
+  return (
+    <li
+      className={cn(
+        'grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem_4.5rem] items-center gap-2 px-2 py-1',
+        thin && 'opacity-60',
+      )}
+    >
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-foreground text-xs">{categoryValueLabel(row)}</span>
+          {showFunnel ? (
+            <span className="shrink-0 rounded bg-muted px-1 text-3xs text-muted-foreground uppercase">
+              {row.funnelStage}
+            </span>
+          ) : null}
         </span>
-      ),
-      sortValue: (row) => `${row.dimension}:${row.value}`,
-    },
-    {
-      id: 'funnel',
-      header: 'Funnel',
-      cell: (row) => <span className="text-xs uppercase">{row.funnelStage}</span>,
-      sortValue: (row) => row.funnelStage,
-    },
-    {
-      id: 'winRate',
-      header: 'Win rate',
-      align: 'right',
-      cell: (row) => (
-        <span
-          className={cn(
-            'text-xs tabular-nums',
-            hasThinEvidence(row) ? 'text-muted-foreground' : 'text-foreground',
-          )}
-          title={
-            hasThinEvidence(row)
-              ? `Computed over ${row.eligibleAds} ad${row.eligibleAds === 1 ? '' : 's'} — too small a cohort to separate the creative from the ad.`
-              : undefined
-          }
+        <FlagPills flags={row.flags} />
+      </span>
+      <span
+        className="text-right text-xs tabular-nums"
+        title={
+          thin
+            ? `Computed over ${row.eligibleAds} ad${row.eligibleAds === 1 ? '' : 's'} — too small a cohort to separate the creative from the ad.`
+            : undefined
+        }
+      >
+        {percent(row.winRate)}
+      </span>
+      <span className="text-right text-muted-foreground text-xs tabular-nums">
+        {row.winners}/{row.eligibleAds}
+      </span>
+      <span className="text-right text-muted-foreground text-xs tabular-nums">
+        {percent(row.spendShare)}
+      </span>
+      <span className="text-right text-muted-foreground text-xs tabular-nums">
+        {money(row.medianCpa)}
+      </span>
+    </li>
+  );
+}
+
+function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? group.rows : group.rows.slice(0, ROWS_PER_GROUP);
+  const hidden = group.rows.length - visible.length;
+  return (
+    <section className="rounded-md border border-border/60">
+      <p className="flex items-center justify-between border-border/60 border-b bg-muted/30 px-2 py-1">
+        <span className="font-medium text-foreground text-xs">
+          {DIMENSION_LABEL[group.dimension]}
+        </span>
+        <span className="text-3xs text-muted-foreground tabular-nums">
+          {group.rows.length} categor{group.rows.length === 1 ? 'y' : 'ies'}
+        </span>
+      </p>
+      <ul className="divide-y divide-border/40">
+        {visible.map((row) => (
+          <WinRateLine
+            key={`${row.dimension}:${row.value}:${row.funnelStage}`}
+            row={row}
+            showFunnel={showFunnel}
+          />
+        ))}
+      </ul>
+      {group.rows.length > ROWS_PER_GROUP ? (
+        <button
+          className="w-full px-2 py-1 text-left text-3xs text-muted-foreground hover:text-foreground"
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
         >
-          {percent(row.winRate)}
-        </span>
-      ),
-      sortValue: (row) => row.winRate ?? -1,
-    },
-    {
-      id: 'ads',
-      header: 'Ads',
-      align: 'right',
-      cell: (row) => (
-        <span className="text-xs tabular-nums">
-          {row.winners}/{row.eligibleAds}
-        </span>
-      ),
-      sortValue: (row) => row.eligibleAds,
-    },
-    {
-      id: 'spendShare',
-      header: 'Spend share',
-      align: 'right',
-      cell: (row) => <span className="text-xs tabular-nums">{percent(row.spendShare)}</span>,
-      sortValue: (row) => row.spendShare ?? -1,
-    },
-    {
-      id: 'medianCpa',
-      header: 'Cohort median CPA',
-      align: 'right',
-      cell: (row) => <span className="text-xs tabular-nums">{money(row.medianCpa)}</span>,
-      sortValue: (row) => row.medianCpa ?? -1,
-    },
-    {
-      id: 'flags',
-      header: 'Flags',
-      cell: (row) => <FlagPills flags={row.flags} />,
-      sortValue: (row) => row.flags.length,
-    },
-  ];
+          {expanded ? 'Show fewer' : `Show ${hidden} more`}
+        </button>
+      ) : null}
+    </section>
+  );
 }
 
 function ExplorerEmpty() {
@@ -153,10 +161,8 @@ function ExplorerBody({ brandId }: { brandId: string }) {
   const { status, report, refreshedAt, isLoading } = usePaidCreativeReport(brandId);
   const [funnel, setFunnel] = useState<FunnelTab>('all');
   const [hideThinEvidence, setHideThinEvidence] = useState(false);
-  const columns = useMemo(buildColumns, []);
-
-  const rows = useMemo(
-    () => selectWinRateRows(report, funnel, { hideThinEvidence }),
+  const groups = useMemo(
+    () => groupWinRatesByDimension(selectWinRateRows(report, funnel, { hideThinEvidence })),
     [report, funnel, hideThinEvidence],
   );
 
@@ -166,6 +172,7 @@ function ExplorerBody({ brandId }: { brandId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+      <WhatsWorkingSynopsis synopsis={report?.synopsis} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs onValueChange={(value) => setFunnel(value as FunnelTab)} value={funnel}>
           <TabsList className="h-7">
@@ -189,21 +196,30 @@ function ExplorerBody({ brandId }: { brandId: string }) {
         </label>
       </div>
 
-      <div className="max-h-[60vh] min-h-0 flex-1 overflow-y-auto">
-        <InsightDataTable
-          columns={columns}
-          // Evidence first: a 100% win rate on one ad must not out-rank a 70%
-          // win rate on twelve.
-          defaultSort={{ columnId: 'ads', direction: 'desc' }}
-          emptyState={
-            <p className="px-2 py-3 text-xs text-muted-foreground">
-              No categories at this funnel stage yet.
-            </p>
-          }
-          getRowId={(row) => `${row.dimension}:${row.value}:${row.funnelStage}`}
-          isLoading={isLoading}
-          rows={rows}
-        />
+      <div className="max-h-[60vh] min-h-0 flex-1 space-y-2 overflow-y-auto">
+        <p className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem_4.5rem] gap-2 px-2 text-3xs text-muted-foreground">
+          <span>Category</span>
+          <span className="text-right">Win rate</span>
+          <span className="text-right">Ads</span>
+          <span className="text-right">Spend</span>
+          <span className="text-right">Median CPA</span>
+        </p>
+        {isLoading && !report ? (
+          <p className="px-2 py-3 text-muted-foreground text-xs">Loading…</p>
+        ) : groups.length === 0 ? (
+          <p className="px-2 py-3 text-muted-foreground text-xs">
+            No categories at this funnel stage yet.
+          </p>
+        ) : (
+          groups.map((group) => (
+            <WinRateSection
+              group={group}
+              // Remount on filter change so a section's "show all" resets with it.
+              key={`${group.dimension}:${funnel}:${hideThinEvidence}`}
+              showFunnel={funnel === 'all'}
+            />
+          ))
+        )}
       </div>
 
       {report ? (

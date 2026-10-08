@@ -6,8 +6,52 @@
 // picking an option while "is empty" is on must replace it, not stack with it.
 // Every helper returns a new array — the caller holds it in React state.
 
-import type { CustomField, CustomFieldFilter } from '@continuum/contracts';
-import { formatCustomFieldValue, formatDateValue } from './customFieldValue';
+import {
+  CURRENT_USER_FILTER_TOKEN,
+  type CustomField,
+  type CustomFieldFilter,
+  type CustomFieldOption,
+  customFieldChoiceOptions,
+} from '@continuum/contracts';
+import { ratingMax } from './customFields';
+import { formatDateValue } from './customFieldValue';
+
+export type FilterMember = { userId: string; label: string };
+
+/**
+ * The values a chip offers as "any of" checkboxes, as strings (the filter's wire
+ * shape). Null for the literal types — text, date, number, url — which filter by
+ * one typed value instead.
+ */
+export function filterChoices(
+  field: CustomField,
+  members: readonly FilterMember[] = [],
+): CustomFieldOption[] | null {
+  switch (field.type) {
+    case 'single_select':
+    case 'multi_select':
+    case 'status':
+      return customFieldChoiceOptions(field);
+    case 'rating':
+      return Array.from({ length: ratingMax(field) }, (_, index) => ({
+        id: String(index + 1),
+        label: '★'.repeat(index + 1),
+      }));
+    case 'checkbox':
+      return [
+        { id: 'true', label: 'Yes' },
+        { id: 'false', label: 'No' },
+      ];
+    case 'user':
+    case 'user_multi':
+      return [
+        { id: CURRENT_USER_FILTER_TOKEN, label: 'Me' },
+        ...members.map((member) => ({ id: member.userId, label: member.label })),
+      ];
+    default:
+      return null;
+  }
+}
 
 export function activeFilterFor(
   filters: readonly CustomFieldFilter[],
@@ -76,7 +120,11 @@ export function clearFieldFilter(
 }
 
 /** Chip label for a field's active filter — '' when the field is unfiltered. */
-export function fieldFilterSummary(field: CustomField, filter: CustomFieldFilter | null): string {
+export function fieldFilterSummary(
+  field: CustomField,
+  filter: CustomFieldFilter | null,
+  members: readonly FilterMember[] = [],
+): string {
   if (!filter) return '';
   if (filter.operator === 'is_empty') return 'Empty';
   if (filter.operator === 'is') {
@@ -85,7 +133,10 @@ export function fieldFilterSummary(field: CustomField, filter: CustomFieldFilter
   }
   if (filter.values.length === 0) return '';
   if (filter.values.length === 1) {
-    return formatCustomFieldValue(field, filter.values[0] ?? null);
+    const [only] = filter.values;
+    return (
+      filterChoices(field, members)?.find((choice) => choice.id === only)?.label ?? 'Removed option'
+    );
   }
   return `${filter.values.length} selected`;
 }

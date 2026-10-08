@@ -19,11 +19,11 @@ import {
 import { ArrowLeft, Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
-import { BatchShareActions } from '@/components/forge/BatchShareActions';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
-import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
+import { fileForFormat, type PreviewFormat, playableFirst } from '@/components/forge/FormatPreview';
+import { ReviewStatusPill, reviewSummary, useLibraryState } from '@/components/forge/libraryState';
 import {
   filesSummary,
   formatsNamedByJob,
@@ -63,8 +63,9 @@ import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 // node; this is the brand's ledger.
 //
 // The brand's ledger reads in batches: one row per Render click, which opens into that click's
-// renders, and a render opens into its detail. Each batch downloads as one zip and shares as a
-// link to it. One template's ledger (on the template itself) stays a list of renders by set.
+// renders, and a render opens into its detail. Each batch says how far its outputs are through
+// review in the Library, where they are shared from. One template's ledger (on the template itself)
+// stays a list of renders by set.
 //
 // Live: the node's own hook polls in-flight jobs (including the auto-judge tail) every 5 s
 // through the live relay, and the list is re-read on focus, on a slow timer, and on a Realtime
@@ -115,13 +116,19 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
   );
 }
 
-/** An image that fails to load — an expired signed link, a deleted file — falls back to the tile. */
+/**
+ * An image draws itself; a video draws its poster still and NEVER the video — a <video> per row
+ * fetched every render (≈9 MB each, index at the end, from the fleet's bucket) to paint 36 px,
+ * and froze the ledger. A still that fails to load — an expired signed link, a deleted file — or
+ * a video whose poster is not made yet falls back to the tile.
+ */
 function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
   const [broken, setBroken] = useState(false);
-  if (output?.kind === 'image' && !broken) {
+  const still = output?.kind === 'image' ? (output.libraryUrl ?? output.url) : output?.posterUrl;
+  if (still && !broken) {
     return (
       <img
-        src={output.url}
+        src={still}
         alt=""
         width={36}
         height={36}
@@ -175,7 +182,7 @@ export function RenderJobsGrid({
     brandId,
     trackedIds: [],
     limit: PAGE_SIZE,
-    pollIntervalMs: pushed ? false : DISCONNECTED_REFRESH_MS,
+    pollIntervalMs: active ? 5_000 : false,
     templateKey,
     // An open batch is read whole from the server; the set filter is for choosing one.
     ...(openBatchId ? { batchId: openBatchId } : renderSetId === 'all' ? {} : { renderSetId }),
@@ -281,11 +288,18 @@ export function RenderJobsGrid({
     sets.find((set) => set.id === job.renderSetId)?.name ??
     (templateKey ? 'No set' : 'Unassigned');
   const nameOf = (job: ApiRenderJob) => job.label ?? job.labelPath.at(-1) ?? templateOf(job);
-  // The first format's file, found by its name: the fleet lists files in a different order per
-  // job. No file for that format is an empty tile, never whichever came first.
+  // Prefer the first format that actually rendered; older jobs can lack their first format.
   const firstFileOf = (job: ApiRenderJob) => {
     const jobFormats = formats ?? formatsNamedByJob(job);
-    return jobFormats[0] ? fileForFormat(job.outputs, jobFormats, jobFormats[0].id) : null;
+    const matched = jobFormats
+      .map((format) => fileForFormat(job.outputs, jobFormats, format.id))
+      .filter((output) => output !== null);
+    return (
+      matched.find((output) => output.assetId) ??
+      matched[0] ??
+      playableFirst(job.outputs)[0] ??
+      null
+    );
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.
@@ -304,8 +318,11 @@ export function RenderJobsGrid({
           const first = firstFileOf(job);
           return (
             <ViewTransition name={jobTransitionName(job.id)}>
-              {/* Keyed by URL: a re-read that re-signs the link gets a fresh try. */}
-              <Thumbnail key={first?.url ?? 'none'} output={first} />
+              {/* Keyed by the link it draws: a re-signed or newly made still gets a fresh try. */}
+              <Thumbnail
+                key={first?.posterUrl ?? first?.libraryUrl ?? first?.url ?? 'none'}
+                output={first}
+              />
             </ViewTransition>
           );
         },
@@ -347,6 +364,9 @@ export function RenderJobsGrid({
             <Badge variant={STATUS_TONE[job.status]}>
               {isInFlight(job) ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
               {job.status}
+              {job.status === 'rendering' && typeof job.progressPct === 'number'
+                ? ` ${job.progressPct}%`
+                : ''}
             </Badge>
             <RenderModePill test={job.test} />
           </span>
@@ -380,7 +400,26 @@ export function RenderJobsGrid({
         header: 'Files',
         enableSorting: false,
         cell: ({ row: { original: job } }) => (
-          <span className="tabular-nums">{filesSummary(job.outputs) || '—'}</span>
+          <span className="flex items-center gap-1.5 tabular-nums">
+            <span>{filesSummary(job.outputs) || '—'}</span>
+            {job.outputs
+              .filter((output) => /\.(mov|mxf)$/i.test(output.fileName))
+              .map((output) => (
+                <a
+                  key={output.id}
+                  href={output.libraryUrl ?? output.url}
+                  download={output.fileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Download ${output.fileName}`}
+                  aria-label={`Download ${output.fileName}`}
+                  onClick={(event) => event.stopPropagation()}
+                  className="text-primary hover:underline"
+                >
+                  {output.fileName.split('.').pop()?.toUpperCase()}
+                </a>
+              ))}
+          </span>
         ),
       },
       {
@@ -458,6 +497,15 @@ export function RenderJobsGrid({
       batch.jobs.some((job) => matching.has(job.id)),
     );
   }, [jobs, visible]);
+  // One Library read for every output of the batches on screen, not one per batch.
+  const libraryState = useLibraryState(
+    brandId,
+    batchLevel && !openBatchId
+      ? batches.flatMap((batch) =>
+          batch.jobs.flatMap((job) => job.outputs.map((output) => output.assetId)),
+        )
+      : [],
+  );
   const [batchSorting, setBatchSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.
   const batchColumns = useMemo<ColumnDef<RenderBatch>[]>(
@@ -470,7 +518,12 @@ export function RenderJobsGrid({
         header: '',
         cell: ({ row: { original: batch } }) => {
           const first = firstFileOf(batch.preview);
-          return <Thumbnail key={first?.url ?? 'none'} output={first} />;
+          return (
+            <Thumbnail
+              key={first?.posterUrl ?? first?.libraryUrl ?? first?.url ?? 'none'}
+              output={first}
+            />
+          );
         },
       },
       {
@@ -537,15 +590,27 @@ export function RenderJobsGrid({
         ),
       },
       {
-        id: 'share',
-        header: '',
+        id: 'review',
+        header: 'Review',
         enableSorting: false,
-        cell: ({ row: { original: batch } }) => (
-          <BatchShareActions brandId={brandId} batchId={batch.id} ready={batch.files > 0} />
-        ),
+        cell: ({ row: { original: batch } }) => {
+          const summary = reviewSummary(
+            batch.jobs.flatMap((job) =>
+              job.outputs.flatMap((output) => {
+                const state = output.assetId ? libraryState.get(output.assetId) : undefined;
+                return state ? [state] : [];
+              }),
+            ),
+          );
+          return summary ? (
+            <ReviewStatusPill status={summary.status} label={summary.label} />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
       },
     ],
-    [brandId, sets, formats],
+    [sets, formats, libraryState],
   );
   const batchTable = useReactTable({
     data: batches,
@@ -622,13 +687,6 @@ export function RenderJobsGrid({
               {openBatch.createdByEmail ? ` · ${openBatch.createdByEmail}` : ''}
             </span>
           ) : null}
-          <div className="ml-auto">
-            <BatchShareActions
-              brandId={brandId}
-              batchId={openBatchId}
-              ready={(openBatch?.files ?? 0) > 0}
-            />
-          </div>
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -685,7 +743,7 @@ export function RenderJobsGrid({
             onClick={() => {
               for (const output of downloadable) {
                 const anchor = document.createElement('a');
-                anchor.href = output.url;
+                anchor.href = output.libraryUrl ?? output.url;
                 anchor.download = output.fileName;
                 anchor.rel = 'noopener';
                 anchor.click();

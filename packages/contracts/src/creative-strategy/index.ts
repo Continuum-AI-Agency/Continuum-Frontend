@@ -11,6 +11,8 @@ export * from './analysis';
 export * from './angleMethod';
 export * from './angleSynthesis';
 export * from './angles';
+export * from './competitorAngles';
+export * from './elements';
 export * from './insight';
 export * from './paid';
 export * from './taxonomy';

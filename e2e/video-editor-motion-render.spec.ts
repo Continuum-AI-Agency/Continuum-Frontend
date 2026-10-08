@@ -1,0 +1,1079 @@
+// videoeditor:motion:render:bench — the motion vocabulary through the REAL browser
+// compositor (buildTimelineEditorRenderPlan → composeTimeline, the code Render bundles as
+// timeline-editor.js), judged per decoded frame by pixels and bounding boxes, never OCR:
+//
+//   slide-up     the text's box rises over its entrance window, its alpha grows, then holds
+//   typewriter   characters appear progressively from a fixed left edge
+//   exit         slide-down runs BEFORE the clip ends: the box drops and fades, at rest before
+//   keyframes    a text clip with position keyframes moves across the frame as keyed
+//   crossfade    mid-transition pixels blend both clips
+//   VHS          the look changes pixels versus the same frame without it
+//   box + shadow a text box renders; its drop shadow darkens the box around the glyphs
+//
+// Two renders — control and styled (VHS + shadow) — so each look is judged against the
+// same frame without it, and the shared text measurements double as a determinism check.
+// The masters go to GCS (never the Library): gs://…/video-editor-motion/render-<run>/.
+//
+// NOT EXERCISED: server export of these animations. Render's /v1/timeline serves the
+// compositor bundled into the Render image (timeline-editor.js), which the owner rebuilds.
+
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { editorProjectV2Schema, type LookEffectId, lookEffectInstance } from '@continuum/contracts';
+import { expect, test } from '@playwright/test';
+import { createBenchRecorder } from './support/benchRecorder';
+import type {
+  EntranceSample,
+  MotionRenderRun,
+  ServerCompareInput,
+  ServerCompareRun,
+  TextBox,
+} from './support/videoEditorMotionRenderEntry';
+
+test.use({ channel: 'chrome' });
+test.describe.configure({ timeout: 300_000 });
+
+const GCS_PREFIX = 'gs://continuum-production-477821-creative-benchmarks/video-editor-motion';
+const FONT_PX = 44;
+const WIDTH = 360;
+
+function buildBrowserBundle(entry = 'e2e/support/videoEditorMotionRenderEntry.ts'): string {
+  const outfile = join(tmpdir(), `video-editor-motion-render-${Date.now()}.js`);
+  execFileSync('bun', ['build', entry, '--target=browser', '--outfile', outfile], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+  });
+  const code = readFileSync(outfile, 'utf8');
+  rmSync(outfile, { force: true });
+  return code;
+}
+
+/** A frame of the tracked NASA recording, cover-fit to the looks canvas (360x640). */
+function recordedLookFrame(): string {
+  const png = execFileSync('ffmpeg', [
+    '-v',
+    'error',
+    '-ss',
+    '60',
+    '-i',
+    join(
+      process.cwd(),
+      '../artifacts/video-studio-climb/floor-2026-10-02/caption-presets-proof/recorded-source.mp4',
+    ),
+    '-frames:v',
+    '1',
+    '-vf',
+    'scale=360:640:force_original_aspect_ratio=increase,crop=360:640',
+    '-f',
+    'image2',
+    '-c:v',
+    'png',
+    'pipe:1',
+  ]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+const seen = (boxes: readonly TextBox[]) => boxes.filter((box) => box.count >= 40);
+const center = (box: TextBox) => (box.left + box.right) / 2;
+const nonIncreasing = (values: readonly number[], slack = 0) =>
+  values.every((value, index) => index === 0 || value <= (values[index - 1] ?? value) + slack);
+const nonDecreasing = (values: readonly number[], slack = 0) =>
+  values.every((value, index) => index === 0 || value >= (values[index - 1] ?? value) - slack);
+const describe = (boxes: readonly TextBox[]) =>
+  boxes
+    .map(
+      (box) =>
+        `${box.timeSec.toFixed(3)}s n=${box.count} mass=${box.mass} x=${box.left}–${box.right} y=${box.top}–${box.bottom}`,
+    )
+    .join(' | ');
+
+test('the motion vocabulary renders in the real compositor, judged per frame', async ({
+  browser,
+}) => {
+  test.skip(
+    Boolean(process.env.VIDEO_EDITOR_EXPORT_MANIFEST),
+    'Explicit retained-export replay; GCS motion vocabulary is separate.',
+  );
+  const rec = createBenchRecorder('videoeditor:motion:render:bench', []);
+  const bundle = buildBrowserBundle();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route('**/fonts/*', (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: readFileSync(
+        join(
+          process.cwd(),
+          'public',
+          'fonts',
+          new URL(route.request().url()).pathname.split('/').pop() ?? '',
+        ),
+      ),
+    }),
+  );
+  await page.route('**/video-editor-motion-render-bench', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body></body></html>' }),
+  );
+  await page.goto('http://127.0.0.1:4173/video-editor-motion-render-bench', {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.addScriptTag({ content: bundle, type: 'module' });
+  await page.waitForFunction(() => Boolean(window.__motionRenderBench));
+  const control = (await page.evaluate(() =>
+    window.__motionRenderBench.run('control'),
+  )) as MotionRenderRun;
+  const styled = (await page.evaluate(() =>
+    window.__motionRenderBench.run('styled'),
+  )) as MotionRenderRun;
+  const entrances = (await page.evaluate(() =>
+    window.__motionRenderBench.entrances(),
+  )) as EntranceSample[];
+  const exits = await page.evaluate(() => window.__motionRenderBench.entrances('out'));
+  const highlights = await page.evaluate(() => window.__motionRenderBench.highlights());
+  const looks = await page.evaluate(() => window.__motionRenderBench.looks());
+  const dust = await page.evaluate(
+    (frame) => window.__motionRenderBench.dust(frame),
+    recordedLookFrame(),
+  );
+  await context.close();
+
+  const lines: string[] = [];
+  const check = (name: string, ok: boolean, detail: string) => {
+    rec.record(name, ok ? 'PASS' : 'FAIL', detail);
+    lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
+    expect.soft(ok, `${name}: ${detail}`).toBe(true);
+  };
+  // FE fa406083 added dust and light leaks: 7 filters and 11 effects. Dust's sparse flecks are
+  // also graded on a real recorded frame below, against the vintage-looks density bound.
+  check(
+    'all seven filters and eleven effects change the composed image pixels',
+    looks.length === 18 && looks.every((look) => look.difference > 0.1),
+    JSON.stringify(looks),
+  );
+  const sparse = (fraction: number) => fraction > 0.0001 && fraction < 0.08;
+  check(
+    'dust at full strength flecks a real recorded frame sparsely',
+    sparse(dust.full),
+    JSON.stringify({ changedFraction: dust.full, bounds: [0.0001, 0.08] }),
+  );
+  check(
+    'dust density oracle rejects zero amount and the bare recorded frame',
+    !sparse(dust.zeroAmount) && !sparse(dust.bare),
+    JSON.stringify({ zeroAmount: dust.zeroAmount, bare: dust.bare }),
+  );
+  check(
+    'all seven named filters are neutral at zero intensity',
+    looks.filter((look) => look.zeroDifference !== null).length === 7 &&
+      looks.every((look) => look.zeroDifference === null || look.zeroDifference === 0),
+    JSON.stringify(looks.map(({ id, zeroDifference }) => ({ id, zeroDifference }))),
+  );
+  const key = looks.find((look) => look.id === 'chroma_key');
+  check(
+    'chroma key removes green while keeping the red subject',
+    Boolean(
+      key && key.corner[1] < 70 && key.corner[2] > 90 && key.centre[0] > 100 && key.centre[1] < 70,
+    ),
+    JSON.stringify(key),
+  );
+  rec.notes.push(
+    `speed samples: ${JSON.stringify({ looks_render: looks.filter((look) => ['vhs', 'pixelate', 'chroma_key'].includes(look.id)).map((look) => look.durationMs), motion_snapshot: [...control.snapshots, ...styled.snapshots].map((frame) => frame.durationMs) })}`,
+  );
+
+  check(
+    'persisted caption highlight colour renders for word and karaoke, and none disables it',
+    highlights.every(
+      (sample) =>
+        sample.yellow === 0 &&
+        (sample.highlightMode === 'none' ? sample.branded === 0 : sample.branded > 100),
+    ),
+    JSON.stringify(highlights),
+  );
+
+  check(
+    'composed snapshots match exported frames through text, transition and VHS',
+    [...control.snapshots, ...styled.snapshots].every(
+      (frame) => frame.meanRgbError <= 6 && frame.durationMs <= 10_000,
+    ),
+    JSON.stringify({ control: control.snapshots, styled: styled.snapshots }),
+  );
+
+  check(
+    'plan: 2 main clips, 5 text cues, a 7 s master',
+    control.plan.items === 2 &&
+      control.plan.captionCues === 5 &&
+      Math.abs(control.durationSec - 7) <= 0.1,
+    `items=${control.plan.items} cues=${control.plan.captionCues} duration=${control.durationSec.toFixed(3)}s`,
+  );
+
+  // slide-up: over the entrance the box rises by at least a quarter of the font, alpha grows.
+  const entering = seen(styled.slideUp);
+  const tops = entering.map((box) => box.top);
+  const hold = styled.slideUpHold;
+  check(
+    'slide-up: the text box rises over its entrance window, then holds',
+    entering.length >= 5 &&
+      nonIncreasing(tops) &&
+      (tops[0] ?? 0) - (tops.at(-1) ?? 0) >= FONT_PX / 4 &&
+      hold.every((box) => Math.abs(box.top - (hold[0]?.top ?? -1)) <= 1) &&
+      Math.abs((hold[0]?.top ?? 0) - (tops.at(-1) ?? 0)) <= 2,
+    `entering ${describe(entering)} ‖ hold ${describe(hold)}`,
+  );
+  check(
+    'slide-up: alpha grows through the entrance (green mass rises to the held level)',
+    (entering[0]?.mass ?? 0) < 0.8 * (hold[0]?.mass ?? 0) &&
+      nonDecreasing(
+        entering.map((box) => box.mass),
+        0.03 * (hold[0]?.mass ?? 0),
+      ),
+    `masses ${entering.map((box) => box.mass).join(', ')} → held ${hold[0]?.mass}`,
+  );
+
+  // typewriter: glyphs appear left to right from a fixed left edge.
+  const typed = seen(styled.typewriter);
+  const final = styled.typewriter.at(-1);
+  check(
+    'typewriter: characters are revealed progressively from a fixed left edge',
+    typed.length >= 5 &&
+      nonDecreasing(typed.map((box) => box.right)) &&
+      nonDecreasing(typed.map((box) => box.count)) &&
+      typed.every((box) => Math.abs(box.left - (final?.left ?? -1)) <= 2) &&
+      (typed[0]?.count ?? 0) < 0.35 * (final?.count ?? 0) &&
+      new Set(typed.map((box) => box.right)).size >= 4,
+    describe(styled.typewriter),
+  );
+
+  // exit: at rest 0.6 s before the end, then dropping and fading before the clip ends.
+  const [rest, ...leaving] = styled.exit;
+  const leavingSeen = seen(leaving);
+  check(
+    'exit (slide-down): runs before the clip end — the box drops and fades',
+    Boolean(rest) &&
+      leavingSeen.length >= 3 &&
+      nonDecreasing(leavingSeen.map((box) => box.top)) &&
+      (leavingSeen.at(-1)?.top ?? 0) - (rest?.top ?? 0) >= FONT_PX / 5 &&
+      Math.min(...leaving.map((box) => box.mass)) < 0.75 * (rest?.mass ?? 0),
+    `rest ${describe(rest ? [rest] : [])} ‖ leaving ${describe(leaving)}`,
+  );
+
+  // keyframes: the centre follows x = 0.25 → 0.75 of the width over the clip.
+  const expected = [4.8, 5.45, 6.1].map((t) => WIDTH * (0.25 + (0.5 * (t - 4.7)) / 1.5));
+  const centers = styled.keyframed.map(center);
+  check(
+    'keyframes: a text clip with position keyframes moves as keyed',
+    centers.every((value, index) => Math.abs(value - (expected[index] ?? 0)) <= 8),
+    `centres ${centers.map((value) => value.toFixed(1)).join(', ')} vs keyed ${expected.map((value) => value.toFixed(1)).join(', ')}`,
+  );
+
+  // crossfade: halfway, the pixel is neither clip but between them on red and blue.
+  const { blue, mid, red } = control.crossfade;
+  const between = (channel: 0 | 2) =>
+    Math.min(blue[channel], red[channel]) + 15 < mid[channel] &&
+    mid[channel] < Math.max(blue[channel], red[channel]) - 15;
+  check(
+    'crossfade: mid-transition pixels blend both clips',
+    between(0) && between(2),
+    `blue ${blue.join(',')} · mid ${mid.join(',')} · red ${red.join(',')}`,
+  );
+
+  // VHS: the same clear band of the red clip, with and without the look.
+  let diff = 0;
+  for (let index = 0; index < control.clearBand.length; index += 1) {
+    diff += Math.abs((control.clearBand[index] ?? 0) - (styled.clearBand[index] ?? 0));
+  }
+  const meanDiff = diff / Math.max(1, control.clearBand.length);
+  check(
+    'VHS: the look changes pixels versus the same frame without it',
+    meanDiff > 4,
+    `mean |ΔRGB| ${meanDiff.toFixed(2)} over the clear band at 5.0 s`,
+  );
+
+  check(
+    'box: a text with backgroundColor renders its box',
+    control.boxYellowPixels > 1_500,
+    `${control.boxYellowPixels} box-yellow pixels in the card band`,
+  );
+  check(
+    'shadow: the drop shadow darkens the box around the glyphs',
+    styled.boxYellowPixels < control.boxYellowPixels - 150 &&
+      styled.boxBandLuma < control.boxBandLuma - 0.5,
+    `yellow ${control.boxYellowPixels} → ${styled.boxYellowPixels}; band luma ${control.boxBandLuma.toFixed(2)} → ${styled.boxBandLuma.toFixed(2)}`,
+  );
+  // The encoder is not bit-exact between runs, so geometry is compared to a pixel.
+  const sameBoxes = (left: readonly TextBox[], right: readonly TextBox[]) =>
+    left.length === right.length &&
+    left.every((box, index) => {
+      const other = right[index];
+      return (
+        other !== undefined &&
+        (box.count === 0) === (other.count === 0) &&
+        (box.count === 0 ||
+          (['left', 'right', 'top', 'bottom'] as const).every(
+            (edge) => Math.abs(box[edge] - other[edge]) <= 1,
+          ))
+      );
+    });
+  check(
+    'determinism: both renders place the text identically, frame for frame',
+    sameBoxes(control.slideUp, styled.slideUp) && sameBoxes(control.typewriter, styled.typewriter),
+    `slide-up ${describe(control.slideUp.slice(0, 3))} vs ${describe(styled.slideUp.slice(0, 3))}`,
+  );
+
+  // Every entrance id: 0.1 s in, the text is visibly mid-motion (moved, sized, partly
+  // revealed or faded) against the same text once settled.
+  for (const [direction, samples] of [
+    ['entrance', entrances],
+    ['exit', exits],
+  ] as const) {
+    for (const { id, early, settled } of samples) {
+      const moved = (['left', 'right', 'top', 'bottom'] as const).some(
+        (edge) => Math.abs(early[edge] - settled[edge]) >= 3,
+      );
+      check(
+        `${direction} ${id}: animates in the compositor, then settles`,
+        settled.count > 500 &&
+          (id === 'none'
+            ? !moved && Math.abs(early.mass - settled.mass) <= settled.mass * 0.01
+            : early.count === 0 || moved || early.mass < 0.85 * settled.mass),
+        `0.1 s ${describe([early])} ‖ settled ${describe([settled])}`,
+      );
+    }
+  }
+
+  // Masters to GCS, never the Library.
+  const run = `render-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const scratch = mkdtempSync(join(tmpdir(), 'video-editor-motion-render-'));
+  try {
+    for (const rendered of [control, styled]) {
+      writeFileSync(
+        join(scratch, `${rendered.variant}.mp4`),
+        Buffer.from(rendered.mp4Base64, 'base64'),
+      );
+    }
+    writeFileSync(
+      join(scratch, 'summary.json'),
+      JSON.stringify(
+        {
+          lines,
+          notExercised: [
+            'server export via Render /v1/timeline — the Render image bundles timeline-editor.js and needs an owner rebuild',
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    let stored = true;
+    try {
+      execFileSync(
+        'gcloud',
+        ['storage', 'cp', '--quiet', join(scratch, '*'), `${GCS_PREFIX}/${run}/`],
+        {
+          stdio: 'pipe',
+        },
+      );
+    } catch (error) {
+      stored = false;
+      lines.push(`FAIL  outputs stored in GCS — ${String(error).slice(0, 300)}`);
+    }
+    check('outputs: masters and summary stored in GCS', stored, `${GCS_PREFIX}/${run}/`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+  lines.push(
+    'NOT EXERCISED  server export of the new animations — Render /v1/timeline serves the compositor bundled into the Render image, which the owner must rebuild',
+  );
+  rec.record(
+    'server export parity',
+    'SKIP',
+    'Run the server-export comparison separately; this run renders in the browser.',
+  );
+  rec.print();
+  const passed = lines.filter((line) => line.startsWith('PASS')).length;
+  const failed = lines.filter((line) => line.startsWith('FAIL')).length;
+  console.log(
+    [
+      ...lines,
+      `videoeditor:motion:render:bench — ${passed} passed, ${failed} failed, 1 not exercised`,
+    ].join('\n'),
+  );
+});
+
+test('recorded browser worker exports retain effects captions audio and duration', async ({
+  browser,
+}) => {
+  const manifestPath = process.env.VIDEO_EDITOR_EXPORT_MANIFEST;
+  test.skip(
+    !manifestPath,
+    'Supply retained recorded projects and pinned source bytes for export replay.',
+  );
+  const manifest = JSON.parse(readFileSync(manifestPath ?? '', 'utf8')) as {
+    output: string;
+    cases: Array<{
+      readback: string;
+      projectKey: 'project' | 'initial';
+      look: LookEffectId;
+      sources: Record<string, { file: string; assetId: string; versionId: string; sha256: string }>;
+    }>;
+  };
+  mkdirSync(manifest.output, { recursive: true });
+  const rec = createBenchRecorder('videoeditor:motion:render:bench', []);
+  let failures = 0;
+  const check = (name: string, ok: boolean, detail: string) => {
+    rec.record(name, ok ? 'PASS' : 'FAIL', detail);
+    if (!ok) failures += 1;
+    expect.soft(ok, `${name}: ${detail}`).toBe(true);
+  };
+  const bundle = buildBrowserBundle();
+  const worker = buildBrowserBundle('src/StudioCanvas/workers/splicer.worker.ts');
+  writeFileSync(join(manifest.output, 'browser-entry.js'), bundle);
+  writeFileSync(join(manifest.output, 'actual-splicer-worker.js'), worker);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const origin = 'http://127.0.0.1:4173';
+  await page.route(`${origin}/export-replay`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html>' }),
+  );
+  await page.route(`${origin}/actual-splicer-worker.js`, (route) =>
+    route.fulfill({ contentType: 'text/javascript', body: worker }),
+  );
+  await page.route(`${origin}/fonts/*`, (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: readFileSync(join(process.cwd(), 'public', new URL(route.request().url()).pathname)),
+    }),
+  );
+  const fileMap = new Map<string, string>();
+  await page.route(`${origin}/recorded-export/*`, (route) => {
+    const path = fileMap.get(new URL(route.request().url()).pathname);
+    return path ? route.fulfill({ body: readFileSync(path) }) : route.fulfill({ status: 404 });
+  });
+  const rgb = (file: string, time?: number) =>
+    execFileSync(
+      'ffmpeg',
+      [
+        '-v',
+        'error',
+        ...(time === undefined ? [] : ['-ss', String(time)]),
+        '-i',
+        file,
+        '-frames:v',
+        '1',
+        '-f',
+        'rawvideo',
+        '-pix_fmt',
+        'rgb24',
+        'pipe:1',
+      ],
+      { maxBuffer: 32_000_000 },
+    );
+  const error = (a: Buffer, b: Buffer) =>
+    a.reduce((sum, value, index) => sum + Math.abs(value - (b[index] ?? 0)), 0) / a.length;
+  const magenta = (pixels: Buffer) => {
+    let count = 0;
+    for (let i = 0; i < pixels.length; i += 3)
+      if (pixels[i] > 150 && pixels[i + 2] > 150 && pixels[i + 1] < 100) count += 1;
+    return count;
+  };
+  const timings: number[] = [];
+  try {
+    await page.goto(`${origin}/export-replay`);
+    await page.addScriptTag({ content: bundle, type: 'module' });
+    for (const [index, item] of manifest.cases.entries()) {
+      const readback = JSON.parse(readFileSync(item.readback, 'utf8')) as Record<string, unknown>;
+      const retained = editorProjectV2Schema.parse(readback[item.projectKey]);
+      const sources = Object.fromEntries(
+        Object.entries(item.sources).map(([clipId, source]) => {
+          expect(createHash('sha256').update(readFileSync(source.file)).digest('hex')).toBe(
+            source.sha256,
+          );
+          const clip = retained.tracks
+            .flatMap((track) => track.clips)
+            .find((clip) => clip.id === clipId);
+          expect(
+            clip &&
+              'source' in clip &&
+              clip.source.sourceType === 'library_asset' &&
+              clip.source.assetId === source.assetId &&
+              clip.source.renditionId === source.versionId,
+          ).toBe(true);
+          const pathname = `/recorded-export/${index}-${encodeURIComponent(clipId)}`;
+          fileMap.set(pathname, source.file);
+          return [clipId, { ...source, url: origin + pathname }];
+        }),
+      );
+      const project = editorProjectV2Schema.parse({
+        ...retained,
+        tracks: [
+          ...retained.tracks.map((track) => ({
+            ...track,
+            clips: track.clips.map((clip) =>
+              clip.kind === 'video' || clip.kind === 'overlay'
+                ? {
+                    ...clip,
+                    effects: [lookEffectInstance(item.look, { id: 'export-look', strength: 0.8 })],
+                  }
+                : clip,
+            ),
+          })),
+          {
+            id: 'export-caption-track',
+            kind: 'caption',
+            name: 'Export caption',
+            order: 10,
+            clips: [
+              {
+                id: 'export-caption',
+                kind: 'caption',
+                timelineStartSec: 0.5,
+                durationSec: 2,
+                text: 'EXPORT PROOF',
+                language: 'en',
+                words: [
+                  { text: 'EXPORT', startSec: 0, endSec: 1 },
+                  { text: 'PROOF', startSec: 1, endSec: 2 },
+                ],
+                highlightMode: 'none',
+                style: {
+                  fontFamily: 'Inter',
+                  fontSizePx: 48,
+                  fontWeight: 800,
+                  color: '#ff00ff',
+                  outlineWidthPx: 0,
+                },
+                transform: { position: { x: 0.5, y: 0.8, unit: 'normalized' } },
+              },
+            ],
+          },
+        ],
+      });
+      const input = { project, sources, workerUrl: `${origin}/actual-splicer-worker.js` };
+      const mp4 = join(manifest.output, `${index}-worker.mp4`);
+      const started = performance.now();
+      const result = await page.evaluate(
+        (payload) => window.__motionRenderBench.recordedExport(payload),
+        input,
+      );
+      writeFileSync(mp4, Buffer.from(result.base64, 'base64'));
+      timings.push(performance.now() - started);
+      writeFileSync(
+        join(manifest.output, `${index}-project.json`),
+        JSON.stringify(project, null, 2),
+      );
+      const probe = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', mp4],
+          { encoding: 'utf8' },
+        ),
+      ) as {
+        format: { duration: string };
+        streams: Array<{ codec_type: string; width?: number; height?: number; channels?: number }>;
+      };
+      check(
+        `case${index}: encoded picture audio and exact timeline duration`,
+        probe.streams.some(
+          (s) =>
+            s.codec_type === 'video' &&
+            s.width === project.exportSettings.width &&
+            s.height === project.exportSettings.height,
+        ) &&
+          probe.streams.some((s) => s.codec_type === 'audio' && s.channels === 2) &&
+          Math.abs(Number(probe.format.duration) - project.durationSec) <= 1 / 30,
+        JSON.stringify(probe),
+      );
+      for (const time of [0.25, 1.25, 2.75, project.durationSec - 0.25]) {
+        const snapshot = await page.evaluate(
+          (payload) => window.__motionRenderBench.recordedExport(payload),
+          { ...input, frameTimeSec: time },
+        );
+        const png = join(manifest.output, `${index}-${time}-snapshot.png`);
+        writeFileSync(png, Buffer.from(snapshot.base64, 'base64'));
+        const actual = rgb(mp4, time),
+          expected = rgb(png);
+        const mean = error(actual, expected);
+        check(
+          `case${index} ${time}s: worker MP4 retains composed pixels`,
+          actual.length === expected.length && mean <= 6,
+          JSON.stringify({ meanRgbError: mean }),
+        );
+        check(
+          `case${index} ${time}s: caption appears only inside its window`,
+          time >= 0.5 && time < 2.5 ? magenta(actual) > 60 : magenta(actual) < 20,
+          JSON.stringify({ magentaPixels: magenta(actual) }),
+        );
+      }
+      const plain = editorProjectV2Schema.parse({
+        ...project,
+        tracks: project.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((clip) =>
+            clip.kind === 'video' || clip.kind === 'overlay' ? { ...clip, effects: [] } : clip,
+          ),
+        })),
+      });
+      const plainFrame = await page.evaluate(
+        (payload) => window.__motionRenderBench.recordedExport(payload),
+        { ...input, project: plain },
+      );
+      const plainFile = join(manifest.output, `${index}-no-look.mp4`);
+      writeFileSync(plainFile, Buffer.from(plainFrame.base64, 'base64'));
+      const lookError = error(rgb(mp4, 0.25), rgb(plainFile, 0.25));
+      check(
+        `case${index}: ${item.look} retained versus actual no-look control`,
+        lookError > 0.1,
+        String(lookError),
+      );
+      const audioClip = project.tracks
+        .flatMap((track) => track.clips)
+        .find((clip) => clip.kind === 'audio' || (clip.kind === 'video' && clip.audioEnabled));
+      if (!audioClip || !('sourceInSec' in audioClip))
+        throw new Error('Recorded audio source missing');
+      const sourceFile = item.sources[audioClip.id]?.file;
+      if (!sourceFile) throw new Error('Pinned audio bytes missing');
+      const pcm = (file: string, start = 0, channel = 0) =>
+        execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-ss',
+            String(start),
+            '-i',
+            file,
+            '-t',
+            String(project.durationSec),
+            '-vn',
+            '-af',
+            `pan=mono|c0=c${channel}`,
+            '-ar',
+            '48000',
+            '-f',
+            'f32le',
+            'pipe:1',
+          ],
+          { maxBuffer: 32_000_000 },
+        );
+      const sourceProbe = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            '-select_streams',
+            'a:0',
+            '-show_entries',
+            'stream=channels',
+            '-of',
+            'json',
+            sourceFile,
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as { streams: Array<{ channels: number }> };
+      const sourceChannels = sourceProbe.streams[0]?.channels ?? 0;
+      if (sourceChannels !== 1 && sourceChannels !== 2)
+        throw new Error('Recorded mono/stereo source missing');
+      for (const channel of [0, 1]) {
+        const a = pcm(mp4, 0, channel),
+          b = pcm(sourceFile, audioClip.sourceInSec, Math.min(channel, sourceChannels - 1));
+        let squared = 0,
+          energy = 0;
+        for (let offset = 0; offset < b.length; offset += 4) {
+          const expected = b.readFloatLE(offset);
+          squared += (a.readFloatLE(offset) - expected) ** 2;
+          energy += expected ** 2;
+        }
+        check(
+          `case${index} channel${channel}: all recorded PCM samples survive browser export`,
+          a.length >= b.length &&
+            b.length / 4 === Math.round(project.durationSec * 48000) &&
+            energy > 1e-6 &&
+            squared / energy <= 0.01,
+          JSON.stringify({
+            samples: b.length / 4,
+            energy,
+            relativeSquaredPcmError: squared / energy,
+          }),
+        );
+      }
+      check(
+        `case${index}: complete browser export within120000ms`,
+        timings[index] <= 120000,
+        String(timings[index]),
+      );
+    }
+    check(
+      'Browser export retains effects, captions, audio and exact timeline duration.',
+      manifest.cases.length === 3 && failures === 0,
+      'Three retained recorded-source projects through actual worker; independent FFmpeg picture/PCM and no-look controls.',
+    );
+    rec.notes.push(`speed samples: ${JSON.stringify({ browser_export: timings })}`);
+    rec.record(
+      'fresh DB/native dialog, long projects, full motion vocabulary, production and adoption',
+      'SKIP',
+      'Offline browser replay of retained real-store readbacks; prior native/Storage/Render proof is separate.',
+    );
+  } catch (error) {
+    rec.record('recorded export replay completes', 'FAIL', String(error));
+    throw error;
+  } finally {
+    await context.close();
+    rec.print();
+  }
+});
+
+// ── Server export vs the client render ─────────────────────────────────────────────────
+//
+// Driven by `video-editor:motion:e2e:bench -- --server-export=<render url>`: the Backend
+// bench builds a motion timeline with the real ops, has Render export it, and hands this
+// test a manifest (the project, its source files, the server master). The same project is
+// rendered here from the same files, and both masters are judged per frame.
+//
+// The motion judges compare each frame's box against its own settled box, alpha as green
+// mass over the settled mass, the share of a typed line revealed, and the keyed centre. The
+// font judge holds each settled line to the width the loaded face gives it — pixel coverage
+// cannot match across operating systems (edge antialiasing, encoder chroma), widths can.
+
+type CompareManifest = {
+  project: unknown;
+  files: Record<string, string>;
+  sources: Record<string, { file: string; assetId: string; versionId: string }>;
+  serverFile: string;
+  samples: ServerCompareInput['samples'];
+  resultPath: string;
+  clientMp4Path: string;
+};
+
+const COMPARE = process.env.MOTION_SERVER_COMPARE;
+
+test('server export matches the client render, frame for frame', async ({ browser }) => {
+  test.skip(!COMPARE, 'run by video-editor:motion:e2e:bench -- --server-export=<render url>');
+  const manifest = JSON.parse(readFileSync(COMPARE ?? '', 'utf8')) as CompareManifest;
+  const bundle = buildBrowserBundle();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route('**/video-editor-motion-compare', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body></body></html>' }),
+  );
+  // The export loads the faces its text names from /fonts, as Render serves them.
+  await page.route('**/fonts/*', (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: readFileSync(
+        join(
+          process.cwd(),
+          'public',
+          'fonts',
+          new URL(route.request().url()).pathname.split('/').pop() ?? '',
+        ),
+      ),
+    }),
+  );
+  await page.route('**/motion-compare-files/*', (route) => {
+    const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+    const path = manifest.files[name];
+    return path
+      ? route.fulfill({ contentType: 'video/mp4', body: readFileSync(path) })
+      : route.fulfill({ status: 404, body: name });
+  });
+  await page.goto('http://127.0.0.1:4173/video-editor-motion-compare', {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.addScriptTag({ content: bundle, type: 'module' });
+  await page.waitForFunction(() => Boolean(window.__motionRenderBench));
+  const fileUrl = (name: string) =>
+    `http://127.0.0.1:4173/motion-compare-files/${encodeURIComponent(name)}`;
+  const input: ServerCompareInput = {
+    project: manifest.project,
+    sources: Object.fromEntries(
+      Object.entries(manifest.sources).map(([clipId, source]) => [
+        clipId,
+        { url: fileUrl(source.file), assetId: source.assetId, versionId: source.versionId },
+      ]),
+    ),
+    serverUrl: fileUrl(manifest.serverFile),
+    samples: manifest.samples,
+  };
+  const run = (await page.evaluate(
+    (payload) => window.__motionRenderBench.compare(payload),
+    input,
+  )) as ServerCompareRun;
+  await context.close();
+  writeFileSync(manifest.clientMp4Path, Buffer.from(run.clientMp4Base64, 'base64'));
+
+  const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
+  const check = (name: string, ok: boolean, detail: string) => {
+    checks.push({ name, ok, detail });
+    expect.soft(ok, `${name}: ${detail}`).toBe(true);
+  };
+  const seenBox = (box: TextBox) => box.count >= 40;
+  const ratio = (value: number, of: number) => (of > 0 ? value / of : 0);
+
+  check(
+    'server master: the project size and length',
+    run.serverSize.width === 360 &&
+      run.serverSize.height === 640 &&
+      Math.abs(run.serverSize.durationSec - 7) <= 0.1,
+    `${run.serverSize.width}×${run.serverSize.height} ${run.serverSize.durationSec.toFixed(3)}s`,
+  );
+
+  for (const [index, client] of run.client.texts.entries()) {
+    const server = run.server.texts[index];
+    if (!server) continue;
+    const pairs = client.frames
+      .map((frame, at) => [frame, server.frames[at]] as const)
+      .filter(
+        (pair): pair is readonly [TextBox, TextBox] =>
+          pair[1] !== undefined && seenBox(pair[0]) && seenBox(pair[1]),
+      );
+    const visibility = client.frames.filter(seenBox).length - server.frames.filter(seenBox).length;
+    if (client.name === 'typewriter') {
+      const revealed = (frame: TextBox, settled: TextBox) =>
+        ratio(frame.right - settled.left, settled.right - settled.left);
+      const worst = Math.max(
+        0,
+        ...pairs.map(([c, s]) =>
+          Math.abs(revealed(c, client.settled) - revealed(s, server.settled)),
+        ),
+      );
+      const leftDrift = Math.max(
+        0,
+        ...pairs.map(([c, s]) =>
+          Math.abs(c.left - client.settled.left - (s.left - server.settled.left)),
+        ),
+      );
+      check(
+        "typewriter: the server reveals the line at the client's pace",
+        pairs.length >= 4 && Math.abs(visibility) <= 1 && worst <= 0.12 && leftDrift <= 2,
+        `${pairs.length} frames · worst reveal gap ${worst.toFixed(3)} of the line · left drift ${leftDrift}px · client ${describe([client.settled])} vs server ${describe([server.settled])}`,
+      );
+      continue;
+    }
+    const motionGap = Math.max(
+      0,
+      ...pairs.flatMap(([c, s]) =>
+        (['top', 'bottom'] as const).map((edge) =>
+          Math.abs(c[edge] - client.settled[edge] - (s[edge] - server.settled[edge])),
+        ),
+      ),
+    );
+    const scaleGap = Math.max(
+      0,
+      ...pairs.map(([c, s]) =>
+        Math.abs(
+          ratio(c.right - c.left, client.settled.right - client.settled.left) -
+            ratio(s.right - s.left, server.settled.right - server.settled.left),
+        ),
+      ),
+    );
+    const alphaGap = Math.max(
+      0,
+      ...pairs.map(([c, s]) =>
+        Math.abs(ratio(c.mass, client.settled.mass) - ratio(s.mass, server.settled.mass)),
+      ),
+    );
+    check(
+      `${client.name}: the server's entrance follows the client's — box motion, scale and alpha per frame`,
+      pairs.length >= 4 &&
+        Math.abs(visibility) <= 1 &&
+        motionGap <= 3 &&
+        scaleGap <= 0.06 &&
+        alphaGap <= 0.12,
+      `${pairs.length} frames · worst Δbox ${motionGap}px · worst scale gap ${scaleGap.toFixed(3)} · worst alpha gap ${alphaGap.toFixed(3)} · settled client ${describe([client.settled])} vs server ${describe([server.settled])}`,
+    );
+  }
+
+  // Which face drew the text: a settled line's width is the face's advance widths, which no
+  // rasteriser or encoder moves (their edge pixels differ across OSes; widths do not). Each
+  // line is held to the width the real draw path gives in the loaded face, and the judge
+  // only counts where the fallback stack would draw it measurably wider or narrower.
+  const width = (box: TextBox) => box.right - box.left;
+  const faces = run.faces.map((probe) => {
+    const index = run.client.texts.findIndex((text) => text.name === probe.name);
+    const server = run.server.texts[index]?.settled;
+    const client = run.client.texts[index]?.settled;
+    const tolerance = Math.max(2, 0.01 * width(probe.face));
+    return {
+      name: probe.name,
+      face: width(probe.face),
+      fallback: width(probe.fallback),
+      server: server ? width(server) : -1,
+      client: client ? width(client) : -1,
+      tolerance,
+      discriminates: Math.abs(width(probe.fallback) - width(probe.face)) > 2 * tolerance,
+    };
+  });
+  const judged = faces.filter((entry) => entry.discriminates);
+  check(
+    'fonts: the server draws each text in the face the export loaded — line widths within 1% of that face, not the fallback',
+    judged.length >= 1 &&
+      faces.every(
+        (entry) =>
+          Math.abs(entry.server - entry.face) <= entry.tolerance &&
+          Math.abs(entry.client - entry.face) <= entry.tolerance,
+      ),
+    faces
+      .map(
+        (entry) =>
+          `${entry.name}: face ${entry.face}px · fallback ${entry.fallback}px${entry.discriminates ? '' : ' (indistinct)'} · client ${entry.client}px · server ${entry.server}px`,
+      )
+      .join(' · '),
+  );
+
+  const keyedGap = run.client.keyed.map((box, index) => {
+    const server = run.server.keyed[index];
+    return server ? Math.abs(center(box) - center(server)) : Number.POSITIVE_INFINITY;
+  });
+  check(
+    'keyframes: the server moves the keyed text to the same centre as the client',
+    keyedGap.every((gap) => gap <= 4),
+    `centres client ${run.client.keyed.map(center).join(', ')} · server ${run.server.keyed.map(center).join(', ')}`,
+  );
+  const blendGap = Math.max(
+    ...run.client.crossfade.map((channel, index) =>
+      Math.abs(channel - (run.server.crossfade[index] ?? 0)),
+    ),
+  );
+  check(
+    'crossfade: the server blends the two clips as the client does, mid-transition',
+    blendGap <= 12,
+    `client ${run.client.crossfade.join(',')} · server ${run.server.crossfade.join(',')}`,
+  );
+  const lookGap = Math.max(
+    ...run.client.look.mean.map((channel, index) =>
+      Math.abs(channel - (run.server.look.mean[index] ?? 0)),
+    ),
+  );
+  check(
+    "look: the server master carries clip 2's look as the client does (band colour and spread)",
+    lookGap <= 8 &&
+      Math.abs(run.client.look.spread - run.server.look.spread) <=
+        Math.max(2, run.client.look.spread),
+    `band mean client ${run.client.look.mean.join(',')} · server ${run.server.look.mean.join(',')} · spread ${run.client.look.spread.toFixed(2)} vs ${run.server.look.spread.toFixed(2)}`,
+  );
+  writeFileSync(manifest.resultPath, JSON.stringify({ checks }, null, 2));
+  console.log(
+    checks
+      .map((entry) => `${entry.ok ? 'PASS' : 'FAIL'}  ${entry.name} — ${entry.detail}`)
+      .join('\n'),
+  );
+});
+
+test('retained curves preserve recorded picture and source gain through actual splits', async ({
+  browser,
+}) => {
+  const fixture = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+  test.skip(!fixture, 'Recorded media fixture not supplied; curve/media coverage unexercised.');
+  const rec = createBenchRecorder('videoeditor:motion:render:bench:retained-curves', []);
+  let failed = 0;
+  const check = (name: string, pass: boolean, detail?: string) => {
+    rec.record(name, pass ? 'PASS' : 'FAIL', detail);
+    if (!pass) failed += 1;
+  };
+  const context = await browser.newContext();
+  const scratch = mkdtempSync(join(tmpdir(), 'video-editor-retained-curves-'));
+  try {
+    const page = await context.newPage();
+    await page.route('https://recorded.bench/source.mp4', (route) =>
+      route.fulfill({ contentType: 'video/mp4', body: readFileSync(fixture!) }),
+    );
+    await page.route('**/video-editor-motion-render-bench', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body></body></html>',
+      }),
+    );
+    await page.goto('http://127.0.0.1:4173/video-editor-motion-render-bench');
+    await page.addScriptTag({ content: buildBrowserBundle(), type: 'module' });
+    await page.waitForFunction(() => Boolean(window.__motionRenderBench));
+    const runs = await rec.step('recorded curve renders through candidate compositor', () =>
+      page.evaluate(() => window.__motionRenderBench.curves('https://recorded.bench/source.mp4')),
+    );
+    for (const run of runs) {
+      check(
+        `${run.interpolation}: retained decoded frames agree with original source clock`,
+        run.frames.every((mae) => mae < 4),
+        JSON.stringify(run.frames),
+      );
+      const a = join(scratch, `${run.interpolation}-baseline.mp4`),
+        b = join(scratch, `${run.interpolation}-sliced.mp4`);
+      writeFileSync(a, Buffer.from(run.baseline, 'base64'));
+      writeFileSync(b, Buffer.from(run.actual, 'base64'));
+      const pcm = (file: string) => {
+        const bytes = execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          file,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-f',
+          'f32le',
+          'pipe:1',
+        ]);
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      };
+      const original = pcm(a),
+        sliced = pcm(b);
+      let delta = 0,
+        energy = 0;
+      for (const localSec of [0.25, 0.75, 1.25, 1.75]) {
+        const expectedSec = localSec < 1 ? localSec : localSec + 1;
+        for (let i = 0; i < 640; i++) {
+          const got = sliced[Math.round(localSec * 16000) + i] ?? 0;
+          const expected = original[Math.round(expectedSec * 16000) + i] ?? 0;
+          delta += (got - expected) ** 2;
+          energy += expected ** 2;
+        }
+      }
+      check(
+        `${run.interpolation}: independent PCM follows retained gain curve`,
+        energy > 1e-6 && delta / energy < 0.02,
+        `relative PCM error ${delta / energy}`,
+      );
+      check(
+        `${run.interpolation}: canonical schema retains full endpoints and clock`,
+        run.project.tracks[0]?.clips[1]?.keyframeOffsetSec === 2 &&
+          run.project.tracks[0]?.clips[1]?.kind === 'video' &&
+          run.project.tracks[0]?.clips[1]?.keyframes?.length === 4,
+      );
+    }
+    rec.record(
+      'hosted Render/store/UI/agent',
+      'SKIP',
+      'Candidate browser/reducer/recorded-media proof only; hosted compositor rebuild, real project persistence, native UI and agent remain unexercised.',
+    );
+    const folder = process.env.VIDEO_EDITOR_CURVES_OUTPUT;
+    if (folder) {
+      execFileSync('mkdir', ['-p', folder]);
+      for (const name of ['hold', 'linear', 'bezier', 'spring'])
+        for (const variant of ['baseline', 'sliced']) {
+          writeFileSync(
+            join(folder, `${name}-${variant}.mp4`),
+            readFileSync(join(scratch, `${name}-${variant}.mp4`)),
+          );
+        }
+      writeFileSync(
+        join(folder, 'summary.json'),
+        JSON.stringify(
+          runs.map(({ baseline, actual, ...rest }) => rest),
+          null,
+          2,
+        ),
+      );
+    }
+    expect(failed).toBe(0);
+  } finally {
+    rec.print();
+    await context.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});

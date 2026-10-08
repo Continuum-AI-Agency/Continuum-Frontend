@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { elementCategorySchema } from '../media/element';
 import { pinnedLibraryAssetRefSchema } from '../media/library-reference';
+import { canvasReviewHandoffSchema, savedImplementationDraftSchema } from './implementation-nodes';
 import { studioPortDataTypeSchema } from './workflow-graph';
 
 /**
@@ -90,7 +91,7 @@ export const pipelineManifestSchema = z
   .object({
     pipeline_id: z.string().min(1),
     name: z.string(),
-    source: z.enum(['brand', 'global']),
+    source: z.literal('brand'),
     inputs: z.array(pipelineManifestInputSchema),
     outputs: z.array(pipelineManifestOutputSchema),
     headless: pipelineManifestHeadlessSchema,
@@ -173,63 +174,16 @@ export const pipelineSemanticInputSchema = z.discriminatedUnion('kind', [
 ]);
 export type PipelineSemanticInput = z.infer<typeof pipelineSemanticInputSchema>;
 
-const scalarControlBase = {
-  control_id: capabilityKeySchema,
-  label: z.string().min(1).max(120),
-  description: z.string().min(1).max(500).optional(),
-  required: z.boolean(),
-};
-
-/** Only these declared scalar controls may cross the public seam into graph configuration. */
-export const pipelineScalarControlSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      ...scalarControlBase,
-      kind: z.literal('boolean'),
-      default: z.boolean().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...scalarControlBase,
-      kind: z.literal('integer'),
-      minimum: z.number().int().optional(),
-      maximum: z.number().int().optional(),
-      step: z.number().int().positive().optional(),
-      default: z.number().int().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...scalarControlBase,
-      kind: z.literal('number'),
-      minimum: z.number().finite().optional(),
-      maximum: z.number().finite().optional(),
-      step: z.number().positive().finite().optional(),
-      default: z.number().finite().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...scalarControlBase,
-      kind: z.literal('string'),
-      min_length: z.number().int().nonnegative().optional(),
-      max_length: z.number().int().positive().optional(),
-      default: z.string().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...scalarControlBase,
-      kind: z.literal('enum'),
-      options: z.array(z.string().min(1).max(120)).min(1).max(50),
-      default: z.string().min(1).max(120).optional(),
-    })
-    .strict(),
-]);
-export type PipelineScalarControl = z.infer<typeof pipelineScalarControlSchema>;
-
 export const pipelineCapabilityOutputSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      output_id: capabilityKeySchema,
+      kind: z.literal('planner_draft'),
+      label: z.string().min(1).max(120),
+      description: z.string().min(1).max(500).optional(),
+      count: z.number().int().positive().max(24),
+    })
+    .strict(),
   z
     .object({
       output_id: capabilityKeySchema,
@@ -238,6 +192,9 @@ export const pipelineCapabilityOutputSchema = z.discriminatedUnion('kind', [
       description: z.string().min(1).max(500).optional(),
       media: pipelineMediaSchema,
       count: z.number().int().positive().max(24),
+      /** As authored on the producing node; absent when the node leaves it to the model. */
+      aspect_ratio: z.string().min(1).max(20).optional(),
+      duration_seconds: z.number().positive().optional(),
     })
     .strict(),
   z
@@ -266,21 +223,54 @@ export type PipelineExecutionPolicy = z.infer<typeof pipelineExecutionPolicySche
 export const pipelineCostPolicySchema = z
   .object({
     currency: z.string().regex(/^[A-Z]{3}$/),
-    max_amount_minor: z.number().int().nonnegative(),
+    /**
+     * Null until a per-model price table exists: a dollar cap nothing measures is a guardrail
+     * that only looks like one. Spend is bounded by `execution_policy.max_generations` per run.
+     */
+    max_amount_minor: z.number().int().nonnegative().nullable(),
+    /**
+     * The limit is `execution_policy.max_generations`: the generators the published graph
+     * starts, fixed at publish. `within_limit` needs no approval beyond the calling surface's
+     * own (Jaina asks before every run; MCP requires the operator role). A graph asking one
+     * unattended run for more than the headless cap is refused before anything generates.
+     */
     approval: z.enum(['within_limit', 'always']),
     on_exceed: z.literal('refuse'),
   })
   .strict();
 export type PipelineCostPolicy = z.infer<typeof pipelineCostPolicySchema>;
 
+/** One gate a run's outputs pass through, and the score floor it adds on top of its verdict. */
+export const pipelineQualityCheckSchema = z
+  .object({
+    check_id: capabilityKeySchema,
+    /** Which produced media this gate judges. */
+    media: z.array(pipelineMediaSchema).min(1).max(5),
+    /** Null when the gate's pass/fail verdict alone decides; otherwise the score it must reach. */
+    minimum_score: z.number().min(0).max(1).nullable(),
+  })
+  .strict();
+export type PipelineQualityCheck = z.infer<typeof pipelineQualityCheckSchema>;
+
 export const pipelineQualityPolicySchema = z
+  .object({
+    checks: z.array(pipelineQualityCheckSchema).min(1).max(24),
+    on_failure: z.literal('refuse'),
+  })
+  .strict();
+export type PipelineQualityPolicy = z.infer<typeof pipelineQualityPolicySchema>;
+
+/**
+ * The single-threshold shape a not-yet-redeployed Backend still sends. It claimed one score
+ * floor for every output, which only the video gate applies. Drop once both sides deploy.
+ */
+export const legacyPipelineQualityPolicySchema = z
   .object({
     minimum_score: z.number().min(0).max(1),
     required_checks: z.array(capabilityKeySchema).min(1).max(24),
     on_failure: z.literal('refuse'),
   })
   .strict();
-export type PipelineQualityPolicy = z.infer<typeof pipelineQualityPolicySchema>;
 
 export const pipelineAgentGuideSchema = z
   .object({
@@ -310,13 +300,17 @@ export const pipelineCapabilityV2Schema = z
     name: z.string().min(1).max(200),
     description: z.string().min(1).max(1_000).optional(),
     agent_guide: pipelineAgentGuideSchema.optional(),
-    source: z.enum(['brand', 'global']),
+    source: z.literal('brand'),
     inputs: z.array(pipelineSemanticInputSchema).max(24),
-    controls: z.array(pipelineScalarControlSchema).max(24),
+    /**
+     * Scalar controls were deleted: a specific pipeline fixes its settings in the graph.
+     * Tolerates the empty list a pre-deletion peer still sends; drop once both sides deploy.
+     */
+    controls: z.array(z.never()).max(0).optional(),
     outputs: z.array(pipelineCapabilityOutputSchema).min(1).max(24),
     execution_policy: pipelineExecutionPolicySchema,
     cost_policy: pipelineCostPolicySchema,
-    quality_policy: pipelineQualityPolicySchema,
+    quality_policy: z.union([pipelineQualityPolicySchema, legacyPipelineQualityPolicySchema]),
   })
   .strict()
   .superRefine((capability, context) => {
@@ -350,11 +344,12 @@ export const pipelineCapabilitySummarySchema = z
     identity: pipelineCapabilityIdentitySchema,
     name: z.string().min(1).max(200),
     description: z.string().min(1).max(1_000).optional(),
-    source: z.enum(['brand', 'global']),
+    source: z.literal('brand'),
     use_when: z.array(z.string().min(1).max(160)).max(6),
     required_inputs: z.array(pipelineSemanticInputSchema).max(24),
     outputs: z.array(pipelineCapabilityOutputSchema).min(1).max(24),
-    control_count: z.number().int().nonnegative().max(24),
+    /** Deterministic "what it makes" line derived from the outputs and inputs; never model-written. */
+    produces: z.string().min(1).max(400),
   })
   .strict();
 export type PipelineCapabilitySummary = z.infer<typeof pipelineCapabilitySummarySchema>;
@@ -424,9 +419,6 @@ export const pipelineResolvedInputSchema = z.discriminatedUnion('kind', [
 ]);
 export type PipelineResolvedInput = z.infer<typeof pipelineResolvedInputSchema>;
 
-export const pipelineScalarValueSchema = z.union([z.boolean(), z.number().finite(), z.string()]);
-export type PipelineScalarValue = z.infer<typeof pipelineScalarValueSchema>;
-
 export const pipelineInvocationRequestSchema = z
   .object({
     brand_profile_id: capabilityIdSchema,
@@ -435,7 +427,8 @@ export const pipelineInvocationRequestSchema = z
     idempotency_key: z.string().min(1).max(200),
     origin: pipelineInvocationOriginSchema,
     inputs: z.record(capabilityKeySchema, pipelineInvocationInputSchema),
-    controls: z.record(capabilityKeySchema, pipelineScalarValueSchema),
+    /** See the capability's `controls`: accepts a pre-deletion caller's `{}`, refuses any value. */
+    controls: z.record(capabilityKeySchema, z.never()).optional(),
   })
   .strict();
 export type PipelineInvocationRequest = z.infer<typeof pipelineInvocationRequestSchema>;
@@ -515,6 +508,13 @@ export const pipelineRunArtifactSchema = z.discriminatedUnion('kind', [
   z
     .object({
       ...pipelineArtifactBase,
+      kind: z.literal('planner_draft'),
+      draft: savedImplementationDraftSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...pipelineArtifactBase,
       kind: z.literal('asset'),
       media: pipelineMediaSchema,
       asset: pinnedLibraryAssetRefSchema,
@@ -546,7 +546,6 @@ export const PIPELINE_ERROR_CODES = [
   'contract_mismatch',
   'input_missing',
   'input_invalid',
-  'control_not_approved',
   'policy_refused',
   'execution_failed',
   'output_invalid',
@@ -590,6 +589,7 @@ export const pipelineRunReceiptSchema = z
     status: pipelineRunStatusSchema,
     resolved_inputs: z.record(capabilityKeySchema, pipelineResolvedInputSchema).nullable(),
     artifacts: z.array(pipelineRunArtifactSchema).max(24),
+    pending_reviews: z.array(canvasReviewHandoffSchema).max(24).default([]),
     cost: pipelineRunCostSchema.nullable(),
     quality: pipelineQualityEvidenceSchema.nullable(),
     error: pipelineRunErrorSchema.nullable(),

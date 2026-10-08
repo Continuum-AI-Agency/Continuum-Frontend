@@ -1,35 +1,47 @@
 'use client';
 import { ReactFlowProvider } from '@xyflow/react';
-import { Bot, GripHorizontal, Maximize2, MessageSquareText, Minimize2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  GripHorizontal,
+  Maximize2,
+  MessageSquareText,
+  Minimize2,
+  X,
+} from 'lucide-react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
+import Link from 'next/link';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
-import { Button } from '@/components/ui/button';
-import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  buildCampaignCreativeRequest,
+  type CampaignCreativeRequest,
+} from '@/lib/campaign-canvas/creativeGeneration';
+import { CanvasJainaContext } from './canvasJaina';
 import { CampaignCanvas } from './components/CampaignCanvas';
+import { CampaignCreativeActionsProvider } from './components/CampaignCreativeActions';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
+import { useCanvasChatBridge } from './hooks/useCanvasChatBridge';
 import { useCampaignStore } from './stores/useCampaignStore';
 
-/**
- * The ask that "Propose via Jaina" puts in the composer.
- *
- * It is PRE-FILLED, not auto-sent. The canvas is a human's edit of a record, and the
- * turn it produces is the one thing that can reach Meta — so the person doing it reads
- * the request before it leaves, and can say more about what changed.
- */
-const PROPOSE_PROMPT =
-  'Propose the campaign on my canvas as a new paid scaffold. Use the structure and names in the canvas block below exactly as given.';
+/** Where "Back to chat" leads: the thread that opened this canvas, else the Jaina tab. */
+export const jainaThreadHref = (sessionId: string | null): string =>
+  sessionId ? `/scale?tab=jaina&sessionId=${encodeURIComponent(sessionId)}` : '/scale?tab=jaina';
 
 const CampaignFlowCanvasPage = ({
   requestedScaffoldId = null,
+  requestedSessionId = null,
 }: {
   /** From `?scaffold=`: the scaffold a Jaina card asked this canvas to load. */
   requestedScaffoldId?: string | null;
+  /** From `?session=`: the Jaina thread that card sits in. */
+  requestedSessionId?: string | null;
 }) => {
   const [isJainaOpen, setIsJainaOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
+  const [creativeRequest, setCreativeRequest] = useState<CampaignCreativeRequest | null>(null);
   const [adAccountId, setAdAccountId] = useState<string | null>(null);
   const dragControls = useDragControls();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -40,41 +52,41 @@ const CampaignFlowCanvasPage = ({
     [activeBrandId, brandSummaries],
   );
 
-  const nodes = useCampaignStore((store) => store.nodes);
-  const edges = useCampaignStore((store) => store.edges);
-  const hydration = useCampaignStore((store) => store.hydration);
-
   /**
-   * The canvas rides along with every turn from THIS chat — it is the canvas page's
-   * assistant, and a question about the graph is unanswerable without the graph. The
-   * try/catch is not decoration: `buildCampaignCanvasPayload` parses its own output, and
-   * a graph it refuses must degrade to a normal chat, never to a blank page.
+   * Every hand-off opens the panel MAXIMIZED, because each ends on something to answer: a
+   * propose or generate turn stops on an approval card whose Approve/Deny footer sits behind
+   * the conversations sidebar at the 420px floating width — rendered, but out of reach.
    */
-  const campaignCanvasPayload = useMemo(() => {
-    try {
-      return buildCampaignCanvasPayload(nodes, edges, {
-        source: 'propose',
-        brandProfileId: activeBrandId,
+  const openChat = useCallback(() => {
+    setIsJainaOpen(true);
+    setIsMaximized(true);
+  }, []);
+  const bridge = useCanvasChatBridge({ adAccountId, openChat });
+  const { deploy } = bridge;
+
+  // Closing the panel unmounts the chat that would settle the request.
+  const { cancel: cancelDeploy, inFlight: deployInFlight } = deploy;
+  React.useEffect(() => {
+    if (!isJainaOpen && deployInFlight) {
+      cancelDeploy('The Jaina panel was closed before the approval opened. Deploy again.');
+    }
+  }, [cancelDeploy, deployInFlight, isJainaOpen]);
+
+  const handleGenerateCreative = useCallback(
+    async (nodeId: string) => {
+      if (!activeBrandId || !adAccountId) throw new Error('Select a brand and ad account first.');
+      const request = await buildCampaignCreativeRequest({
+        ...useCampaignStore.getState(),
+        nodeId,
+        brandId: activeBrandId,
         adAccountId,
       });
-    } catch {
-      return null;
-    }
-  }, [nodes, edges, activeBrandId, adAccountId]);
-
-  const handlePropose = useCallback(() => {
-    setIsJainaOpen(true);
-    // Maximized, because this flow ENDS in a decision. A propose turn finishes on an
-    // approval card whose Approve/Deny footer sits behind the conversations sidebar at
-    // the default 420px floating width — the buttons render, and the pointer never
-    // reaches them. Opening at the wide size is what makes the gate answerable.
-    setIsMaximized(true);
-    setInitialPrompt(
-      hydration
-        ? `${PROPOSE_PROMPT} It started as "${hydration.scaffoldName}" v${hydration.version}.`
-        : PROPOSE_PROMPT,
-    );
-  }, [hydration]);
+      setCreativeRequest(request);
+      setIsJainaOpen(true);
+      setIsMaximized(true);
+    },
+    [activeBrandId, adAccountId],
+  );
 
   const chatDimensions = useMemo(
     () => ({
@@ -89,15 +101,36 @@ const CampaignFlowCanvasPage = ({
       <ReactFlowProvider>
         {/* Main Canvas Area */}
         <div ref={canvasContainerRef} className="relative flex-1 h-full w-full">
-          <CampaignCanvas />
+          <CanvasJainaContext.Provider value={bridge.canvasJaina}>
+            <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+              <CampaignCanvas />
+            </CampaignCreativeActionsProvider>
+          </CanvasJainaContext.Provider>
 
           {/* The record this canvas is showing, and the one way forward from it. */}
-          <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
+          <div className="pointer-events-none absolute top-3 left-1/2 z-40 flex -translate-x-1/2 items-start gap-2">
+            {/* Back to the conversation this canvas was opened from. */}
+            <Link
+              href={jainaThreadHref(requestedSessionId)}
+              className={buttonVariants({
+                variant: 'outline',
+                size: 'sm',
+                className:
+                  'pointer-events-auto shrink-0 gap-1.5 bg-background/90 shadow-sm backdrop-blur',
+              })}
+              data-testid="canvas-back-to-chat"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden />
+              Back to chat
+            </Link>
             <ScaffoldRecordBar
               brandId={activeBrandId}
               requestedScaffoldId={requestedScaffoldId}
               onAdAccountChange={setAdAccountId}
-              onPropose={handlePropose}
+              onPropose={bridge.propose}
+              onDeploy={bridge.deployInChat}
+              deployInFlight={deploy.inFlight}
+              deployRefusal={deploy.refusal}
             />
           </div>
 
@@ -170,9 +203,11 @@ const CampaignFlowCanvasPage = ({
                     brandName={brandName}
                     adAccountId={adAccountId}
                     userId={user?.id ?? null}
-                    campaignCanvasPayload={campaignCanvasPayload}
-                    initialPrompt={initialPrompt}
-                    onInitialPromptConsumed={() => setInitialPrompt(null)}
+                    initialSessionId={requestedSessionId}
+                    campaignCanvasPayload={bridge.campaignCanvasPayload}
+                    {...bridge.chatProps}
+                    requestedCreative={creativeRequest}
+                    onCreativeRequestConsumed={() => setCreativeRequest(null)}
                   />
                 </div>
               </motion.div>

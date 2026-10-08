@@ -2,7 +2,7 @@
 
 // Actions sub-view — the account-wide approvals queue. Each portfolio with pending work
 // renders its own unified queue (budget moves + recommendations) that approves AND executes
-// through the real Meta write path; approved fatigue renewals surface as tracked tasks. The
+// through the real write path of the portfolio's platform; approved fatigue renewals surface as tracked tasks. The
 // standing "ad-level is preview" banner is gone: ad-level rows now carry a per-row danger
 // tooltip inside the queue, so the limit shows exactly where it applies.
 
@@ -13,7 +13,10 @@ import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
 import { nextCycleLabel, soonestNextCycle } from '../format';
 import { hasPendingWork } from '../reportModel';
+import * as typeScale from '../typeScale';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
+import { PlatformChips } from './platforms/PlatformChip';
+import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
 type OptimizerActionsProps = {
@@ -68,17 +71,19 @@ export function OptimizerActions({
   return (
     <div className="space-y-4">
       {portfoliosWithPending.map((portfolio) => (
-        <OptimizerActionsPortfolioGroup
-          key={portfolio.id}
-          brandId={brandId}
-          adAccountId={adAccountId}
-          portfolio={portfolio}
-        />
+        <div key={portfolio.id} className="space-y-1" data-testid="actions-portfolio">
+          <PlatformChips platforms={OPTIMIZER_PORTFOLIO_PLATFORMS} />
+          <OptimizerActionsPortfolioGroup
+            brandId={brandId}
+            adAccountId={adAccountId}
+            portfolio={portfolio}
+          />
+        </div>
       ))}
 
       {renewals.length > 0 ? (
         <div>
-          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className={`${typeScale.label} mb-2 px-1 font-semibold text-muted-foreground`}>
             Approved renewals · tasks ({renewals.length})
           </h3>
           <div className="space-y-2">

@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { CycleItemRow, PortfolioBrief } from '@continuum/contracts';
 import type { HeroView } from '../heroModel';
-import type { NewsCardModel } from './justification';
-import { pickJustification } from './justification';
-import { buildPortfolioNews, capFor, headlineFor, intervalFor } from './newsModel';
+import { buildPortfolioNews } from './newsModel';
 
 type BriefCandidate = PortfolioBrief['candidates'][number];
 
@@ -72,9 +70,6 @@ const brief = (over: Partial<PortfolioBrief> = {}): PortfolioBrief => ({
 const view = (over: Partial<HeroView> = {}): HeroView => ({
   state: 'ready',
   source: 'brief',
-  chart: null,
-  chartReading: null,
-  tiles: [],
   pacingLine: null,
   pacingTone: 'muted',
   brief: brief(),
@@ -84,157 +79,41 @@ const view = (over: Partial<HeroView> = {}): HeroView => ({
   ...over,
 });
 
-describe('headlineFor', () => {
-  it('leads a budget move with the money that moved, and carries the pair', () => {
-    expect(headlineFor(candidate(), item())).toEqual({
-      kind: 'money',
-      value: 66,
-      unit: 'currency_per_day',
-      label: 'a day moved onto it',
-      from: 120,
-      to: 186,
-    });
-  });
-
-  it('says which direction the money went', () => {
-    const down = headlineFor(candidate(), item({ change_abs: -40, final_budget: 80 }));
-    expect(down?.label).toBe('a day moved off it');
-    expect(down?.value).toBe(40);
-  });
-
-  it('declares nothing when the cycle row has no pair to show', () => {
-    expect(headlineFor(candidate(), item({ current_budget: null }))).toBeNull();
-    expect(headlineFor(candidate(), item({ change_abs: 0 }))).toBeNull();
-    expect(headlineFor(candidate(), null)).toBeNull();
-  });
-
-  it('leads a pause that bought nothing with the spend it avoids', () => {
-    const pause = candidate({
-      id: 'rec:1',
-      module: 'pause',
-      kind: 'pause',
-      impact_per_day: 120,
-      results_per_day: 0,
-    });
-    expect(headlineFor(pause, null)).toEqual({
-      kind: 'avoided',
-      value: 120,
-      unit: 'currency_per_day',
-      label: 'a day buying nothing',
-      from: null,
-      to: null,
-    });
-  });
-
-  it('will not call spend "avoided" on a pause that DID buy something', () => {
-    const producing = candidate({
-      module: 'pause',
-      kind: 'pause',
-      impact_per_day: 120,
-      results_per_day: 0.4,
-    });
-    expect(headlineFor(producing, null)).toBeNull();
-  });
-
-  it('invents no figure for a creative or audience candidate', () => {
-    expect(
-      headlineFor(candidate({ module: 'creative', kind: 'variate_creative' }), null),
-    ).toBeNull();
-    expect(
-      headlineFor(candidate({ module: 'audience', kind: 'audience_expand' }), null),
-    ).toBeNull();
-  });
-});
-
-describe('intervalFor', () => {
-  it('passes the engine interval through, point estimate and all', () => {
-    expect(
-      intervalFor(item({ diagnostics: { ci: { lo: 96, hi: 190, cpa: 140, events: 12 } } }), 70),
-    ).toEqual({ low: 96, high: 190, estimate: 140, referenceLabel: 'target', reference: 70 });
-  });
-
-  it('keeps the estimate null when the window bought nothing', () => {
-    const open = intervalFor(
-      item({ diagnostics: { ci: { lo: 96, hi: 192, cpa: 0, events: 0 } } }),
-      70,
-    );
-    expect(open?.estimate).toBeNull();
-  });
-
-  it('refuses a range that is not a range', () => {
-    expect(intervalFor(item({ diagnostics: { ci: { lo: 96, hi: 96 } } }), 70)).toBeNull();
-    expect(intervalFor(item({ diagnostics: { ci: { lo: 96 } } }), 70)).toBeNull();
-    expect(intervalFor(item(), 70)).toBeNull();
-  });
-
-  it('names no reference when the portfolio has no target', () => {
-    const noTarget = intervalFor(
-      item({ diagnostics: { ci: { lo: 96, hi: 190, cpa: 140, events: 12 } } }),
-      null,
-    );
-    expect(noTarget?.referenceLabel).toBeNull();
-  });
-});
-
-describe('capFor', () => {
-  it('names the velocity band when the raw budget was clamped', () => {
-    expect(capFor(item({ diagnostics: { rawBudget: 260, velocityCapped: 186 } }))).toContain(
-      'velocity band',
-    );
-  });
-
-  it('says nothing when the clamp did not bite', () => {
-    expect(capFor(item({ diagnostics: { rawBudget: 186, velocityCapped: 186 } }))).toBeNull();
-  });
-
-  it('names a freeze when the ad set was held', () => {
-    expect(capFor(item({ diagnostics: { freezeReason: 'no_own_budget' } }))).toBe(
-      'Held · no own budget',
-    );
-  });
-});
-
 describe('buildPortfolioNews', () => {
-  it('leads with the hero and its arithmetic, and keeps money as day · month support', () => {
+  it('leads with the hero, its own evidence drawn and the money that moved on top', () => {
     const news = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
     expect(news.lead?.claim).toBe('Move $66/day onto Cold, which buys leads cheaper.');
-    expect(news.lead?.headline?.from).toBe(120);
-    // A headline leads, so the money drops to day · month underneath it.
-    expect(news.lead?.moneyPerDay).toBe(14);
+    expect(news.lead?.visual).toEqual({
+      kind: 'budget_move',
+      from: 120,
+      to: 186,
+      wanted: null,
+      cap: null,
+    });
+    expect(news.lead?.figure).toEqual({
+      value: 66,
+      unit: 'currency_per_day',
+      label: 'a day moved',
+      signed: true,
+    });
+    expect(news.lead?.eyebrow).toBe('Budget · raise');
     expect(news.lead?.impactPerDay).toBe(14);
     expect(news.lead?.cta?.label).toBe('Review the budget moves');
   });
 
-  it('drops the money line when it would only repeat the headline', () => {
-    const pauseBrief = brief({
-      hero: {
-        module: 'pause',
-        candidate_id: 'rec:1',
-        headline: 'Stop $120/day going to Dead.',
-        why: 'No leads in 7 days.',
-        impact_per_day: 120,
-        impact_unit: 'currency',
-        impact_basis: 'spend/day on the ad set',
-        justification: null,
-        confidence_note: null,
-        cta: { kind: 'queue_row', target_id: 'rec:1' },
-      },
-      candidates: [
-        candidate({
-          id: 'rec:1',
-          module: 'pause',
-          kind: 'pause',
-          adset_id: 'as-9',
-          impact_per_day: 120,
-          results_per_day: 0,
+  it('names the ad set above the claim only when the claim does not already say it', () => {
+    const named = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
+    expect(named.lead?.subject).toBeNull();
+    const unnamed = buildPortfolioNews({
+      view: view({
+        brief: brief({
+          hero: { ...brief().hero, headline: 'Move money onto the cheapest ad set.' },
         }),
-      ],
+      }),
+      items: [item()],
+      target: 70,
     });
-    const news = buildPortfolioNews({ view: view({ brief: pauseBrief }), items: [], target: 70 });
-    expect(news.lead?.headline?.kind).toBe('avoided');
-    expect(news.lead?.moneyPerDay).toBeNull();
-    // The tier still has something to read, which is why impactPerDay is a separate field.
-    expect(news.lead?.impactPerDay).toBe(120);
+    expect(unnamed.lead?.subject).toBe('Cold');
   });
 
   it('takes every secondary the brief listed, and never repeats the hero as one', () => {
@@ -272,237 +151,41 @@ describe('buildPortfolioNews', () => {
     expect(news.insights[0]?.claim).toBe('Creative on Warm');
   });
 
-  it('renders every card with no cycle items at all — money leads, month alone beneath', () => {
-    // The production state today: no candidate carries a headline, so the money is the figure
-    // and the support line must not print the same day figure a second time.
+  it('gives every card a visual even with no cycle items and no evidence at all', () => {
     const news = buildPortfolioNews({ view: view(), items: [], target: 70 });
-    expect(news.lead?.headline).toBeNull();
-    expect(news.lead?.interval).toBeNull();
-    expect(news.lead?.moneyPerDay).toBeNull();
+    expect(news.lead?.visual.kind).toBe('strip');
+    expect(news.lead?.figure?.value).toBe(14);
     expect(news.lead?.impactPerDay).toBe(14);
   });
-});
 
-describe('the lead draws a chart only when the chart is about the lead', () => {
-  // A budget hero leads with the pair the cycle wrote down: 120 → 186 a day.
-  const budgetView = (chart: HeroView['chart']) => view({ chart });
-
-  it('withholds the portfolio-wide growth chart from a budget card', () => {
-    // `growthRates` is cost per result across the window. True, and about a different
-    // quantity than "66 a day moved onto it" — which is the confusion, drawn.
+  it('calls a hero with no candidate "nothing to change", and still draws the portfolio', () => {
+    const calm = brief({
+      hero: { ...brief().hero, module: 'none', candidate_id: null, impact_per_day: null },
+      candidates: [],
+    });
     const news = buildPortfolioNews({
-      view: budgetView({
-        shape: 'rates',
-        unit: 'currency',
-        points: [
-          { t: '2026-09-18', a: 81.2, b: 70 },
-          { t: '2026-09-19', a: 77.45, b: 70 },
+      view: view({
+        brief: calm,
+        series: [
+          { date: '2026-09-18', spend: 400, results: 5 },
+          { date: '2026-09-19', spend: 300, results: 5 },
         ],
-        a_label: 'Cost per lead',
-        b_label: 'Target',
-        projected_from: null,
-        gap_per_day: 14,
       }),
       items: [item()],
       target: 70,
     });
-    expect(news.lead?.headline?.from).toBe(120);
-    expect(news.leadChart).toBeNull();
-  });
-
-  it('keeps a chart that draws the pair the card leads with', () => {
-    const news = buildPortfolioNews({
-      view: budgetView({
-        shape: 'rates',
-        unit: 'currency',
-        points: [
-          { t: '2026-09-18', a: 120, b: null },
-          { t: '2026-09-19', a: 186, b: null },
-        ],
-        a_label: 'Daily budget',
-        b_label: 'Daily budget',
-        projected_from: null,
-        gap_per_day: null,
-      }),
-      items: [item()],
+    expect(news.lead?.eyebrow).toBe('Today · nothing to change');
+    expect(news.lead?.subject).toBe('1 ad set');
+    expect(news.lead?.visual).toEqual({
+      kind: 'cost_line',
+      across: 'days',
+      points: [
+        { label: '2026-09-18', cost: 80 },
+        { label: '2026-09-19', cost: 60 },
+      ],
       target: 70,
+      overall: 77.45,
     });
-    expect(news.leadChart?.shape).toBe('rates');
-  });
-
-  it('withholds a chart that does not argue at all, whatever it is about', () => {
-    const news = buildPortfolioNews({
-      view: budgetView({
-        shape: 'transfer',
-        unit: 'currency',
-        from: { label: 'Warm', cost_per_result: 120, spend_per_day: 400 },
-        to: { label: 'Cold', cost_per_result: 186, spend_per_day: 300 },
-        movable_per_day: 66,
-        saving_per_day: 0,
-      }),
-      items: [item()],
-      target: 70,
-    });
-    // The pair IS on it — and a transfer is the arithmetic the sentence already made.
-    expect(news.leadChart).toBeNull();
-  });
-
-  it('is null when there was no chart to begin with', () => {
-    const news = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
-    expect(news.leadChart).toBeNull();
-  });
-
-  it('keeps a pause interval that reaches the avoided money it leads with', () => {
-    const pause = candidate({
-      id: 'rec:r-1',
-      module: 'pause',
-      kind: 'pause',
-      adset_id: 'as-9',
-      impact_per_day: 96,
-      results_per_day: 0,
-      cta: { kind: 'queue_row', target_id: 'rec:r-1' },
-    });
-    const news = buildPortfolioNews({
-      view: view({
-        brief: brief({
-          candidates: [pause],
-          hero: { ...brief().hero, module: 'pause', candidate_id: 'rec:r-1', impact_per_day: 96 },
-        }),
-        chart: {
-          shape: 'interval',
-          unit: 'currency',
-          estimate: null,
-          low: 96,
-          high: 192,
-          reference: 70,
-          reference_label: 'target',
-          at_stake_per_day: 96,
-          no_results: true,
-        },
-      }),
-      items: [],
-      target: 70,
-    });
-    expect(news.lead?.headline?.value).toBe(96);
-    expect(news.leadChart?.shape).toBe('interval');
-  });
-});
-
-describe('the bracket beside the figure has to be about the figure', () => {
-  // Straight off the screenshot that started this: a pause card leading with "$26 a day
-  // buying nothing" and drawing the engine's cost-per-result interval underneath it —
-  // $71 on the left, $339,700,000 on the right, on a portfolio whose whole daily budget
-  // is $324. Three quantities in one border and the upper bound wrong by nine orders.
-  const blownCi = { lo: 71, hi: 339_700_000, cpa: 4_900_000, events: 2 };
-
-  const pauseHero = (ci: Record<string, number>) =>
-    buildPortfolioNews({
-      view: view({
-        brief: brief({
-          hero: {
-            ...brief().hero,
-            module: 'pause',
-            candidate_id: 'rec:1',
-            headline: 'Stop $26/day going to Dead',
-            impact_per_day: 26,
-            impact_basis: 'spend/day on an ad set with 0 results in 7 days',
-          },
-          candidates: [
-            candidate({
-              id: 'rec:1',
-              module: 'pause',
-              kind: 'pause',
-              adset_id: 'as-1',
-              impact_per_day: 26,
-              results_per_day: 0,
-              impact_basis: 'spend/day on an ad set with 0 results in 7 days',
-              cta: { kind: 'queue_row', target_id: 'rec:1' },
-            }),
-          ],
-        }),
-      }),
-      items: [item({ adset_id: 'as-1', diagnostics: { ci } })],
-      target: 35,
-    });
-
-  it('withholds a cost-per-result interval from a money-per-day figure', () => {
-    const news = pauseHero(blownCi);
-    expect(news.lead?.headline?.value).toBe(26);
-    expect(news.lead?.headline?.unit).toBe('currency_per_day');
-    // The engine measured it and the row still holds it — the CARD is what refuses to draw it.
-    expect(intervalFor(item({ diagnostics: { ci: blownCi } }), 35)).not.toBeNull();
-    expect(news.lead?.interval).toBeNull();
-  });
-
-  it('leaves the card with a reading rather than a hole', () => {
-    // No bracket means no bounded layout, so the card says its formula instead.
-    const news = pauseHero(blownCi);
-    expect(pickJustification(news.lead as NewsCardModel)).toBe('open');
-    expect(news.lead?.basis).toContain('0 results');
-  });
-
-  it('keeps an interval the leading figure actually sits inside', () => {
-    const news = pauseHero({ lo: 18, hi: 44, cpa: 26, events: 9 });
-    expect(news.lead?.interval).toEqual({
-      low: 18,
-      high: 44,
-      estimate: 26,
-      referenceLabel: 'target',
-      reference: 35,
-    });
-    expect(pickJustification(news.lead as NewsCardModel)).toBe('bounded');
-  });
-
-  it('does not let the target stand in for a mark — it is carried, never drawn', () => {
-    // `IntervalRule` draws low, high and the estimate's tick. `reference` reaches no ink,
-    // so a figure that only matches the target is not a figure the reader sees agreeing.
-    const news = pauseHero({ lo: 71, hi: 339_700_000, cpa: 4_900_000, events: 2 });
-    expect(news.lead?.interval).toBeNull();
-    const onTarget = buildPortfolioNews({
-      view: view({
-        brief: brief({
-          hero: { ...brief().hero, module: 'pause', candidate_id: 'rec:1', impact_per_day: 35 },
-          candidates: [
-            candidate({
-              id: 'rec:1',
-              module: 'pause',
-              kind: 'pause',
-              adset_id: 'as-1',
-              impact_per_day: 35,
-              results_per_day: 0,
-              cta: { kind: 'queue_row', target_id: 'rec:1' },
-            }),
-          ],
-        }),
-      }),
-      items: [item({ adset_id: 'as-1', diagnostics: { ci: blownCi } })],
-      target: 35,
-    });
-    expect(onTarget.lead?.interval).toBeNull();
-  });
-
-  it('checks the money a headline-less card leads with, not just the headline', () => {
-    // Without a headline the card still prints `impact_per_day` beside the rule, so a
-    // vacuous pass here would let every card written before the vocabulary back in.
-    const news = buildPortfolioNews({
-      view: view({
-        brief: brief({
-          hero: { ...brief().hero, module: 'creative', candidate_id: 'rec:9', impact_per_day: 14 },
-          candidates: [
-            candidate({
-              id: 'rec:9',
-              module: 'creative',
-              kind: 'variate_creative',
-              adset_id: 'as-1',
-            }),
-          ],
-        }),
-      }),
-      items: [item({ adset_id: 'as-1', diagnostics: { ci: blownCi } })],
-      target: 35,
-    });
-    expect(news.lead?.headline).toBeNull();
-    expect(news.lead?.interval).toBeNull();
   });
 });
 
@@ -517,7 +200,7 @@ describe('cards — the row order is the brief’s own ranking', () => {
       ...over,
     });
   const viewOf = (b: PortfolioBrief): HeroView =>
-    ({ brief: b, cta: null, observe: false, chart: null }) as unknown as HeroView;
+    ({ brief: b, cta: null, observe: false }) as unknown as HeroView;
 
   it('leads with the hero when the hero is the maximum, then the rest by money per day', () => {
     const b = three({

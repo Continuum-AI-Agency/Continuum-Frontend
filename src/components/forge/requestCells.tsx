@@ -9,7 +9,9 @@ import {
   type ApiRenderVariable,
   checkAssetSwap,
   classifyLibraryFile,
+  clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
+  isLayerSwitch,
   type MediaAsset,
   readableLayerName,
 } from '@continuum/contracts';
@@ -28,6 +30,7 @@ import {
   MoreHorizontal,
   Plus,
   RotateCcw,
+  TriangleAlert,
   Upload,
   Video,
   X,
@@ -48,9 +51,13 @@ import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import {
+  clipShortBy,
+  effectiveEvidence,
   effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
+  hasSavedDefault,
+  isDefaultValue,
   isEmptyInput,
   MAX_BATCH_ROWS,
   missingInputs,
@@ -59,6 +66,7 @@ import {
   type RequestRowMedia,
   type RowDrop,
   rowBreadcrumb,
+  seededValue,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
@@ -80,6 +88,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
@@ -134,12 +143,16 @@ export type RequestGridMeta = {
   contract: ApiRenderTemplateContract;
   rows: RequestRow[];
   clientErrors: Map<string, Record<string, string>>;
+  /** Fields the server fills from another (see `derivedFrom`); a source of lines takes several. */
+  linkedFields?: ApiRenderVariable[];
   actions: RequestRowActions;
   /** Rows ticked for Render, in grid order — what "Apply to selected" writes to. */
   selectedIds: string[];
   hiddenColumns: number;
   /** A draft already running: the row menu's AI items say so rather than starting a second. */
   generating: boolean;
+  /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
+  liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -147,6 +160,12 @@ export type VariableColumnMeta = { variable: ApiRenderVariable };
 // react-table types `meta` as an empty interface; augmenting it globally would retype every
 // other table in the app, so the one cast lives here.
 const gridMeta = (table: Table<RequestRow>) => table.options.meta as RequestGridMeta;
+
+/** What an empty cell renders: the brand's saved default, else the designer's own copy. */
+const placeholderOf = (variable: ApiRenderVariable) =>
+  typeof variable.defaultValue === 'string' || typeof variable.defaultValue === 'number'
+    ? String(variable.defaultValue)
+    : (variable.sample ?? undefined);
 
 const isMedia = (variable: ApiRenderVariable) =>
   variable.kind === 'image' || variable.kind === 'video';
@@ -161,6 +180,8 @@ function fitTone(verdict: ApiRenderFitVerdict | null) {
   }
   return { variant: 'success' as const, text: 'Fits', title: verdict.why };
 }
+
+const secs = (value: number) => `${value.toFixed(1)}s`;
 
 function MediaPicker({
   variable,
@@ -185,11 +206,26 @@ function MediaPicker({
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
   const Kind = variable.kind === 'video' ? Video : ImageIcon;
+  // An empty slot with a saved Library default renders that default, so it says so. The default
+  // is a bare pin with no sidecar, so it shows the kind's icon rather than a thumbnail.
+  const defaulted = isDefaultValue(variable, value);
   const picked = pins.length
     ? variable.multiple
       ? `${pins.length} picked`
       : (media?.name ?? 'Picked')
-    : 'Choose';
+    : defaulted
+      ? 'Default'
+      : 'Choose';
+  // A video slot plays a fixed stretch of its clip — the render keeps the layer's timing — so its
+  // length rides in the field like a text budget does. A length the Library never stored is read
+  // from the file's own metadata.
+  const clip = variable.clip;
+  const [measured, setMeasured] = useState<{ url: string; sec: number } | null>(null);
+  const clipSec =
+    media?.durationSec ?? (measured?.url === media?.clipUrl ? measured?.sec : undefined);
+  const shortBy = pins.length ? clipShortBy(clip, clipSec) : null;
+  // Same wording as the template editor's badge — one formatter, so the two cannot drift.
+  const clipNeed = clipRequirement(clip)?.detail ?? null;
   // One line whatever was picked: a fixed-width anchor that truncates, controls that never wrap.
   return (
     <div className="flex items-center gap-1.5">
@@ -204,7 +240,18 @@ function MediaPicker({
           <button
             type="button"
             aria-label={`${pins.length ? 'Change' : 'Choose'} ${variable.label}`}
-            title={pins.length ? picked : undefined}
+            title={
+              [
+                pins.length
+                  ? picked
+                  : defaulted
+                    ? 'The template’s saved default — choose to replace'
+                    : null,
+                clipNeed,
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
             className="flex h-7 w-32 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-1.5 text-2xs text-muted-foreground hover:bg-muted/50"
             onClick={() => setOpen(true)}
           >
@@ -218,7 +265,18 @@ function MediaPicker({
               <Kind className="size-3 shrink-0" aria-hidden />
             )}
             <span className="min-w-0 flex-1 truncate text-left">{picked}</span>
-            {!pins.length ? <Library className="size-3 shrink-0" aria-hidden /> : null}
+            {clip ? (
+              <span
+                className={cn(
+                  'shrink-0 font-mono tabular-nums',
+                  shortBy !== null && 'text-warning',
+                )}
+              >
+                {clipRequirement(clip)?.chip}
+              </span>
+            ) : !pins.length ? (
+              <Library className="size-3 shrink-0" aria-hidden />
+            ) : null}
           </button>
         }
       />
@@ -265,6 +323,28 @@ function MediaPicker({
           <Upload className="size-3.5" aria-hidden />
         )}
       </button>
+      {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
+        // biome-ignore lint/a11y/useMediaCaption: read for its length, never shown
+        <video
+          src={media.clipUrl}
+          preload="metadata"
+          muted
+          hidden
+          onLoadedMetadata={(event) => {
+            const sec = event.currentTarget.duration;
+            if (Number.isFinite(sec) && media.clipUrl) setMeasured({ url: media.clipUrl, sec });
+          }}
+        />
+      ) : null}
+      {shortBy !== null && clipSec !== undefined && clip ? (
+        <Badge
+          variant="warning"
+          title={`This clip is ${secs(clipSec)}; the template plays it to ${secs(clip.toSec)}, so it runs out ${secs(shortBy)} early and the layer is empty for the rest.`}
+          className="shrink-0 px-1 py-0 text-2xs"
+        >
+          Short
+        </Badge>
+      ) : null}
       {fit ? (
         <Badge variant={fit.variant} title={fit.title} className="shrink-0 px-1 py-0 text-2xs">
           {fit.text}
@@ -309,8 +389,13 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({ row, invalid }: { row: RequestRow; invalid: boolean }) {
-  if (invalid) return <Badge variant="destructive">Invalid</Badge>;
+function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: string }) {
+  if (invalidReason)
+    return (
+      <Explained why={invalidReason}>
+        <Badge variant="destructive">Invalid</Badge>
+      </Explained>
+    );
   switch (row.check.state) {
     case 'checking':
       return (
@@ -344,13 +429,32 @@ function StatusBadge({ row, invalid }: { row: RequestRow; invalid: boolean }) {
 function InheritanceAction({
   row,
   variable,
+  value,
   actions,
 }: {
   row: RequestRow;
   variable: ApiRenderVariable;
+  value: ApiRenderInputValue | undefined;
   actions: RequestRowActions;
 }) {
-  if (!row.parentId) return null;
+  if (!row.parentId) {
+    // A root inherits nothing; its reset puts back what a new row starts with — the designer's
+    // value, or nothing where a saved default fills it. A media slot's own clear already does that.
+    const restore = seededValue(variable);
+    const canRestore = restore !== undefined || hasSavedDefault(variable);
+    if (isMedia(variable) || !canRestore || isDefaultValue(variable, value)) return null;
+    return (
+      <button
+        type="button"
+        className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+        aria-label={`Reset ${variable.label} to default`}
+        title="Reset to default"
+        onClick={() => actions.setValue(row.id, variable.key, restore)}
+      >
+        <RotateCcw className="size-3" aria-hidden />
+      </button>
+    );
+  }
   const changed = variable.key in row.values || row.clearedKeys.includes(variable.key);
   return changed ? (
     <button
@@ -375,6 +479,26 @@ function InheritanceAction({
   );
 }
 
+/** Marks a cell still holding what the design or a saved default supplied, not typed input. */
+function DefaultTag({
+  variable,
+  value,
+}: {
+  variable: ApiRenderVariable;
+  value: ApiRenderInputValue | undefined;
+}) {
+  const saved = isEmptyInput(variable, value) && hasSavedDefault(variable);
+  return (
+    <Badge
+      variant="muted"
+      title={`${saved ? 'The template’s saved default' : 'From the design'} — ${variable.kind === 'boolean' ? 'switch' : 'type'} to replace`}
+      className="shrink-0 px-1 py-0 text-2xs"
+    >
+      Default
+    </Badge>
+  );
+}
+
 /**
  * A number typed as text. The draft is the source of truth while typing, so `1.` and `-` stay
  * on screen; only a finite number (or an empty cell) is committed to the row.
@@ -384,6 +508,7 @@ function NumberInput({
   value,
   error,
   invalid,
+  muted,
   placeholder,
   onCommit,
 }: {
@@ -391,6 +516,7 @@ function NumberInput({
   value: ApiRenderInputValue | undefined;
   error: string | undefined;
   invalid: boolean;
+  muted: boolean;
   placeholder: string | undefined;
   onCommit: (value: number | undefined) => void;
 }) {
@@ -409,7 +535,11 @@ function NumberInput({
   return (
     <Input
       size={1}
-      className={cn('h-7 text-xs tabular-nums', invalid && 'border-destructive')}
+      className={cn(
+        'h-7 text-xs tabular-nums',
+        muted && 'text-muted-foreground',
+        invalid && 'border-destructive',
+      )}
       type="text"
       inputMode="decimal"
       aria-label={label}
@@ -432,12 +562,18 @@ export function VariableCell({
   table,
 }: CellContext<RequestRow, unknown>) {
   const { variable } = column.columnDef.meta as VariableColumnMeta;
-  const { brandId, contract, rows, clientErrors, actions } = gridMeta(table);
+  const { brandId, contract, rows, clientErrors, actions, liveFit } = gridMeta(table);
   const error = clientErrors.get(row.id)?.[variable.key];
   const value = effectiveValues(rows, row.id)[variable.key];
+  const fit = liveFit.get(row.id)?.get(variable.key);
   // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
   const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
-  const inheritance = <InheritanceAction row={row} variable={variable} actions={actions} />;
+  const inheritance = (
+    <InheritanceAction row={row} variable={variable} value={value} actions={actions} />
+  );
+  // Display only: a default renders muted and tagged, so typed input stands out from it.
+  const isDefault = isDefaultValue(variable, value);
+  const defaultTag = isDefault ? <DefaultTag variable={variable} value={value} /> : null;
 
   if (variable.reserved)
     return (
@@ -450,12 +586,16 @@ export function VariableCell({
 
   if (isMedia(variable)) {
     const dims = effectiveMedia(rows, row.id)[variable.key];
-    const verdict = checkAssetSwap({
-      key: variable.key,
-      placement: variable.placement,
-      asset: dims?.w && dims.h ? { w: dims.w, h: dims.h } : null,
-      neighbours: (contract.layout?.boxes ?? []).filter((box) => box.key !== variable.key),
-    });
+    // A rig-placed slot is answered by the kit's rig arithmetic; every other by the closed form.
+    const verdict =
+      fit?.subject === 'media'
+        ? fit
+        : checkAssetSwap({
+            key: variable.key,
+            placement: variable.placement,
+            asset: dims?.w && dims.h ? { w: dims.w, h: dims.h } : null,
+            neighbours: (contract.layout?.boxes ?? []).filter((box) => box.key !== variable.key),
+          });
     return (
       <div
         title={error}
@@ -479,18 +619,30 @@ export function VariableCell({
     );
   }
 
-  if (variable.kind === 'boolean')
+  if (variable.kind === 'boolean') {
+    // A row that has not set the switch renders what the file authored, so that is what it
+    // shows — reading it as Off hid 253/254's career logo from anyone checking the grid.
+    const authored = variable.sample === 'true' ? true : variable.sample === 'false' ? false : null;
+    // A saved default outranks the file, as it does at render time.
+    const fallback = typeof variable.defaultValue === 'boolean' ? variable.defaultValue : authored;
+    const shown = typeof value === 'boolean' ? value : fallback;
+    const [on, off] = isLayerSwitch(variable.sourceSlotKey) ? ['Shown', 'Hidden'] : ['On', 'Off'];
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <Switch
           size="sm"
-          aria-label={variable.label}
-          checked={value === true}
+          aria-label={readableLayerName(variable.label)}
+          checked={shown === true}
           onCheckedChange={(next) => actions.setValue(row.id, variable.key, next)}
         />
+        <span className="text-2xs text-muted-foreground">
+          {shown === null ? 'As designed' : shown ? on : off}
+        </span>
+        {defaultTag}
         {inheritance}
       </div>
     );
+  }
 
   if (variable.kind === 'enum' && variable.options.length > 0)
     return (
@@ -548,39 +700,68 @@ export function VariableCell({
           value={value}
           error={error}
           invalid={invalid}
-          placeholder={variable.sample ?? undefined}
+          muted={isDefault}
+          placeholder={placeholderOf(variable)}
           onCommit={(next) => actions.setValue(row.id, variable.key, next)}
         />
+        {defaultTag}
         {inheritance}
       </div>
     );
 
-  const used = typeof value === 'string' ? value.length : 0;
+  // A headline set on several layers: one line per layer, the first on this one.
+  const lineFields = (gridMeta(table).linkedFields ?? []).filter(
+    (field) => field.derivedFrom?.key === variable.key && field.derivedFrom.line !== null,
+  );
+  const text = value === undefined ? '' : String(value);
+  const onText = (next: string) =>
+    actions.setValue(row.id, variable.key, next === '' ? undefined : next);
+  const used =
+    typeof value === 'string'
+      ? (lineFields.length ? (value.split(/\r?\n/)[0] ?? '') : value).length
+      : 0;
   const budget = variable.charBudget;
   const over = budget !== null && used > budget;
+  const misfit = fit?.subject === 'text' && fit.state === 'clipped' ? fit.why : null;
   return (
     <div className="flex min-w-32 items-center gap-1.5">
       {/* The count sits inside the field, shown while typing or once over: width is for the text. */}
       <div className="group/count relative min-w-0 flex-1">
-        <Input
-          size={1}
-          className={cn(
-            'h-7 text-xs',
-            budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
-            invalid && 'border-destructive',
-          )}
-          aria-label={variable.label}
-          title={error}
-          placeholder={variable.sample ?? undefined}
-          value={value === undefined ? '' : String(value)}
-          onChange={(event) =>
-            actions.setValue(
-              row.id,
-              variable.key,
-              event.target.value === '' ? undefined : event.target.value,
-            )
-          }
-        />
+        {lineFields.length ? (
+          <Textarea
+            rows={lineFields.length + 1}
+            className={cn(
+              'min-h-0 resize-none py-1 text-xs',
+              isDefault && 'text-muted-foreground',
+              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
+              misfit && 'border-warning',
+              invalid && 'border-destructive',
+            )}
+            aria-label={`${variable.label} — one line each for ${[variable, ...lineFields].map((field) => field.label).join(', ')}`}
+            title={error}
+            placeholder={[variable, ...lineFields]
+              .map((field) => field.sample ?? field.label)
+              .join('\n')}
+            value={text}
+            onChange={(event) => onText(event.target.value)}
+          />
+        ) : (
+          <Input
+            size={1}
+            className={cn(
+              'h-7 text-xs',
+              isDefault && 'text-muted-foreground',
+              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
+              misfit && 'border-warning',
+              invalid && 'border-destructive',
+            )}
+            aria-label={variable.label}
+            title={error}
+            placeholder={placeholderOf(variable)}
+            value={text}
+            onChange={(event) => onText(event.target.value)}
+          />
+        )}
         {budget !== null ? (
           <span
             className={cn(
@@ -593,6 +774,12 @@ export function VariableCell({
           </span>
         ) : null}
       </div>
+      {misfit ? (
+        <Explained why={`Doesn’t fit the design: ${misfit}`}>
+          <TriangleAlert className="size-3.5 text-warning" aria-label="Doesn’t fit the design" />
+        </Explained>
+      ) : null}
+      {defaultTag}
       {inheritance}
     </div>
   );
@@ -841,9 +1028,15 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
   }
   const effective = effectiveOutputIds(rows, row.id);
   const selectedIds = effective.length ? effective : outputs.map((output) => output.id);
+  // Two outputs at one ratio are arrangements of the design ("Model in front" / "Headline in
+  // front"), which the ratio alone cannot tell apart — those chips carry their name.
   const ratios = outputs
     .filter((output) => selectedIds.includes(output.id))
-    .map((output) => output.ratio ?? output.label);
+    .map((output) =>
+      output.ratio && outputs.filter((other) => other.ratio === output.ratio).length === 1
+        ? output.ratio
+        : output.label,
+    );
   const inheritedFrom =
     row.parentId && row.outputIds.length === 0
       ? formatsSource(rows, row)?.label.trim() || 'Untitled'
@@ -933,7 +1126,8 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
   const { contract, rows, clientErrors } = gridMeta(table);
-  const errorKeys = Object.keys(clientErrors.get(row.id) ?? {});
+  const errors = clientErrors.get(row.id) ?? {};
+  const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
   // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
   if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
@@ -946,7 +1140,17 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       </Badge>
     );
   }
-  return <StatusBadge row={row} invalid={errorKeys.length > 0} />;
+  return (
+    <StatusBadge
+      row={row}
+      invalidReason={Object.entries(errors)
+        .map(([key, message]) => {
+          const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;
+          return `${readableLayerName(label)}: ${message}`;
+        })
+        .join('; ')}
+    />
+  );
 }
 
 /**
@@ -963,10 +1167,14 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
   const cells = row
     .getAllCells()
     .filter((cell) => (cell.column.columnDef.meta as Partial<VariableColumnMeta>)?.variable);
+  const evidenceByKey = effectiveEvidence(table.options.data, rowId);
+  const hasDraftEvidence = row.original.evidence !== undefined;
+  const values = effectiveValues(table.options.data, rowId);
   return (
     <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-xs">
       {cells.map((cell) => {
         const { variable } = cell.column.columnDef.meta as VariableColumnMeta;
+        const evidence = evidenceByKey[variable.key];
         return (
           <Fragment key={cell.id}>
             <dt className="truncate text-muted-foreground" title={variable.label}>
@@ -974,6 +1182,15 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
             </dt>
             <dd className="min-w-0 [&_input]:w-full">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              {hasDraftEvidence && !variable.reserved && variable.key in values ? (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {evidence?.kind === 'document'
+                    ? `Source: ${evidence.name}${evidence.sheet ? ` · ${evidence.sheet}` : ''} — “${evidence.excerpt}”`
+                    : evidence?.kind === 'media'
+                      ? 'Source: selected Library asset'
+                      : 'Needs review'}
+                </p>
+              ) : null}
             </dd>
           </Fragment>
         );

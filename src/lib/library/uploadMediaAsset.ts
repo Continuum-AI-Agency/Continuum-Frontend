@@ -11,10 +11,13 @@
 
 import {
   type AssetPreviewState,
-  classifyLibraryFile,
+  classifyLibraryFileOrGeneric,
   completeMcpUploadIntentRequestSchema,
   completeMcpUploadIntentResponseSchema,
+  LIBRARY_LONG_RECORDING_SEC,
+  LIBRARY_UPLOAD_MAX_BYTES,
   type LibraryUploadTicket,
+  libraryUploadRefusal,
   libraryUploadTicketSchema,
   type PinnedLibraryImageRef,
   registerMediaErrorSchema,
@@ -23,8 +26,13 @@ import {
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { attachAssetPreview } from './assetPreview';
-import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
-import { type attachVideoPoster, isVideoMimeType, probeVideoDurationSec } from './videoPoster';
+import { requestLibraryPreviewProxy } from './previewProxy';
+import {
+  type ResumableUploadProgress,
+  resumableStorageUpload,
+  TUS_CHUNK_SIZE_BYTES,
+} from './resumableStorageUpload';
+import { type attachVideoPoster, isVideoMimeType, probeMediaDurationSec } from './videoPoster';
 
 export type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -34,16 +42,47 @@ export const MEDIA_LIBRARY_BUCKET = 'media-library';
 // requires a non-empty one and derives kind 'file' for non-image/video.
 const FALLBACK_MIME_TYPE = 'application/octet-stream';
 const MAX_BUFFERED_CHECKSUM_BYTES = 64 * 1024 * 1024;
-export const MAX_PROJECT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
+
+// The Supabase project-GLOBAL storage upload limit, from the contracts registry (measured
+// there). Storage's own 413 is mapped to the same sentence below regardless.
+export const LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES = LIBRARY_UPLOAD_MAX_BYTES;
+
+const BYTES_PER_MB = 1024 * 1024;
+
+export function uploadTooLargeMessage(file: { name: string; size: number }): string {
+  const sizeMb = (file.size / BYTES_PER_MB).toFixed(1).replace(/\.0$/, '');
+  const capMb = LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES / BYTES_PER_MB;
+  return `${file.name} is ${sizeMb} MB — uploads are capped at ${capMb} MB right now.`;
+}
+
+/**
+ * The refusal to show before any network call, or null: the Storage cap, the forge's
+ * project-file cap, or a font (which belongs in the brand font store).
+ */
+export function uploadSizeRefusal(file: {
+  name: string;
+  size: number;
+  type?: string;
+}): string | null {
+  return libraryUploadRefusal({ fileName: file.name, mimeType: file.type, sizeBytes: file.size });
+}
+
+// Storage says "The object exceeded the maximum allowed size" on a signed PUT
+// and a bare 413 on TUS; both mean the cap above, so both read as that sentence.
+function isStorageSizeRefusal(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /exceeded the maximum allowed size|\(413\)/i.test(message);
+}
 
 function resolveMimeType(file: File): string {
   return file.type || FALLBACK_MIME_TYPE;
 }
 
 // sha256 hex of the file bytes, sent as `checksum` on register. Seeds the
-// future creative-DNA join against paid_media.content_hash. Fail-soft: a
+// future creative-DNA join against paid_media.content_hash, and is what a
+// re-dropped file is matched on (findExistingAssetByContent). Fail-soft: a
 // digest failure (e.g. a file too large to buffer) never blocks the upload.
-async function computeChecksum(file: File): Promise<string | null> {
+export async function computeChecksum(file: File): Promise<string | null> {
   if (file.size > MAX_BUFFERED_CHECKSUM_BYTES) return null;
   try {
     const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -63,6 +102,8 @@ export interface UploadMediaAssetResult {
   thumbnailPath: string | null;
   versionId: string;
   previewState: AssetPreviewState;
+  /** Container duration, including WebM recordings whose HTML duration is infinite. */
+  durationSec?: number;
 }
 
 export interface UploadMediaAssetDeps {
@@ -70,10 +111,70 @@ export interface UploadMediaAssetDeps {
   /** Injected for tests; decodes a frame in the browser and persists it. */
   attachPoster?: typeof attachVideoPoster;
   attachPreview?: typeof attachAssetPreview;
-  probeDuration?: typeof probeVideoDurationSec;
+  probeDuration?: typeof probeMediaDurationSec;
+  requestServerPreview?: typeof requestLibraryPreviewProxy;
   resumableUpload?: typeof resumableStorageUpload;
   supabaseUrl?: string;
   anonKey?: string;
+  /** Where a resumable upload remembers itself across a reload; null turns it off. */
+  resumeStore?: ResumeStore | null;
+}
+
+type ResumeStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+// A resumable upload survives a reload or a closed tab: its ticket and TUS URL are kept
+// under the file's fingerprint, so choosing the same file again continues from Storage's
+// offset instead of byte 0. Two hours is the life of the signed upload ticket. Best effort
+// throughout — no storage (private window, quota) just means a fresh upload.
+const RESUME_KEY_PREFIX = 'continuum:library-upload-resume:';
+const RESUME_TTL_MS = 2 * 60 * 60 * 1000;
+
+export function uploadResumeKey(brandId: string, file: File): string {
+  return `${RESUME_KEY_PREFIX}${brandId}:${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function defaultResumeStore(): ResumeStore | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readSavedResume(
+  store: ResumeStore | null,
+  key: string,
+  now = Date.now(),
+): UploadResumeState | null {
+  try {
+    const raw = store?.getItem(key);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { ticket?: unknown; uploadUrl?: unknown; savedAt?: unknown };
+    const ticket = libraryUploadTicketSchema.safeParse(saved.ticket);
+    const fresh = typeof saved.savedAt === 'number' && now - saved.savedAt < RESUME_TTL_MS;
+    if (!ticket.success || !fresh || typeof saved.uploadUrl !== 'string') {
+      store?.removeItem(key);
+      return null;
+    }
+    return { ticket: ticket.data, uploadUrl: saved.uploadUrl };
+  } catch {
+    return null;
+  }
+}
+
+function saveResume(store: ResumeStore | null, key: string, state: UploadResumeState): void {
+  if (!state.uploadUrl) return;
+  try {
+    store?.setItem(key, JSON.stringify({ ...state, savedAt: Date.now() }));
+  } catch {
+    // Quota or a private window: the upload still runs, it just cannot outlive the page.
+  }
+}
+
+function forgetResume(store: ResumeStore | null, key: string): void {
+  try {
+    store?.removeItem(key);
+  } catch {}
 }
 
 export type UploadResumeState = {
@@ -84,6 +185,7 @@ export type UploadResumeState = {
 export type UploadMediaAssetParams = {
   file: File;
   brandId: string;
+  templateVariantOf?: string;
   signal?: AbortSignal;
   resume?: UploadResumeState | null;
   onResumeState?: (state: UploadResumeState) => void;
@@ -142,7 +244,7 @@ async function invokeLibraryUpload(
  *  route to storage without also inheriting `register`'s `source:"upload"` row. */
 export async function signLibraryUpload(
   supabase: SupabaseBrowserClient,
-  body: { brandId: string; fileName: string; mimeType: string },
+  body: { brandId: string; fileName: string; mimeType: string; sizeBytes?: number },
 ): Promise<LibraryUploadTicket> {
   const data = await invokeLibraryUpload(supabase, { action: 'sign_upload', ...body });
   const parsed = libraryUploadTicketSchema.safeParse(data);
@@ -165,11 +267,19 @@ export async function uploadToLibraryTicket(
 }
 
 function isProjectFile(file: File): boolean {
-  const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
-  return format.accepted && format.originalKind === 'file';
+  return (
+    classifyLibraryFileOrGeneric({ fileName: file.name, mimeType: file.type }).originalKind ===
+    'file'
+  );
 }
 
-async function uploadProjectFile(
+// TUS: chunked, resumable after a pause or a dropped connection. Used for
+// project files and for any file bigger than one chunk; smaller files go in one PUT.
+function isResumableUpload(file: File): boolean {
+  return isProjectFile(file) || file.size > TUS_CHUNK_SIZE_BYTES;
+}
+
+async function uploadResumable(
   supabase: SupabaseBrowserClient,
   ticket: LibraryUploadTicket,
   params: UploadMediaAssetParams,
@@ -203,19 +313,43 @@ export async function uploadMediaAsset(
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
   const { file, brandId } = params;
   const mimeType = resolveMimeType(file);
-  if (isProjectFile(file) && file.size > MAX_PROJECT_FILE_BYTES) {
-    throw new Error('file_too_large: Project files must be 5 GB or smaller');
-  }
+  const refusal = uploadSizeRefusal(file);
+  if (refusal) throw new Error(refusal);
 
+  const resumeStore = deps.resumeStore === undefined ? defaultResumeStore() : deps.resumeStore;
+  const resumeKey = uploadResumeKey(brandId, file);
+  const resume = params.resume ?? readSavedResume(resumeStore, resumeKey);
   const ticket =
-    params.resume?.ticket ??
-    (await signLibraryUpload(supabase, { brandId, fileName: file.name, mimeType }));
-  params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
-  if (isProjectFile(file)) {
-    await uploadProjectFile(supabase, ticket, params, deps);
-  } else {
-    await uploadToLibraryTicket(supabase, ticket, file);
-    params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
+    resume?.ticket ??
+    (await signLibraryUpload(supabase, {
+      brandId,
+      fileName: file.name,
+      mimeType,
+      sizeBytes: file.size,
+    }));
+  params.onResumeState?.({ ticket, uploadUrl: resume?.uploadUrl ?? null });
+  try {
+    if (isResumableUpload(file)) {
+      await uploadResumable(
+        supabase,
+        ticket,
+        {
+          ...params,
+          resume,
+          onResumeState: (state) => {
+            saveResume(resumeStore, resumeKey, state);
+            params.onResumeState?.(state);
+          },
+        },
+        deps,
+      );
+    } else {
+      await uploadToLibraryTicket(supabase, ticket, file);
+      params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
+    }
+  } catch (error) {
+    if (isStorageSizeRefusal(error)) throw new Error(uploadTooLargeMessage(file), { cause: error });
+    throw error;
   }
 
   const checksum = await computeChecksum(file);
@@ -225,11 +359,12 @@ export async function uploadMediaAsset(
       ? 'skipped_large_file'
       : 'unknown';
   // Read before register because register is what enqueues analysis, and analysis
-  // needs the duration to decide whether this is long-form. Videos only, and never
+  // needs the duration to decide whether this is long-form. Video and audio, and never
   // fatal: a null just leaves analyze_media without that signal.
-  const durationSec = isVideoMimeType(mimeType)
-    ? await (deps.probeDuration ?? probeVideoDurationSec)(file)
-    : null;
+  const durationSec =
+    isVideoMimeType(mimeType) || mimeType.startsWith('audio/')
+      ? await (deps.probeDuration ?? probeMediaDurationSec)(file)
+      : null;
 
   const data = await invokeLibraryUpload(supabase, {
     action: 'register',
@@ -242,11 +377,32 @@ export async function uploadMediaAsset(
     sizeBytes: file.size,
     ...(checksum ? { checksum } : {}),
     integrityState,
+    ...(params.templateVariantOf ? { templateVariantOf: params.templateVariantOf } : {}),
     ...(durationSec === null ? {} : { durationSec }),
   });
 
   const ok = registerMediaResponseSchema.safeParse(data);
   if (ok.success) {
+    forgetResume(resumeStore, resumeKey);
+    // A recording past analyze_media's budget is transcribed on the server (chunked through
+    // Continuum-Render), which the server preview starts. Videos always reach it through
+    // their preview; a browser-playable recording needs no preview, so it is asked here.
+    if (
+      mimeType.startsWith('audio/') &&
+      durationSec !== null &&
+      durationSec > LIBRARY_LONG_RECORDING_SEC
+    ) {
+      void (deps.requestServerPreview ?? requestLibraryPreviewProxy)({
+        brandId,
+        assetId: ok.data.assetId,
+        assetVersionId: ok.data.versionId,
+      }).catch((error: unknown) => {
+        console.warn(
+          '[library/uploadMediaAsset] long-recording transcription request failed',
+          error,
+        );
+      });
+    }
     // The poster rides on top of an upload that has ALREADY succeeded: the row
     // exists and the analysis pipeline is running. So a poster failure of any
     // kind — decode, encode, network, an unexpected throw from an injected dep —
@@ -275,6 +431,7 @@ export async function uploadMediaAsset(
       signedUrl: ok.data.signedUrl,
       thumbnailPath,
       previewState,
+      ...(durationSec === null ? {} : { durationSec }),
     };
   }
   const failed = registerMediaErrorSchema.safeParse(data);

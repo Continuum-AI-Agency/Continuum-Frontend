@@ -17,7 +17,15 @@ import type { AccountCandidate, CandidateHeadline } from '@continuum/contracts';
 import { perPeriod } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatHeadline, formatPercent, formatPerPeriod } from '../../format';
+import { HeroFigure, type HeroFigureKind } from '../../components/HeroFigure';
+import {
+  type FigureUnit,
+  figureProps,
+  formatCurrency,
+  formatHeadline,
+  formatPercent,
+  formatPerPeriod,
+} from '../../format';
 
 /** The calm rhythm. One short rule breathes inside the first fifth of it and rests for the rest. */
 export const CALM_SECONDS = 5;
@@ -59,10 +67,12 @@ export function CalmRule({ play, testId }: { play: boolean; testId?: string }) {
 /** How large the leading figure sits. The card leads a screen; a row leads a line. */
 export type HeadlineSize = 'row' | 'column' | 'card';
 
-const FIGURE_SIZE: Record<HeadlineSize, string> = {
-  row: 'text-base',
-  column: 'text-xl',
-  card: 'text-3xl',
+/** A column's figure is a headline figure and the card's is the account lead figure; a row's
+ *  sits inline in its line and is not a hero figure at all. */
+const FIGURE_KIND: Record<HeadlineSize, HeroFigureKind | null> = {
+  row: null,
+  column: 'headline',
+  card: 'lead',
 };
 
 /** One side of a `from → to`, printed in the headline's own unit. */
@@ -70,6 +80,13 @@ function sideFigure(unit: CandidateHeadline['unit'], value: number, currency: st
   if (unit === 'percent') return formatPercent(value);
   if (unit === 'currency_per_day') return formatCurrency(value, currency);
   return value.toLocaleString('en-US');
+}
+
+/** The headline's unit in the figure-provenance vocabulary (see `figureProps`). */
+export function headlineFigureUnit(unit: CandidateHeadline['unit']): FigureUnit {
+  if (unit === 'percent') return 'percent';
+  if (unit === 'currency_per_day') return 'currency';
+  return 'count';
 }
 
 /**
@@ -84,26 +101,45 @@ export function HeadlineFigure({
   currency,
   size = 'row',
   testId,
+  figureKey = 'candidate',
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   size?: HeadlineSize;
   testId?: string;
+  /** The surface's name for this figure, e.g. `account-lead` → `account-lead.figure`. */
+  figureKey?: string;
 }) {
   const lead = candidate.headline
     ? formatHeadline(candidate.headline, currency)
     : { figure: formatCurrency(candidate.impact_per_day, currency), label: '/day' };
+  const provenance = candidate.headline
+    ? figureProps(
+        `${figureKey}.figure`,
+        candidate.headline.value,
+        currency,
+        'none',
+        headlineFigureUnit(candidate.headline.unit),
+      )
+    : figureProps(`${figureKey}.figure`, candidate.impact_per_day, currency);
   return (
     <p
-      className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
+      className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground"
       data-headline={candidate.headline?.kind ?? 'money_fallback'}
       data-testid={testId}
     >
-      <span
-        className={cn('font-mono font-semibold tabular-nums text-foreground', FIGURE_SIZE[size])}
-      >
-        {lead.figure}
-      </span>
+      {FIGURE_KIND[size] ? (
+        <HeroFigure className="text-foreground" kind={FIGURE_KIND[size]} {...provenance}>
+          {lead.figure}
+        </HeroFigure>
+      ) : (
+        <span
+          className="font-mono font-semibold text-base text-foreground tabular-nums"
+          {...provenance}
+        >
+          {lead.figure}
+        </span>
+      )}
       <span className="text-foreground">{lead.label}</span>
     </p>
   );
@@ -119,17 +155,25 @@ export function HeadlineComparison({
   candidate,
   currency,
   testId,
+  figureKey = 'candidate',
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   testId?: string;
+  figureKey?: string;
 }) {
   const headline = candidate.headline;
   if (!headline || headline.from == null || headline.to == null) return null;
+  const unit = headlineFigureUnit(headline.unit);
   return (
-    <p className="text-3xs text-muted-foreground tabular-nums" data-testid={testId}>
-      {sideFigure(headline.unit, headline.from, currency)} →{' '}
-      {sideFigure(headline.unit, headline.to, currency)}
+    <p className="text-xs text-muted-foreground tabular-nums" data-testid={testId}>
+      <span {...figureProps(`${figureKey}.from`, headline.from, currency, 'none', unit)}>
+        {sideFigure(headline.unit, headline.from, currency)}
+      </span>{' '}
+      →{' '}
+      <span {...figureProps(`${figureKey}.to`, headline.to, currency, 'none', unit)}>
+        {sideFigure(headline.unit, headline.to, currency)}
+      </span>
     </p>
   );
 }
@@ -145,18 +189,30 @@ export function MoneyLine({
   candidate,
   currency,
   testId,
+  figureKey = 'candidate',
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   testId?: string;
+  figureKey?: string;
 }) {
   const { month } = perPeriod(candidate.impact_per_day);
   const money = candidate.headline
     ? formatPerPeriod(candidate.impact_per_day, currency)
     : `${formatCurrency(month, currency)}/mo`;
+  const provenance = figureProps(
+    `${figureKey}.money`,
+    candidate.impact_per_day,
+    currency,
+    'none',
+    candidate.headline ? 'per-period' : 'per-month',
+  );
   return (
-    <p className="text-2xs text-muted-foreground tabular-nums" data-testid={testId}>
-      <span className="text-foreground">{money}</span> · {candidate.result_label}
+    <p className="text-xs text-muted-foreground tabular-nums" data-testid={testId}>
+      <span className="text-foreground" {...provenance}>
+        {money}
+      </span>{' '}
+      · {candidate.result_label}
     </p>
   );
 }

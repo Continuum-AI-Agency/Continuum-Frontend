@@ -1,3 +1,4 @@
+import type { OrganicMetricPlatform } from '@continuum/contracts';
 import type {
   OrganicMetrics,
   OrganicPost,
@@ -202,7 +203,7 @@ const ACCOUNT_METRIC_ROWS: Array<{ label: string; key: keyof OrganicMetrics }> =
 ];
 
 export function buildOrganicReportCsv(params: {
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  platform: OrganicMetricPlatform;
   accountName: string;
   generatedAt: string;
   accountRangeSince: string;
@@ -339,7 +340,7 @@ function fmtNumber(value: number) {
 }
 
 export function buildOrganicReportHtml(params: {
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  platform: OrganicMetricPlatform;
   accountName: string;
   generatedAt: string;
   accountRangeSince: string;

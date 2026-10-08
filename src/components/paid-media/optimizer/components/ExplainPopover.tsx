@@ -31,7 +31,7 @@ export function ExplainPopover({
       <PopoverTrigger
         aria-label={`Why: ${title}`}
         className={cn(
-          'inline-flex items-center gap-1 rounded text-2xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           className,
         )}
         type="button"

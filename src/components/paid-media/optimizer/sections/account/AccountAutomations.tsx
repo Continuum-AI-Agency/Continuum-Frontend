@@ -24,6 +24,7 @@ import {
   useInsightApprovalMutations,
   useOptimizerAccountRead,
 } from '../../useOptimizerData';
+import { staleCount } from '../portfolioStaleness';
 import { FamilyCeilings } from './FamilyCeilings';
 
 export type AccountAutomationsProps = {
@@ -53,6 +54,8 @@ export function AccountAutomations({
   const defaults = accountRead.data?.read?.ceiling_defaults ?? null;
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
   const stopped = autopilot.filter((portfolio) => portfolio.autopilot_paused).length;
+  // Autopilot that has missed a cycle runs nothing; the meta line says so beside "stopped".
+  const stale = staleCount(autopilot);
 
   return (
     <div className="space-y-3">
@@ -80,9 +83,10 @@ export function AccountAutomations({
       >
         <SectionHeader
           meta={
-            <span className="text-3xs text-muted-foreground" data-testid="portfolio-autonomy-meta">
+            <span className="text-xs text-muted-foreground" data-testid="portfolio-autonomy-meta">
               {autopilot.length} of {portfolios.length} on autopilot
               {stopped > 0 ? ` · ${stopped} stopped` : ''}
+              {stale > 0 ? ` · ${stale} stale` : ''}
             </span>
           }
           title="Per portfolio"
@@ -96,7 +100,7 @@ export function AccountAutomations({
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground text-xs">{portfolio.name}</p>
-                <p className="text-3xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {humanize(portfolio.objective)} · {waitingLine(portfolio)}
                 </p>
               </div>
@@ -107,7 +111,7 @@ export function AccountAutomations({
                   scopes={portfolio.autopilot_scopes ?? null}
                 />
                 <Button
-                  className="h-7 px-2 text-2xs"
+                  className="h-7 px-2 text-xs"
                   onClick={() => onManagePortfolio(portfolio.id)}
                   size="sm"
                   type="button"

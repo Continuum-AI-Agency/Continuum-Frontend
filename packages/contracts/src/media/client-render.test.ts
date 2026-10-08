@@ -3,11 +3,26 @@ import { createEditorProjectV2 } from '../ai-studio/editor-project-reducer';
 import {
   claimClientRenderJobRequestSchema,
   clientRenderExecutionSpecSchema,
+  clientRenderJobInputManifestSchema,
   clientRenderJobSchema,
-  hyperframesClientRenderWorkSchema,
 } from './client-render';
 
 describe('client render contracts', () => {
+  it('accepts a render with no inputs (a text-only edit draws on its background)', () => {
+    expect(clientRenderJobInputManifestSchema.parse([])).toEqual([]);
+    const input = (position: number) => ({
+      position,
+      kind: 'video' as const,
+      sourceId: `clip-${position}`,
+      label: `Clip ${position}`,
+    });
+    expect(clientRenderJobInputManifestSchema.safeParse([input(0), input(0)]).success).toBe(false);
+    expect(
+      clientRenderJobInputManifestSchema.safeParse(Array.from({ length: 101 }, (_, i) => input(i)))
+        .success,
+    ).toBe(false);
+  });
+
   it('accepts captioned UGC metadata on a Planner reel render', () => {
     expect(
       clientRenderExecutionSpecSchema.safeParse({
@@ -216,21 +231,5 @@ describe('client render contracts', () => {
       completedAt: new Date().toISOString(),
     });
     expect(result.success).toBe(true);
-  });
-
-  it('can resume finalization from an already registered HyperFrames output', () => {
-    expect(
-      hyperframesClientRenderWorkSchema.parse({
-        kind: 'finalize',
-        revisionId: '11111111-1111-4111-8111-111111111111',
-        fingerprint: 'f'.repeat(64),
-        assetId: '22222222-2222-4222-8222-222222222222',
-      }),
-    ).toEqual({
-      kind: 'finalize',
-      revisionId: '11111111-1111-4111-8111-111111111111',
-      fingerprint: 'f'.repeat(64),
-      assetId: '22222222-2222-4222-8222-222222222222',
-    });
   });
 });

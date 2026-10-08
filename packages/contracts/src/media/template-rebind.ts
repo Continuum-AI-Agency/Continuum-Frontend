@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { templateParseSchema } from './template-source';
 
 export const templateRebindSlotSchema = z
   .object({
@@ -18,6 +19,7 @@ export const templateRebindPreviewSchema = z
     versionId: z.string().uuid(),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
     slots: z.array(templateRebindSlotSchema),
+    missingFootage: templateParseSchema.shape.missingFootage,
     requiresReview: z.boolean(),
   })
   .strict();

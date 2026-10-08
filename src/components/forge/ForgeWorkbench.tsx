@@ -7,16 +7,21 @@ import {
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fileSha256, matchDroppedFile, uploadRefusal } from '@/components/forge/ForgeProjectDrop';
-import { PendingApprovals } from '@/components/forge/PendingApprovals';
+import {
+  fileSha256,
+  isForgeDesignFile,
+  matchDroppedFile,
+  uploadRefusal,
+} from '@/components/forge/ForgeProjectDrop';
+import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
-import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
+import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import {
   type SharedTemplate,
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
-import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
@@ -33,12 +38,17 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
   discoverWorkspaceTemplates,
   fetchTemplateSources,
+  loadWorkspaceTemplates,
   renameTemplateSource,
   setTemplateAdoption,
+  uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplateImports';
 
 // Forge — bring your own After Effects project.
 //
@@ -46,35 +56,20 @@ import {
 // same `media-source` bucket and becomes the same `media.assets` row. This screen is where you
 // work on it — find it in the gallery, open it, and say what its variables mean.
 
-/**
- * What the brand's workspaces hold, split in two.
- *
- * Templates built from this brand's own uploads lend their build name to the matching card, so a
- * template nobody titled still reads as what it was built as. Everything else is "shared": discovery
- * ends at an intersection — what the workspace holds ∩ what this brand has been granted — so a brand
- * nobody granted anything sees an empty picker however much is really there, and this is that list
- * with the grant as a button.
- *
- * ONE read, whatever the brand's topology. This used to list the brand's workspaces and fan a
- * discover call out per workspace from the browser; the server merges them now, and each row
- * carries the binding it came from so adoption still names the right one.
- */
-async function loadWorkspaceTemplates(brandId: string): Promise<WorkspaceTemplate[]> {
-  // Advisory: a brand with no binding yet has no workspace to read, which is a normal state for a
-  // new tenant and must not put an error on the page.
-  return discoverWorkspaceTemplates(brandId)
-    .then((result) => result.items)
-    .catch(() => []);
-}
-
 function splitWorkspaceTemplates(
   items: WorkspaceTemplate[],
-  ownAssetIds: Set<string>,
+  ownSources: TemplateSourceSummary[],
 ): { shared: SharedTemplate[]; buildNames: Map<string, string> } {
   const buildNames = new Map<string, string>();
   const shared: SharedTemplate[] = [];
+  const sourceById = new Map(ownSources.map((source) => [source.assetId, source]));
   for (const item of items) {
-    if (item.sourceAssetId && ownAssetIds.has(item.sourceAssetId)) {
+    const ownSource = item.sourceAssetId ? sourceById.get(item.sourceAssetId) : null;
+    if (
+      item.sourceAssetId &&
+      ownSource &&
+      (ownSource.templateKey === item.templateKey || (!ownSource.templateKey && !item.granted))
+    ) {
       buildNames.set(item.sourceAssetId, templateDisplayName(item.name));
       continue;
     }
@@ -86,6 +81,7 @@ function splitWorkspaceTemplates(
       granted: item.granted,
       updatedAt: item.updatedAt,
       workspaceId: item.bindingId,
+      sourceAssetId: item.sourceAssetId,
     });
   }
   return { shared, buildNames };
@@ -95,17 +91,29 @@ export function ForgeWorkbench({
   brandId,
   brandName,
   onOpenRender,
+  templateIntent,
+  onTemplateIntentConsumed,
 }: {
   brandId: string;
   brandName?: string;
   /** Jump to the Render tab with a template (and optionally a render set) loaded. */
   onOpenRender?: (intent: ForgeRenderIntent) => void;
+  /** A template to open from elsewhere on the page — its settings unless it names a tab. */
+  templateIntent?: ForgeTemplateIntent;
+  /** The workbench has taken `templateIntent`; the shell drops it so a remount never replays it. */
+  onTemplateIntentConsumed?: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<string | undefined>();
+  // The composition to land on in Edit layers — an output row's Edit names its own.
+  const [detailComp, setDetailComp] = useState<string | undefined>();
   // The `sharedTemplateId` of the open shared template. Keyed by id, not held as an object, so a
   // grant switched off elsewhere drops the detail back to the gallery on the next list read.
   const [selectedShared, setSelectedShared] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<TemplateSourceSummary | null>(null);
+  const [removalReturn, setRemovalReturn] = useState<string | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
   // Dropped files named like a template already here, waiting for "revision or new template?".
   const [sameName, setSameName] = useState<Array<{ file: File; source: TemplateSourceSummary }>>(
     [],
@@ -130,11 +138,7 @@ export function ForgeWorkbench({
   });
   const rawSources = sourceQuery.data ?? [];
   const { shared, buildNames } = useMemo(
-    () =>
-      splitWorkspaceTemplates(
-        workspaceQuery.data ?? [],
-        new Set(rawSources.map((source) => source.assetId)),
-      ),
+    () => splitWorkspaceTemplates(workspaceQuery.data ?? [], rawSources),
     [rawSources, workspaceQuery.data],
   );
   // A title wins; the build name stands in only where nobody has typed one.
@@ -147,7 +151,6 @@ export function ForgeWorkbench({
       ),
     [buildNames, rawSources],
   );
-
   useEffect(() => {
     if (sourceQuery.error)
       toast.error(
@@ -168,11 +171,22 @@ export function ForgeWorkbench({
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templateVariants(brandId) }),
+        // The gallery nests uploads by family; a stale registry would list a new variant as a row.
+        queryClient.invalidateQueries({ queryKey: ['forge', brandId, 'revision-variants'] }),
       ]).then(() => undefined),
     [brandId, queryClient, sourceKey],
   );
 
-  const uploaded = useCallback(() => void refreshSources(), [refreshSources]);
+  const { imports, start: importDesign } = useDesignTemplateImports(brandId, refreshTemplate);
+
+  const uploaded = useCallback(
+    ({ file, uploaded: result }: { file: File; uploaded: { assetId: string } }) => {
+      void refreshSources();
+      if (isForgeDesignFile(file.name)) void importDesign(file.name, result.assetId);
+    },
+    [importDesign, refreshSources],
+  );
 
   const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(
     brandId,
@@ -247,15 +261,98 @@ export function ForgeWorkbench({
     }
   };
 
+  const removeFromBrand = async () => {
+    if (!removing || removeBusy) return;
+    const source = removing;
+    setRemoveBusy(true);
+    let accessDisabled = false;
+    try {
+      const published =
+        source.templateKey || source.forgeRunId
+          ? (await discoverWorkspaceTemplates(brandId)).items.filter(
+              (item) => item.sourceAssetId === source.assetId && item.granted,
+            )
+          : [];
+      if (source.templateKey && !published.some((item) => item.templateKey === source.templateKey))
+        throw new Error('Could not find this template’s render workspace. Refresh and try again.');
+      for (const item of published) {
+        const disabled = await setTemplateAdoption({
+          brandId,
+          templateKey: item.templateKey,
+          enabled: false,
+          workspaceId: item.bindingId,
+        });
+        if (!disabled.granted)
+          throw new Error('Could not turn off render access for this template.');
+        accessDisabled = true;
+      }
+      const removed = await bulkDeleteAssetsOperation(createSupabaseBrowserClient(), {
+        brandId,
+        assetIds: [source.assetId],
+      });
+      if (!removed.includes(source.assetId)) throw new Error('The template file was not removed.');
+      if (selected === source.assetId) setSelected(removalReturn);
+      setRemovalReturn(null);
+      setRemoving(null);
+      toast.success(`${sourceDisplayName(source)} removed from ${brandName ?? 'this brand'}`);
+    } catch (error) {
+      toast.error(
+        accessDisabled
+          ? 'The template file could not be removed. Render access is off; try removing it again.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not remove the template.',
+      );
+    } finally {
+      setRemoveBusy(false);
+      void refreshTemplate();
+    }
+  };
+
+  // A link from the Library (`/forge?template=…&set=…&row=…`), read after mount the way the tab
+  // shell reads `#approvals`, and taken once: the template opens here, and its set opens in Render
+  // once the template's key is known.
+  const [deepLink, setDeepLink] = useState<ForgeDeepLink | null>(null);
+  useEffect(() => {
+    const link = readForgeDeepLink(window.location.search);
+    if (!link) return;
+    setSelected(link.templateAssetId);
+    if (link.renderSetId) setDeepLink(link);
+  }, []);
+
   const morph = useTemplateMorphSwap();
-  const open = (assetId: string | null) => morph(() => setSelected(assetId));
+  const open = (assetId: string | null, tab?: string, comp?: string) =>
+    morph(() => {
+      setDetailTab(tab);
+      setDetailComp(comp);
+      setSelected(assetId);
+    });
   const openShared = (template: SharedTemplate | null) =>
     morph(() => setSelectedShared(template ? sharedTemplateId(template) : null));
+
+  // An intent is an event, taken once and handed back, the way the Render grid takes its own.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event.
+  useEffect(() => {
+    if (!templateIntent) return;
+    onTemplateIntentConsumed?.();
+    open(templateIntent.assetId, templateIntent.tab ?? 'layers');
+  }, [templateIntent]);
 
   const current = sources.find((source) => source.assetId === selected) ?? null;
   const currentShared = current
     ? null
     : (shared.find((template) => sharedTemplateId(template) === selectedShared) ?? null);
+
+  useEffect(() => {
+    if (!deepLink?.renderSetId || current?.assetId !== deepLink.templateAssetId) return;
+    if (!current.templateKey) return;
+    setDeepLink(null);
+    onOpenRender?.({
+      templateKey: current.templateKey,
+      renderSetId: deepLink.renderSetId,
+      ...(deepLink.rowId ? { rowId: deepLink.rowId, rerender: deepLink.rerender } : {}),
+    });
+  }, [current, deepLink, onOpenRender]);
 
   // A drop never makes a second copy by accident: the same bytes open the template that holds them,
   // and a known file name asks whether this is its next revision.
@@ -281,6 +378,12 @@ export function ForgeWorkbench({
     if (existing) open(existing.assetId);
   };
 
+  const receiveFonts = async (files: File[]) => {
+    const { stored, refused } = await uploadTemplateFontFiles(brandId, files);
+    if (stored.length) toast.success(`Fonts added: ${stored.join(', ')}`);
+    if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
+  };
+
   const asking = sameName[0];
   const answer = (choice: 'revision' | 'template' | null) => {
     if (!asking) return;
@@ -300,10 +403,6 @@ export function ForgeWorkbench({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {/* Above everything: a batch waiting on a person is the most time-sensitive thing on this
-          page, and it belongs to no one template. Renders nothing when there is nothing waiting. */}
-      <PendingApprovals brandId={brandId} />
-
       {uploads.length ? (
         <div className="flex flex-col gap-1.5">
           <UploadStrip
@@ -321,13 +420,34 @@ export function ForgeWorkbench({
         </div>
       ) : null}
 
+      <DesignTemplateImports
+        imports={imports}
+        onRetry={importDesign}
+        sourceIds={sources.map((source) => source.assetId)}
+        onOpen={open}
+      />
+
       {current ? (
         <TemplateDetail
           key={current.assetId}
           brandId={brandId}
           source={current}
+          initialTab={detailTab}
+          initialComp={detailComp}
           onBack={() => open(null)}
+          onOpenVariant={async (assetId, tab) => {
+            await refreshTemplate();
+            open(assetId, tab);
+          }}
           onRename={(title) => void rename(current.assetId, title)}
+          onDeleteVariant={(variant) => {
+            setRemovalReturn(variant.rootAssetId);
+            setRemoving(variant.source);
+          }}
+          onRemove={() => {
+            setRemovalReturn(null);
+            setRemoving(current);
+          }}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
@@ -342,6 +462,14 @@ export function ForgeWorkbench({
           busy={adopting === sharedTemplateId(currentShared)}
           onBack={() => openShared(null)}
           onToggle={() => void toggleShared(currentShared)}
+          onOpenSource={
+            currentShared.sourceAssetId
+              ? () => {
+                  openShared(null);
+                  open(currentShared.sourceAssetId!);
+                }
+              : undefined
+          }
           onOpenRender={onOpenRender}
         />
       ) : (
@@ -357,9 +485,10 @@ export function ForgeWorkbench({
           onToggleShared={(template) => void toggleShared(template)}
           onOpenRender={onOpenRender}
           onFiles={(files) => void receive(files)}
+          onFonts={receiveFonts}
           onRejected={(files) =>
             toast.error(
-              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, or .zip files.`,
+              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd or .ai, and .ttf or .otf for fonts.`,
             )
           }
         />
@@ -381,6 +510,34 @@ export function ForgeWorkbench({
             </Button>
             <Button type="button" onClick={() => answer('revision')}>
               New revision of {askingName}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={removing !== null}
+        onOpenChange={(next) => !next && !removeBusy && setRemoving(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remove “{removing ? sourceDisplayName(removing) : ''}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the template from {brandName ?? 'this brand'} and its Library. Existing
+              renders and file history are kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeBusy}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={removeBusy}
+              onClick={() => void removeFromBrand()}
+            >
+              {removeBusy ? 'Removing…' : 'Remove from brand'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

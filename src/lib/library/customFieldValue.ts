@@ -13,15 +13,17 @@
 // asset is re-saved), so a value whose option no longer exists renders as
 // ORPHANED_OPTION_LABEL rather than disappearing or crashing.
 
-import type {
-  AssetFieldValue,
-  CustomField,
-  CustomFieldOption,
-  CustomFieldValue,
+import {
+  type AssetFieldValue,
+  type CustomField,
+  type CustomFieldOption,
+  type CustomFieldValue,
+  customFieldChoiceOptions,
 } from '@continuum/contracts';
-import { isEmptyFieldValue, validateFieldValue } from './customFields';
+import { isEmptyFieldValue, ratingMax, validateFieldValue } from './customFields';
 
 export const ORPHANED_OPTION_LABEL = 'Removed option';
+export const ORPHANED_USER_LABEL = 'Former member';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -35,7 +37,7 @@ export function valuesByFieldId(values: readonly AssetFieldValue[]): Map<string,
 }
 
 export function findOption(field: CustomField, optionId: string): CustomFieldOption | null {
-  return field.options.find((option) => option.id === optionId) ?? null;
+  return customFieldChoiceOptions(field).find((option) => option.id === optionId) ?? null;
 }
 
 /** The option id a single_select holds, or null when unset or shape-mismatched. */
@@ -80,11 +82,20 @@ export function formatDateValue(iso: string): string {
   });
 }
 
-/** Display string for a stored value. Unset reads as '' — the caller renders the placeholder. */
-export function formatCustomFieldValue(field: CustomField, value: CustomFieldValue): string {
+/**
+ * Display string for a stored value. Unset reads as '' — the caller renders the
+ * placeholder. A user value is an id; `userLabel` names it when the caller has the
+ * member list, and an unknown id reads as ORPHANED_USER_LABEL rather than a uuid.
+ */
+export function formatCustomFieldValue(
+  field: CustomField,
+  value: CustomFieldValue,
+  userLabel?: (userId: string) => string | undefined,
+): string {
   if (value === null || value === undefined) return '';
   switch (field.type) {
-    case 'single_select': {
+    case 'single_select':
+    case 'status': {
       const optionId = singleSelectOptionId(value);
       return optionId ? optionLabel(field, optionId) : '';
     }
@@ -100,9 +111,29 @@ export function formatCustomFieldValue(field: CustomField, value: CustomFieldVal
       const iso = literalValue(value).trim();
       return iso ? formatDateValue(iso) : '';
     }
+    case 'number':
+      return typeof value === 'number' ? value.toLocaleString('en-US') : '';
+    case 'checkbox':
+      return value === true ? 'Yes' : value === false ? 'No' : '';
+    case 'rating':
+      return typeof value === 'number' ? `${'★'.repeat(value)} ${value}/${ratingMax(field)}` : '';
+    case 'user': {
+      const userId = literalValue(value);
+      return userId ? (userLabel?.(userId) ?? ORPHANED_USER_LABEL) : '';
+    }
+    case 'user_multi':
+      return multiSelectOptionIds(value)
+        .map((userId) => userLabel?.(userId) ?? ORPHANED_USER_LABEL)
+        .join(', ');
     default:
       return literalValue(value).trim();
   }
+}
+
+/** The colour of a status option, or null for an unset/removed one. */
+export function statusColor(field: CustomField, value: CustomFieldValue): string | null {
+  const optionId = singleSelectOptionId(value);
+  return optionId ? (findOption(field, optionId)?.color ?? null) : null;
 }
 
 /**
@@ -120,9 +151,4 @@ export function validateCustomFieldValue(
   return checked.ok
     ? { ok: true, value: checked.value }
     : { ok: false, error: `${field.name} · ${checked.reason}` };
-}
-
-/** Only a single_select can drive a board's lanes: an asset must sit in exactly one. */
-export function isGroupableField(field: CustomField): boolean {
-  return field.type === 'single_select';
 }

@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Video } from '@/components/ui/video';
 import {
   useAnalyseInspirationPost,
   useDevelopInspirationPost,
@@ -38,7 +39,7 @@ import { ApiError } from '@/lib/api/errors';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import { type CompetitorPostView, carouselSlides } from './competitorPostView';
-import { PostCarousel, PostThumb, ReelVideo, reelVideoUrl } from './postMedia';
+import { PostCarousel, PostThumb, reelVideoUrl } from './postMedia';
 import { OutlierBadge, PostMetrics } from './postStats';
 
 // The act routes answer 409 with a machine code in `error`; ApiError carries it as
@@ -232,13 +233,13 @@ function PanelMedia({ view }: { view: CompetitorPostView }) {
   if (slides.length > 0) return <PostCarousel slides={slides} poster={post.coverUrl} alt={alt} />;
   if (videoUrl) {
     return (
-      <ReelVideo
+      <Video
         src={videoUrl}
-        poster={post.coverUrl}
-        alt={alt}
+        poster={post.coverUrl ?? undefined}
+        ariaLabel={alt}
         autoPlay
-        controls
-        className="max-h-[42vh] object-contain"
+        muted
+        className="aspect-auto! h-auto max-h-[42vh] w-full rounded-lg border-0 [&_video]:h-auto [&_video]:max-h-[42vh] [&_video]:object-contain"
       />
     );
   }

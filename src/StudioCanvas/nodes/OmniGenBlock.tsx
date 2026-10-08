@@ -35,6 +35,7 @@ import {
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
+import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { GroundingChip } from '../components/GroundingChip';
@@ -181,6 +182,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
    * other section off as a side effect of touching one.
    */
   const { sections: designSections } = useBrandDesignSections(brandId);
+  const { all: brandSkills } = useBrandSkills(brandId);
   const handleToggleDesignSection = useCallback(
     (section: DesignSection) => {
       const enabled = designSections.map((entry) => entry.section);
@@ -494,6 +496,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                   onGenerate={handleGenerate}
                   onSubmitTurn={handleSubmitTurn}
                   onDownload={handleDownload}
+                  slashSkills={brandId ? brandSkills : undefined}
                 />
               ) : null}
 

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import type { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { type ActionId, type UnsplashPhoto, validateWorkflowGraph } from '@continuum/contracts';
-import { AtSign, Camera, FolderOpen } from 'lucide-react';
+import { AtSign, Camera, FolderOpen, Palette } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useShallow } from 'zustand/react/shallow';
@@ -28,6 +28,7 @@ import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { useCanvasRunRequests } from '@/components/ai-studio/hooks/useCanvasRunRequests';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
 import { Cursor } from '@/components/realtime/cursor';
+import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -50,9 +51,10 @@ import { CANVAS_NODE_TYPES_WITH_FOLD, useFoldedGraph } from '../hooks/useFoldedG
 import { usePlannerSeedHydration } from '../hooks/usePlannerSeedHydration';
 import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { LibraryContextSync } from '../library/LibraryContextSync';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
-import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
+import { FULL_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { buildReferenceNodes, type ReferenceMediaItem } from '../utils/buildReferenceNodes';
 import { computeReadyNodeIds, computeStyledEdges } from '../utils/edgeStyling';
 import { executeWorkflow } from '../utils/executeWorkflow';
@@ -140,7 +142,8 @@ function Flow({
   const lastMousePositionRef = useRef({ x: 240, y: 180 });
   const contextMenuAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
-  const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow();
+  const { screenToFlowPosition, fitView, setCenter, zoomIn, zoomOut } = useReactFlow();
+  const [canvasReady, setCanvasReady] = useState(false);
 
   useEffect(() => {
     if (brandProfileId) {
@@ -162,16 +165,35 @@ function Flow({
 
   const focusedNodeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!targetNodeId || isLoading || focusedNodeRef.current === targetNodeId) return;
+    if (!targetNodeId || isLoading || !canvasReady) return;
     const target = nodes.find((node) => node.id === targetNodeId);
     if (!target) return;
-    focusedNodeRef.current = targetNodeId;
+    const focusKey = `${targetNodeId}:${target.position.x}:${target.position.y}`;
+    if (focusedNodeRef.current === focusKey) return;
+    focusedNodeRef.current = focusKey;
+    if (target.type === 'string') {
+      // React Flow's initial whole-room fit can finish after this effect. Wait
+      // for that camera move, then center the off-screen, unmeasured text node.
+      const width = typeof target.style?.width === 'number' ? target.style.width : 420;
+      const height = typeof target.style?.height === 'number' ? target.style.height : 240;
+      setNodes(nodes.map((node) => ({ ...node, selected: node.id === targetNodeId })));
+      void (async () => {
+        await fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 0 });
+        if (focusedNodeRef.current !== focusKey) return;
+        await setCenter(target.position.x + width / 2, target.position.y + height / 2, {
+          zoom: 0.8,
+          duration: 0,
+        });
+      })();
+      return;
+    }
     setNodes(nodes.map((node) => ({ ...node, selected: node.id === targetNodeId })));
-    const handle = requestAnimationFrame(() => {
-      fitView({ nodes: [target], padding: 0.65, duration: 350 });
+    if (!focusNodeId) return;
+    requestAnimationFrame(() => {
+      if (focusedNodeRef.current !== focusKey) return;
+      void fitView({ nodes: [target], padding: 0.65, duration: 350 });
     });
-    return () => cancelAnimationFrame(handle);
-  }, [fitView, targetNodeId, isLoading, nodes, setNodes]);
+  }, [canvasReady, fitView, focusNodeId, setCenter, targetNodeId, isLoading, nodes, setNodes]);
 
   // Co-play: the agent works while the user watches. An agent write appends BELOW
   // everything already on the canvas, so on a room that is not empty it lands off
@@ -187,12 +209,13 @@ function Flow({
   const { arrivedNodeIds } = realtime;
   useEffect(() => {
     if (arrivedNodeIds.length === 0) return;
+    if (targetNodeId) return;
     if (!arrivedNodeIds.some((id) => nodes.some((node) => node.id === id))) return;
     const handle = requestAnimationFrame(() => {
       fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 });
     });
     return () => cancelAnimationFrame(handle);
-  }, [arrivedNodeIds, nodes, fitView]);
+  }, [arrivedNodeIds, nodes, fitView, targetNodeId]);
 
   // When the walkthrough seeds starter nodes, frame them so the tour's node
   // steps always have an on-screen target. Runs once per Flow instance.
@@ -219,6 +242,7 @@ function Flow({
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isUnsplashBrowserOpen, setIsUnsplashBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
+  const [isStylesOpen, setIsStylesOpen] = useState(false);
   const [isSaveWorkflowOpen, setIsSaveWorkflowOpen] = useState(false);
   // Where an added node lands: the right-click point, pinned when the Add Node submenu
   // opens. Read from a ref at add time rather than lastMousePositionRef, because the
@@ -272,7 +296,7 @@ function Flow({
       return;
     }
     targets.forEach((node) => {
-      updateNodeData(node.id, { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES });
+      updateNodeData(node.id, { brandBookPieces: FULL_BRAND_BOOK_PIECES });
     });
     triggerSave();
     show({
@@ -539,6 +563,7 @@ function Flow({
       >
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
+            onInit={() => setCanvasReady(true)}
             // React Flow mounts every node in the graph unless told otherwise, so a
             // 300-node canvas rendered 300 nodes to show the ~20 that fit on screen —
             // and pulled 440 MB of full-resolution media to do it. Culling to the
@@ -620,6 +645,16 @@ function Flow({
                 <Camera className="mr-2 h-4 w-4" />
                 Unsplash
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsStylesOpen((open) => !open)}
+                aria-label="Browse styles"
+              >
+                <Palette className="mr-2 h-4 w-4" />
+                Styles
+              </Button>
             </Panel>
 
             {isLibraryBrowserOpen && (
@@ -630,6 +665,17 @@ function Flow({
                 className="h-[560px] w-[360px]"
               >
                 <StudioMediaLibraryPanel brandProfileId={brandProfileId || ''} />
+              </CanvasFloatingPanel>
+            )}
+
+            {isStylesOpen && (
+              <CanvasFloatingPanel
+                title="Styles"
+                icon={<Palette className="size-4" aria-hidden />}
+                onClose={() => setIsStylesOpen(false)}
+                className="h-[560px] w-[360px]"
+              >
+                <StylesShelfLazy brandId={brandProfileId || ''} className="p-3" />
               </CanvasFloatingPanel>
             )}
 
@@ -785,7 +831,7 @@ export function StudioCanvas({
     },
     [activeRoomId, brandProfileId, currentSearch, router],
   );
-  const plannerApply = useApplyBackToPlanner({ brandProfileId, organicPlannerSeed });
+  const plannerApply = useApplyBackToPlanner({ brandProfileId, organicPlannerSeed, focusNodeId });
 
   // The room itself is fenced above; this drops the previous brand's graph and its room
   // param. resetForBrandSwitch takes the new brand because child effects run before parent
@@ -837,6 +883,7 @@ export function StudioCanvas({
 
         <main className="relative flex-1 min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
           <CanvasRuntimeProvider value={canvasRuntime}>
+            <LibraryContextSync />
             <Flow
               brandProfileId={brandProfileId}
               realtime={realtime}

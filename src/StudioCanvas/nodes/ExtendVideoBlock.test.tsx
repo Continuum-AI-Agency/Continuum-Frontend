@@ -111,12 +111,16 @@ describe('ExtendVideoBlock generated-video preview', () => {
       generatedVideoUrl: 'https://example.com/clip.mp4',
     });
 
-    expect(container.querySelector('media-controller')).not.toBeNull();
-    expect(container.querySelector('media-time-range')).not.toBeNull();
-    const video = container.querySelector('video') as HTMLVideoElement;
-    expect(video.getAttribute('preload')).toBe('metadata');
+    const video = container.querySelector(
+      '[data-testid="studio-node-video-preview"] video',
+    ) as HTMLVideoElement;
     expect(video.getAttribute('playsinline')).not.toBeNull();
     expect(video.className).toContain('object-contain');
+    expect(
+      container.querySelector(
+        '[data-testid="studio-node-video-preview"] button[aria-label="Play"]',
+      ),
+    ).not.toBeNull();
     expect(queryByText('Extend Video • 16:9')).toBeNull();
   });
 });

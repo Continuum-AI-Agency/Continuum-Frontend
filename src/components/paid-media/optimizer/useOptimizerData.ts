@@ -1,4 +1,10 @@
 'use client';
+import type {
+  CreativeOutputManifest,
+  OptimizerAction,
+  PlatformId,
+  PortfolioConfig,
+} from '@continuum/contracts';
 
 // Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
 // Edge read is owned by React Query: the cache has deliberate freshness windows,
@@ -18,6 +24,7 @@ import {
   type AdsetAd,
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
+  type AdsetTargeting,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -46,6 +53,7 @@ import {
   type CycleRunReport,
   CycleRunReportSchema,
   type CycleSkipReason,
+  type EfficiencySeriesPoint,
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
@@ -81,7 +89,15 @@ import {
   TimelineEventSchema,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  type UseQueryOptions,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
@@ -160,9 +176,9 @@ async function readEdgeErrorMessage(error: unknown): Promise<string> {
 
 export const optimizerQueryKeys = {
   root: ['optimizer'] as const,
-  portfoliosRoot: ['optimizer', 'portfolios'] as const,
-  portfolios: (brandId: string, adAccountId: string | null) =>
-    ['optimizer', 'portfolios', brandId, adAccountId ?? 'all'] as const,
+  /** Brand-scoped, like the RPC behind it: every account view reads the same entry and
+   *  narrows it with `select`, so the page shell and the tab share one request. */
+  portfolios: (brandId: string) => ['optimizer', 'portfolios', brandId] as const,
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
   creativeSwapJobs: (brandId: string) => ['optimizer', 'creative-swap-jobs', brandId] as const,
@@ -310,16 +326,15 @@ function scopeToAccount(
   };
 }
 
-async function fetchPortfolios(
-  brandId: string,
-  adAccountId: string | null,
-): Promise<PortfolioScope> {
+type BrandPortfolios = { rows: PortfolioListItem[]; dropped: number };
+
+/** The RPC is brand-scoped; the account filter is `scopeToAccount`, applied per view. */
+async function fetchPortfolios(brandId: string): Promise<BrandPortfolios> {
   const { data, error } = await getClient().rpc('optimizer_list_portfolios', {
     p_brand_id: brandId,
   });
   if (error) throw new Error('optimizer_list_portfolios unreachable');
-  const { rows, dropped } = parsePortfolioRows('optimizer_list_portfolios', data ?? []);
-  return scopeToAccount(rows, adAccountId, dropped);
+  return parsePortfolioRows('optimizer_list_portfolios', data ?? []);
 }
 
 async function fetchAdAccounts(brandId: string): Promise<AdAccount[]> {
@@ -588,6 +603,82 @@ async function createPortfolio(request: CreatePortfolioRequest): Promise<{ portf
   return { portfolio_id: parsed.data };
 }
 
+/** A portfolio with no Meta ad set, hosted on the platform account the person chose. */
+export type CreatePlatformPortfolioRequest = {
+  brand_id: string;
+  platform: PlatformId;
+  account_id: string;
+  config: PortfolioConfig;
+};
+
+/** The members optimizer_add_portfolio_members enrolls (Google / TikTok campaigns). */
+export type AddPortfolioMembersRequest = {
+  portfolio_id: string;
+  members: {
+    platform: PlatformId;
+    account_id: string;
+    entity_id: string;
+    level: 'campaign' | 'group';
+    name?: string;
+  }[];
+};
+
+const AddPortfolioMembersResultSchema = z.object({
+  enrolled: z.number().int().nonnegative(),
+  already: z.number().int().nonnegative(),
+});
+
+/** The RPCs refuse in sentences ("optimizer: google_ads campaign 1 is already in portfolio …");
+ *  the person reads the sentence, without the schema prefix. */
+function memberRefusal(error: { message?: string }, fallback: string): string {
+  const message = (error.message ?? '').replace(/^optimizer:\s*/, '').trim();
+  return message.length > 0 ? message : fallback;
+}
+
+async function createPlatformPortfolio(
+  request: CreatePlatformPortfolioRequest,
+): Promise<{ portfolio_id: string }> {
+  const { data, error } = await getClient().rpc('optimizer_create_platform_portfolio', {
+    p_brand_id: request.brand_id,
+    p_platform: request.platform,
+    p_account_id: request.account_id,
+    p_config: request.config,
+  });
+  if (error) {
+    const code = pgErrorCode(error);
+    throw new OptimizerRpcError(
+      code === '42501'
+        ? "This account isn't assigned to this brand. Assign it in Settings → Integrations."
+        : memberRefusal(error, 'Could not create the portfolio.'),
+      code,
+    );
+  }
+  const parsed = z.string().uuid().safeParse(data);
+  if (!parsed.success) throw new OptimizerRpcError('Malformed create-portfolio response.', null);
+  return { portfolio_id: parsed.data };
+}
+
+async function addPortfolioMembers(
+  request: AddPortfolioMembersRequest,
+): Promise<z.infer<typeof AddPortfolioMembersResultSchema>> {
+  const { data, error } = await getClient().rpc('optimizer_add_portfolio_members', {
+    p_portfolio_id: request.portfolio_id,
+    p_members: request.members,
+  });
+  if (error) {
+    const code = pgErrorCode(error);
+    throw new OptimizerRpcError(
+      code === '42501'
+        ? "One of these campaigns' accounts isn't assigned to this brand. Assign it in Settings → Integrations."
+        : memberRefusal(error, 'Could not add these campaigns.'),
+      code,
+    );
+  }
+  const parsed = AddPortfolioMembersResultSchema.safeParse(data);
+  if (!parsed.success) throw new OptimizerRpcError('Malformed add-members response.', null);
+  return parsed.data;
+}
+
 async function enrollAdsets(request: EnrollRequest): Promise<EnrollResult> {
   const { data, error } = await getClient().functions.invoke('optimizer-enroll', {
     body: request,
@@ -681,7 +772,15 @@ export type RunUnavailableKind =
  *  indistinguishable from an unreachable service, so all three outcomes collapsed into one
  *  message: "Optimizer service not live yet". It was true in none of them. */
 export type RunCycleOutcome =
-  | { status: 'ran'; run: RunCycleResponse }
+  | {
+      status: 'ran';
+      run: RunCycleResponse;
+      /** The service handed back the run that was ALREADY on screen. optimizer_record_cycle
+       *  keeps one run per portfolio per UTC day (`on conflict (portfolio_id, utc_day) do
+       *  nothing` returns the existing id), so a second Run now the same day scores nothing
+       *  new. Present only when true. */
+      alreadyScoredToday?: true;
+    }
   | { status: 'skipped'; reason: CycleSkipReason; run: RunCycleResponse }
   | { status: 'unavailable'; kind: RunUnavailableKind };
 
@@ -706,6 +805,8 @@ async function runCycle(
   portfolioId: string,
   brandId?: string,
   accountId?: string | null,
+  /** latest_run.id on screen when Run now was pressed. */
+  runIdOnScreen?: string | null,
 ): Promise<RunCycleOutcome> {
   // brandId + accountId scope the run to a brand/account the caller can access —
   // the optimizer-run edge verifies them (mirrors optimizer-suggest). Omitted keys
@@ -725,6 +826,7 @@ async function runCycle(
     // LOUDLY: swallowing it into a silent null is what hid this exact bug for weeks.
     console.error('optimizer-run returned a body that does not match RunCycleResponseSchema', {
       issues: parsed.error.issues,
+      body: data,
     });
     return { status: 'unavailable', kind: 'malformed' };
   }
@@ -737,7 +839,19 @@ async function runCycle(
     console.error('optimizer-run returned runId:null with no skip reason', { run });
     return { status: 'unavailable', kind: 'malformed' };
   }
+  if (runIdOnScreen && run.runId === runIdOnScreen) {
+    return { status: 'ran', run, alreadyScoredToday: true };
+  }
   return { status: 'ran', run };
+}
+
+/** The latest_run.id of the performance report currently cached for a portfolio. */
+function cachedLatestRunId(queryClient: QueryClient, portfolioId: string): string | null {
+  const report = queryClient.getQueryData<CycleRunReport | null>(
+    optimizerQueryKeys.performance(portfolioId),
+  );
+  const id = report?.latest_run?.id;
+  return typeof id === 'string' ? id : null;
 }
 
 /** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
@@ -1034,6 +1148,7 @@ const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
+const EMPTY_TARGETING: AdsetTargeting[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
@@ -1080,6 +1195,8 @@ type OptimizerReadOptions<T> = {
   staleTime: number;
   gcTime?: number;
   refetchInterval?: number | false;
+  /** Shown while the first fetch for this key runs — never cached as the answer. */
+  placeholderData?: () => NoInfer<T> | undefined;
 };
 
 /** A small query adapter keeps the existing surface ergonomics (`data` is always
@@ -1092,6 +1209,7 @@ function useOptimizerRead<T>({
   staleTime,
   gcTime = THIRTY_MINUTES,
   refetchInterval = false,
+  placeholderData,
 }: OptimizerReadOptions<T>) {
   const query = useQuery({
     queryKey,
@@ -1101,6 +1219,7 @@ function useOptimizerRead<T>({
     gcTime,
     refetchInterval,
     retry: 1,
+    placeholderData: placeholderData as UseQueryOptions<T>['placeholderData'],
   });
 
   return { ...query, data: query.data ?? empty };
@@ -1109,23 +1228,37 @@ function useOptimizerRead<T>({
 /** The selected account's portfolios. `data` stays the PortfolioListItem[] every
  *  consumer already renders; the scope counts ride alongside so the surface can tell
  *  "this brand has no portfolios" (onboarding) apart from "they are all on another ad
- *  account" (a notice naming that account). */
+ *  account" (a notice naming that account).
+ *
+ *  One cache entry per brand: the page shell (account null) and the tab (the selected
+ *  account) used to key separately, so the tab re-ran the identical RPC after the shell's
+ *  read landed, and every account switch ran it again. `hasAnswer` separates "never read"
+ *  from "read once, the latest refresh failed" — React Query keeps the last data on a
+ *  failed refetch, and the surface must keep painting it rather than go offline. */
 export function useOptimizerPortfolios(brandId: string, adAccountId: string | null) {
-  const query = useOptimizerRead({
-    queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
-    queryFn: () => fetchPortfolios(brandId, adAccountId),
-    empty: EMPTY_PORTFOLIO_SCOPE,
+  const select = useCallback(
+    (brand: BrandPortfolios) => scopeToAccount(brand.rows, adAccountId, brand.dropped),
+    [adAccountId],
+  );
+  const query = useQuery({
+    queryKey: optimizerQueryKeys.portfolios(brandId),
+    queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
+    select,
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: 1,
   });
+  const scope = query.data ?? EMPTY_PORTFOLIO_SCOPE;
 
   return {
     ...query,
-    data: query.data.portfolios,
-    brandPortfolios: query.data.brandPortfolios,
-    brandPortfolioCount: query.data.brandPortfolioCount,
-    otherAccountIds: query.data.otherAccountIds,
-    droppedRowCount: query.data.droppedRowCount,
+    hasAnswer: query.data !== undefined,
+    data: scope.portfolios,
+    brandPortfolios: scope.brandPortfolios,
+    brandPortfolioCount: scope.brandPortfolioCount,
+    otherAccountIds: scope.otherAccountIds,
+    droppedRowCount: scope.droppedRowCount,
   };
 }
 
@@ -1466,6 +1599,60 @@ export function useOptimizerCpaSeries(
   });
 }
 
+/** One efficiency series per portfolio, in the order the ids were given. */
+export type PortfolioEfficiencySeries = {
+  series: EfficiencySeriesPoint[][];
+  /** True while any portfolio's series is still on its way. */
+  pending: boolean;
+  /** How many portfolios' series could not be read. A sum over the rest is not the account. */
+  failed: number;
+  /** Ask again for the ones that failed. */
+  retryFailed: () => void;
+};
+
+function combineEfficiencySeries(
+  results: Array<{
+    data: EfficiencySeriesPoint[] | undefined;
+    isPending: boolean;
+    isError: boolean;
+    refetch: () => unknown;
+  }>,
+): PortfolioEfficiencySeries {
+  const failed = results.filter((result) => result.isError);
+  return {
+    series: results.map((result) => result.data ?? EMPTY_CPA),
+    pending: results.some((result) => result.isPending),
+    failed: failed.length,
+    retryFailed: () => {
+      for (const result of failed) void result.refetch();
+    },
+  };
+}
+
+/**
+ * The efficiency series of every listed portfolio at once — the Overview's source for spend,
+ * results and cost per result over the window, per portfolio and summed across the account.
+ *
+ * Same key and same limit as the detail's own read and the hover prefetch, so the three share
+ * one cache entry per portfolio and opening a portfolio paints from what the Overview fetched.
+ */
+export function useOptimizerPortfolioEfficiency(
+  portfolioIds: readonly string[],
+): PortfolioEfficiencySeries {
+  return useQueries({
+    queries: portfolioIds.map((portfolioId) => ({
+      queryKey: optimizerQueryKeys.cpaSeries(portfolioId),
+      queryFn: () => withReadTimeout(fetchCpaSeries(portfolioId, DEFAULT_CPA_SERIES_LIMIT)),
+      staleTime: FIVE_MINUTES,
+      gcTime: THIRTY_MINUTES,
+      // The Overview fires one of these per portfolio the moment the page mounts, which is
+      // also when the session is still settling; two retries ride that out where one did not.
+      retry: 2,
+    })),
+    combine: combineEfficiencySeries,
+  });
+}
+
 const EMPTY_SWAP_JOBS: CreativeSwapJobRow[] = [];
 
 async function fetchCreativeSwapJobs(brandId: string): Promise<CreativeSwapJobRow[]> {
@@ -1557,6 +1744,17 @@ export type RequestFlashCreativesInput = {
   count: number;
 };
 
+async function requestCreativeGeneration(recommendationId: string): Promise<string> {
+  const { data, error } = await getClient().rpc('optimizer_request_creative_generation', {
+    p_rec_id: recommendationId,
+  } as never);
+  if (error || !data)
+    throw new Error(
+      `Could not request creative generation: ${error ? rpcErrorText(error) : 'no job returned'}`,
+    );
+  return String(data);
+}
+
 async function requestFlashCreatives(input: RequestFlashCreativesInput): Promise<string> {
   const { data, error } = await getClient().rpc('optimizer_request_flash_creatives', {
     p_rec_id: input.recommendationId,
@@ -1571,6 +1769,7 @@ async function requestFlashCreatives(input: RequestFlashCreativesInput): Promise
 }
 
 export type ImplementFlashCreativeInput = {
+  manifest: CreativeOutputManifest;
   jobId: string;
   assetId: string;
   targetAdsetId: string;
@@ -1583,6 +1782,7 @@ async function implementFlashCreative(input: ImplementFlashCreativeInput): Promi
     p_asset_id: input.assetId,
     p_target_adset_id: input.targetAdsetId,
     p_predecessor_ad_id: input.predecessorAdId,
+    p_manifest: input.manifest,
   } as never);
   if (error) throw new Error(`Could not implement the creative: ${rpcErrorText(error)}`);
   return String(data);
@@ -1595,12 +1795,22 @@ export function useFlashCreativeMutations(brandId: string) {
     void queryClient.invalidateQueries({ queryKey: ['optimizer'] });
   };
   const request = useMutation({ mutationFn: requestFlashCreatives, onSuccess: refresh });
+  const generate = useMutation({ mutationFn: requestCreativeGeneration, onSuccess: refresh });
   const implement = useMutation({ mutationFn: implementFlashCreative, onSuccess: refresh });
   /** After a pipeline is published on the brand's behalf, the catalogue is stale. */
   const refreshPipelines = () => {
     void queryClient.invalidateQueries({ queryKey: pipelineCapabilitiesQueryKey(brandId) });
   };
-  return { request, implement, refreshPipelines };
+  const retry = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await getClient().rpc('optimizer_retry_creative_generation', {
+        p_job_id: jobId,
+      } as never);
+      if (error) throw new Error(rpcErrorText(error));
+    },
+    onSuccess: refresh,
+  });
+  return { request, generate, implement, retry, refreshPipelines };
 }
 
 // ── Audience proposals ────────────────────────────────────────────────────────
@@ -1717,7 +1927,14 @@ export function useAudienceProposalMutations(brandId: string) {
       ),
     onSuccess: refresh,
   });
-  return { request, approve, cancel, activate, undo, refresh };
+  /** A failed Meta write (execute / activate / undo) on a sound plan goes back to the queue
+   *  for the phase that failed; the worker picks it up as if it had never stopped. */
+  const retry = useMutation({
+    mutationFn: (proposalId: string) =>
+      rpcVoid('optimizer_retry_audience_proposal', { p_id: proposalId }, 'Could not retry in Meta'),
+    onSuccess: refresh,
+  });
+  return { request, approve, cancel, activate, undo, retry, refresh };
 }
 
 /** While the latest cycle has no brief yet, nudge the performance read every 30s for up
@@ -1893,6 +2110,7 @@ export function useOptimizerAccountSnapshots(
   return {
     ...query,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
+    targeting: query.data?.targeting ?? EMPTY_TARGETING,
     fetchedAt: query.data?.fetchedAt ?? null,
     budgetSummary: query.data?.budgetSummary ?? null,
     refresh,
@@ -2191,15 +2409,17 @@ export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown
   return expired;
 }
 
-/** Warm the lightweight overview reads before the Optimization tab mounts. */
-export function usePrefetchOptimizerOverview(brandId: string, adAccountId: string | null) {
+/** Warm the lightweight overview reads before the Optimization tab mounts. `_adAccountId`
+ *  stays in the signature the page shell calls with: the portfolio read is brand-scoped, so
+ *  every account view is warmed by the same entry. */
+export function usePrefetchOptimizerOverview(brandId: string, _adAccountId: string | null) {
   const queryClient = useQueryClient();
 
   return useCallback(() => {
     if (!brandId) return;
     void queryClient.prefetchQuery({
-      queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
-      queryFn: () => withReadTimeout(fetchPortfolios(brandId, adAccountId)),
+      queryKey: optimizerQueryKeys.portfolios(brandId),
+      queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
       staleTime: FIVE_MINUTES,
     });
     void queryClient.prefetchQuery({
@@ -2207,7 +2427,7 @@ export function usePrefetchOptimizerOverview(brandId: string, adAccountId: strin
       queryFn: () => withReadTimeout(fetchRenewals(brandId)),
       staleTime: FIVE_MINUTES,
     });
-  }, [adAccountId, brandId, queryClient]);
+  }, [brandId, queryClient]);
 }
 
 /** Warm a portfolio's detail-workspace reads before it opens — fired from a card's
@@ -2286,6 +2506,16 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     onSuccess: invalidateOptimizer,
   });
 
+  const createPlatform = useMutation({
+    mutationFn: createPlatformPortfolio,
+    onSuccess: invalidateOptimizer,
+  });
+
+  const addMembers = useMutation({
+    mutationFn: addPortfolioMembers,
+    onSuccess: invalidateOptimizer,
+  });
+
   const update = useMutation({
     mutationFn: updatePortfolio,
     onSuccess: invalidateOptimizer,
@@ -2307,7 +2537,8 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
   });
 
   const run = useMutation({
-    mutationFn: (portfolioId: string) => runCycle(portfolioId, brandId, adAccountId),
+    mutationFn: (portfolioId: string) =>
+      runCycle(portfolioId, brandId, adAccountId, cachedLatestRunId(queryClient, portfolioId)),
     // Only a cycle that actually persisted a run changed anything worth re-reading. A skip
     // wrote nothing, and an unreachable service wrote nothing either.
     onSuccess: (outcome) => {
@@ -2351,6 +2582,8 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
   return {
     create,
     enroll,
+    createPlatform,
+    addMembers,
     update,
     unenroll,
     archive,
@@ -2438,6 +2671,71 @@ export function useApplyApproved() {
         void queryClient.invalidateQueries({
           queryKey: optimizerQueryKeys.performance(request.portfolio_id),
         });
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+      }
+    },
+  });
+}
+
+/** One action's verdict from the service's POST /apply/actions
+ *  (Continuum-Optimizer/src/multiplatform/actions/route.ts). Read loosely on purpose: the card
+ *  needs the status and the refusal in words, and a field the service adds later must not turn
+ *  Google's verdict into a parse failure. */
+const ApplyActionResultSchema = z
+  .object({
+    status: z.string(),
+    kind: z.string().nullable(),
+    reason: z.string().optional(),
+    detail: z.string().optional(),
+    legs: z
+      .array(z.object({ status: z.string(), error: z.string().optional() }).passthrough())
+      .optional(),
+  })
+  .passthrough();
+export type ApplyActionResult = z.infer<typeof ApplyActionResultSchema>;
+
+const ApplyActionsResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    dryRun: z.boolean(),
+    results: z.array(ApplyActionResultSchema),
+  })
+  .passthrough();
+export type ApplyActionsResponse = z.infer<typeof ApplyActionsResponseSchema>;
+
+export type ApplyActionsRequest = {
+  portfolio_id: string;
+  actions: OptimizerAction[];
+  dryRun: boolean;
+  /** The recommendation the actions came from, for the ledger row. */
+  recommendation_id?: string;
+};
+
+/** A platform card's approved actions through optimizer-apply-actions → service
+ *  /apply/actions. dryRun:true asks Google's validate_only and reads the live value, writing
+ *  nothing; dryRun:false writes, attributed to the signed-in person by the route. */
+async function applyOptimizerActions(
+  request: ApplyActionsRequest,
+): Promise<ApplyActionsResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-actions', {
+    body: {
+      portfolio_id: request.portfolio_id,
+      actions: request.actions,
+      dryRun: request.dryRun,
+      ...(request.recommendation_id ? { recommendation_id: request.recommendation_id } : {}),
+    },
+  });
+  if (error) throw new Error('optimizer-apply-actions unreachable');
+  const parsed = ApplyActionsResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export function useApplyOptimizerActions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: applyOptimizerActions,
+    onSuccess: (data) => {
+      if (data && data.dryRun === false) {
         void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
       }
     },

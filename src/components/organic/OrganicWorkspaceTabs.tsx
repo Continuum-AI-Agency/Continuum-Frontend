@@ -1,5 +1,7 @@
 'use client';
 
+import type { OrganicMetricPlatform } from '@continuum/contracts';
+
 import { useSearchParams } from 'next/navigation';
 import React, { startTransition } from 'react';
 import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerationJobsRealtime';
@@ -23,39 +25,64 @@ const ViewTransition =
 type MetricsPrefetchParams = {
   brandId: string;
   integrationAccountId: string;
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  platform: OrganicMetricPlatform;
 };
 
 type Props = {
   plannerSlot: React.ReactNode;
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
+  exploreSlot?: React.ReactNode;
   agentSlot?: React.ReactNode;
+  reviewSlot?: React.ReactNode;
+  stylesSlot?: React.ReactNode;
+  rulesSlot?: React.ReactNode;
   brandId?: string | null;
 };
 
-const WORKSPACE_LABELS: Record<'planner' | 'metrics' | 'agent', string> = {
+type OrganicView = 'planner' | 'metrics' | 'explore' | 'agent' | 'review' | 'styles' | 'rules';
+
+const WORKSPACE_LABELS: Record<OrganicView, string> = {
   planner: 'Planner',
   metrics: 'Metrics',
+  explore: 'Explore',
   agent: 'Agent',
+  review: 'Review',
+  styles: 'Styles',
+  rules: 'Rules',
 };
 
 export function OrganicWorkspaceTabs({
   plannerSlot,
   metricsSlot,
   metricsPrefetchParams,
+  exploreSlot,
   agentSlot,
+  reviewSlot,
+  stylesSlot,
+  rulesSlot,
   brandId,
 }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const initialView: 'planner' | 'metrics' | 'agent' =
-    tabParam === 'metrics' ? 'metrics' : tabParam === 'agent' ? 'agent' : 'planner';
-  const [activeView, setActiveView] = React.useState<'planner' | 'metrics' | 'agent'>(initialView);
+  const initialView: OrganicView =
+    tabParam === 'metrics' ||
+    tabParam === 'explore' ||
+    tabParam === 'agent' ||
+    tabParam === 'review' ||
+    tabParam === 'styles' ||
+    tabParam === 'rules'
+      ? tabParam
+      : 'planner';
+  const [activeView, setActiveView] = React.useState<OrganicView>(initialView);
   // Track whether metrics/agent tabs have ever been shown — once mounted, keep alive
   // so switching back doesn't re-fetch / re-mount the components.
   const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === 'metrics');
+  const [exploreEverShown, setExploreEverShown] = React.useState(initialView === 'explore');
   const [agentEverShown, setAgentEverShown] = React.useState(initialView === 'agent');
+  const [reviewEverShown, setReviewEverShown] = React.useState(initialView === 'review');
+  const [stylesEverShown, setStylesEverShown] = React.useState(initialView === 'styles');
+  const [rulesEverShown, setRulesEverShown] = React.useState(initialView === 'rules');
 
   // Prefetch metrics data while user is on the planner tab
   React.useEffect(() => {
@@ -83,22 +110,37 @@ export function OrganicWorkspaceTabs({
   }, [activeView, metricsPrefetchParams]);
 
   React.useEffect(() => {
-    const nextView: 'planner' | 'metrics' | 'agent' =
-      tabParam === 'metrics' ? 'metrics' : tabParam === 'agent' ? 'agent' : 'planner';
+    const nextView: OrganicView =
+      tabParam === 'metrics' ||
+      tabParam === 'explore' ||
+      tabParam === 'agent' ||
+      tabParam === 'review' ||
+      tabParam === 'styles' ||
+      tabParam === 'rules'
+        ? tabParam
+        : 'planner';
     if (nextView !== activeView) {
       setActiveView(nextView);
       if (nextView === 'metrics') setMetricsEverShown(true);
+      if (nextView === 'explore') setExploreEverShown(true);
       if (nextView === 'agent') setAgentEverShown(true);
+      if (nextView === 'review') setReviewEverShown(true);
+      if (nextView === 'styles') setStylesEverShown(true);
+      if (nextView === 'rules') setRulesEverShown(true);
     }
   }, [activeView, tabParam]);
 
   const handleValueChange = React.useCallback((value: string) => {
-    const nextView = value as 'planner' | 'metrics' | 'agent';
+    const nextView = value as OrganicView;
 
     const apply = () => {
       setActiveView(nextView);
       if (nextView === 'metrics') setMetricsEverShown(true);
+      if (nextView === 'explore') setExploreEverShown(true);
       if (nextView === 'agent') setAgentEverShown(true);
+      if (nextView === 'review') setReviewEverShown(true);
+      if (nextView === 'styles') setStylesEverShown(true);
+      if (nextView === 'rules') setRulesEverShown(true);
       // One writer for every planner URL param (see plannerUrlState): still
       // history.replaceState under the hood, so no Next re-render and no Suspense flash.
       writePlannerUrlState({ tab: nextView });
@@ -132,9 +174,15 @@ export function OrganicWorkspaceTabs({
               aria-label="Organic workspace"
             >
               {(
-                ['planner', 'metrics', ...(agentSlot !== undefined ? ['agent'] : [])] as Array<
-                  'planner' | 'metrics' | 'agent'
-                >
+                [
+                  'planner',
+                  'metrics',
+                  ...(exploreSlot !== undefined ? ['explore'] : []),
+                  ...(agentSlot !== undefined ? ['agent'] : []),
+                  ...(reviewSlot !== undefined ? ['review'] : []),
+                  ...(stylesSlot !== undefined ? ['styles'] : []),
+                  ...(rulesSlot !== undefined ? ['rules'] : []),
+                ] as Array<OrganicView>
               ).map((view) => {
                 const isActive = activeView === view;
 
@@ -186,6 +234,24 @@ export function OrganicWorkspaceTabs({
                 {metricsSlot}
               </div>
             )}
+            {/* Defer explore mount until first viewed, then keep alive */}
+            {exploreSlot !== undefined && exploreEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-y-auto px-[var(--card-pad)]"
+                hidden={activeView !== 'explore'}
+              >
+                {exploreSlot}
+              </div>
+            )}
+            {/* Defer rules mount until first viewed, then keep alive */}
+            {rulesSlot !== undefined && rulesEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+                hidden={activeView !== 'rules'}
+              >
+                {rulesSlot}
+              </div>
+            )}
             {/* Defer agent mount until first viewed, then keep alive */}
             {agentSlot !== undefined && agentEverShown && (
               <div
@@ -193,6 +259,22 @@ export function OrganicWorkspaceTabs({
                 hidden={activeView !== 'agent'}
               >
                 {agentSlot}
+              </div>
+            )}
+            {reviewSlot !== undefined && reviewEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+                hidden={activeView !== 'review'}
+              >
+                {reviewSlot}
+              </div>
+            )}
+            {stylesSlot !== undefined && stylesEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+                hidden={activeView !== 'styles'}
+              >
+                {stylesSlot}
               </div>
             )}
           </div>

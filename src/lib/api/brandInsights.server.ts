@@ -1,19 +1,11 @@
 import 'server-only';
 
-import { currentWeekStartUtc } from '@continuum/contracts';
 import { getApiBaseUrl } from '@/lib/api/config';
-import { ApiError, assertOk } from '@/lib/api/errors';
+import { assertOk } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
-import {
-  mapBackendInsightsResponse,
-  mapBackendProfileResponse,
-} from '@/lib/brand-insights/backend';
+import { mapBackendInsightsResponse } from '@/lib/brand-insights/backend';
 import { tags } from '@/lib/cache/tags';
-import {
-  BRAND_TRENDS_SCHEMA,
-  type BrandInsights,
-  type BrandInsightsProfile,
-} from '@/lib/schemas/brandInsights';
+import { BRAND_TRENDS_SCHEMA, type BrandInsights } from '@/lib/schemas/brandInsights';
 
 type FetchOptions = {
   revalidateSeconds?: number;
@@ -67,92 +59,21 @@ async function request<TResponse = unknown>(
   return json as TResponse;
 }
 
-async function requestWithFallback<TResponse = unknown>(
-  primaryPath: string,
-  fallbackPath: string,
-  options?: Omit<RequestOptions<TResponse>, 'path'>,
-) {
-  try {
-    return await request<TResponse>({ ...options, path: primaryPath });
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 404) {
-      throw error;
-    }
-
-    return request<TResponse>({ ...options, path: fallbackPath });
-  }
-}
-
 export async function fetchBrandInsights(
   brandId: string,
   options?: FetchOptions,
 ): Promise<BrandInsights> {
-  const encodedBrandId = encodeURIComponent(brandId);
   const revalidate = options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS;
   const next = { revalidate, tags: [tags.brandInsights(brandId)] };
-  let response: unknown;
-
-  try {
-    response = await request({
-      path: '/api/trends/read',
-      method: 'POST',
-      body: {
-        brand_id: brandId,
-        week_start_date: options?.weekStartDate,
-      },
-      next,
-    });
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 404) {
-      throw error;
-    }
-
-    response = await requestWithFallback(
-      `/api/trends/${encodedBrandId}`,
-      `/api/brand-insights/${encodedBrandId}`,
-      {
-        method: 'GET',
-        next,
-      },
-    );
-  }
-
-  return mapBackendInsightsResponse(response);
-}
-
-export async function fetchBrandInsightsProfile(
-  brandId: string,
-  options?: FetchOptions,
-): Promise<BrandInsightsProfile> {
-  const encodedBrandId = encodeURIComponent(brandId);
-  const response = await requestWithFallback(
-    `/api/trends/profile/${encodedBrandId}`,
-    `/api/brand-insights/profile/${encodedBrandId}`,
-    {
-      method: 'GET',
-      next: {
-        revalidate: options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS,
-        tags: [tags.brandInsights(brandId)],
-      },
-    },
-  );
-
-  return mapBackendProfileResponse(response);
-}
-
-export async function startBrandInsightsServer(brandId: string): Promise<void> {
-  const windowStartDate = currentWeekStartUtc();
-  const windowEndDate = new Date(windowStartDate.getTime() + 7 * 24 * 60 * 60 * 1_000);
-
-  await request({
-    path: '/api/trends/jobs/start',
+  const response = await request({
+    path: '/api/trends/read',
     method: 'POST',
     body: {
       brand_id: brandId,
-      week_start_date: windowStartDate.toISOString().slice(0, 10),
-      window_start: windowStartDate.toISOString(),
-      window_end: windowEndDate.toISOString(),
+      week_start_date: options?.weekStartDate,
     },
-    cache: 'no-store',
+    next,
   });
+
+  return mapBackendInsightsResponse(response);
 }

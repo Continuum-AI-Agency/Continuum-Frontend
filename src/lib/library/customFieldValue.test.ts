@@ -3,7 +3,6 @@ import { type CustomField, type CustomFieldType, customFieldSchema } from '@cont
 import { MAX_FIELD_TEXT_LENGTH } from './customFields';
 import {
   formatCustomFieldValue,
-  isGroupableField,
   isValueEmpty,
   multiSelectOptionIds,
   ORPHANED_OPTION_LABEL,
@@ -14,7 +13,7 @@ import {
 
 function makeField(
   type: CustomFieldType,
-  options: { id: string; label: string }[] = [],
+  options: { id: string; label: string; color?: string }[] = [],
 ): CustomField {
   return customFieldSchema.parse({
     id: `field-${type}`,
@@ -160,11 +159,60 @@ describe('validateCustomFieldValue', () => {
   });
 });
 
-describe('isGroupableField', () => {
-  it('allows only single_select to drive board lanes', () => {
-    expect(isGroupableField(singleSelect)).toBe(true);
-    expect(isGroupableField(multiSelect)).toBe(false);
-    expect(isGroupableField(text)).toBe(false);
-    expect(isGroupableField(date)).toBe(false);
+describe('the six Wave-1 field types', () => {
+  const status = makeField('status', [
+    { id: 'todo', label: 'To do', color: '#999999' },
+    { id: 'done', label: 'Done', color: '#10b981' },
+  ]);
+  const rating = customFieldSchema.parse({
+    ...makeField('text'),
+    type: 'rating',
+    options: { max: 3 },
+  });
+  const member = '11111111-1111-4111-8111-111111111111';
+
+  it('formats each new type for display', () => {
+    expect(formatCustomFieldValue(status, 'done')).toBe('Done');
+    expect(formatCustomFieldValue(makeField('number'), 1200)).toBe('1,200');
+    expect(formatCustomFieldValue(makeField('checkbox'), false)).toBe('No');
+    expect(formatCustomFieldValue(rating, 2)).toBe('★★ 2/3');
+    expect(formatCustomFieldValue(makeField('url'), 'https://x.test/a')).toBe('https://x.test/a');
+    expect(formatCustomFieldValue(makeField('user'), member, () => 'Ada')).toBe('Ada');
+    expect(formatCustomFieldValue(makeField('user'), member)).toBe('Former member');
+  });
+
+  it('validates each new type against its declared shape', () => {
+    expect(validateCustomFieldValue(status, 'done')).toEqual({ ok: true, value: 'done' });
+    expect(validateCustomFieldValue(status, 'nope').ok).toBe(false);
+    expect(validateCustomFieldValue(makeField('number'), 3.5)).toEqual({ ok: true, value: 3.5 });
+    expect(validateCustomFieldValue(makeField('number'), '3').ok).toBe(false);
+    expect(validateCustomFieldValue(makeField('checkbox'), false)).toEqual({
+      ok: true,
+      value: false,
+    });
+    expect(validateCustomFieldValue(rating, 3)).toEqual({ ok: true, value: 3 });
+    expect(validateCustomFieldValue(rating, 4).ok).toBe(false);
+    expect(validateCustomFieldValue(rating, 0)).toEqual({ ok: true, value: null });
+    expect(validateCustomFieldValue(makeField('user'), member)).toEqual({
+      ok: true,
+      value: member,
+    });
+    expect(validateCustomFieldValue(makeField('user'), 'ada').ok).toBe(false);
+    expect(validateCustomFieldValue(makeField('url'), ' https://x.test ')).toEqual({
+      ok: true,
+      value: 'https://x.test',
+    });
+    expect(validateCustomFieldValue(makeField('url'), 'ftp://x').ok).toBe(false);
+  });
+});
+
+describe('formatCustomFieldValue — user_multi', () => {
+  it('names each member in stored order and marks one who left', () => {
+    const people = makeField('user_multi');
+    const names: Record<string, string> = { u1: 'Ana', u2: 'Bo' };
+    expect(formatCustomFieldValue(people, ['u2', 'u1', 'gone'], (id) => names[id])).toBe(
+      'Bo, Ana, Former member',
+    );
+    expect(formatCustomFieldValue(people, null)).toBe('');
   });
 });

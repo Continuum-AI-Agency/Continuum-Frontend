@@ -85,7 +85,7 @@ describe('DataFreshnessChip', () => {
 
   it('uses the token type scale, never a px literal', () => {
     const { container } = renderChip();
-    expect(container.innerHTML).toContain('text-2xs');
+    expect(container.innerHTML).toContain('text-xs');
     expect(container.innerHTML).not.toMatch(/text-\[\d/);
   });
 });

@@ -53,7 +53,7 @@ export function AdThumb({
     return (
       <span
         className={cn(
-          'grid shrink-0 place-items-center rounded-sm bg-muted text-3xs text-muted-foreground',
+          'grid shrink-0 place-items-center rounded-sm bg-muted text-xs text-muted-foreground',
           sizeClassName,
           className,
         )}

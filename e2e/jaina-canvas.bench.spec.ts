@@ -1,9 +1,17 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
+import {
+  type Browser,
+  type BrowserContext,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { mintSessionForEmail } from './support/auth';
+import { STARCRAFT_BRAND_ID } from './support/forge-studio-fixtures';
 import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
@@ -25,17 +33,22 @@ import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 //      a request: the browser holds no grant on these tables and this is what says so.
 //   3. PROPOSE — "Propose via Jaina" on a brand with a live ad account puts the canvas
 //      in the composer and the turn reaches `paid_scaffold_propose`.
-//   4. THE CARD IN CHAT — graded against the rows it reads: counts per level, the opening
-//      budget, what would stop build/populate, the outline at the 420px panel width, the
-//      link back onto the canvas. Then the build gate is asked for in a SECOND turn (no
-//      proposal frame on it), which this bench DENIES, and a reload must bring the card
-//      back without a live Approve. Screenshots: artifacts/jaina-canvas-bench/.
+//   4. THE CARD IN CHAT — graded against the rows it reads: counts per level, the six-figure
+//      summary strip (budget summed from the rows), the evidence from manifest.plan, ONE
+//      "Deploy paused" action with its blockers named, the outline at the 420px panel width,
+//      the link back onto the canvas. The deploy gate — opened by the proposal or by the
+//      card's own operator action — is DENIED, and a reload must bring the card back without a
+//      live Approve. Screenshots: artifacts/jaina-canvas-bench/.
+//   5. EDIT → SAVE → DEPLOY (see that test's header): a seeded client-brand version is edited
+//      on the canvas (side-entry audience, inspector budget and copy, a 2-card carousel from
+//      the Library), saved as a NEW version row that carries the edits, and its deploy gate is
+//      opened from the record bar and denied.
 //
 // ── MONEY SAFETY — this bench cannot write to an ad account ──
-//   * `paid_scaffold_propose` is UNGATED BY DESIGN (scaffoldApproval.ts:24) because it
-//     writes Continuum rows only — no Meta call, no spend. The first gate on the chain
-//     is `paid_scaffold_build`, and this bench answers it DENY. Nothing is approved
-//     anywhere in this file; there is no `'approve'` in it.
+//   * `paid_scaffold_propose` and the canvas save are UNGATED BY DESIGN: they write Continuum
+//     rows only — no Meta call, no spend. The only gate on the chain is `paid_scaffold_deploy`,
+//     and this bench answers it DENY every time. Nothing is approved anywhere in this file;
+//     there is no `'approve'` in it.
 //   * A denied gate never reaches `claim_paid_scaffold_gate`, so no Meta object is
 //     created. Step 4 additionally asserts every node it created has a NULL
 //     `meta_object_id` before deleting them.
@@ -85,6 +98,33 @@ const BENCH_TAG = 'bench:';
 const RUN_ID = randomUUID().slice(0, 8);
 const SCAFFOLD_NAME = `${BENCH_TAG}canvas-read ${RUN_ID}`;
 const AUDIENCE_NAME = `${BENCH_TAG}canvas-audience ${RUN_ID}`;
+const SAVE_SCAFFOLD_NAME = `${BENCH_TAG}canvas-save ${RUN_ID}`;
+/**
+ * The save → deploy hop runs on the ARMED SANDBOX, never a client: StarCraft's sandbox account
+ * resolves a single Page (the deploy gate's own precondition — Easy Fit has several and the gate
+ * refuses there by name), and it is the account the Backend deploy bench already drives. The
+ * gate is still only ever DENIED here.
+ */
+const SANDBOX_AD_ACCOUNT_ID = 'act_1246951350890277';
+const SANDBOX_OWNER_EMAIL = 'duane@continuumai.agency';
+
+const EDITED_COPY = `Canvas-edited copy ${RUN_ID}: stretch that moves with you.`;
+const EDITED_LINK = 'https://easyfit.mx/bench-canvas';
+
+/** The slice of `manifest.plan` the save hop reads back. */
+type PaidPlanTruth = {
+  adsets?: {
+    budget_source?: string;
+    daily_budget_minor_units?: number | null;
+    audience?: {
+      kind?: string;
+      targeting?: { countries?: string[]; age_min?: number; age_max?: number };
+    };
+  }[];
+  ads?: { creative?: { format?: string; cards?: unknown[] } | null }[];
+};
+type PaidAdPayload = { creative?: { message?: string; link?: string } } | null;
+type SentDraftNode = { level: string; message: string | null; link: string | null };
 
 const BACKEND_PORT = Number(process.env.JAINA_CANVAS_BENCH_BACKEND_PORT ?? 4421);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
@@ -185,6 +225,11 @@ async function startBackend(): Promise<void> {
       // belongs to the deployed Backend. Off, exactly as the peer benches run them.
       MCP_JOB_WORKER_ENABLED: 'false',
       BRAND_REPORT_JOB_WORKER_ENABLED: 'false',
+      // EVERY loop that claims other brands' production work — queues, automations, the
+      // scheduled-publish poller that posts real clients' due posts. Left on, a bench races the
+      // deployed Backend for them.
+      BACKGROUND_WORKERS_ENABLED: 'false',
+      JAINA_REPORT_ARTIFACT_WORKER_ENABLED: 'false',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     // Its own process group, so teardown can kill the GROUP. `bun run-backend.ts`
@@ -458,6 +503,27 @@ async function deleteSeed(value: Seed): Promise<void> {
  * calling the tool" (a finished row with events). Those three read identically at the
  * DOM and have completely different causes.
  */
+/**
+ * The conversations in `sessionIds` this run may delete: those with no run from before
+ * `since`. `POST /chat/conversations` also answers for a thread the panel RESTORED on mount,
+ * so collecting every session id it returns and deleting them all once aimed at a thread
+ * another bench owned (`bench:golden:smoke:*`, 2026-09-28) — a restored thread has history.
+ */
+async function sessionsThisRunOwns(sessionIds: Iterable<string>, since: string): Promise<string[]> {
+  const owned: string[] = [];
+  for (const sessionId of sessionIds) {
+    const { count } = await admin
+      .schema('jaina')
+      .from('jaina_conversation_runs')
+      .select('run_id', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .lt('created_at', since);
+    if ((count ?? 0) === 0) owned.push(sessionId);
+    else notes.push(`kept conversation ${sessionId}: it has runs from before this test`);
+  }
+  return owned;
+}
+
 async function latestRun(
   brandId: string,
   since: string,
@@ -521,8 +587,11 @@ async function latestSessionId(brandId: string, since: string): Promise<string |
   return ((data ?? [])[0] as { session_id: string | null } | undefined)?.session_id ?? null;
 }
 
+/** The gate "Deploy paused" answers; `paid_scaffold_build` only in pre-deploy transcripts. */
+const DEPLOY_GATE_TOOLS = ['paid_scaffold_deploy', 'paid_scaffold_build'];
+
 /**
- * Did a run since `since` open the build gate? Separates "the model never asked" (a SKIP about
+ * Did a run since `since` open the deploy gate? Separates "the model never asked" (a SKIP about
  * model behaviour) from "it asked and no card rendered" (the chat defect this bench exists for).
  */
 async function buildGateOpenedSince(brandId: string, since: string): Promise<string | null> {
@@ -540,10 +609,10 @@ async function buildGateOpenedSince(brandId: string, since: string): Promise<str
     .select('run_id,payload')
     .in('run_id', runIds)
     .eq('event_type', 'tool.approval_required');
-  const opened = (events ?? []).find(
-    (row) =>
-      (row as { payload: { toolName?: string } | null }).payload?.toolName ===
-      'paid_scaffold_build',
+  const opened = (events ?? []).find((row) =>
+    DEPLOY_GATE_TOOLS.includes(
+      (row as { payload: { toolName?: string } | null }).payload?.toolName ?? '',
+    ),
   );
   return opened ? String((opened as { run_id: string }).run_id) : null;
 }
@@ -565,6 +634,14 @@ async function scaffoldTruth(versionIds: string[]) {
     creative_asset_id: string | null;
     creative_media: unknown;
   }[];
+  const { data: versions } = await brandProfiles()
+    .from('paid_scaffold_versions')
+    .select('plan:manifest->plan')
+    .in('id', versionIds);
+  const evidence = ((versions ?? []) as { plan: { evidence?: unknown[] } | null }[]).reduce(
+    (total, row) => total + (Array.isArray(row.plan?.evidence) ? row.plan.evidence.length : 0),
+    0,
+  );
   const adSets = rows.filter((row) => row.level === 'adset');
   const ads = rows.filter((row) => row.level === 'ad');
   return {
@@ -575,6 +652,7 @@ async function scaffoldTruth(versionIds: string[]) {
     budgetMinorUnits: adSets.reduce((total, row) => total + (row.daily_budget_minor_units ?? 0), 0),
     adSetsWithoutAudience: adSets.filter((row) => !row.payload?.targeting).length,
     adsWithoutCreative: ads.filter((row) => !row.creative_asset_id && !row.creative_media).length,
+    evidence,
   };
 }
 
@@ -583,6 +661,172 @@ const plural = (count: number, noun: string): string => `${count} ${noun}${count
 /** Screenshots land beside the other bench artifacts at the monorepo root (gitignored). */
 const shotPath = (name: string): string =>
   path.join(process.cwd(), '..', 'artifacts', 'jaina-canvas-bench', `${RUN_ID}-${name}.png`);
+
+/**
+ * Deploy gate rows opened on these scaffolds' versions. Their subject is `<versionId>:<hash>` as
+ * TEXT — nothing cascades to it — so they are read by that prefix and then deleted by id.
+ */
+async function deleteDeployGates(scaffoldIds: string[]): Promise<void> {
+  if (scaffoldIds.length === 0) return;
+  const { data: versions } = await brandProfiles()
+    .from('paid_scaffold_versions')
+    .select('id')
+    .in('scaffold_id', scaffoldIds);
+  for (const version of (versions ?? []) as { id: string }[]) {
+    const { data: gates } = await brandProfiles()
+      .from('jaina_tool_gate_approvals')
+      .select('id')
+      .in('tool_name', DEPLOY_GATE_TOOLS)
+      .like('subject_id', `${version.id}:%`);
+    for (const gate of (gates ?? []) as { id: string }[]) {
+      const { error } = await brandProfiles()
+        .from('jaina_tool_gate_approvals')
+        .delete()
+        .eq('id', gate.id);
+      if (error) console.warn(`[canvas-bench] cleanup gate ${gate.id}: ${error.message}`);
+    }
+  }
+}
+
+/* -- the edit → save → deploy hop ------------------------------------------------------ */
+
+/** A brand member's uid — `brand_profiles.permissions` is the app's own answer to "who". */
+async function brandMemberId(brandId: string, email: string): Promise<string> {
+  const { data: members, error } = await brandProfiles()
+    .from('permissions')
+    .select('user_id,email')
+    .eq('brand_profile_id', brandId);
+  if (error) throw new Error(`[canvas-bench] permissions read: ${error.message}`);
+  const id = (members ?? [])
+    .map((row) => row as { user_id: string; email: string | null })
+    .find((row) => row.email?.toLowerCase() === email)?.user_id;
+  if (!id) throw new Error(`[canvas-bench] ${email} is not a member of brand ${brandId}`);
+  return id;
+}
+
+type SaveSeed = { scaffoldId: string; versionId: string; adSetNodeId: string; adNodeId: string };
+
+/**
+ * A v1 on the sandbox account, shaped like the scaffolds Jaina proposes: one campaign, one ad set
+ * with NO audience, one ad with copy and NO creative. The save hop has to run where the account is
+ * linked — the compiler reads Meta's floor and the account's Page — and seeding it (rather than
+ * editing a real proposal) means no real scaffold ever gets a version nobody made. Deleted by id
+ * in the test's `finally`.
+ */
+async function seedSaveScaffold(userId: string): Promise<SaveSeed> {
+  const scaffold = await insert('paid_scaffolds', {
+    brand_id: STARCRAFT_BRAND_ID,
+    ad_account_id: SANDBOX_AD_ACCOUNT_ID,
+    name: SAVE_SCAFFOLD_NAME,
+    created_by: userId,
+  });
+  const scaffoldId = String(scaffold.id);
+  const version = await insert('paid_scaffold_versions', {
+    scaffold_id: scaffoldId,
+    brand_id: STARCRAFT_BRAND_ID,
+    version: 1,
+    lifecycle: 'proposed',
+    manifest: { schema_version: 1, source: SAVE_SCAFFOLD_NAME },
+    content_hash: hash64(`${scaffoldId}:v1`),
+    special_ad_categories: [],
+    created_by: userId,
+  });
+  const versionId = String(version.id);
+  await brandProfiles()
+    .from('paid_scaffolds')
+    .update({ current_version_id: versionId })
+    .eq('id', scaffoldId);
+  const campaign = await insert('paid_scaffold_nodes', {
+    version_id: versionId,
+    brand_id: STARCRAFT_BRAND_ID,
+    parent_id: null,
+    level: 'campaign',
+    ordinal: 0,
+    path_key: 'c0',
+    name: `${SAVE_SCAFFOLD_NAME} // CAMPAIGN`,
+    payload: { objective: 'OUTCOME_TRAFFIC' },
+    status: 'pending',
+  });
+  const adSet = await insert('paid_scaffold_nodes', {
+    version_id: versionId,
+    brand_id: STARCRAFT_BRAND_ID,
+    parent_id: String(campaign.id),
+    level: 'adset',
+    ordinal: 0,
+    path_key: 'c0/a0',
+    name: `${SAVE_SCAFFOLD_NAME} // ADSET`,
+    product_key: 'bench_product',
+    angle_key: 'bench_angle',
+    payload: {
+      objective: 'OUTCOME_TRAFFIC',
+      optimization_goal: 'LINK_CLICKS',
+      funnel_stage: 'prospecting',
+      placement: { mode: 'advantage_plus' },
+    },
+    status: 'pending',
+  });
+  const ad = await insert('paid_scaffold_nodes', {
+    version_id: versionId,
+    brand_id: STARCRAFT_BRAND_ID,
+    parent_id: String(adSet.id),
+    level: 'ad',
+    ordinal: 0,
+    path_key: 'c0/a0/ad0',
+    name: `${SAVE_SCAFFOLD_NAME} // AD`,
+    product_key: 'bench_product',
+    angle_key: 'bench_angle',
+    concept_key: 'bench_concept',
+    payload: {
+      creative: {
+        message: 'Bench copy before the canvas edit.',
+        headline: 'Bench headline',
+        link: 'https://easyfit.mx/',
+        call_to_action_type: 'LEARN_MORE',
+      },
+    },
+    status: 'pending',
+  });
+  return { scaffoldId, versionId, adSetNodeId: String(adSet.id), adNodeId: String(ad.id) };
+}
+
+/** Drag one handle onto another the way a pointer does — React Flow listens for exactly this. */
+async function dragHandle(page: Page, from: Locator, to: Locator): Promise<void> {
+  await from.scrollIntoViewIfNeeded();
+  const a = await from.boundingBox();
+  const b = await to.boundingBox();
+  if (!a || !b) throw new Error('[canvas-bench] a handle has no box to drag');
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+}
+
+/** Right-click an empty stretch of the canvas and add one node from the palette. */
+const MENU_NODE_TYPES = { Audience: 'audience', Creative: 'creative', 'Ad Set': 'ad-set' } as const;
+
+async function addNodeFromMenu(
+  page: Page,
+  label: keyof typeof MENU_NODE_TYPES,
+  at: { x: number; y: number },
+): Promise<string> {
+  // `at` is pane-relative; the right-click moves the pointer there, which is where the canvas
+  // drops the node.
+  await page.locator('.react-flow__pane').click({ button: 'right', position: at });
+  await page.getByRole('menuitem', { name: 'Add Component' }).hover();
+  await page.getByRole('menuitem', { name: label, exact: true }).click();
+  const inspector = page.getByTestId('canvas-inspector');
+  await expect(inspector).toHaveAttribute('data-node-type', MENU_NODE_TYPES[label]);
+  return (await inspector.getAttribute('data-node-id')) ?? '';
+}
+
+async function selectNode(page: Page, nodeId: string): Promise<Locator> {
+  await page
+    .locator(`.react-flow__node[data-id="${nodeId}"]`)
+    .click({ position: { x: 24, y: 12 } });
+  const inspector = page.getByTestId('canvas-inspector');
+  await expect(inspector).toHaveAttribute('data-node-id', nodeId);
+  return inspector;
+}
 
 /* -- brand + session ------------------------------------------------------------- */
 
@@ -765,6 +1009,702 @@ test.describe('campaign flow canvas', () => {
     expect(nameAfter).toBe(nameBefore);
     expect(nameAfter).not.toContain('EDITED LOCALLY');
     grade('hitl.no-write', true, 'paid_scaffold_nodes.name unchanged after the edit');
+  });
+
+  test('edit on the canvas, save a NEW version that carries the edits, deploy it paused — denied', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(600_000);
+    const ownerUserId = await brandMemberId(STARCRAFT_BRAND_ID, SANDBOX_OWNER_EMAIL);
+    await selectBrand(ownerUserId, STARCRAFT_BRAND_ID);
+    const saveSeed = await seedSaveScaffold(ownerUserId);
+    const testStartedAt = new Date().toISOString();
+    const { context, page } = await signedInPage(browser, SANDBOX_OWNER_EMAIL);
+    const createdSessions = new Set<string>();
+    page.on('response', async (response) => {
+      if (
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/agents/jaina/chat/conversations')
+      ) {
+        const body = (await response.json().catch(() => null)) as { session_id?: unknown } | null;
+        if (typeof body?.session_id === 'string') createdSessions.add(body.session_id);
+      }
+    });
+
+    try {
+      await openCanvas(page);
+      await page.getByTestId('canvas-scaffold-picker').click();
+      await expect(page.getByRole('listbox')).toBeVisible({ timeout: 15_000 });
+      await page.keyboard.type(SAVE_SCAFFOLD_NAME);
+      await page.keyboard.press('Enter');
+      await expect(page.getByTestId('canvas-record-version')).toContainText('v1', {
+        timeout: 90_000,
+      });
+      await expect(page.getByText(`${SAVE_SCAFFOLD_NAME} // ADSET`, { exact: true })).toBeVisible();
+
+      // ---- side-entry audience: a Broad audience feeding the ad set from the LEFT ------------
+      const pane = await page.locator('.react-flow__pane').boundingBox();
+      if (!pane) throw new Error('[canvas-bench] the canvas has no pane');
+      const audienceId = await addNodeFromMenu(page, 'Audience', { x: 120, y: pane.height - 180 });
+      const audienceInspector = page.getByTestId('canvas-inspector');
+      await audienceInspector.getByRole('tab', { name: 'Broad' }).click();
+      await audienceInspector
+        .getByTestId('inspector-audience-countries')
+        .getByRole('button', { name: 'Mexico' })
+        .click();
+      await audienceInspector.getByTestId('inspector-audience-age-min').fill('25');
+      await audienceInspector.getByTestId('inspector-audience-age-min').press('Enter');
+      await audienceInspector.getByTestId('inspector-audience-age-max').fill('44');
+      await audienceInspector.getByTestId('inspector-audience-age-max').press('Enter');
+      await dragHandle(
+        page,
+        page.locator(`.react-flow__handle.source[data-nodeid="${audienceId}"]`),
+        page.locator(
+          `.react-flow__handle.target[data-nodeid="${saveSeed.adSetNodeId}"][data-handleid="audience"]`,
+        ),
+      );
+      const sideEdge = page.locator(
+        `.react-flow__edge[data-testid*="${audienceId}"][data-testid*="${saveSeed.adSetNodeId}"]`,
+      );
+      await expect(sideEdge).toHaveCount(1);
+      grade(
+        'canvas.side-audience',
+        true,
+        "audience → ad set on the ad set's left `audience` handle",
+      );
+
+      // ---- inspector: budget on the ad set, copy on the ad -------------------------------------
+      const adSetInspector = await selectNode(page, saveSeed.adSetNodeId);
+      await adSetInspector.getByTestId('inspector-field-budgetAmount').fill('150');
+      await adSetInspector.getByTestId('inspector-field-budgetAmount').press('Enter');
+      const adInspector = await selectNode(page, saveSeed.adNodeId);
+      await adInspector.getByTestId('inspector-field-primaryText').fill(EDITED_COPY);
+      await adInspector.getByTestId('inspector-field-primaryText').press('Tab');
+      await adInspector.getByTestId('inspector-field-linkUrl').fill(EDITED_LINK);
+      await adInspector.getByTestId('inspector-field-linkUrl').press('Enter');
+
+      // ---- creative: connect an image creative, make it a 2-card carousel from the Library -----
+      // Dragged off the ad's own handle into empty canvas: the canvas creates the Creative there,
+      // already connected — the affordance a person uses, and one no node can sit on top of.
+      const adHandle = page.locator(
+        `.react-flow__handle.source[data-nodeid="${saveSeed.adNodeId}"]`,
+      );
+      await adHandle.scrollIntoViewIfNeeded();
+      const handleBox = await adHandle.boundingBox();
+      if (!handleBox) throw new Error('[canvas-bench] the ad has no source handle to drag from');
+      const fromX = handleBox.x + handleBox.width / 2;
+      const fromY = handleBox.y + handleBox.height / 2;
+      await page.mouse.move(fromX, fromY);
+      await page.mouse.down();
+      await page.mouse.move(fromX + 40, fromY + 140, { steps: 12 });
+      await page.mouse.up();
+      const inspectorAfterDrop = page.getByTestId('canvas-inspector');
+      await expect(inspectorAfterDrop).toHaveAttribute('data-node-type', 'creative');
+      const creativeId = (await inspectorAfterDrop.getAttribute('data-node-id')) ?? '';
+      await expect(
+        page.locator(
+          `.react-flow__edge[data-testid*="${saveSeed.adNodeId}"][data-testid*="${creativeId}"]`,
+        ),
+      ).toHaveCount(1);
+      const creativeInspector = await selectNode(page, creativeId);
+      await creativeInspector
+        .getByTestId('inspector-creative-format')
+        .getByRole('button', { name: 'Carousel' })
+        .click();
+      await creativeInspector.getByTestId('inspector-creative-library').click();
+      const picker = page.getByRole('dialog');
+      const tiles = picker.locator('button[aria-pressed]');
+      await expect(tiles.nth(1)).toBeVisible({ timeout: 60_000 });
+      await tiles.nth(0).click();
+      await tiles.nth(1).click();
+      await picker.getByRole('button', { name: /^Add 2$/ }).click();
+      await expect(creativeInspector.getByTestId('inspector-carousel-card')).toHaveCount(2);
+      grade('canvas.carousel', true, '2 Library images placed as ordered carousel cards');
+      await expect(page.getByTestId('canvas-record-dirty')).toBeVisible();
+
+      // ---- an unconnected ad set refuses the save BY NAME, and nothing is sent -----------------
+      // A save walks the tree from the campaign; a node it cannot reach would silently vanish from
+      // the saved version, so the canvas must refuse rather than report "Saved as v2".
+      const orphanId = await addNodeFromMenu(page, 'Ad Set', { x: 120, y: 90 });
+      const orphanLabel = (
+        await page.getByTestId('canvas-inspector').getByTestId('inspector-field-label').inputValue()
+      ).trim();
+      let refusedSavePosts = 0;
+      const countSavePosts = (request: { method(): string; url(): string }) => {
+        if (request.method() === 'POST' && /\/scaffolds\/[^/]+\/versions$/.test(request.url())) {
+          refusedSavePosts += 1;
+        }
+      };
+      page.on('request', countSavePosts);
+      await page.getByTestId('canvas-save').click();
+      await expect(page.getByTestId('canvas-save-issues')).toContainText(orphanLabel, {
+        timeout: 15_000,
+      });
+      page.off('request', countSavePosts);
+      expect(refusedSavePosts).toBe(0);
+      await expect(page.getByTestId('canvas-record-version')).toContainText('v1');
+      grade(
+        'canvas.orphan-save-refused',
+        refusedSavePosts === 0,
+        `Save refused, naming "${orphanLabel}"; ${refusedSavePosts} version POSTs sent`,
+      );
+
+      // ---- a keyboard delete is a real edit: the node goes, the canvas stays dirty -------------
+      await selectNode(page, orphanId);
+      await page.keyboard.press('Backspace');
+      await expect(page.locator(`.react-flow__node[data-id="${orphanId}"]`)).toHaveCount(0);
+      await expect(page.getByTestId('canvas-record-dirty')).toBeVisible();
+      grade('canvas.keyboard-delete', true, 'Backspace removed the orphan ad set; still dirty');
+
+      // ---- SAVE → a new version row, then the canvas reloads exactly that version -------------
+      const versionsBefore = await brandProfiles()
+        .from('paid_scaffold_versions')
+        .select('id')
+        .eq('scaffold_id', saveSeed.scaffoldId);
+      // The body the browser actually sent — so a copy that does not land is attributable to
+      // the canvas (never sent) or the route (sent, not kept) without a second run.
+      const saveRequest = page.waitForRequest(
+        (request) =>
+          request.method() === 'POST' && /\/scaffolds\/[^/]+\/versions$/.test(request.url()),
+        { timeout: 60_000 },
+      );
+      await page.getByTestId('canvas-save').click();
+      const sentNodes =
+        ((await saveRequest).postDataJSON() as { nodes?: SentDraftNode[] }).nodes ?? [];
+      const sentAd = sentNodes.find((node) => node.level === 'ad');
+      const saved = await page
+        .getByTestId('canvas-record-version')
+        .filter({ hasText: 'v2' })
+        .waitFor({ timeout: 180_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!saved) {
+        const issues = await page.getByTestId('canvas-save-issues').allTextContents();
+        const error = await page.getByTestId('canvas-record-error').allTextContents();
+        throw new Error(`[canvas-bench] save did not land: ${[...error, ...issues].join(' | ')}`);
+      }
+      await expect(page.getByTestId('canvas-record-dirty')).toHaveCount(0);
+
+      const { data: versionRows } = await brandProfiles()
+        .from('paid_scaffold_versions')
+        .select('id,version,lifecycle,content_hash,plan:manifest->plan')
+        .eq('scaffold_id', saveSeed.scaffoldId)
+        .order('version', { ascending: true });
+      const rows = (versionRows ?? []) as {
+        id: string;
+        version: number;
+        content_hash: string;
+        plan: PaidPlanTruth | null;
+      }[];
+      expect(rows.length).toBe((versionsBefore.data ?? []).length + 1);
+      const v2 = rows.at(-1);
+      expect(v2?.version).toBe(2);
+      expect(v2?.id).not.toBe(saveSeed.versionId);
+      grade('save.new-version', true, `v2 ${v2?.id} beside the untouched v1`);
+
+      const plannedAdSet = v2?.plan?.adsets?.[0];
+      expect(plannedAdSet?.budget_source).toBe('user');
+      expect(plannedAdSet?.daily_budget_minor_units ?? 0).toBeGreaterThanOrEqual(15_000);
+      expect(plannedAdSet?.audience?.kind).toBe('broad');
+      expect(plannedAdSet?.audience?.targeting?.countries).toEqual(['MX']);
+      expect(plannedAdSet?.audience?.targeting?.age_min).toBe(25);
+      expect(plannedAdSet?.audience?.targeting?.age_max).toBe(44);
+      const plannedAd = v2?.plan?.ads?.[0];
+      expect(plannedAd?.creative?.format).toBe('carousel');
+      expect(plannedAd?.creative?.cards?.length).toBe(2);
+      const { data: v2Nodes } = await brandProfiles()
+        .from('paid_scaffold_nodes')
+        .select('level,payload,daily_budget_minor_units,meta_object_id,meta_creative_id')
+        .eq('version_id', v2?.id ?? '');
+      const adRow = ((v2Nodes ?? []) as { level: string; payload: PaidAdPayload }[]).find(
+        (row) => row.level === 'ad',
+      );
+      expect(sentAd?.message, 'the canvas never SENT the edited copy').toBe(EDITED_COPY);
+      expect(sentAd?.link, 'the canvas never SENT the edited link').toBe(EDITED_LINK);
+      expect(adRow?.payload?.creative?.message, 'the route did not keep the sent copy').toBe(
+        EDITED_COPY,
+      );
+      expect(adRow?.payload?.creative?.link, 'the route did not keep the sent link').toBe(
+        EDITED_LINK,
+      );
+      grade(
+        'save.carries-edits',
+        true,
+        `budget ${plannedAdSet?.daily_budget_minor_units} (user), broad MX 25-44, ` +
+          'carousel ×2, copy + link — read back off the v2 rows',
+      );
+
+      // ---- DEPLOY PAUSED from the record bar → the gate in the canvas's Jaina panel → DENY ----
+      // Opened only now, not before the edits: minimized, the panel floats over the right side
+      // of the canvas — exactly where the docked inspector sits — and swallows its clicks.
+      // A FRESH conversation for the deploy gate: the panel restores the newest one on mount, and
+      // on a shared brand that can be someone else's.
+      await page.getByRole('button', { name: 'Open Jaina' }).click();
+      await page.getByRole('button', { name: 'Maximize chat' }).click();
+      const newestConversation = page.locator('[data-testid^="jaina-conversation-"]').first();
+      if (await newestConversation.isVisible({ timeout: 30_000 }).catch(() => false)) {
+        await expect(newestConversation).toBeDisabled({ timeout: 60_000 });
+      }
+      await page.getByRole('button', { name: 'Create new conversation' }).click();
+      await page.getByRole('button', { name: 'Minimize chat' }).click();
+      // Minimized, never closed: a remount would restore whichever conversation is newest.
+
+      const deployClickedAt = new Date().toISOString();
+      await page.getByTestId('canvas-deploy-paused').click();
+      const gateCard = page.locator(
+        `[data-testid="paid-scaffold-card"][data-scaffold-version="${v2?.id}"]`,
+        { has: page.locator('[data-testid="scaffold-deploy"][data-action="approve"]') },
+      );
+      const gateOpened = await gateCard
+        .first()
+        .waitFor({ state: 'visible', timeout: 180_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!gateOpened) {
+        const run = await latestRun(STARCRAFT_BRAND_ID, deployClickedAt);
+        if (run) {
+          // Read BEFORE cleanup deletes the conversation: a refusal is text in these events.
+          const { data: events } = await admin
+            .schema('jaina')
+            .from('jaina_conversation_run_events')
+            .select('event_type,payload')
+            .eq('run_id', run.runId)
+            .order('seq', { ascending: true });
+          notes.push(
+            `deploy run ${run.runId}: ${JSON.stringify(
+              (events ?? []).map((event) => [
+                (event as { event_type: string }).event_type,
+                JSON.stringify((event as { payload: unknown }).payload).slice(0, 240),
+              ]),
+            )}`,
+          );
+        }
+        throw new Error(
+          `[canvas-bench] Deploy paused opened no gate on v2. ${
+            run
+              ? `run ${run.runId} status=${run.status}, ${run.events} event(s) — a refusal is text-only`
+              : 'no run row: the operator action never reached the Backend'
+          }`,
+        );
+      }
+      const card = gateCard.first();
+      await expect(card.getByTestId('scaffold-gate-preview')).toContainText('PAUSED');
+      await expect(card.getByTestId('scaffold-deploy')).toHaveText('Deploy paused');
+      await card.screenshot({ path: shotPath('deploy-gate') });
+      grade(
+        'deploy.gate',
+        true,
+        'operator action opened the deploy gate on v2; preview lands everything PAUSED',
+      );
+
+      const dismiss = card.getByRole('button', { name: 'Dismiss' });
+      await expect(dismiss).toBeEnabled({ timeout: 180_000 });
+      await dismiss.click();
+      // Re-found by version, not by its Approve: a decided card no longer has one.
+      await expect(
+        page
+          .locator(`[data-testid="paid-scaffold-card"][data-scaffold-version="${v2?.id}"]`)
+          .filter({ hasText: 'Declined — nothing created' })
+          .first(),
+      ).toBeVisible({ timeout: 60_000 });
+      await expect
+        .poll(
+          async () => {
+            const { data } = await brandProfiles()
+              .from('jaina_tool_gate_approvals')
+              .select('status')
+              .eq('tool_name', 'paid_scaffold_deploy')
+              // The deploy gate's subject is `<versionId>:<contentHash>` — the hash IS the consent.
+              .like('subject_id', `${v2?.id ?? 'none'}:%`);
+            return ((data ?? []) as { status: string }[]).map((row) => row.status).join(',');
+          },
+          { timeout: 60_000 },
+        )
+        .toBe('denied');
+      const touchedMeta = (
+        (v2Nodes ?? []) as {
+          meta_object_id: string | null;
+          meta_creative_id: string | null;
+        }[]
+      ).filter((row) => row.meta_object_id || row.meta_creative_id);
+      expect(touchedMeta).toHaveLength(0);
+      grade('deploy.denied', true, 'gate row denied; no v2 node carries a Meta id');
+    } finally {
+      await deleteDeployGates([saveSeed.scaffoldId]);
+      const { error } = await brandProfiles()
+        .from('paid_scaffolds')
+        .delete()
+        .eq('id', saveSeed.scaffoldId);
+      if (error) console.warn(`[canvas-bench] cleanup ${saveSeed.scaffoldId}: ${error.message}`);
+      for (const sessionId of await sessionsThisRunOwns(createdSessions, testStartedAt)) {
+        const response = await page.request
+          .delete(`/api/agents/jaina/chat/conversations/${encodeURIComponent(sessionId)}`)
+          .catch(() => null);
+        if (!response?.ok()) {
+          console.warn(`[canvas-bench] cleanup conversation ${sessionId}: ${response?.status()}`);
+        }
+      }
+      await context.close();
+    }
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // THE COMPANION LOOP — the owner's 09-28 notes, end to end, on the armed sandbox only (no
+  // client brand, no client login). Every hop runs through the real UI, the Fastify this spec
+  // spawns, and production rows; each is graded on a row, a URL or a rendered pixel:
+  //   1. a plain campaign ask — the recording's own sentence, no "scaffold" in it — proposes
+  //   2. the proposal opens the chat's companion canvas beside it, on that scaffold
+  //   3. an edit on the companion shows in the chat's card as it is made, and saves (v2)
+  //   4. "Open on canvas" carries the thread; a Library image placed there is still drawn
+  //      after Save reloads the version (v3)
+  //   5. "Generate with Jaina" hands an empty ad to Jaina in the SAME thread, pinned to v3
+  //   6. "Back to chat" lands in that thread, and its card draws the attached image
+  // MONEY: generation is approval-gated and nothing here approves — a gate is left pending and
+  // deleted by id. Scaffolds, gates and the one conversation this test made are id-diffed and
+  // deleted by id.
+  // ---------------------------------------------------------------------------------------
+  test('companion loop — a plain campaign ask proposes, the side canvas follows, an image survives save, back to the thread, Generate hands the ad to Jaina', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(1_800_000);
+    const NATURAL_ASK =
+      'Plan a starter ad account and then make two creative to put into an ad set.';
+    const testStartedAt = new Date().toISOString();
+    const ownerUserId = await brandMemberId(STARCRAFT_BRAND_ID, SANDBOX_OWNER_EMAIL);
+    await selectBrand(ownerUserId, STARCRAFT_BRAND_ID);
+
+    const scaffoldIds = async (): Promise<string[]> =>
+      (
+        (
+          await brandProfiles()
+            .from('paid_scaffolds')
+            .select('id')
+            .eq('brand_id', STARCRAFT_BRAND_ID)
+        ).data ?? []
+      ).map((row) => String((row as { id: string }).id));
+    const gateIds = async (): Promise<string[]> =>
+      (
+        (
+          await brandProfiles()
+            .from('jaina_tool_gate_approvals')
+            .select('id')
+            .eq('brand_id', STARCRAFT_BRAND_ID)
+        ).data ?? []
+      ).map((row) => String((row as { id: string }).id));
+    const currentVersionOf = async (scaffoldId: string): Promise<string> => {
+      const { data } = await brandProfiles()
+        .from('paid_scaffolds')
+        .select('current_version_id')
+        .eq('id', scaffoldId)
+        .single();
+      return String((data as { current_version_id: string }).current_version_id);
+    };
+    const runEventsText = async (runId: string): Promise<string> => {
+      const { data } = await admin
+        .schema('jaina')
+        .from('jaina_conversation_run_events')
+        .select('event_type,payload')
+        .eq('run_id', runId)
+        .order('seq', { ascending: true });
+      return JSON.stringify(data ?? []);
+    };
+    const settledRun = async (since: string) => {
+      await expect
+        .poll(async () => (await latestRun(STARCRAFT_BRAND_ID, since))?.status, {
+          timeout: 420_000,
+          intervals: [3_000, 5_000],
+        })
+        .toMatch(/completed|failed|paused|awaiting|cancel/);
+      return latestRun(STARCRAFT_BRAND_ID, since);
+    };
+    // Next keeps the page navigated AWAY from mounted but hidden, so on the canvas page the Scale
+    // page's companion canvas (and its record bar, inspector and nodes) is still in the DOM.
+    // Every canvas locator below is scoped to what is on screen.
+    const shown = (selector: string) => page.locator(`${selector}:visible`);
+    const selectShownNode = async (nodeId: string) => {
+      await shown(`.react-flow__node[data-id="${nodeId}"]`).click({ position: { x: 24, y: 12 } });
+      const inspector = shown('[data-testid="canvas-inspector"]');
+      await expect(inspector).toHaveAttribute('data-node-id', nodeId);
+      return inspector;
+    };
+    /** Saves the canvas on screen and returns the version it made current. */
+    const saveCanvas = async (scaffoldId: string, before: string): Promise<string> => {
+      await shown('[data-testid="canvas-save"]').click();
+      await expect.poll(() => currentVersionOf(scaffoldId), { timeout: 180_000 }).not.toBe(before);
+      await expect(shown('[data-testid="canvas-record-dirty"]')).toHaveCount(0, {
+        timeout: 180_000,
+      });
+      return currentVersionOf(scaffoldId);
+    };
+
+    const scaffoldsBefore = new Set(await scaffoldIds());
+    const gatesBefore = new Set(await gateIds());
+    const { context, page } = await signedInPage(browser, SANDBOX_OWNER_EMAIL);
+    const createdSessions = new Set<string>();
+    page.on('response', async (response) => {
+      if (
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/agents/jaina/chat/conversations')
+      ) {
+        const body = (await response.json().catch(() => null)) as { session_id?: unknown } | null;
+        if (typeof body?.session_id === 'string') createdSessions.add(body.session_id);
+      }
+    });
+    let createdScaffolds: string[] = [];
+
+    try {
+      // ---- 1. the plain ask proposes ------------------------------------------------------
+      await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+      const composer = page.getByRole('textbox', { name: 'Message Jaina' });
+      await expect(composer).toBeVisible({ timeout: 240_000 });
+      // The panel restores the newest thread on mount, and a "new" clicked before that lands is
+      // undone by it — the turn then goes into an old thread. `isVisible` does not wait (its
+      // timeout is ignored), which is how two runs landed in `bench:golden:smoke:*`.
+      const conversations = page.locator('[data-testid^="jaina-conversation-"]');
+      const restored = await conversations
+        .first()
+        .waitFor({ state: 'visible', timeout: 90_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (restored) await expect(conversations.first()).toBeDisabled({ timeout: 90_000 });
+      await page.getByRole('button', { name: 'Create new conversation' }).click();
+      await expect(conversations.and(page.locator(':disabled'))).toHaveCount(0, {
+        timeout: 15_000,
+      });
+      await composer.click();
+      await composer.pressSequentially(NATURAL_ASK);
+      const askedAt = new Date().toISOString();
+      await page.getByRole('button', { name: 'Send message' }).click();
+
+      const proposed = await expect
+        .poll(async () => (await scaffoldIds()).filter((id) => !scaffoldsBefore.has(id)).length, {
+          timeout: 420_000,
+          intervals: [2_000, 5_000],
+        })
+        .toBeGreaterThan(0)
+        .then(() => true)
+        .catch(() => false);
+      createdScaffolds = (await scaffoldIds()).filter((id) => !scaffoldsBefore.has(id));
+      const askRun = await settledRun(askedAt).catch(() => latestRun(STARCRAFT_BRAND_ID, askedAt));
+      grade(
+        'trigger.plain-ask',
+        proposed,
+        proposed
+          ? `"${NATURAL_ASK}" wrote ${createdScaffolds.length} scaffold(s) — no "scaffold" in the ask`
+          : `no scaffold row; run ${askRun?.runId ?? 'none'} status=${askRun?.status ?? '—'}`,
+      );
+      if (!proposed) throw new Error('[canvas-bench] the plain campaign ask proposed nothing');
+      const { data: askRunRow } = await admin
+        .schema('jaina')
+        .from('jaina_conversation_runs')
+        .select('session_id')
+        .eq('run_id', askRun?.runId ?? 'none')
+        .maybeSingle();
+      const askSession = String((askRunRow as { session_id?: string } | null)?.session_id ?? '');
+      const freshThread = (await sessionsThisRunOwns([askSession], testStartedAt)).length === 1;
+      grade('trigger.fresh-thread', freshThread, `the ask ran in ${askSession}`);
+      if (!freshThread) {
+        throw new Error(`[canvas-bench] the ask landed in an existing thread ${askSession}`);
+      }
+
+      const scaffoldId = createdScaffolds[0] as string;
+      const v1 = await currentVersionOf(scaffoldId);
+      const { data: scaffoldRow } = await brandProfiles()
+        .from('paid_scaffolds')
+        .select('name')
+        .eq('id', scaffoldId)
+        .single();
+      const scaffoldName = String((scaffoldRow as { name: string }).name);
+      const card = page
+        .locator(`[data-testid="paid-scaffold-card"][data-scaffold-version="${v1}"]`)
+        .first();
+      await expect(card).toBeVisible({ timeout: 120_000 });
+
+      // ---- 2. the proposal opens the companion canvas on it ---------------------------------
+      await expect(page.getByTestId('canvas-record-bar')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('canvas-scaffold-picker')).toContainText(
+        scaffoldName.slice(0, 24),
+        { timeout: 120_000 },
+      );
+      await expect(page.getByTestId('canvas-record-version')).toContainText('v1');
+      await expect(page.getByTestId('canvas-propose-via-jaina')).toHaveCount(0);
+      grade('companion.opened', true, `side canvas loaded "${scaffoldName}" v1, no Propose button`);
+
+      // ---- 3. an edit on the companion shows in the card as it is made, then saves ----------
+      const { data: v1Nodes } = await brandProfiles()
+        .from('paid_scaffold_nodes')
+        .select('id,level')
+        .eq('version_id', v1)
+        .order('path_key', { ascending: true });
+      const adSetRow = ((v1Nodes ?? []) as { id: string; level: string }[]).find(
+        (row) => row.level === 'adset',
+      );
+      if (!adSetRow) throw new Error('[canvas-bench] the proposal has no ad set');
+      const liveName = `Live ${RUN_ID} ad set`;
+      const adSetInspector = await selectShownNode(adSetRow.id);
+      await adSetInspector.getByTestId('inspector-field-label').fill(liveName);
+      await adSetInspector.getByTestId('inspector-field-label').press('Enter');
+      await expect(card.getByTestId('scaffold-live-canvas')).toBeVisible({ timeout: 30_000 });
+      await expect(card).toContainText(liveName, { timeout: 30_000 });
+      grade(
+        'companion.live-card',
+        true,
+        'renamed on the side canvas → the chat card shows it, "Live on canvas"',
+      );
+      const v2 = await saveCanvas(scaffoldId, v1);
+      grade('companion.save', v2 !== v1, `the side canvas saved v2 ${v2}`);
+
+      // ---- 4. Open on canvas carries the thread; a Library image survives Save -------------
+      const openLink = card.getByTestId('scaffold-open-canvas');
+      const href = (await openLink.getAttribute('href')) ?? '';
+      const threadSessionId = new URL(href, 'http://bench').searchParams.get('session');
+      expect(threadSessionId, 'Open on canvas carries the thread').toBeTruthy();
+      await openLink.click();
+      await page.waitForURL(/\/scale\/campaign-canvas\?/, { timeout: 60_000 });
+      // The page first shows the store's copy of the graph, then the record bar loads the
+      // requested scaffold and replaces every node — closing any inspector (and the Library
+      // picker inside it) opened in between. Touch nothing until that load has landed.
+      await expect(shown('[data-testid="canvas-scaffold-picker"]')).toBeVisible({
+        timeout: 180_000,
+      });
+      await expect(shown('[data-testid="canvas-record-bar"]')).not.toContainText('Loading', {
+        timeout: 180_000,
+      });
+      await expect(shown('[data-testid="canvas-record-version"]')).toContainText('v2', {
+        timeout: 180_000,
+      });
+
+      const creatives = shown('.react-flow__node-creative');
+      await expect(creatives.first()).toBeVisible({ timeout: 60_000 });
+      const firstCreativeId = (await creatives.first().getAttribute('data-id')) ?? '';
+      // The record bar loads the requested scaffold AFTER the page shows the store's copy, and
+      // that load replaces every node — dropping a selection made in between. Select again.
+      await expect(async () => {
+        const inspector = await selectShownNode(firstCreativeId);
+        await inspector.getByTestId('inspector-creative-library').click({ timeout: 5_000 });
+      }).toPass({ timeout: 120_000 });
+      // Named: a "Saved as v2" toast is a dialog too.
+      const picker = page.getByRole('dialog', { name: /from the Library/ });
+      const tiles = picker.locator('button[aria-pressed]');
+      await expect(tiles.first()).toBeVisible({ timeout: 60_000 });
+      await tiles.first().click();
+      const add = picker.getByRole('button', { name: /^Add\b/ });
+      if (await add.isVisible({ timeout: 3_000 }).catch(() => false)) await add.click();
+      await expect(picker).toBeHidden({ timeout: 15_000 });
+      const v3 = await saveCanvas(scaffoldId, v2);
+      // The reload replaced every node: read the pixels of whatever creative now holds an image.
+      const savedImage = shown('.react-flow__node-creative img').first();
+      await expect(savedImage).toBeVisible({ timeout: 60_000 });
+      await expect
+        .poll(
+          () =>
+            savedImage.evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0)),
+          { timeout: 60_000 },
+        )
+        .toBeGreaterThan(0);
+      await page.screenshot({ path: shotPath('companion-after-save') });
+      grade('preview.survives-save', true, `v3 ${v3}: the reloaded creative draws a real image`);
+
+      // ---- 5. Generate with Jaina, into the saved version, in the same thread ---------------
+      const emptyCreative = creatives.filter({ hasNot: page.locator('img') }).first();
+      if (await emptyCreative.isVisible({ timeout: 15_000 }).catch(() => false)) {
+        const targetId = (await emptyCreative.getAttribute('data-id')) ?? '';
+        const generatedAt = new Date().toISOString();
+        await expect(async () => {
+          const inspector = await selectShownNode(targetId);
+          const generate = inspector.getByTestId('inspector-creative-generate');
+          await expect(generate).toBeEnabled({ timeout: 5_000 });
+          await generate.click({ timeout: 5_000 });
+        }).toPass({ timeout: 120_000 });
+        const run = await settledRun(generatedAt).catch(() =>
+          latestRun(STARCRAFT_BRAND_ID, generatedAt),
+        );
+        const events = run ? await runEventsText(run.runId) : '';
+        const handedOff = /paid_creative_generate|paid_scaffold_attach_creative/.test(events);
+        const { data: runRow } = await admin
+          .schema('jaina')
+          .from('jaina_conversation_runs')
+          .select('session_id,query')
+          .eq('run_id', run?.runId ?? 'none')
+          .maybeSingle();
+        const runQuery = String((runRow as { query?: string } | null)?.query ?? '');
+        grade(
+          'generate.handoff',
+          handedOff,
+          `run ${run?.runId ?? 'none'} status=${run?.status ?? '—'}: ${
+            handedOff ? 'reached generate / attach' : 'no generate or attach tool in its events'
+          }`,
+        );
+        grade(
+          'generate.pinned-to-saved-version',
+          runQuery.includes(v3),
+          runQuery.includes(v3) ? `the turn names v3 ${v3}` : 'the turn does not name v3',
+        );
+        grade(
+          'generate.same-thread',
+          (runRow as { session_id?: string } | null)?.session_id === threadSessionId,
+          'the canvas chat is the thread the card lives in',
+        );
+      } else {
+        graded.push({
+          step: 'generate.handoff',
+          grade: 'SKIP',
+          detail: 'every creative already held an image, so no empty ad was left to generate into',
+        });
+      }
+
+      // ---- 6. Back to chat lands in the same thread, its card drawing the image ------------
+      // Generate opened the chat maximized over the canvas; its footprint covers the top bar.
+      const minimize = page.getByRole('button', { name: 'Minimize chat' });
+      if (await minimize.count()) await minimize.click();
+      const back = shown('[data-testid="canvas-back-to-chat"]');
+      await expect(back).toHaveAttribute('href', `/scale?tab=jaina&sessionId=${threadSessionId}`);
+      await back.click();
+      await page.waitForURL(/\/scale\?tab=jaina&sessionId=/, { timeout: 60_000 });
+      const cardAgain = shown(
+        `[data-testid="paid-scaffold-card"][data-scaffold-version="${v1}"]`,
+      ).first();
+      await expect(cardAgain).toBeVisible({ timeout: 180_000 });
+      grade('canvas.back-to-thread', true, `returned to thread ${threadSessionId}, card on screen`);
+      const tileImage = cardAgain.getByTestId('scaffold-creative').locator('img').first();
+      await expect(tileImage).toBeVisible({ timeout: 60_000 });
+      await expect
+        .poll(
+          () =>
+            tileImage.evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0)),
+          { timeout: 60_000 },
+        )
+        .toBeGreaterThan(0);
+      grade('card.creative-preview', true, "the card's Creatives tile draws the attached image");
+      await page.screenshot({ path: shotPath('companion-back-in-thread') });
+    } finally {
+      const newGates = (await gateIds()).filter((id) => !gatesBefore.has(id));
+      for (const id of newGates) {
+        const { error } = await brandProfiles()
+          .from('jaina_tool_gate_approvals')
+          .delete()
+          .eq('id', id);
+        if (error) console.warn(`[canvas-bench] cleanup gate ${id}: ${error.message}`);
+      }
+      for (const id of createdScaffolds) {
+        const { error } = await brandProfiles().from('paid_scaffolds').delete().eq('id', id);
+        if (error) console.warn(`[canvas-bench] cleanup scaffold ${id}: ${error.message}`);
+      }
+      const ownedSessions = await sessionsThisRunOwns(createdSessions, testStartedAt);
+      for (const sessionId of ownedSessions) {
+        const response = await context.request
+          .delete(`/api/agents/jaina/chat/conversations/${encodeURIComponent(sessionId)}`)
+          .catch(() => null);
+        if (!response?.ok()) {
+          console.warn(`[canvas-bench] cleanup conversation ${sessionId}: ${response?.status()}`);
+        }
+      }
+      notes.push(
+        `companion loop cleaned: ${newGates.length} gate(s), ${createdScaffolds.length} scaffold(s), ` +
+          `${ownedSessions.length} conversation(s)`,
+      );
+      await context.close();
+    }
   });
 
   test('propose via Jaina, the card in chat, the gate a turn later, denied', async ({
@@ -952,47 +1892,75 @@ test.describe('campaign flow canvas', () => {
         await expect(card).toContainText(expectedSummary);
         if (gateOpenedInTurn1) {
           await expect(card).toContainText('Awaiting your approval');
-          grade('chat.card', true, `${expectedSummary}, gate opened in the same turn and says so`);
+          grade('chat.card', true, `${expectedSummary}, deploy gate opened with the proposal`);
         } else {
           await expect(card).toContainText('Proposed — nothing on Meta yet');
           await expect(card).not.toContainText('Awaiting your approval');
           grade('chat.card', true, `${expectedSummary}, called a proposal (no gate is open)`);
         }
 
-        if (truth.budgeted > 0) {
-          const total = card.getByTestId('scaffold-opening-budget-total');
-          await expect(total).toBeVisible();
-          const shown = (await total.textContent()) ?? '';
-          expect(Number(shown.replace(/[^\d]/g, ''))).toBe(
-            Math.round(truth.budgetMinorUnits / 100),
+        // THE SUMMARY STRIP — six figures, the budget graded against the rows it sums.
+        const strip = card.getByTestId('scaffold-summary');
+        await expect(strip.locator('[data-testid^="scaffold-summary-"]')).toHaveCount(6);
+        const budgetCell = card.getByTestId('scaffold-summary-budget');
+        const shownBudget = (await budgetCell.textContent()) ?? '';
+        if (truth.budgeted === truth.adSets && truth.adSets > 0) {
+          const figure = Number(
+            (shownBudget.match(/[\d,]+(?:\.\d+)?/)?.[0] ?? '').replace(/,/g, ''),
           );
-          grade('chat.budget', true, `"${shown}" == ${truth.budgetMinorUnits} minor units in rows`);
+          expect(Math.round(figure)).toBe(Math.round(truth.budgetMinorUnits / 100));
+          grade('chat.budget', true, `"${shownBudget}" == ${truth.budgetMinorUnits} minor units`);
         } else {
-          await expect(card.getByTestId('scaffold-opening-budget')).toContainText(
-            'placeholder budget',
+          await expect(budgetCell).toContainText('Placeholder');
+          grade(
+            'chat.budget',
+            true,
+            'an ad set has no measured budget; the strip says placeholder',
           );
-          grade('chat.budget', true, 'no measured CPA in the rows; the card names the placeholder');
         }
 
-        const audienceBlocker = card.getByTestId('scaffold-blocker-audience');
+        // WHY — the evidence the version carries, one entry per decision, as the manifest says.
+        const evidence = card.getByTestId('scaffold-evidence');
+        await expect(evidence).toBeVisible();
+        if (truth.evidence > 0) {
+          await expect(evidence.getByTestId('scaffold-evidence-item')).toHaveCount(
+            Math.min(truth.evidence, 4),
+          );
+          grade('chat.evidence', true, `${truth.evidence} evidence entries in manifest.plan`);
+        } else {
+          grade(
+            'chat.evidence',
+            true,
+            'no manifest.plan evidence; the card says so rather than invent it',
+          );
+        }
+
+        // ONE action. The three gate buttons are gone; what remains is Deploy paused.
+        await expect(card.getByTestId('scaffold-deploy')).toHaveCount(1);
+        await expect(card.getByRole('button', { name: /^Approve &/ })).toHaveCount(0);
+
+        const blocked = (code: string) =>
+          card.locator(`[data-testid="scaffold-deploy-blocker"][data-code="${code}"]`);
         if (truth.adSetsWithoutAudience > 0) {
-          await expect(audienceBlocker).toContainText(
+          await expect(blocked('adset_without_audience')).toContainText(
             plural(truth.adSetsWithoutAudience, 'ad set'),
           );
         } else {
-          await expect(audienceBlocker).toHaveCount(0);
+          await expect(blocked('adset_without_audience')).toHaveCount(0);
         }
-        const creativeBlocker = card.getByTestId('scaffold-blocker-creative');
         if (truth.adsWithoutCreative > 0) {
-          await expect(creativeBlocker).toContainText(plural(truth.adsWithoutCreative, 'ad'));
+          await expect(blocked('ad_without_creative')).toContainText(
+            plural(truth.adsWithoutCreative, 'ad'),
+          );
+          await expect(card.getByTestId('scaffold-deploy')).toBeDisabled();
         } else {
-          await expect(creativeBlocker).toHaveCount(0);
+          await expect(blocked('ad_without_creative')).toHaveCount(0);
         }
         grade(
-          'chat.blockers',
+          'chat.single-action',
           true,
-          `${truth.adSetsWithoutAudience} ad set(s) without audience, ` +
-            `${truth.adsWithoutCreative} ad(s) without creative — as the rows say`,
+          `one Deploy paused; ${truth.adSetsWithoutAudience} ad set(s) without audience, ` +
+            `${truth.adsWithoutCreative} ad(s) without creative — named as the rows say`,
         );
 
         // Both widths a person actually gets: Propose opens the panel maximized, and the
@@ -1038,103 +2006,70 @@ test.describe('campaign flow canvas', () => {
         }
       }
 
-      // ---- the build gate, asked for a turn LATER ---------------------------------------
-      // That turn carries no proposal frame, which is exactly the case that used to render no
-      // card and no buttons. A card that appears is always DENIED, never approved.
-      const approveButton = page.getByRole('button', { name: 'Approve & create (paused)' });
+      // ---- the deploy gate ---------------------------------------------------------------
+      // Opened by the proposal itself when nothing blocks it; otherwise by the card's own
+      // "Deploy paused" (an operator action — no model turn, so no model behaviour to SKIP on).
+      // Whatever card holds it is DENIED, never approved.
+      const approveButton = page.locator('[data-testid="scaffold-deploy"][data-action="approve"]');
       let gateAppeared = false;
       if (proposed && gateOpenedInTurn1) {
-        gateAppeared = await approveButton.isVisible();
-        graded.push({
-          step: 'chat.gate-next-turn',
-          grade: 'SKIP',
-          detail: `run ${gateOpenedInTurn1} opened the gate in turn 1, unasked; nothing to ask for`,
-        });
-        notes.push(
-          'UN-EXERCISED: the later-turn gate. Jaina opened paid_scaffold_build in the proposing ' +
-            'turn without being asked, so the gate is graded (and denied) on that card instead.',
-        );
+        gateAppeared = await approveButton.first().isVisible();
       } else if (proposed) {
-        const gateAskedAt = new Date().toISOString();
-        await composer.click();
-        await page.keyboard.type(
-          'Call paid_scaffold_build for the scaffold you just proposed so its approval card ' +
-            'opens. I will review and answer the card myself. Do not summarise the scaffold.',
-        );
-        await page.getByRole('button', { name: 'Send message' }).click();
-        gateAppeared = await approveButton
-          .waitFor({ state: 'visible', timeout: 240_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (!gateAppeared) {
-          const openedBy = await buildGateOpenedSince(CLIENT_BRAND_ID, gateAskedAt);
-          if (openedBy) {
-            grade(
-              'chat.gate-next-turn',
-              false,
-              `run ${openedBy} opened paid_scaffold_build, and no approval card rendered`,
-            );
-          } else {
-            graded.push({
-              step: 'chat.gate-next-turn',
-              grade: 'SKIP',
-              detail: 'the second turn did not open paid_scaffold_build; no card to deny',
-            });
-            notes.push(
-              'UN-EXERCISED: the build gate in a later turn. No tool.approval_required for ' +
-                'paid_scaffold_build was logged, so this is model behaviour, not a missing card. ' +
-                'Nothing was approved.',
-            );
+        const openButton = cards
+          .first()
+          .locator('[data-testid="scaffold-deploy"][data-action="open"]');
+        if (await openButton.isEnabled().catch(() => false)) {
+          await openButton.click();
+          gateAppeared = await approveButton
+            .first()
+            .waitFor({ state: 'visible', timeout: 180_000 })
+            .then(() => true)
+            .catch(() => false);
+          if (!gateAppeared) {
+            grade('chat.deploy-open', false, 'Deploy paused was clicked and no gate card rendered');
           }
+        } else {
+          const blockers = await cards
+            .first()
+            .getByTestId('scaffold-deploy-blocker')
+            .allTextContents();
+          graded.push({
+            step: 'chat.deploy-open',
+            grade: 'SKIP',
+            detail: `Deploy paused is disabled by name: ${blockers.join(' | ') || 'no blocker text'}`,
+          });
+          notes.push(
+            'UN-EXERCISED on the propose hop: the deploy gate — the proposal has named blockers ' +
+              '(graded above). The canvas test below opens and denies it on a seeded version.',
+          );
         }
       }
 
       if (gateAppeared) {
-        // The card that HOLDS the Approve — not "the last card": the later turn may propose a
-        // scaffold of its own and gate that one instead.
-        const gateCard = page.locator('[data-testid="paid-scaffold-card"]', { has: approveButton });
+        const gateCard = page
+          .locator('[data-testid="paid-scaffold-card"]', { has: approveButton })
+          .first();
         await expect(gateCard).toContainText('Awaiting your approval');
-        const sessionId = await latestSessionId(CLIENT_BRAND_ID, turnStartedAt);
-        if (sessionId) {
-          const ours = await scaffoldsProposedInSession(sessionId, turnStartedAt);
-          createdIds = [...new Set([...createdIds, ...ours.filter((id) => !idsBefore.has(id))])];
-        }
+        await expect(gateCard.getByTestId('scaffold-gate-preview')).toContainText('PAUSED');
         const gateVersion = (await gateCard.getAttribute('data-scaffold-version')) ?? '';
         expect(await versionIdsOf(), 'the gated card is not a scaffold this run wrote').toContain(
           gateVersion,
         );
-        // The duplicate re-propose, graded: the gate must open on the scaffold turn 1 wrote.
-        // That also makes this the live run of the seeded card path — a gate turn that
-        // carries no proposal frame of its own.
-        const reproposed = !gateOpenedInTurn1 && !proposedVersionIds.includes(gateVersion);
-        if (!gateOpenedInTurn1) {
-          grade(
-            'chat.gate-next-turn',
-            !reproposed,
-            reproposed
-              ? 'turn 2 proposed a DUPLICATE scaffold and gated it instead of building the one on screen'
-              : 'the gate opened on the turn-1 scaffold; its card rendered with no proposal frame',
-          );
-        }
-        // DENY. Never approve: a denied gate never reaches `claim_paid_scaffold_gate`,
-        // so no Meta object is created. `Dismiss` is this card's reject label.
-        //
-        // Scoped to the card's own footer rather than the page: a bare name lookup also
-        // matches controls in the conversations sidebar, and Playwright then spends its
-        // whole timeout retrying a click the sidebar is covering.
-        const cardActions = approveButton.locator('..');
-        const denyButton = cardActions.getByRole('button', { name: 'Dismiss' });
-        // Both actions carry `locked={isStreaming}`, so the card renders with its
-        // buttons DISABLED while the turn is still streaming. Waiting for enabled is
-        // waiting for the turn to settle; clicking before that just burns the
-        // actionability window against a re-rendering card.
+        grade(
+          'chat.deploy-open',
+          true,
+          "the deploy gate is open on this run's version, preview shown",
+        );
+        // Scoped to the card: a bare name lookup also matches the conversations sidebar.
+        const denyButton = gateCard.getByRole('button', { name: 'Dismiss' });
+        // Locked while the turn streams; enabled is the turn settling.
         await expect(denyButton).toBeEnabled({ timeout: 180_000 });
         await denyButton.scrollIntoViewIfNeeded();
         await denyButton.click();
-        await expect(page.getByText('Declined — nothing created')).toBeVisible({ timeout: 60_000 });
-        grade('chat.denied', true, 'gate answered deny; the card says nothing was created');
-        // Asserted only after the deny, so a failing run still leaves nothing approvable.
-        expect(reproposed, 'turn 2 re-proposed a duplicate scaffold instead of building').toBe(false);
+        await expect(page.getByText('Declined — nothing created').first()).toBeVisible({
+          timeout: 60_000,
+        });
+        grade('chat.denied', true, 'deploy gate answered deny; the card says nothing was created');
       }
 
       // ---- a reload brings the card back, and never the Approve beside it ------------------
@@ -1194,6 +2129,8 @@ test.describe('campaign flow canvas', () => {
         ? await scaffoldsProposedInSession(sessionId, turnStartedAt).catch(() => [])
         : [];
       const toDelete = new Set([...createdIds, ...proposedHere.filter((id) => !idsBefore.has(id))]);
+      // The deploy gate's subject is the version id as TEXT — nothing cascades to it.
+      await deleteDeployGates([...toDelete]);
       // One delete per scaffold: `scaffold_id`, `version_id` and the node self-FK are
       // all ON DELETE CASCADE, and `current_version_id` is ON DELETE SET NULL.
       for (const scaffoldId of toDelete) {

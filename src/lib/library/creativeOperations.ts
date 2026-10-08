@@ -41,6 +41,9 @@ import {
   type RegisterGeneratedAssetOperation,
   type RegisterGeneratedAssetResponse,
   type RegisterVersionResponse,
+  type ReorderAssetVersionsResult,
+  type RestoreAssetsResult,
+  reorderAssetVersionsResultSchema,
   type ReviewCommandResponse,
   type ReviewTransitionResponse,
   type RevokeShareLinkRequest,
@@ -50,13 +53,21 @@ import {
   registerVersionResponseSchema,
   renameLibraryTagOperationSchema,
   requestAssetReviewOperationSchema,
+  restoreAssetsResultSchema,
   reviewCommandResponseSchema,
   reviewTransitionResponseSchema,
   revokeShareLinkOperationSchema,
   rollbackAssetVersionOperationSchema,
+  type SetNotesResult,
   type ShareLink,
+  type StackAssetsResult,
+  setNotesOperationSchema,
+  setNotesResultSchema,
+  type UnstackAssetVersionResult,
+  unstackAssetVersionResultSchema,
   shareLinkSchema,
   signVersionUploadOperationSchema,
+  stackAssetsResultSchema,
   transitionAssetReviewOperationSchema,
   type UpdateCommentRequest,
   updateCommentOperationSchema,
@@ -398,13 +409,7 @@ export function revokeShareLinkOperation(
 
 export async function createLibraryCollectionOperation(
   supabase: SupabaseClient,
-  input: {
-    brandId: string;
-    name: string;
-    kind?: 'manual' | 'smart';
-    parentId?: string | null;
-    smartQuery?: Omit<LibraryBrowseQuery, 'cursor'>;
-  },
+  input: Omit<z.input<typeof createLibraryCollectionOperationSchema>, 'action' | 'idempotencyKey'>,
 ): Promise<MediaCollection> {
   const result = await invokeCreativeOperation(
     supabase,
@@ -420,13 +425,7 @@ export async function createLibraryCollectionOperation(
 
 export async function updateLibraryCollectionOperation(
   supabase: SupabaseClient,
-  input: {
-    brandId: string;
-    collectionId: string;
-    name?: string;
-    parentId?: string | null;
-    smartQuery?: Omit<LibraryBrowseQuery, 'cursor'> | null;
-  },
+  input: Omit<z.input<typeof updateLibraryCollectionOperationSchema>, 'action' | 'idempotencyKey'>,
 ): Promise<MediaCollection> {
   const result = await invokeCreativeOperation(
     supabase,
@@ -511,6 +510,56 @@ export async function bulkDeleteAssetsOperation(
   return result.updatedAssetIds;
 }
 
+// Drag-to-stack: every version of each source becomes a newer version of the target,
+// and the sources leave the grid (their bytes now live on the target's history).
+export function stackAssetsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; targetAssetId: string; sourceAssetIds: string[] },
+): Promise<StackAssetsResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'stack_assets', ...input, idempotencyKey: crypto.randomUUID() },
+    stackAssetsResultSchema,
+  );
+}
+
+// Trash restore. A stacked asset is refused rather than restored: its bytes already
+// live on as versions of the asset it was stacked into.
+export function restoreAssetsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetIds: string[] },
+): Promise<RestoreAssetsResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'restore_assets', ...input, idempotencyKey: crypto.randomUUID() },
+    restoreAssetsResultSchema,
+  );
+}
+
+// Pulls one version out of a stack into an asset of its own; the stack keeps the rest.
+export function unstackAssetVersionOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetId: string; versionId: string },
+): Promise<UnstackAssetVersionResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'unstack_asset_version', ...input, idempotencyKey: crypto.randomUUID() },
+    unstackAssetVersionResultSchema,
+  );
+}
+
+// Puts a stack in a new order, oldest first; the last version becomes the head.
+export function reorderAssetVersionsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetId: string; versionIds: string[] },
+): Promise<ReorderAssetVersionsResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'reorder_asset_versions', ...input, idempotencyKey: crypto.randomUUID() },
+    reorderAssetVersionsResultSchema,
+  );
+}
+
 export async function bulkTransitionAssetReviewOperation(
   supabase: SupabaseClient,
   input: {
@@ -551,6 +600,20 @@ export async function bulkSetAssetFieldValueOperation(
     libraryBulkCommandResponseSchema,
   );
   return result.updatedAssetIds;
+}
+
+// media.assets.notes through the dispatcher's set_notes; the Edge Function stamps the actor.
+export function setAssetNotesOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetId: string; notes: string | null },
+): Promise<SetNotesResult> {
+  return invokeCreativeOperation(
+    supabase,
+    setNotesOperationSchema
+      .omit({ actor: true })
+      .parse({ action: 'set_notes', ...input, idempotencyKey: crypto.randomUUID() }),
+    setNotesResultSchema,
+  );
 }
 
 export function renameLibraryTagOperation(

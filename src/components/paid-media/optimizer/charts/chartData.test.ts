@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import type { CpaSeriesPoint, CycleItemRow, PortfolioListItem } from '@continuum/contracts';
+import type { CpaSeriesPoint, CycleItemRow } from '@continuum/contracts';
 import { freezeLabel, parseReport } from '../reportModel';
 import {
   attributeTransfers,
-  budgetByObjective,
-  budgetByPortfolio,
-  budgetMix,
   buildCpaTrendPoints,
   cpaTrendSummary,
-  lastFullDay,
-  spendSnapshotTs,
   splitReallocation,
 } from './chartData';
 
@@ -171,74 +166,6 @@ describe('attributeTransfers', () => {
   });
 });
 
-describe('budgetByObjective', () => {
-  it('sums daily_total per objective, descending', () => {
-    const portfolios = [
-      { objective: 'purchase', daily_total: 4200 },
-      { objective: 'lead', daily_total: 1500 },
-      { objective: 'purchase', daily_total: 800 },
-    ] as PortfolioListItem[];
-    expect(budgetByObjective(portfolios)).toEqual([
-      { name: 'Purchase', daily: 5000 },
-      { name: 'Lead', daily: 1500 },
-    ]);
-  });
-});
-
-describe('budgetByPortfolio', () => {
-  it('lists funded portfolios by name descending, dropping zero/null-budget ones', () => {
-    const portfolios = [
-      { name: 'Alpha', daily_total: 2100 },
-      { name: 'Beta', daily_total: 2200 },
-      { name: 'Draft', daily_total: null },
-      { name: 'Zero', daily_total: 0 },
-    ] as PortfolioListItem[];
-    expect(budgetByPortfolio(portfolios)).toEqual([
-      { name: 'Beta', daily: 2200 },
-      { name: 'Alpha', daily: 2100 },
-    ]);
-  });
-});
-
-describe('budgetMix', () => {
-  it('splits by objective when 2+ objectives carry budget', () => {
-    const portfolios = [
-      { name: 'A', objective: 'purchase', daily_total: 300 },
-      { name: 'B', objective: 'lead', daily_total: 120 },
-    ] as PortfolioListItem[];
-    expect(budgetMix(portfolios)).toEqual({
-      dimension: 'objective',
-      slices: [
-        { name: 'Purchase', daily: 300 },
-        { name: 'Lead', daily: 120 },
-      ],
-    });
-  });
-
-  it('falls back to per-portfolio when every portfolio shares one objective', () => {
-    const portfolios = [
-      { name: 'Daniel — resto', objective: 'conversations', daily_total: 2100 },
-      { name: 'Daniel — todas', objective: 'conversations', daily_total: 2200 },
-    ] as PortfolioListItem[];
-    expect(budgetMix(portfolios)).toEqual({
-      dimension: 'portfolio',
-      slices: [
-        { name: 'Daniel — todas', daily: 2200 },
-        { name: 'Daniel — resto', daily: 2100 },
-      ],
-    });
-  });
-
-  it('ignores unfunded objectives when deciding the dimension', () => {
-    const portfolios = [
-      { name: 'A', objective: 'purchase', daily_total: 300 },
-      { name: 'B', objective: 'lead', daily_total: 0 },
-    ] as PortfolioListItem[];
-    // Only one objective actually carries budget → per-portfolio fallback.
-    expect(budgetMix(portfolios).dimension).toBe('portfolio');
-  });
-});
-
 describe('freezeReason survives the real contracts parse (WS0+WS1 boundary)', () => {
   it('parseReport keeps diagnostics.freezeReason and freezeLabel renders the Held state', () => {
     const report = {
@@ -261,67 +188,5 @@ describe('freezeReason survives the real contracts parse (WS0+WS1 boundary)', ()
     const reason = parsed?.latest_items[0]?.diagnostics?.freezeReason;
     expect(reason).toBe('unsupported_budget');
     expect(freezeLabel(reason)?.label).toBe('Held · CBO/lifetime');
-  });
-});
-
-describe('spendStream', () => {
-  const { spendStream } = require('./chartData') as typeof import('./chartData');
-  const rows = [
-    { date: '2026-09-09', objective: 'purchase', spend: 100 },
-    { date: '2026-09-09', objective: 'lead', spend: 50 },
-    { date: '2026-09-10', objective: 'purchase', spend: 120 },
-    { date: '2026-09-11', objective: 'lead', spend: 60 },
-    { date: '2026-09-11', objective: 'purchase', spend: 130 },
-    { date: '2026-08-01', objective: 'awareness', spend: 999 }, // outside the window, still counted in totals? no — only its order
-  ];
-  it('stacks per day in largest-objective-first order and fills gaps with zeros', () => {
-    const stream = spendStream(rows, 3, '2026-09-11');
-    expect(stream.objectives).toEqual(['awareness', 'purchase', 'lead']);
-    expect(stream.points.map((p) => p.date)).toEqual(['2026-09-09', '2026-09-10', '2026-09-11']);
-    expect(stream.points[1].byObjective).toEqual({ awareness: 0, purchase: 120, lead: 0 });
-    expect(stream.points[2].stacked).toEqual({ awareness: 0, purchase: 130, lead: 190 });
-    expect(stream.points[2].total).toBe(190);
-    expect(stream.latest).toEqual({
-      date: '2026-09-11',
-      total: 190,
-      byObjective: { awareness: 0, purchase: 130, lead: 60 },
-    });
-    expect(stream.hasData).toBe(true);
-    expect(stream.window).toEqual({ start: '2026-09-09', end: '2026-09-11' });
-    expect(stream.enoughToChart).toBe(true);
-  });
-  it('flags a window with under a dollar a day as not worth charting', () => {
-    const stream = spendStream(
-      [{ date: '2026-09-11', objective: 'lead', spend: 2 }],
-      3,
-      '2026-09-11',
-    );
-    expect(stream.hasData).toBe(true);
-    expect(stream.enoughToChart).toBe(false);
-  });
-  it('spendSnapshotTs is the OLDEST snapshot across rows, null when none carry one', () => {
-    expect(
-      spendSnapshotTs([
-        { date: '2026-09-11', objective: 'lead', spend: 1, snapshot_ts: '2026-09-12T06:10:00Z' },
-        {
-          date: '2026-09-11',
-          objective: 'purchase',
-          spend: 1,
-          snapshot_ts: '2026-09-11T06:10:00Z',
-        },
-        { date: '2026-09-10', objective: 'lead', spend: 1 },
-      ]),
-    ).toBe('2026-09-11T06:10:00Z');
-    expect(spendSnapshotTs([{ date: '2026-09-10', objective: 'lead', spend: 1 }])).toBeNull();
-  });
-  it('lastFullDay is the day before, across a month boundary', () => {
-    expect(lastFullDay('2026-09-01')).toBe('2026-08-31');
-    expect(lastFullDay('2026-09-12')).toBe('2026-09-11');
-  });
-  it('is honestly empty with no rows', () => {
-    const stream = spendStream([], 14, '2026-09-11');
-    expect(stream.hasData).toBe(false);
-    expect(stream.points).toHaveLength(14);
-    expect(stream.latest).toBeNull();
   });
 });

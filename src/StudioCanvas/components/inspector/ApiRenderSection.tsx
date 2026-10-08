@@ -18,7 +18,7 @@ import type {
   PaidCanvasTarget,
 } from '@continuum/contracts';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,9 +33,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/components/ui/ToastProvider';
 import { apiRendersApi } from '../../nodes/api-render/apiRendersApi';
 import { RenderFitTable } from '../../nodes/api-render/RenderFitTable';
 import { RenderJobCard } from '../../nodes/api-render/RenderJobCard';
+import { describeRenderDiscoveryFailure } from '../../nodes/api-render/renderDiscoveryCopy';
 import { resolveApiRenderVariables } from '../../nodes/api-render/resolveApiRenderVariables';
 import { TemplateFontsRow } from '../../nodes/api-render/TemplateFontsRow';
 import { useApiRenderJobs } from '../../nodes/api-render/useApiRenderJobs';
@@ -57,6 +59,7 @@ export function ApiRenderSection({
   const brandId = useStudioStore((state) => state.brandId);
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
   const edges = useStudioStore((state) => state.edges);
+  const { show } = useToast();
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [setName, setSetName] = useState('');
   const [campaignOptions, setCampaignOptions] = useState<PaidCanvasTarget[]>([]);
@@ -69,6 +72,21 @@ export function ApiRenderSection({
   const { jobs, refreshJobs, refreshOne } = useApiRenderJobs({ brandId, trackedIds });
   const batchIds = data.batchInputSetIds ?? [];
   const deliveryEnabled = data.deliveryEnabled === true;
+
+  // Opening the history is a load, not a read of whatever the cached recent list holds: the
+  // renders this node tracks can have fallen off that list, and only the tracked-id recovery in
+  // `refreshJobs` brings them back. A ref keeps it one load per open (and per brand), the same
+  // way the node itself loads, instead of a refetch on every confirm.
+  const loadJobs = useRef(refreshJobs);
+  useEffect(() => {
+    loadJobs.current = refreshJobs;
+  });
+  useEffect(() => {
+    if (!brandId) return;
+    void loadJobs.current({ preferCache: true }).catch(() => {
+      // The node's own template discovery already surfaces an unreachable backend.
+    });
+  }, [brandId]);
 
   // Saved sets are brand AND template scoped — a set authored against one template's contract
   // means nothing against another.
@@ -177,7 +195,7 @@ export function ApiRenderSection({
       setSetName('');
       onPatch({ inputSetId: created.id });
     } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : 'Save failed');
+      setLocalError(cause instanceof Error ? describeRenderDiscoveryFailure(cause) : 'Save failed');
     } finally {
       setBusy(false);
     }
@@ -218,7 +236,10 @@ export function ApiRenderSection({
       if (output.kind !== 'image' || !output.assetId || !output.versionId) return;
       const store = useStudioStore.getState();
       const newNodeId = `api-render-ref-${output.versionId}`;
-      if (store.nodes.some((node) => node.id === newNodeId)) return;
+      if (store.nodes.some((node) => node.id === newNodeId)) {
+        show({ title: 'Already on the canvas', description: output.fileName, variant: 'info' });
+        return;
+      }
       const sourceNode = store.getNodeById(nodeId);
       if (!sourceNode) return;
       store.takeSnapshot();
@@ -242,8 +263,9 @@ export function ApiRenderSection({
       };
       store.setNodes(resolveCollisions([...store.nodes, derivedNode]) as StudioNode[]);
       store.triggerSave();
+      show({ title: 'Added as reference', description: output.fileName, variant: 'success' });
     },
-    [nodeId],
+    [nodeId, show],
   );
 
   if (!data.templateKey) {

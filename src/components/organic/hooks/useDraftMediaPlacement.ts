@@ -9,6 +9,8 @@ import type { CreativeRef, MediaAsset } from '@continuum/contracts';
 import {
   creativeRefFromAsset,
   findMultiVideoSelectionError,
+  matchPublishFormat,
+  reconcileFormatWithAssetKinds,
   shapeUserSuppliedMedia,
 } from '@continuum/contracts';
 import * as React from 'react';
@@ -30,8 +32,23 @@ import { useDraftFieldPersistence } from './useDraftFieldEditor';
  * refetch from overwriting the result.
  */
 
-/** The media fields a failed write has to put back. */
-type MediaSnapshot = Pick<OrganicCalendarDraft, 'mediaSuggestion' | 'publishingAssets'>;
+/** The media fields a failed write has to put back — format included, since media moves it. */
+type MediaSnapshot = Pick<OrganicCalendarDraft, 'mediaSuggestion' | 'publishingAssets' | 'format'>;
+
+/**
+ * The draft with its format restated from its media: kept when the media can publish as it,
+ * otherwise the format the media can. The backend applies the same rule to the write; doing it
+ * here too keeps the chip honest and stops the manual-draft autosave stamping the old format
+ * back into `slot_data.draftSnapshot`, which the publisher reads first. Without it an image
+ * placed on a Reel stayed a Reel and was refused at publish for having no video.
+ */
+function withMediaFormat(draft: OrganicCalendarDraft): OrganicCalendarDraft {
+  const kinds = (draft.publishingAssets ?? []).map((asset) => asset.kind);
+  if (kinds.length === 0) return draft;
+  const current = matchPublishFormat(draft.format);
+  const format = reconcileFormatWithAssetKinds(current, kinds);
+  return format === current ? draft : { ...draft, format };
+}
 
 export type SlotTarget =
   | { kind: 'single' }
@@ -137,15 +154,16 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       } = { next: null, previous: null };
 
       updateDraft(draftId, (current) => {
-        const next = mutate(current);
+        const mutated = mutate(current);
         // A validation no-op returns the draft untouched — nothing to write through.
-        if (next !== current) {
-          captured.previous = {
-            mediaSuggestion: current.mediaSuggestion,
-            publishingAssets: current.publishingAssets,
-          };
-          captured.next = next;
-        }
+        if (mutated === current) return current;
+        const next = withMediaFormat(mutated);
+        captured.previous = {
+          mediaSuggestion: current.mediaSuggestion,
+          publishingAssets: current.publishingAssets,
+          format: current.format,
+        };
+        captured.next = next;
         return next;
       });
 
@@ -158,8 +176,18 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           publishingAssets: next.publishingAssets ?? [],
           mediaSuggestion: next.mediaSuggestion ?? undefined,
         },
+        // Undo back to the generation clears the assets, so the server has no media to
+        // restate the format from — it has to be told.
+        ...(next.format !== previous?.format ? { format: next.format } : {}),
       }).then((result) => {
-        if (result.ok) return;
+        if (result.ok) {
+          // The row's new version. Without it the next edit (switching the format chip,
+          // say) carries a stale expected_updated_at, is refused as "changed elsewhere",
+          // and snaps back.
+          const { updatedAt } = result;
+          if (updatedAt) updateDraft(draftId, (current) => ({ ...current, updatedAt }));
+          return;
+        }
         if (previous) updateDraft(draftId, (current) => ({ ...current, ...previous }));
         show({
           title: 'Media not saved',
@@ -198,6 +226,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
         setUndoSnapshot({
           mediaSuggestion: current.mediaSuggestion,
           publishingAssets: current.publishingAssets,
+          format: current.format,
         });
 
         const { mediaSuggestionPatch, publishingAssets } = shapeUserSuppliedMedia(refs);
@@ -225,6 +254,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       ...current,
       mediaSuggestion: snapshot.mediaSuggestion ?? current.mediaSuggestion,
       publishingAssets: snapshot.publishingAssets ?? current.publishingAssets,
+      format: snapshot.format ?? current.format,
     }));
   }, [undoSnapshot, applyMedia]);
 

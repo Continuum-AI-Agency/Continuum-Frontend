@@ -1,7 +1,11 @@
 // brand_profiles.notifications helpers for the bell UI: DB row → contract
 // mapping and per-kind display strings. Pure — unit tested with bun.
 
-import { type AppNotification, appNotificationSchema } from '@continuum/contracts';
+import {
+  type AppNotification,
+  appNotificationSchema,
+  buildLibraryAssetHref,
+} from '@continuum/contracts';
 
 export type NotificationRow = {
   id: string;
@@ -44,14 +48,21 @@ export type NotificationDisplay = {
 };
 
 // Every kind deep-links to the asset's detail modal (/library?assetId=…);
-// the library page opens it on load. Legacy rows without an assetId in their
-// payload still land on /library rather than nowhere.
+// the library page opens it on load. A comment's notification (reply, mention)
+// also names the comment, so the modal opens on that thread and its moment.
+// Legacy rows without an assetId in their payload still land on /library.
 export function describeNotification(notification: AppNotification): NotificationDisplay {
   const actorName = payloadString(notification, 'actorName') ?? 'A teammate';
   const assetName = payloadString(notification, 'assetName') ?? 'a creative';
   const message = payloadString(notification, 'message');
   const assetId = payloadString(notification, 'assetId');
-  const href = assetId ? `/library?assetId=${encodeURIComponent(assetId)}` : '/library';
+  const commentId = payloadString(notification, 'commentId');
+  const href = assetId
+    ? buildLibraryAssetHref({
+        assetId,
+        deepLink: commentId ? { commentId, timeMs: null, endMs: null } : null,
+      })
+    : '/library';
 
   switch (notification.kind) {
     case 'review_request':
@@ -80,6 +91,29 @@ export function describeNotification(notification: AppNotification): Notificatio
       return {
         title: `${actorName} mentioned you on “${assetName}”`,
         detail: message ?? payloadString(notification, 'excerpt'),
+        href,
+      };
+    case 'asset_assigned': {
+      const count = typeof notification.payload.count === 'number' ? notification.payload.count : 1;
+      return {
+        title:
+          count > 1
+            ? `${actorName} assigned you ${count} assets`
+            : `${actorName} assigned you “${assetName}”`,
+        detail: payloadString(notification, 'fieldName'),
+        href,
+      };
+    }
+    case 'review_reminder':
+      return {
+        title: `Reminder: “${assetName}” is waiting for your review`,
+        detail: message,
+        href,
+      };
+    case 'review_escalation':
+      return {
+        title: `“${assetName}” review is overdue`,
+        detail: message,
         href,
       };
   }

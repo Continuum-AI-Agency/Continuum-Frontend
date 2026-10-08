@@ -84,6 +84,9 @@ export const competitorInspirationPostSchema = z
     // Null for a saved post of an untracked account (pasted URL).
     competitorId: z.string().uuid().nullable(),
     competitorName: z.string(),
+    // ponytail: the account handle on post.platform (a YouTube @handle or channel id
+    // when platform is youtube). Kept under this name because saved assets persist it
+    // in media.assets.origin_ref; rename with a data migration if a third platform lands.
     instagramUsername: z.string(),
     post: instagramPostSchema,
     format: competitorPostFormatSchema,
@@ -97,12 +100,40 @@ export const competitorInspirationPostSchema = z
   .strict();
 export type CompetitorInspirationPost = z.infer<typeof competitorInspirationPostSchema>;
 
-export const inspirationSortSchema = z.enum(['recent', 'outlier', 'relevance']);
+// 'views' ranks by raw view count. YouTube allows only 'recent' and 'views': its
+// policies forbid custom channel-average scores and merging API data with other data.
+export const inspirationSortSchema = z.enum(['recent', 'outlier', 'relevance', 'views']);
 export type InspirationSort = z.infer<typeof inspirationSortSchema>;
 
-// GET /api/competitor-ad-spy/instagram/posts?brandId&competitorId?&limit?&sort?
+// GET /api/competitor-ad-spy/instagram/posts?brandId&competitorId?&limit?&sort?&platform?
+// (platform defaults to instagram; the path predates YouTube).
+//
+// `syncFaults` names the tracked competitors whose persisted window is too
+// stale to show live previews (IG CDN URLs expire after a few days) because
+// their last sync failed. The read path still serves their rows for metrics;
+// the UI banners these so a dead tile reads as a connection fault, not a bug.
+export const organicSyncFaultKindSchema = z.enum([
+  'account_required',
+  'permission_denied',
+  'facebook_login_required',
+  'not_found',
+  'generic',
+]);
+export type OrganicSyncFaultKind = z.infer<typeof organicSyncFaultKindSchema>;
+
+export const organicSyncFaultSchema = z.object({
+  competitorId: z.string().uuid(),
+  competitorName: z.string(),
+  // Same ponytail as competitorInspirationPostSchema: the account handle on
+  // post.platform, kept under this name for consistency across the surface.
+  instagramUsername: z.string(),
+  kind: organicSyncFaultKindSchema,
+});
+export type OrganicSyncFault = z.infer<typeof organicSyncFaultSchema>;
+
 export const inspirationPostsResponseSchema = z.object({
   items: z.array(competitorInspirationPostSchema),
+  syncFaults: z.array(organicSyncFaultSchema).default([]),
 });
 export type InspirationPostsResponse = z.infer<typeof inspirationPostsResponseSchema>;
 

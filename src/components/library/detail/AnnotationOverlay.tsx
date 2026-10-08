@@ -1,25 +1,29 @@
 'use client';
 
 // Annotation surface shared by the image stage and the paused video frame:
-// renders existing spatial annotations (numbered pins + geometry), supports
-// point, rectangle, and freehand drafts, and anchors a composer to the draft.
-// All geometry is normalized 0..1 against the object-contain content rect so
-// pins land on the pixels regardless of letterboxing.
+// renders existing spatial annotations (numbered pins, legacy box/freehand
+// outlines, and saved drawings), captures new marks with the draw tools, and
+// anchors a composer to the draft. All geometry is normalized 0..1 against the
+// object-contain content rect so marks land on the pixels regardless of
+// letterboxing.
 
-import type { CommentAnnotation } from '@continuum/contracts';
+import type { CommentAnnotation, DrawingShape } from '@continuum/contracts';
 import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import type { StageTool } from './annotation/DrawingToolbar';
+import { freehandShape, shapeFromDrag, shapesAnchor, shapesBounds } from './annotation/drawing';
+import { ShapeLayer } from './annotation/ShapeLayer';
 import {
   type CssRect,
   composerAnchor,
   containerPointToNormalized,
-  isMeaningfulBox,
   type NormalizedBox,
   type NormalizedPoint,
-  normalizedBoxFromPoints,
   normalizedBoxToCssRect,
   type Size,
 } from './annotationGeometry';
+
+export type SpatialAnnotation = Exclude<CommentAnnotation, { kind: 'time' }>;
 
 export type OverlayPin = {
   id: string;
@@ -29,45 +33,29 @@ export type OverlayPin = {
   selected: boolean;
 };
 
-export type SpatialAnnotation = Exclude<CommentAnnotation, { kind: 'time' }>;
-export type AnnotationTool = SpatialAnnotation['kind'];
-
 type Props = {
   containerSize: Size | null;
   contentRect: CssRect | null;
   pins: OverlayPin[];
-  /** Numbered pin markers (image mode). Video mode shows only box outlines. */
+  /** Numbered pin markers (image mode). Video mode shows only the selected marks. */
   showPinMarkers?: boolean;
+  /** "View all annotations": every pin's marks, not only the hovered or selected one's. */
+  showAllMarks?: boolean;
   onSelectPin?: (id: string | null) => void;
   drawEnabled: boolean;
-  tool?: AnnotationTool;
-  draftAnnotation: SpatialAnnotation | null;
-  onDraftAnnotation?: (annotation: SpatialAnnotation | null) => void;
-  /** Composer anchored to the draft annotation. */
+  tool?: StageTool;
+  color?: string;
+  /** Marks already drawn in the open draft. */
+  draftShapes?: readonly DrawingShape[];
+  onShapeDrawn?: (shape: DrawingShape) => void;
+  /** A pin dropped with the point tool. */
+  draftPoint?: NormalizedPoint | null;
+  onDraftPoint?: (point: NormalizedPoint) => void;
+  /** Composer anchored to the draft. Hosts pass it for a pin only: beside a drawing
+   *  it would cover where the reviewer draws next. */
   composer?: React.ReactNode;
   composerWidth?: number;
 };
-
-function boxStyle(rect: CssRect): React.CSSProperties {
-  return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-}
-
-function annotationBounds(annotation: SpatialAnnotation): NormalizedBox {
-  if (annotation.kind === 'box') return annotation;
-  if (annotation.kind === 'point') {
-    return { x: annotation.x, y: annotation.y, width: 0, height: 0 };
-  }
-  const xs = annotation.points.map((point) => point.x);
-  const ys = annotation.points.map((point) => point.y);
-  const x = Math.min(...xs);
-  const y = Math.min(...ys);
-  return {
-    x,
-    y,
-    width: Math.max(...xs) - x,
-    height: Math.max(...ys) - y,
-  };
-}
 
 function annotationAnchor(annotation: SpatialAnnotation): NormalizedPoint {
   if (annotation.kind === 'point') return annotation;
@@ -75,82 +63,41 @@ function annotationAnchor(annotation: SpatialAnnotation): NormalizedPoint {
   return annotation.points[0] ?? { x: 0, y: 0 };
 }
 
-function SpatialShape({
-  annotation,
-  contentRect,
-  draft = false,
-}: {
-  annotation: SpatialAnnotation;
-  contentRect: CssRect;
-  draft?: boolean;
-}) {
-  const colorClass = draft ? 'border-dashed' : '';
-  if (annotation.kind === 'box') {
-    return (
-      <div
-        className={cn(
-          'pointer-events-none absolute rounded-sm border-2 border-primary bg-primary/10',
-          colorClass,
-        )}
-        style={boxStyle(normalizedBoxToCssRect(annotation, contentRect))}
-      />
-    );
-  }
-  if (annotation.kind === 'point') {
-    return (
-      <div
-        className={cn(
-          'pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-primary/20',
-          colorClass,
-        )}
-        style={{
-          left: contentRect.left + annotation.x * contentRect.width,
-          top: contentRect.top + annotation.y * contentRect.height,
-        }}
-      />
-    );
-  }
-  const points = annotation.points
-    .map((point) => `${point.x * contentRect.width},${point.y * contentRect.height}`)
-    .join(' ');
-  return (
-    <svg
-      aria-hidden="true"
-      className="pointer-events-none absolute overflow-visible"
-      style={boxStyle(contentRect)}
-      viewBox={`0 0 ${contentRect.width} ${contentRect.height}`}
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--primary)"
-        strokeWidth="3"
-        strokeDasharray={draft ? '5 4' : undefined}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
+// A saved annotation as marks: new drawings carry their own shapes; legacy box
+// and freehand rows outline in the theme colour they were always drawn in.
+function annotationShapes(annotation: SpatialAnnotation, color: string): DrawingShape[] {
+  if (annotation.kind === 'point') return annotation.shapes ?? [];
+  if (annotation.kind === 'box') return [{ tool: 'box', color, ...boxOf(annotation) }];
+  return [{ tool: 'freehand', color, points: annotation.points }];
 }
+
+function boxOf(box: NormalizedBox): NormalizedBox {
+  return { x: box.x, y: box.y, width: box.width, height: box.height };
+}
+
+const LEGACY_COLOR = '#3B82F6';
 
 export function AnnotationOverlay({
   containerSize,
   contentRect,
   pins,
   showPinMarkers = true,
+  showAllMarks = false,
   onSelectPin,
   drawEnabled,
   tool = 'box',
-  draftAnnotation,
-  onDraftAnnotation,
+  color = LEGACY_COLOR,
+  draftShapes = [],
+  onShapeDrawn,
+  draftPoint = null,
+  onDraftPoint,
   composer,
   composerWidth = 288,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [dragStart, setDragStart] = useState<NormalizedPoint | null>(null);
   const [dragCurrent, setDragCurrent] = useState<NormalizedPoint | null>(null);
-  const [freehandPoints, setFreehandPoints] = useState<NormalizedPoint[]>([]);
+  const [strokePoints, setStrokePoints] = useState<NormalizedPoint[]>([]);
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
 
   const pointFromEvent = useCallback(
@@ -166,21 +113,27 @@ export function AnnotationOverlay({
     [contentRect],
   );
 
+  const pinning = tool === 'point';
+  // A pin is one click and closes the draft; marks keep coming until it posts.
   const canDraw =
-    drawEnabled && !draftAnnotation && Boolean(contentRect) && Boolean(onDraftAnnotation);
+    drawEnabled &&
+    Boolean(contentRect) &&
+    (pinning
+      ? Boolean(onDraftPoint) && !draftPoint && draftShapes.length === 0
+      : Boolean(onShapeDrawn));
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!canDraw || e.button !== 0) return;
     const point = pointFromEvent(e);
     if (!point) return;
-    if (tool === 'point') {
-      onDraftAnnotation?.({ kind: 'point', ...point });
+    if (pinning) {
+      onDraftPoint?.(point);
       return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragStart(point);
     setDragCurrent(point);
-    if (tool === 'freehand') setFreehandPoints([point]);
+    if (tool === 'freehand') setStrokePoints([point]);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -189,7 +142,7 @@ export function AnnotationOverlay({
     if (!point) return;
     setDragCurrent(point);
     if (tool === 'freehand') {
-      setFreehandPoints((current) => {
+      setStrokePoints((current) => {
         const previous = current[current.length - 1];
         if (!previous || Math.hypot(point.x - previous.x, point.y - previous.y) >= 0.002) {
           return current.length >= 1024 ? current : [...current, point];
@@ -202,35 +155,35 @@ export function AnnotationOverlay({
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!dragStart) return;
     const end = pointFromEvent(e) ?? dragCurrent ?? dragStart;
-    const box = normalizedBoxFromPoints(dragStart, end);
-    const completedFreehand =
+    const shape =
       tool === 'freehand'
-        ? [...freehandPoints, end].filter(
-            (point, index, points) =>
-              index === 0 || point.x !== points[index - 1]?.x || point.y !== points[index - 1]?.y,
-          )
-        : [];
+        ? freehandShape([...strokePoints, end], color)
+        : tool === 'point'
+          ? null
+          : shapeFromDrag(tool, dragStart, end, color);
     setDragStart(null);
     setDragCurrent(null);
-    setFreehandPoints([]);
-    if (tool === 'freehand' && completedFreehand.length >= 2) {
-      onDraftAnnotation?.({ kind: 'freehand', points: completedFreehand.slice(0, 1024) });
-    } else if (tool === 'box' && isMeaningfulBox(box)) {
-      onDraftAnnotation?.({ kind: 'box', ...box });
-    } else {
-      onSelectPin?.(null);
-    }
+    setStrokePoints([]);
+    if (shape) onShapeDrawn?.(shape);
+    else if (draftShapes.length === 0) onSelectPin?.(null);
   };
 
-  const liveAnnotation: SpatialAnnotation | null =
-    tool === 'freehand' && freehandPoints.length >= 2
-      ? { kind: 'freehand', points: freehandPoints }
-      : dragStart && dragCurrent
-        ? { kind: 'box', ...normalizedBoxFromPoints(dragStart, dragCurrent) }
+  const liveShape: DrawingShape | null =
+    dragStart && dragCurrent && tool !== 'point'
+      ? tool === 'freehand'
+        ? freehandShape(strokePoints, color)
+        : shapeFromDrag(tool, dragStart, dragCurrent, color)
+      : null;
+
+  const draftBounds: NormalizedBox | null =
+    draftShapes.length > 0
+      ? shapesBounds(draftShapes)
+      : draftPoint
+        ? { ...draftPoint, width: 0, height: 0 }
         : null;
   const anchor =
-    draftAnnotation && contentRect && containerSize
-      ? composerAnchor(annotationBounds(draftAnnotation), contentRect, containerSize, composerWidth)
+    draftBounds && contentRect && containerSize
+      ? composerAnchor(draftBounds, contentRect, containerSize, composerWidth)
       : null;
 
   return (
@@ -246,15 +199,19 @@ export function AnnotationOverlay({
       {contentRect &&
         pins.map((pin) => {
           const marker = annotationAnchor(pin.annotation);
-          const outlined = pin.selected || hoveredPinId === pin.id;
+          const outlined = showAllMarks || pin.selected || hoveredPinId === pin.id;
+          const shapes = annotationShapes(pin.annotation, LEGACY_COLOR);
           return (
             <div key={pin.id}>
-              {outlined && <SpatialShape annotation={pin.annotation} contentRect={contentRect} />}
+              {outlined && shapes.length > 0 && (
+                <ShapeLayer shapes={shapes} contentRect={contentRect} commentId={pin.id} />
+              )}
               {showPinMarkers && (
                 <button
                   type="button"
                   title={pin.title}
                   aria-label={`Comment ${pin.label}: ${pin.title}`}
+                  data-comment-pin={pin.id}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -282,12 +239,17 @@ export function AnnotationOverlay({
           );
         })}
 
-      {contentRect && liveAnnotation && (
-        <SpatialShape annotation={liveAnnotation} contentRect={contentRect} draft />
+      {contentRect && draftShapes.length > 0 && (
+        <ShapeLayer shapes={draftShapes} contentRect={contentRect} />
       )}
-
-      {contentRect && draftAnnotation && (
-        <SpatialShape annotation={draftAnnotation} contentRect={contentRect} />
+      {contentRect && liveShape && (
+        <ShapeLayer shapes={[liveShape]} contentRect={contentRect} draft />
+      )}
+      {contentRect && draftPoint && (
+        <div
+          className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-primary/20"
+          style={normalizedPointStyle(draftPoint, contentRect)}
+        />
       )}
 
       {anchor && composer && (
@@ -308,4 +270,19 @@ export function AnnotationOverlay({
       )}
     </div>
   );
+}
+
+function normalizedPointStyle(point: NormalizedPoint, rect: CssRect): React.CSSProperties {
+  const css = normalizedBoxToCssRect({ ...point, width: 0, height: 0 }, rect);
+  return { left: css.left, top: css.top };
+}
+
+// The saved annotation a draft becomes: a pin, anchored where the first mark
+// started when the reviewer drew rather than clicked.
+export function draftToSpatialAnnotation(
+  point: NormalizedPoint | null,
+  shapes: readonly DrawingShape[],
+): SpatialAnnotation | null {
+  if (shapes.length > 0) return { kind: 'point', ...shapesAnchor(shapes), shapes: [...shapes] };
+  return point ? { kind: 'point', ...point } : null;
 }

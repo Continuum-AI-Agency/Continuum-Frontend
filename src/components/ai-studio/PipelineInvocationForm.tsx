@@ -10,23 +10,14 @@ import {
   pipelineInvocationRequestSchema,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Box, ChevronDown, FileImage, Loader2, Play } from 'lucide-react';
+import { Box, FileImage, Loader2, Play } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ELEMENT_CATEGORY_LABEL, useElements } from '@/lib/ai-studio/elements';
 import { startPipelineRun, waitForPipelineRun } from '@/lib/ai-studio/pipelines';
@@ -36,7 +27,6 @@ import { cn } from '@/lib/utils';
 type PinnedAsset = { asset_id: string; version_id: string };
 type FormValues = {
   inputs: Record<string, string | PinnedAsset[]>;
-  controls: Record<string, unknown>;
 };
 type PipelineRunExecutor = (
   invocation: PipelineInvocationRequest,
@@ -60,45 +50,17 @@ function inputValueSchema(input: PipelineCapabilityV2['inputs'][number]) {
   return input.required ? text : z.union([z.literal(''), text]);
 }
 
-function controlValueSchema(control: PipelineCapabilityV2['controls'][number]) {
-  const allowUntouched = (schema: z.ZodType) =>
-    !control.required && control.default === undefined ? z.union([z.literal(''), schema]) : schema;
-  if (control.kind === 'boolean') return allowUntouched(z.boolean());
-  if (control.kind === 'enum') {
-    return allowUntouched(z.enum(control.options as [string, ...string[]]));
-  }
-  if (control.kind === 'string') {
-    let text = z.string();
-    if (control.min_length) text = text.min(control.min_length);
-    if (control.max_length) text = text.max(control.max_length);
-    return allowUntouched(text);
-  }
-  let number = control.kind === 'integer' ? z.number().int() : z.number();
-  if (control.minimum !== undefined) number = number.min(control.minimum);
-  if (control.maximum !== undefined) number = number.max(control.maximum);
-  return allowUntouched(number);
-}
-
 function buildFormSchema(capability: PipelineCapabilityV2) {
   const inputs = Object.fromEntries(
     capability.inputs.map((input) => [input.input_id, inputValueSchema(input)]),
   );
-  const controls = Object.fromEntries(
-    capability.controls.map((control) => [control.control_id, controlValueSchema(control)]),
-  );
-  return z.object({ inputs: z.object(inputs), controls: z.object(controls) });
+  return z.object({ inputs: z.object(inputs) });
 }
 
 function defaultValues(capability: PipelineCapabilityV2): FormValues {
   return {
     inputs: Object.fromEntries(
       capability.inputs.map((input) => [input.input_id, input.kind === 'asset' ? [] : '']),
-    ),
-    controls: Object.fromEntries(
-      capability.controls.map((control) => [
-        control.control_id,
-        control.default ?? (control.required && control.kind === 'boolean' ? false : ''),
-      ]),
     ),
   };
 }
@@ -241,59 +203,13 @@ function ElementInput({
   );
 }
 
-function ControlInput({
-  id,
-  control,
-  value,
-  onChange,
-}: {
-  id: string;
-  control: PipelineCapabilityV2['controls'][number];
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  if (control.kind === 'boolean') {
-    return (
-      <Checkbox id={id} checked={Boolean(value)} onCheckedChange={(checked) => onChange(checked)} />
-    );
-  }
-  if (control.kind === 'enum') {
-    return (
-      <Select value={String(value)} onValueChange={onChange}>
-        <SelectTrigger id={id} aria-label={control.label}>
-          <SelectValue items={Object.fromEntries(control.options.map((item) => [item, item]))} />
-        </SelectTrigger>
-        <SelectContent>
-          {control.options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
-  if (control.kind === 'string') {
-    return (
-      <Input id={id} value={String(value)} onChange={(event) => onChange(event.target.value)} />
-    );
-  }
-  return (
-    <Input
-      id={id}
-      type="number"
-      value={typeof value === 'number' ? value : ''}
-      min={control.minimum}
-      max={control.maximum}
-      step={control.step}
-      onChange={(event) => onChange(event.target.valueAsNumber)}
-    />
-  );
-}
-
 function artifactIdentity(artifact: PipelineRunArtifact): string {
   if (artifact.kind === 'asset') {
     return `asset ${artifact.asset.asset_id.slice(0, 8)} · version ${artifact.asset.version_id.slice(0, 8)}`;
+  }
+  if (artifact.kind === 'planner_draft') {
+    const count = artifact.draft.assets.length;
+    return `planner draft ${artifact.draft.draftId.slice(0, 8)} · ${count} asset${count === 1 ? '' : 's'}`;
   }
   return `Candidate Element · ${artifact.candidate.category} · ${artifact.candidate.member_assets.length} member${artifact.candidate.member_assets.length === 1 ? '' : 's'}`;
 }
@@ -434,9 +350,6 @@ export function PipelineInvocationForm({
         idempotency_key: crypto.randomUUID(),
         origin: 'client',
         inputs: invocationInputs(capability, values),
-        controls: Object.fromEntries(
-          Object.entries(values.controls).filter(([, value]) => value !== ''),
-        ),
       }) as PipelineInvocationRequest;
       const settled = await executePipeline(invocation, controller.signal);
       setReceipt(settled);
@@ -504,43 +417,6 @@ export function PipelineInvocationForm({
           />
         ))}
       </div>
-
-      {capability.controls.length > 0 ? (
-        <Collapsible>
-          <CollapsibleTrigger className="group flex w-full items-center justify-between border-t border-border pt-2 text-xs font-medium">
-            Advanced controls
-            <ChevronDown className="size-3.5 transition-transform group-data-[panel-open]:rotate-180" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-col gap-3 pt-3">
-            {capability.controls.map((control) => (
-              <Controller
-                key={control.control_id}
-                control={form.control}
-                name={`controls.${control.control_id}`}
-                render={({ field, fieldState }) => (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={`pipeline-control-${control.control_id}`}>
-                      {control.label}
-                    </Label>
-                    <ControlInput
-                      id={`pipeline-control-${control.control_id}`}
-                      control={control}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                    {control.description ? (
-                      <p className="text-xs text-muted-foreground">{control.description}</p>
-                    ) : null}
-                    {fieldState.error ? (
-                      <p className="text-xs text-destructive">{fieldState.error.message}</p>
-                    ) : null}
-                  </div>
-                )}
-              />
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
-      ) : null}
 
       {runError ? (
         <p role="alert" className="text-xs text-destructive">

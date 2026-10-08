@@ -42,5 +42,18 @@ describe('parseOptimizerSnapshotEnvelope', () => {
     expect(parsed.budgetSummary).toBeNull();
     expect(parsed.fetchedAt).toBeNull();
     expect(parsed.snapshots).toHaveLength(1);
+    expect(parsed.targeting).toEqual([]);
+  });
+
+  it("keeps each ad set's targeting spec beside the fleet, never on a snapshot", () => {
+    const parsed = parseOptimizerSnapshotEnvelope({
+      snapshots: [SNAPSHOT],
+      targeting: [{ adsetId: 'adset-1', spec: { age_min: 25, custom_audiences: [{ id: '7' }] } }],
+    });
+
+    expect(parsed.targeting).toEqual([
+      { adsetId: 'adset-1', spec: { age_min: 25, custom_audiences: [{ id: '7' }] } },
+    ]);
+    expect(parsed.snapshots[0]).not.toHaveProperty('targeting');
   });
 });

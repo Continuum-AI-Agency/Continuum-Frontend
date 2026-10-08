@@ -10,6 +10,7 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
 import { useCalendarStore } from '@/lib/organic/store';
@@ -49,9 +57,20 @@ const PLATFORM_CHIP_COLORS: Record<string, string> = {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function metricsPostHref(post: OrganicCalendarPostedContent): string | null {
+  if (!post.integrationAccountId || !post.externalPostId) return null;
+  return `?${new URLSearchParams({
+    tab: 'metrics',
+    platform: post.platform,
+    accountId: post.integrationAccountId,
+    postId: post.externalPostId,
+  })}`;
+}
+
 type OrganicMonthlyCalendarProps = {
   days: OrganicCalendarDay[];
   monthAnchorDate: Date;
+  todayId?: string;
   platforms: PlannerPlatform[];
   postedContent: OrganicCalendarPostedContent[];
   selectedDraftId: string | null;
@@ -59,10 +78,12 @@ type OrganicMonthlyCalendarProps = {
       move the whole set — the same contract the week grid already honours. */
   selectedDraftIds?: string[];
   onSelectDraft: (id: string) => void;
+  onSelectPost: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
   onToggleSelection?: (id: string) => void;
   onCreatePost: (options: CreatePostOptions) => void;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
+  onToday: () => void;
   onRegenerate?: (draftId: string) => void;
   onDeleteDraft?: (draftId: string) => void;
 };
@@ -155,7 +176,7 @@ function DraftChip({
                       onClick();
                     }}
                     className={cn(
-                      'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight transition-opacity hover:opacity-80',
+                      'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-xs font-medium leading-tight transition-opacity hover:opacity-80',
                       statusFrameClasses(platform, draft.status, 'chip'),
                       isSelected && 'ring-1 ring-brand-primary ring-offset-1',
                       isMultiSelected && !isSelected && 'ring-1 ring-brand-primary/50',
@@ -211,23 +232,37 @@ function DraftChip({
   );
 }
 
-function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
+function PostedContentChip({
+  post,
+  onSelect,
+}: {
+  post: OrganicCalendarPostedContent;
+  onSelect: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
+}) {
   const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? 'bg-emerald-600/80 text-white';
   const isCarousel = isCarouselMediaType(post.mediaType);
+  const router = useRouter();
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+  const metricsHref = metricsPostHref(post);
 
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
+    <HoverCard open={previewOpen} onOpenChange={setPreviewOpen} openDelay={300} closeDelay={100}>
       <HoverCardTrigger
         render={
           <button
             type="button"
             className={cn(
-              'flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
+              'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
               colorClass,
             )}
+            onClick={(event) => {
+              event.stopPropagation();
+              setPreviewOpen(false);
+              onSelect(post, metricsHref);
+            }}
             title={isCarousel ? `Carousel · ${post.title}` : post.title}
           >
-            <span className="shrink-0 text-3xs font-bold uppercase">{post.timeLabel}</span>
+            <span className="shrink-0 text-2xs font-bold uppercase">{post.timeLabel}</span>
             {isCarousel ? (
               <GalleryHorizontalEnd className="size-2.5 shrink-0" aria-label="Carousel" />
             ) : null}
@@ -240,7 +275,10 @@ function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
         align="start"
         className="p-0 border-none bg-transparent shadow-none"
       >
-        <PostedContentPreview post={post} />
+        <PostedContentPreview
+          post={post}
+          onViewMetrics={metricsHref ? () => router.push(metricsHref) : undefined}
+        />
       </HoverCardContent>
     </HoverCard>
   );
@@ -301,24 +339,28 @@ function MonthDayCell({
 export function OrganicMonthlyCalendar({
   days,
   monthAnchorDate,
+  todayId: brandTodayId,
   selectedDraftId,
   selectedDraftIds,
   onSelectDraft,
+  onSelectPost,
   onToggleSelection,
   onCreatePost,
   onPreviousMonth,
   onNextMonth,
+  onToday,
   onRegenerate,
   onDeleteDraft,
   postedContent,
 }: OrganicMonthlyCalendarProps) {
-  const todayId = React.useMemo(() => formatDayId(new Date()), []);
+  const todayId = brandTodayId ?? formatDayId(new Date());
   const selectedDraftIdSet = React.useMemo(
     () => new Set(selectedDraftIds ?? []),
     [selectedDraftIds],
   );
   const focusedDayId = useCalendarStore((state) => state.focusedDayId);
   const setFocusedDayId = useCalendarStore((state) => state.setFocusedDayId);
+  const [openDayId, setOpenDayId] = React.useState<string | null>(null);
 
   const draftsByDayId = React.useMemo(() => {
     const map = new Map<string, OrganicCalendarDraft[]>();
@@ -354,6 +396,9 @@ export function OrganicMonthlyCalendar({
       <header className="mb-2 flex shrink-0 items-center justify-between">
         <h2 className="text-lg font-semibold tracking-tight text-foreground">{monthLabel}</h2>
         <div className="flex items-center gap-1">
+          <Button type="button" variant="outline" size="sm" onClick={onToday}>
+            Today
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -394,8 +439,8 @@ export function OrganicMonthlyCalendar({
             const isToday = dayId === todayId;
             const drafts = draftsByDayId.get(dayId) ?? [];
             const posts = postedByDayId.get(dayId) ?? [];
-            const visibleDrafts = drafts.slice(0, Math.max(0, 5 - Math.min(posts.length, 3)));
-            const visiblePosts = posts.slice(0, Math.max(1, 5 - visibleDrafts.length));
+            const visibleDrafts = drafts.slice(0, Math.max(0, 3 - Math.min(posts.length, 2)));
+            const visiblePosts = posts.slice(0, Math.max(1, 3 - visibleDrafts.length));
             const overflowCount =
               drafts.length + posts.length - visibleDrafts.length - visiblePosts.length;
 
@@ -427,7 +472,7 @@ export function OrganicMonthlyCalendar({
                       <button
                         type="button"
                         aria-label="Add post"
-                        className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                        className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
                       >
                         <Plus className="size-3 text-muted-foreground" />
                       </button>
@@ -448,12 +493,21 @@ export function OrganicMonthlyCalendar({
                       />
                     ))}
                     {visiblePosts.map((post) => (
-                      <PostedContentChip key={post.id} post={post} />
+                      <PostedContentChip key={post.id} post={post} onSelect={onSelectPost} />
                     ))}
                     {overflowCount > 0 && (
-                      <span className="pl-1 text-3xs text-muted-foreground/70">
+                      <button
+                        type="button"
+                        className="pl-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline"
+                        aria-label={`Show all ${drafts.length + posts.length} posts for ${dayId}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setFocusedDayId(dayId);
+                          setOpenDayId(dayId);
+                        }}
+                      >
                         +{overflowCount} more
-                      </span>
+                      </button>
                     )}
                   </div>
                 </MonthDayCell>
@@ -462,6 +516,66 @@ export function OrganicMonthlyCalendar({
           })}
         </div>
       </div>
+      <Dialog open={openDayId !== null} onOpenChange={(open) => !open && setOpenDayId(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {openDayId
+                ? new Date(`${openDayId}T12:00:00`).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+                : 'Posts'}
+            </DialogTitle>
+            <DialogDescription>All planned and published posts for this day.</DialogDescription>
+          </DialogHeader>
+          {openDayId && (
+            <div className="flex flex-col gap-2">
+              {(draftsByDayId.get(openDayId) ?? []).map((draft) => (
+                <Button
+                  key={draft.id}
+                  type="button"
+                  variant="outline"
+                  className="h-auto min-w-0 justify-start gap-2 py-2 text-left"
+                  onClick={() => {
+                    onSelectDraft(draft.id);
+                    setOpenDayId(null);
+                  }}
+                >
+                  <span className="shrink-0 text-xs text-muted-foreground">{draft.timeLabel}</span>
+                  <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">
+                    {draft.title || 'Untitled'}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-2xs">
+                    {draftStatusPresentation(draft.status).label}
+                  </span>
+                </Button>
+              ))}
+              {(postedByDayId.get(openDayId) ?? []).map((post) => (
+                <Button
+                  key={post.id}
+                  type="button"
+                  variant="outline"
+                  className="h-auto min-w-0 justify-start gap-2 py-2 text-left"
+                  onClick={() => {
+                    onSelectPost(post, metricsPostHref(post));
+                    setOpenDayId(null);
+                  }}
+                >
+                  <span className="shrink-0 text-xs text-muted-foreground">{post.timeLabel}</span>
+                  <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">
+                    {post.title}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-2xs">
+                    Published
+                  </span>
+                </Button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

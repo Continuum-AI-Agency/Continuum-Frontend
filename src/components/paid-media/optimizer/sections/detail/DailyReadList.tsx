@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdhocSuggestionFigure } from '@continuum/contracts';
+import type * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -37,7 +38,15 @@ type DailyReadListProps = {
   /** Why the last build on a row did not happen, printed on that row. A refusal nobody can
    *  see is the dead end this list exists to close, wearing a different hat. */
   failure?: { rowId: string; message: string } | null;
+  /** The row opened in place — an asked-for row whose handoff opened an audience proposal
+   *  shows that proposal under itself. Null ⇒ nothing is open. */
+  expandedRowId?: string | null;
+  /** What the open row shows. Absent ⇒ no row can open. */
+  renderExpansion?: (row: DailyReadRow) => React.ReactNode;
 };
+
+/** The control's label while its row is open: the same button closes what it opened. */
+const CLOSE_LABEL = 'Close the proposal';
 
 function formatFigure(figure: AdhocSuggestionFigure, currency: string | null): string {
   switch (figure.unit) {
@@ -71,19 +80,21 @@ export function DailyReadList({
   busyRowId = null,
   isWaiting,
   failure = null,
+  expandedRowId = null,
+  renderExpansion,
 }: DailyReadListProps) {
   if (rows.length === 0) return null;
   const asked = rows.filter((row) => row.origin === 'asked').length;
   return (
     <section
-      className="mb-3 rounded-lg border border-border/60 bg-card/60"
+      className="mb-5 rounded-xl border border-border/60 bg-card/60"
       data-testid="daily-read"
     >
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-border/60 border-b px-3 py-2">
-        <h3 className="font-semibold text-foreground text-sm">
+      <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
+        <h3 className="font-semibold text-foreground text-base tracking-tight">
           {asked > 0 ? "Today's read, and what you asked for" : "Today's read, by category"}
         </h3>
-        <p className="text-3xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           {source === 'brief' ? 'Jaina, from the latest cycle' : 'Draft read from the latest cycle'}
         </p>
       </header>
@@ -91,10 +102,11 @@ export function DailyReadList({
         {rows.map((row) => {
           const waiting = isWaiting?.(row) ?? false;
           const busy = busyRowId === row.id;
+          const expanded = expandedRowId === row.id && Boolean(renderExpansion);
           return (
             <li
               className={cn(
-                'grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
+                'grid gap-5 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start',
                 row.isHero && 'bg-primary/5',
                 // A ~5s breath while the worker reads. No sheen, no sweep — the row is
                 // waiting, not loading a skeleton.
@@ -103,35 +115,43 @@ export function DailyReadList({
               data-row-key={`read:${row.id}`}
               key={row.id}
             >
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge className="text-3xs" variant={MODULE_VARIANT[row.module]}>
+              <div className="min-w-0 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="px-2.5 py-0.5 text-xs" variant={MODULE_VARIANT[row.module]}>
                     {row.category}
                   </Badge>
-                  <Badge className="text-3xs" variant={TIER_VARIANT[row.tier]}>
+                  <Badge className="px-2.5 py-0.5 text-xs" variant={TIER_VARIANT[row.tier]}>
                     {row.tierLabel}
                   </Badge>
                   {row.isHero ? (
-                    <span className="text-3xs text-primary">On the overview</span>
+                    <span className="text-primary text-xs">On the overview</span>
                   ) : null}
                   {row.origin === 'asked' ? (
-                    <span className="text-3xs text-muted-foreground">You asked for this</span>
+                    <span className="text-muted-foreground text-xs">You asked for this</span>
                   ) : null}
                 </div>
-                <p className="truncate font-medium text-foreground text-xs">{row.title}</p>
+                <p className="truncate font-semibold text-foreground text-sm tracking-tight">
+                  {row.title}
+                </p>
                 {row.reason ? (
-                  <p className="line-clamp-2 text-2xs text-muted-foreground" title={row.basis}>
+                  <p
+                    className="line-clamp-2 text-xs text-muted-foreground leading-relaxed"
+                    title={row.basis}
+                  >
                     {row.reason}
                   </p>
                 ) : (
-                  <p className="text-2xs text-muted-foreground">{row.basis}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{row.basis}</p>
                 )}
                 {row.detail && row.detail.figures.length > 0 ? (
-                  <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-3xs text-muted-foreground">
+                  <dl className="flex flex-wrap gap-2">
                     {row.detail.figures.map((figure) => (
-                      <div className="flex gap-1" key={`${row.id}:${figure.label}`}>
-                        <dt>{figure.label}</dt>
-                        <dd className="font-medium text-foreground">
+                      <div
+                        className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5"
+                        key={`${row.id}:${figure.label}`}
+                      >
+                        <dt className="text-muted-foreground text-xs">{figure.label}</dt>
+                        <dd className="font-semibold text-foreground text-xs tabular-nums">
                           {formatFigure(figure, currency)}
                         </dd>
                       </div>
@@ -139,34 +159,34 @@ export function DailyReadList({
                   </dl>
                 ) : null}
                 {row.detail && row.detail.steps.length > 0 ? (
-                  <ol className="list-inside list-decimal space-y-0.5 text-2xs text-muted-foreground">
+                  <ol className="list-inside list-decimal space-y-1.5 text-muted-foreground text-xs">
                     {row.detail.steps.map((step) => (
                       <li key={`${row.id}:${step}`}>{step}</li>
                     ))}
                   </ol>
                 ) : null}
                 {failure?.rowId === row.id ? (
-                  <p className="text-2xs text-destructive" data-testid={`read-failure:${row.id}`}>
+                  <p className="text-destructive text-xs" data-testid={`read-failure:${row.id}`}>
                     {failure.message}
                   </p>
                 ) : null}
                 {row.nextNote ? (
                   <p
-                    className="text-2xs text-secondary opacity-70"
+                    className="text-secondary text-xs opacity-80"
                     data-testid={`read-next-note:${row.id}`}
                   >
                     {row.nextNote}
                   </p>
                 ) : null}
               </div>
-              <div className="flex flex-col items-start gap-1.5 justify-self-start sm:items-end sm:justify-self-end">
+              <div className="flex flex-col items-start gap-2 justify-self-start sm:items-end sm:justify-self-end">
                 {busy && row.cta.kind === 'build' ? (
                   <CalmRule play testId="read-build-rule" />
                 ) : null}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   {onDismiss && row.origin === 'asked' && !waiting ? (
                     <Button
-                      className="h-7 text-2xs"
+                      className="h-8 px-4 text-xs"
                       disabled={busy}
                       onClick={() => onDismiss(row)}
                       size="sm"
@@ -177,17 +197,26 @@ export function DailyReadList({
                     </Button>
                   ) : null}
                   <Button
-                    className="h-7 text-2xs"
+                    aria-expanded={renderExpansion ? expanded : undefined}
+                    className="h-8 px-4 text-xs"
                     disabled={waiting || busy}
                     onClick={() => onCta(row.cta, row)}
                     size="sm"
                     type="button"
                     variant="secondary"
                   >
-                    {busy ? 'Working…' : row.cta.label}
+                    {busy ? 'Working…' : expanded ? CLOSE_LABEL : row.cta.label}
                   </Button>
                 </div>
               </div>
+              {expanded && renderExpansion ? (
+                <div
+                  className="rounded-lg border border-border/60 bg-card px-4 py-4 sm:col-span-2"
+                  data-testid={`read-expansion:${row.id}`}
+                >
+                  {renderExpansion(row)}
+                </div>
+              ) : null}
             </li>
           );
         })}

@@ -4,7 +4,7 @@
 // as Metrics Compare (loadBrandOrganicSnapshot). Within a platform with multiple
 // accounts, values are platform-blended (summable metrics only).
 
-import type { OrganicMetricPlatform } from '@continuum/contracts';
+import { type OrganicMetricPlatform, organicMetricPlatformSchema } from '@continuum/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import type { InstagramAccountOption } from '@/components/dashboard/InstagramOrganicReportingWidget';
 import { Sparkline, type SparklineTone } from '@/components/organic/cards/Sparkline';
@@ -29,13 +29,7 @@ import { resolveMetricPresentation } from '@/lib/ui/metricPresentation';
 
 const RANGE_PRESET = 'last_7d' as const;
 
-const PLATFORM_ORDER: OrganicMetricPlatform[] = [
-  'instagram',
-  'facebook',
-  'tiktok',
-  'youtube',
-  'linkedin',
-];
+const PLATFORM_ORDER: readonly OrganicMetricPlatform[] = organicMetricPlatformSchema.options;
 
 const PLATFORM_SHORT: Record<OrganicMetricPlatform, string> = {
   instagram: 'IG',
@@ -43,6 +37,7 @@ const PLATFORM_SHORT: Record<OrganicMetricPlatform, string> = {
   tiktok: 'TT',
   youtube: 'YT',
   linkedin: 'LI',
+  x: 'X',
 };
 
 // Preferred headline metric per platform (lowest-level product language).
@@ -55,6 +50,7 @@ const HEADLINE_METRIC: Record<
   tiktok: { id: 'views', label: 'views' },
   youtube: { id: 'views', label: 'views' },
   linkedin: { id: 'impressions', label: 'impr.' },
+  x: { id: 'views', label: 'views' },
 };
 
 export type OrganicMetricStripAccount = {
@@ -79,6 +75,7 @@ function resolveAccounts(props: OrganicMetricStripProps): SnapshotAccountRef[] {
       tiktok: props.accountsByPlatform.tiktok ?? [],
       youtube: props.accountsByPlatform.youtube ?? [],
       linkedin: props.accountsByPlatform.linkedin ?? [],
+      x: props.accountsByPlatform.x ?? [],
     };
     return flattenAccountsByPlatform(byPlatform);
   }
@@ -278,10 +275,7 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
   }));
 
   return (
-    <div
-      data-tour-id="organic-home-metric-strip"
-      className="flex flex-col items-start gap-2.5"
-    >
+    <div data-tour-id="organic-home-metric-strip" className="flex flex-col items-start gap-2.5">
       {hero ? <MetricHero kpi={hero} /> : null}
       <MetricStrip items={restItems} live={!hero && kpis.some((kpi) => kpi.ready)} />
     </div>

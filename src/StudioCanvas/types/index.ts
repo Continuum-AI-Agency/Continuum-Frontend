@@ -21,6 +21,7 @@ import type {
   ImageSize,
   ShaderStackV1,
   StudioEmittedModality,
+  VideoGeneratorModel,
 } from '@continuum/contracts';
 import type {
   Connection,
@@ -198,6 +199,10 @@ export interface ImageNodeData extends BaseNodeData {
   // Storage bucket for sourcePath, so a reference URL can be re-signed on load.
   bucket?: string;
   sourceUrl?: string;
+  // Set when the node draws a Library RENDITION (a PSD's preview_image, an INDD page_1)
+  // instead of the original: sourcePath/bucket point at the rendition, while
+  // assetId/assetVersionId stay the source asset + version.
+  renditionRole?: string | null;
   referenceType?: ImageReferenceType;
   aspectRatio?: string;
   originalImage?: string;
@@ -229,9 +234,14 @@ export interface VideoNodeData extends BaseNodeData {
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
+  // The Library proxy the node plays for an MKV/AVI/MXF original — see ImageNodeData.
+  renditionRole?: string | null;
   aspectRatio?: string;
   referenceStatus?: 'processing' | 'ready' | 'error';
   referenceError?: string;
+  // In/out trim set on the node; absent means the whole clip.
+  trimStartMs?: number;
+  trimEndMs?: number;
 }
 
 export interface AudioNodeData extends BaseNodeData {
@@ -242,8 +252,12 @@ export interface AudioNodeData extends BaseNodeData {
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
+  // The Library audio_proxy the node plays for an AIFF/WMA original — see ImageNodeData.
+  renditionRole?: string | null;
   referenceStatus?: 'processing' | 'ready' | 'error';
   referenceError?: string;
+  trimStartMs?: number;
+  trimEndMs?: number;
 }
 
 export interface CanvasDocument {
@@ -255,6 +269,10 @@ export interface CanvasDocument {
   sourceUrl?: string;
   storagePath?: string;
   bucket?: string;
+  // The Library asset + exact version this document came from (dropped from the
+  // Library, attached by an agent, or seeded by Open in Canvas).
+  assetId?: string;
+  assetVersionId?: string;
   // brand_profiles.brand_documents row id — enables chunk lookup on the server.
   sourceDocumentId?: string;
   type: 'pdf' | 'txt';
@@ -269,13 +287,7 @@ export interface DocumentNodeData extends BaseNodeData {
 export interface VideoGenNodeData extends BaseNodeData {
   /** See `NanoGenNodeData.batchRun` — the fan-out branch runs for video generators too. */
   batchRun?: BatchRunRecord;
-  model:
-    | 'veo-3.1'
-    | 'veo-3.1-fast'
-    | 'veo-3.1-lite'
-    | 'kling-omni'
-    | 'pixverse-v6'
-    | 'seedance-2.0';
+  model: VideoGeneratorModel;
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;

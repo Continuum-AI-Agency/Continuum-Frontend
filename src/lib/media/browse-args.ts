@@ -1,39 +1,66 @@
-import type { LibraryBrowseQuery } from '@continuum/contracts';
+import {
+  type LibraryBrowseQuery,
+  libraryBrowseRpcQuery,
+  libraryBrowseSortSpecs,
+} from '@continuum/contracts';
 
 /**
- * The contract → RPC argument mapping for `media.library_browse_page` and
- * `library_browse_facets`.
+ * The contract → RPC argument mapping for `media.library_browse_assets` and
+ * `media.library_browse_facet_counts`.
  *
  * Deliberately NOT inside `browse.server.ts`: that module imports `server-only` (and, through
  * `signed-urls`, `next/headers`), so nothing outside a Next request can load it — which would
  * leave an end-to-end bench with no choice but to restate this mapping and grade its own copy.
- * A filter that is passed under the wrong argument name is exactly the bug such a copy hides.
+ * A filter that is passed under the wrong key is exactly the bug such a copy hides.
  *
- * Every argument goes by NAME. `library_browse_page` has 20-odd defaulted parameters and they
- * have been added to over time; a positional call would silently shift the day one more lands.
+ * Every filter travels inside ONE jsonb argument, so a new filter is a new key, never a new
+ * argument — a second overload is what takes a PostgREST RPC down.
  */
-export function libraryBrowseRpcArgs(query: LibraryBrowseQuery) {
+export function libraryBrowseQueryArg(query: LibraryBrowseQuery): Record<string, unknown> {
+  return {
+    ...libraryBrowseRpcQuery(query),
+    ...(query.collectionId ? { collectionId: query.collectionId } : {}),
+  };
+}
+
+/** The keyset position after a row: its sort key values, then its id. */
+export type LibraryBrowseCursor = { keys: unknown[]; id: string };
+
+export function libraryBrowseAssetsArgs(
+  query: LibraryBrowseQuery,
+  cursor: LibraryBrowseCursor | null,
+  limit: number = query.limit,
+) {
   return {
     p_brand_id: query.brandId,
-    p_media_type: query.mediaType,
-    p_sources: query.createdWith.length > 0 ? query.createdWith : null,
-    p_tags: query.tags.length > 0 ? query.tags : null,
-    p_review_statuses: query.reviewStatuses.length > 0 ? query.reviewStatuses : null,
-    p_owner_ids: query.ownerIds.length > 0 ? query.ownerIds : null,
-    p_campaign_ids: query.campaignIds.length > 0 ? query.campaignIds : null,
-    p_usage_rights: query.usageRights.length > 0 ? query.usageRights : null,
-    p_placements: query.placements.length > 0 ? query.placements : null,
-    p_collection_id: query.collectionId ?? null,
-    p_project_ids: query.projectIds.length > 0 ? query.projectIds : null,
-    p_used: query.used ?? null,
-    p_shared: query.shared ?? null,
-    p_leading_only: query.leadingOnly,
-    p_template_only: query.templateOnly,
-    p_ratios: query.ratios.length > 0 ? query.ratios : null,
-    p_fonts: query.fonts.length > 0 ? query.fonts : null,
-    p_search: query.search || null,
-    p_performance_window: query.performanceWindow,
-    p_destination: query.destination ?? null,
-    p_aspect_ratios: query.aspectRatios.length > 0 ? query.aspectRatios : null,
+    p_query: libraryBrowseQueryArg(query),
+    p_sorts: libraryBrowseSortSpecs(query),
+    p_cursor: cursor,
+    p_limit: limit,
   };
+}
+
+export function libraryBrowseFacetArgs(query: LibraryBrowseQuery) {
+  return { p_brand_id: query.brandId, p_query: libraryBrowseQueryArg(query) };
+}
+
+export function encodeLibraryBrowseCursor(cursor: LibraryBrowseCursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString('base64url');
+}
+
+/** Inverse of encodeLibraryBrowseCursor; a cursor from before the keyset change reads as none. */
+export function decodeLibraryBrowseCursor(
+  value: string | null | undefined,
+): LibraryBrowseCursor | null {
+  if (!value) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+  } catch {
+    throw new Error('Invalid Library cursor');
+  }
+  if (!parsed || typeof parsed !== 'object') throw new Error('Invalid Library cursor');
+  const { keys, id } = parsed as { keys?: unknown; id?: unknown };
+  if (typeof id !== 'string') throw new Error('Invalid Library cursor');
+  return Array.isArray(keys) ? { keys, id } : null;
 }
