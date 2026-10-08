@@ -1,10 +1,10 @@
 'use client';
 
-// Who can reach a collection, and at which role. "Only members" restricts the collection
-// and everything inside it (sub-collections too) to its member list plus the brand's
-// owners and admins; each member's role — manager, editor, commenter, viewer — then
-// decides what they can do there, independently of their brand role. The database
-// enforces all of it (RLS + authorize_operation); this dialog only reads and relays.
+// Who belongs to a collection, and at which role — manager, editor, commenter, viewer.
+// The "Only members" switch (access = 'restricted') is withheld: several Library read
+// paths do not honour a restriction yet, and the database refuses to set one
+// (media.refuse_restricted_collection_access). Bring the switch back with the full fix.
+// The database enforces roles (RLS + authorize_operation); this dialog only reads and relays.
 
 import type { CollectionAccess, CollectionMember, CollectionRole } from '@continuum/contracts';
 import { Loader2, Trash2, UserLock } from 'lucide-react';
@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast-imperative';
 import { type BrandRole, useBrandRole } from '@/lib/library/useBrandRole';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
@@ -141,9 +140,8 @@ export function CollectionMembersDialog({
             <UserLock className="size-4" /> Members of {collectionName}
           </DialogTitle>
           <DialogDescription>
-            With “Only members” on, this collection, its sub-collections and every asset in them are
-            hidden from anyone not listed here. Brand owners and admins always see everything. An
-            asset that is also in another collection is hidden there too.
+            Each member’s role decides what they can do in this collection. Brand owners and
+            admins can always do everything.
           </DialogDescription>
         </DialogHeader>
 
@@ -153,23 +151,6 @@ export function CollectionMembersDialog({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              {/* Named by id, not <label htmlFor>: Base UI puts an id on its hidden input,
-                  which would leave the visible role="switch" without a name. */}
-              <span id="collection-only-members-label">Only members</span>
-              <Switch
-                aria-labelledby="collection-only-members-label"
-                checked={state.access === 'restricted'}
-                disabled={!manage || busy}
-                onCheckedChange={(checked) =>
-                  void change(
-                    { access: checked ? 'restricted' : 'brand' },
-                    checked ? 'Restricted to members' : 'Open to the whole brand',
-                  )
-                }
-              />
-            </div>
-
             <ul className="flex flex-col gap-1.5" data-testid="collection-members-list">
               {state.members.length === 0 ? (
                 <li className="text-xs text-muted-foreground">No members yet.</li>
@@ -282,7 +263,7 @@ export function CollectionMembersDialog({
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Only a brand owner, admin or this collection’s manager can change access.
+                Only a brand owner, admin or this collection’s manager can change members.
               </p>
             )}
           </div>
