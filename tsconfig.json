@@ -146,7 +146,9 @@
     ".next/vercel-parity/types/**/*.ts",
     ".next/vercel-parity/dev/types/**/*.ts",
     ".next/studio-placement/types/**/*.ts",
-    ".next/studio-placement/dev/types/**/*.ts"
+    ".next/studio-placement/dev/types/**/*.ts",
+    ".next/beta-check/types/**/*.ts",
+    ".next/beta-check/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
