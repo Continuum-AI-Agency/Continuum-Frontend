@@ -18,6 +18,7 @@ import {
   type RunConfidence,
 } from '@continuum/contracts';
 import type { z } from 'zod';
+import { type EntityNounSource, entityNoun, isMetaEntity, platformName } from './entityNoun';
 
 /** What the Performance tab should say about a portfolio with no cycle on screen.
  *
@@ -261,10 +262,18 @@ export function confidenceBand(band: string | null | undefined): {
 /** A cycle item's freeze reason → a labeled "Held" state. Returns null when the
  *  item was NOT held (budget was actually reallocated). Rendering this instead of
  *  a $0.00 change is the point: a held ad set was left unchanged ON PURPOSE, not
- *  scored to no-change. Tolerant of loose DB strings. */
+ *  scored to no-change. Tolerant of loose DB strings.
+ *
+ *  `entity` (the item's platform and level) only changes the wording off Meta; omitted, every
+ *  sentence is the Meta one it always was. Mirrors the engine's freezeLabel (explain.ts). */
 export function freezeLabel(
   reason: string | null | undefined,
+  entity?: EntityNounSource | null,
 ): { label: string; hint: string } | null {
+  if (!isMetaEntity(entity)) {
+    const platformHeld = platformFreezeLabel(reason, entity);
+    if (platformHeld) return platformHeld;
+  }
   switch (reason) {
     case 'no_conversions':
       return {
@@ -299,10 +308,40 @@ export function freezeLabel(
     case 'kpi_mismatch':
       return {
         label: 'Held · different goal',
-        hint: 'This ad set is bidding for a different result than the portfolio prices (for example messaging conversations in a portfolio measured on leads). Ranking them together would compare a cheap event against an expensive one and hand the budget to whichever is cheaper, so it is held instead. Move it to a portfolio that measures what it actually buys.',
+        hint: `This ${entityNoun(entity)} is bidding for a different result than the portfolio prices (for example messaging conversations in a portfolio measured on leads). Ranking them together would compare a cheap event against an expensive one and hand the budget to whichever is cheaper, so it is held instead. Move it to a portfolio that measures what it actually buys.`,
       };
     default:
       if (reason) return { label: 'Held', hint: 'Budget left unchanged on purpose this cycle.' };
+      return null;
+  }
+}
+
+/** The held states whose Meta wording names a Meta mechanism (CBO, ad-set budgets) that a
+ *  Google campaign or a TikTok ad group does not have. Null for every other reason, which
+ *  reads the same on any platform once the noun is right. */
+function platformFreezeLabel(
+  reason: string | null | undefined,
+  entity: EntityNounSource | null | undefined,
+): { label: string; hint: string } | null {
+  const noun = entityNoun(entity);
+  const platform = platformName(entity);
+  switch (reason) {
+    case 'unsupported_budget':
+      return {
+        label: 'Held · budget not movable',
+        hint: `The optimizer cannot move this ${noun}'s budget: it is shared with other campaigns, set at the campaign level, or the campaign type is read-only through the ${platform} API. It is left unchanged.`,
+      };
+    case 'no_own_budget':
+      return {
+        label: 'Held · no budget of its own',
+        hint: `This ${noun} has no budget of its own for the optimizer to move. It is left alone rather than handed a share of the pool it never had. Give it a daily budget in ${platform} if you want the optimizer to manage it.`,
+      };
+    case 'no_declared_objective':
+      return {
+        label: 'Held · no declared goal',
+        hint: `This ${noun} does not tell ${platform} what result it is buying, and it has produced none of the results this portfolio measures. Scoring it would rank it on events it never claimed to buy, so it is held instead. Set a conversion goal on the ${noun} in ${platform}.`,
+      };
+    default:
       return null;
   }
 }

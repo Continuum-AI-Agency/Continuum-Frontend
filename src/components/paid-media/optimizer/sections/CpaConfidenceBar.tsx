@@ -12,6 +12,7 @@
 import type { CycleItemRow } from '@continuum/contracts';
 
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
+import { entityOf } from '../entityNoun';
 import { pct } from '../charts/chartScale';
 import { formatCpa } from '../format';
 import { HeldPill } from '../HeldPill';
@@ -39,7 +40,7 @@ export function CpaConfidenceBar({
       <div className="flex items-center gap-3">
         <AdSetIdLabel id={item.adset_id} name={name} />
         <div className="flex flex-1 items-center">
-          <HeldPill reason={freezeReason} />
+          <HeldPill reason={freezeReason} entity={entityOf(item)} />
         </div>
         <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
           budget unchanged

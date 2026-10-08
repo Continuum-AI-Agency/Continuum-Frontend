@@ -15,6 +15,7 @@ import type {
   OptimizationMetricDefinition,
 } from '@continuum/contracts';
 import { resolveAdsetName } from '../adsetName';
+import { type EntityNounSource, entityOf } from '../entityNoun';
 import { deriveEfficiency, formatCurrency } from '../format';
 import { measuredCpa } from '../reportModel';
 
@@ -36,6 +37,8 @@ export type StoryRow = {
   changePct: number | null;
   held: boolean;
   freezeReason: string | null;
+  /** Platform and level of the cycle item; null on Meta-era rows. Names the held entity. */
+  entity: EntityNounSource | null;
   deliveryState: string | null;
   /** Standing against the target: below (good), above, or unknown (no target / no cost). */
   standing: 'below' | 'above' | 'unknown';
@@ -134,6 +137,7 @@ export function buildReallocationStory(args: {
       changePct: item.change_pct ?? null,
       held: Boolean(freezeReason),
       freezeReason,
+      entity: entityOf(item),
       deliveryState: item.diagnostics?.delivery?.state ?? null,
       standing,
       reason: item.reason ?? null,

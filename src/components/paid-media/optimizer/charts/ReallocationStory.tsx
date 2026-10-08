@@ -87,7 +87,7 @@ function CostCell({
   if (row.held) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
-        <HeldPill reason={row.freezeReason} />
+        <HeldPill reason={row.freezeReason} entity={row.entity} />
       </div>
     );
   }

@@ -11,6 +11,7 @@
 // so it says "a different result" rather than guess.
 
 import type { CycleItemRow, ParsedCycleRunReport } from '@continuum/contracts';
+import { collectionPlural, entityOf } from '../../entityNoun';
 
 export type GoalMismatch = {
   scope: 'all' | 'some';
@@ -22,6 +23,8 @@ export type GoalMismatch = {
   measures: string;
   /** Their share of spend (engine) or of the daily budget (items); null when it says nothing. */
   share: { pct: number; of: 'spend' | 'budget' } | null;
+  /** What the held entities are called, plural: "ad sets" on Meta, "campaigns" on Google. */
+  entities: string;
   text: string;
 };
 
@@ -38,12 +41,14 @@ const UNNAMED = 'another result';
 /**
  * The engine's kpi_mismatch sentence (optimization-engine confidence.ts), read back:
  * "12 of 12 ad sets (100% of spend) bid for purchases, not the conversations this portfolio
- * prices, …". Null for a sentence in a shape this does not know.
+ * prices, …". The entity noun follows the platform ("2 of 2 campaigns" on Google Ads,
+ * "ad groups" on TikTok). Null for a sentence in a shape this does not know.
  */
 export function readMismatchMessage(message: string): MismatchMessage | null {
-  const said = /^(\d+) of (\d+) ad sets.*? bid for (.+?), not the (.+?) this portfolio prices/.exec(
-    message,
-  );
+  const said =
+    /^(\d+) of (\d+) (?:ad sets|campaigns|ad groups)(?: \/ (?:ad sets|campaigns|ad groups))*\b.*? bid for (.+?), not the (.+?) this portfolio prices/.exec(
+      message,
+    );
   if (!said) return null;
   return {
     mismatched: Number(said[1]),
@@ -65,19 +70,27 @@ function budgetShare(items: readonly CycleItemRow[]): GoalMismatch['share'] {
   return { pct: Math.round((held / total) * 100), of: 'budget' };
 }
 
+function singular(entities: string): string {
+  return entities
+    .split(' / ')
+    .map((noun) => noun.replace(/s$/, ''))
+    .join(' / ');
+}
+
 function sentence(m: Omit<GoalMismatch, 'text'>): string {
   const what = m.bought
     ? `for ${m.bought}, not the ${m.measures}`
     : `for a different result than the ${m.measures}`;
   if (m.scope === 'all') {
-    const who = m.total === 1 ? 'The one ad set bids' : `All ${m.total} ad sets bid`;
+    const who =
+      m.total === 1 ? `The one ${singular(m.entities)} bids` : `All ${m.total} ${m.entities} bid`;
     const them = m.total === 1 ? 'it' : 'them';
     return `${who} ${what} this portfolio measures — the optimizer holds ${them} and moves nothing.`;
   }
   const share = m.share ? ` (${m.share.pct}% of ${m.share.of})` : '';
   const verb = m.mismatched === 1 ? 'bids' : 'bid';
   const them = m.mismatched === 1 ? 'it' : 'them';
-  return `${m.mismatched} of ${m.total} ad sets${share} ${verb} ${what} this portfolio measures — the optimizer holds ${them} and moves only the rest.`;
+  return `${m.mismatched} of ${m.total} ${m.entities}${share} ${verb} ${what} this portfolio measures — the optimizer holds ${them} and moves only the rest.`;
 }
 
 export function goalMismatchOf(args: {
@@ -110,6 +123,7 @@ export function goalMismatchOf(args: {
     bought: said?.bought ?? null,
     measures,
     share,
+    entities: collectionPlural(items.map(entityOf).filter((e) => e != null)),
   } as const;
   return { ...shape, text: sentence(shape) };
 }

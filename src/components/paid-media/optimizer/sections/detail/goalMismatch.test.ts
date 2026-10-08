@@ -147,3 +147,40 @@ describe('readMismatchMessage', () => {
     expect(readMismatchMessage('Something else entirely.')).toBeNull();
   });
 });
+
+describe('goalMismatchOf — a Google Ads portfolio names campaigns', () => {
+  // The Optimizer (PR #21) records Google rows with platform google_ads and an entity_ref
+  // carrying the level; the engine's sentence then says "campaigns".
+  const asGoogle = (body: unknown) => {
+    const google = clone(body) as Mutable & {
+      latest_items: Array<Record<string, unknown>>;
+    };
+    for (const item of google.latest_items) {
+      item.platform = 'google_ads';
+      item.entity_ref = { platform: 'google_ads', level: 'campaign', id: item.adset_id };
+    }
+    return google;
+  };
+
+  it('all held: says campaigns, never ad sets', () => {
+    const mismatch = read(asGoogle(tours));
+    expect(mismatch?.entities).toBe('campaigns');
+    expect(mismatch?.text).toBe(
+      'All 12 campaigns bid for a different result than the conversations this portfolio measures — the optimizer holds them and moves nothing.',
+    );
+  });
+
+  it('reads the engine sentence when it names campaigns', () => {
+    expect(
+      readMismatchMessage(
+        '1 of 2 campaigns (28% of spend) bid for purchases, not the leads this portfolio prices, so the optimizer holds their budgets and moves none of theirs.',
+      ),
+    ).toEqual({ mismatched: 1, total: 2, bought: 'purchases', priced: 'leads' });
+  });
+
+  it('one held of one: the singular noun', () => {
+    const one = asGoogle(tours);
+    one.latest_items = one.latest_items.slice(0, 1);
+    expect(read(one)?.text).toStartWith('The one campaign bids');
+  });
+});

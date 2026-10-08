@@ -32,6 +32,7 @@ import { pct } from './charts/chartScale';
 import { DeliveryPill } from './DeliveryPill';
 import { deriveEfficiency, formatCpa } from './format';
 import { HeldPill } from './HeldPill';
+import { type EntityNounSource, entityOf } from './entityNoun';
 import { freezeLabel, measuredCpa, upperBoundNote } from './reportModel';
 
 const DASH = '—';
@@ -57,6 +58,8 @@ export type OptimizerAdsetRow = {
   } | null;
   /** Freeze reason → a labeled Held state instead of a cost. */
   freezeReason?: string | null;
+  /** Platform and level of a cycle item; null on Meta-era rows. Names the held entity. */
+  entity?: EntityNounSource | null;
   /** Was it being SERVED (serving | throttled | dark)? Null ⇒ not read this cycle, which
    *  renders no chip — the row must not claim delivery it never measured. */
   deliveryState?: string | null;
@@ -102,6 +105,7 @@ function rowFromItem(
     cost: costFromCi ?? costFromWindow,
     ci,
     freezeReason: item.diagnostics?.freezeReason ?? null,
+    entity: entityOf(item),
     deliveryState: item.diagnostics?.delivery?.state ?? null,
     currentBudget: item.current_budget,
     proposedBudget: item.final_budget,
@@ -257,11 +261,11 @@ function CostCell({
   maxCiCost: number;
 }) {
   if (row.freezeReason) {
-    const held = freezeLabel(row.freezeReason);
+    const held = freezeLabel(row.freezeReason, row.entity);
     return (
       <span className="inline-flex items-center justify-end">
         {held ? (
-          <HeldPill reason={row.freezeReason} />
+          <HeldPill reason={row.freezeReason} entity={row.entity} />
         ) : (
           <span className="text-muted-foreground">{DASH}</span>
         )}

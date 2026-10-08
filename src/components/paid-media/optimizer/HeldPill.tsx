@@ -2,6 +2,7 @@
 
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { EntityNounSource } from './entityNoun';
 import { freezeLabel } from './reportModel';
 
 // A held ad set was left unchanged ON PURPOSE (CBO/lifetime budget, no conversion
@@ -9,8 +10,15 @@ import { freezeLabel } from './reportModel';
 // reportModel.freezeLabel, replacing the amber chip that was hand-rolled across
 // the optimizer sections. The warning indicator + hint tooltip carry the reason;
 // semantic tokens keep light/dark automatic. Renders nothing when not held.
-export function HeldPill({ reason }: { reason: string | null | undefined }) {
-  const held = freezeLabel(reason);
+export function HeldPill({
+  reason,
+  entity,
+}: {
+  reason: string | null | undefined;
+  /** The item's platform and level; absent reads as a Meta ad set. */
+  entity?: EntityNounSource | null;
+}) {
+  const held = freezeLabel(reason, entity);
   if (!held) return null;
 
   return (

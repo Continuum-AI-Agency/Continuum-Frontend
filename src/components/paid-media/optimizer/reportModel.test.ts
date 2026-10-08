@@ -581,3 +581,37 @@ describe('measuredCpa / upperBoundNote', () => {
     expect(upperBoundNote(null)).toBeNull();
   });
 });
+
+describe('freezeLabel off Meta', () => {
+  const google = { platform: 'google_ads', level: 'campaign' };
+
+  it('names a Google campaign and Google Ads, never CBO or ad sets', () => {
+    const held = freezeLabel('unsupported_budget', google);
+    expect(held?.label).toBe('Held · budget not movable');
+    expect(held?.hint).toContain("this campaign's budget");
+    expect(held?.hint).toContain('Google Ads API');
+    expect(held?.hint).not.toContain('ad set');
+  });
+
+  it('kpi_mismatch keeps its label and names the campaign', () => {
+    const held = freezeLabel('kpi_mismatch', google);
+    expect(held?.label).toBe('Held · different goal');
+    expect(held?.hint).toStartWith('This campaign is bidding');
+  });
+
+  it('a TikTok ad group and an unspecified level', () => {
+    expect(freezeLabel('no_own_budget', { platform: 'tiktok_ads', level: 'group' })?.hint).toStartWith(
+      'This ad group has no budget',
+    );
+    expect(freezeLabel('no_declared_objective', { platform: 'google_ads' })?.hint).toContain(
+      'Set a conversion goal on the campaign in Google Ads',
+    );
+  });
+
+  it('Meta, or no entity at all, reads exactly as before', () => {
+    for (const entity of [undefined, null, { platform: 'meta' }]) {
+      expect(freezeLabel('unsupported_budget', entity)?.label).toBe('Held · CBO/lifetime');
+      expect(freezeLabel('kpi_mismatch', entity)?.hint).toStartWith('This ad set is bidding');
+    }
+  });
+});
