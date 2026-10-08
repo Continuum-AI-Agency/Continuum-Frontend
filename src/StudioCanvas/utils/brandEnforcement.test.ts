@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import type { BrandDirectionPiece } from '@continuum/contracts';
+import type { BrandBookPieceKind, BrandDirectionPiece } from '@continuum/contracts';
 
 import { brandMdTokensSchema } from '@continuum/contracts';
 import {
   brandBookAvailability,
+  brandBookMode,
+  brandBookModeDetail,
+  brandBookModeLabel,
   effectiveBrandBookPieces,
   enforcedConcretePieces,
   groundingChipLabel,
@@ -16,10 +19,18 @@ import {
 } from './brandEnforcement';
 
 describe('effective / enforced helpers', () => {
-  it('treats undefined as the whole book (default-on)', () => {
-    expect(effectiveBrandBookPieces(undefined)).toEqual(['full']);
+  it('treats undefined as the light canvas book: colors, type, logo (default-on)', () => {
+    expect(effectiveBrandBookPieces(undefined)).toEqual(['colors', 'typography', 'logo']);
     expect(isBrandEnforced(undefined)).toBe(true);
-    expect(isEntireBookEnforced(undefined)).toBe(true);
+    expect(isEntireBookEnforced(undefined)).toBe(false);
+    expect(isPieceEnforced(undefined, 'logo')).toBe(true);
+    expect(isPieceEnforced(undefined, 'voice')).toBe(false);
+  });
+
+  it('keeps an explicit selection as-is, including an explicit full book', () => {
+    expect(effectiveBrandBookPieces(['full'])).toEqual(['full']);
+    expect(effectiveBrandBookPieces(['voice'])).toEqual(['voice']);
+    expect(effectiveBrandBookPieces([])).toEqual([]);
   });
 
   it('treats an explicit empty array as off', () => {
@@ -68,6 +79,11 @@ describe('toggleBrandPiece', () => {
     expect(toggleBrandPiece(undefined, 'full')).toEqual([]);
   });
 
+  it('toggles a piece against the light default, not the full book', () => {
+    expect(toggleBrandPiece(undefined, 'voice')).toEqual(['colors', 'typography', 'voice', 'logo']);
+    expect(toggleBrandPiece(undefined, 'logo')).toEqual(['colors', 'typography']);
+  });
+
   it('unchecking one piece from full drops to the other six', () => {
     const next = toggleBrandPiece(['full'], 'logo');
     expect(next).not.toContain('logo');
@@ -75,7 +91,7 @@ describe('toggleBrandPiece', () => {
   });
 
   it('re-adding the last piece normalizes back to full', () => {
-    const six: any = ['colors', 'typography', 'voice', 'imagery', 'personality', 'audience'];
+    const six: BrandBookPieceKind[] = ['colors', 'typography', 'voice', 'imagery', 'personality', 'audience'];
     expect(toggleBrandPiece(six, 'logo')).toEqual(['full']);
   });
 
@@ -127,36 +143,61 @@ describe('brandBookAvailability', () => {
   });
 });
 
+describe('brandBookMode', () => {
+  it('names the four states the chip can be in', () => {
+    expect(brandBookMode(undefined)).toBe('light');
+    expect(brandBookMode(['full'])).toBe('full');
+    expect(brandBookMode([])).toBe('off');
+    expect(brandBookMode(['colors', 'voice'])).toBe('custom');
+  });
+
+  it('reads an explicit colors/type/logo pick as Light, in any order', () => {
+    expect(brandBookMode(['logo', 'colors', 'typography'])).toBe('light');
+  });
+
+  it('reads every concrete piece as Full', () => {
+    expect(
+      brandBookMode(['colors', 'typography', 'voice', 'imagery', 'personality', 'audience', 'logo']),
+    ).toBe('full');
+  });
+
+  it('labels and details each mode', () => {
+    expect(brandBookModeLabel(undefined)).toBe('Light');
+    expect(brandBookModeDetail(undefined)).toBe('colors, type, logo');
+    expect(brandBookModeLabel(['full'])).toBe('Full');
+    expect(brandBookModeDetail(['full'])).toBe('the whole brand book');
+    expect(brandBookModeLabel([])).toBe('Off');
+    expect(brandBookModeDetail([])).toBe('no brand guidance');
+    expect(brandBookModeLabel(['voice', 'colors'])).toBe('2 pieces');
+    expect(brandBookModeDetail(['voice', 'colors'])).toBe('colors, voice');
+    expect(brandBookModeLabel(['voice'])).toBe('1 piece');
+  });
+});
+
 describe('groundingChipLabel', () => {
-  it('shows "Style" for the default-on whole book with no skills', () => {
-    // undefined pieces = default-ON entire book (how an untagged gen node starts).
-    expect(groundingChipLabel(undefined, 0)).toBe('Style');
+  it('shows "Brand · Light" for an untouched node with no skills', () => {
+    expect(groundingChipLabel(undefined, 0)).toBe('Brand · Light');
   });
 
-  it('shows the concrete count for a partial book', () => {
-    expect(groundingChipLabel(['voice', 'colors'], 0)).toBe('Style 2');
+  it('shows the full, custom and off states', () => {
+    expect(groundingChipLabel(['full'], 0)).toBe('Brand · Full');
+    expect(groundingChipLabel(['voice', 'colors'], 0)).toBe('Brand · 2 pieces');
+    expect(groundingChipLabel([], 0)).toBe('Brand · Off');
   });
 
-  it('joins style and skills when both are present', () => {
-    expect(groundingChipLabel(['voice', 'colors'], 2)).toBe('Style 2 · Skills 2');
-    expect(groundingChipLabel(['full'], 3)).toBe('Style · Skills 3');
+  it('appends skills after the brand mode', () => {
+    expect(groundingChipLabel(['voice', 'colors'], 2)).toBe('Brand · 2 pieces · Skills 2');
+    expect(groundingChipLabel(['full'], 3)).toBe('Brand · Full · Skills 3');
+    expect(groundingChipLabel([], 2)).toBe('Brand · Off · Skills 2');
   });
 
   it('shows a narrowed creative-direction selection, and stays quiet when there is none', () => {
     // `null` is the tri-state's "no preference" — everything the plan admits — and a badge
     // for it would report a choice the user never made.
-    expect(groundingChipLabel(['full'], 0, null)).toBe('Style');
-    expect(groundingChipLabel(['full'], 0, 3)).toBe('Style · Direction 3');
+    expect(groundingChipLabel(['full'], 0, null)).toBe('Brand · Full');
+    expect(groundingChipLabel(['full'], 0, 3)).toBe('Brand · Full · Direction 3');
     // Zero is a real selection: the user switched every authored piece off.
-    expect(groundingChipLabel(['full'], 0, 0)).toBe('Style · Direction 0');
-  });
-
-  it('shows only skills when brand enforcement is explicitly off', () => {
-    expect(groundingChipLabel([], 2)).toBe('Skills 2');
-  });
-
-  it('shows "Off" when nothing is enforced', () => {
-    expect(groundingChipLabel([], 0)).toBe('Off');
+    expect(groundingChipLabel(['full'], 0, 0)).toBe('Brand · Full · Direction 0');
   });
 });
 

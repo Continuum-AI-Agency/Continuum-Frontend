@@ -31,7 +31,7 @@ import type {
   GenerationPayload,
   NodeOutput,
 } from '../types/execution';
-import { DEFAULT_BRAND_BOOK_PIECES, effectiveBrandBookPieces } from './brandEnforcement';
+import { effectiveBrandBookPieces } from './brandEnforcement';
 import { compositeImages } from './compositeImages';
 import { parseDataUrl } from './dataUrl';
 import {
@@ -471,8 +471,8 @@ const normalizeVeoResolution = (model: VideoGenNodeData['model'], resolution?: s
 
 // Enrichment inherits its grounding from the generation node the text box feeds:
 // the same skills + brand-book pieces that node would generate with, so the
-// enriched prompt reflects the actual output. Falls back to the default-ON brand
-// book (no skills) when the text box is not yet wired to a generator. Takes the
+// enriched prompt reflects the actual output. Falls back to what an untouched
+// generator would enforce (no skills) when the text box is not yet wired. Takes the
 // first connected generator when several are downstream.
 export function resolveInheritedGrounding(
   nodeId: string,
@@ -508,7 +508,7 @@ export function resolveInheritedGrounding(
   // Unwired: the text box grounds as itself. Enrichment writes words, and `voice` is the
   // only section that shapes words — a type scale or a shadow ramp cannot.
   return {
-    brandBookPieces: DEFAULT_BRAND_BOOK_PIECES,
+    brandBookPieces: effectiveBrandBookPieces(undefined),
     designSystemSections: resolveAmbientDesignSections(
       'string',
       undefined,

@@ -1,5 +1,6 @@
 'use client';
 
+import type { Skill } from '@continuum/contracts';
 import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -20,6 +21,7 @@ import { streamJainaSpeechToText } from '@/lib/jaina/speech';
 import { cn } from '@/lib/utils';
 import { type Attachment, Attachments } from './attachments';
 import { MentionPickerMenu, type MentionPlatformOption } from './mention-picker-menu';
+import { SlashMenu, useSlashMenu } from './slash-menu';
 import type { MentionAnalyticsContext } from './mention-suggestion-hover';
 import { MENTION_DRAG_TYPE } from './SessionContentTray';
 import { SpeechInput } from './speech-input';
@@ -89,6 +91,8 @@ type PromptInputProps = {
   // can always interrupt a running turn.
   isStreaming?: boolean;
   onStop?: () => void;
+  /** The brand's skills, for the `/` shortcut menu. Absent switches the menu off. */
+  slashSkills?: readonly Skill[];
 };
 
 type ActiveMention = {
@@ -338,6 +342,20 @@ function buildChipElement(tracked: TrackedReference): HTMLSpanElement {
   return chip;
 }
 
+/** Selects the plain-text span [from, to) — an `@query` or `/query` — and returns its range. */
+function selectPlainRange(root: HTMLElement, from: number, to: number): Range | null {
+  setCaretFromPlainOffset(root, from);
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const startRange = selection.getRangeAt(0);
+  setCaretFromPlainOffset(root, to);
+  const endRange = selection.getRangeAt(0);
+  startRange.setEnd(endRange.startContainer, endRange.startOffset);
+  selection.removeAllRanges();
+  selection.addRange(startRange);
+  return startRange;
+}
+
 function insertChipAtSelection(
   root: HTMLElement,
   tracked: TrackedReference,
@@ -346,18 +364,7 @@ function insertChipAtSelection(
 ): void {
   root.focus();
   if (replaceFromPlainOffset != null && replaceToPlainOffset != null) {
-    setCaretFromPlainOffset(root, replaceFromPlainOffset);
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      // Extend selection to cover the @query span.
-      const startRange = selection.getRangeAt(0);
-      setCaretFromPlainOffset(root, replaceToPlainOffset);
-      const endRange = selection.getRangeAt(0);
-      startRange.setEnd(endRange.startContainer, endRange.startOffset);
-      selection.removeAllRanges();
-      selection.addRange(startRange);
-      startRange.deleteContents();
-    }
+    selectPlainRange(root, replaceFromPlainOffset, replaceToPlainOffset)?.deleteContents();
   }
 
   const selection = window.getSelection();
@@ -437,6 +444,7 @@ export function PromptInput({
   attachmentOnlyPrompt,
   inlinePastedText = false,
   onFocus,
+  slashSkills,
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -471,6 +479,16 @@ export function PromptInput({
     setIsEmpty(serialized.text.trim().length === 0 && serialized.references.length === 0);
     return serialized;
   }, []);
+
+  const slash = useSlashMenu(slashSkills, (option, query) => {
+    const root = editorRef.current;
+    if (!root) return;
+    root.focus();
+    selectPlainRange(root, query.start, query.end);
+    // A no-break space: a trailing plain space collapses in contenteditable.
+    insertTextAtSelection(root, `/${option.slug}\u00a0`);
+    syncFromEditor();
+  });
 
   // Holding submit until every upload settles is what stops the old failure: a chip whose file was
   // never uploaded serialized to an attachment with no url, and the agent silently received none.
@@ -581,7 +599,8 @@ export function PromptInput({
     const next = findActiveMentionInText(serialized.text, caret, completedTokens);
     setActiveMention(next);
     if (!next) setMentionParentStack([]);
-  }, [syncFromEditor]);
+    slash.track(serialized.text, caret);
+  }, [slash.track, syncFromEditor]);
 
   const insertTrackedMention = useCallback(
     (suggestion: AgentMentionSuggestion, replaceActive: boolean) => {
@@ -665,6 +684,7 @@ export function PromptInput({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (slash.onKeyDown(event)) return;
       if (activeMention && mentionSuggestions.length > 0) {
         if (event.key === 'ArrowDown') {
           event.preventDefault();
@@ -709,6 +729,7 @@ export function PromptInput({
       mentionParent,
       mentionSuggestions,
       selectMentionSuggestion,
+      slash.onKeyDown,
     ],
   );
 
@@ -910,6 +931,7 @@ export function PromptInput({
                 refreshActiveMention();
               }}
               onFocus={() => onFocus?.()}
+              onBlur={slash.close}
               onKeyDown={handleKeyDown}
               onKeyUp={() => refreshActiveMention()}
               onMouseUp={() => refreshActiveMention()}
@@ -919,7 +941,9 @@ export function PromptInput({
               tabIndex={disabled ? -1 : 0}
             />
           </div>
-          {activeMention && mentionProvider ? (
+          {slash.menuProps ? (
+            <SlashMenu {...slash.menuProps} />
+          ) : activeMention && mentionProvider ? (
             <MentionPickerMenu
               suggestions={mentionSuggestions}
               highlightedIndex={highlightedMentionIndex}

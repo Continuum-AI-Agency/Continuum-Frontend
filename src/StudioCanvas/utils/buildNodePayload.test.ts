@@ -914,7 +914,7 @@ describe('buildNodePayload', () => {
       expect(payload?.brandBookPieces).toEqual(['voice', 'colors']);
     });
 
-    it('inherits the effective (default-full) brand book from an untagged video generator', async () => {
+    it('inherits the effective (default-light) brand book from an untagged video generator', async () => {
       const node: StudioNode = {
         id: 'string',
         type: 'string',
@@ -937,11 +937,11 @@ describe('buildNodePayload', () => {
         },
       ];
       const payload = await buildEnrichPayload(node, new Map(), [node, genNode], edges, 'brand-1');
-      expect(payload?.brandBookPieces).toEqual(['full']);
+      expect(payload?.brandBookPieces).toEqual(['colors', 'typography', 'logo']);
       expect(payload?.skillIds).toBeUndefined();
     });
 
-    it('defaults to the full brand book with no skills when unconnected to a generator', async () => {
+    it('defaults to the light canvas book with no skills when unconnected to a generator', async () => {
       const node: StudioNode = {
         id: 'string',
         type: 'string',
@@ -949,7 +949,7 @@ describe('buildNodePayload', () => {
         data: { value: 'a hero shot' },
       };
       const payload = await buildEnrichPayload(node, new Map(), [node], [], 'brand-1');
-      expect(payload?.brandBookPieces).toEqual(['full']);
+      expect(payload?.brandBookPieces).toEqual(['colors', 'typography', 'logo']);
       expect(payload?.skillIds).toBeUndefined();
     });
   });
@@ -993,7 +993,7 @@ describe('buildNodePayload', () => {
   });
 
   describe('brand-book enforcement', () => {
-    it('defaults an untagged image node to the full brand book', () => {
+    it('defaults an untagged image node to the light canvas book', () => {
       const node: StudioNode = {
         id: 'nano',
         type: 'nanoGen',
@@ -1001,8 +1001,8 @@ describe('buildNodePayload', () => {
         data: { model: 'nano-banana', positivePrompt: 'A cat' },
       };
       const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
-      expect(payload?.brandBookPieces).toEqual(['full']);
-      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['full']);
+      expect(payload?.brandBookPieces).toEqual(['colors', 'typography', 'logo']);
+      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['colors', 'typography', 'logo']);
     });
 
     it('passes an explicit piece selection through to the backend payload', () => {
@@ -1157,7 +1157,7 @@ describe('buildNodePayload', () => {
       });
     });
 
-    it('defaults an untagged video node to the full brand book', () => {
+    it('defaults an untagged video node to the light canvas book', () => {
       const node: StudioNode = {
         id: 'veo',
         type: 'veoDirector',
@@ -1165,7 +1165,7 @@ describe('buildNodePayload', () => {
         data: { model: 'veo-3.1', prompt: 'A video', enhancePrompt: false },
       };
       const payload = buildVeoPayload(node, new Map(), [], [], 'brand-1');
-      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['full']);
+      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['colors', 'typography', 'logo']);
     });
   });
 });

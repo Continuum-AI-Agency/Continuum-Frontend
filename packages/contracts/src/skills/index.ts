@@ -3,3 +3,4 @@ export * from './skill';
 export * from './skill-body';
 export * from './skill-request';
 export * from './skill-response';
+export * from './shortcuts';

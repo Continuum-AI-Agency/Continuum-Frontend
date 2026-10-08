@@ -14,8 +14,10 @@
  * lives in the node so closing mid-turn loses nothing.
  */
 
+import type { Skill } from '@continuum/contracts';
 import { Download, Loader2, Sparkles, Video, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -62,6 +64,8 @@ export interface OmniGenDialogProps {
   onGenerate: (prompt: string) => Promise<void> | void;
   onSubmitTurn: (instruction: string) => Promise<void> | void;
   onDownload: () => void;
+  /** The brand's skills, for the `/` shortcut menu. Absent switches it off. */
+  slashSkills?: readonly Skill[];
 }
 
 export function OmniGenDialog({
@@ -82,8 +86,10 @@ export function OmniGenDialog({
   onGenerate,
   onSubmitTurn,
   onDownload,
+  slashSkills,
 }: OmniGenDialogProps) {
   const [draft, setDraft] = useState('');
+  const slash = useSlashTextarea(slashSkills, setDraft);
 
   const hasChain = variations.length > 0;
   // The in-flight flag is the optimistic pending variation itself, which lives in
@@ -288,22 +294,29 @@ export function OmniGenDialog({
         </div>
 
         <div className="border-t border-border/60 p-3">
-          <Textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={
-              mode === 'turn'
-                ? 'Describe a change — Omni keeps the rest of the clip.'
-                : 'A marble rolling fast along a wooden track, one continuous shot…'
-            }
-            className="min-h-24 resize-none text-sm"
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                event.preventDefault();
-                submit();
+          <div className="relative">
+            {slash.menuProps ? <SlashMenu {...slash.menuProps} /> : null}
+            <Textarea
+              ref={slash.ref}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onSelect={slash.onSelect}
+              onBlur={slash.close}
+              placeholder={
+                mode === 'turn'
+                  ? 'Describe a change — Omni keeps the rest of the clip.'
+                  : 'A marble rolling fast along a wooden track, one continuous shot…'
               }
-            }}
-          />
+              className="min-h-24 resize-none text-sm"
+              onKeyDown={(event) => {
+                if (slash.onKeyDown(event)) return;
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+            />
+          </div>
           <div className="mt-2 flex items-center justify-between">
             <p className="text-2xs text-muted-foreground">
               {mode === 'turn'

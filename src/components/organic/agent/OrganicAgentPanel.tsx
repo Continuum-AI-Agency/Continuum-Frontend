@@ -541,6 +541,7 @@ export function OrganicAgentPanel({
   );
 
   const {
+    all: allBrandSkills,
     skills: brandSkills,
     templates: brandSkillTemplates,
     refresh: refreshBrandSkills,
@@ -2119,6 +2120,7 @@ export function OrganicAgentPanel({
             ariaLabel="Message the organic agent"
             className="px-0"
             mentionProvider={mentionProviderObj}
+            slashSkills={allBrandSkills}
             queuedMentionSuggestions={queuedMentionSuggestions}
             onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
             queuedText={queuedPromptText}

@@ -15,6 +15,7 @@ import {
   NodeHeader,
   NodeTitle,
 } from '@/components/ai-elements/node';
+import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -26,6 +27,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Textarea } from '@/components/ui/textarea';
+import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { GroundingChip } from '../components/GroundingChip';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -95,14 +97,20 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
     setDraft(data.value);
   }, [data.value]);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setDraft(e.target.value);
-      updateNodeData(id, { value: e.target.value });
+  const commitDraft = useCallback(
+    (value: string) => {
+      setDraft(value);
+      updateNodeData(id, { value });
       debouncedSave();
     },
     [id, updateNodeData, debouncedSave],
   );
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => commitDraft(e.target.value),
+    [commitDraft],
+  );
+  const { all: brandSkills } = useBrandSkills(brandId);
+  const slash = useSlashTextarea(brandId ? brandSkills : undefined, commitDraft);
 
   const handleFocus = useCallback(() => {
     isEditingRef.current = true;
@@ -172,6 +180,10 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
               handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
             />
 
+            {slash.menuProps ? (
+              <SlashMenu {...slash.menuProps} className="nodrag nopan nowheel" />
+            ) : null}
+
             <CanvasNode
               handles={{ target: false, source: false }}
               selected={selected}
@@ -195,14 +207,22 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
 
               <NodeContent className="relative flex-1 flex flex-col min-h-0 overflow-hidden p-0 bg-muted/20">
                 <Textarea
+                  ref={slash.ref}
                   data-testid="studio-string-node-textarea"
                   value={draft}
                   onChange={handleChange}
+                  onSelect={slash.onSelect}
                   onFocus={handleFocus}
-                  onBlur={handleBlur}
-                  onKeyDown={(event) => event.stopPropagation()}
+                  onBlur={() => {
+                    slash.close();
+                    handleBlur();
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    slash.onKeyDown(event);
+                  }}
                   className="nodrag text-xs text-primary placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]"
-                  placeholder="Enter prompt or instructions..."
+                  placeholder="Enter prompt or instructions — type / for shortcuts"
                 />
 
                 {data.error ? (

@@ -80,6 +80,7 @@ import {
   startCanvasRunTelemetry,
 } from './canvasRunTelemetry';
 import { compositeImages } from './compositeImages';
+import { effectiveBrandBookPieces } from './brandEnforcement';
 import { blobToBase64, buildDataUrl, parseDataUrl } from './dataUrl';
 import {
   exportKindForSources,
@@ -2526,9 +2527,11 @@ export async function executeWorkflow(
           references: references.length > 0 ? references : undefined,
           sourceVideo,
           skillIds: Array.isArray(data.skillIds) ? (data.skillIds as string[]) : undefined,
+          // Unset resolves to the canvas default HERE, as on every other generator —
+          // sent as `undefined` the Backend applies the full book while the chip says Light.
           brandBookPieces: Array.isArray(data.brandBookPieces)
             ? (data.brandBookPieces as string[])
-            : undefined,
+            : effectiveBrandBookPieces(undefined),
           designSystemSections: Array.isArray(data.designSystemSections)
             ? (data.designSystemSections as string[])
             : undefined,

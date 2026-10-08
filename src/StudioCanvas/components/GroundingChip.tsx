@@ -2,7 +2,7 @@
 
 // The single grounding indicator on a canvas node. Replaces the old brand badge +
 // ring + hidden-skills-in-a-submenu with ONE compact chip that says, at a glance,
-// what will be forced into the generation ("Brand · Skills 2"). On a generation
+// what will be forced into the generation ("Brand · Light · Skills 2"). On a generation
 // node, hovering (or clicking, for touch and keyboard) expands the Style menu out
 // of the chip; hovering a section expands its checkbox rows as a submenu. On the
 // enrich (string) node it is read-only — a plain tooltip surfaces the grounding
@@ -32,6 +32,7 @@ import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
+  brandBookModeDetail,
   enforcedConcretePieces,
   groundingChipLabel,
   isBrandEnforced,
@@ -225,7 +226,11 @@ export function GroundingChip({
       <DropdownMenuTrigger
         openOnHover
         render={
-          <button type="button" className="nodrag nopan cursor-pointer">
+          <button
+            type="button"
+            className="nodrag nopan cursor-pointer"
+            title={`Brand book: ${brandBookModeDetail(brandBookPieces)}`}
+          >
             {chipInner}
           </button>
         }
