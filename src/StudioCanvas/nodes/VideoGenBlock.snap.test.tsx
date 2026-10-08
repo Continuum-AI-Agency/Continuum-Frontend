@@ -117,16 +117,20 @@ describe('VideoGenBlock generated-video preview', () => {
     expect((node()?.data as VideoGenNodeData).aspectRatio).toBe('16:9');
   });
 
-  it('renders the clip in a media-chrome scrubber that only fetches metadata', () => {
+  it('renders the clip in the Kobra player, letterboxed inside the node', () => {
     const { container } = renderNode(
       videoData({ generatedVideoUrl: 'https://example.com/clip.mp4' }),
     );
 
-    const video = container.querySelector('video') as HTMLVideoElement;
-    expect(video.getAttribute('preload')).toBe('metadata');
+    const video = container.querySelector(
+      '[data-testid="studio-node-video-preview"] video',
+    ) as HTMLVideoElement;
     expect(video.getAttribute('playsinline')).not.toBeNull();
     expect(video.className).toContain('object-contain');
-    expect(container.querySelector('media-controller')).not.toBeNull();
-    expect(container.querySelector('media-time-range')).not.toBeNull();
+    expect(
+      container.querySelector(
+        '[data-testid="studio-node-video-preview"] button[aria-label="Play"]',
+      ),
+    ).not.toBeNull();
   });
 });

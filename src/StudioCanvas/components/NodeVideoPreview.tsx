@@ -1,31 +1,30 @@
 'use client';
 
-import {
-  MediaControlBar,
-  MediaController,
-  MediaMuteButton,
-  MediaPlayButton,
-  MediaTimeDisplay,
-  MediaTimeRange,
-} from 'media-chrome/react';
+import { Video } from '@/components/ui/video';
 import { cn } from '@/lib/utils';
 
 /**
  * The generated-clip preview every video-producing node renders.
  *
- * One component because the four generator blocks kept four copies of
- * `<video controls>` that had already drifted (some sized themselves, some
- * carried a Radix AspectRatio, none preloaded metadata). media-chrome gives an
- * in-node scrub bar the native control strip never fit at node scale, and it is
- * an already-installed dependency.
+ * One component because the generator blocks kept drifting copies of a player.
+ * Watching a clip — on a node and in the dialogs that open one — goes through
+ * the Kobra player (`components/ui/video.tsx`, installed from `@kobra/video`).
  *
- * The BOX carries the aspect ratio (see useSnapToVideoAspect) and the video
+ * The BOX carries the aspect ratio (see useSnapToVideoAspect) and the picture
  * fills it with `object-contain`: sizing the preview from its own ratio is the
- * bug that read as extreme zoom in Airtable #232.
+ * bug that read as extreme zoom in Airtable #232. The player's own `aspect-video`
+ * stays in the class list (Loomix does not merge), so the override is `aspect-auto!`.
+ * A 9:16 clip then letterboxes inside the node instead of forcing it landscape.
  *
- * `nodrag` on the control bar only — scrubbing must not drag the node, while the
+ * `nodrag` on the controls only — scrubbing must not drag the node, while the
  * picture itself stays a drag surface so the node can still be moved by it.
  */
+const CANVAS_PLAYER = [
+  'aspect-auto! h-full w-full rounded-none border-0 bg-black/85',
+  '[&_button]:nodrag [&_button]:nowheel',
+  '[&_.pointer-events-auto]:nodrag [&_.pointer-events-auto]:nowheel',
+].join(' ');
+
 export function NodeVideoPreview({
   src,
   className,
@@ -38,25 +37,12 @@ export function NodeVideoPreview({
   'data-testid'?: string;
 }) {
   return (
-    <MediaController
-      className={cn('relative flex h-full w-full bg-black/85', className)}
+    <div
+      className="relative flex h-full w-full"
       data-testid={testId ?? 'studio-node-video-preview'}
     >
-      {/* biome-ignore lint/a11y/useMediaCaption: generated clip; no authored caption track exists */}
-      <video
-        slot="media"
-        src={src}
-        preload="metadata"
-        playsInline
-        className="h-full w-full object-contain"
-      />
-      <MediaControlBar className="nodrag nowheel">
-        <MediaPlayButton />
-        <MediaTimeRange />
-        <MediaTimeDisplay showDuration />
-        <MediaMuteButton />
-      </MediaControlBar>
+      <Video src={src} ariaLabel="Generated clip" className={cn(CANVAS_PLAYER, className)} />
       {children}
-    </MediaController>
+    </div>
   );
 }

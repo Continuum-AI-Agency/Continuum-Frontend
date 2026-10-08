@@ -65,12 +65,14 @@ export function TemplateLayerInspector({
   fonts,
   disabled,
   onEdit,
+  idPrefix = 'inspector',
 }: {
   layer: TemplateEditableLayer;
   edit?: TemplateLayerEdit;
   fonts: FontInventoryRow[];
   disabled: boolean;
   onEdit: (change: Partial<TemplateLayerEdit>) => void;
+  idPrefix?: string;
 }) {
   const locked = (key: TemplateLayerTransform) => disabled || !!layer.transformLocks[key];
   const position = edit?.position ?? layer.position ?? [0, 0];
@@ -88,11 +90,11 @@ export function TemplateLayerInspector({
           </p>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`visible-${layer.layerId}`} className="text-xs">
+          <label htmlFor={`${idPrefix}-visible-${layer.layerId}`} className="text-xs">
             Visible in template
           </label>
           <Switch
-            id={`visible-${layer.layerId}`}
+            id={`${idPrefix}-visible-${layer.layerId}`}
             size="sm"
             checked={edit?.visible ?? layer.visible}
             disabled={disabled || !!layer.visibilityReason}
@@ -176,11 +178,11 @@ export function TemplateLayerInspector({
               onChange={(fontSize) => onEdit({ fontSize })}
             />
             <label
-              htmlFor={`bold-${layer.layerId}`}
+              htmlFor={`${idPrefix}-bold-${layer.layerId}`}
               className="flex h-7 items-center gap-2 text-xs"
             >
               <Checkbox
-                id={`bold-${layer.layerId}`}
+                id={`${idPrefix}-bold-${layer.layerId}`}
                 checked={weight.bold}
                 disabled={disabled || !!layer.textReason || !weight.target}
                 onCheckedChange={() => {

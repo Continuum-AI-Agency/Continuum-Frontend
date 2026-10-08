@@ -60,7 +60,7 @@ import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
-import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
+import { isPostPlatform, POST_PLATFORMS, type PostFormatOption } from '@/lib/organic/postPlatforms';
 import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
@@ -579,12 +579,13 @@ function LifecyclePill({ status }: { status: OrganicCalendarDraft['status'] }) {
   );
 }
 
-function toPublishFormat(format: string): 'Post' | 'Carousel' | 'Reel' {
+function toPublishFormat(format: string): PostFormatOption {
   const f = format.toLowerCase();
   // Legacy 'hyperframe' drafts display as Reel — HyperFrames is a production
   // method whose rendered MP4 publishes as a reel, not a selectable post type.
   if (f === 'hyperframe' || f === 'reel' || f === 'video') return 'Reel';
   if (f === 'carousel') return 'Carousel';
+  if (f === 'story') return 'Story';
   return 'Post';
 }
 

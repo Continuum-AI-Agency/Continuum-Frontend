@@ -17,6 +17,7 @@
 // parse — same rule as analysis.ts and competitor-spy.
 
 import { z } from 'zod';
+import type { CreativeTarget, OptimizerGenerationContext } from '../headless-content/optimizer';
 import type { AdsetAudience } from '../paid/adNaming';
 import {
   paidCreativeAudienceEvidenceSchema,
@@ -460,6 +461,8 @@ export type CreativeRequestBrief = z.infer<typeof creativeRequestBriefSchema>;
  *  contracts must not depend on the engine package. */
 export type CreativeVariationSeedInput = {
   adSetId: string;
+  target?: CreativeTarget;
+  generationContext?: OptimizerGenerationContext;
   winnerAdId?: string | null;
   winnerCreativeRowId?: string | null;
   winnerAssetId?: string | null;
@@ -480,6 +483,12 @@ export type CreativeVariationSeedInput = {
   angleId?: GlobalAngleId | null;
   /** The pipeline the portfolio nominated, if any. */
   pipelineId?: string | null;
+  /** The producer nominated by the portfolio; optimizer refreshes default to headless. */
+  producer?: 'image' | 'headless' | null;
+  /** Which headless formats to make (`autogen.headlessFormats`); absent follows the winner's assetType. */
+  headlessFormats?: Array<'reel' | 'stills'> | null;
+  /** The language the creative is written in (`autogen.language`); absent follows the winner's copy. */
+  language?: string | null;
   /** Parsed from the target ad set's own name — see audienceFromAdName. */
   audience?: AdsetAudience | null;
 };

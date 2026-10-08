@@ -1,4 +1,5 @@
 'use client';
+import type { CreativeOutputManifest } from '@continuum/contracts';
 
 // Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
 // Edge read is owned by React Query: the cache has deliberate freshness windows,
@@ -1461,6 +1462,17 @@ export type RequestFlashCreativesInput = {
   count: number;
 };
 
+async function requestCreativeGeneration(recommendationId: string): Promise<string> {
+  const { data, error } = await getClient().rpc('optimizer_request_creative_generation', {
+    p_rec_id: recommendationId,
+  } as never);
+  if (error || !data)
+    throw new Error(
+      `Could not request creative generation: ${error ? rpcErrorText(error) : 'no job returned'}`,
+    );
+  return String(data);
+}
+
 async function requestFlashCreatives(input: RequestFlashCreativesInput): Promise<string> {
   const { data, error } = await getClient().rpc('optimizer_request_flash_creatives', {
     p_rec_id: input.recommendationId,
@@ -1475,6 +1487,7 @@ async function requestFlashCreatives(input: RequestFlashCreativesInput): Promise
 }
 
 export type ImplementFlashCreativeInput = {
+  manifest: CreativeOutputManifest;
   jobId: string;
   assetId: string;
   targetAdsetId: string;
@@ -1487,6 +1500,7 @@ async function implementFlashCreative(input: ImplementFlashCreativeInput): Promi
     p_asset_id: input.assetId,
     p_target_adset_id: input.targetAdsetId,
     p_predecessor_ad_id: input.predecessorAdId,
+    p_manifest: input.manifest,
   } as never);
   if (error) throw new Error(`Could not implement the creative: ${rpcErrorText(error)}`);
   return String(data);
@@ -1499,12 +1513,22 @@ export function useFlashCreativeMutations(brandId: string) {
     void queryClient.invalidateQueries({ queryKey: ['optimizer'] });
   };
   const request = useMutation({ mutationFn: requestFlashCreatives, onSuccess: refresh });
+  const generate = useMutation({ mutationFn: requestCreativeGeneration, onSuccess: refresh });
   const implement = useMutation({ mutationFn: implementFlashCreative, onSuccess: refresh });
   /** After a pipeline is published on the brand's behalf, the catalogue is stale. */
   const refreshPipelines = () => {
     void queryClient.invalidateQueries({ queryKey: pipelineCapabilitiesQueryKey(brandId) });
   };
-  return { request, implement, refreshPipelines };
+  const retry = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await getClient().rpc('optimizer_retry_creative_generation', {
+        p_job_id: jobId,
+      } as never);
+      if (error) throw new Error(rpcErrorText(error));
+    },
+    onSuccess: refresh,
+  });
+  return { request, generate, implement, retry, refreshPipelines };
 }
 
 // ── Audience proposals ────────────────────────────────────────────────────────

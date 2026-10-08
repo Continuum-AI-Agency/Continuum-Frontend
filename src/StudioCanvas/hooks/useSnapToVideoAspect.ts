@@ -65,8 +65,8 @@ export function clearVideoAspectCache(): void {
 /**
  * A `<video>` already on the page showing this exact clip, if there is one.
  *
- * The node that wants the ratio is usually rendering the clip already — media-chrome
- * loads it for the scrub bar the moment the node mounts. Measuring with a second,
+ * The node that wants the ratio is usually rendering the clip already — the
+ * Kobra player loads it the moment the node mounts. Measuring with a second,
  * detached element therefore downloaded the SAME bytes twice, and because both requests
  * were issued in the same instant under the same token neither could use the other's
  * cache entry. Measured: 15 video nodes, 15 distinct clips, 30 requests.

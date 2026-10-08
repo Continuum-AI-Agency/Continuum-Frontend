@@ -3,6 +3,7 @@
 import type { ShaderStackV1 } from '@continuum/contracts';
 import { Loader2, Play } from 'lucide-react';
 import * as React from 'react';
+import { Video } from '@/components/ui/video';
 import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
 import { signHyperframeComposition } from '@/lib/organic/hyperframeSign';
@@ -194,14 +195,11 @@ export function HyperFramePlayer({
     <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/70 bg-black">
       {state === 'playing' && signedUrl ? (
         usesRenderedShaderPreview ? (
-          // biome-ignore lint/a11y/useMediaCaption: generated creative preview has no caption track
-          <video
+          <Video
             src={signedUrl}
-            controls
             autoPlay
-            playsInline
-            className="h-full w-full"
-            aria-label={draft.title}
+            ariaLabel={draft.title}
+            className="aspect-auto! size-full rounded-none border-0"
           />
         ) : (
           <iframe

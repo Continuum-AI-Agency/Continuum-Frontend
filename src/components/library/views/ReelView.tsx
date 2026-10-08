@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, FileText, ImageOff, Maximize2 } from 'lucide
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Video } from '@/components/ui/video';
 import { formatDurationMs } from './cardOptions';
 
 const LOAD_AHEAD = 3;
@@ -24,16 +25,15 @@ function ReelMedia({ asset }: { asset: MediaAsset }) {
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
   if (asset.kind === 'video' && asset.signedUrl) {
     return (
-      // biome-ignore lint/a11y/useMediaCaption: the user's own creative; no caption track exists
-      <video
+      <Video
         key={asset.id}
         src={asset.signedUrl}
         poster={asset.thumbnailUrl ?? undefined}
-        className="size-full object-contain"
+        ariaLabel={name}
         autoPlay
         muted
-        controls
-        playsInline
+        className="aspect-auto! size-full rounded-none border-0"
+        videoClassName="object-contain"
       />
     );
   }

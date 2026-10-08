@@ -111,6 +111,20 @@ describe('PublishOptionsPanel', () => {
     expect(screen.getByText(/LinkedIn does not accept a first comment/)).toBeTruthy();
   });
 
+  it('offers no first comment on an Instagram story, which has no comments', () => {
+    render(
+      <PublishOptionsPanel
+        publishOptions={undefined}
+        draft={draft()}
+        platform="instagram"
+        format="STORY"
+        onChange={mock()}
+      />,
+    );
+    expect(screen.queryByLabelText('First comment')).toBeNull();
+    expect(screen.getByText(/A story has no comments/)).toBeTruthy();
+  });
+
   it('offers a cover only for video, and only where the platform takes one', () => {
     render(
       <PublishOptionsPanel

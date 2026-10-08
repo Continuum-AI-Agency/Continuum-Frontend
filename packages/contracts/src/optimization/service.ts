@@ -14,6 +14,7 @@ import { globalAngleIdSchema } from '../creative-strategy/angles';
 import { creativeSpecV1Schema } from '../creative-system/creative-spec';
 import { creativeReferenceSchema } from '../creative-system/references';
 import { conversionDescriptorSchema } from './custom-conversion';
+import { creativeOutputManifestSchema } from '../headless-content/optimizer';
 import {
   AdSetSnapshotSchema,
   FreezeReasonSchema,
@@ -2265,6 +2266,9 @@ export const CreativeSwapJobRowSchema = z
     attempts: z.number().int().nonnegative().optional(),
     result: z.record(z.string(), z.unknown()).nullable().optional(),
     error: z.record(z.string(), z.unknown()).nullable().optional(),
+    approved_manifest: creativeOutputManifestSchema.nullable().optional(),
+    publish_approved_by: z.string().nullable().optional(),
+    publish_approved_at: z.string().nullable().optional(),
     enqueued_via: z.string().optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),

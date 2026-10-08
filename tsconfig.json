@@ -192,7 +192,15 @@
     ".next-canvas-roundtrip-bench/types/**/*.ts",
     ".next-canvas-roundtrip-bench/dev/types/**/*.ts",
     ".next-search-bench/types/**/*.ts",
-    ".next-search-bench/dev/types/**/*.ts"
+    ".next-search-bench/dev/types/**/*.ts",
+    ".next/styles-ui-bench/types/**/*.ts",
+    ".next/styles-ui-bench/dev/types/**/*.ts",
+    ".next/forge-layers-bench/types/**/*.ts",
+    ".next/forge-layers-bench/dev/types/**/*.ts",
+    ".next/drive-ui-check/types/**/*.ts",
+    ".next/drive-ui-check/dev/types/**/*.ts",
+    ".next/forge-folder-bench/types/**/*.ts",
+    ".next/forge-folder-bench/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

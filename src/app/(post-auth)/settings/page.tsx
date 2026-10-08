@@ -412,14 +412,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             figmaAccounts={figmaAccounts}
           />
         </SettingsSection>
-        {user?.id ? (
-          <SettingsSection
-            title="Sharing and removal"
-            description="Which brands each connection reaches, and how to take one back."
-          >
-            <MyConnectionsSharingSection userId={user.id} />
-          </SettingsSection>
-        ) : null}
+        {user?.id ? <MyConnectionsSharingSection userId={user.id} /> : null}
         <SettingsSection
           title="Chat request delivery"
           description="Slack and Microsoft Teams identities that can receive Goal questions. Choose the preferred route for this brand."

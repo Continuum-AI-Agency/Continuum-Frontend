@@ -30,6 +30,7 @@ import { previewMarkup } from '@/components/forge/layerPreviewSvg';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { TemplateLayerInspector } from '@/components/forge/TemplateLayerInspector';
 import { type StackRow, TemplateLayerList } from '@/components/forge/TemplateLayerList';
+import { TemplateLayerPreview } from '@/components/forge/TemplateLayerPreview';
 import { TemplateWireframe } from '@/components/forge/TemplateWireframe';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -494,12 +495,17 @@ export function TemplateLayerEditor({
           <div className="flex min-h-0 flex-col bg-muted/40">
             <div className="relative flex h-72 items-center justify-center p-4 lg:h-auto lg:min-h-0 lg:flex-1">
               {markup ? (
-                <div
-                  role="img"
-                  aria-label="Layout preview of the template with these edits"
-                  className={`size-full transition-opacity ${previewing ? 'opacity-80' : ''}`}
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: rebuilt from an element and attribute allowlist in layerPreviewSvg.safeSvg.
-                  dangerouslySetInnerHTML={{ __html: markup }}
+                <TemplateLayerPreview
+                  markup={markup}
+                  layers={layers}
+                  compId={shownScene!.compId}
+                  layer={layer?.compId === shownScene!.compId ? layer : undefined}
+                  edit={layer ? edits[layer.layerId] : undefined}
+                  edits={edits}
+                  fonts={fonts.data ?? []}
+                  disabled={saving}
+                  onSelect={setSelected}
+                  onEdit={edit}
                 />
               ) : parse && defaultComp ? (
                 <TemplateWireframe
@@ -513,6 +519,13 @@ export function TemplateLayerEditor({
                 <Skeleton className="size-full" />
               )}
             </div>
+            <p
+              id="template-preview-help"
+              className="border-t border-border px-3 py-2 text-2xs text-muted-foreground"
+            >
+              Click a layer for controls. Drag to move; arrow keys nudge, Shift moves 10 px. Edits
+              stay temporary until you save.
+            </p>
             {scene.isError || composed.isError || shownScene?.warnings.length ? (
               <div className="max-h-24 overflow-y-auto border-t border-border px-3 py-2">
                 {scene.isError || composed.isError ? (

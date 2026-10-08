@@ -3,7 +3,7 @@
  *
  * Both sides import from here: the Backend publisher emits `PublishEvent` over SSE,
  * the Frontend `usePublishDraft` hook interprets it. Post format stays platform-neutral
- * (`POST | REEL | CAROUSEL`) because every existing consumer already speaks it —
+ * (`POST | REEL | CAROUSEL | STORY`) because every existing consumer already speaks it —
  * `content_json.content.format`, `slot_data`, the `post_type` CHECK constraint, and the
  * planner's `inferPostType`. Per-platform native shapes are derived from
  * `PLATFORM_CAPABILITIES` at the boundary rather than fanned out into the type system.
@@ -83,7 +83,11 @@ export const publishPlatformSchema = organicPlatformSchema.extract([
 ]);
 export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 
-export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
+/**
+ * STORY is an Instagram Story: one image or video, no caption, gone after 24h. Only Instagram
+ * publishes it; every other platform refuses it at the boundary with `unsupported_format`.
+ */
+export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL', 'STORY']);
 export type PublishFormat = z.infer<typeof publishFormatSchema>;
 
 /** Match generator-written and user-written format strings at the boundary. */
@@ -136,7 +140,7 @@ export interface PlatformCapability {
 
 export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCapability>> = {
   instagram: {
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: true },
     carousel: { min: 2, max: 10 },
     mediaTransport: 'url',
     // Instagram Content Publishing API.
@@ -152,7 +156,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     },
   },
   facebook: {
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     carousel: { min: 2, max: 10 },
     mediaTransport: 'url',
     // Facebook's message field is effectively unbounded at the post level (63,206).
@@ -169,7 +173,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
   },
   linkedin: {
     // REEL maps to a native video post; CAROUSEL maps to a native multiImage post.
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     carousel: { min: 2, max: 20 },
     mediaTransport: 'bytes',
     // LinkedIn ugcPost commentary.
@@ -186,7 +190,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     // YouTube has no photo or carousel surface at all: a video IS the post. POST and CAROUSEL
     // are refused at the boundary with `unsupported_format` rather than mapped onto something
     // that would upload a still image as a one-frame video.
-    formats: { POST: false, REEL: true, CAROUSEL: false },
+    formats: { POST: false, REEL: true, CAROUSEL: false, STORY: false },
     // Unreachable while CAROUSEL is false; kept so the shape stays total over PublishFormat.
     carousel: { min: 0, max: 0 },
     // YouTube will not fetch a URL — `videos.insert` is a resumable upload of the bytes,
@@ -206,7 +210,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
   tiktok: {
     // REEL is the native shape (a video). POST is a single-image photo post and CAROUSEL a
     // multi-image photo post, both via /post/publish/content/init with media_type=PHOTO.
-    formats: { POST: true, REEL: true, CAROUSEL: true },
+    formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     // TikTok photo posts accept up to 35 images.
     carousel: { min: 2, max: 35 },
     // URL-pull for EVERY format. The Business Organic API (business-api.tiktok.com/open_api/v1.3,

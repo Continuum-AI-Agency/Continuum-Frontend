@@ -12,6 +12,8 @@ import {
   creativeRefFromAsset,
   type MediaAsset,
   type OneShotPostResponse,
+  type OrganicPostFormat,
+  organicPostFormatEnum,
 } from '@continuum/contracts';
 import { ImageOff, Images, Loader2, Play, Sparkles } from 'lucide-react';
 import * as React from 'react';
@@ -26,10 +28,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { createOneShotPost } from '@/lib/organic/oneShotPost';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { postFormatOptions } from '@/lib/organic/postPlatforms';
 import type { Trend } from '@/lib/organic/trends';
 import { cn } from '@/lib/utils';
 import { useOneShotEvidence } from './useOneShotEvidence';
@@ -164,6 +168,8 @@ export function AiPostComposer({
   const [angle, setAngle] = React.useState('');
   const [guidance, setGuidance] = React.useState('');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  // null = the agent picks the format, as it always has; a Story can only be chosen here.
+  const [format, setFormat] = React.useState<OrganicPostFormat | null>(null);
   // Seeded via useState initializer: the workspace mounts a fresh composer per
   // open, so a "Generate from this trend" entry point needs no sync effect.
   const [selectedTrendIds, setSelectedTrendIds] = React.useState<string[]>(() =>
@@ -194,6 +200,7 @@ export function AiPostComposer({
       setAngle('');
       setGuidance('');
       setSelectedIds([]);
+      setFormat(null);
       setSelectedTrendIds([]);
       setSelectedMetricRefs([]);
       setSelectedInsightRefs([]);
@@ -236,7 +243,7 @@ export function AiPostComposer({
         platform,
         scheduledAt,
         direction: angle.trim() ? angle.trim() : null,
-        format: isCarousel ? 'carousel' : null,
+        format: isCarousel ? 'carousel' : format,
         metrics: evidence.metrics.filter((m) => selectedMetricRefs.includes(m.refId)),
         insights: evidence.insights.filter((i) => selectedInsightRefs.includes(i.refId)),
         angles: evidence.angles.filter((a) => selectedAngleRefs.includes(a.refId)),
@@ -318,6 +325,34 @@ export function AiPostComposer({
               />
             </>
           )}
+
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Format
+            </p>
+            {/* Two or more creatives already make it a carousel, so the choice is locked. */}
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              aria-label="Post format"
+              value={isCarousel ? 'carousel' : (format ?? '')}
+              onValueChange={(value) =>
+                setFormat(organicPostFormatEnum.safeParse(value).data ?? null)
+              }
+            >
+              {postFormatOptions([platform]).map((option) => (
+                <ToggleGroupItem
+                  key={option}
+                  value={option.toLowerCase()}
+                  disabled={isCarousel || submitting}
+                >
+                  {option}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
 
           <details className="group/guidance">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">

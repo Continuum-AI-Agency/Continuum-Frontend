@@ -32,7 +32,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -126,6 +126,7 @@ import {
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
+import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import {
   AlertDialog,
@@ -141,7 +142,7 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
-import { saveTemplateVariables } from '@/lib/library/templateSources';
+import { fetchTemplateLineage, saveTemplateVariables } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
@@ -410,6 +411,30 @@ export function RenderRequestsGrid({
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
+  // The checkpoint this grid is pinned to, or null to follow whatever is live.
+  const [templateRef, setTemplateRef] = useState<string | null>(null);
+  // The template's history, for the checkpoint picker: which checkpoint renders, and the rest.
+  const sourceAssetId = contract?.template.sourceAssetId ?? null;
+  const lineage = useQuery({
+    queryKey: forgeQueryKeys.lineage(brandId, sourceAssetId ?? ''),
+    queryFn: () => fetchTemplateLineage(brandId, sourceAssetId as string),
+    enabled: sourceAssetId !== null,
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const checkpoints = useMemo(
+    () => (lineage.data ? checkpointGraph(lineage.data) : null),
+    [lineage.data],
+  );
+  // Every row's dry-run asked about the previous checkpoint; a new pin asks again, so a pin that
+  // cannot hold (live moved) shows on the rows now rather than at Render.
+  const pinCheckpoint = (ref: string | null) => {
+    setTemplateRef(ref);
+    setRows((current) =>
+      current.map((row) =>
+        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
+      ),
+    );
+  };
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
@@ -908,9 +933,12 @@ export function RenderRequestsGrid({
     const pending = timers.current;
     for (const row of rows) {
       const snapshot = preflightSnapshot(rows, row.id);
+      // Armed for these values AND this checkpoint: a pin made while a dry-run waits must re-arm
+      // it, or it fires with the checkpoint it was armed under.
+      const armedFor = `${snapshot}|${templateRef ?? ''}`;
       const scheduled = pending.get(row.id);
       // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
-      if (scheduled?.snapshot === snapshot) continue;
+      if (scheduled?.snapshot === armedFor) continue;
       if (scheduled) {
         clearTimeout(scheduled.timer);
         pending.delete(row.id);
@@ -969,9 +997,9 @@ export function RenderRequestsGrid({
         }
         settle(check, 'checking');
       }, PREFLIGHT_DEBOUNCE_MS);
-      pending.set(row.id, { timer, snapshot });
+      pending.set(row.id, { timer, snapshot: armedFor });
     }
-  }, [rows, contract, clientErrors, brandId, bindingId]);
+  }, [rows, contract, clientErrors, brandId, bindingId, templateRef]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -1344,8 +1372,6 @@ export function RenderRequestsGrid({
     setPendingDiscard(() => action);
   };
 
-  // The head this grid is pinned to, or null for the template's live pointer.
-  const [templateRef, setTemplateRef] = useState<string | null>(null);
   // A row an intent named, held until its set's rows are on screen.
   const [focusRow, setFocusRow] = useState<{
     setId: string | undefined;
@@ -2015,9 +2041,11 @@ export function RenderRequestsGrid({
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
-          confirmDiscard(() =>
-            setSelection({ templateKey: picked.key, bindingId: picked.bindingId }),
-          );
+          // A checkpoint belongs to the template it was picked from; never carry it to another.
+          confirmDiscard(() => {
+            setTemplateRef(null);
+            setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
+          });
         }}
         ready={contract !== null}
         inputSets={inputSets}
@@ -2028,8 +2056,12 @@ export function RenderRequestsGrid({
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
         }
-        layerSwitches={layerSwitches}
+        // Only this brand's own upload can be changed from here; a granted template cannot.
+        layerSwitches={contract?.template.sourceAssetId ? layerSwitches : []}
         onAskSwitch={(variable) => void askSwitch(variable)}
+        checkpoints={checkpoints}
+        templateRef={templateRef}
+        onTemplateRefChange={pinCheckpoint}
         onUpload={() => setImportOpen(true)}
         onDownloadTemplate={() =>
           contract &&

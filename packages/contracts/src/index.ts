@@ -45,3 +45,9 @@ export * from './trial-reels/index';
 export * from './virality/index';
 export * from './whats-new/index';
 export * from './hyperframes-aep/design-import';
+
+export * from './headless-content/optimizer';
+
+export * from './reels/presentation';
+
+export * from './reels/templates';

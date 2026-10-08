@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { purge, register, reset, size, teardown } from './storeRegistry';
+import { purge, register, reset, size, teardown, teardownAll } from './storeRegistry';
 
 describe('storeRegistry', () => {
   beforeEach(() => {
@@ -69,5 +69,18 @@ describe('storeRegistry', () => {
     purge('brand-prev');
 
     expect(purgeA).toHaveBeenCalledWith('brand-prev');
+  });
+
+  it('teardownAll resets every entry with a logout event even without a brand id', () => {
+    const a = mock(() => {});
+    const b = mock(() => {});
+    register({ name: 'a', teardown: a });
+    register({ name: 'b', teardown: b });
+
+    teardownAll();
+
+    const logoutEvent = { prevBrandId: '', nextBrandId: null, reason: 'logout' };
+    expect(a).toHaveBeenCalledWith('', logoutEvent);
+    expect(b).toHaveBeenCalledWith('', logoutEvent);
   });
 });
