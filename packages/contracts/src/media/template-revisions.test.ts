@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   saveTemplateRevisionRequestSchema,
   templateRevisionEditsSchema,
+  templateRevisionSchema,
 } from './template-revisions';
 
 describe('immutable template revision edits', () => {
@@ -22,6 +23,18 @@ describe('immutable template revision edits', () => {
         ],
       }).success,
     ).toBe(false);
+  });
+
+  test('an order names each layer and each comp once', () => {
+    const order = { compId: 63, layerIds: [114, 116, 71] };
+    expect(templateRevisionEditsSchema.parse({ orders: [order] }).orders).toEqual([order]);
+    expect(templateRevisionEditsSchema.parse({}).orders).toEqual([]);
+    for (const orders of [
+      [{ ...order, layerIds: [114, 114] }],
+      [{ ...order, layerIds: [114] }],
+      [order, { ...order, layerIds: [71, 116, 114] }],
+    ])
+      expect(templateRevisionEditsSchema.safeParse({ orders }).success).toBe(false);
   });
 
   test('an arrangement saved before artboards were recorded reads as the canvas', () => {
@@ -66,7 +79,7 @@ describe('immutable template revision edits', () => {
     ).toBe(false);
     expect(
       saveTemplateRevisionRequestSchema.parse({ ...request, name: 'Large headline' }).edits,
-    ).toEqual({ layers: [], slots: [] });
+    ).toEqual({ layers: [], slots: [], orders: [] });
     expect(
       saveTemplateRevisionRequestSchema.safeParse({
         ...request,
@@ -74,5 +87,13 @@ describe('immutable template revision edits', () => {
         edits: { layers: [{ compId: 1, layerId: 1, fontSize: 0 }] },
       }).success,
     ).toBe(false);
+  });
+
+  test('a revision by a seeded user still reads', () => {
+    // The local fixture login is a valid Postgres uuid but not RFC 4122 v4.
+    const createdBy = templateRevisionSchema.shape.createdBy;
+    expect(createdBy.safeParse('00000000-0000-0000-0000-0000000000a1').success).toBe(true);
+    expect(createdBy.safeParse(null).success).toBe(true);
+    expect(createdBy.safeParse('not-a-uuid').success).toBe(false);
   });
 });

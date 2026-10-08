@@ -43,7 +43,9 @@ import {
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
   templateForgeBundleSchema,
+  templateLayerInventorySchema,
   templateLayerPreviewResponseSchema,
+  templateLayerSceneSchema,
   templateMappingReviewSchema,
   templateRebindPreviewSchema,
   templateRevisionSchema,
@@ -655,6 +657,46 @@ export async function saveTemplateRevision(assetId: string, request: SaveTemplat
         body: JSON.stringify(request),
       }),
       'Save template revision',
+    ),
+  );
+}
+
+/**
+ * The Layers tab's unedited layer list for one source version (the open revision's file). The
+ * Backend stores it per version, so only a first open reaches the forge.
+ */
+export async function fetchTemplateLayerInventory(
+  brandId: string,
+  assetId: string,
+  versionId: string,
+) {
+  const query = new URLSearchParams({ brandId, versionId });
+  return templateLayerInventorySchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/layers?${query}`),
+      'Layers',
+    ),
+  );
+}
+
+/** One comp's unedited layout preview; the template's default comp when none is named. */
+export async function fetchTemplateLayerScene(
+  brandId: string,
+  assetId: string,
+  versionId: string,
+  compId: number | null,
+) {
+  const query = new URLSearchParams({
+    brandId,
+    versionId,
+    ...(compId ? { compId: String(compId) } : {}),
+  });
+  return templateLayerSceneSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        `/api/ai-studio/templates/${encodeURIComponent(assetId)}/layer-scene?${query}`,
+      ),
+      'Layout preview',
     ),
   );
 }

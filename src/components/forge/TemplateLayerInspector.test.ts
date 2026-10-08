@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { FontInventoryRow } from '@continuum/contracts';
-import { boldFaceFor } from './TemplateLayerEditor';
+import { boldFaceFor } from './TemplateLayerInspector';
 
 const font = (
   postScriptName: string,

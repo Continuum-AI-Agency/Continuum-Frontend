@@ -148,7 +148,7 @@ export function VariantsPanel({
         idempotencyKey: crypto.randomUUID(),
         name: name.trim() || file.name.replace(/\.[^.]+$/, ''),
         uploadAssetId: uploaded.assetId,
-        edits: { layers: [], slots: [] },
+        edits: { layers: [], slots: [], orders: [] },
       });
       await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
       await onInspect?.(saved.sourceAssetId);

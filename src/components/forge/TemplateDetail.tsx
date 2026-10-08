@@ -595,6 +595,7 @@ export function TemplateDetail({
           idempotencyKey: crypto.randomUUID(),
           edits: {
             layers: [],
+            orders: [],
             slots: edits.map((edit) => templateSourceSlotEditSchema.parse(edit)),
           },
         });
@@ -1774,6 +1775,7 @@ export function TemplateDetail({
               active={tab === 'layers'}
               versionId={source.versionId}
               name={source.displayName ?? source.parse?.filename ?? 'Template'}
+              parse={source.parse}
               onSaved={async () => {
                 await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
                 await Promise.all([onChanged(), loadVariables()]);

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   saveTemplateLayerVariantRequestSchema,
+  templateLayerInventorySchema,
   templateLayerPreviewRequestSchema,
+  templateLayerViewQuerySchema,
 } from './template-layer-edits';
 
 const base = {
@@ -53,5 +55,85 @@ describe('template edit boundary', () => {
         exposures: [{ slotKey: 'text__label', exposed: 'false' }],
       }).success,
     ).toBe(false);
+  });
+  test('transforms are static pairs and numbers within AE ranges', () => {
+    const at = { compId: 63, layerId: 114 };
+    for (const change of [
+      { x: 1400, y: 620 },
+      { rotation: -12.5 },
+      { scale: [110, 90] },
+      { opacity: 0 },
+    ]) {
+      expect(
+        templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [{ ...at, ...change }] })
+          .success,
+      ).toBe(true);
+    }
+    for (const change of [
+      { position: [1400, 620] },
+      { x: Number.NaN },
+      { scale: [110] },
+      { scale: [110, 90, 100] },
+      { opacity: 101 },
+      { rotation: Infinity },
+      { anchor_point: [0, 0] },
+    ]) {
+      expect(
+        templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [{ ...at, ...change }] })
+          .success,
+      ).toBe(false);
+    }
+  });
+  test('the layer list carries transforms and locks, never a second position', () => {
+    const layer = {
+      compId: 63,
+      comp: 'Main',
+      layerId: 114,
+      name: 'Logo',
+      kind: 'artwork',
+      visible: true,
+      visibilityReason: null,
+      textReason: 'This layer has no editable text.',
+      text: null,
+      font: null,
+      fontSize: null,
+      x: 960,
+      y: 540,
+      slotKeys: [],
+      visibilitySlotKeys: [],
+      index: 0,
+      rotation: 0,
+      scale: [100, 100],
+      opacity: 100,
+      transformLocks: { rotation: 'Animated rotation must be edited in its source.' },
+      parentId: null,
+      parentName: null,
+    };
+    const inventory = {
+      compId: 63,
+      comps: [{ id: 63, name: 'Main', orderReason: null }],
+      layers: [layer],
+      warnings: [],
+    };
+    expect(templateLayerInventorySchema.safeParse(inventory).success).toBe(true);
+    expect(
+      templateLayerInventorySchema.safeParse({
+        ...inventory,
+        layers: [{ ...layer, position: [960, 540] }],
+      }).success,
+    ).toBe(false);
+    expect(
+      templateLayerInventorySchema.safeParse({
+        ...inventory,
+        layers: [{ ...layer, transformLocks: { anchor: 'no' } }],
+      }).success,
+    ).toBe(false);
+    expect(
+      templateLayerViewQuerySchema.parse({
+        brandId: base.brandId,
+        versionId: base.expectedVersionId,
+        compId: '63',
+      }).compId,
+    ).toBe(63);
   });
 });

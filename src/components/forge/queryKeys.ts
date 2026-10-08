@@ -17,6 +17,13 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'template-variables', assetId, versionId] as const,
   templateFonts: (brandId: string, assetId: string, versionId: string) =>
     ['forge', brandId, 'template-fonts', assetId, versionId] as const,
+  layerInventory: (brandId: string, assetId: string, versionId: string) =>
+    ['forge', brandId, 'layer-inventory', assetId, versionId] as const,
+  layerScene: (brandId: string, assetId: string, versionId: string, compId: number | null) =>
+    ['forge', brandId, 'layer-scene', assetId, versionId, compId] as const,
+  /** A composed preview of pending edits on one revision; `edits` is part of the key. */
+  layerPreview: (brandId: string, revisionId: string, compId: number | null, edits: unknown) =>
+    ['forge', brandId, 'layer-preview', revisionId, compId, edits] as const,
   workspaces: (brandId: string) => ['forge', brandId, 'workspaces'] as const,
   workspaceTemplates: (brandId: string) => ['forge', brandId, 'workspace-templates'] as const,
   environments: (brandId: string) => ['forge', brandId, 'environments'] as const,

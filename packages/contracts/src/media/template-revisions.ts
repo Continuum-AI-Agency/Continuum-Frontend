@@ -7,6 +7,13 @@ import { designArrangementSchema } from '../hyperframes-aep/design-import';
 import { templateSourceKindSchema, templateSourceSummarySchema } from './template-source';
 import { templateSourceSlotEditSchema } from './template-source-slot';
 
+const transformPairSchema = (limit: number) =>
+  z.tuple([z.number().finite().min(-limit).max(limit), z.number().finite().min(-limit).max(limit)]);
+
+/**
+ * One layer's changes. `x`/`y` are the layer's AE Position, on any layer; rotation (degrees),
+ * scale (percent per axis) and opacity (percent) are its static transform values.
+ */
 export const templateRevisionLayerEditSchema = z
   .object({
     compId: z.number().int().positive(),
@@ -21,16 +28,41 @@ export const templateRevisionLayerEditSchema = z
     y: z.number().finite().optional(),
     width: z.number().finite().positive().max(100_000).optional(),
     height: z.number().finite().positive().max(100_000).optional(),
+    rotation: z.number().finite().min(-36_000).max(36_000).optional(),
+    scale: transformPairSchema(10_000).optional(),
+    opacity: z.number().finite().min(0).max(100).optional(),
   })
   .strict()
   .refine(
     (edit) =>
-      ['font', 'fontSize', 'text', 'visible', 'x', 'y', 'width', 'height'].some(
-        (key) => key in edit,
-      ),
+      [
+        'font',
+        'fontSize',
+        'text',
+        'visible',
+        'x',
+        'y',
+        'width',
+        'height',
+        'rotation',
+        'scale',
+        'opacity',
+      ].some((key) => key in edit),
     'Choose a layer change',
   );
 export type TemplateRevisionLayerEdit = z.infer<typeof templateRevisionLayerEditSchema>;
+
+/** One comp re-stacked: every layer of it exactly once, top first. */
+export const templateLayerOrderSchema = z
+  .object({
+    compId: z.number().int().positive(),
+    layerIds: z.array(z.number().int().positive()).min(2).max(1000),
+  })
+  .strict()
+  .refine((order) => new Set(order.layerIds).size === order.layerIds.length, {
+    message: 'A layer may appear only once',
+  });
+export type TemplateLayerOrder = z.infer<typeof templateLayerOrderSchema>;
 
 /**
  * Arrangements saved before artboards were recorded carry no `artboardId`; the registry backfill
@@ -46,12 +78,15 @@ export const templateRevisionEditsSchema = z
     arrangement: revisionArrangementSchema.optional(),
     layers: z.array(templateRevisionLayerEditSchema).max(64).default([]),
     slots: z.array(templateSourceSlotEditSchema).max(500).default([]),
+    orders: z.array(templateLayerOrderSchema).max(16).default([]),
   })
   .strict()
   .superRefine((edits, ctx) => {
     const keys = edits.layers.map((layer) => `${layer.compId}:${layer.layerId}`);
     if (new Set(keys).size !== keys.length)
       ctx.addIssue({ code: 'custom', message: 'Duplicate layer edit' });
+    if (new Set(edits.orders.map((order) => order.compId)).size !== edits.orders.length)
+      ctx.addIssue({ code: 'custom', message: 'Duplicate composition order' });
     if (new Set(edits.slots.map((slot) => slot.slotKey)).size !== edits.slots.length)
       ctx.addIssue({ code: 'custom', message: 'Duplicate field edit' });
     edits.slots.forEach((slot, index) => {
@@ -153,7 +188,8 @@ export const templateRevisionSchema = z
     /** Present only when the outputs run different packages; `sourceAssetId` is then one of them. */
     sources: z.array(templateRevisionSourceSchema).min(2).optional(),
     createdAt: z.string(),
-    createdBy: z.string().uuid().nullable(),
+    /** An auth user id: any Postgres uuid. Seeded users (the local fixture) are not RFC v4. */
+    createdBy: z.guid().nullable(),
     nativeCommitId: z.string().nullable().default(null),
   })
   .strict();
