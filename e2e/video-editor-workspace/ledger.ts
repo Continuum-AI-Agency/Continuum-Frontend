@@ -209,8 +209,8 @@ export async function removeObjects(admin: SupabaseClient, objects: readonly Own
 
 /**
  * Remove the owned objects that exist, then the asset rows. Register receipts
- * (library_internal.operation_receipts) are not reachable with the service role — the schema
- * is not exposed and no RPC deletes them — so they are returned for the caller to report.
+ * (library_internal.operation_receipts) are not in an exposed schema, so their asset ids are
+ * returned for `receiptRows` to sweep.
  */
 export async function removeAssets(
   admin: SupabaseClient,
@@ -270,7 +270,7 @@ async function countLeft(admin: SupabaseClient, table: string, ids: readonly str
  * Takes back everything the ledger owns and grades the proof, by owned id only: a planted control
  * the ledger must see before cleanup, then no owned object (the control included), asset row or
  * project left. A ledger that never saw its control proves nothing, so its zero is graded FAIL,
- * never PASS. Register receipts are an honest SKIP that names the asset ids to sweep.
+ * never PASS. Register receipts are swept by asset id and graded by what is still there after.
  */
 export async function proveNetZero(
   admin: SupabaseClient,
@@ -322,47 +322,94 @@ export async function proveNetZero(
         grade: grade(leftRows === 0 && left.length === 0 && leftProjects === 0),
         detail: `rows ${leftRows} of ${ids.length}, objects ${left.length}, projects ${leftProjects} of ${projectIds.length}${vacuous}`,
       },
-      {
-        step: 'net zero: register receipts',
-        grade: 'SKIP',
-        detail: `NOT EXERCISED: register receipts (service role cannot read library_internal); left by asset id: ${ids.join(', ') || 'none'}`,
-      },
+      await receiptRows(admin, brand, removed.receiptsLeftFor),
     ],
     notes: [
       `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects + late.length} storage object(s) of ${ledger.objects.length} owned paths and ${ledger.folders.length} owned folders`,
-      ...(ids.length > 0
-        ? [
-            `register receipts to sweep (library_internal.operation_receipts, by response assetId): ${ids.join(', ')}`,
-          ]
-        : []),
     ],
   };
 }
 
 const JOB_ID = /^job_[0-9a-f]{32}$/;
+/** The one brand plugin_mcp.sweep_video_bench_leftovers will delete from. */
+const BENCH_BRAND = 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
+const sweepRows = z.array(
+  z.object({ id: z.string(), deleted: z.number().int(), remaining: z.number().int() }),
+);
 
 /**
- * The run's plugin_mcp.jobs rows, an honest SKIP: the table is not granted to the service role and
- * nothing it may call deletes a job, so they stay. Each id is read through get_job, so the step
- * names exactly the rows left to sweep.
+ * Deletes the listed register receipts (by asset id) and plugin_mcp.jobs rows (by job id) on the
+ * bench brand through plugin_mcp.sweep_video_bench_leftovers, the one hop the service role has to
+ * either table, and names the ids still there after: every id, with the reason, if the call fails.
+ */
+async function sweep(
+  admin: SupabaseClient,
+  brandId: string,
+  assetIds: readonly string[],
+  jobIds: readonly string[],
+): Promise<{ left: string[]; deleted: number; error?: string }> {
+  const { data, error } = await admin.schema('plugin_mcp').rpc('sweep_video_bench_leftovers', {
+    p_brand_id: brandId,
+    p_receipt_asset_ids: assetIds,
+    p_job_ids: jobIds,
+  });
+  if (error) return { left: [...assetIds, ...jobIds], deleted: 0, error: error.message };
+  const rows = sweepRows.parse(data);
+  return {
+    left: rows.filter((row) => row.remaining > 0).map((row) => row.id),
+    deleted: rows.reduce((sum, row) => sum + row.deleted, 0),
+  };
+}
+
+/** The run's register receipts, swept by asset id: PASS only when none is left. */
+export async function receiptRows(
+  admin: SupabaseClient,
+  brandId: string,
+  assetIds: readonly string[],
+): Promise<GradedStep> {
+  const step = 'net zero: register receipts';
+  const ids = assetIds.map((id) => uuid.parse(id));
+  if (ids.length === 0) return { step, grade: 'SKIP', detail: 'no asset registered this run' };
+  const { left, deleted, error } = await sweep(admin, uuid.parse(brandId), ids, []);
+  return left.length === 0
+    ? { step, grade: 'PASS', detail: `${deleted} deleted by asset id; none left of ${ids.length}` }
+    : {
+        step,
+        grade: 'FAIL',
+        detail: `left by asset id: ${left.join(', ')} (${left.length} of ${ids.length})${error ? `; sweep failed: ${error}` : ''}`,
+      };
+}
+
+/**
+ * The run's plugin_mcp.jobs rows, swept by id on the bench brand, then each id read again through
+ * get_job: PASS only when neither the sweep nor get_job still finds one.
  */
 export async function jobRows(
   admin: SupabaseClient,
   userId: string,
   jobIds: readonly string[],
 ): Promise<GradedStep> {
-  const left: string[] = [];
+  const step = 'net zero: job rows';
+  for (const jobId of jobIds) if (!JOB_ID.test(jobId)) throw new Error(`not a job id: ${jobId}`);
+  if (jobIds.length === 0) return { step, grade: 'SKIP', detail: 'no job this run started' };
+  const swept = await sweep(admin, BENCH_BRAND, [], jobIds);
+  const left = new Set(swept.left);
   for (const jobId of jobIds) {
-    if (!JOB_ID.test(jobId)) throw new Error(`not a job id: ${jobId}`);
     const { error } = await admin
       .schema('plugin_mcp')
       .rpc('get_job', { p_job_id: jobId, p_user_id: uuid.parse(userId) });
-    if (!error) left.push(jobId);
+    if (!error) left.add(jobId);
     else if (error.code !== 'P0002') throw new Error(`job ledger read ${jobId}: ${error.message}`);
   }
-  return {
-    step: 'net zero: job rows',
-    grade: 'SKIP',
-    detail: `NOT EXERCISED: job rows (service role cannot delete plugin_mcp.jobs); left by job id: ${left.join(', ') || 'none'} (${left.length} of ${jobIds.length} this run started)`,
-  };
+  return left.size === 0
+    ? {
+        step,
+        grade: 'PASS',
+        detail: `${swept.deleted} deleted by job id; none left of ${jobIds.length} this run started`,
+      }
+    : {
+        step,
+        grade: 'FAIL',
+        detail: `left by job id: ${[...left].join(', ')} (${left.size} of ${jobIds.length} this run started)${swept.error ? `; sweep failed: ${swept.error}` : ''}`,
+      };
 }

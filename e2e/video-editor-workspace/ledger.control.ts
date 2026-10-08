@@ -2,8 +2,9 @@
 // GCP client VM holds; never the management token). RED: a ledger whose listing sees nothing
 // grades its zero FAIL, never PASS, and the real listing then finds the control it missed.
 // GREEN: one tiny owned object planted on the bench brand is seen, taken back, and proven gone.
-// It also reads, never writes, the two other service-role hops the benches lean on: whether a
-// kept transcript exists, and get_job by id.
+// It also reads, never writes, the other service-role hops the benches lean on: whether a kept
+// transcript exists, get_job by id, and plugin_mcp.sweep_video_bench_leftovers on ids nothing owns
+// (it answers for the bench brand and refuses any other). Red until that migration is applied.
 //   bun e2e/video-editor-workspace/ledger.control.ts
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -15,6 +16,7 @@ import {
   keptTranscript,
   presentObjects,
   proveNetZero,
+  receiptRows,
   removeObjects,
   type StorageLedger,
   unkeptTranscripts,
@@ -87,9 +89,21 @@ rec.check(
 
 const job = await jobRows(admin, randomUUID(), [`job_${'0'.repeat(32)}`]);
 rec.check(
-  'job rows: get_job answers the service role by id (a missing id reads as gone)',
-  job.detail.includes('left by job id: none (0 of 1'),
+  'job rows: the sweep and get_job answer the service role by id (a missing id reads as gone)',
+  job.grade === 'PASS' && job.detail.includes('none left of 1'),
   job.detail,
+);
+const receipts = await receiptRows(admin, BRAND, [randomUUID()]);
+rec.check(
+  'register receipts: the sweep answers the service role on the bench brand (an unowned id reads as gone)',
+  receipts.grade === 'PASS',
+  receipts.detail,
+);
+const refused = await receiptRows(admin, randomUUID(), [randomUUID()]);
+rec.check(
+  'register receipts: the sweep refuses any brand but the bench brand',
+  refused.grade === 'FAIL' && refused.detail.includes('not the video bench brand'),
+  refused.detail,
 );
 
 rec.finish();

@@ -3,7 +3,8 @@
 // (owner rule: these benches run on a client holding only the service-role key). GREEN: the service-role ledger derives
 // the run's paths from its rows (the kept Brief transcript included), sees a planted control, and
 // sees zero after cleanup. NEGATIVE: a ledger that lists nothing reports a vacuous zero, and the
-// control check catches it — proveNetZero grades that zero FAIL, never PASS.
+// control check catches it — proveNetZero grades that zero FAIL, never PASS. Register receipts and
+// job rows are swept by the run's ids and grade FAIL by any id the sweep (or get_job) still finds.
 import { describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -18,6 +19,7 @@ import {
   plantControl,
   presentObjects,
   proveNetZero,
+  receiptRows,
   removeAssets,
   unkeptTranscripts,
 } from './ledger';
@@ -28,6 +30,7 @@ const VERSION = '55555555-5555-4555-8555-555555555555';
 const PROJECT = '88888888-8888-4888-8888-888888888888';
 const JOB = `job_${'a'.repeat(32)}`;
 const GONE_JOB = `job_${'b'.repeat(32)}`;
+const BENCH = 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
 /** A read-only source version, its transcript kept before the run, and one the run first hears. */
 const KEPT_BEFORE = '66666666-6666-4666-8666-666666666666';
 const HEARD_NOW = '77777777-7777-4777-8777-777777777777';
@@ -45,14 +48,26 @@ const tokenReaders = (sources: readonly { path: string; text: string }[]) =>
     .map(({ path }) => path);
 const key = (bucket: string, path: string) => `${bucket}\n${path}`;
 
+type SweepArgs = { p_brand_id: string; p_receipt_asset_ids: string[]; p_job_ids: string[] };
+
 /**
  * A service-role client over in-memory tables and storage; `blind` lists nothing, `stuck` paths
- * survive a remove, `jobs` are the plugin_mcp.jobs ids get_job finds.
+ * survive a remove, `jobs` are the plugin_mcp.jobs ids get_job finds. The bench sweep deletes
+ * every listed id except `kept` ones; `foreign` jobs it cannot see (another brand) but get_job
+ * still finds; `sweepDown` fails the call; `swept` records every call.
  */
 function fakeAdmin(
   tables: Record<string, Row[]>,
   store: Set<string>,
-  { blind = false, stuck = [] as string[], jobs = [] as string[] } = {},
+  {
+    blind = false,
+    stuck = [] as string[],
+    jobs = [] as string[],
+    kept = [] as string[],
+    foreign = [] as string[],
+    sweepDown = false,
+    swept = [] as SweepArgs[],
+  } = {},
 ) {
   const table = (name: string) => ({
     select: (_columns: string, options: { head?: boolean } = {}) => ({
@@ -103,10 +118,26 @@ function fakeAdmin(
       return { error: null };
     },
   });
-  const rpc = async (name: string, args: { p_job_id: string }) =>
-    name === 'get_job' && jobs.includes(args.p_job_id)
+  const sweep = (args: SweepArgs) => {
+    swept.push(args);
+    if (sweepDown) return { data: null, error: { message: 'Could not find the function' } };
+    const ids = [...args.p_receipt_asset_ids, ...args.p_job_ids].filter(
+      (id) => !foreign.includes(id),
+    );
+    jobs = jobs.filter((id) => kept.includes(id) || !ids.includes(id));
+    const row = (id: string) => ({
+      id,
+      deleted: kept.includes(id) ? 0 : 1,
+      remaining: kept.includes(id) ? 1 : 0,
+    });
+    return { data: ids.map(row), error: null };
+  };
+  const rpc = async (name: string, args: { p_job_id: string } & SweepArgs) => {
+    if (name === 'sweep_video_bench_leftovers') return sweep(args);
+    return name === 'get_job' && jobs.includes(args.p_job_id)
       ? { data: { job_id: args.p_job_id }, error: null }
       : { data: null, error: { code: 'P0002', message: 'NOT_FOUND' } };
+  };
   return {
     schema: () => ({ from: table, rpc }),
     storage: { from: bucketApi },
@@ -238,9 +269,10 @@ describe('workspace storage ledger', () => {
     expect([...store].sort()).toEqual(FOREIGN);
   });
 
-  test('proveNetZero GREEN: control seen, zero left by id, receipts an honest SKIP naming the ids', async () => {
+  test('proveNetZero GREEN: control seen, zero left by id, receipts swept by owned asset id', async () => {
     const { tables, store, assets } = world();
-    const admin = fakeAdmin(tables, store);
+    const swept: SweepArgs[] = [];
+    const admin = fakeAdmin(tables, store, { swept });
     const ledger = await ownedStorage(admin, BRAND, assets);
     const { steps, notes } = await proveNetZero(admin, BRAND, {
       id: 'run1',
@@ -249,12 +281,11 @@ describe('workspace storage ledger', () => {
       projects: [PROJECT],
       settleMs: 0,
     });
-    expect(steps.map((step) => step.grade)).toEqual(['PASS', 'PASS', 'PASS', 'SKIP']);
+    expect(steps.map((step) => step.grade)).toEqual(['PASS', 'PASS', 'PASS', 'PASS']);
     expect(steps[2]?.detail).toBe('rows 0 of 1, objects 0, projects 0 of 1');
-    expect(steps[3]?.detail).toBe(
-      `NOT EXERCISED: register receipts (service role cannot read library_internal); left by asset id: ${ASSET}`,
-    );
-    expect(notes.join('\n')).toContain(`by response assetId): ${ASSET}`);
+    expect(steps[3]?.detail).toBe('1 deleted by asset id; none left of 1');
+    expect(swept).toEqual([{ p_brand_id: BRAND, p_receipt_asset_ids: [ASSET], p_job_ids: [] }]);
+    expect(notes.join('\n')).toContain('1 asset row(s)');
     expect(tables.assets).toEqual([]);
     expect(tables.editor_projects).toEqual([]);
     expect([...store].sort()).toEqual(FOREIGN);
@@ -266,7 +297,7 @@ describe('workspace storage ledger', () => {
     const admin = fakeAdmin(tables, store, { stuck: [transcript] });
     const ledger = await ownedStorage(admin, BRAND, assets);
     const { steps } = await proveNetZero(admin, BRAND, { id: 'run1', ledger, assets, settleMs: 0 });
-    expect(steps.map((step) => step.grade)).toEqual(['PASS', 'FAIL', 'FAIL', 'SKIP']);
+    expect(steps.map((step) => step.grade)).toEqual(['PASS', 'FAIL', 'FAIL', 'PASS']);
     expect(steps[1]?.detail).toContain(`${AI_STUDIO_BUCKET}/${transcript}`);
   });
 
@@ -275,19 +306,56 @@ describe('workspace storage ledger', () => {
     const blind = fakeAdmin(tables, store, { blind: true });
     const ledger = await ownedStorage(blind, BRAND, assets);
     const { steps } = await proveNetZero(blind, BRAND, { id: 'run1', ledger, assets, settleMs: 0 });
-    expect(steps.map((step) => step.grade)).toEqual(['FAIL', 'FAIL', 'FAIL', 'SKIP']);
+    expect(steps.map((step) => step.grade)).toEqual(['FAIL', 'FAIL', 'FAIL', 'PASS']);
     expect(steps[2]?.detail).toContain('VACUOUS');
   });
 
-  test('job rows: an honest SKIP naming only the ids get_job still finds', async () => {
-    const admin = fakeAdmin({}, new Set(), { jobs: [JOB] });
-    const step = await jobRows(admin, BRAND, [JOB, GONE_JOB]);
-    expect(step).toEqual({
-      step: 'net zero: job rows',
-      grade: 'SKIP',
-      detail: `NOT EXERCISED: job rows (service role cannot delete plugin_mcp.jobs); left by job id: ${JOB} (1 of 2 this run started)`,
+  test('register receipts: PASS when the sweep leaves none, FAIL naming each id it leaves', async () => {
+    const kept = await receiptRows(fakeAdmin({}, new Set(), { kept: [ASSET] }), BRAND, [ASSET]);
+    expect(kept).toEqual({
+      step: 'net zero: register receipts',
+      grade: 'FAIL',
+      detail: `left by asset id: ${ASSET} (1 of 1)`,
     });
-    await expect(jobRows(admin, BRAND, ["job_x' or 1=1"])).rejects.toThrow('not a job id');
+    const down = await receiptRows(fakeAdmin({}, new Set(), { sweepDown: true }), BRAND, [ASSET]);
+    expect(down.grade).toBe('FAIL');
+    expect(down.detail).toContain(`left by asset id: ${ASSET} (1 of 1); sweep failed: Could not`);
+    const none = await receiptRows(fakeAdmin({}, new Set()), BRAND, []);
+    expect(none.grade).toBe('SKIP');
+  });
+
+  test('job rows: swept by id on the bench brand, PASS only when neither the sweep nor get_job finds one', async () => {
+    const swept: SweepArgs[] = [];
+    const gone = await jobRows(fakeAdmin({}, new Set(), { jobs: [JOB], swept }), BRAND, [
+      JOB,
+      GONE_JOB,
+    ]);
+    expect(gone).toEqual({
+      step: 'net zero: job rows',
+      grade: 'PASS',
+      detail: '2 deleted by job id; none left of 2 this run started',
+    });
+    expect(swept).toEqual([
+      { p_brand_id: BENCH, p_receipt_asset_ids: [], p_job_ids: [JOB, GONE_JOB] },
+    ]);
+    // The sweep cannot see a job on another brand; get_job still finds it, so it is left.
+    const foreign = await jobRows(
+      fakeAdmin({}, new Set(), { jobs: [JOB], foreign: [JOB] }),
+      BRAND,
+      [JOB],
+    );
+    expect(foreign.grade).toBe('FAIL');
+    expect(foreign.detail).toBe(`left by job id: ${JOB} (1 of 1 this run started)`);
+    const kept = await jobRows(fakeAdmin({}, new Set(), { jobs: [JOB], kept: [JOB] }), BRAND, [
+      JOB,
+    ]);
+    expect(kept.grade).toBe('FAIL');
+    const down = await jobRows(fakeAdmin({}, new Set(), { sweepDown: true }), BRAND, [JOB]);
+    expect(down.detail).toContain('sweep failed: Could not find the function');
+    expect((await jobRows(fakeAdmin({}, new Set()), BRAND, [])).grade).toBe('SKIP');
+    await expect(jobRows(fakeAdmin({}, new Set()), BRAND, ["job_x' or 1=1"])).rejects.toThrow(
+      'not a job id',
+    );
   });
 
   test('NEGATIVE: a ledger that lists nothing reports a vacuous zero and fails the control', async () => {
