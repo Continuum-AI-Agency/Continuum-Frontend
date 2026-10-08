@@ -27022,6 +27022,19 @@ export type Database = {
           transport: string
         }[]
       }
+      sweep_video_bench_leftovers: {
+        Args: {
+          p_brand_id: string
+          p_job_ids: string[]
+          p_receipt_asset_ids: string[]
+        }
+        Returns: {
+          deleted: number
+          id: string
+          kind: string
+          remaining: number
+        }[]
+      }
       update_job_progress: {
         Args: { p_job_id: string; p_progress: number }
         Returns: undefined
