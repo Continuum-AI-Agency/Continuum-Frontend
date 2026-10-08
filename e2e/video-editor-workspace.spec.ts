@@ -21,12 +21,9 @@ import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenc
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
-  controlSeen,
+  type GradedStep,
   ownedStorage,
-  plantControl,
-  presentObjects,
-  removeAssets,
-  removeObjects,
+  proveNetZero,
   removeProjects,
 } from './video-editor-workspace/ledger';
 
@@ -61,8 +58,6 @@ const BRAND =
   (INSPECTOR_JOURNEY
     ? '00000000-0000-4000-8000-0000000000b2'
     : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
-/** Where the Backend keeps transcripts per version (its AI_STUDIO_BUCKET default). */
-const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 const OWNER_EMAIL = INSPECTOR_JOURNEY
   ? 'local@continuum.test'
   : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
@@ -92,6 +87,10 @@ function check(step: string, ok: boolean, detail?: string): boolean {
 function note(message: string): void {
   rec.note(message);
   notes.push(message);
+}
+function grade(step: GradedStep): void {
+  rec.record(step.step, step.grade, step.detail);
+  results.push(step);
 }
 /** The Recorder envelope, printed last so the factory runner can read the run. */
 function printEnvelope(): number {
@@ -694,68 +693,17 @@ test(BENCH, async ({ browser }) => {
         if (!createdAssets.some((asset) => asset.id === row.id))
           createdAssets.push({ id: row.id, storagePath: row.storage_path });
       }
-      // The run's storage, read from its rows while they exist, plus a planted control object
-      // the ledger must see before cleanup and must not see after it.
+      // The run's storage, read from its rows while they exist (the transcript the Brief keeps
+      // for the drop's version included), taken back and proven gone by owned id.
       const ledger = await ownedStorage(admin, BRAND, createdAssets);
-      const control = await plantControl(admin, BRAND, ledger, RUN);
-      check(
-        'storage ledger positive control: a planted owned object is detected',
-        await controlSeen(admin, ledger, control),
-        `${control.bucket}/${control.path}`,
-      );
-      const removedProjects = await removeProjects(admin, BRAND, createdProjects);
-      // The auto-offered Brief warms the drop's transcript, which the Backend keeps per version
-      // (sourceMedia keptTranscriptPath) — named by version, so the asset deletes never reach it.
-      const { data: versionRows } = await admin
-        .schema('media')
-        .from('asset_versions')
-        .select('id')
-        .in(
-          'asset_id',
-          createdAssets.length > 0
-            ? createdAssets.map((asset) => asset.id)
-            : ['00000000-0000-0000-0000-000000000000'],
-        );
-      const keptPaths = (versionRows ?? []).map(
-        (row) => `${BRAND}/video-editor/transcripts/${row.id}.json`,
-      );
-      if (keptPaths.length > 0) await admin.storage.from(KEPT_BUCKET).remove(keptPaths);
-      const removed = await removeAssets(admin, BRAND, createdAssets, ledger);
-      note(
-        `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects} storage object(s) of ${ledger.objects.length} owned paths and ${ledger.folders.length} owned folders`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, 5_000));
-      const lateObjects = await presentObjects(admin, ledger);
-      if (lateObjects.length > 0) await removeObjects(admin, lateObjects);
-      const { count: leftRows } = await admin
-        .schema('media')
-        .from('assets')
-        .select('id', { count: 'exact', head: true })
-        .eq('brand_id', BRAND)
-        .eq('file_name', DROP_NAME);
-      const leftObjects = (await presentObjects(admin, ledger)).length;
-      check(
-        'storage ledger positive control: cleanup removed the planted object and the ledger sees zero',
-        !(await controlSeen(admin, ledger, control)) && leftObjects === 0,
-        `owned objects left ${leftObjects}`,
-      );
-      const { count: leftProjects } = await admin
-        .schema('media')
-        .from('editor_projects')
-        .select('id', { count: 'exact', head: true })
-        .in(
-          'id',
-          createdProjects.length > 0 ? createdProjects : ['00000000-0000-0000-0000-000000000000'],
-        );
-      check(
-        'net zero: no media.assets rows, storage objects or projects left from this run',
-        (leftRows ?? 0) === 0 && leftObjects === 0 && (leftProjects ?? 0) === 0,
-        `rows ${leftRows ?? 0}, objects ${leftObjects}, projects ${leftProjects ?? 0}`,
-      );
-      const receipts = 'net zero: register receipts';
-      const receiptsDetail = `NOT EXERCISED — library_internal.operation_receipts is not reachable with the service role (schema not exposed, no RPC); receipts left for this run's asset ids ${removed.receiptsLeftFor.join(', ') || 'none'}, each keyed to this run's unique upload path`;
-      rec.record(receipts, 'SKIP', receiptsDetail);
-      results.push({ step: receipts, grade: 'SKIP', detail: receiptsDetail });
+      const netZero = await proveNetZero(admin, BRAND, {
+        id: RUN,
+        ledger,
+        assets: createdAssets,
+        projects: createdProjects,
+      });
+      for (const step of netZero.steps) grade(step);
+      for (const line of netZero.notes) note(line);
       note(
         "brand-prefix storage object count not taken: the service role has no count over a storage prefix; the run's own objects are proven by owned path above",
       );

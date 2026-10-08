@@ -22,8 +22,10 @@
 // Cloud Run identity, as production does. The two tones are staged as Library audio assets
 // of the bench brand over an existing bench video (picture only), and the timeline is
 // exported twice through the real `export` op: bed keyed, then bed unkeyed. Writes (the
-// two staged tones, the project, both exports, their render jobs, storage and receipts) are
-// deleted at exit and asserted gone by id. Hold the shared bench lock for this mode.
+// two staged tones, the project, both exports, their render jobs and storage) are deleted at
+// exit and proven gone by owned id with a planted control; register receipts cannot be
+// removed with the service role, a SKIP that names the asset ids left to sweep. Hold the
+// shared bench lock for this mode.
 
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -37,7 +39,7 @@ import { createBenchRecorder } from './support/benchRecorder';
 import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import type { AudioRenderRun } from './support/videoEditorAudioRenderEntry';
 import { bootBackend, type Server } from './video-editor-workspace/harness';
-import { objectsFor, removeAssets } from './video-editor-workspace/ledger';
+import { ownedStorage, projectAssets, proveNetZero } from './video-editor-workspace/ledger';
 
 test.use({ channel: 'chrome' });
 test.describe.configure({ timeout: 300_000 });
@@ -899,21 +901,8 @@ test('server export: a ducked bed on a deployed Render revision, judged on the d
     // ── cleanup + net zero, by id ──────────────────────────────────────────────────────
     try {
       backend?.stop();
-      const exported: { id: string; storagePath: string }[] = [];
-      if (projectId) {
-        const { data: jobs } = await media
-          .from('client_render_jobs')
-          .select('result_asset_ids')
-          .eq('source_id', projectId);
-        const ids = ((jobs ?? []) as Array<{ result_asset_ids: string[] | null }>).flatMap(
-          (job) => job.result_asset_ids ?? [],
-        );
-        if (ids.length > 0) {
-          const { data: rows } = await media.from('assets').select('id,storage_path').in('id', ids);
-          for (const row of (rows ?? []) as Array<{ id: string; storage_path: string }>)
-            exported.push({ id: row.id, storagePath: row.storage_path });
-        }
-      }
+      // Each export names its project.
+      const exported = projectId ? await projectAssets(admin, BRAND, [projectId]) : [];
       // Anything staged under this run's folder, even when staging stopped half way.
       const stagedPrefix = `${BRAND}/video-editor-bench/${run}`;
       const { data: stagedRows } = await media
@@ -925,12 +914,10 @@ test('server export: a ducked bed on a deployed Render revision, judged on the d
         if (!staged.some((asset) => asset.id === row.id))
           staged.push({ id: row.id, versionId: '', storagePath: row.storage_path });
       }
-      const { data: stagedObjects } = await admin.storage.from(BUCKET).list(stagedPrefix);
-      if (stagedObjects?.length)
-        await admin.storage
-          .from(BUCKET)
-          .remove(stagedObjects.map((entry) => `${stagedPrefix}/${entry.name}`));
       const ours = [...staged.map(({ id, storagePath }) => ({ id, storagePath })), ...exported];
+      // The run's storage, read while its rows exist, and the staging folder itself.
+      const ledger = await ownedStorage(admin, BRAND, ours);
+      ledger.folders.push({ bucket: BUCKET, path: stagedPrefix });
       for (const table of ['preview_jobs', 'media_probe_jobs', 'asset_renditions']) {
         if (ours.length > 0)
           await media
@@ -941,37 +928,26 @@ test('server export: a ducked bed on a deployed Render revision, judged on the d
               ours.map((asset) => asset.id),
             );
       }
-      await removeAssets(admin, BRAND, ours);
-      if (projectId) {
-        await media.from('client_render_jobs').delete().eq('source_id', projectId);
-        await media.from('editor_projects').delete().eq('id', projectId);
-        const prefix = `${BRAND}/video-exports/${projectId}`;
-        const { data: left } = await admin.storage.from(BUCKET).list(prefix);
-        if (left?.length)
-          await admin.storage.from(BUCKET).remove(left.map((entry) => `${prefix}/${entry.name}`));
+      if (projectId) await media.from('client_render_jobs').delete().eq('source_id', projectId);
+      const netZero = await proveNetZero(admin, BRAND, {
+        id: run,
+        ledger,
+        assets: ours,
+        projects: projectId ? [projectId] : [],
+      });
+      for (const step of netZero.steps) {
+        if (step.grade === 'SKIP') lines.push(`SKIP  ${step.step} — ${step.detail}`);
+        else check(step.step, step.grade === 'PASS', step.detail);
       }
-      const ids =
-        ours.length > 0 ? ours.map((asset) => asset.id) : ['00000000-0000-0000-0000-000000000000'];
-      const { count: leftAssets } = await media
-        .from('assets')
-        .select('id', { count: 'exact', head: true })
-        .in('id', ids);
-      const leftObjects = (await objectsFor(BRAND, ours)).length;
-      const { count: leftProjects } = await media
-        .from('editor_projects')
-        .select('id', { count: 'exact', head: true })
-        .eq('id', projectId ?? '00000000-0000-0000-0000-000000000000');
+      for (const line of netZero.notes) lines.push(`NOTE  ${line}`);
       const { count: leftJobs } = await media
         .from('client_render_jobs')
         .select('id', { count: 'exact', head: true })
         .eq('source_id', projectId ?? '00000000-0000-0000-0000-000000000000');
       check(
-        'server net zero: no staged tone, export, storage object, render job or project left (by id)',
-        (leftAssets ?? 0) === 0 &&
-          leftObjects === 0 &&
-          (leftProjects ?? 0) === 0 &&
-          (leftJobs ?? 0) === 0,
-        `assets ${leftAssets ?? 0}/${ours.length} (${staged.length} staged, ${exported.length} exported), objects ${leftObjects}, project ${leftProjects ?? 0}, render jobs ${leftJobs ?? 0}`,
+        'server net zero: no render job left (by project id)',
+        (leftJobs ?? 0) === 0,
+        `render jobs ${leftJobs ?? 0} · ${staged.length} staged, ${exported.length} exported`,
       );
     } catch (error) {
       check('server cleanup', false, error instanceof Error ? error.message : String(error));

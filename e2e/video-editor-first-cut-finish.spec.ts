@@ -19,14 +19,22 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleAuth } from 'google-auth-library';
 import { z } from 'zod';
-import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { openCreativeSpendLedger } from '../../Continuum-Backend/scripts/lib/creativeSpendLedger';
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { ffprobe, type Probe } from './video-editor-journey/frames';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
-import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
+import {
+  type GradedStep,
+  jobRows,
+  type OwnedObject,
+  ownedStorage,
+  projectAssets,
+  proveNetZero,
+  removeProjects,
+  unkeptTranscripts,
+} from './video-editor-workspace/ledger';
 
 // ---------------------------------------------------------------------------
 // videoeditor:first-cut:finish:e2e:bench — footage + goal → FINISHED first cuts, then every
@@ -51,9 +59,10 @@ import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
 // the export steps.
 //
 // Writes, only under BENCH_SINK=library: the two b-roll uploads, the projects the draft
-// makes, each variant's music bed, the three exports, the draft/generation job rows and the
-// transcripts the Backend keeps per footage version — all deleted at exit, net zero
-// asserted by id and by name against a baseline.
+// makes, each variant's music bed, the three exports, the draft job rows and the transcripts
+// the Backend keeps per footage version — net zero by owned id with a planted control (a reel's
+// transcript is this run's only when it was not kept before). Job rows and register receipts
+// cannot be removed with the service role: SKIPs that name the ids left to sweep.
 // ---------------------------------------------------------------------------
 
 test.describe.configure({ timeout: 2_700_000 });
@@ -150,6 +159,10 @@ function check(step: string, ok: boolean, detail?: string): boolean {
 function note(message: string): void {
   rec.note(message);
   notes.push(message);
+}
+function grade(step: GradedStep): void {
+  rec.record(step.step, step.grade, step.detail);
+  results.push(step);
 }
 function printEnvelope(): number {
   const counts = rec.summary();
@@ -326,22 +339,6 @@ async function registerFixture(fixture: Fixture & { bytes: Buffer }, scratch: st
   return { id: receipt.assetId, storagePath, probe };
 }
 
-// ── net zero, by id and name ──────────────────────────────────────────────────────────
-
-async function brandAssetIds(): Promise<Set<string>> {
-  const rows = await prodSql<{ id: string }>(
-    `select id::text as id from media.assets where brand_id = '${BRAND}'`,
-  );
-  if (rows === null) throw new Error('net zero needs the Supabase management token');
-  return new Set(rows.map((row) => row.id));
-}
-async function brandObjectNames(): Promise<Set<string>> {
-  const rows = await prodSql<{ name: string }>(
-    `select bucket_id || '/' || name as name from storage.objects where name like '${BRAND}/%'`,
-  );
-  if (rows === null) throw new Error('net zero needs the Supabase management token');
-  return new Set(rows.map((row) => row.name));
-}
 async function versionIdsOf(assetIds: readonly string[]): Promise<string[]> {
   if (assetIds.length === 0) return [];
   const { data } = await media.from('asset_versions').select('id').in('asset_id', assetIds);
@@ -418,15 +415,16 @@ test(BENCH, async ({ browser }) => {
   const scratch = mkdtempSync(join(tmpdir(), 'video-first-cut-finish-'));
   let previousActiveBrand: string | null = null;
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
-  let assetsBefore = new Set<string>();
-  let objectsBefore = new Set<string>();
+  let reelTranscripts: OwnedObject[] = [];
   const exercised = new Set<string>();
   try {
     await (async () => {
-      assetsBefore = await brandAssetIds();
-      objectsBefore = await brandObjectNames();
+      // The reels are read-only: a transcript the Brief keeps for one is this run's only when
+      // none was kept before it.
+      const reelVersions = await versionIdsOf(REEL_IDS);
+      reelTranscripts = await unkeptTranscripts(admin, BRAND, reelVersions);
       note(
-        `net zero baseline: ${assetsBefore.size} media.assets rows, ${objectsBefore.size} objects under ${BRAND}/`,
+        `net zero baseline: ${reelTranscripts.length} of the reels' ${reelVersions.length} version transcripts not kept yet (the run owns them if its Brief keeps them)`,
       );
       const ledger = openCreativeSpendLedger(LEDGER, `first-cut-finish-${RUN}`, 100);
       try {
@@ -804,99 +802,31 @@ test(BENCH, async ({ browser }) => {
         for (const row of data ?? []) createdProjects.add((row as { id: string }).id);
       }
       const projectIds = [...createdProjects];
-      // Exports: each project's render jobs name their Library results.
-      for (const projectId of projectIds) {
-        const { data: jobs } = await media
-          .from('client_render_jobs')
-          .select('result_asset_ids')
-          .eq('source_id', projectId);
-        for (const job of (jobs ?? []) as Array<{ result_asset_ids: string[] | null }>) {
-          for (const id of job.result_asset_ids ?? []) {
-            if (createdAssets.some((asset) => asset.id === id)) continue;
-            const { data: row } = await media
-              .from('assets')
-              .select('id, storage_path')
-              .eq('id', id)
-              .maybeSingle();
-            if (row) createdAssets.push({ id: row.id, storagePath: row.storage_path });
-          }
-        }
+      // The b-roll this run staged (by its folder, so a half-staged clip is caught), each
+      // variant's music bed (filed under its project) and each export (naming its project).
+      const { data: staged } = await media
+        .from('assets')
+        .select('id, storage_path')
+        .eq('brand_id', BRAND)
+        .like('storage_path', `${FIXTURE_FOLDER}/%`);
+      const made = (staged ?? []).map((row) => ({ id: row.id, storagePath: row.storage_path }));
+      for (const asset of [...made, ...(await projectAssets(admin, BRAND, projectIds))])
+        if (!createdAssets.some((owned) => owned.id === asset.id)) createdAssets.push(asset);
+      for (const projectId of projectIds)
         await media.from('client_render_jobs').delete().eq('source_id', projectId);
-      }
-      // Anything else new on the brand that names this run's projects (the music beds).
-      const ours = (text: string) =>
-        text.includes(FIXTURE_FOLDER) ||
-        projectIds.some((id) => text.includes(id)) ||
-        createdAssets.some((asset) => text.includes(asset.id));
-      const addedIds = [...(await brandAssetIds())].filter((id) => !assetsBefore.has(id));
-      const addedRows =
-        addedIds.length === 0
-          ? []
-          : ((await prodSql<{ id: string; storage_path: string; text: string }>(
-              `select id::text as id, coalesce(storage_path, '') as storage_path, concat_ws(' ', file_name, storage_path, origin_ref::text) as text from media.assets where id in (${addedIds.map((id) => `'${id}'`).join(',')})`,
-            )) ?? []);
-      for (const row of addedRows) {
-        if (ours(`${row.id} ${row.text}`) && !createdAssets.some((asset) => asset.id === row.id))
-          createdAssets.push({ id: row.id, storagePath: row.storage_path });
-      }
-      // The transcripts the Backend keeps per footage version, for this run's footage.
-      const ourVersions = await versionIdsOf([...REEL_IDS, ...createdAssets.map((a) => a.id)]);
-      const removedProjects = await removeProjects(admin, BRAND, projectIds);
-      const removed = await removeAssets(admin, BRAND, createdAssets);
-      const jobRows =
-        (await prodSql<{ job_id: string }>(
-          `delete from plugin_mcp.jobs where brand_id = '${BRAND}' and (${
-            draftJobs.size > 0
-              ? `job_id in (${[...draftJobs].map((id) => `'${id}'`).join(',')}) or `
-              : ''
-          }(enqueued_at >= '${startedAt}' and (${
-            projectIds.length > 0
-              ? projectIds.map((id) => `params::text like '%${id}%'`).join(' or ')
-              : 'false'
-          }))) returning job_id`,
-        )) ?? [];
-      await sleep(5_000);
-      const keptPrefix = `${BRAND_BUCKET}/${BRAND}/video-editor/transcripts/`;
-      const addedObjects = () =>
-        brandObjectNames().then((names) => [...names].filter((name) => !objectsBefore.has(name)));
-      const mine = (name: string) =>
-        ours(name) || (name.startsWith(keptPrefix) && ourVersions.some((id) => name.includes(id)));
-      const strays = (await addedObjects()).filter(mine);
-      for (const bucket of new Set(strays.map((name) => name.split('/')[0] ?? ''))) {
-        await admin.storage
-          .from(bucket)
-          .remove(
-            strays
-              .filter((name) => name.startsWith(`${bucket}/`))
-              .map((name) => name.slice(bucket.length + 1)),
-          );
-      }
-      note(
-        `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects} object(s), ${jobRows.length} job row(s), ${strays.length} late/kept object(s) swept`,
-      );
-      const leftRows = [...(await brandAssetIds())].filter(
-        (id) => !assetsBefore.has(id) && createdAssets.some((asset) => asset.id === id),
-      );
-      const foreign = addedRows.filter((row) => !ours(`${row.id} ${row.text}`));
-      if (foreign.length > 0)
-        note(
-          `another writer on the bench brand during this run (not this bench's): ${foreign
-            .map((row) => `${row.id} ${row.text.slice(0, 80)}`)
-            .join('; ')}`,
-        );
-      const leftObjects = (await addedObjects()).filter(mine);
-      const { count: leftProjects } = await media
-        .from('editor_projects')
-        .select('id', { count: 'exact', head: true })
-        .in('id', projectIds.length > 0 ? projectIds : ['00000000-0000-0000-0000-000000000000']);
-      const leftJobs =
-        draftJobs.size === 0
-          ? 0
-          : ((
-              await prodSql<{ count: number }>(
-                `select count(*)::int as count from plugin_mcp.jobs where job_id in (${[...draftJobs].map((id) => `'${id}'`).join(',')})`,
-              )
-            )?.[0]?.count ?? -1);
+      // The run's storage: every asset's paths and folder, the transcripts kept for this run's
+      // versions, the staging folder, and the reel transcripts its Brief kept for the first time.
+      const ledger = await ownedStorage(admin, BRAND, createdAssets);
+      ledger.folders.push({ bucket: BRAND_BUCKET, path: FIXTURE_FOLDER });
+      ledger.objects.push(...reelTranscripts);
+      const netZero = await proveNetZero(admin, BRAND, {
+        id: RUN,
+        ledger,
+        assets: createdAssets,
+        projects: projectIds,
+      });
+      for (const step of netZero.steps) grade(step);
+      for (const line of netZero.notes) note(line);
       const { count: leftRenderJobs } = await media
         .from('client_render_jobs')
         .select('id', { count: 'exact', head: true })
@@ -905,14 +835,11 @@ test(BENCH, async ({ browser }) => {
           projectIds.length > 0 ? projectIds : ['00000000-0000-0000-0000-000000000000'],
         );
       check(
-        'net zero: no project, asset (b-roll, music bed, export), object, kept transcript, render job or draft job left from this run',
-        leftRows.length === 0 &&
-          leftObjects.length === 0 &&
-          (leftProjects ?? 0) === 0 &&
-          leftJobs === 0 &&
-          (leftRenderJobs ?? 0) === 0,
-        `rows ${leftRows.length}, objects ${leftObjects.length}${leftObjects.length ? ` [${leftObjects.slice(0, 4).join(', ')}]` : ''}, projects ${leftProjects ?? 0}, draft jobs ${leftJobs} of ${draftJobs.size}, render jobs ${leftRenderJobs ?? 0} · made and removed ${createdAssets.length} asset(s), ${projectIds.length} project(s)`,
+        'net zero: no render job left from this run',
+        (leftRenderJobs ?? 0) === 0,
+        `render jobs ${leftRenderJobs ?? 0} · made and removed ${createdAssets.length} asset(s), ${projectIds.length} project(s)`,
       );
+      if (session) grade(await jobRows(admin, session.userId, [...draftJobs]));
     } catch (error) {
       check('cleanup', false, error instanceof Error ? error.message : String(error));
     }

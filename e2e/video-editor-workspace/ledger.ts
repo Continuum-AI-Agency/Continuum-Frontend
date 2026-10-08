@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { readBackendEnv } from '../support/prodEnv';
 
 // What the bench wrote, and the proof it took it all back — with the project service-role
 // client only, so it runs on any client with the bench's service key. Uploads go through the
@@ -14,12 +15,25 @@ export type OwnedObject = { bucket: string; path: string };
 /** Every path this run owns, and every asset folder whose late contents it also owns. */
 export type StorageLedger = { objects: OwnedObject[]; folders: OwnedObject[] };
 
+/** The Backend's AI_STUDIO_BUCKET: kept transcripts and exports land here. */
+export const AI_STUDIO_BUCKET = readBackendEnv('AI_STUDIO_BUCKET') ?? 'brand-profile-assets';
+
+/** Where the Backend keeps a version's word-level transcript (sourceMedia keptTranscriptPath). */
+export const keptTranscript = (brandId: string, versionId: string): OwnedObject => ({
+  bucket: AI_STUDIO_BUCKET,
+  path: `${uuid.parse(brandId)}/video-editor/transcripts/${uuid.parse(versionId)}.json`,
+});
+
 const key = (object: OwnedObject) => `${object.bucket}\n${object.path}`;
 const unique = (objects: OwnedObject[]) => [
   ...new Map(objects.map((object) => [key(object), object])).values(),
 ];
 
-/** The storage these assets own, read from their asset, version and rendition rows. */
+/**
+ * The storage these assets own, read from their asset, version and rendition rows — including
+ * the transcript a Brief keeps per version, which is named by version and so never sits in the
+ * asset's folder.
+ */
 export async function ownedStorage(
   admin: SupabaseClient,
   brandId: string,
@@ -40,7 +54,11 @@ export async function ownedStorage(
     'id,bucket,storage_path,thumbnail_path',
     'id',
   );
-  const versions = await read<PathRow>('asset_versions', 'bucket,storage_path', 'asset_id');
+  const versions = await read<PathRow & { id: string }>(
+    'asset_versions',
+    'id,bucket,storage_path',
+    'asset_id',
+  );
   const renditions = await read<PathRow>('asset_renditions', 'bucket,storage_path', 'asset_id');
   const objects: OwnedObject[] = [];
   for (const row of [...assetRows, ...versions, ...renditions])
@@ -54,6 +72,7 @@ export async function ownedStorage(
     if (bucket && asset.storagePath) objects.push({ bucket, path: asset.storagePath });
   }
   const buckets = [...new Set(objects.map((object) => object.bucket))];
+  for (const version of versions) objects.push(keptTranscript(brand, version.id));
   return {
     // Never anything outside this brand's prefix.
     objects: unique(objects.filter((object) => object.path.startsWith(`${brand}/`))),
@@ -99,6 +118,50 @@ export async function presentObjects(
   for (const object of ledger.objects) if (await exists(admin, object)) present.push(object);
   for (const folder of ledger.folders) present.push(...(await folderObjects(admin, folder)));
   return unique(present);
+}
+
+/**
+ * The kept transcripts of read-only source versions that do not exist yet. A Brief or a bed that
+ * hears one of those versions during the run keeps its words, so the run owns what is there at
+ * exit; a transcript kept before the run is someone else's and is never touched.
+ * ponytail: another writer that first hears the same version mid-run has its copy removed too —
+ * a cache miss for it, never a wrong word.
+ */
+export async function unkeptTranscripts(
+  admin: SupabaseClient,
+  brandId: string,
+  versionIds: readonly string[],
+): Promise<OwnedObject[]> {
+  const unkept: OwnedObject[] = [];
+  for (const versionId of versionIds) {
+    const transcript = keptTranscript(brandId, versionId);
+    if (!(await exists(admin, transcript))) unkept.push(transcript);
+  }
+  return unkept;
+}
+
+/** The Library assets these projects made: sound generated for one (filed under it), its exports. */
+export async function projectAssets(
+  admin: SupabaseClient,
+  brandId: string,
+  projectIds: readonly string[],
+): Promise<{ id: string; storagePath: string }[]> {
+  const brand = uuid.parse(brandId);
+  const ids = projectIds.map((id) => uuid.parse(id));
+  if (ids.length === 0) return [];
+  const assets = () =>
+    admin.schema('media').from('assets').select('id,storage_path').eq('brand_id', brand);
+  const reads = [
+    ...ids.map((id) => assets().contains('origin_ref', { nodeId: `video-project:${id}` })),
+    assets().in('origin_ref->>projectId', ids),
+  ];
+  const found = new Map<string, string>();
+  for (const { data, error } of await Promise.all(reads)) {
+    if (error) throw new Error(`project asset read: ${error.message}`);
+    for (const row of (data ?? []) as { id: string; storage_path: string }[])
+      found.set(row.id, row.storage_path);
+  }
+  return [...found].map(([id, storagePath]) => ({ id, storagePath }));
 }
 
 /**
@@ -186,4 +249,120 @@ export async function removeProjects(
     );
   if (error) throw new Error(`project cleanup failed: ${error.message}`);
   return count ?? 0;
+}
+
+export type GradedStep = { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail: string };
+
+const where = (object: OwnedObject) => `${object.bucket}/${object.path}`;
+
+async function countLeft(admin: SupabaseClient, table: string, ids: readonly string[]) {
+  if (ids.length === 0) return 0;
+  const { count, error } = await admin
+    .schema('media')
+    .from(table)
+    .select('id', { count: 'exact', head: true })
+    .in('id', ids);
+  if (error) throw new Error(`net zero read ${table}: ${error.message}`);
+  return count ?? 0;
+}
+
+/**
+ * Takes back everything the ledger owns and grades the proof, by owned id only: a planted control
+ * the ledger must see before cleanup, then no owned object (the control included), asset row or
+ * project left. A ledger that never saw its control proves nothing, so its zero is graded FAIL,
+ * never PASS. Register receipts are an honest SKIP that names the asset ids to sweep.
+ */
+export async function proveNetZero(
+  admin: SupabaseClient,
+  brandId: string,
+  run: {
+    id: string;
+    ledger: StorageLedger;
+    assets: readonly { id: string; storagePath: string }[];
+    projects?: readonly string[];
+    /** Late writes (a poster, an analysis artefact) land after the rows go. */
+    settleMs?: number;
+  },
+): Promise<{ steps: GradedStep[]; notes: string[] }> {
+  const { ledger, assets, projects = [], settleMs = 5_000 } = run;
+  const brand = uuid.parse(brandId);
+  const projectIds = projects.map((id) => uuid.parse(id));
+  // An export is stored under its project before it is registered.
+  for (const id of projectIds) {
+    const folder = { bucket: AI_STUDIO_BUCKET, path: `${brand}/video-exports/${id}` };
+    if (!ledger.folders.some((owned) => key(owned) === key(folder))) ledger.folders.push(folder);
+  }
+  const control = await plantControl(admin, brand, ledger, run.id);
+  const seen = await controlSeen(admin, ledger, control);
+  const removedProjects = await removeProjects(admin, brand, projectIds);
+  const removed = await removeAssets(admin, brand, assets, ledger);
+  if (settleMs > 0) await new Promise((done) => setTimeout(done, settleMs));
+  const late = await presentObjects(admin, ledger);
+  if (late.length > 0) await removeObjects(admin, late);
+  const left = await presentObjects(admin, ledger);
+  const ids = assets.map((asset) => uuid.parse(asset.id));
+  const leftRows = await countLeft(admin, 'assets', ids);
+  const leftProjects = await countLeft(admin, 'editor_projects', projectIds);
+  const vacuous = seen ? '' : ' — VACUOUS: the ledger never saw its planted control';
+  const grade = (ok: boolean) => (seen && ok ? 'PASS' : 'FAIL');
+  return {
+    steps: [
+      {
+        step: 'storage ledger positive control: a planted owned object is detected',
+        grade: seen ? 'PASS' : 'FAIL',
+        detail: where(control),
+      },
+      {
+        step: 'storage ledger positive control: cleanup removed the planted object and the ledger sees zero',
+        grade: grade(left.length === 0),
+        detail: `owned objects left ${left.length}${left.length > 0 ? ` [${left.slice(0, 4).map(where).join(', ')}]` : ''}${vacuous}`,
+      },
+      {
+        step: 'net zero: no media.assets rows, storage objects or projects left from this run',
+        grade: grade(leftRows === 0 && left.length === 0 && leftProjects === 0),
+        detail: `rows ${leftRows} of ${ids.length}, objects ${left.length}, projects ${leftProjects} of ${projectIds.length}${vacuous}`,
+      },
+      {
+        step: 'net zero: register receipts',
+        grade: 'SKIP',
+        detail: `NOT EXERCISED: register receipts (service role cannot read library_internal); left by asset id: ${ids.join(', ') || 'none'}`,
+      },
+    ],
+    notes: [
+      `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects + late.length} storage object(s) of ${ledger.objects.length} owned paths and ${ledger.folders.length} owned folders`,
+      ...(ids.length > 0
+        ? [
+            `register receipts to sweep (library_internal.operation_receipts, by response assetId): ${ids.join(', ')}`,
+          ]
+        : []),
+    ],
+  };
+}
+
+const JOB_ID = /^job_[0-9a-f]{32}$/;
+
+/**
+ * The run's plugin_mcp.jobs rows, an honest SKIP: the table is not granted to the service role and
+ * nothing it may call deletes a job, so they stay. Each id is read through get_job, so the step
+ * names exactly the rows left to sweep.
+ */
+export async function jobRows(
+  admin: SupabaseClient,
+  userId: string,
+  jobIds: readonly string[],
+): Promise<GradedStep> {
+  const left: string[] = [];
+  for (const jobId of jobIds) {
+    if (!JOB_ID.test(jobId)) throw new Error(`not a job id: ${jobId}`);
+    const { error } = await admin
+      .schema('plugin_mcp')
+      .rpc('get_job', { p_job_id: jobId, p_user_id: uuid.parse(userId) });
+    if (!error) left.push(jobId);
+    else if (error.code !== 'P0002') throw new Error(`job ledger read ${jobId}: ${error.message}`);
+  }
+  return {
+    step: 'net zero: job rows',
+    grade: 'SKIP',
+    detail: `NOT EXERCISED: job rows (service role cannot delete plugin_mcp.jobs); left by job id: ${left.join(', ') || 'none'} (${left.length} of ${jobIds.length} this run started)`,
+  };
 }
