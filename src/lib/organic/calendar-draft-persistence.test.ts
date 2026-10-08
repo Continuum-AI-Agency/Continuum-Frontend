@@ -337,6 +337,17 @@ describe('mapPersistedRowToCalendarEntry — generated drafts (content_json shap
     expect(entry?.draft.mediaSuggestion?.assetUrl).toBe('https://signed/img.png');
   });
 
+  it('reads the reason a scheduled publish stopped retrying from content_json.publishError', () => {
+    const row = { ...generatedRow(), status: 'failed' };
+    (row.content_json as Record<string, unknown>).publishError =
+      '(#10) Application does not have permission for this action';
+    const entry = mapPersistedRowToCalendarEntry(row, days);
+    expect(entry?.draft.status).toBe('failed');
+    expect(entry?.draft.publishError).toBe(
+      '(#10) Application does not have permission for this action',
+    );
+  });
+
   it('resolves the day from scheduled_date when no dayId is present', () => {
     const row = generatedRow();
     (row.slot_data as Record<string, unknown>).schedule = {};

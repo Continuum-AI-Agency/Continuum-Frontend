@@ -359,6 +359,34 @@ describe('CalendarDraftCard', () => {
     expect(onClearFailure).toHaveBeenCalledWith('draft-failed');
   });
 
+  it('shows why a scheduled publish failed, without offering a media regenerate', () => {
+    const failedDraft: OrganicCalendarDraft = {
+      ...draft,
+      id: 'draft-publish-failed',
+      status: 'failed',
+      publishError: '(#10) Application does not have permission for this action',
+    };
+
+    render(
+      <CalendarDraftCard
+        draft={failedDraft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
+        onClearFailure={mock()}
+      />,
+    );
+
+    expect(screen.getByText('Publish failed')).toBeTruthy();
+    expect(
+      screen.getByText('(#10) Application does not have permission for this action'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Retry')).toBeNull();
+    expect(screen.getByText('Clear')).toBeTruthy();
+  });
+
   it('invokes the onMouseEnter hover callback for the preview surface', () => {
     const onMouseEnter = mock();
     const { container } = render(

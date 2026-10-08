@@ -802,6 +802,7 @@ export function mapPersistedRowToCalendarEntry(
     tone: readString(snapshot.tone) ?? undefined,
     cta: readString(snapshot.cta) ?? undefined,
     generationError: readString(snapshot.generationError) ?? undefined,
+    publishError: readString(placement.publishError) ?? undefined,
     instagram_post_id:
       readString(snapshot.instagram_post_id) ?? readString(row.instagram_post_id) ?? null,
     creativeDirectionPrompt:
