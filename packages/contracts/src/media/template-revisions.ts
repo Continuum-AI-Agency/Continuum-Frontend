@@ -80,6 +80,45 @@ export const templateRevisionPublicationSchema = z
   .strict();
 export type TemplateRevisionPublication = z.infer<typeof templateRevisionPublicationSchema>;
 
+/**
+ * Every refusal the revision registry can answer with. The Frontend keys its copy on this union,
+ * so a new Backend code without words is a type error rather than a raw code on screen.
+ */
+export const templateRevisionErrorCodeSchema = z.enum([
+  'template_revision_target_required',
+  /** No revision is published to this template key and render workspace. */
+  'template_revision_unpublished',
+  /** Several revisions claim one target. The publication unique key makes this unreachable today. */
+  'template_revision_selection_required',
+  'template_revision_output_required',
+  'template_revision_not_found',
+  'template_revision_source_missing',
+  /** The exact file is still there, but its bytes no longer match what was published. */
+  'template_revision_source_changed',
+  'template_variant_archived',
+  'template_revision_head_conflict',
+  'template_revision_multi_source_edit_unsupported',
+  'template_revision_multi_source_publish_unsupported',
+  'template_revision_sources_invalid',
+]);
+export type TemplateRevisionErrorCode = z.infer<typeof templateRevisionErrorCodeSchema>;
+
+/**
+ * One AEP package of a multi-source revision: the worker attachment the template's graph points
+ * those outputs at, and the exact Library version holding its bytes. A template whose outputs run
+ * different packages is described by all of them; no single file is its "master".
+ */
+export const templateRevisionSourceSchema = z
+  .object({
+    fileId: z.number().int().positive(),
+    outputs: z.array(z.string().min(1)).min(1),
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid(),
+    checksum: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+export type TemplateRevisionSource = z.infer<typeof templateRevisionSourceSchema>;
+
 export const templateRevisionSchema = z
   .object({
     templateId: z.string().uuid(),
@@ -111,6 +150,8 @@ export const templateRevisionSchema = z
       .nullable()
       .default(null),
     publications: z.array(templateRevisionPublicationSchema),
+    /** Present only when the outputs run different packages; `sourceAssetId` is then one of them. */
+    sources: z.array(templateRevisionSourceSchema).min(2).optional(),
     createdAt: z.string(),
     createdBy: z.string().uuid().nullable(),
     nativeCommitId: z.string().nullable().default(null),

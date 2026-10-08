@@ -282,6 +282,19 @@ export function VariantsPanel({
                   ) : null,
                 )}
               </div>
+              {(published ?? draft)?.sources ? (
+                // Outputs here run different After Effects files; naming one would misdescribe the rest.
+                <ul
+                  aria-label={`${variant.name} source files`}
+                  className="space-y-0.5 text-2xs text-muted-foreground"
+                >
+                  {(published ?? draft)?.sources?.map((source) => (
+                    <li key={source.fileId}>
+                      {source.outputs.join(', ')} · worker file {source.fileId}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           );
         })}

@@ -868,28 +868,42 @@ describe('RenderRequestsGrid', () => {
   });
 
   // 2026-10-05: a refused first save toasted its raw code and re-sent itself every 5 s.
+  // 2026-10-06 (Inyogo Card B): it also said "more than one published revision" when there were
+  // none. Zero publications now reads as unpublished, with the template one click away.
   test('a refused autosave says why in the toolbar once, without a toast or a retry loop', async () => {
-    const code = 'template_revision_selection_required';
+    const code = 'template_revision_unpublished';
+    const sourceAssetId = '55555555-5555-4555-8555-555555555555';
+    contractOverrides = { template: { ...TEMPLATE, sourceAssetId } };
     createRenderSetMock.mockImplementationOnce(async () => {
-      throw new ApiError(code, 409, undefined, { error: code, detail: code });
+      throw new ApiError(code, 409, undefined, {
+        error: code,
+        detail: 'This template has no published revision for this render workspace.',
+      });
     });
     const toasts: string[] = [];
     const unregister = registerToastSink(({ title }) => {
       toasts.push(String(title));
     });
     toasts.length = 0;
+    const onOpenTemplate = mock((_intent: { assetId: string; tab?: string }) => undefined);
     try {
-      render(<RenderRequestsGrid brandId={BRAND} />);
+      render(<RenderRequestsGrid brandId={BRAND} onOpenTemplate={onOpenTemplate} />);
       fireEvent.change(await screen.findByDisplayValue('Hola mundo'), {
         target: { value: 'Hola de nuevo' },
       });
       const status = await screen.findByRole('status', { name: 'Save status' });
-      await waitFor(() => expect(status.textContent).toContain('Choose the revision'), {
+      await waitFor(() => expect(status.textContent).toContain('no published revision'), {
         timeout: 4000,
       });
       expect(status.textContent).not.toContain(code);
+      expect(status.textContent).not.toContain('more than one');
       expect(status.textContent).not.toContain('Retrying');
       expect(toasts).toEqual([]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open template' }));
+      expect(onOpenTemplate).toHaveBeenCalledWith({ assetId: sourceAssetId, tab: 'variants' });
+      // Repairing the template never costs the rows that could not be saved.
+      expect(screen.getByDisplayValue('Hola de nuevo')).toBeTruthy();
     } finally {
       unregister();
     }

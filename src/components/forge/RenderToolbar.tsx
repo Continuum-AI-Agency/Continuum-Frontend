@@ -284,7 +284,7 @@ export function RenderToolbar({
   saveStatus:
     | { phase: 'saving' }
     | { phase: 'saved'; at: string }
-    | { phase: 'failed'; reason: string; retrying: boolean }
+    | { phase: 'failed'; reason: string; retrying: boolean; onRepair?: () => void }
     | null;
   canSave: boolean;
   onSave: () => void;
@@ -514,6 +514,11 @@ export function RenderToolbar({
                       ? `Saved · ${formatRelativeTime(saveStatus.at)}`
                       : null}
             </span>
+            {saveStatus?.phase === 'failed' && saveStatus.onRepair ? (
+              <Button type="button" size="xs" variant="outline" onClick={saveStatus.onRepair}>
+                Open template
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"

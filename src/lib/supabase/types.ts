@@ -13268,6 +13268,81 @@ export type Database = {
           },
         ]
       }
+      listening_keywords: {
+        Row: {
+          brand_id: string
+          created_at: string
+          keyword: string
+          kind: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          keyword: string
+          kind: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          keyword?: string
+          kind?: string
+        }
+        Relationships: []
+      }
+      mentions: {
+        Row: {
+          author: string | null
+          body: string | null
+          brand_id: string
+          engagement: Json
+          fetched_at: string
+          id: string
+          keyword: string | null
+          platform: string
+          published_at: string | null
+          relevant: boolean
+          sentiment: string | null
+          source_id: string
+          tags: string[]
+          title: string | null
+          url: string
+        }
+        Insert: {
+          author?: string | null
+          body?: string | null
+          brand_id: string
+          engagement?: Json
+          fetched_at?: string
+          id?: string
+          keyword?: string | null
+          platform: string
+          published_at?: string | null
+          relevant?: boolean
+          sentiment?: string | null
+          source_id: string
+          tags?: string[]
+          title?: string | null
+          url: string
+        }
+        Update: {
+          author?: string | null
+          body?: string | null
+          brand_id?: string
+          engagement?: Json
+          fetched_at?: string
+          id?: string
+          keyword?: string | null
+          platform?: string
+          published_at?: string | null
+          relevant?: boolean
+          sentiment?: string | null
+          source_id?: string
+          tags?: string[]
+          title?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       questions: {
         Row: {
           analysis_tags: string[]
@@ -20559,6 +20634,44 @@ export type Database = {
         }
         Relationships: []
       }
+      template_layer_views: {
+        Row: {
+          asset_id: string
+          body: Json
+          comp_id: number
+          fonts_key: string
+          part: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          asset_id: string
+          body: Json
+          comp_id?: number
+          fonts_key: string
+          part: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          asset_id?: string
+          body?: Json
+          comp_id?: number
+          fonts_key?: string
+          part?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_layer_views_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_lineage_cache: {
         Row: {
           asset_id: string
@@ -20636,6 +20749,61 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "template_revisions"
             referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      template_revision_sources: {
+        Row: {
+          brand_id: string
+          checksum: string
+          created_at: string
+          file_id: number
+          outputs: string[]
+          revision_id: string
+          source_asset_id: string
+          source_version_id: string
+        }
+        Insert: {
+          brand_id: string
+          checksum: string
+          created_at?: string
+          file_id: number
+          outputs: string[]
+          revision_id: string
+          source_asset_id: string
+          source_version_id: string
+        }
+        Update: {
+          brand_id?: string
+          checksum?: string
+          created_at?: string
+          file_id?: number
+          outputs?: string[]
+          revision_id?: string
+          source_asset_id?: string
+          source_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_revision_sources_revision_id_brand_id_fkey"
+            columns: ["revision_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_revision_sources_source_asset_id_fkey"
+            columns: ["source_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_revision_sources_source_version_id_fkey"
+            columns: ["source_version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -22558,6 +22726,24 @@ export type Database = {
           p_parent_revision_id: string
           p_source_asset_id: string
           p_source_version_id: string
+          p_template_id: string
+          p_user_id: string
+          p_variant_id: string
+        }
+        Returns: string
+      }
+      register_template_revision_sources: {
+        Args: {
+          p_brand_id: string
+          p_dependencies: Json
+          p_edits: Json
+          p_expected_head_revision_id: string
+          p_idempotency_key: string
+          p_name: string
+          p_parent_revision_id: string
+          p_source_asset_id: string
+          p_source_version_id: string
+          p_sources: Json
           p_template_id: string
           p_user_id: string
           p_variant_id: string
@@ -28791,6 +28977,10 @@ export type Database = {
     }
     Functions: {
       archive_hot_window: { Args: never; Returns: Json }
+      billing_webhook_event_count: {
+        Args: { p_since?: string }
+        Returns: number
+      }
       can_impersonate: {
         Args: { admin_id: string; target_id: string }
         Returns: boolean
