@@ -447,17 +447,18 @@ export function CalendarDraftCard({
                       </div>
                     ) : null}
 
-                    {/* Error state */}
-                    {isFailed && draft.generationError ? (
+                    {/* Error state. Generation wins: a cleared publish failure leaves its reason in content_json. */}
+                    {isFailed && (draft.generationError || draft.publishError) ? (
                       <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
                         <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
-                          Generation failed
+                          {draft.generationError ? 'Generation failed' : 'Publish failed'}
                         </p>
                         <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
-                          {draft.generationError}
+                          {draft.generationError ?? draft.publishError}
                         </p>
                         <div className="mt-2 flex items-center gap-2">
-                          {onRegenerate ? (
+                          {/* Retry regenerates the media, which cannot fix a refused publish. */}
+                          {onRegenerate && draft.generationError ? (
                             // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
                             <span
                               role="button"

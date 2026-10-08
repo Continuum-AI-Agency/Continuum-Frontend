@@ -81,6 +81,8 @@ export type OrganicCalendarDraft = {
   cta?: string;
   creativeIdea?: string;
   generationError?: string;
+  /** Why the scheduled publish stopped retrying; the backend writes it to `content_json`. */
+  publishError?: string;
   generationAttempts?: number;
   backendDraftId?: string;
   /**
