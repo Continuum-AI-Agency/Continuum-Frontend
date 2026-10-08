@@ -445,4 +445,43 @@ describe('useDraftMediaPlacement', () => {
     expect(draft.mediaSuggestion.reel.url).toBe('brands/brand-1/img.jpg');
     expect(draft.publishingAssets).toEqual([expect.objectContaining({ kind: 'video' })]);
   });
+
+  // "Me siguió mandando mi imagen como reel": an image placed on a Reel draft left the
+  // draft a Reel, so the publish refused it for having no video. The chip and the
+  // autosaved snapshot both read this local format, so it has to follow the media.
+  it('place() of an image on a Reel draft restates the format as a post', async () => {
+    storedDraft = { ...storedDraft, format: 'Reel' };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => {
+      result.current.place([makeImageAsset()], { kind: 'single' });
+    });
+
+    expect((storedDraft as { format: string }).format).toBe('POST');
+  });
+
+  it('place() keeps a Story a Story — one image is a valid story', async () => {
+    storedDraft = { ...storedDraft, format: 'Story' };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => {
+      result.current.place([makeImageAsset()], { kind: 'single' });
+    });
+
+    expect((storedDraft as { format: string }).format).toBe('Story');
+  });
+
+  it('undo() restores the format the attach replaced', async () => {
+    storedDraft = { ...storedDraft, format: 'Reel' };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => {
+      result.current.place([makeImageAsset()], { kind: 'single' });
+    });
+    await act(async () => {
+      result.current.undo();
+    });
+
+    expect((storedDraft as { format: string }).format).toBe('Reel');
+  });
 });
