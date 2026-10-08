@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'bun:test';
-import type { PortfolioSuggestion } from '@continuum/contracts';
+import type { PlatformCandidateAccount, PortfolioSuggestion } from '@continuum/contracts';
 import {
   buildCreateConfig,
+  draftFromScratch,
   draftFromSuggestion,
   effectiveTargetMetric,
   emptyDraft,
   enrollLabel,
   hasMetaSelection,
+  memberBlockReason,
   memberKey,
   memberPayload,
   membersByAccount,
   planReadout,
+  platformAccountNotes,
   platformHost,
   selectedMembers,
+  selectedMembersBudget,
   selectionByPlatform,
+  selectionCurrency,
   stepIssues,
   suggestedGuardrails,
   suggestionPlatformCounts,
@@ -386,5 +391,168 @@ describe('enrolling the members a cross-platform suggestion proposed', () => {
     expect(enrollLabel(googleOnly())).toBe('Create & enroll 1 Google campaign');
     expect(enrollLabel(draftFromSuggestion(suggestion))).toBe('Create & enroll 2 ad sets');
     expect(selectionByPlatform(emptyDraft())).toEqual([]);
+  });
+});
+
+// Vivo 47's from-scratch list: two Google campaigns in MXN, one in another account in USD.
+const CANDIDATES: PlatformCandidateAccount[] = [
+  {
+    platform: 'google_ads',
+    account_id: '3710693645',
+    currency: 'MXN',
+    candidates: [
+      {
+        entity_id: '20775796216',
+        name: 'VIVO 47-EKATAR',
+        objectives: ['lead'],
+        daily_budget: 1179,
+        spend14: 15287,
+        channel_type: 'SEARCH',
+      },
+      {
+        entity_id: '24331887298',
+        name: 'SALES-PMAX-OCTUBRE',
+        objectives: ['lead'],
+        daily_budget: 450,
+        spend14: 0,
+        channel_type: 'PERFORMANCE_MAX',
+      },
+    ],
+  },
+  {
+    platform: 'google_ads',
+    account_id: '999',
+    currency: 'USD',
+    candidates: [
+      {
+        entity_id: 'u1',
+        name: 'US search',
+        objectives: [],
+        daily_budget: 50,
+        spend14: 10,
+        channel_type: 'SEARCH',
+      },
+    ],
+  },
+];
+
+describe('a portfolio from scratch on any platform', () => {
+  it('lists every other-platform campaign, none ticked', () => {
+    const draft = draftFromScratch(CANDIDATES);
+    expect(draft.source).toBe('scratch');
+    expect(draft.memberKeys).toEqual([]);
+    expect(draft.proposedMembers.map((m) => [m.entity_id, m.currency, m.daily_budget])).toEqual([
+      ['20775796216', 'MXN', 1179],
+      ['24331887298', 'MXN', 450],
+      ['u1', 'USD', 50],
+    ]);
+    expect(stepIssues(draft, 'assets', ctx)).toEqual(['Select at least one ad set or campaign.']);
+  });
+
+  it("a Google-only selection is hosted on Google, recommend-only, at its campaigns' budget", () => {
+    const base = draftFromScratch(CANDIDATES);
+    const draft = {
+      ...base,
+      name: 'Leads // Google Ads only',
+      objective: 'lead' as const,
+      memberKeys: base.proposedMembers.slice(0, 2).map(memberKey),
+      applyMode: 'autopilot' as const,
+    };
+    expect(platformHost(draft)).toEqual({
+      platform: 'google_ads',
+      account_id: '3710693645',
+    });
+    expect(selectedMembersBudget(draft)).toBe(1629);
+    expect(stepIssues(draft, 'assets', ctx)).toEqual([]);
+    expect(enrollLabel(draft)).toBe('Create & enroll 2 Google campaigns');
+    const config = buildCreateConfig(draft, {
+      currency: 'MXN',
+      selectedBudgetSum: selectedMembersBudget(draft),
+      level: 'adset',
+    });
+    expect(config.apply_mode).toBe('recommend');
+    expect(config.level).toBe('campaign');
+    expect(config.daily_total).toBe(1629);
+  });
+
+  it('holds the selection to one currency and says why a campaign is disabled', () => {
+    const base = draftFromScratch(CANDIDATES);
+    const [ekatar, , usd] = base.proposedMembers;
+    const draft = { ...base, memberKeys: [memberKey(ekatar)] };
+    expect(selectionCurrency(draft, 'MXN')).toBe('MXN');
+    expect(memberBlockReason(usd, draft, 'MXN')).toBe('Bills in USD; this portfolio is in MXN.');
+    expect(memberBlockReason(ekatar, draft, 'MXN')).toBeNull();
+    // A Meta ad set fixes the currency to the Meta account's.
+    const metaUsd = { ...base, adsetIds: ['as-1'] };
+    expect(memberBlockReason(ekatar, metaUsd, 'USD')).toBe(
+      'Bills in MXN; this portfolio is in USD.',
+    );
+    // Should a mixed selection arrive anyway, the step refuses it.
+    const mixed = { ...base, memberKeys: [memberKey(ekatar), memberKey(usd)] };
+    expect(stepIssues(mixed, 'assets', { ...ctx, metaCurrency: 'MXN' })).toEqual([
+      'A portfolio holds one currency, and this selection bills in MXN and USD. Untick one side.',
+    ]);
+  });
+});
+
+describe('platformAccountNotes', () => {
+  const googleOnly: PortfolioSuggestion = {
+    objective: 'lead',
+    name: 'Leads // Google Ads only',
+    level: 'campaign',
+    mode: 'efficiency',
+    daily_total: 1629,
+    adset_ids: [],
+    by_platform: [
+      {
+        platform: 'google_ads',
+        account_id: '3710693645',
+        members: 2,
+        daily_total: 1629,
+        spend14: 15287,
+        conv14: 232,
+      },
+    ],
+    summary: { adsets: 2, spend14: 15287, conv14: 232 },
+    reason: '2 campaigns on Google Ads buying Leads',
+  };
+
+  it('says why each account was not combined, and where its campaigns went', () => {
+    expect(
+      platformAccountNotes(
+        [
+          {
+            platform: 'google_ads',
+            account_id: '3710693645',
+            currency: 'MXN',
+            status: 'no_shared_objective',
+          },
+          {
+            platform: 'google_ads',
+            account_id: '999',
+            currency: 'USD',
+            status: 'currency_mismatch',
+          },
+          {
+            platform: 'google_ads',
+            account_id: '5',
+            currency: null,
+            status: 'read_failed',
+          },
+          {
+            platform: 'google_ads',
+            account_id: '6',
+            currency: 'MXN',
+            status: 'joined',
+          },
+        ],
+        [googleOnly],
+        'MXN',
+      ),
+    ).toEqual([
+      'Google Ads account 3710693645 buys different results than this Meta account, so it has a suggestion of its own.',
+      'Google Ads account 999 bills in USD and this Meta account in MXN, and a portfolio holds one currency, so its campaigns are under Start from scratch.',
+      'Google Ads account 5 could not be read just now, so its campaigns are missing here.',
+    ]);
   });
 });

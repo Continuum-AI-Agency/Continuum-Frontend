@@ -295,7 +295,8 @@ export function StepStart({
             {suggestions.map((suggestion) => (
               <SuggestionCard
                 canExplore={suggestion.adset_ids.some((id) => snapshotById.has(id))}
-                currency={currency}
+                // A suggestion on another platform's account carries its own currency.
+                currency={suggestion.currency ?? currency}
                 exploring={exploring === suggestion.name}
                 key={suggestion.name}
                 onPick={() => onPick(suggestion)}
@@ -316,8 +317,8 @@ export function StepStart({
                 <span className="font-semibold text-sm tracking-tight">Start from scratch</span>
               </span>
               <span className="text-xs text-muted-foreground">
-                Pick the ad sets or whole campaigns yourself, then set the goal, the plan and who
-                applies the moves.
+                Pick the ad sets or campaigns yourself, on any connected platform, then set the
+                goal, the plan and who applies the moves.
               </span>
               <span className="inline-flex items-center gap-1 text-primary text-xs">
                 Build it <ArrowRightIcon aria-hidden className="size-3.5" />

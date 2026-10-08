@@ -13,8 +13,15 @@
 // A cross-platform suggestion's ticked Google campaigns are enrolled after the Meta ad sets
 // through optimizer_add_portfolio_members. With every Meta ad set unticked the portfolio is
 // born on the Google account instead (optimizer_create_platform_portfolio), recommend-only.
+// From scratch, the brand's other accounts' campaigns (optimizer-suggest platform_candidates)
+// are listed unticked beside the Meta picker, so a portfolio can start on any platform.
 
-import type { AdSetSnapshot, PortfolioSuggestion } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  PlatformCandidateAccount,
+  PlatformId,
+  PortfolioSuggestion,
+} from '@continuum/contracts';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -34,6 +41,7 @@ import { StepStart, type SuggestionOverride } from './StepStart';
 import { WizardSummary } from './WizardSummary';
 import {
   buildCreateConfig,
+  draftFromScratch,
   draftFromSuggestion,
   effectiveTargetMetric,
   emptyDraft,
@@ -41,6 +49,7 @@ import {
   memberPayload,
   platformHost,
   selectedMembers,
+  selectedMembersBudget,
   stepIssues,
   WIZARD_STEPS,
   type WizardDraft,
@@ -58,6 +67,15 @@ type PortfolioWizardProps = {
   snapshots: AdSetSnapshot[];
   snapshotsLoading: boolean;
   snapshotsError: boolean;
+  /** Every eligible campaign on the brand's other accounts: the from-scratch list. */
+  platformCandidates?: PlatformCandidateAccount[];
+  /** False when the account in context is not a Meta account: there are no ad sets to pick. */
+  metaAvailable?: boolean;
+  /** Platforms with an account granted to the brand (the platform tabs' rule). */
+  connectedPlatforms?: PlatformId[];
+  /** Whether the suggest edge returned `platform_candidates` at all — an older one does not,
+   *  and then an empty list proves nothing about a connected platform. */
+  candidatesKnown?: boolean;
   onCreated?: (portfolioId: string) => void;
   /** Rendered under the suggestions on step 1 (CBO campaigns, projections). */
   startExtras?: React.ReactNode;
@@ -76,6 +94,10 @@ export function PortfolioWizard({
   snapshots,
   snapshotsLoading,
   snapshotsError,
+  platformCandidates = [],
+  metaAvailable = true,
+  connectedPlatforms = [],
+  candidatesKnown = false,
   onCreated,
   startExtras,
 }: PortfolioWizardProps) {
@@ -104,12 +126,15 @@ export function PortfolioWizard({
     setDraft((prev) => ({ ...prev, ...next }));
   }, []);
 
+  // Meta ad sets plus the ticked campaigns on other platforms — one currency, by the rule the
+  // Assets step enforces.
   const selectedBudgetSum = useMemo(() => {
     const ids = new Set(draft.adsetIds);
-    return pickerEntities
+    const meta = pickerEntities
       .filter((entity) => ids.has(entity.id))
       .reduce((sum, entity) => sum + (entity.currentBudget ?? 0), 0);
-  }, [pickerEntities, draft.adsetIds]);
+    return meta + selectedMembersBudget(draft);
+  }, [pickerEntities, draft]);
   const inactiveCount = useMemo(() => {
     const ids = new Set(draft.adsetIds);
     return pickerEntities.filter(
@@ -138,7 +163,11 @@ export function PortfolioWizard({
     target: draft.target,
   });
 
-  const issues = stepIssues(draft, step, { selectedBudgetSum, blockedCount });
+  const issues = stepIssues(draft, step, {
+    selectedBudgetSum,
+    blockedCount,
+    metaCurrency: currency,
+  });
   const stepIndex = STEP_ORDER.indexOf(step);
   const isLast = stepIndex === STEP_ORDER.length - 1;
   const busy =
@@ -175,7 +204,7 @@ export function PortfolioWizard({
     setStep('assets');
   }
   function startScratch() {
-    setDraft({ ...emptyDraft(), source: 'scratch' });
+    setDraft(draftFromScratch(platformCandidates));
     setCompleted(new Set(['start']));
     setStep('assets');
   }
@@ -289,10 +318,15 @@ export function PortfolioWizard({
               objective={draft.objective}
               onAssetModeChange={(assetMode) => patch({ assetMode })}
               onChangeCampaigns={(campaignIds) => patch({ campaignIds })}
+              draft={draft}
               memberKeys={draft.memberKeys}
+              metaAvailable={metaAvailable}
+              candidatesKnown={candidatesKnown}
+              connectedPlatforms={connectedPlatforms}
               onChangeMembers={(memberKeys) => patch({ memberKeys })}
               onChangeSelection={(adsetIds) => patch({ adsetIds })}
               proposedMembers={draft.proposedMembers}
+              source={draft.source}
               selectedIds={draft.adsetIds}
               warnings={{ inactiveCount, blockedCount, moves }}
             />

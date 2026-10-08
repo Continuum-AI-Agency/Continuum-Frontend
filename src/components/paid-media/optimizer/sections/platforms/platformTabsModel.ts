@@ -71,7 +71,7 @@ export function readAdPlatform(raw: unknown): AdPlatform | null {
 }
 
 /** list_brand_ad_accounts spells Meta `meta_ads` and Google `google_ads`; it has no TikTok row. */
-function accountPlatform(account: AdAccount): AdPlatform | null {
+export function accountPlatform(account: AdAccount): AdPlatform | null {
   if (account.platform === 'meta_ads' || account.platform === 'meta') return 'meta';
   if (account.platform === 'google_ads' || account.platform === 'google-ads') return 'google_ads';
   return null;

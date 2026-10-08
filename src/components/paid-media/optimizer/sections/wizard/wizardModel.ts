@@ -12,10 +12,12 @@ import type {
   BudgetGranularity,
   OptimizationModeDto,
   OptimizationObjective,
+  PlatformCandidateAccount,
   PlatformId,
   PortfolioConfig,
   PortfolioSuggestion,
   SuggestionMember,
+  SuggestResult,
   TargetMetric,
 } from '@continuum/contracts';
 import {
@@ -64,9 +66,10 @@ export type WizardDraft = {
   /** Whole campaigns chosen in campaign mode (their ad sets also land in adsetIds). */
   campaignIds: string[];
   /**
-   * The members on other platforms a cross-platform suggestion proposed ("Leads // All
-   * platforms"), as it proposed them — the Assets step lists every one, ticked or not.
-   * Empty for a Meta-only suggestion and for a portfolio built from scratch.
+   * The members on other platforms the Assets step lists, ticked or not: what a suggestion
+   * proposed ("Leads // All platforms", "Leads // Google Ads only"), or — from scratch — every
+   * campaign the brand's other accounts could put in a portfolio. Empty for a Meta-only
+   * suggestion and for a brand with Meta only.
    */
   proposedMembers: SuggestionMember[];
   /** Which of `proposedMembers` are selected, by memberKey. All of them, until unticked. */
@@ -135,6 +138,89 @@ export function emptyDraft(): WizardDraft {
     scaleCadenceDays: '',
     scaleMaxDaily: '',
   };
+}
+
+/** From scratch: every eligible campaign on the brand's other accounts, none ticked. */
+export function draftFromScratch(candidates: readonly PlatformCandidateAccount[]): WizardDraft {
+  return {
+    ...emptyDraft(),
+    source: 'scratch',
+    proposedMembers: scratchMembers(candidates),
+  };
+}
+
+/** The from-scratch list as members, in the order the accounts and campaigns arrived. */
+export function scratchMembers(
+  candidates: readonly PlatformCandidateAccount[],
+): SuggestionMember[] {
+  return candidates.flatMap((account) =>
+    account.candidates.map((candidate) => ({
+      platform: account.platform,
+      account_id: account.account_id,
+      entity_id: candidate.entity_id,
+      level: 'campaign' as const,
+      ...(candidate.name?.trim() ? { name: candidate.name.trim() } : {}),
+      ...(account.currency ? { currency: account.currency } : {}),
+      daily_budget: candidate.daily_budget,
+    })),
+  );
+}
+
+const normCurrency = (currency: string | null | undefined) =>
+  currency?.trim().toUpperCase() || null;
+
+/**
+ * The one currency the selection bills in so far, or null when nothing priced is selected.
+ * A portfolio holds one currency — optimizer_add_portfolio_members refuses a second — so the
+ * first ticked member (or the Meta account, once a Meta ad set is ticked) fixes it.
+ */
+export function selectionCurrency(
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  metaCurrency: string | null | undefined,
+): string | null {
+  if (hasMetaSelection(draft) && normCurrency(metaCurrency)) return normCurrency(metaCurrency);
+  for (const member of selectedMembers(draft)) {
+    const currency = normCurrency(member.currency);
+    if (currency) return currency;
+  }
+  return null;
+}
+
+/** Why a member cannot join the selection, or null when it can: it bills in another currency
+ *  than what is already selected. A ticked member is never blocked — it can always be unticked. */
+export function memberBlockReason(
+  member: SuggestionMember,
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  metaCurrency: string | null | undefined,
+): string | null {
+  if (draft.memberKeys.includes(memberKey(member))) return null;
+  const fixed = selectionCurrency(draft, metaCurrency);
+  const own = normCurrency(member.currency);
+  if (!fixed || !own || own === fixed) return null;
+  return `Bills in ${own}; this portfolio is in ${fixed}.`;
+}
+
+/** The selection's currencies when it holds more than one — the step refuses it. */
+function mixedCurrencies(
+  draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  metaCurrency: string | null | undefined,
+): string[] {
+  const currencies = new Set<string>();
+  if (hasMetaSelection(draft) && normCurrency(metaCurrency)) {
+    currencies.add(normCurrency(metaCurrency) as string);
+  }
+  for (const member of selectedMembers(draft)) {
+    const currency = normCurrency(member.currency);
+    if (currency) currencies.add(currency);
+  }
+  return currencies.size > 1 ? [...currencies] : [];
+}
+
+/** The ticked members' daily budgets, in the selection's one currency. */
+export function selectedMembersBudget(
+  draft: Pick<WizardDraft, 'proposedMembers' | 'memberKeys'>,
+): number {
+  return selectedMembers(draft).reduce((sum, member) => sum + (member.daily_budget ?? 0), 0);
 }
 
 function num(value: string): number | null {
@@ -321,6 +407,8 @@ export type StepContext = {
   selectedBudgetSum: number;
   /** Selected ad sets held by a portfolio the operator cannot release. */
   blockedCount: number;
+  /** The Meta account's currency, which a selected Meta ad set bills in. */
+  metaCurrency?: string | null;
 };
 
 /** What still blocks leaving a step, in the operator's words. Empty = the step is complete. */
@@ -341,6 +429,14 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
         issues.push(
           `${ctx.blockedCount} selected ${ctx.blockedCount === 1 ? 'ad set is' : 'ad sets are'} held by a portfolio you cannot edit.`,
         );
+      }
+      {
+        const mixed = mixedCurrencies(draft, ctx.metaCurrency);
+        if (mixed.length > 0) {
+          issues.push(
+            `A portfolio holds one currency, and this selection bills in ${mixed.join(' and ')}. Untick one side.`,
+          );
+        }
       }
       break;
     case 'goal': {
@@ -493,4 +589,62 @@ export function suggestedGuardrails(dailyTotal: number): {
     maxDailyApply: dailyTotal > 0 ? String(Math.round(dailyTotal * 1.5)) : '',
     maxChangePct: DEFAULT_MAX_CHANGE_PCT,
   };
+}
+
+const ACCOUNT_TITLE: Record<PlatformId, string> = {
+  meta: 'Meta',
+  google_ads: 'Google Ads',
+  tiktok_ads: 'TikTok',
+};
+
+/**
+ * One line per other-platform account the suggestions did not combine with this Meta account,
+ * saying why — instead of a Google account silently missing from them. Joined accounts say
+ * nothing; an account with a suggestion of its own says where it went.
+ */
+export function platformAccountNotes(
+  accounts: NonNullable<SuggestResult['platform_accounts']>,
+  suggestions: readonly PortfolioSuggestion[],
+  metaCurrency: string | null | undefined,
+): string[] {
+  const notes: string[] = [];
+  for (const account of accounts) {
+    if (account.status === 'joined') continue;
+    const name = `${ACCOUNT_TITLE[account.platform]} account ${account.account_id}`;
+    const alone = suggestions.some(
+      (suggestion) =>
+        !hasMetaMembers(suggestion) &&
+        (suggestion.by_platform ?? []).some(
+          (entry) => entry.platform === account.platform && entry.account_id === account.account_id,
+        ),
+    );
+    const where = alone
+      ? 'it has a suggestion of its own'
+      : 'its campaigns are under Start from scratch';
+    switch (account.status) {
+      case 'no_shared_objective':
+        notes.push(`${name} buys different results than this Meta account, so ${where}.`);
+        break;
+      case 'currency_mismatch':
+        notes.push(
+          `${name} bills in ${account.currency ?? 'another currency'}${
+            metaCurrency ? ` and this Meta account in ${metaCurrency}` : ''
+          }, and a portfolio holds one currency, so ${where}.`,
+        );
+        break;
+      case 'currency_unknown':
+        notes.push(
+          `${name} or this Meta account did not report its currency, so they are not combined.`,
+        );
+        break;
+      case 'read_failed':
+        notes.push(`${name} could not be read just now, so its campaigns are missing here.`);
+        break;
+    }
+  }
+  return notes;
+}
+
+function hasMetaMembers(suggestion: PortfolioSuggestion): boolean {
+  return suggestion.adset_ids.length > 0;
 }

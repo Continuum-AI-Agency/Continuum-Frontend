@@ -1273,8 +1273,34 @@ export const SuggestionMemberSchema = z.object({
   entity_id: z.string(),
   level: z.enum(['adset', 'campaign']),
   name: z.string().optional(),
+  /** The member's account currency and its daily budget in that currency's MAJOR units —
+   *  what the wizard sums and holds to one currency. Absent from an older suggest edge. */
+  currency: z.string().optional(),
+  daily_budget: z.number().nonnegative().optional(),
 });
 export type SuggestionMember = z.infer<typeof SuggestionMemberSchema>;
+
+/** One campaign another platform's account could put in a portfolio: the wizard's
+ *  "from scratch" list. Already filtered to what a portfolio may hold (enabled, a daily
+ *  budget, never Google Smart / Display / Video). `objectives` empty = its goals map to no
+ *  optimizer objective; it is still pickable. */
+export const PlatformCandidateSchema = z.object({
+  entity_id: z.string(),
+  name: z.string().nullable(),
+  objectives: z.array(OptimizationObjectiveSchema),
+  daily_budget: z.number().nonnegative(),
+  spend14: z.number(),
+  channel_type: z.string().nullable(),
+});
+export type PlatformCandidate = z.infer<typeof PlatformCandidateSchema>;
+
+export const PlatformCandidateAccountSchema = z.object({
+  platform: PlatformIdSchema,
+  account_id: z.string(),
+  currency: z.string().nullable(),
+  candidates: z.array(PlatformCandidateSchema),
+});
+export type PlatformCandidateAccount = z.infer<typeof PlatformCandidateAccountSchema>;
 
 /** A cross-platform suggestion's figures for one account: what the card's chips count. */
 export const SuggestionPlatformSummarySchema = z.object({
@@ -1816,6 +1842,10 @@ export const SuggestResultSchema = z.object({
       }),
     )
     .optional(),
+  /** Every eligible campaign on the brand's other ad accounts, suggested or not — what the
+   *  wizard lists when a person builds a portfolio from scratch. Absent for a Meta-only brand
+   *  and from an older suggest edge. */
+  platform_candidates: z.array(PlatformCandidateAccountSchema).optional(),
 });
 export type SuggestResult = z.infer<typeof SuggestResultSchema>;
 
