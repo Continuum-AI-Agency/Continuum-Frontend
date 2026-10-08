@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import { firstCutSpeedNote } from './video-editor-first-cut-speed';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   type GradedStep,
@@ -167,13 +168,15 @@ const transientWavCount = async () => {
   return error ? Number.NaN : (data ?? []).length;
 };
 
-/** Waits for a submitted draft to finish in the open dialog, sampling its progress. */
-async function draftToSummary(page: Page, dialog: Locator) {
-  const startedMs = Date.now();
+/**
+ * Waits for a draft submitted at `clickedMs` to finish in the open dialog, sampling its
+ * progress; `ms` is the person's wait, Draft click to summary.
+ */
+async function draftToSummary(page: Page, dialog: Locator, clickedMs: number) {
   const phases = new Set<string>();
   let failure = '';
   const summary = dialog.getByTestId('brief-summary');
-  while (Date.now() - startedMs < DRAFT_BUDGET_MS) {
+  while (Date.now() - clickedMs < DRAFT_BUDGET_MS) {
     const phase = page.locator('[data-testid="brief-phase"]:visible');
     if ((await phase.count()) > 0) phases.add((await phase.innerText().catch(() => '')).trim());
     const alert = dialog.getByRole('alert');
@@ -184,6 +187,7 @@ async function draftToSummary(page: Page, dialog: Locator) {
     if ((await summary.count()) > 0) break;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+  const ms = Date.now() - clickedMs;
   const rows = await summary.locator('li[data-variant]').evaluateAll((nodes) =>
     nodes.map((node) => ({
       label: node.getAttribute('data-variant') ?? '',
@@ -191,7 +195,7 @@ async function draftToSummary(page: Page, dialog: Locator) {
     })),
   );
   return {
-    ms: Date.now() - startedMs,
+    ms,
     phases: [...phases].filter(Boolean),
     failure,
     summary: rows,
@@ -245,6 +249,7 @@ test(BENCH, async ({ browser }) => {
   const createdAssets: { id: string; storagePath: string }[] = [];
   const briefIds = new Set<string>();
   const draftJobs = new Set<string>();
+  const drafts: Awaited<ReturnType<typeof draftToSummary>>[] = [];
   let wavsBefore = Number.NaN;
   let previousActiveBrand: string | null = null;
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
@@ -465,8 +470,10 @@ test(BENCH, async ({ browser }) => {
       );
 
       // ── draft, with visible progress, to a summary ───────────────────────────────────
+      const draftClickMs = Date.now();
       await dialog.getByTestId('brief-submit').click();
-      const firstDraft = await draftToSummary(page, dialog);
+      const firstDraft = await draftToSummary(page, dialog, draftClickMs);
+      drafts.push(firstDraft);
       check(
         'drafting shows its progress (phase + bar)',
         firstDraft.phases.length > 0,
@@ -585,6 +592,7 @@ test(BENCH, async ({ browser }) => {
         redraftText === beforeB.brief?.text && redraftCount === 'true',
         `"${redraftText.slice(0, 80)}" · 3 pressed ${redraftCount}`,
       );
+      const redraftClickMs = Date.now();
       await dialog.getByTestId('brief-submit').click();
       await page.locator('[data-testid="brief-phase"]:visible').waitFor({ timeout: 30_000 });
       await page.keyboard.press('Escape');
@@ -602,7 +610,8 @@ test(BENCH, async ({ browser }) => {
         'while a draft runs, the top-bar "Drafting…" indicator reopens the dialog on it',
         indicatorShown && reopened,
       );
-      const redraft = await draftToSummary(page, dialog);
+      const redraft = await draftToSummary(page, dialog, redraftClickMs);
+      drafts.push(redraft);
       const afterRedraftB = await getProject(api, variantB.projectId);
       // Undo from the completion toast, before it times out.
       const toastUndo = page
@@ -742,6 +751,7 @@ test(BENCH, async ({ browser }) => {
     }
     for (const server of servers.reverse()) server.stop();
   }
+  note(firstCutSpeedNote(drafts));
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
 });
