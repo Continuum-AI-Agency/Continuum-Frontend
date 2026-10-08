@@ -9,6 +9,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ApiRenderInputValue, ApiRenderVariable } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
@@ -39,8 +40,9 @@ function renderFields(
   } = {},
 ) {
   return render(
-    <ReactFlowProvider>
-      <RenderVariableFields
+    <QueryClientProvider client={new QueryClient()}>
+      <ReactFlowProvider>
+        <RenderVariableFields
         definitions={definitions}
         values={extra.values}
         brandId={extra.brandId}
@@ -48,8 +50,9 @@ function renderFields(
         mediaStatus={extra.mediaStatus}
         onChange={extra.onChange ?? (() => undefined)}
         onClear={extra.onClear ?? (() => undefined)}
-      />
-    </ReactFlowProvider>,
+        />
+      </ReactFlowProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -152,6 +155,22 @@ describe('RenderVariableFields — numeric geometry', () => {
     fireEvent.change(field, { target: { value: '12' } });
     expect(changes).toEqual([['duration', 12]]);
     expect(handleFor('duration')).toBeNull();
+  });
+});
+
+describe('RenderVariableFields — colour geometry', () => {
+  // A colour used to fall through to the text branch, so the canvas asked for a typed hex
+  // where every other Forge surface offers the picker.
+  test('is a colour picker showing the current hex, not a text field', () => {
+    renderFields([variable({ key: 'accent', label: 'Accent', kind: 'color' })], {
+      values: { accent: '#d70024' },
+    });
+
+    const trigger = document.querySelector('[data-slot="color-field"]');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain('#d70024');
+    expect(screen.queryByDisplayValue('#d70024')).toBeNull();
+    expect(handleFor('accent')).toBeNull();
   });
 });
 
