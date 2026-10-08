@@ -30,6 +30,17 @@ export const PLAN_CODES = ['organic_studio', 'paid_media'] as const;
 export const planCodeSchema = z.enum(PLAN_CODES);
 export type PlanCode = z.infer<typeof planCodeSchema>;
 
+/**
+ * Reads keep only the codes this build knows. The server adds a product or plan before every
+ * Frontend ships it, and one unknown code must never fail the whole read: it once read every
+ * brand holding `listening` as having no products. Request bodies stay strict.
+ */
+function knownCodes<const Codes extends readonly string[]>(codes: Codes) {
+  return z
+    .array(z.string())
+    .transform((values) => values.filter((value): value is Codes[number] => codes.includes(value)));
+}
+
 /** 1 credit = $0.01 of billed usage (provider cost × 1.15, rounded up per generation). */
 export const USD_PER_CREDIT = 0.01;
 export const CREDIT_PACK_CREDITS = 1_000;
@@ -45,7 +56,7 @@ export const planCatalogEntrySchema = z
     planCode: planCodeSchema,
     displayName: z.string().min(1),
     monthlyPriceUsd: z.number().nonnegative(),
-    products: z.array(productCodeSchema).min(1),
+    products: knownCodes(PRODUCT_CODES),
     includedCanvasCredits: z.number().int().nonnegative(),
   })
   .strict();
@@ -103,9 +114,9 @@ export const brandEntitlementsSchema = z
     status: z.enum(['inactive', 'trialing', 'active', 'past_due', 'canceled']),
     billingModel: billingModelSchema,
     /** Self-serve plans currently on the brand's Stripe subscription. Empty for Contract. */
-    plans: z.array(planCodeSchema),
-    products: z.array(productCodeSchema),
-    addons: z.array(addonCodeSchema),
+    plans: knownCodes(PLAN_CODES),
+    products: knownCodes(PRODUCT_CODES),
+    addons: knownCodes(ADDON_CODES),
     trendsTier: z.enum(['base', 'pro']).nullable(),
     buckets: z.array(usageBucketSchema),
     creditBalance: creditBalanceSchema,
@@ -132,7 +143,7 @@ export const billingSubscriptionViewSchema = z
   .object({
     id: z.string().min(1),
     status: z.string().min(1),
-    plans: z.array(planCodeSchema),
+    plans: knownCodes(PLAN_CODES),
     cancelAtPeriodEnd: z.boolean(),
     currentPeriodStart: z.string().datetime({ offset: true }).nullable(),
     currentPeriodEnd: z.string().datetime({ offset: true }).nullable(),
@@ -193,7 +204,13 @@ export const billingOverviewSchema = z
     /** Plan cards come from `billing.plan_definitions`, never hardcoded. */
     catalog: z
       .object({
-        plans: z.array(planCatalogEntrySchema),
+        plans: z.preprocess(
+          (plans) =>
+            Array.isArray(plans)
+              ? plans.filter((plan) => PLAN_CODES.some((code) => code === plan?.planCode))
+              : plans,
+          z.array(planCatalogEntrySchema),
+        ),
         creditPack: creditPackOfferSchema,
       })
       .strict(),

@@ -84,6 +84,44 @@ describe('billing contracts', () => {
     expect(billingOverviewSchema.parse({ ...overview, overageCapUsd: null }).overageCapUsd).toBeNull();
   });
 
+  it('drops product and plan codes this build does not know instead of failing the read', () => {
+    // A Contract brand's prod entitlements and catalog after the server added Trends+.
+    const ahead = {
+      ...entitlements,
+      plans: ['organic_studio', 'trends_plus'],
+      products: ['listening', 'mcp', 'organic_agent', 'paid_media', 'studio', 'trends'],
+      addons: ['provider_apify', 'provider_new'],
+    };
+    const parsed = brandEntitlementsSchema.parse(ahead);
+    expect(parsed.products).toEqual(['mcp', 'organic_agent', 'paid_media', 'studio', 'trends']);
+    expect(parsed.plans).toEqual(['organic_studio']);
+    expect(parsed.addons).toEqual(['provider_apify']);
+
+    const plan = (planCode: string, products: string[]) => ({
+      planCode,
+      displayName: planCode,
+      monthlyPriceUsd: 10,
+      products,
+      includedCanvasCredits: 0,
+    });
+    const overview = billingOverviewSchema.parse({
+      brandId,
+      entitlements: ahead,
+      hasPaymentMethod: false,
+      overageEnabled: false,
+      overageCapUsd: null,
+      subscription: null,
+      invoices: [],
+      canvas: { studioBucket: null, rolloverUsd: 0, purchasedBalanceUsd: 0, overageUsd: 0 },
+      catalog: {
+        plans: [plan('paid_media', ['paid_media']), plan('trends_plus', ['trends', 'listening'])],
+        creditPack: { credits: 1000, priceUsd: 10, maxPacks: 50 },
+      },
+      livemode: true,
+    });
+    expect(overview.catalog.plans.map((entry) => entry.planCode)).toEqual(['paid_media']);
+  });
+
   it('takes only a boolean overage opt-in and echoes the subscription state', () => {
     expect(billingOverageRequestSchema.parse({ enabled: true }).enabled).toBe(true);
     expect(billingOverageRequestSchema.safeParse({}).success).toBe(false);
