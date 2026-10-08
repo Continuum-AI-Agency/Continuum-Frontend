@@ -9,28 +9,103 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
-import { loadLocalSupabaseEnv } from './support/prodEnv';
+import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import {
+  FRONTEND_REVISION_STEP,
+  PRODUCTION_BACKEND,
+  productionOrigin,
+  type Revisions,
+  servingRevisions,
+  verifyServingRevisions,
+} from './video-editor-prod/prodMode';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
-import { removeProjects } from './video-editor-workspace/ledger';
+import {
+  type GradedStep,
+  ownedStorage,
+  presentObjects,
+  projectAssets,
+  proveNetZero,
+  receiptRows,
+  removeProjects,
+  type StorageLedger,
+} from './video-editor-workspace/ledger';
 
 // Real native capture, upload, Edge registration, editor save, reload and playback.
 // Camera/mic use Chromium's file-backed devices; screen capture may only select our tab.
-// No physical devices, desktop capture, paid provider, or hosted database is permitted.
+// No physical devices, desktop capture, paid provider, or hosted database is permitted —
+// except VIDEO_EDITOR_PROD, which runs the same journey on the deployed Frontend and the
+// production Backend (its own Render) as the bench user on the bench brand in hosted Supabase.
+const PROD = productionOrigin();
 const BENCH = 'videoeditor:record:e2e:bench';
-const BRAND = '00000000-0000-4000-8000-0000000000b2';
+const BRAND = PROD
+  ? 'b411bba9-d09c-4892-9b86-5ff340ce64e5'
+  : '00000000-0000-4000-8000-0000000000b2';
+const OWNER_EMAIL = PROD
+  ? (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai')
+  : 'local@continuum.test';
 const SOURCE_SHA = '157f82600e337c8efa0b1be466806854075f90acb05a8f33dbb2a90a9ee3d201';
-const { url, serviceRoleKey } = loadLocalSupabaseEnv();
+const { url, serviceRoleKey } = PROD ? loadProdSupabaseEnv() : loadLocalSupabaseEnv();
 process.env.SUPABASE_URL = url;
 const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 const media = admin.schema('media');
 const rec = new Recorder(BENCH);
 const results: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
+const notes: string[] = [];
 const startedAt = new Date().toISOString();
 const startedMs = Date.now();
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 function check(step: string, ok: boolean, detail?: string) {
   rec.check(step, ok, detail);
   results.push({ step, grade: ok ? 'PASS' : 'FAIL', detail });
+}
+function note(message: string) {
+  rec.note(message);
+  notes.push(message);
+}
+function grade(step: GradedStep) {
+  rec.record(step.step, step.grade, step.detail);
+  results.push(step);
+}
+/** Production rows left by owned id, through the service role. */
+async function rowsLeft(table: string, column: string, ids: readonly string[]): Promise<number> {
+  const { count, error } = await media
+    .from(table)
+    .select(column, { count: 'exact', head: true })
+    .in(column, ids);
+  if (error) throw new Error(`${table} read: ${error.message}`);
+  return count ?? 0;
+}
+/**
+ * Owned ids whose storage reservation still exists in production. billing_private is not exposed
+ * and nothing here can delete a reservation; media.drive_finish_storage is the service role's one
+ * door to it by id: P0002 is no row, anything else is a row left (a settled one reads back
+ * unchanged, a reserved one is released).
+ */
+async function reservationsLeft(ids: readonly string[]): Promise<string[]> {
+  const left: string[] = [];
+  for (const id of ids) {
+    const { error } = await media.rpc('drive_finish_storage', {
+      p_reservation_id: id,
+      p_settle: false,
+    });
+    if (error?.code !== 'P0002') left.push(error ? `${id} (${error.message})` : id);
+  }
+  return left;
+}
+/** The local count query's terms, by owned id with the service role: '0' only when none is left. */
+async function leftInProduction(ids: string[], ledger: StorageLedger): Promise<string> {
+  const receipts = await receiptRows(admin, BRAND, ids);
+  const terms = {
+    assets: await rowsLeft('assets', 'id', ids),
+    versions: await rowsLeft('asset_versions', 'asset_id', ids),
+    receipts: receipts.grade === 'PASS' ? [] : [receipts.detail],
+    reservations: await reservationsLeft(ids),
+    objects: (await presentObjects(admin, ledger)).map((o) => `${o.bucket}/${o.path}`),
+  };
+  return terms.assets + terms.versions === 0 &&
+    [terms.receipts, terms.reservations, terms.objects].every((term) => term.length === 0)
+    ? '0'
+    : JSON.stringify(terms);
 }
 function localSql(sql: string): string {
   return execFileSync(
@@ -65,11 +140,16 @@ test(BENCH, async () => {
   const folder = process.env.VIDEO_EDITOR_RECORD_OUTPUT;
   const source = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
   const renderer = process.env.VIDEO_EDITOR_RENDER_URL;
-  if (!folder || !source || !renderer)
+  // Production previews on the production Backend's own Render; no local one is involved.
+  if (!folder || !source || (!renderer && !PROD))
     throw new Error(
       'Require recorded fixture, fresh output directory and explicit loopback Render URL.',
     );
-  if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(renderer).hostname))
+  if (
+    renderer &&
+    !PROD &&
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(renderer).hostname)
+  )
     throw new Error('Render must be loopback.');
   if (process.env.BENCH_SINK !== 'library') throw new Error('Require BENCH_SINK=library.');
   mkdirSync(folder, { recursive: true });
@@ -129,15 +209,40 @@ test(BENCH, async () => {
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | undefined;
   let previousBrand: string | null | undefined;
   let preferenceChanged = false;
+  let before: Revisions | undefined;
+  let ledger: StorageLedger | undefined;
+  const captured: { id: string; storagePath: string }[] = [];
   const previewTasks = new Set<Promise<unknown>>();
   try {
-    const port = await freePort();
-    const backend = await bootBackend(`http://localhost:${port}`, {
-      CONTINUUM_RENDER_SERVICE_URL: renderer,
-    });
-    servers.push(backend);
-    const frontend = await bootFrontend(port, backend.url, '.next/video-record-e2e');
-    servers.push(frontend);
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (PROD) {
+      try {
+        before = await servingRevisions(PROD);
+      } catch (error) {
+        check(
+          FRONTEND_REVISION_STEP,
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
+      frontendUrl = PROD;
+      backendUrl = PRODUCTION_BACKEND;
+      note(
+        `production: Frontend ${PROD} at ${before.frontend}, Backend ${PRODUCTION_BACKEND} at ${before.backend}`,
+      );
+    } else {
+      const port = await freePort();
+      const backend = await bootBackend(`http://localhost:${port}`, {
+        CONTINUUM_RENDER_SERVICE_URL: String(renderer),
+      });
+      servers.push(backend);
+      const frontend = await bootFrontend(port, backend.url, '.next/video-record-e2e');
+      servers.push(frontend);
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+    }
     writeFileSync(
       join(folder, 'server-logs.json'),
       JSON.stringify(
@@ -146,8 +251,8 @@ test(BENCH, async () => {
         2,
       ),
     );
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
-    session = await mintSessionBundleForEmail('local@continuum.test');
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
+    session = await mintSessionBundleForEmail(OWNER_EMAIL);
     const preference = await admin
       .schema('brand_profiles')
       .from('user_brand_preferences')
@@ -188,7 +293,7 @@ test(BENCH, async () => {
         viewport: { width: 1440, height: 1000 },
       });
       await context.grantPermissions(['camera', 'microphone', 'local-network-access'], {
-        origin: frontend.url,
+        origin: frontendUrl,
       });
       await context.addInitScript((ownedTitle) => {
         const state: Capture = {
@@ -300,7 +405,7 @@ test(BENCH, async () => {
       });
       page.on('requestfinished', (request) => pending.delete(request.url()));
       page.on('requestfailed', (request) => pending.delete(request.url()));
-      const created = await fetch(`${backend.url}/api/ai-studio/video-projects`, {
+      const created = await fetch(`${backendUrl}/api/ai-studio/video-projects`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
@@ -317,7 +422,7 @@ test(BENCH, async () => {
       const projectId = editorProjectResponseSchema.parse(await created.json()).project.projectId;
       projects.push(projectId);
       writeFileSync(join(folder, 'owned-projects.json'), JSON.stringify(projects));
-      await page.goto(`${frontend.url}${videoStudioEditorPath(projectId)}`);
+      await page.goto(`${frontendUrl}${videoStudioEditorPath(projectId)}`);
       await page.getByRole('button', { name: 'Record', exact: true }).click();
       await page
         .getByRole('menuitem', {
@@ -364,7 +469,7 @@ test(BENCH, async () => {
             (track) => track.kind === 'video' && track.settings.displaySurface === 'browser',
           ),
         );
-      const read = await fetch(`${backend.url}/api/ai-studio/video-projects/${projectId}`, {
+      const read = await fetch(`${backendUrl}/api/ai-studio/video-projects/${projectId}`, {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       });
       const project = editorProjectResponseSchema.parse(await read.json()).project;
@@ -533,6 +638,28 @@ test(BENCH, async () => {
     await Promise.all([...previewTasks]);
     await context?.close();
     await browser?.close();
+    if (PROD) {
+      // Production has no SQL door to storage.objects: the tickets' own objects and folders,
+      // then everything the rows name, read while the rows exist.
+      const ticketed = [...tickets.values()];
+      captured.push(...ticketed.map((t) => ({ id: t.assetId, storagePath: t.path })));
+      ledger = {
+        objects: ticketed.map((t) => ({ bucket: t.bucket, path: t.path })),
+        folders: ticketed.map((t) => ({ bucket: t.bucket, path: `${BRAND}/${t.assetId}` })),
+      };
+      try {
+        captured.push(...(await projectAssets(admin, BRAND, projects)));
+        const rows = await ownedStorage(admin, BRAND, captured);
+        ledger.objects.push(...rows.objects);
+        ledger.folders.push(...rows.folders);
+      } catch (error) {
+        check(
+          'owned fixture cleanup',
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
     await (async () => {
       try {
         await removeProjects(admin, BRAND, projects);
@@ -540,19 +667,29 @@ test(BENCH, async () => {
           const quotedProjects = projects.map((id) => `'${z.string().uuid().parse(id)}'`).join(',');
           check(
             'owned projects and revisions removed',
-            localSql(
-              `select (select count(*) from media.editor_projects where id in (${quotedProjects})) + (select count(*) from media.editor_project_revisions where project_id in (${quotedProjects}));`,
-            ) === '0',
+            PROD
+              ? (await rowsLeft('editor_projects', 'id', projects)) +
+                  (await rowsLeft('editor_project_revisions', 'project_id', projects)) ===
+                  0
+              : localSql(
+                  `select (select count(*) from media.editor_projects where id in (${quotedProjects})) + (select count(*) from media.editor_project_revisions where project_id in (${quotedProjects}));`,
+                ) === '0',
           );
         }
         const ids = [...tickets.keys()].map((id) => z.string().uuid().parse(id));
         if (ids.length) {
           const quoted = ids.map((id) => `'${id}'`).join(',');
-          const objects = JSON.parse(
-            localSql(
-              `select coalesce(json_agg(t),'[]') from (select bucket_id,name from storage.objects where name like '${BRAND}/%' and (${ids.map((id) => `name like '%${id}%'`).join(' or ')})) t;`,
-            ),
-          ) as { bucket_id: string; name: string }[];
+          // `ledger` is set exactly in production mode.
+          const objects = ledger
+            ? (await presentObjects(admin, ledger)).map((o) => ({
+                bucket_id: o.bucket,
+                name: o.path,
+              }))
+            : (JSON.parse(
+                localSql(
+                  `select coalesce(json_agg(t),'[]') from (select bucket_id,name from storage.objects where name like '${BRAND}/%' and (${ids.map((id) => `name like '%${id}%'`).join(' or ')})) t;`,
+                ),
+              ) as { bucket_id: string; name: string }[]);
           for (const bucket of new Set(objects.map((object) => object.bucket_id))) {
             const removed = await admin.storage
               .from(bucket)
@@ -565,12 +702,16 @@ test(BENCH, async () => {
           }
           const removed = await media.from('assets').delete().eq('brand_id', BRAND).in('id', ids);
           if (removed.error) throw removed.error;
-          localSql(
-            `delete from library_internal.operation_receipts where brand_id='${BRAND}' and (response->>'assetId' in (${quoted}) or idempotency_key in (${ids.map((id) => `'upload:${id}'`).join(',')})); delete from billing_private.storage_reservations where brand_id='${BRAND}' and id in (${quoted});`,
-          );
-          const left = localSql(
-            `select (select count(*) from media.assets where id in (${quoted})) + (select count(*) from media.asset_versions where asset_id in (${quoted})) + (select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId' in (${quoted})) + (select count(*) from billing_private.storage_reservations where id in (${quoted})) + (select count(*) from storage.objects where name like '${BRAND}/%' and (${ids.map((id) => `name like '%${id}%'`).join(' or ')}));`,
-          );
+          if (!ledger)
+            localSql(
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and (response->>'assetId' in (${quoted}) or idempotency_key in (${ids.map((id) => `'upload:${id}'`).join(',')})); delete from billing_private.storage_reservations where brand_id='${BRAND}' and id in (${quoted});`,
+            );
+          // In production the receipts are swept by asset id inside leftInProduction.
+          const left = ledger
+            ? await leftInProduction(ids, ledger)
+            : localSql(
+                `select (select count(*) from media.assets where id in (${quoted})) + (select count(*) from media.asset_versions where asset_id in (${quoted})) + (select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and response->>'assetId' in (${quoted})) + (select count(*) from billing_private.storage_reservations where id in (${quoted})) + (select count(*) from storage.objects where name like '${BRAND}/%' and (${ids.map((id) => `name like '%${id}%'`).join(' or ')}));`,
+              );
           check(
             'owned captured assets, versions and Storage objects removed',
             left === '0',
@@ -599,18 +740,37 @@ test(BENCH, async () => {
         );
       }
     })();
+    if (ledger)
+      try {
+        const proof = await proveNetZero(admin, BRAND, {
+          id: randomUUID().slice(0, 8),
+          ledger,
+          assets: captured,
+          projects,
+        });
+        for (const step of proof.steps) grade(step);
+        for (const message of proof.notes) note(message);
+      } catch (error) {
+        check(
+          'owned fixture cleanup',
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     fixture.closeAllConnections();
     fixture.close();
     for (const server of servers.reverse()) server.stop();
   }
-  const step =
-    'Physical camera/mic, OS share picker and cancellation, other browsers, long recordings and current production';
+  const step = PROD
+    ? 'Physical camera/mic, OS share picker and cancellation, other browsers and long recordings'
+    : 'Physical camera/mic, OS share picker and cancellation, other browsers, long recordings and current production';
   rec.record(
     step,
     'SKIP',
     'Only native Chromium capture from owned tab and file-backed recorded devices exercised.',
   );
   results.push({ step, grade: 'SKIP' });
+  if (PROD && before) await verifyServingRevisions({ check, note }, PROD, before);
   const summary = {
     bench: BENCH,
     startedAt,
@@ -618,6 +778,7 @@ test(BENCH, async () => {
     results,
     notes: [
       `speed samples: ${JSON.stringify({ record: samples.map((sample) => sample.durationMs) })}`,
+      ...notes,
     ],
     counts: rec.summary(),
     exitCode: rec.summary().fail ? 1 : 0,

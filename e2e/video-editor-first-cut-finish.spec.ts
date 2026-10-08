@@ -24,6 +24,14 @@ import { openCreativeSpendLedger } from '../../Continuum-Backend/scripts/lib/cre
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { ffprobe, type Probe } from './video-editor-journey/frames';
+import {
+  FRONTEND_REVISION_STEP,
+  PRODUCTION_BACKEND,
+  productionOrigin,
+  type Revisions,
+  servingRevisions,
+  verifyServingRevisions,
+} from './video-editor-prod/prodMode';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   type GradedStep,
@@ -32,7 +40,9 @@ import {
   ownedStorage,
   projectAssets,
   proveNetZero,
+  receiptRows,
   removeProjects,
+  type StorageLedger,
   unkeptTranscripts,
 } from './video-editor-workspace/ledger';
 
@@ -63,6 +73,10 @@ import {
 // the Backend keeps per footage version — net zero by owned id with a planted control (a reel's
 // transcript is this run's only when it was not kept before). Job rows and register receipts
 // cannot be removed with the service role: SKIPs that name the ids left to sweep.
+//
+// VIDEO_EDITOR_PROD (e2e/video-editor-prod/prodMode.ts) drives the deployed Frontend against
+// the production Backend and its own Render instead of the local pair; the paid test then
+// requires VIDEO_EDITOR_RENDER_URL to name that Render.
 // ---------------------------------------------------------------------------
 
 test.describe.configure({ timeout: 2_700_000 });
@@ -72,8 +86,11 @@ const BENCH =
     ? 'video-editor:first-cut:finish:e2e:bench'
     : 'videoeditor:first-cut:finish:e2e:bench';
 const EXPORT_ONLY = process.env.VIDEO_EDITOR_FINISH_EXPORT_ONLY === '1';
+const PROD = productionOrigin();
+/** Export-only on the local stack; in production it runs on the hosted stores as the bench user. */
+const LOCAL_EXPORT_ONLY = EXPORT_ONLY && !PROD;
 if (
-  EXPORT_ONLY &&
+  LOCAL_EXPORT_ONLY &&
   !['localhost', '127.0.0.1', '[::1]'].includes(
     new URL(process.env.VIDEO_EDITOR_RENDER_URL ?? 'https://invalid').hostname,
   )
@@ -84,13 +101,13 @@ const BRAND = z
   .uuid()
   .parse(
     process.env.CONTINUUM_TEST_BRAND_ID ??
-      (EXPORT_ONLY
+      (LOCAL_EXPORT_ONLY
         ? '00000000-0000-4000-8000-0000000000b2'
         : 'b411bba9-d09c-4892-9b86-5ff340ce64e5'),
   );
 /** Where the Backend keeps transcripts per version and stores exports (AI_STUDIO_BUCKET). */
 const BRAND_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
-const OWNER_EMAIL = EXPORT_ONLY
+const OWNER_EMAIL = LOCAL_EXPORT_ONLY
   ? 'local@continuum.test'
   : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 const RENDER_URL =
@@ -127,7 +144,7 @@ const LEDGER = resolve(
  */
 const RUN_USD = 0.41;
 
-const { url: supabaseUrl, serviceRoleKey } = EXPORT_ONLY
+const { url: supabaseUrl, serviceRoleKey } = LOCAL_EXPORT_ONLY
   ? loadLocalSupabaseEnv()
   : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
@@ -179,6 +196,16 @@ function printEnvelope(): number {
     }),
   );
   return counts.fail;
+}
+
+/** Both serving revisions before the run; a refused read is graded FAIL before it stops the run. */
+async function readRevisions(origin: string): Promise<Revisions> {
+  try {
+    return await servingRevisions(origin);
+  } catch (error) {
+    check(FRONTEND_REVISION_STEP, false, error instanceof Error ? error.message : String(error));
+    throw error;
+  }
 }
 
 // ── the Backend's doors, as the bench user ────────────────────────────────────────────
@@ -407,6 +434,21 @@ test(BENCH, async ({ browser }) => {
     expect(sinkLibrary, 'run through the package script: the bench writes Library rows').toBe(true);
     return;
   }
+  // Production exports on the production Backend's own Render: the health step must probe that
+  // Render, never the export-long default, so its URL has to be given. Refused before any spend.
+  const renderNamed = Boolean(process.env.VIDEO_EDITOR_RENDER_URL);
+  if (
+    PROD &&
+    !check(
+      "Render answers /health to the Backend's service-account identity",
+      renderNamed,
+      "production mode requires VIDEO_EDITOR_RENDER_URL set to the production Backend's CONTINUUM_RENDER_SERVICE_URL; refused before any spend",
+    )
+  ) {
+    printEnvelope();
+    expect(renderNamed, 'VIDEO_EDITOR_RENDER_URL names the production Render').toBe(true);
+    return;
+  }
   const servers: Server[] = [];
   const createdProjects = new Set<string>();
   const createdAssets: { id: string; storagePath: string }[] = [];
@@ -417,8 +459,10 @@ test(BENCH, async ({ browser }) => {
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
   let reelTranscripts: OwnedObject[] = [];
   const exercised = new Set<string>();
+  let before: Revisions | undefined;
   try {
     await (async () => {
+      if (PROD) before = await readRevisions(PROD);
       // The reels are read-only: a transcript the Brief keeps for one is this run's only when
       // none was kept before it.
       const reelVersions = await versionIdsOf(REEL_IDS);
@@ -478,16 +522,35 @@ test(BENCH, async ({ browser }) => {
       );
 
       // ── servers + identity ──────────────────────────────────────────────────────────
-      const fePort = await freePort();
-      const backend = await bootBackend(`http://localhost:${fePort}`, {
-        CONTINUUM_RENDER_SERVICE_URL: RENDER_URL,
-      });
-      servers.push(backend);
-      const frontend = await bootFrontend(fePort, backend.url, '.next/video-first-cut-finish-e2e');
-      servers.push(frontend);
-      note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
+      let frontendUrl: string;
+      let backendUrl: string;
+      if (PROD && before) {
+        frontendUrl = PROD;
+        backendUrl = PRODUCTION_BACKEND;
+        process.env.PLAYWRIGHT_BASE_URL = PROD;
+        note(
+          `production Frontend ${PROD} (revision ${before.frontend}); Backend ${PRODUCTION_BACKEND} (revision ${before.backend}), exporting on its own Render`,
+        );
+      } else {
+        const fePort = await freePort();
+        const backend = await bootBackend(`http://localhost:${fePort}`, {
+          CONTINUUM_RENDER_SERVICE_URL: RENDER_URL,
+        });
+        servers.push(backend);
+        const frontend = await bootFrontend(
+          fePort,
+          backend.url,
+          '.next/video-first-cut-finish-e2e',
+        );
+        servers.push(frontend);
+        note(
+          `local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`,
+        );
+        frontendUrl = frontend.url;
+        backendUrl = backend.url;
+      }
       session = await mintSessionBundleForEmail(OWNER_EMAIL);
-      const api: Api = { base: backend.url, token: session.accessToken };
+      const api: Api = { base: backendUrl, token: session.accessToken };
       const { data: preference } = await admin
         .schema('brand_profiles')
         .from('user_brand_preferences')
@@ -530,7 +593,7 @@ test(BENCH, async ({ browser }) => {
           })
           .catch(() => undefined);
       });
-      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectA = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
       createdProjects.add(projectA);
@@ -862,6 +925,7 @@ test(BENCH, async ({ browser }) => {
       `NOT EXERCISED${missed.length ? ` (this run stopped early): ${missed.map(([, label]) => label).join(', ')};` : ':'} unticked b-roll (the pool-not-source path; this run leaves it ticked, the default), switching a Finish piece off, fit=contain, the Export dialog's own "All variants" toggle (opened from the variant switcher), the brand-caption look against the brand kit (only presence is asserted), and any Render but ${RENDER_URL}.`,
     );
   }
+  if (PROD && before) await verifyServingRevisions({ check, note }, PROD, before);
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
 });
@@ -885,31 +949,54 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
     updated_at: string;
   } | null = null;
   let changedPreference = false;
-  const inputPath = `${BRAND}/video-variant-bench/${RUN}/recorded.mp4`;
+  let before: Revisions | undefined;
+  const inputFolder = `${BRAND}/video-variant-bench/${RUN}`;
+  const inputPath = `${inputFolder}/recorded.mp4`;
   const recorded = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
-  const skip =
-    'Paid first-cut draft/finishing, generation, agent/MCP, hosted deployment and adoption';
-  rec.record(skip, 'SKIP', 'This scope certifies only f37 on owned loopback fixtures.');
+  const skip = PROD
+    ? 'Paid first-cut draft/finishing, generation, agent/MCP and adoption'
+    : 'Paid first-cut draft/finishing, generation, agent/MCP, hosted deployment and adoption';
+  rec.record(
+    skip,
+    'SKIP',
+    PROD
+      ? 'This scope certifies only f37 on owned fixtures, on the deployed Frontend and Backend.'
+      : 'This scope certifies only f37 on owned loopback fixtures.',
+  );
   results.push({ step: skip, grade: 'SKIP' });
   try {
     if (!recorded) throw new Error('Export-only benchmark requires real recorded footage.');
     const bytes = readFileSync(recorded),
       checksum = createHash('sha256').update(bytes).digest('hex');
     save('recorded-source.json', { checksum, bytes: bytes.length });
-    const port = await freePort();
-    const backend = await bootBackend(`http://localhost:${port}`, {
-      CONTINUUM_RENDER_SERVICE_URL: RENDER_URL,
-    });
-    servers.push(backend);
-    const frontend = await bootFrontend(port, backend.url, '.next/video-first-cut-finish-local');
-    servers.push(frontend);
-    save(
-      'owned-server-logs.json',
-      servers.map((s) => ({ url: s.url, log: s.log })),
-    );
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (PROD) {
+      // The production Backend exports on its own Render; the bench's Render is not used.
+      before = await readRevisions(PROD);
+      frontendUrl = PROD;
+      backendUrl = PRODUCTION_BACKEND;
+      note(
+        `production Frontend ${PROD} (revision ${before.frontend}); Backend ${PRODUCTION_BACKEND} (revision ${before.backend}), exporting on its own Render`,
+      );
+    } else {
+      const port = await freePort();
+      const backend = await bootBackend(`http://localhost:${port}`, {
+        CONTINUUM_RENDER_SERVICE_URL: RENDER_URL,
+      });
+      servers.push(backend);
+      const frontend = await bootFrontend(port, backend.url, '.next/video-first-cut-finish-local');
+      servers.push(frontend);
+      save(
+        'owned-server-logs.json',
+        servers.map((s) => ({ url: s.url, log: s.log })),
+      );
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+    }
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
-    const api: Api = { base: backend.url, token: session.accessToken };
+    const api: Api = { base: backendUrl, token: session.accessToken };
     const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
     const { data: preference, error: prefError } = await prefs
       .select('user_id,active_brand_id,updated_at')
@@ -975,7 +1062,7 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
         }),
       });
       if (!response.ok)
-        throw new Error(`Create ${label}: HTTP${response.status()} ${await response.text()}`);
+        throw new Error(`Create ${label}: HTTP${response.status} ${await response.text()}`);
       const initial = editorProjectResponseSchema.parse(await response.json()).project;
       projectIds.push(initial.projectId);
       const sourceIn = 0.2 + index * 0.4;
@@ -1038,13 +1125,13 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
       storageState: session.state,
       viewport: { width: 1600, height: 1000 },
     });
-    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    await context.grantPermissions(['local-network-access'], { origin: frontendUrl });
     const page = await context.newPage(),
       pageErrors: string[] = [];
     page.on('pageerror', (e) => pageErrors.push(e.message));
     page.setDefaultTimeout(30000);
     const viewed = variants[1]!;
-    await page.goto(`${frontend.url}${videoStudioEditorPath(viewed.id)}`, { timeout: 300_000 });
+    await page.goto(`${frontendUrl}${videoStudioEditorPath(viewed.id)}`, { timeout: 300_000 });
     await page.getByTestId('video-studio-edit').waitFor({ timeout: 180000 });
     const offer = page.locator('[data-testid="brief-dialog"]:visible');
     if (await offer.count()) await page.keyboard.press('Escape');
@@ -1390,6 +1477,9 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
     save('speed-samples.json', { export_all_variants: timings });
     note(`speed samples: ${JSON.stringify({ export_all_variants: timings })}`);
     await context?.close();
+    // Production only: the run's storage, read while its rows exist, for the net-zero proof.
+    const owned: { id: string; storagePath: string }[] = [];
+    let ledger = null as StorageLedger | null;
     try {
       await (async () => {
         const { data: jobs, error: jobsError } = projectIds.length
@@ -1403,10 +1493,18 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
         save('cleanup-jobs.json', jobs);
         if ((jobs ?? []).some((j) => !['completed', 'failed', 'superseded'].includes(j.state)))
           throw new Error('Owned export remains live; exact fixtures retained for recovery.');
-        for (const id of new Set([
+        const ownedIds = new Set([
           ...assetIds,
           ...(jobs ?? []).flatMap((j) => j.result_asset_ids as string[]),
-        ])) {
+        ]);
+        if (PROD) {
+          owned.push(...(await projectAssets(admin, BRAND, projectIds)));
+          for (const id of ownedIds)
+            if (!owned.some((asset) => asset.id === id)) owned.push({ id, storagePath: '' });
+          ledger = await ownedStorage(admin, BRAND, owned);
+          ledger.folders.push({ bucket: 'media-library', path: inputFolder });
+        }
+        for (const id of ownedIds) {
           z.string().uuid().parse(id);
           const { data: versions, error: versionsError } = await media
             .from('asset_versions')
@@ -1422,6 +1520,7 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
           }
           const { error } = await media.from('assets').delete().eq('brand_id', BRAND).eq('id', id);
           if (error) throw error;
+          if (PROD) continue;
           execFileSync('docker', [
             'exec',
             '-i',
@@ -1450,6 +1549,12 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
         const { error: inputError } = await admin.storage.from('media-library').remove([inputPath]);
         if (inputError) throw inputError;
         save('owned-ids.json', { brandId: BRAND, projectIds, assetIds, inputPath, jobs });
+        // Production has no psql: the receipts go through the service-role sweep, by asset id.
+        if (PROD) {
+          const receipts = await receiptRows(admin, BRAND, [...ownedIds]);
+          if (receipts.grade === 'FAIL') throw new Error(receipts.detail);
+          note(`register receipts: ${receipts.grade} ${receipts.detail}`);
+        }
         const { count, error: projectError } = projectIds.length
           ? await media
               .from('editor_projects')
@@ -1463,6 +1568,20 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
       })();
     } catch (e) {
       check('f37 exact owned fixture cleanup', false, e instanceof Error ? e.message : String(e));
+    }
+    if (ledger) {
+      try {
+        const netZero = await proveNetZero(admin, BRAND, {
+          id: RUN,
+          ledger,
+          assets: owned,
+          projects: projectIds,
+        });
+        for (const step of netZero.steps) grade(step);
+        for (const line of netZero.notes) note(line);
+      } catch (e) {
+        check('f37 exact owned fixture cleanup', false, e instanceof Error ? e.message : String(e));
+      }
     }
     try {
       await (async () => {
@@ -1489,6 +1608,7 @@ test(`${BENCH}: recorded variant export`, async ({ browser }) => {
     }
     for (const server of servers.reverse()) server.stop();
   }
+  if (PROD && before) await verifyServingRevisions({ check, note }, PROD, before);
   save('summary.json', { results, notes });
   expect(printEnvelope(), 'graded FAIL steps').toBe(0);
 });

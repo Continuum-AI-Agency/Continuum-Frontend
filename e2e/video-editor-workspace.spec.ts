@@ -19,12 +19,22 @@ import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
 import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import {
+  FRONTEND_REVISION_STEP,
+  PRODUCTION_BACKEND,
+  productionOrigin,
+  type Revisions,
+  servingRevisions,
+  verifyServingRevisions,
+} from './video-editor-prod/prodMode';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   type GradedStep,
   ownedStorage,
   proveNetZero,
+  receiptRows,
   removeProjects,
+  type StorageLedger,
 } from './video-editor-workspace/ledger';
 
 // ---------------------------------------------------------------------------
@@ -53,12 +63,13 @@ const TIMELINE_JOURNEY = process.env.VIDEO_EDITOR_TIMELINE_JOURNEY === '1';
 const INSPECTOR_JOURNEY =
   IMPORT_JOURNEY || TIMELINE_JOURNEY || process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
 const FEATURE = GRAPH_JOURNEY ? 'f02' : IMPORT_JOURNEY ? 'f01' : TIMELINE_JOURNEY ? 'f05' : 'f06';
+/** VIDEO_EDITOR_PROD: the deployed Frontend, the production Backend and hosted Supabase. */
+const PROD = productionOrigin();
+const LOCAL_STORE = INSPECTOR_JOURNEY && !PROD;
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
-  (INSPECTOR_JOURNEY
-    ? '00000000-0000-4000-8000-0000000000b2'
-    : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
-const OWNER_EMAIL = INSPECTOR_JOURNEY
+  (LOCAL_STORE ? '00000000-0000-4000-8000-0000000000b2' : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
+const OWNER_EMAIL = LOCAL_STORE
   ? 'local@continuum.test'
   : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip with its own speech. */
@@ -68,7 +79,7 @@ const LIVE_EDIT_BUDGET_MS = 3_000;
 const RUN = randomUUID().slice(0, 8);
 const DROP_NAME = `bench-video-workspace-${RUN}.mp4`;
 
-const { url: supabaseUrl, serviceRoleKey } = INSPECTOR_JOURNEY
+const { url: supabaseUrl, serviceRoleKey } = LOCAL_STORE
   ? loadLocalSupabaseEnv()
   : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
@@ -91,6 +102,23 @@ function note(message: string): void {
 function grade(step: GradedStep): void {
   rec.record(step.step, step.grade, step.detail);
   results.push(step);
+}
+/**
+ * Production mode: both serving revisions, read before any write or session mint. A refused read
+ * is a FAIL under the Frontend revision step, rethrown so the run's catch and finally still print
+ * the envelope.
+ */
+async function productionRevisions(origin: string): Promise<Revisions> {
+  try {
+    const before = await servingRevisions(origin);
+    note(
+      `deployed Frontend ${origin} at ${before.frontend}; production Backend ${PRODUCTION_BACKEND} at ${before.backend}`,
+    );
+    return before;
+  } catch (error) {
+    check(FRONTEND_REVISION_STEP, false, error instanceof Error ? error.message : String(error));
+    throw error;
+  }
 }
 /** The Recorder envelope, printed last so the factory runner can read the run. */
 function printEnvelope(): number {
@@ -170,17 +198,28 @@ test(BENCH, async ({ browser }) => {
   const createdAssets: { id: string; storagePath: string }[] = [];
   let previousActiveBrand: string | null = null;
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
+  let revisionsBefore: Revisions | undefined;
   try {
     // ── servers + identity ────────────────────────────────────────────────────────────
-    const fePort = await freePort();
-    const backend = await bootBackend(`http://localhost:${fePort}`);
-    servers.push(backend);
-    const frontend = await bootFrontend(fePort, backend.url);
-    servers.push(frontend);
-    note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (PROD) {
+      revisionsBefore = await productionRevisions(PROD);
+      frontendUrl = PROD;
+      backendUrl = PRODUCTION_BACKEND;
+    } else {
+      const fePort = await freePort();
+      const backend = await bootBackend(`http://localhost:${fePort}`);
+      servers.push(backend);
+      const frontend = await bootFrontend(fePort, backend.url);
+      servers.push(frontend);
+      note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+    }
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
-    const api: Api = { base: backend.url, token: session.accessToken };
+    const api: Api = { base: backendUrl, token: session.accessToken };
 
     const { data: preference } = await admin
       .schema('brand_profiles')
@@ -234,7 +273,7 @@ test(BENCH, async ({ browser }) => {
       if (message.type() === 'error' || message.type() === 'warning')
         consoleLines.push(message.text().slice(0, 200));
     });
-    await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+    await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
     await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
     const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
     createdProjects.push(projectId);
@@ -722,6 +761,7 @@ test(BENCH, async ({ browser }) => {
     }
     for (const server of servers.reverse()) server.stop();
   }
+  if (PROD && revisionsBefore) await verifyServingRevisions({ check, note }, PROD, revisionsBefore);
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
 });
@@ -746,6 +786,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | undefined;
   let previousBrand: string | null | undefined,
     brandChanged = false;
+  let revisionsBefore: Revisions | undefined;
   let owned:
     | {
         path: string;
@@ -768,15 +809,15 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
   try {
     note(
       GRAPH_JOURNEY
-        ? 'f02 scope: actual Canvas session/binding, pinned Graph pool after authenticated Edge advances Library head, native hover preview/add, HTTP/store/network/undo/reload. Paid generation, GCS/export and currentproduction unexercised.'
+        ? `f02 scope: actual Canvas session/binding, pinned Graph pool after authenticated Edge advances Library head, native hover preview/add, HTTP/store/network/undo/reload. Paid generation${PROD ? ' and GCS/export' : ', GCS/export and currentproduction'} unexercised.`
         : IMPORT_JOURNEY
-          ? `${FEATURE} scope: native pinned Media panel plus/context imports after the actual Library head advances; real Edge version reads, HTTP/store, network transfers, reload and undo. File-upload/recording Edge and GCS paths, native Export and current production unexercised.`
+          ? `${FEATURE} scope: native pinned Media panel plus/context imports after the actual Library head advances; real Edge version reads, HTTP/store, network transfers, reload and undo. File-upload/recording Edge and GCS paths${PROD ? ' and native Export' : ', native Export and current production'} unexercised.`
           : TIMELINE_JOURNEY
-            ? 'f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through local Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.'
-            : 'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
+            ? `f05 scope: native timeline edits, source intervals, frame grid, tracks/markers/snapping and waveform through ${PROD ? 'production' : 'local'} Library/HTTP/store. Original hosted upload/drop, native Export dialog and hosted Render unexercised.`
+            : `f06 scope: full native transform/crop/gain/constant-speed inspection, real ${PROD ? 'production' : 'loopback'} Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.`,
     );
     if (IMPORT_JOURNEY) {
-      const step = `${FEATURE} file upload/recording, paid generation, GCS, native Export and current production`;
+      const step = `${FEATURE} file upload/recording, paid generation, ${PROD ? 'GCS and native Export' : 'GCS, native Export and current production'}`;
       const detail =
         'Only normal Supabase pinned-media native/store/network imports are exercised.';
       rec.record(step, 'SKIP', detail);
@@ -807,14 +848,24 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       Number(probe.format.duration) >= (TIMELINE_JOURNEY ? 6.2 : 4.2),
       createHash('sha256').update(bytes).digest('hex'),
     );
-    const port = await freePort(),
-      backend = await bootBackend(`http://localhost:${port}`);
-    servers.push(backend);
-    const frontend = await bootFrontend(port, backend.url, '.next/video-workspace-inspector');
-    servers.push(frontend);
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (PROD) {
+      revisionsBefore = await productionRevisions(PROD);
+      frontendUrl = PROD;
+      backendUrl = PRODUCTION_BACKEND;
+    } else {
+      const port = await freePort(),
+        backend = await bootBackend(`http://localhost:${port}`);
+      servers.push(backend);
+      const frontend = await bootFrontend(port, backend.url, '.next/video-workspace-inspector');
+      servers.push(frontend);
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+    }
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
-    const api: Api = { base: backend.url, token: session.accessToken };
+    const api: Api = { base: backendUrl, token: session.accessToken };
     const { data: preference, error: prefError } = await admin
       .schema('brand_profiles')
       .from('user_brand_preferences')
@@ -891,7 +942,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       storageState: session.state,
       viewport: { width: 1600, height: 1000 },
     });
-    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    await context.grantPermissions(['local-network-access'], { origin: frontendUrl });
     const page = await context.newPage(),
       errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -906,7 +957,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         '--outfile',
         bundle,
         '--define',
-        `process.env=${JSON.stringify({ NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: supabaseUrl, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL: backend.url })}`,
+        `process.env=${JSON.stringify({ NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: supabaseUrl, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL: backendUrl })}`,
       ],
       { stdio: 'pipe' },
     );
@@ -916,7 +967,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         body: '<!doctype html><html><body></body></html>',
       }),
     );
-    await compositor.goto(`${frontend.url}/inspector-compositor`);
+    await compositor.goto(`${frontendUrl}/inspector-compositor`);
     await compositor.addScriptTag({ content: readFileSync(bundle, 'utf8'), type: 'module' });
     await compositor.waitForFunction(() => Boolean(window.__editorV2DurableRenderBench));
     const post = async (id: string, op: string, args: Record<string, unknown>) => {
@@ -1129,7 +1180,7 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         crop: [0.15, 0.1, 0.05, 0.15],
       },
     ].entries()) {
-      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const id = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
       if (!id) throw new Error('Missing project');
@@ -2631,6 +2682,16 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         timings.length >= 3 && timings.every((t) => t.durationMs > 0 && t.durationMs <= 200),
       );
     await context?.close();
+    // Production: the run's storage, read from its rows before anything is deleted (late
+    // renditions, probe outputs and kept transcripts included), proven gone after the cleanup.
+    let ledger: StorageLedger | undefined;
+    if (PROD && owned?.assetId)
+      ledger = await ownedStorage(admin, BRAND, [
+        { id: owned.assetId, storagePath: owned.path },
+      ]).catch((error: unknown) => {
+        check('f06 cleanup', false, `storage ledger: ${String(error)}`);
+        return undefined;
+      });
     try {
       await removeProjects(admin, BRAND, ids);
       if (ids.length) {
@@ -2702,63 +2763,93 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
               .eq('brand_id', BRAND)
           : { error: null };
         assert('f06 owned media removed', !storageError && !assetError);
+        // Production has no psql: one service-role sweep by the asset id takes both register
+        // receipts (the generated register's and the import head's).
+        const swept = PROD
+          ? await receiptRows(admin, BRAND, owned.assetId ? [owned.assetId] : [])
+          : undefined;
         if (owned.versionReceiptKey) {
           assert(
             `${FEATURE} version receipt key is safe`,
             /^import-head-[a-f0-9]{8}$/.test(owned.versionReceiptKey),
           );
-          const left = execFileSync(
-            'docker',
-            [
-              'exec',
-              'supabase_db_continuum',
-              'psql',
-              '-U',
-              'postgres',
-              '-d',
-              'postgres',
-              '-v',
-              'ON_ERROR_STOP=1',
-              '-Atc',
-              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.versionReceiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.versionReceiptKey}';`,
-            ],
-            { encoding: 'utf8', stdio: 'pipe' },
-          );
-          assert(
-            `${FEATURE} owned version receipt removed`,
-            left.trim().split('\n').at(-1) === '0',
-          );
+          if (swept)
+            assert(
+              `${FEATURE} owned version receipt removed`,
+              swept.grade === 'PASS',
+              swept.detail,
+            );
+          else {
+            const left = execFileSync(
+              'docker',
+              [
+                'exec',
+                'supabase_db_continuum',
+                'psql',
+                '-U',
+                'postgres',
+                '-d',
+                'postgres',
+                '-v',
+                'ON_ERROR_STOP=1',
+                '-Atc',
+                `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.versionReceiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.versionReceiptKey}';`,
+              ],
+              { encoding: 'utf8', stdio: 'pipe' },
+            );
+            assert(
+              `${FEATURE} owned version receipt removed`,
+              left.trim().split('\n').at(-1) === '0',
+            );
+          }
         }
         if (owned.receiptKey) {
           assert(
             'f06 owned receipt identity is safe',
             /^generated:[a-f0-9]{64}$/.test(owned.receiptKey) && /^[a-f0-9-]{36}$/.test(BRAND),
           );
-          const left = execFileSync(
-            'docker',
-            [
-              'exec',
-              'supabase_db_continuum',
-              'psql',
-              '-U',
-              'postgres',
-              '-d',
-              'postgres',
-              '-v',
-              'ON_ERROR_STOP=1',
-              '-Atc',
-              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.receiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.receiptKey}';`,
-            ],
-            { stdio: 'pipe', encoding: 'utf8' },
-          );
-          assert('f06 owned receipt removed', left.trim().split('\n').at(-1) === '0');
+          if (swept) assert('f06 owned receipt removed', swept.grade === 'PASS', swept.detail);
+          else {
+            const left = execFileSync(
+              'docker',
+              [
+                'exec',
+                'supabase_db_continuum',
+                'psql',
+                '-U',
+                'postgres',
+                '-d',
+                'postgres',
+                '-v',
+                'ON_ERROR_STOP=1',
+                '-Atc',
+                `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.receiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.receiptKey}';`,
+              ],
+              { stdio: 'pipe', encoding: 'utf8' },
+            );
+            assert('f06 owned receipt removed', left.trim().split('\n').at(-1) === '0');
+          }
         }
       }
     } catch (error) {
       check('f06 cleanup', false, error instanceof Error ? error.message : String(error));
     }
+    if (ledger && owned?.assetId)
+      try {
+        const netZero = await proveNetZero(admin, BRAND, {
+          id: RUN,
+          ledger,
+          assets: [{ id: owned.assetId, storagePath: owned.path }],
+          projects: ids,
+        });
+        for (const step of netZero.steps) grade(step);
+        for (const line of netZero.notes) note(line);
+      } catch (error) {
+        check('f06 cleanup', false, error instanceof Error ? error.message : String(error));
+      }
     for (const server of servers.reverse()) server.stop();
   }
+  if (PROD && revisionsBefore) await verifyServingRevisions({ check, note }, PROD, revisionsBefore);
   const failures = printEnvelope();
   writeFileSync(
     join(folder, 'summary.json'),

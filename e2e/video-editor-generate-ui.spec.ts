@@ -14,6 +14,14 @@ import { createClient } from '@supabase/supabase-js';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import {
+  FRONTEND_REVISION_STEP,
+  PRODUCTION_BACKEND,
+  productionOrigin,
+  type Revisions,
+  servingRevisions,
+  verifyServingRevisions,
+} from './video-editor-prod/prodMode';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   type GradedStep,
@@ -23,6 +31,7 @@ import {
   projectAssets,
   proveNetZero,
   removeProjects,
+  type StorageLedger,
   unkeptTranscripts,
 } from './video-editor-workspace/ledger';
 
@@ -49,8 +58,13 @@ import {
 
 test.describe.configure({ timeout: 1_200_000 });
 
+// VIDEO_EDITOR_PROD runs the Library journey on the deployed Frontend and the production Backend,
+// as the bench user on the bench brand in hosted Supabase; nothing is booted locally.
+const PROD = productionOrigin();
 const LIBRARY_JOURNEY = process.env.VIDEO_EDITOR_LIBRARY_JOURNEY === '1';
 const NATIVE_EXPORT_URL = process.env.VIDEO_EDITOR_LIBRARY_EXPORT_URL;
+if (PROD && NATIVE_EXPORT_URL)
+  throw new Error('Native Library export is local-only: unset VIDEO_EDITOR_LIBRARY_EXPORT_URL.');
 if (
   NATIVE_EXPORT_URL &&
   (!LIBRARY_JOURNEY || !['127.0.0.1', 'localhost'].includes(new URL(NATIVE_EXPORT_URL).hostname))
@@ -60,14 +74,16 @@ if (
   );
 }
 const BENCH = 'videoeditor:generate:e2e:bench';
-const BRAND =
-  process.env.CONTINUUM_TEST_BRAND_ID ??
-  (LIBRARY_JOURNEY
-    ? '00000000-0000-4000-8000-0000000000b2'
-    : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
-const OWNER_EMAIL = LIBRARY_JOURNEY
-  ? 'local@continuum.test'
-  : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
+const BRAND = PROD
+  ? 'b411bba9-d09c-4892-9b86-5ff340ce64e5'
+  : (process.env.CONTINUUM_TEST_BRAND_ID ??
+    (LIBRARY_JOURNEY
+      ? '00000000-0000-4000-8000-0000000000b2'
+      : 'b411bba9-d09c-4892-9b86-5ff340ce64e5'));
+const OWNER_EMAIL =
+  LIBRARY_JOURNEY && !PROD
+    ? 'local@continuum.test'
+    : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip on the bench brand, spoken. */
 const SOURCE_ASSET_ID =
   process.env.VIDEO_GENERATE_SOURCE_ASSET ?? 'd0cae5f0-d938-4825-952b-f1d24cef0069';
@@ -77,9 +93,8 @@ const JOB_MS = 360_000;
 const STEP_MS = 20_000;
 const RUN = randomUUID().slice(0, 8);
 
-const { url: supabaseUrl, serviceRoleKey } = LIBRARY_JOURNEY
-  ? loadLocalSupabaseEnv()
-  : loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } =
+  LIBRARY_JOURNEY && !PROD ? loadLocalSupabaseEnv() : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const media = admin.schema('media');
@@ -214,6 +229,10 @@ async function settled(page: Page, jobId: string) {
 
 test(BENCH, async ({ browser }) => {
   test.skip(LIBRARY_JOURNEY, 'Explicit local Library import case does not call paid generators.');
+  test.skip(
+    Boolean(PROD),
+    'Production mode covers the Library journey only (VIDEO_EDITOR_LIBRARY_JOURNEY=1).',
+  );
   const servers: Server[] = [];
   const createdProjects: string[] = [];
   const jobIds: string[] = [];
@@ -597,30 +616,58 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
   let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let previousBrand: string | null | undefined,
     changedBrand = false;
+  let before: Revisions | undefined;
+  let ledger: StorageLedger | undefined;
+  const ledgerAssets: { id: string; storagePath: string }[] = [];
   try {
     if (!/^[a-f0-9-]{36}$/.test(BRAND)) throw new Error('Invalid fixture brand');
     const file = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
     if (!file) throw new Error('Library journey requires actual recorded source.');
     const sourceBytes = readFileSync(file);
     note(`f03 recorded source SHA256: ${createHash('sha256').update(sourceBytes).digest('hex')}`);
-    const skip = `f03 paid generation, STT, upload/recording, GCS, ${NATIVE_EXPORT_URL ? 'full browser-export feature certification' : 'native Export'} and current production`;
-    rec.record(skip, 'SKIP', 'Actual stored Library image/audio picker imports on loopback only.');
+    const skip = PROD
+      ? 'f03 paid generation, STT, upload/recording, GCS and native Export'
+      : `f03 paid generation, STT, upload/recording, GCS, ${NATIVE_EXPORT_URL ? 'full browser-export feature certification' : 'native Export'} and current production`;
+    const scope = `Actual stored Library image/audio picker imports on ${PROD ? 'the deployed app' : 'loopback'} only.`;
+    rec.record(skip, 'SKIP', scope);
     results.push({
       step: skip,
       grade: 'SKIP',
-      detail: 'Actual stored Library image/audio picker imports on loopback only.',
+      detail: scope,
     });
-    const port = await freePort(),
-      backend = await bootBackend(
-        `http://localhost:${port}`,
-        NATIVE_EXPORT_URL ? { CONTINUUM_RENDER_SERVICE_URL: NATIVE_EXPORT_URL } : {},
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (PROD) {
+      try {
+        before = await servingRevisions(PROD);
+      } catch (error) {
+        check(
+          FRONTEND_REVISION_STEP,
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
+      frontendUrl = PROD;
+      backendUrl = PRODUCTION_BACKEND;
+      note(
+        `production: Frontend ${PROD} at ${before.frontend}, Backend ${PRODUCTION_BACKEND} at ${before.backend}`,
       );
-    servers.push(backend);
-    const frontend = await bootFrontend(port, backend.url, '.next/video-generate-e2e');
-    servers.push(frontend);
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    } else {
+      const port = await freePort(),
+        backend = await bootBackend(
+          `http://localhost:${port}`,
+          NATIVE_EXPORT_URL ? { CONTINUUM_RENDER_SERVICE_URL: NATIVE_EXPORT_URL } : {},
+        );
+      servers.push(backend);
+      const frontend = await bootFrontend(port, backend.url, '.next/video-generate-e2e');
+      servers.push(frontend);
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+    }
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
-    const api: Api = { base: backend.url, token: session.accessToken };
+    const api: Api = { base: backendUrl, token: session.accessToken };
     const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
     const { data: pref, error: prefError } = await prefs
       .select('active_brand_id')
@@ -722,7 +769,7 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
       storageState: session.state,
       viewport: { width: 1600, height: 1000 },
     });
-    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    await context.grantPermissions(['local-network-access'], { origin: frontendUrl });
     await context.addInitScript(() => {
       const starts: Array<{ sampleRate: number; offset: number; whenSec: number; pcm: number[] }> =
         [];
@@ -752,7 +799,7 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
     page.setDefaultTimeout(15000);
     page.on('pageerror', (e) => errors.push(e.message));
     for (let i = 0; i < 3; i += 1) {
-      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300000 });
+      await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180000 });
       const id = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
       if (!id) throw new Error('Missing native project');
@@ -1071,6 +1118,25 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
     writeFileSync(join(folder, 'save-timings.json'), JSON.stringify(timings, null, 2));
     note(`speed samples: ${JSON.stringify({ library_import: timings.map((t) => t.durationMs) })}`);
     await context?.close();
+    if (PROD) {
+      // Production has no SQL door to storage.objects: the fixtures' own paths, then everything
+      // the rows name, read while the rows exist.
+      ledgerAssets.push(
+        ...owned.flatMap((x) => (x.assetId ? [{ id: x.assetId, storagePath: x.path }] : [])),
+      );
+      ledger = {
+        objects: owned.map((x) => ({ bucket: 'media-library', path: x.path })),
+        folders: [],
+      };
+      try {
+        ledgerAssets.push(...(await projectAssets(admin, BRAND, projectIds)));
+        const rows = await ownedStorage(admin, BRAND, ledgerAssets);
+        ledger.objects.push(...rows.objects);
+        ledger.folders.push(...rows.folders);
+      } catch (e) {
+        check('f03 owned cleanup completes', false, e instanceof Error ? e.message : String(e));
+      }
+    }
     try {
       await (async () => {
         if (NATIVE_EXPORT_URL && projectIds.length) {
@@ -1143,7 +1209,8 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
           ? await media.from('assets').delete().eq('id', asset.assetId).eq('brand_id', BRAND)
           : { error: null };
         check(`f03 owned ${asset.kind} media removed`, !storageError && !assetError);
-        if (asset.assetId)
+        // In production proveNetZero sweeps these receipts by asset id ('net zero: register receipts').
+        if (asset.assetId && !PROD)
           execFileSync(
             'docker',
             [
@@ -1186,8 +1253,22 @@ test('Library native: recorded images and audio on appropriate tracks', async ({
     } catch (e) {
       check('f03 owned cleanup completes', false, e instanceof Error ? e.message : String(e));
     }
+    if (ledger)
+      try {
+        const proof = await proveNetZero(admin, BRAND, {
+          id: RUN,
+          ledger,
+          assets: ledgerAssets,
+          projects: projectIds,
+        });
+        for (const step of proof.steps) grade(step);
+        for (const message of proof.notes) note(message);
+      } catch (e) {
+        check('f03 owned cleanup completes', false, e instanceof Error ? e.message : String(e));
+      }
     for (const server of servers.reverse()) server.stop();
   }
+  if (PROD && before) await verifyServingRevisions({ check, note }, PROD, before);
   writeFileSync(join(folder, 'summary.json'), JSON.stringify({ results, notes }, null, 2));
   expect(printEnvelope(), 'graded FAIL steps').toBe(0);
 });
