@@ -1,31 +1,65 @@
-// The workspace bench's storage ledger, at $0 with no network. RED: the management-SQL ledger
-// it replaces cannot run without an account-wide token. GREEN: the service-role ledger derives
-// the run's paths from its rows, sees a planted control, and sees zero after cleanup. NEGATIVE:
-// a ledger that lists nothing reports a vacuous zero, and the control check catches it.
+// The video-editor benches' storage ledger, at $0 with no network. RED: the management-SQL ledger
+// it replaces needed an account-wide token, and no video-editor e2e file may reach for one now
+// (owner rule: these benches run on a client holding only the service-role key). GREEN: the service-role ledger derives
+// the run's paths from its rows (the kept Brief transcript included), sees a planted control, and
+// sees zero after cleanup. NEGATIVE: a ledger that lists nothing reports a vacuous zero, and the
+// control check catches it — proveNetZero grades that zero FAIL, never PASS.
 import { describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { controlSeen, ownedStorage, plantControl, presentObjects, removeAssets } from './ledger';
+import {
+  AI_STUDIO_BUCKET,
+  controlSeen,
+  jobRows,
+  keptTranscript,
+  ownedStorage,
+  plantControl,
+  presentObjects,
+  proveNetZero,
+  removeAssets,
+  unkeptTranscripts,
+} from './ledger';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
 const ASSET = '22222222-2222-4222-8222-222222222222';
+const VERSION = '55555555-5555-4555-8555-555555555555';
+const PROJECT = '88888888-8888-4888-8888-888888888888';
+const JOB = `job_${'a'.repeat(32)}`;
+const GONE_JOB = `job_${'b'.repeat(32)}`;
+/** A read-only source version, its transcript kept before the run, and one the run first hears. */
+const KEPT_BEFORE = '66666666-6666-4666-8666-666666666666';
+const HEARD_NOW = '77777777-7777-4777-8777-777777777777';
 /** The last Frontend commit with the management-SQL ledger. */
 const OLD_LEDGER_COMMIT = '25fe816a3d6bfd783ca9d453c2551f79ff71261f';
 
 type Row = Record<string, string | null>;
+
+/** Files that name the management-SQL helper, the token, or the Management API. */
+const tokenReaders = (sources: readonly { path: string; text: string }[]) =>
+  sources
+    .filter(({ text }) =>
+      /managementSql|prodSql|SUPABASE_ACCESS_TOKEN|api\.supabase\.com\/v1\/projects/.test(text),
+    )
+    .map(({ path }) => path);
 const key = (bucket: string, path: string) => `${bucket}\n${path}`;
 
-/** A service-role client over in-memory tables and storage; `blind` lists nothing. */
-function fakeAdmin(tables: Record<string, Row[]>, store: Set<string>, blind = false) {
+/**
+ * A service-role client over in-memory tables and storage; `blind` lists nothing, `stuck` paths
+ * survive a remove, `jobs` are the plugin_mcp.jobs ids get_job finds.
+ */
+function fakeAdmin(
+  tables: Record<string, Row[]>,
+  store: Set<string>,
+  { blind = false, stuck = [] as string[], jobs = [] as string[] } = {},
+) {
   const table = (name: string) => ({
-    select: () => ({
-      in: async (column: string, values: string[]) => ({
-        data: (tables[name] ?? []).filter((row) => values.includes(String(row[column]))),
-        error: null,
-      }),
+    select: (_columns: string, options: { head?: boolean } = {}) => ({
+      in: async (column: string, values: string[]) => {
+        const rows = (tables[name] ?? []).filter((row) => values.includes(String(row[column])));
+        return options.head ? { count: rows.length, error: null } : { data: rows, error: null };
+      },
     }),
     delete: () => {
       const filters: Array<(row: Row) => boolean> = [];
@@ -65,15 +99,26 @@ function fakeAdmin(tables: Record<string, Row[]>, store: Set<string>, blind = fa
       return { error: null };
     },
     remove: async (paths: string[]) => {
-      for (const path of paths) store.delete(key(bucket, path));
+      for (const path of paths) if (!stuck.includes(path)) store.delete(key(bucket, path));
       return { error: null };
     },
   });
+  const rpc = async (name: string, args: { p_job_id: string }) =>
+    name === 'get_job' && jobs.includes(args.p_job_id)
+      ? { data: { job_id: args.p_job_id }, error: null }
+      : { data: null, error: { code: 'P0002', message: 'NOT_FOUND' } };
   return {
-    schema: () => ({ from: table }),
+    schema: () => ({ from: table, rpc }),
     storage: { from: bucketApi },
   } as unknown as SupabaseClient;
 }
+
+/** What is never this run's: another asset on the shared brand, another brand, a kept transcript. */
+const FOREIGN = [
+  key('media-library', `${BRAND}/33333333-3333-4333-8333-333333333333/other.mp4`),
+  key('media-library', `44444444-4444-4444-8444-444444444444/${ASSET}/foreign.mp4`),
+  key(AI_STUDIO_BUCKET, `${BRAND}/video-editor/transcripts/${KEPT_BEFORE}.json`),
+].sort();
 
 function world() {
   const folder = `${BRAND}/${ASSET}`;
@@ -88,8 +133,14 @@ function world() {
       },
     ],
     asset_versions: [
-      { asset_id: ASSET, bucket: 'media-library', storage_path: `${folder}/v2/head.mp4` },
+      {
+        id: VERSION,
+        asset_id: ASSET,
+        bucket: 'media-library',
+        storage_path: `${folder}/v2/head.mp4`,
+      },
     ],
+    editor_projects: [{ id: PROJECT, brand_id: BRAND }],
     asset_renditions: [
       { asset_id: ASSET, bucket: 'media-previews', storage_path: `${folder}/poster.jpg` },
     ],
@@ -99,6 +150,10 @@ function world() {
     key('media-library', `${folder}/thumb.jpg`),
     key('media-library', `${folder}/v2/head.mp4`),
     key('media-previews', `${folder}/poster.jpg`),
+    // The Brief kept the drop's words by version, outside the asset folder.
+    key(AI_STUDIO_BUCKET, `${BRAND}/video-editor/transcripts/${VERSION}.json`),
+    // A read-only source's words, kept before the run: never this run's.
+    key(AI_STUDIO_BUCKET, `${BRAND}/video-editor/transcripts/${KEPT_BEFORE}.json`),
     // Written after the rows were read (a late analysis artefact): found by the folder walk.
     key('media-library', `${folder}/analysis/late.json`),
     // Not this run's: another asset on the shared brand, and another brand.
@@ -109,53 +164,27 @@ function world() {
 }
 
 describe('workspace storage ledger', () => {
-  test('RED: the management-SQL ledger it replaces throws without the account-wide token', () => {
+  test('RED: the management-SQL ledger it replaces needed the account-wide token', () => {
     const old = spawnSync(
       'git',
       ['show', `${OLD_LEDGER_COMMIT}:e2e/video-editor-workspace/ledger.ts`],
-      {
-        cwd: join(import.meta.dir, '../..'),
-        encoding: 'utf8',
-      },
+      { cwd: join(import.meta.dir, '../..'), encoding: 'utf8' },
     );
     if (old.status !== 0) throw new Error(`old ledger not in history: ${old.stderr}`);
-    const dir = mkdtempSync(join(tmpdir(), 'old-ledger-'));
-    try {
-      const managementSql = join(
-        import.meta.dir,
-        '../../../Continuum-Backend/scripts/_bench/managementSql.ts',
+    expect(tokenReaders([{ path: 'old/ledger.ts', text: old.stdout }])).toEqual(['old/ledger.ts']);
+  });
+
+  test('owner rule: no video-editor e2e file reaches for the management token', () => {
+    const e2e = join(import.meta.dir, '..');
+    const sources = readdirSync(e2e, { recursive: true, encoding: 'utf8' })
+      .filter((file) => /^video-editor[^/]*(\/|\.spec\.ts$)/.test(file) && /\.tsx?$/.test(file))
+      .map((file) => ({ path: file, text: readFileSync(join(e2e, file), 'utf8') }))
+      // This file names what it forbids.
+      .filter(
+        (source) => !join(e2e, source.path).endsWith('video-editor-workspace/ledger.test.ts'),
       );
-      writeFileSync(
-        join(dir, 'ledger.ts'),
-        old.stdout
-          .replace(
-            "'../../../Continuum-Backend/scripts/_bench/managementSql'",
-            JSON.stringify(managementSql),
-          )
-          .replace("from 'zod'", `from ${JSON.stringify(require.resolve('zod'))}`),
-      );
-      writeFileSync(
-        join(dir, 'run.ts'),
-        `import { objectsFor } from './ledger.ts';
-try { await objectsFor('${BRAND}', [{ id: '${ASSET}', storagePath: 'x' }]); console.log('no throw'); }
-catch (error) { console.log(error instanceof Error ? error.message : String(error)); }`,
-      );
-      // No token in the environment and no \`security\` binary on PATH: the old lookup finds
-      // nothing, and the real keychain is never read.
-      const run = spawnSync(process.execPath, [join(dir, 'run.ts')], {
-        encoding: 'utf8',
-        env: {
-          NODE_ENV: 'test',
-          PATH: dirname(process.execPath),
-          HOME: dir,
-          SUPABASE_URL: 'https://fakeref.supabase.co',
-        },
-      });
-      expect(run.stdout).toContain('needs the Supabase management token');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-    expect(readFileSync(join(import.meta.dir, 'ledger.ts'), 'utf8')).not.toContain('managementSql');
+    expect(sources.map((source) => source.path)).toContain('video-editor-first-cut.spec.ts');
+    expect(tokenReaders(sources)).toEqual([]);
   });
 
   test('GREEN: owned paths and late folder contents are seen, a planted control too, then zero', async () => {
@@ -172,26 +201,98 @@ catch (error) { console.log(error instanceof Error ? error.message : String(erro
         `media-library/${BRAND}/${ASSET}/thumb.jpg`,
         `media-library/${BRAND}/${ASSET}/v2/head.mp4`,
         `media-previews/${BRAND}/${ASSET}/poster.jpg`,
+        `${AI_STUDIO_BUCKET}/${BRAND}/video-editor/transcripts/${VERSION}.json`,
       ].sort(),
     );
     const control = await plantControl(admin, BRAND, ledger, 'run1');
     expect(await controlSeen(admin, ledger, control)).toBe(true);
     const removed = await removeAssets(admin, BRAND, assets, ledger);
-    expect(removed).toEqual({ objects: 6, rows: 1, receiptsLeftFor: [ASSET] });
+    expect(removed).toEqual({ objects: 7, rows: 1, receiptsLeftFor: [ASSET] });
     expect(await presentObjects(admin, ledger)).toEqual([]);
     expect(await controlSeen(admin, ledger, control)).toBe(false);
     // Nothing that is not this run's was touched.
-    expect([...store].sort()).toEqual(
+    expect([...store].sort()).toEqual(FOREIGN);
+  });
+
+  test('kept Brief transcripts: an owned version is owned; a read-only one only if the run kept it', async () => {
+    const { tables, store, assets } = world();
+    const admin = fakeAdmin(tables, store);
+    // Baseline, before the Brief hears the read-only sources.
+    const unkept = await unkeptTranscripts(admin, BRAND, [KEPT_BEFORE, HEARD_NOW]);
+    expect(unkept).toEqual([keptTranscript(BRAND, HEARD_NOW)]);
+    // The Brief keeps the words of the source it heard for the first time.
+    store.add(key(AI_STUDIO_BUCKET, `${BRAND}/video-editor/transcripts/${HEARD_NOW}.json`));
+    const ledger = await ownedStorage(admin, BRAND, assets);
+    ledger.objects.push(...unkept);
+    const transcripts = (await presentObjects(admin, ledger))
+      .filter((object) => object.path.includes('/transcripts/'))
+      .map((object) => object.path)
+      .sort();
+    expect(transcripts).toEqual(
       [
-        key('media-library', `${BRAND}/33333333-3333-4333-8333-333333333333/other.mp4`),
-        key('media-library', `44444444-4444-4444-8444-444444444444/${ASSET}/foreign.mp4`),
+        `${BRAND}/video-editor/transcripts/${VERSION}.json`,
+        `${BRAND}/video-editor/transcripts/${HEARD_NOW}.json`,
       ].sort(),
     );
+    await removeAssets(admin, BRAND, assets, ledger);
+    expect([...store].sort()).toEqual(FOREIGN);
+  });
+
+  test('proveNetZero GREEN: control seen, zero left by id, receipts an honest SKIP naming the ids', async () => {
+    const { tables, store, assets } = world();
+    const admin = fakeAdmin(tables, store);
+    const ledger = await ownedStorage(admin, BRAND, assets);
+    const { steps, notes } = await proveNetZero(admin, BRAND, {
+      id: 'run1',
+      ledger,
+      assets,
+      projects: [PROJECT],
+      settleMs: 0,
+    });
+    expect(steps.map((step) => step.grade)).toEqual(['PASS', 'PASS', 'PASS', 'SKIP']);
+    expect(steps[2]?.detail).toBe('rows 0 of 1, objects 0, projects 0 of 1');
+    expect(steps[3]?.detail).toBe(
+      `NOT EXERCISED: register receipts (service role cannot read library_internal); left by asset id: ${ASSET}`,
+    );
+    expect(notes.join('\n')).toContain(`by response assetId): ${ASSET}`);
+    expect(tables.assets).toEqual([]);
+    expect(tables.editor_projects).toEqual([]);
+    expect([...store].sort()).toEqual(FOREIGN);
+  });
+
+  test('proveNetZero RED: an owned object that survives cleanup fails net zero, by path', async () => {
+    const { tables, store, assets } = world();
+    const transcript = `${BRAND}/video-editor/transcripts/${VERSION}.json`;
+    const admin = fakeAdmin(tables, store, { stuck: [transcript] });
+    const ledger = await ownedStorage(admin, BRAND, assets);
+    const { steps } = await proveNetZero(admin, BRAND, { id: 'run1', ledger, assets, settleMs: 0 });
+    expect(steps.map((step) => step.grade)).toEqual(['PASS', 'FAIL', 'FAIL', 'SKIP']);
+    expect(steps[1]?.detail).toContain(`${AI_STUDIO_BUCKET}/${transcript}`);
+  });
+
+  test('proveNetZero NEGATIVE: a blind ledger never PASSes its zero', async () => {
+    const { tables, store, assets } = world();
+    const blind = fakeAdmin(tables, store, { blind: true });
+    const ledger = await ownedStorage(blind, BRAND, assets);
+    const { steps } = await proveNetZero(blind, BRAND, { id: 'run1', ledger, assets, settleMs: 0 });
+    expect(steps.map((step) => step.grade)).toEqual(['FAIL', 'FAIL', 'FAIL', 'SKIP']);
+    expect(steps[2]?.detail).toContain('VACUOUS');
+  });
+
+  test('job rows: an honest SKIP naming only the ids get_job still finds', async () => {
+    const admin = fakeAdmin({}, new Set(), { jobs: [JOB] });
+    const step = await jobRows(admin, BRAND, [JOB, GONE_JOB]);
+    expect(step).toEqual({
+      step: 'net zero: job rows',
+      grade: 'SKIP',
+      detail: `NOT EXERCISED: job rows (service role cannot delete plugin_mcp.jobs); left by job id: ${JOB} (1 of 2 this run started)`,
+    });
+    await expect(jobRows(admin, BRAND, ["job_x' or 1=1"])).rejects.toThrow('not a job id');
   });
 
   test('NEGATIVE: a ledger that lists nothing reports a vacuous zero and fails the control', async () => {
     const { tables, store, assets } = world();
-    const blind = fakeAdmin(tables, store, true);
+    const blind = fakeAdmin(tables, store, { blind: true });
     const ledger = await ownedStorage(blind, BRAND, assets);
     expect(await presentObjects(blind, ledger)).toEqual([]);
     const control = await plantControl(blind, BRAND, ledger, 'run1');

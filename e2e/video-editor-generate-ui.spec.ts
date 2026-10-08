@@ -11,12 +11,20 @@ import {
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
-import { objectsFor, removeAssets, removeProjects } from './video-editor-workspace/ledger';
+import {
+  type GradedStep,
+  jobRows,
+  type OwnedObject,
+  ownedStorage,
+  projectAssets,
+  proveNetZero,
+  removeProjects,
+  unkeptTranscripts,
+} from './video-editor-workspace/ledger';
 
 // ---------------------------------------------------------------------------
 // videoeditor:generate:e2e:bench — generating inside the Video Studio, end to end, as the
@@ -32,10 +40,11 @@ import { objectsFor, removeAssets, removeProjects } from './video-editor-workspa
 //   shows "Edit in timeline" and opens a timeline with the image on it.
 //
 // Every step is asserted on the persisted project, read back through the Backend. Paid: one
-// Lyria bed and one TTS line (cents), plus STT of the 6.6 s source. Writes, all deleted at
-// exit and asserted gone by id: the editor projects, the two generated Library assets and
-// their stored audio, the source version's kept transcript (when this run made it), and the
-// generation job rows.
+// Lyria bed and one TTS line (cents), plus STT of the 6.6 s source. Writes, deleted at exit
+// and proven gone by owned id with a planted control: the editor projects, the two generated
+// Library assets and their stored audio, and the source version's kept transcript (when this
+// run made it). The generation job rows and register receipts cannot be removed with the
+// service role: SKIPs that name the ids left to sweep.
 // ---------------------------------------------------------------------------
 
 test.describe.configure({ timeout: 1_200_000 });
@@ -59,8 +68,6 @@ const BRAND =
 const OWNER_EMAIL = LIBRARY_JOURNEY
   ? 'local@continuum.test'
   : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
-/** Where the Backend keeps transcripts per version (its AI_STUDIO_BUCKET default). */
-const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip on the bench brand, spoken. */
 const SOURCE_ASSET_ID =
   process.env.VIDEO_GENERATE_SOURCE_ASSET ?? 'd0cae5f0-d938-4825-952b-f1d24cef0069';
@@ -90,6 +97,10 @@ function check(step: string, ok: boolean, detail?: string): boolean {
 function note(message: string): void {
   rec.note(message);
   notes.push(message);
+}
+function grade(step: GradedStep): void {
+  rec.record(step.step, step.grade, step.detail);
+  results.push(step);
 }
 /** The Recorder envelope, printed last so the factory runner can read the run. */
 function printEnvelope(): number {
@@ -208,8 +219,7 @@ test(BENCH, async ({ browser }) => {
   const jobIds: string[] = [];
   let previousActiveBrand: string | null = null;
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
-  let keptPath: string | null = null;
-  let keptBefore = true;
+  let sourceTranscripts: OwnedObject[] = [];
   try {
     // ── servers + identity ────────────────────────────────────────────────────────────
     const fePort = await freePort();
@@ -229,13 +239,7 @@ test(BENCH, async ({ browser }) => {
       .eq('id', SOURCE_ASSET_ID)
       .maybeSingle();
     const sourceVersion = (sourceRow as { head_version_id?: string } | null)?.head_version_id;
-    if (sourceVersion) {
-      keptPath = `${BRAND}/video-editor/transcripts/${sourceVersion}.json`;
-      const { data } = await admin.storage
-        .from(KEPT_BUCKET)
-        .list(`${BRAND}/video-editor/transcripts`, { search: `${sourceVersion}.json` });
-      keptBefore = (data ?? []).some((object) => object.name === `${sourceVersion}.json`);
-    }
+    if (sourceVersion) sourceTranscripts = await unkeptTranscripts(admin, BRAND, [sourceVersion]);
 
     const { data: preference } = await admin
       .schema('brand_profiles')
@@ -518,18 +522,12 @@ test(BENCH, async ({ browser }) => {
     // ── cleanup + net-zero ────────────────────────────────────────────────────────────
     try {
       // Generated sound is filed under the project that asked for it.
-      const generated: { id: string; storagePath: string }[] = [];
-      for (const projectId of createdProjects) {
-        const { data } = await media
-          .from('assets')
-          .select('id,storage_path')
-          .eq('brand_id', BRAND)
-          .contains('origin_ref', { nodeId: `video-project:${projectId}` });
-        for (const row of (data ?? []) as Array<{ id: string; storage_path: string }>) {
-          generated.push({ id: row.id, storagePath: row.storage_path });
-        }
-      }
+      const generated = await projectAssets(admin, BRAND, createdProjects);
       const ids = generated.map((asset) => asset.id);
+      // The run's storage, read while the rows exist, and the source's transcript when this run
+      // was the first to keep it.
+      const ledger = await ownedStorage(admin, BRAND, generated);
+      ledger.objects.push(...sourceTranscripts);
       if (ids.length > 0) {
         // A probe a deployed worker is mid-way through would write after the delete.
         await until(
@@ -548,54 +546,18 @@ test(BENCH, async ({ browser }) => {
           await media.from(table).delete().in('asset_id', ids);
         }
       }
-      const removedAssets = await removeAssets(admin, BRAND, generated);
-      const removedProjects = await removeProjects(admin, BRAND, createdProjects);
-      if (keptPath && !keptBefore) await admin.storage.from(KEPT_BUCKET).remove([keptPath]);
-      const removedJobs =
-        jobIds.length === 0
-          ? []
-          : await prodSql(
-              `delete from plugin_mcp.jobs where brand_id = '${BRAND}' and job_id in (${jobIds.map((id) => `'${id.replaceAll("'", '')}'`).join(',')}) returning 1`,
-            );
+      const netZero = await proveNetZero(admin, BRAND, {
+        id: RUN,
+        ledger,
+        assets: generated,
+        projects: createdProjects,
+      });
+      for (const step of netZero.steps) grade(step);
+      for (const line of netZero.notes) note(line);
       note(
-        `cleanup: ${removedProjects} project(s), ${removedAssets.rows} generated asset(s), ${removedAssets.objects} object(s), ${removedJobs?.length ?? 0} job row(s)${keptPath && !keptBefore ? ', the kept source transcript' : ''}`,
+        `generated assets ${ids.length}; the source transcript ${sourceTranscripts.length > 0 ? 'was not kept before, so this run owned it' : 'was kept before the run, so it stays'}`,
       );
-
-      const projectIds = createdProjects.length > 0 ? createdProjects : [randomUUID()];
-      const { count: leftProjects } = await media
-        .from('editor_projects')
-        .select('id', { count: 'exact', head: true })
-        .in('id', projectIds);
-      const { count: leftAssets } = await media
-        .from('assets')
-        .select('id', { count: 'exact', head: true })
-        .in('id', ids.length > 0 ? ids : [randomUUID()]);
-      const leftObjects = (await objectsFor(BRAND, generated)).length;
-      let leftKept = 0;
-      if (keptPath && !keptBefore) {
-        const name = keptPath.split('/').pop() ?? '';
-        const { data } = await admin.storage
-          .from(KEPT_BUCKET)
-          .list(`${BRAND}/video-editor/transcripts`, { search: name });
-        leftKept = (data ?? []).filter((object) => object.name === name).length;
-      }
-      const leftJobs =
-        jobIds.length === 0
-          ? 0
-          : ((
-              await prodSql<{ count: number }>(
-                `select count(*)::int as count from plugin_mcp.jobs where job_id in (${jobIds.map((id) => `'${id.replaceAll("'", '')}'`).join(',')})`,
-              )
-            )?.[0]?.count ?? -1);
-      check(
-        'net zero: no project, generated asset, stored audio, kept transcript or job row left from this run',
-        (leftProjects ?? 0) === 0 &&
-          (leftAssets ?? 0) === 0 &&
-          leftObjects === 0 &&
-          leftKept === 0 &&
-          leftJobs === 0,
-        `projects ${leftProjects ?? 0}/${createdProjects.length}, assets ${leftAssets ?? 0}/${ids.length}, objects ${leftObjects}, kept transcript ${leftKept}${keptBefore ? ' (existed before, kept)' : ''}, jobs ${leftJobs}/${jobIds.length}`,
-      );
+      if (session) grade(await jobRows(admin, session.userId, jobIds));
     } catch (error) {
       check('cleanup', false, error instanceof Error ? error.message : String(error));
     }

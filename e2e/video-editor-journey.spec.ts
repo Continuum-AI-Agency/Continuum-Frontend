@@ -13,7 +13,6 @@ import {
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import {
   connectMcp,
   type McpConnection,
@@ -38,7 +37,12 @@ import {
 } from './video-editor-journey/frames';
 import { openRenderProxy, type RenderProxy } from './video-editor-journey/renderProxy';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
-import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
+import {
+  type GradedStep,
+  ownedStorage,
+  projectAssets,
+  proveNetZero,
+} from './video-editor-workspace/ledger';
 
 // ---------------------------------------------------------------------------
 // video-editor:e2e:bench — the Video Studio V1 deploy gate: ONE journey in a real browser,
@@ -60,7 +64,9 @@ import { removeAssets, removeProjects } from './video-editor-workspace/ledger';
 // Source: "The Perfect Everyday Pink Lipstick", a 14 s bench-brand reel — speech with
 // pauses over a continuous music bed — downloaded read-only and dropped as a new file.
 // Writes, only under BENCH_SINK=library: one editor project, the Library asset the drop
-// registers and the two exports — all deleted at exit, net zero asserted by id and name.
+// registers (and the transcript the agent turn keeps for it) and the two exports — deleted at
+// exit, net zero proven by owned id with a planted control; register receipts are a SKIP that
+// names the asset ids left to sweep.
 // ---------------------------------------------------------------------------
 
 test.describe.configure({ timeout: 2_700_000 });
@@ -103,6 +109,10 @@ function check(step: string, ok: boolean, detail?: string): boolean {
 function note(message: string): void {
   rec.note(message);
   notes.push(message);
+}
+function grade(step: GradedStep): void {
+  rec.record(step.step, step.grade, step.detail);
+  results.push(step);
 }
 /** The Recorder envelope, printed last so the factory runner can read the run. */
 function printEnvelope(): number {
@@ -217,23 +227,6 @@ async function dropFile(page: Page, target: Locator, bytes: Buffer, name: string
   await target.dispatchEvent('drop', { dataTransfer: transfer });
 }
 
-// ── net zero, by id and name ──────────────────────────────────────────────────────────
-
-async function brandAssetIds(): Promise<Set<string>> {
-  const rows = await prodSql<{ id: string }>(
-    `select id::text as id from media.assets where brand_id = '${BRAND}'`,
-  );
-  if (rows === null) throw new Error('net zero needs the Supabase management token');
-  return new Set(rows.map((row) => row.id));
-}
-async function brandObjectNames(): Promise<Set<string>> {
-  const rows = await prodSql<{ name: string }>(
-    `select bucket_id || '/' || name as name from storage.objects where name like '${BRAND}/%'`,
-  );
-  if (rows === null) throw new Error('net zero needs the Supabase management token');
-  return new Set(rows.map((row) => row.name));
-}
-
 async function awaitExport(api: Api, projectId: string, jobId: string) {
   const deadline = Date.now() + EXPORT_BUDGET_MS;
   let status = await runOp(api, projectId, 'export_status', { jobId });
@@ -266,16 +259,8 @@ test(BENCH, async ({ browser }) => {
   let mcp: McpConnection | null = null;
   let previousActiveBrand: string | null = null;
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
-  let assetsBefore = new Set<string>();
-  let objectsBefore = new Set<string>();
   const exercised = new Set<string>();
   try {
-    assetsBefore = await brandAssetIds();
-    objectsBefore = await brandObjectNames();
-    note(
-      `net zero baseline: ${assetsBefore.size} media.assets rows, ${objectsBefore.size} objects under ${BRAND}/`,
-    );
-
     // ── Render revision, servers, identity ────────────────────────────────────────────
     proxy = await openRenderProxy(RENDER_URL);
     const health = await fetch(`${proxy.url}/health`).then(
@@ -744,109 +729,33 @@ test(BENCH, async ({ browser }) => {
         if (!createdAssets.some((asset) => asset.id === row.id))
           createdAssets.push({ id: row.id, storagePath: row.storage_path });
       }
-      for (const projectId of createdProjects) {
-        const { data: jobs } = await media
-          .from('client_render_jobs')
-          .select('result_asset_ids')
-          .eq('source_id', projectId);
-        for (const job of (jobs ?? []) as Array<{ result_asset_ids: string[] | null }>) {
-          for (const id of job.result_asset_ids ?? []) {
-            if (createdAssets.some((asset) => asset.id === id)) continue;
-            const { data: row } = await media
-              .from('assets')
-              .select('id, storage_path')
-              .eq('id', id)
-              .maybeSingle();
-            if (row) createdAssets.push({ id: row.id, storagePath: row.storage_path });
-          }
-        }
+      // Each export names its project.
+      for (const asset of await projectAssets(admin, BRAND, createdProjects))
+        if (!createdAssets.some((owned) => owned.id === asset.id)) createdAssets.push(asset);
+      for (const projectId of createdProjects)
         await media.from('client_render_jobs').delete().eq('source_id', projectId);
-      }
-      const removedProjects = await removeProjects(admin, BRAND, createdProjects);
-      const removed = await removeAssets(admin, BRAND, createdAssets);
-      note(
-        `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects} storage object(s)`,
-      );
-      // Late writes (a poster, an export prefix) are caught by name against the baseline.
-      await sleep(5_000);
-      const strays = [...(await brandObjectNames())].filter((name) => !objectsBefore.has(name));
-      const mine = strays.filter(
-        (name) =>
-          createdProjects.some((id) => name.includes(id)) ||
-          createdAssets.some((asset) => name.includes(asset.id)),
-      );
-      for (const bucket of new Set(mine.map((name) => name.split('/')[0] ?? ''))) {
-        await admin.storage
-          .from(bucket)
-          .remove(
-            mine
-              .filter((name) => name.startsWith(`${bucket}/`))
-              .map((name) => name.slice(bucket.length + 1)),
-          );
-      }
-      // The bench brand is shared: another session's bench can register assets while this
-      // one runs. Every new row and object is attributed — to this run (must be none), to
-      // another writer's new asset (named below), or to nobody (fails).
-      const addedIds = [...(await brandAssetIds())].filter((id) => !assetsBefore.has(id));
-      const addedRows =
-        addedIds.length === 0
-          ? []
-          : ((await prodSql<{
-              id: string;
-              file_name: string | null;
-              source: string | null;
-              origin: string;
-            }>(
-              `select id::text as id, file_name, source::text as source, coalesce(origin_ref::text, '') as origin from media.assets where id in (${addedIds.map((id) => `'${id}'`).join(',')})`,
-            )) ?? []);
-      const ours = (text: string) =>
-        text.includes(DROP_NAME) ||
-        createdProjects.some((id) => text.includes(id)) ||
-        createdAssets.some((asset) => text.includes(asset.id));
-      const ourRows = addedRows.filter((row) => ours(`${row.id} ${row.file_name} ${row.origin}`));
-      const foreignRows = addedRows.filter((row) => !ourRows.includes(row));
-      const addedObjects = [...(await brandObjectNames())].filter(
-        (name) => !objectsBefore.has(name),
-      );
-      const ourObjects = addedObjects.filter(ours);
-      const foreignObjects = addedObjects.filter(
-        (name) => !ours(name) && foreignRows.some((row) => name.includes(row.id)),
-      );
-      const unknownObjects = addedObjects.filter(
-        (name) => !ourObjects.includes(name) && !foreignObjects.includes(name),
-      );
-      if (foreignRows.length > 0)
-        note(
-          `another writer on the bench brand during this run (not this bench's): ${foreignRows
-            .map(
-              (row) =>
-                `${row.id} ${row.source}/${(/"kind": ?"([^"]+)"/.exec(row.origin) ?? [])[1] ?? 'unknown'} "${row.file_name}"`,
-            )
-            .join('; ')} with ${foreignObjects.length} object(s)`,
-        );
-      check(
-        'net zero: no media.assets row from this run is left on the brand',
-        ourRows.length === 0,
-        `${assetsBefore.size} before · ${addedIds.length} added during the run, ${ourRows.length} traceable to this run [${ourRows.map((row) => row.id).join(', ')}] · this run made and removed ${createdAssets.length}`,
-      );
-      check(
-        "net zero: no storage object from this run under the brand's prefix, and none unaccounted for",
-        ourObjects.length === 0 && unknownObjects.length === 0,
-        ourObjects.length + unknownObjects.length > 0
-          ? `left: ${[...ourObjects, ...unknownObjects].slice(0, 6).join(', ')}`
-          : `${objectsBefore.size} before · ${addedObjects.length} added, all under another writer's new asset${mine.length ? ` · ${mine.length} late object(s) of this run swept` : ''}`,
-      );
-      const { count: leftProjects } = await media
-        .from('editor_projects')
+      // The run's storage, read while its rows exist: the drop (and the transcript the agent
+      // turn keeps for its version), both exports, and each project's export folder.
+      const ledger = await ownedStorage(admin, BRAND, createdAssets);
+      const netZero = await proveNetZero(admin, BRAND, {
+        id: RUN,
+        ledger,
+        assets: createdAssets,
+        projects: createdProjects,
+      });
+      for (const step of netZero.steps) grade(step);
+      for (const line of netZero.notes) note(line);
+      const { count: leftRenderJobs } = await media
+        .from('client_render_jobs')
         .select('id', { count: 'exact', head: true })
         .in(
-          'id',
+          'source_id',
           createdProjects.length > 0 ? createdProjects : ['00000000-0000-0000-0000-000000000000'],
         );
       check(
-        'net zero: no editor project left',
-        (leftProjects ?? 0) === 0,
-        `projects ${createdProjects.join(', ') || 'none'}`,
+        'net zero: no render job left from this run',
+        (leftRenderJobs ?? 0) === 0,
+        `render jobs ${leftRenderJobs ?? 0} over ${createdProjects.length} project(s)`,
       );
     } catch (error) {
       check('cleanup', false, error instanceof Error ? error.message : String(error));
