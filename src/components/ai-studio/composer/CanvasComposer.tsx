@@ -182,6 +182,7 @@ export function CanvasComposer({
       onStop={cancel}
       mentionProvider={mentionProvider}
       mentionSource="canvas"
+      slashSkills={brandProfileId ? brandSkills : undefined}
       attachments={composerAttachments}
       inlinePastedText
       attachmentOnlyPrompt="Use the attached media as a visual reference."
@@ -224,7 +225,7 @@ export function CanvasComposer({
       placeholder={
         selectedNodeIds.length > 0
           ? `Change the ${selectedNodeIds.length} selected node${selectedNodeIds.length > 1 ? 's' : ''}…`
-          : 'Describe a workflow; type @ for skills, Elements or Library media'
+          : 'Describe a workflow; @ for skills, Elements or Library media, / for shortcuts'
       }
       actions={
         <>

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { brandMdTokensSchema, type DesignSection } from '@continuum/contracts';
+import { brandMdTokensSchema, type DesignSection, type Skill } from '@continuum/contracts';
 
 let brandTokens: ReturnType<typeof brandMdTokensSchema.parse> | null = null;
+let brandSkills: Skill[] = [];
 
 // The menu reads the BRAND's system, its book, its direction and its skills. Only the
 // first two shape what this file asserts; the rest are stubbed so the sections render.
@@ -28,8 +29,27 @@ mock.module('@/lib/brands/useBrandDirectionPieces.client', () => ({
   useBrandDirectionPieces: () => ({ pieces: [] }),
 }));
 mock.module('@/lib/organic/skills', () => ({
-  useBrandSkills: () => ({ all: [], isLoading: false }),
+  useBrandSkills: () => ({ all: brandSkills, isLoading: false }),
 }));
+
+const skillRow = (id: string, overrides: Partial<Skill> = {}): Skill => ({
+  id,
+  brandId: 'brand-1',
+  isTemplate: false,
+  name: `Skill ${id}`,
+  slug: id,
+  description: null,
+  kind: 'creative_direction',
+  surface: 'visual',
+  directives: 'Do the thing.',
+  tags: [],
+  status: 'active',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  ...overrides,
+});
+const shortcutRow = (id: string): Skill =>
+  skillRow(id, { isTemplate: true, brandId: null, tags: ['shortcut', 'shortcut:light'] });
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
@@ -130,6 +150,7 @@ describe('GroundingMenuSections — structure', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /Brand book/ }));
     expect(screen.getByText('Signal red (primary) #d7263d')).toBeDefined();
     expect(screen.getByLabelText('Brand colors: #d7263d')).toBeDefined();
   });
@@ -290,7 +311,7 @@ describe('GroundingChip — hover menu wiring', () => {
         />,
       );
 
-      // The chip's own label also reads "Style", so the sections are the open signal.
+      // The menu's sections are the open signal.
       fireEvent.click(screen.getByRole('button'));
       await waitFor(() => expect(screen.getByText('Brand book')).toBeDefined());
       expect(screen.getByText('Creative skills')).toBeDefined();
@@ -307,6 +328,114 @@ describe('GroundingChip — hover menu wiring', () => {
       expect(screen.queryByRole('button')).toBeNull();
       expect(screen.queryByText('Brand book')).toBeNull();
       expect(screen.queryByText('Creative skills')).toBeNull();
+    },
+    RENDER_TIMEOUT_MS,
+  );
+});
+
+function renderInspector(props: Partial<React.ComponentProps<typeof GroundingPopover>> = {}) {
+  return render(
+    <GroundingPopover
+      brandId="brand-1"
+      skillIds={[]}
+      brandBookPieces={undefined}
+      onToggleSkill={() => {}}
+      onTogglePiece={() => {}}
+      onToggleDesignSection={() => {}}
+      {...props}
+    />,
+  );
+}
+
+describe('GroundingPopover — inspector sections', () => {
+  afterEach(() => {
+    brandSkills = [];
+    cleanup();
+  });
+
+  it('starts collapsed, with a one-line summary on every header', () => {
+    renderInspector({ skillIds: ['a', 'b'] });
+
+    expect(screen.getByRole('button', { name: /Brand book/ }).textContent).toContain(
+      'Light · colors, type, logo',
+    );
+    expect(screen.getByRole('button', { name: /Design system/ }).textContent).toContain('all on');
+    expect(screen.getByRole('button', { name: /Skills/ }).textContent).toContain('2 on');
+    // Collapsed: no row of any section is in the document yet.
+    expect(screen.queryByText('Enforce brand book')).toBeNull();
+    expect(screen.queryByText('Palette')).toBeNull();
+  });
+
+  it('says Full and Off plainly', () => {
+    renderInspector({ brandBookPieces: ['full'] });
+    expect(screen.getByRole('button', { name: /Brand book/ }).textContent).toContain('Full');
+    cleanup();
+    renderInspector({ brandBookPieces: [] });
+    expect(screen.getByRole('button', { name: /Brand book/ }).textContent).toContain('Off');
+  });
+
+  it('expands a section on click', () => {
+    renderInspector();
+    fireEvent.click(screen.getByRole('button', { name: /Design system/ }));
+    expect(screen.getByText('Palette')).toBeDefined();
+  });
+
+  it('keeps shortcut skills out of the list and points at the slash menu instead', () => {
+    brandSkills = [skillRow('bold-light'), shortcutRow('goldenhour'), shortcutRow('noir')];
+    renderInspector();
+    fireEvent.click(screen.getByRole('button', { name: /Skills/ }));
+
+    expect(screen.getByText('Skill bold-light')).toBeDefined();
+    expect(screen.queryByText('Skill goldenhour')).toBeNull();
+    expect(screen.getByText('Type / in the prompt for 2 style shortcuts')).toBeDefined();
+  });
+
+  it('still lists a shortcut that is switched on, so it can be switched off', () => {
+    brandSkills = [shortcutRow('goldenhour')];
+    renderInspector({ skillIds: ['goldenhour'] });
+    fireEvent.click(screen.getByRole('button', { name: /Skills/ }));
+
+    expect(screen.getByText(/Skill goldenhour/)).toBeDefined();
+  });
+
+  it('caps the skill list at eight rows behind a search box and "Show all"', () => {
+    brandSkills = Array.from({ length: 11 }, (_, index) => skillRow(`s${index}`));
+    renderInspector();
+    fireEvent.click(screen.getByRole('button', { name: /Skills/ }));
+
+    expect(screen.getAllByText(/^Skill s\d+$/)).toHaveLength(8);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all (11)' }));
+    expect(screen.getAllByText(/^Skill s\d+$/)).toHaveLength(11);
+  });
+
+  it('filters the skill list from the search box', () => {
+    brandSkills = Array.from({ length: 11 }, (_, index) => skillRow(`s${index}`));
+    renderInspector();
+    fireEvent.click(screen.getByRole('button', { name: /Skills/ }));
+
+    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 's10' } });
+    expect(screen.getAllByText(/^Skill s\d+$/).map((node) => node.textContent)).toEqual([
+      'Skill s10',
+    ]);
+  });
+});
+
+describe('GroundingMenuSections — shortcuts', () => {
+  afterEach(() => {
+    brandSkills = [];
+    cleanup();
+  });
+
+  it(
+    'leaves shortcut skills out of the chip submenu too',
+    async () => {
+      brandSkills = [skillRow('bold-light'), shortcutRow('goldenhour')];
+      renderSections();
+
+      await openSection('Creative skills');
+      expect(rowFor('Skill bold-light')).toBeDefined();
+      expect(rowFor('Skill goldenhour')).toBeUndefined();
+      expect(screen.getByText('Type / in the prompt for 1 style shortcuts')).toBeDefined();
     },
     RENDER_TIMEOUT_MS,
   );
@@ -347,19 +476,13 @@ describe('grounding chip + menu styling', () => {
     expect(surface).not.toContain('var(--available-height)');
   });
 
-  // The other half of #281. `position: sticky` resolves against the nearest block
-  // ancestor, so a <section> per group made each header stick only for as long as its own
-  // group — at full scroll the first group's header was measured 1445px above the pane
-  // while the last group's held at 0. One flat column is one containing block for every
-  // header, so each holds the top of the scrollport until the next covers it.
-  it('lays the flat surface out as one column, with no per-group wrapper', () => {
+  // The owner's "bounded, not crazy long" ask: the inspector body is collapsed sections,
+  // not one long column of every row the brand has.
+  it('lays the inspector surface out as accordion sections', () => {
     const surface = codeOf('GroundingPopover.tsx');
-    const flat = surface.slice(surface.indexOf('export function GroundingPopover'));
-    expect(flat).not.toContain('<section>');
-    // The column carries no `gap`: the spacing rides on the sticky headers' own margin,
-    // which a `gap` would double and a flattened column would apply between every row.
-    expect(flat).toContain('<div className="flex flex-col">');
-    expect(surface).toContain('sticky top-0 z-10 mb-1 mt-3 flex min-h-6');
+    const panel = surface.slice(surface.indexOf('export function GroundingPopover'));
+    expect(panel).toContain('<Accordion type="multiple"');
+    expect(panel).not.toContain('defaultValue');
   });
 
   // The frame, not the caller, bounds the panel and owns the pane — docs/styleguide.md §4.

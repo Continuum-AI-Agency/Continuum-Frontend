@@ -2704,6 +2704,24 @@ describe('executeWorkflow — omniGen payload', () => {
     expect(payload.brandBookPieces).toEqual(['tone']);
   });
 
+  // Unset used to travel as `undefined`, which the Backend reads as the FULL book while
+  // the node's chip said Light — the one generator whose payload disagreed with its chip.
+  it('resolves an untouched node to the light canvas book, like every other generator', async () => {
+    const payload = await runOmni(
+      [
+        {
+          id: 'omni',
+          position: { x: 0, y: 0 },
+          type: 'omniGen',
+          data: { model: 'gemini-omni-flash', prompt: 'a marble on a track' },
+        } as unknown as StudioNode,
+      ],
+      [],
+    );
+
+    expect(payload.brandBookPieces).toEqual(['colors', 'typography', 'logo']);
+  });
+
   it('defaults the resolution rather than letting the Backend pick silently', async () => {
     const payload = await runOmni(
       [

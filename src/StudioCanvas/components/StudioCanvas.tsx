@@ -54,7 +54,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { LibraryContextSync } from '../library/LibraryContextSync';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
-import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
+import { FULL_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { buildReferenceNodes, type ReferenceMediaItem } from '../utils/buildReferenceNodes';
 import { computeReadyNodeIds, computeStyledEdges } from '../utils/edgeStyling';
 import { executeWorkflow } from '../utils/executeWorkflow';
@@ -296,7 +296,7 @@ function Flow({
       return;
     }
     targets.forEach((node) => {
-      updateNodeData(node.id, { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES });
+      updateNodeData(node.id, { brandBookPieces: FULL_BRAND_BOOK_PIECES });
     });
     triggerSave();
     show({

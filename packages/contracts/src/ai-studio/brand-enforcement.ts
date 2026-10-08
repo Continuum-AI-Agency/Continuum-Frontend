@@ -35,6 +35,20 @@ export type BrandBookPieceKind = z.infer<typeof brandBookPieceKindSchema>;
  */
 export const DEFAULT_BRAND_BOOK_PIECES: readonly BrandBookPieceKind[] = ['full'];
 
+/**
+ * What a canvas node a PERSON built enforces when nobody touched its brand control:
+ * the visual identity (palette, type, logo) without the full book's voice, narrative
+ * and operational rules. Owner call 10-07 — agents (the composer, Organic headless)
+ * still default to the whole book; a hand-built node opts into it with the control
+ * or by typing `/brand`. The Backend default above stays `full` for callers that omit
+ * the field, so an omitting surface can never go brand-blind.
+ */
+export const CANVAS_DEFAULT_BRAND_BOOK_PIECES: readonly BrandBookPieceKind[] = [
+  'colors',
+  'typography',
+  'logo',
+];
+
 // Attached to a canvas node / a generation request. A non-empty `pieces` array
 // means the node is brand-enforced.
 export const brandEnforcementSchema = z.object({
