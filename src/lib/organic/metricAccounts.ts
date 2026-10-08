@@ -22,6 +22,7 @@ type MetricIntegrationSummary = {
   tiktok: IntegrationSummaryPlatform;
   youtube: IntegrationSummaryPlatform;
   linkedin?: IntegrationSummaryPlatform;
+  x?: IntegrationSummaryPlatform;
 };
 
 type OrganicMetricAccountsByPlatform = {
@@ -30,6 +31,7 @@ type OrganicMetricAccountsByPlatform = {
   tiktok: OrganicMetricAccountOption[];
   youtube: OrganicMetricAccountOption[];
   linkedin: OrganicMetricAccountOption[];
+  x: OrganicMetricAccountOption[];
 };
 
 function dedupeByIntegrationAccountId(
@@ -111,6 +113,9 @@ export function deriveMetricAccountsByPlatform(params: {
   const summaryLinkedIn = params.integrationSummary
     ? fromIntegrationSummary(params.integrationSummary.linkedin, 'LinkedIn organization')
     : [];
+  const summaryX = params.integrationSummary
+    ? fromIntegrationSummary(params.integrationSummary.x, 'X account')
+    : [];
 
   return {
     instagram:
@@ -131,5 +136,6 @@ export function deriveMetricAccountsByPlatform(params: {
     // is sourced from the integration summary only.
     youtube: summaryYouTube,
     linkedin: summaryLinkedIn,
+    x: summaryX,
   };
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import type { OrganicMetricPlatform } from '@continuum/contracts';
+
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -8,7 +10,7 @@ import {
   selectAccountPostDetails,
   usePostAnalyticsStore,
 } from '@/lib/organic/post-analytics-store';
-import type { OrganicPlatform, OrganicPost } from '@/lib/schemas/organicMetrics';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 
 const POST_INSIGHT_METRIC_KEYS = [
   'reach',
@@ -35,7 +37,7 @@ export function isAllZeroPost(post: OrganicPost): boolean {
 
 type UseOrganicPostDetailParams = {
   brandId: string;
-  platform: Extract<OrganicPlatform, 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'>;
+  platform: OrganicMetricPlatform;
   integrationAccountId: string | null;
 };
 

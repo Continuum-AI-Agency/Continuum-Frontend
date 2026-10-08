@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { OrganicMetricPlatform } from '@continuum/contracts';
 import type { OrganicAnalyticsRequest } from '@/lib/api/organicAnalytics.client';
 import type { OrganicMetricsResponse } from '@/lib/schemas/organicMetrics';
 import {
@@ -10,7 +11,7 @@ import {
 } from './brandOrganicSnapshot';
 
 function fakeResponse(
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin',
+  platform: OrganicMetricPlatform,
   accountId: string,
   metrics: Record<string, number>,
 ): OrganicMetricsResponse {
@@ -37,8 +38,9 @@ describe('flattenAccountsByPlatform', () => {
       tiktok: [{ integrationAccountId: 'tt1', name: 'TT' }],
       youtube: [],
       linkedin: [{ integrationAccountId: 'li1', name: 'LI' }],
+      x: [{ integrationAccountId: 'x1', name: 'X' }],
     });
-    expect(flat.map((a) => a.platform)).toEqual(['instagram', 'tiktok', 'linkedin']);
+    expect(flat.map((a) => a.platform)).toEqual(['instagram', 'tiktok', 'linkedin', 'x']);
   });
 });
 

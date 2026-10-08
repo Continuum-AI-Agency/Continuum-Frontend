@@ -1,3 +1,4 @@
+import type { OrganicMetricPlatform } from '@continuum/contracts';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { ProductGate } from '@/components/billing/ProductGate';
@@ -341,7 +342,7 @@ async function OrganicContent({
       tiktok: onboarding.connections.tiktok,
     },
   });
-  const initialMetricsPlatform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin' =
+  const initialMetricsPlatform: OrganicMetricPlatform =
     metricAccountsByPlatform.instagram.length > 0
       ? 'instagram'
       : metricAccountsByPlatform.tiktok.length > 0
@@ -350,7 +351,9 @@ async function OrganicContent({
           ? 'youtube'
           : metricAccountsByPlatform.linkedin.length > 0
             ? 'linkedin'
-            : 'facebook';
+            : metricAccountsByPlatform.x.length > 0
+              ? 'x'
+              : 'facebook';
 
   return (
     <>

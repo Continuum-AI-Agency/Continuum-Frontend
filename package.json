@@ -64,6 +64,7 @@
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
     "paid:parity:e2e:bench": "playwright test --config playwright.paid-parity.config.ts --workers=1",
     "integrations:google-assets-render:e2e:bench": "bun run src/lib/integrations/google-assets-render.bench.ts",
+    "organic:x:metrics:e2e:bench": "playwright test --config playwright.organic-x-metrics.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
     "trends:render:e2e:bench": "bun run src/lib/brand-insights/trends-render.bench.ts",

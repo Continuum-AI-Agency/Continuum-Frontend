@@ -1,5 +1,7 @@
 'use client';
 
+import type { OrganicMetricPlatform } from '@continuum/contracts';
+
 import { useSearchParams } from 'next/navigation';
 import React, { startTransition } from 'react';
 import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerationJobsRealtime';
@@ -23,7 +25,7 @@ const ViewTransition =
 type MetricsPrefetchParams = {
   brandId: string;
   integrationAccountId: string;
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  platform: OrganicMetricPlatform;
 };
 
 type Props = {

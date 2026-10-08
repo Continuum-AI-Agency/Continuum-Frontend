@@ -1,17 +1,16 @@
 'use client';
 
-import type { IntegrationErrorCode } from '@continuum/contracts';
+import type { IntegrationErrorCode, OrganicMetricPlatform } from '@continuum/contracts';
 import {
   type OrganicAnalyticsScope,
   type OrganicDateRangePreset,
-  type OrganicPlatform,
   organicMetricsResponseSchema,
 } from '@/lib/schemas/organicMetrics';
 
 export type OrganicAnalyticsRequest = {
   brandId: string;
   integrationAccountId: string;
-  platform: Extract<OrganicPlatform, 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'>;
+  platform: OrganicMetricPlatform;
   range: {
     preset: OrganicDateRangePreset;
     custom?: { from: string; to: string };

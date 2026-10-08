@@ -1,6 +1,10 @@
 'use client';
 
-import type { OrganicAwarenessReportPayload, OrganicBestTimes } from '@continuum/contracts';
+import type {
+  OrganicAwarenessReportPayload,
+  OrganicBestTimes,
+  OrganicMetricPlatform,
+} from '@continuum/contracts';
 import * as React from 'react';
 import type {
   OrganicComputedInsight,
@@ -11,7 +15,7 @@ import type { OrganicDateRangePreset } from '@/lib/schemas/organicMetrics';
 type UseOrganicInsightsParams = {
   brandId: string;
   integrationAccountId: string | null;
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+  platform: OrganicMetricPlatform;
   rangePreset: OrganicDateRangePreset;
   enabled?: boolean;
 };

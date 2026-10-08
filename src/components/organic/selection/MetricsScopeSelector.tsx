@@ -4,7 +4,7 @@
 // single: Overview / Post performance — one merged account combobox (pick platform+account together).
 // multi: Compare — one multi-select combobox (checkbox rows grouped by platform, color-coded).
 
-import type { OrganicMetricPlatform } from '@continuum/contracts';
+import { type OrganicMetricPlatform, organicMetricPlatformSchema } from '@continuum/contracts';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import * as React from 'react';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
@@ -29,13 +29,7 @@ export type ScopeAccount = {
 
 export type AccountsByPlatform = Record<OrganicMetricPlatform, ScopeAccount[]>;
 
-const PLATFORM_ORDER: OrganicMetricPlatform[] = [
-  'instagram',
-  'facebook',
-  'tiktok',
-  'youtube',
-  'linkedin',
-];
+const PLATFORM_ORDER: readonly OrganicMetricPlatform[] = organicMetricPlatformSchema.options;
 
 const PLATFORM_LABELS: Record<OrganicMetricPlatform, string> = {
   instagram: 'Instagram',
@@ -43,6 +37,7 @@ const PLATFORM_LABELS: Record<OrganicMetricPlatform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
   linkedin: 'LinkedIn',
+  x: 'X',
 };
 
 export type MetricsScopeSelectorProps = {

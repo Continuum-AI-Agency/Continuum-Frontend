@@ -17,8 +17,8 @@ import {
   YAxis,
 } from 'recharts';
 import { Gauge } from '@/components/charts/gauge';
-import { BestTimeTiles } from '@/components/organic/best-time/BestTimeTiles';
 import { Pill } from '@/components/kibo-ui/pill';
+import { BestTimeTiles } from '@/components/organic/best-time/BestTimeTiles';
 import { DisabledControl } from '@/components/organic/DisabledControl';
 import { describeExportBlock, describeRefreshBlock } from '@/components/organic/disabledReasons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
@@ -48,21 +48,25 @@ const OrganicAudienceLocationMapCard = dynamic(
   { ssr: false },
 );
 
-import type { IntegrationErrorCode, OrganicMetricId } from '@continuum/contracts';
-import { kpiConfigForPlatform } from '@continuum/contracts';
+import type {
+  IntegrationErrorCode,
+  OrganicMetricId,
+  OrganicMetricPlatform,
+} from '@continuum/contracts';
+import { kpiConfigForPlatform, organicMetricPlatformSchema } from '@continuum/contracts';
 import { Download, Flag, RotateCw, Send } from 'lucide-react';
 import { BrandTrendsHeaderModule } from '@/components/brand-insights/BrandTrendsHeaderModule';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
-import { OrganicWinnersSection } from '@/components/organic/OrganicWinnersSection';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
 import {
   type CompareExportSelection,
   OrganicCompareView,
 } from '@/components/organic/compare/OrganicCompareView';
 import { OrganicAwarenessReportView } from '@/components/organic/OrganicAwarenessReportView';
+import { OrganicWinnersSection } from '@/components/organic/OrganicWinnersSection';
 import {
   articleFor,
   formatCompactNumber,
@@ -167,19 +171,14 @@ export type OrganicAccountOption = {
   externalAccountId: string | null;
 };
 
-type AccountsByPlatform = {
-  instagram: OrganicAccountOption[];
-  facebook: OrganicAccountOption[];
-  tiktok: OrganicAccountOption[];
-  youtube: OrganicAccountOption[];
-  linkedin: OrganicAccountOption[];
-};
-
-type MetricsPlatform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
+type MetricsPlatform = OrganicMetricPlatform;
+type AccountsByPlatform = Record<MetricsPlatform, OrganicAccountOption[]>;
 type MetricsViewMode = 'account' | 'posts' | 'compare';
 
+const METRICS_PLATFORMS = organicMetricPlatformSchema.options;
+
 function isMetricsPlatform(value: string): value is MetricsPlatform {
-  return value === 'instagram' || value === 'facebook' || value === 'tiktok' || value === 'youtube' || value === 'linkedin';
+  return organicMetricPlatformSchema.safeParse(value).success;
 }
 
 const PLATFORM_LABELS: Record<MetricsPlatform, string> = {
@@ -188,6 +187,7 @@ const PLATFORM_LABELS: Record<MetricsPlatform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
   linkedin: 'LinkedIn',
+  x: 'X',
 };
 
 type Props = {
@@ -1530,7 +1530,15 @@ function Dashboard({
     } else if (hasMorePosts && !loadingMorePosts && !loadMorePostsError) {
       onLoadMorePosts?.();
     }
-  }, [viewMode, linkedPostId, data.posts, hasMorePosts, loadingMorePosts, loadMorePostsError, onLoadMorePosts]);
+  }, [
+    viewMode,
+    linkedPostId,
+    data.posts,
+    hasMorePosts,
+    loadingMorePosts,
+    loadMorePostsError,
+    onLoadMorePosts,
+  ]);
 
   const selectedPostBase = (data.posts ?? []).find((post) => post.id === selectedPostId) ?? null;
   const selectedPostDetail =
@@ -1690,52 +1698,64 @@ function Dashboard({
       ) : null}
       {isAccountView ? (
         <div className="px-3 pt-3">
-        <motion.div
-          key={`kpi-${data.range.since}-${data.range.until}`}
-          initial="hidden"
-          animate="visible"
-          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
-          className="grid grid-cols-1 gap-2 sm:grid-cols-3"
-        >
-          {getKpiConfig(platform).slice(0, showAllKpis ? undefined : 3).map((metric) => (
-            <motion.div
-              key={String(metric.key)}
-              variants={{
-                hidden: { opacity: 0, y: 8 },
-                visible: {
-                  opacity: 1,
-                  y: 0,
-                  transition: { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] },
-                },
-              }}
+          <motion.div
+            key={`kpi-${data.range.since}-${data.range.until}`}
+            initial="hidden"
+            animate="visible"
+            variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
+            className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+          >
+            {getKpiConfig(platform)
+              .slice(0, showAllKpis ? undefined : 3)
+              .map((metric) => (
+                <motion.div
+                  key={String(metric.key)}
+                  variants={{
+                    hidden: { opacity: 0, y: 8 },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      transition: { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] },
+                    },
+                  }}
+                >
+                  <MetricCard
+                    label={metric.label}
+                    value={
+                      metric.key === 'profileVisits24h' ? profileVisits24h : metrics[metric.key]
+                    }
+                    format={metric.format}
+                    basisComparison={metricComparisonFor(data, metric.key)}
+                    active={selectedAccountMetric === metric.key}
+                    ariaLabel={`Account metric ${metric.label}`}
+                    metricKey={String(metric.key)}
+                    platform={platform}
+                    rangePreset={rangePreset}
+                    onClick={
+                      graphableAccountMetrics.has(metric.key)
+                        ? () => {
+                            setSelectedAccountMetric(metric.key);
+                          }
+                        : undefined
+                    }
+                    insights={insightsByKpi.get(metric.key)}
+                  />
+                </motion.div>
+              ))}
+          </motion.div>
+          {getKpiConfig(platform).length > 3 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              aria-expanded={showAllKpis}
+              onClick={() => setShowAllKpis((value) => !value)}
             >
-              <MetricCard
-                label={metric.label}
-                value={metric.key === 'profileVisits24h' ? profileVisits24h : metrics[metric.key]}
-                format={metric.format}
-                basisComparison={metricComparisonFor(data, metric.key)}
-                active={selectedAccountMetric === metric.key}
-                ariaLabel={`Account metric ${metric.label}`}
-                metricKey={String(metric.key)}
-                platform={platform}
-                rangePreset={rangePreset}
-                onClick={
-                  graphableAccountMetrics.has(metric.key)
-                    ? () => {
-                        setSelectedAccountMetric(metric.key);
-                      }
-                    : undefined
-                }
-                insights={insightsByKpi.get(metric.key)}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
-        {getKpiConfig(platform).length > 3 ? (
-          <Button variant="ghost" size="sm" className="mt-2" aria-expanded={showAllKpis} onClick={() => setShowAllKpis((value) => !value)}>
-            {showAllKpis ? 'Show key metrics' : `Show all ${getKpiConfig(platform).length} metrics`}
-          </Button>
-        ) : null}
+              {showAllKpis
+                ? 'Show key metrics'
+                : `Show all ${getKpiConfig(platform).length} metrics`}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1747,7 +1767,8 @@ function Dashboard({
             title="Metric Drilldown"
             meta={
               <span className="text-xs text-muted-foreground">
-                Independent chart window · {selectedAccountMetricLabel} · {formatDateRangeLabel(accountAxisLabelRange)}
+                Independent chart window · {selectedAccountMetricLabel} ·{' '}
+                {formatDateRangeLabel(accountAxisLabelRange)}
               </span>
             }
             action={
@@ -1883,7 +1904,9 @@ function Dashboard({
 
       {isAccountView ? <CreativeStrategyCard brandId={brandId} /> : null}
 
-      {isAccountView && platform === 'instagram' ? <OrganicWinnersSection brandId={brandId} /> : null}
+      {isAccountView && platform === 'instagram' ? (
+        <OrganicWinnersSection brandId={brandId} />
+      ) : null}
 
       {isAccountView && platform !== 'tiktok' ? (
         <OrganicAudienceLocationMapCard
@@ -2091,7 +2114,8 @@ export function OrganicMetricsDashboard({
   brandInsights = null,
 }: Props) {
   const searchParams = useSearchParams();
-  const linkedPlatform = searchParams.get('tab') === 'metrics' ? searchParams.get('platform') : null;
+  const linkedPlatform =
+    searchParams.get('tab') === 'metrics' ? searchParams.get('platform') : null;
   const linkedAccountId = searchParams.get('accountId');
   const linkedPostId = searchParams.get('postId');
   const [isPending, startTransition] = React.useTransition();
@@ -2116,7 +2140,12 @@ export function OrganicMetricsDashboard({
     if (!linkedPlatform || !linkedAccountId || !linkedPostId) return;
     if (!isMetricsPlatform(linkedPlatform)) return;
     const nextPlatform = linkedPlatform;
-    if (!accountsByPlatform[nextPlatform].some((account) => account.integrationAccountId === linkedAccountId)) return;
+    if (
+      !accountsByPlatform[nextPlatform].some(
+        (account) => account.integrationAccountId === linkedAccountId,
+      )
+    )
+      return;
     setPlatform(nextPlatform);
     setSelectedAccountByPlatform((current) => ({ ...current, [nextPlatform]: linkedAccountId }));
     setSelection(brandId, nextPlatform, linkedAccountId);
@@ -2137,26 +2166,20 @@ export function OrganicMetricsDashboard({
   // Compare mode owns its own multi-account selection; the export action needs to
   // see it to work outside the single-account views.
   const [compareSelection, setCompareSelection] = React.useState<CompareExportSelection>([]);
-  const [selectedAccountByPlatform, setSelectedAccountByPlatform] = React.useState<{
-    instagram: string | null;
-    facebook: string | null;
-    tiktok: string | null;
-    youtube: string | null;
-    linkedin: string | null;
-  }>(() => {
+  const [selectedAccountByPlatform, setSelectedAccountByPlatform] = React.useState<
+    Record<MetricsPlatform, string | null>
+  >(() => {
     const store = useAccountSelectionStore.getState();
-    const resolve = (platform: string, accounts: OrganicAccountOption[]) => {
+    const resolve = (platform: MetricsPlatform) => {
+      const accounts = accountsByPlatform[platform];
       const stored = store.getSelection(brandId, platform);
       const isValid = stored !== null && accounts.some((a) => a.integrationAccountId === stored);
       return isValid ? stored : (accounts[0]?.integrationAccountId ?? null);
     };
-    return {
-      instagram: resolve('instagram', accountsByPlatform.instagram),
-      facebook: resolve('facebook', accountsByPlatform.facebook),
-      tiktok: resolve('tiktok', accountsByPlatform.tiktok),
-      youtube: resolve('youtube', accountsByPlatform.youtube),
-      linkedin: resolve('linkedin', accountsByPlatform.linkedin),
-    };
+    return Object.fromEntries(METRICS_PLATFORMS.map((p) => [p, resolve(p)])) as Record<
+      MetricsPlatform,
+      string | null
+    >;
   });
   const [state, setState] = React.useState<LoadState>({ status: 'idle' });
   const [kpisState, setKpisState] = React.useState<SectionState<OrganicMetricsResponse>>({
@@ -2166,41 +2189,20 @@ export function OrganicMetricsDashboard({
     { status: 'idle' },
   );
 
-  const platformAccounts =
-    platform === 'facebook'
-      ? accountsByPlatform.facebook
-      : platform === 'tiktok'
-        ? accountsByPlatform.tiktok
-        : platform === 'youtube'
-          ? accountsByPlatform.youtube
-          : platform === 'linkedin'
-            ? accountsByPlatform.linkedin
-            : accountsByPlatform.instagram;
+  const platformAccounts = accountsByPlatform[platform];
 
   // MetricsScopeSelector/OrganicCompareView tag each account with its platform
   // (needed to flatten across platforms in Compare mode); the dashboard's own
   // accountsByPlatform keeps platform implicit in which array an account is in.
-  const scopeAccountsByPlatform: ScopeAccountsByPlatform = React.useMemo(
-    () => ({
-      instagram: accountsByPlatform.instagram.map((a) => ({ ...a, platform: 'instagram' })),
-      facebook: accountsByPlatform.facebook.map((a) => ({ ...a, platform: 'facebook' })),
-      tiktok: accountsByPlatform.tiktok.map((a) => ({ ...a, platform: 'tiktok' })),
-      youtube: accountsByPlatform.youtube.map((a) => ({ ...a, platform: 'youtube' })),
-      linkedin: accountsByPlatform.linkedin.map((a) => ({ ...a, platform: 'linkedin' })),
-    }),
-    [accountsByPlatform],
-  );
+  const scopeAccountsByPlatform: ScopeAccountsByPlatform = React.useMemo(() => {
+    const tagged = {} as ScopeAccountsByPlatform;
+    for (const p of METRICS_PLATFORMS) {
+      tagged[p] = accountsByPlatform[p].map((a) => ({ ...a, platform: p }));
+    }
+    return tagged;
+  }, [accountsByPlatform]);
 
-  const selectedAccountId =
-    platform === 'facebook'
-      ? selectedAccountByPlatform.facebook
-      : platform === 'tiktok'
-        ? selectedAccountByPlatform.tiktok
-        : platform === 'youtube'
-          ? selectedAccountByPlatform.youtube
-          : platform === 'linkedin'
-            ? selectedAccountByPlatform.linkedin
-            : selectedAccountByPlatform.instagram;
+  const selectedAccountId = selectedAccountByPlatform[platform];
 
   const selectedAccount =
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
@@ -2461,84 +2463,16 @@ export function OrganicMetricsDashboard({
   );
 
   React.useEffect(() => {
-    const firstPlatformAccountId = platformAccounts[0]?.integrationAccountId ?? null;
-    if (platform === 'facebook') {
-      if (
-        !selectedAccountByPlatform.facebook ||
-        !platformAccounts.some(
-          (item) => item.integrationAccountId === selectedAccountByPlatform.facebook,
-        )
-      ) {
-        setSelectedAccountByPlatform((current) => ({
-          ...current,
-          facebook: firstPlatformAccountId,
-        }));
-      }
-      return;
-    }
-
-    if (platform === 'tiktok') {
-      if (
-        !selectedAccountByPlatform.tiktok ||
-        !platformAccounts.some(
-          (item) => item.integrationAccountId === selectedAccountByPlatform.tiktok,
-        )
-      ) {
-        setSelectedAccountByPlatform((current) => ({ ...current, tiktok: firstPlatformAccountId }));
-      }
-      return;
-    }
-
-    if (platform === 'youtube') {
-      if (
-        !selectedAccountByPlatform.youtube ||
-        !platformAccounts.some(
-          (item) => item.integrationAccountId === selectedAccountByPlatform.youtube,
-        )
-      ) {
-        setSelectedAccountByPlatform((current) => ({
-          ...current,
-          youtube: firstPlatformAccountId,
-        }));
-      }
-      return;
-    }
-
-    if (platform === 'linkedin') {
-      if (
-        !selectedAccountByPlatform.linkedin ||
-        !platformAccounts.some(
-          (item) => item.integrationAccountId === selectedAccountByPlatform.linkedin,
-        )
-      ) {
-        setSelectedAccountByPlatform((current) => ({
-          ...current,
-          linkedin: firstPlatformAccountId,
-        }));
-      }
-      return;
-    }
-
     if (
-      !selectedAccountByPlatform.instagram ||
-      !platformAccounts.some(
-        (item) => item.integrationAccountId === selectedAccountByPlatform.instagram,
-      )
+      selectedAccountId &&
+      platformAccounts.some((item) => item.integrationAccountId === selectedAccountId)
     ) {
-      setSelectedAccountByPlatform((current) => ({
-        ...current,
-        instagram: firstPlatformAccountId,
-      }));
+      return;
     }
-  }, [
-    platform,
-    platformAccounts,
-    selectedAccountByPlatform.facebook,
-    selectedAccountByPlatform.instagram,
-    selectedAccountByPlatform.linkedin,
-    selectedAccountByPlatform.tiktok,
-    selectedAccountByPlatform.youtube,
-  ]);
+    const firstPlatformAccountId = platformAccounts[0]?.integrationAccountId ?? null;
+    if (firstPlatformAccountId === selectedAccountId) return;
+    setSelectedAccountByPlatform((current) => ({ ...current, [platform]: firstPlatformAccountId }));
+  }, [platform, platformAccounts, selectedAccountId]);
 
   React.useEffect(() => {
     // Compare mode fans out via OrganicCompareView / loadBrandOrganicSnapshot —
@@ -2752,7 +2686,10 @@ export function OrganicMetricsDashboard({
             onSelect={(nextPlatform, accountId) => {
               startTransition(() => {
                 setPlatform(nextPlatform);
-                setSelectedAccountByPlatform((current) => ({ ...current, [nextPlatform]: accountId }));
+                setSelectedAccountByPlatform((current) => ({
+                  ...current,
+                  [nextPlatform]: accountId,
+                }));
                 setSelection(brandId, nextPlatform, accountId);
               });
             }}
@@ -2760,25 +2697,27 @@ export function OrganicMetricsDashboard({
         ) : null}
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          {viewMode !== 'posts' ? <div>
-            <Select
-              value={rangePreset}
-              onValueChange={(value) =>
-                startTransition(() => setRangePreset(value as OrganicDateRangePreset))
-              }
-            >
-              <SelectTrigger className="h-8 w-[7.5rem] text-xs">
-                {rangeLabel(rangePreset)}
-              </SelectTrigger>
-              <SelectContent>
-                {RANGE_OPTIONS.map((preset) => (
-                  <SelectItem key={preset} value={preset}>
-                    {rangeLabel(preset)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div> : null}
+          {viewMode !== 'posts' ? (
+            <div>
+              <Select
+                value={rangePreset}
+                onValueChange={(value) =>
+                  startTransition(() => setRangePreset(value as OrganicDateRangePreset))
+                }
+              >
+                <SelectTrigger className="h-8 w-[7.5rem] text-xs">
+                  {rangeLabel(rangePreset)}
+                </SelectTrigger>
+                <SelectContent>
+                  {RANGE_OPTIONS.map((preset) => (
+                    <SelectItem key={preset} value={preset}>
+                      {rangeLabel(preset)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-2">
             <span className="hidden text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
@@ -2959,11 +2898,18 @@ export function OrganicMetricsDashboard({
             <AlertDescription>{reportError}</AlertDescription>
           </Alert>
         ) : null}
-        {linkedPostId && linkedPlatform && linkedAccountId &&
+        {linkedPostId &&
+        linkedPlatform &&
+        linkedAccountId &&
         (!isMetricsPlatform(linkedPlatform) ||
-          !accountsByPlatform[linkedPlatform].some((account) => account.integrationAccountId === linkedAccountId)) ? (
+          !accountsByPlatform[linkedPlatform].some(
+            (account) => account.integrationAccountId === linkedAccountId,
+          )) ? (
           <Alert className="m-3 w-auto">
-            <AlertDescription>Post performance is unavailable because the linked account is not connected to this brand.</AlertDescription>
+            <AlertDescription>
+              Post performance is unavailable because the linked account is not connected to this
+              brand.
+            </AlertDescription>
           </Alert>
         ) : null}
         {viewMode === 'compare' ? (

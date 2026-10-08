@@ -27,7 +27,7 @@ function Svg({ children, size = 18, className }: React.PropsWithChildren<IconPro
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-hidden
+      aria-hidden="true"
       focusable={false}
     >
       {children}
@@ -213,6 +213,8 @@ export function PlatformIcon({
       return (
         <SvgRenderer svgContent={linkedin.svg} size={size} className={className} title="LinkedIn" />
       );
+    case 'x':
+      return <XIcon size={size} className={className} />;
     case 'amazonAds':
       return (
         <SvgRenderer svgContent={amazon.svg} size={size} className={className} title="Amazon" />

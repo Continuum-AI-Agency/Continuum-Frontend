@@ -202,7 +202,9 @@
     ".next/forge-folder-bench/types/**/*.ts",
     ".next/forge-folder-bench/dev/types/**/*.ts",
     ".next/forge-gallery-bench/types/**/*.ts",
-    ".next/forge-gallery-bench/dev/types/**/*.ts"
+    ".next/forge-gallery-bench/dev/types/**/*.ts",
+    ".next/organic-x-metrics-e2e/types/**/*.ts",
+    ".next/organic-x-metrics-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

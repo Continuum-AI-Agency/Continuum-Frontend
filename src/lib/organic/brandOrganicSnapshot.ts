@@ -8,7 +8,11 @@ import type {
   OrganicMetricPlatform,
   OrganicMetrics,
 } from '@continuum/contracts';
-import { getOrganicMetric, isMetricAvailableOnPlatform } from '@continuum/contracts';
+import {
+  getOrganicMetric,
+  isMetricAvailableOnPlatform,
+  organicMetricPlatformSchema,
+} from '@continuum/contracts';
 import {
   fetchOrganicAnalytics,
   type OrganicAnalyticsRequest,
@@ -127,22 +131,14 @@ export async function loadBrandOrganicSnapshot(
   return { accounts: ok, missing, loadedAt: new Date().toISOString() };
 }
 
-export function flattenAccountsByPlatform(accountsByPlatform: {
-  instagram: Array<{ integrationAccountId: string; name: string }>;
-  facebook: Array<{ integrationAccountId: string; name: string }>;
-  tiktok: Array<{ integrationAccountId: string; name: string }>;
-  youtube: Array<{ integrationAccountId: string; name: string }>;
-  linkedin: Array<{ integrationAccountId: string; name: string }>;
-}): SnapshotAccountRef[] {
-  const platforms: OrganicMetricPlatform[] = [
-    'instagram',
-    'facebook',
-    'tiktok',
-    'youtube',
-    'linkedin',
-  ];
+export function flattenAccountsByPlatform(
+  accountsByPlatform: Record<
+    OrganicMetricPlatform,
+    Array<{ integrationAccountId: string; name: string }>
+  >,
+): SnapshotAccountRef[] {
   const out: SnapshotAccountRef[] = [];
-  for (const platform of platforms) {
+  for (const platform of organicMetricPlatformSchema.options) {
     for (const account of accountsByPlatform[platform]) {
       out.push({
         platform,
