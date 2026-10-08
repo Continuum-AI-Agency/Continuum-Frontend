@@ -21579,6 +21579,13 @@ export type Database = {
         Returns: number
       }
       caller_blocked_anywhere: { Args: never; Returns: boolean }
+      caller_hidden_storage_objects: {
+        Args: never
+        Returns: {
+          bucket: string
+          storage_path: string
+        }[]
+      }
       caller_limited_anywhere: { Args: never; Returns: boolean }
       can_edit_asset: {
         Args: { p_asset: string; p_brand: string }
@@ -29461,6 +29468,10 @@ export type Database = {
         Returns: undefined
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
+      optimizer_add_portfolio_members: {
+        Args: { p_members: Json; p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_adopt_adhoc_suggestion: {
         Args: { p_confirm_token: string; p_id: string }
         Returns: Json
@@ -29782,6 +29793,15 @@ export type Database = {
       optimizer_conversions_daily_count: {
         Args: { p_kind: string; p_since?: string }
         Returns: number
+      }
+      optimizer_create_platform_portfolio: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_config: Json
+          p_platform: string
+        }
+        Returns: string
       }
       optimizer_create_portfolio: {
         Args: { p_ad_account_id: string; p_brand_id: string; p_config: Json }
