@@ -150,3 +150,71 @@ describe('GoogleCampaignTypeBreakdown — under the multi-platform frame', () =>
     expect(none.container.textContent).toBe('');
   });
 });
+
+describe('GoogleAdsTabView — currency and what the Optimizer reads', () => {
+  it('says once that the currency is unknown, instead of printing bare figures as if known', () => {
+    const { getByTestId } = render(
+      <GoogleAdsTabView
+        state={{ status: 'ready', account: { ...VIVO_47, currency: null }, overview }}
+      />,
+    );
+    const subline = getByTestId('google-subline').textContent ?? '';
+    expect(subline.match(/currency not reported by Google/g)?.length).toBe(1);
+  });
+
+  it('prints every money figure with its code when the currency is known', () => {
+    const { container, getByTestId } = render(
+      <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview }} />,
+    );
+    expect(getByTestId('google-subline').textContent).not.toContain('currency not reported');
+    const money = container.querySelectorAll('[data-figure-currency="MXN"]');
+    expect(money.length).toBeGreaterThan(0);
+    for (const figure of money) expect(figure.textContent).toMatch(/MXN$/);
+    // And every tile's sub-line money reads in MXN too ("1,315 MXN each").
+    expect(getByTestId('google-tiles').textContent).not.toMatch(/\d each(?! )/);
+    expect(getByTestId('google-tiles').textContent).toContain('453 MXN each');
+  });
+
+  it("names what the figures are and when the Optimizer's own reading starts, with the way in", () => {
+    let created = 0;
+    const { getByTestId, queryByTestId } = render(
+      <GoogleAdsTabView
+        onCreatePortfolio={() => {
+          created += 1;
+        }}
+        state={{ status: 'ready', account: VIVO_47, overview }}
+      />,
+    );
+    expect(queryByTestId('google-not-managed')).toBeNull();
+    const note = getByTestId('platform-reading-note');
+    expect(note.textContent).toContain(
+      "These figures come straight from Google. The Optimizer's own reading of Google starts once a portfolio holds Google campaigns.",
+    );
+    note.querySelector('button')?.click();
+    expect(created).toBe(1);
+  });
+
+  it('leaves the note out when the frame above already said it', () => {
+    const { queryByTestId } = render(
+      <GoogleAdsTabView
+        readingNote={false}
+        state={{ status: 'ready', account: VIVO_47, overview }}
+      />,
+    );
+    expect(queryByTestId('platform-reading-note')).toBeNull();
+  });
+});
+
+describe('GoogleCampaignTypeBreakdown — currency', () => {
+  it('says once that the currency is unknown in its label', () => {
+    const { getByTestId } = render(
+      <GoogleCampaignTypeBreakdown
+        state={{ status: 'ready', account: { ...VIVO_47, currency: null }, overview }}
+      />,
+    );
+    expect(
+      getByTestId('google-breakdown').textContent?.match(/currency not reported by Google/g)
+        ?.length,
+    ).toBe(1);
+  });
+});

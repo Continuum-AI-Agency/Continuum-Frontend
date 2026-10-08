@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { BrandEventsList } from './BrandEventsList';
 import { BrandQuestionsList } from './BrandQuestionsList';
 import { BrandTrendsGrid } from './BrandTrendsGrid';
+import { ListeningFeed } from './ListeningFeed';
 import { countQuestions } from './questions-utils';
 import { TiktokTrendsList } from './TiktokTrendsList';
 
@@ -34,7 +35,7 @@ export function BrandTrendsTabs({
   fill = false,
 }: Props) {
   const questionsCount = useMemo(() => countQuestions(questionsByNiche), [questionsByNiche]);
-  // TikTok trends load only once the tab is opened: a cold load queries TikTok.
+  // TikTok trends and Listening load only once their tab is opened.
   const [tab, setTab] = useState('trends');
   const contentClassName = cn(
     'mt-0 min-h-0 flex-1 overflow-y-auto',
@@ -65,7 +66,7 @@ export function BrandTrendsTabs({
       onValueChange={(next) => setTab(String(next))}
       className="flex min-h-0 flex-1 flex-col gap-1"
     >
-      <TabsList className="grid h-7 w-full grid-cols-4 gap-0.5 p-0.5">
+      <TabsList className="grid h-7 w-full grid-cols-5 gap-0.5 p-0.5">
         {/* Each badge counts the items available in its own tab, never a selection
             or a cap. The aria-label says which quantity, since a bare number beside
             a tab name is ambiguous to a screen reader. */}
@@ -90,6 +91,9 @@ export function BrandTrendsTabs({
         <TabsTrigger value="tiktok" className="h-6 min-w-0 px-2 text-xs">
           <span className="truncate">TikTok</span>
         </TabsTrigger>
+        <TabsTrigger value="listening" className="h-6 min-w-0 px-2 text-xs">
+          <span className="truncate">Listening</span>
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="trends" className={contentClassName}>
@@ -110,6 +114,10 @@ export function BrandTrendsTabs({
 
       <TabsContent value="tiktok" className={contentClassName}>
         <TiktokTrendsList brandId={brandId} enabled={tab === 'tiktok'} />
+      </TabsContent>
+
+      <TabsContent value="listening" className={contentClassName}>
+        <ListeningFeed brandId={brandId} enabled={tab === 'listening'} />
       </TabsContent>
     </Tabs>
   );

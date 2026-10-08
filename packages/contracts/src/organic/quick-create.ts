@@ -12,14 +12,10 @@ import { z } from "zod";
 
 import { creativeRefSchema } from "../media/attach";
 import { organicPostFormatEnum } from "../streaming/organic";
+import { organicGeneratablePlatformSchema } from "./publishing";
 
-export const quickCreatePlatformEnum = z.enum([
-  "instagram",
-  "facebook",
-  "linkedin",
-  "tiktok",
-  "youtube",
-]);
+/** Every platform the pipeline can compose for (it was a hand-copied list that drifted). */
+export const quickCreatePlatformEnum = organicGeneratablePlatformSchema;
 export type QuickCreatePlatform = z.infer<typeof quickCreatePlatformEnum>;
 
 export const quickCreateObjectiveEnum = z.enum([

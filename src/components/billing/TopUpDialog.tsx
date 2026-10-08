@@ -2,7 +2,7 @@
 
 import { Radio } from '@base-ui/react/radio';
 import { RadioGroup } from '@base-ui/react/radio-group';
-import { CREDIT_PACK_OFFER, type CreditPackOffer } from '@continuum/contracts';
+import { CREDIT_PACK_OFFER, type CreditPackOffer, type CreditWallet } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowRight, Check } from 'lucide-react';
 import Link from 'next/link';
@@ -98,14 +98,19 @@ export function TopUpPackPicker({
   );
 }
 
-/** Opens Stripe Checkout for `packs`, returning to the current page. */
-export function useCreditCheckout(brandId: string, purchasedCreditsBefore: number) {
+/** Opens Stripe Checkout for `packs` of `wallet` credits, returning to the current page. */
+export function useCreditCheckout(
+  brandId: string,
+  purchasedCreditsBefore: number,
+  wallet: CreditWallet = 'canvas',
+) {
   const { show } = useToast();
   const checkout = useMutation({
     mutationFn: (packs: number) =>
       startCreditCheckout(brandId, {
         packs,
-        ...topUpReturnUrls(window.location.href, purchasedCreditsBefore),
+        wallet,
+        ...topUpReturnUrls(window.location.href, purchasedCreditsBefore, wallet),
       }),
     onSuccess: (session) => window.location.assign(session.url),
     onError: (error) =>

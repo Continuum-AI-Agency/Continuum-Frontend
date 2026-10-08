@@ -8,6 +8,7 @@ import type { OrganicCalendarDraft } from '@/components/organic/primitives/types
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { xCreditsHref } from '@/lib/billing/productAccess';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { classifyOrganicError } from '@/lib/organic/error-handling';
 import {
@@ -275,7 +276,20 @@ export function usePublishDraft(): UsePublishDraftResult {
               }
               const description = describePublishError(ev.code, ev.error);
               setError(description);
-              show({ title: 'Publishing failed', description, variant: 'error' });
+              const brandId = accountContext.brandId;
+              show({
+                title: 'Publishing failed',
+                description,
+                variant: 'error',
+                ...(ev.code === 'credits_exhausted' && brandId
+                  ? {
+                      action: {
+                        label: 'Buy X credits',
+                        onClick: () => window.location.assign(xCreditsHref(brandId)),
+                      },
+                    }
+                  : {}),
+              });
             }
           }
         }

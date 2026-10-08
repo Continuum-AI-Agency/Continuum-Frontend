@@ -10,6 +10,9 @@ const createMutateAsync = mock(async () => ({ portfolio_id: 'p-new' }));
 const enrollMutateAsync = mock(async () => ({}));
 const runMutate = mock(() => {});
 const onCreated = mock(() => {});
+const neverCalled = mock(async () => {
+  throw new Error('a Meta-only portfolio called a non-Meta writer');
+});
 
 const suggestion: PortfolioSuggestion = {
   objective: 'lead',
@@ -87,6 +90,9 @@ mock.module('../useOptimizerData', () => ({
   useOptimizerMutations: () => ({
     create: { mutate: mock(() => {}), mutateAsync: createMutateAsync, isPending: false },
     enroll: { mutate: mock(() => {}), mutateAsync: enrollMutateAsync, isPending: false },
+    // A Meta-only wizard never reaches the non-Meta writers; a call would be a regression.
+    createPlatform: { mutateAsync: neverCalled, isPending: false },
+    addMembers: { mutateAsync: neverCalled, isPending: false },
     run: { mutate: runMutate, isPending: false },
   }),
 }));

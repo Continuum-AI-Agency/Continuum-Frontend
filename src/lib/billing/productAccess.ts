@@ -76,12 +76,14 @@ export const PLAN_NAME_FOR_PRODUCT: Partial<Record<ProductCode, string>> = {
   studio: 'Organic Plus',
   organic_agent: 'Organic Plus',
   paid_media: 'Performance Plus',
+  listening: 'Trends+',
 };
 
 /** The self-serve plans' display names (`billing.plan_definitions.display_name`). */
 export const PLAN_NAME: Record<PlanCode, string> = {
   organic_studio: 'Organic Plus',
   paid_media: 'Performance Plus',
+  trends_plus: 'Trends+',
 };
 
 /**
@@ -117,6 +119,14 @@ export const CREDITS_ANCHOR = 'credits';
 
 /** Settings → Billing at the credit-pack section. */
 export const CREDITS_HREF = `/settings?section=billing#${CREDITS_ANCHOR}`;
+
+/** The X API credits section of Settings → Billing. */
+export const X_CREDITS_ANCHOR = 'x-credits';
+
+/** Settings → Billing at the X API credits section, for the brand an X publish failed on. */
+export function xCreditsHref(brandId: string): string {
+  return `/settings?section=billing&brand=${encodeURIComponent(brandId)}#${X_CREDITS_ANCHOR}`;
+}
 
 /** `CREDITS_HREF`, remembering the page the buyer came from. */
 export function creditsHref(from?: string): string {

@@ -20,6 +20,12 @@ const ComparisonValueSchema = z.object({
 
 const RangeSchema = z.object({ since: z.string(), until: z.string() });
 
+/** The customer's currency code, when the edge carries it (Google reports money in it). */
+const CurrencyFields = {
+  currency: z.string().nullable().optional(),
+  currency_code: z.string().nullable().optional(),
+};
+
 export const GoogleAccountOverviewSchema = z.object({
   metrics: z.object({
     spend: z.number(),
@@ -30,6 +36,7 @@ export const GoogleAccountOverviewSchema = z.object({
   }),
   comparison: z.object({ spend: ComparisonValueSchema }).partial().optional(),
   range: RangeSchema,
+  ...CurrencyFields,
 });
 export type GoogleAccountOverview = z.infer<typeof GoogleAccountOverviewSchema>;
 
@@ -48,6 +55,7 @@ export const GoogleTopCampaignsSchema = z.object({
     }),
   ),
   range: RangeSchema,
+  ...CurrencyFields,
 });
 export type GoogleTopCampaigns = z.infer<typeof GoogleTopCampaignsSchema>;
 
@@ -97,6 +105,8 @@ export type CampaignGroup = {
 };
 
 export type GoogleOverview = {
+  /** The code the read carried, or null: the tab then says once that the currency is unknown. */
+  currency: string | null;
   since: string;
   until: string;
   days: number;
@@ -111,6 +121,32 @@ export type GoogleOverview = {
   byType: boolean;
   groups: CampaignGroup[];
 };
+
+/** The currency code a read carries, upper-cased; null when it carries none. */
+export function googleCurrencyOf(
+  read: { currency?: string | null; currency_code?: string | null } | null | undefined,
+): string | null {
+  const code = (read?.currency ?? read?.currency_code ?? '').trim().toUpperCase();
+  return code === '' ? null : code;
+}
+
+/**
+ * The `days` complete UTC days ending yesterday — the window the multi-platform producer
+ * (optimizer_get_account_platform_metrics) reads. The edge's own `last_7d` runs to TODAY and
+ * covers eight days, so a header and a breakdown read that way could never agree.
+ */
+export function completeDaysWindow(
+  days: number,
+  now: Date = new Date(),
+): {
+  since: string;
+  until: string;
+} {
+  const DAY = 86_400_000;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { since: iso(today - days * DAY), until: iso(today - DAY) };
+}
 
 function daysBetween(since: string, until: string): number {
   const ms = Date.parse(`${until}T00:00:00Z`) - Date.parse(`${since}T00:00:00Z`);
@@ -168,6 +204,7 @@ export function buildGoogleOverview(
   const conversions = spending.reduce((sum, row) => sum + row.metrics.conversions, 0);
   const prior = account.comparison?.spend?.previous;
   return {
+    currency: googleCurrencyOf(account) ?? googleCurrencyOf(campaigns),
     since: account.range.since,
     until: account.range.until,
     days: daysBetween(account.range.since, account.range.until),

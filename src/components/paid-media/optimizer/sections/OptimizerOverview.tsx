@@ -278,7 +278,12 @@ export function OptimizerOverview({
       <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
         {tabs}
         {jainaBand}
-        <PlatformTab brandId={brandId} metrics={platformMetrics} platform={platformTab} />
+        <PlatformTab
+          brandId={brandId}
+          metrics={platformMetrics}
+          onCreatePortfolio={onCreatePortfolio}
+          platform={platformTab}
+        />
       </div>
     );
   }
@@ -637,14 +642,22 @@ function PlatformTab({
   brandId,
   metrics,
   platform,
+  onCreatePortfolio,
 }: {
   brandId: string;
   metrics: AccountPlatformMetricsState;
   platform: Exclude<AdPlatform, 'meta'>;
+  onCreatePortfolio: () => void;
 }) {
+  // One window on the tab: the producer's when it answered, else the same 7 complete days
+  // ending yesterday the producer would read.
+  const window =
+    metrics.status === 'ready'
+      ? { since: metrics.metrics.window.since, until: metrics.metrics.window.until }
+      : null;
   const fallback =
     platform === 'google_ads' ? (
-      <GoogleAdsTab brandId={brandId} />
+      <GoogleAdsTab brandId={brandId} onCreatePortfolio={onCreatePortfolio} window={window} />
     ) : (
       <TikTokAdsTab advertiserId={null} brandId={brandId} />
     );
@@ -662,11 +675,24 @@ function PlatformTab({
   }
   const row = metrics.status === 'ready' ? platformTotals(metrics.metrics, platform) : null;
   if (metrics.status === 'ready' && row?.connected) {
+    // Google connected but not yet read by the Optimizer: Google's own read leads in full,
+    // under a note that says what it is.
+    const googleUnread = platform === 'google_ads' && row.spend == null;
     return (
       <>
-        <PlatformMetricsSection metrics={metrics.metrics} platform={platform} />
+        <PlatformMetricsSection
+          liveBelow={googleUnread}
+          metrics={metrics.metrics}
+          onCreatePortfolio={onCreatePortfolio}
+          platform={platform}
+        />
         {platform === 'google_ads' ? (
-          <GoogleAdsTab brandId={brandId} mode="breakdown" />
+          <GoogleAdsTab
+            brandId={brandId}
+            mode={googleUnread ? 'full' : 'breakdown'}
+            readingNote={false}
+            window={window}
+          />
         ) : (
           <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
         )}

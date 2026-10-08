@@ -14,6 +14,7 @@ import {
   isTerminalBrandInsightsStatus,
   subscribeToBrandInsightsJob,
 } from '@/lib/api/brandInsights.client';
+import { ApiError } from '@/lib/api/errors';
 import { buildBrandInsightsProgressSteps } from '@/lib/brand-insights/progress';
 import { cn } from '@/lib/utils';
 
@@ -146,20 +147,7 @@ export function BrandInsightsGenerateButton({
           const activeGenerationId = result.generationId;
           setGenerationId(activeGenerationId);
           setStatus(result.jobStatus ?? 'running');
-          const awaitingBrandContext =
-            result.jobStatus === 'pending' && result.dependencyBrandContext?.required === true;
-          const awaitingStrategic =
-            result.jobStatus === 'pending' &&
-            (result.dependencyStrategicAnalysis?.required === true ||
-              result.dependencyStrategicAnalysis?.status === 'pending');
-          setStage(
-            result.stage ??
-              (awaitingBrandContext
-                ? 'awaiting_brand_context'
-                : awaitingStrategic
-                  ? 'awaiting_strategic_analysis'
-                  : 'queued'),
-          );
+          setStage(result.stage ?? 'queued');
           setStageMessage(result.message ?? null);
           stopTrackingRef.current?.();
           stopTrackingRef.current = subscribeToBrandInsightsJob({
@@ -238,7 +226,14 @@ export function BrandInsightsGenerateButton({
           await refreshInsights();
         }
       } catch (runError) {
-        setError(runError instanceof Error ? runError.message : 'Unable to start generation');
+        // 409: the brand report isn't approved yet — trends start on their own after onboarding.
+        setError(
+          runError instanceof ApiError && runError.status === 409
+            ? 'Trends start automatically once your brand report is approved.'
+            : runError instanceof Error
+              ? runError.message
+              : 'Unable to start generation',
+        );
       }
     });
   };

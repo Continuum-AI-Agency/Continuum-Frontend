@@ -39,6 +39,7 @@ import {
 } from './accountPlatformMetricsModel';
 import { windowRangeLabel } from './googleAdsOverviewModel';
 import { PlatformChip } from './PlatformChip';
+import { PlatformReadingNote } from './PlatformReadingNote';
 import { type AdPlatform, PLATFORM_NAMES } from './platformTabsModel';
 
 function decisionsSentence(count: number): string {
@@ -258,9 +259,15 @@ export function AllPlatformsTiles({
 export function PlatformMetricsSection({
   metrics,
   platform,
+  liveBelow = false,
+  onCreatePortfolio,
 }: {
   metrics: AccountPlatformMetrics;
   platform: AdPlatform;
+  /** The platform's own live read renders under this section: when the Optimizer has not read
+   *  the platform, the section says that the figures below are that read. */
+  liveBelow?: boolean;
+  onCreatePortfolio?: () => void;
 }) {
   const row = platformTotals(metrics, platform);
   if (!row?.connected) return null;
@@ -269,6 +276,21 @@ export function PlatformMetricsSection({
   const kinds = platformKinds(row).slice(0, MAX_KIND_TILES);
   const name = PLATFORM_NAMES[platform];
   const lead = kinds[0];
+  if (row.spend == null && liveBelow) {
+    return (
+      <section
+        className="space-y-1"
+        data-source="account-platform-metrics"
+        data-testid={`platform-metrics-${platform}`}
+      >
+        <PlatformReadingNote
+          onCreatePortfolio={onCreatePortfolio}
+          platform={platform}
+          where="below"
+        />
+      </section>
+    );
+  }
   return (
     <section
       className="space-y-3"
@@ -312,6 +334,12 @@ export function PlatformMetricsSection({
               ? 'counts what its portfolios hold'
               : 'every campaign of the connected accounts'}
           </span>
+          {row.spend != null && !row.currency ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>currency not reported</span>
+            </>
+          ) : null}
         </div>
       </div>
       {row.spend == null ? null : (

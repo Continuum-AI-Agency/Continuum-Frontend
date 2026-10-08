@@ -21,6 +21,7 @@ import {
   type CampaignCreativeRequest,
   creativeCanvasUpdate,
 } from '@/lib/campaign-canvas/creativeGeneration';
+import { jainaOpeningSessionId } from '@/lib/jaina/deepLink';
 import type { CreativeArtifact } from '@/lib/jaina/schemas';
 
 const AnimatedShaderBackground = dynamic(
@@ -228,6 +229,9 @@ type JainaChatSurfaceProps = {
   /** The platform a deep link was asked from (the Optimizer's Google or TikTok tab): the turn
    *  is scoped to the brand's account there when it has one. */
   platform?: PlatformId | null;
+  /** The deep link asked for a new conversation (an Ask-Jaina chip's `new=1`): open a fresh
+   *  session for its question instead of the most recent conversation. */
+  startNewConversation?: boolean;
   /**
    * A gated call a button OUTSIDE the transcript opened — the canvas's "Deploy paused". It is
    * posted once as an `operator_action` (no model turn) and its approval card lands in this
@@ -728,6 +732,7 @@ export function JainaChatSurface({
   initialPrompt,
   onInitialPromptConsumed,
   platform = null,
+  startNewConversation = false,
   operatorActionRequest = null,
   onOperatorActionConsumed,
   onOperatorActionSettled,
@@ -916,6 +921,8 @@ export function JainaChatSurface({
   const activeSessionIdRef = React.useRef(sessionId);
   // Deep link (?sessionId=) wins over "most recent" exactly once, on first bootstrap.
   const deepLinkSessionIdRef = React.useRef(initialSessionId ?? null);
+  // A new-conversation deep link skips "most recent" exactly once, on first bootstrap.
+  const startNewConversationRef = React.useRef(startNewConversation);
   const activeResponseIdRef = React.useRef<string | null>(null);
   const activeRunIdRef = React.useRef<string | undefined>(undefined);
   const streamBusyRef = React.useRef(false);
@@ -1749,7 +1756,13 @@ export function JainaChatSurface({
 
         const deepLinkSessionId = deepLinkSessionIdRef.current;
         deepLinkSessionIdRef.current = null;
-        const targetSessionId = deepLinkSessionId ?? sessions[0]?.sessionId;
+        const newConversation = startNewConversationRef.current;
+        startNewConversationRef.current = false;
+        const targetSessionId = jainaOpeningSessionId({
+          deepLinkSessionId,
+          newConversation,
+          latestSessionId: sessions[0]?.sessionId,
+        });
         if (!targetSessionId) {
           // No history to open, so the session this surface mounted with stands. The queue is
           // deliberately NOT cleared: a turn sent while this loaded is waiting in it, and a
@@ -2242,6 +2255,15 @@ export function JainaChatSurface({
     processedReportArtifactJobIdsRef.current.clear();
     persistedAssistantResponseIdsRef.current.clear();
   }, [isStreaming, liveChatMessage?.runId, setUiMessages, stopChat]);
+
+  // A new-conversation link that arrives while this surface is already open (the person was on
+  // the Jaina tab, or it stayed mounted) starts a fresh session, exactly as on first load.
+  const lastStartNewRef = React.useRef(startNewConversation);
+  React.useEffect(() => {
+    const arrived = startNewConversation && !lastStartNewRef.current;
+    lastStartNewRef.current = startNewConversation;
+    if (arrived && historyReady) handleClearConversation();
+  }, [startNewConversation, historyReady, handleClearConversation]);
 
   const handleSelectConversation = React.useCallback(
     async (targetSessionId: string) => {

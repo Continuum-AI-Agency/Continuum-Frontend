@@ -16,10 +16,19 @@ let latestSelectorPlatform: string | null = null;
 let latestAssignedAccountIds: string[] | null | undefined;
 let searchParamsValue = 'tab=jaina';
 const routerReplaceMock = mock(() => {});
-let optimizerAdAccounts: { data: Array<{ account_id: string }>; isSuccess: boolean } = {
+let optimizerAdAccounts: {
+  data: Array<{ account_id: string; platform?: string; name?: string | null }>;
+  isSuccess: boolean;
+} = {
   data: [],
   isSuccess: false,
 };
+type PortfolioRow = { ad_account_id: string | null; status: string; daily_total: number | null };
+let optimizerBrandPortfolios: {
+  brandPortfolios: PortfolioRow[];
+  isSuccess: boolean;
+  isError: boolean;
+} = { brandPortfolios: [], isSuccess: false, isError: false };
 let dynamicComponentIndex = 0;
 
 const canvasState = { nodes: [], edges: [], platform: 'meta' };
@@ -77,6 +86,7 @@ mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
     return latestOptimizerPrefetch;
   },
   useOptimizerAdAccounts: () => optimizerAdAccounts,
+  useOptimizerPortfolios: () => optimizerBrandPortfolios,
 }));
 
 mock.module('@/components/paid-media/campaigns/usePrefetchScaleCampaigns', () => ({
@@ -155,6 +165,8 @@ describe('PaidMediaClientPage brand context', () => {
     searchParamsValue = 'tab=jaina';
     routerReplaceMock.mockReset();
     optimizerAdAccounts = { data: [], isSuccess: false };
+    optimizerBrandPortfolios = { brandPortfolios: [], isSuccess: false, isError: false };
+    window.localStorage.clear();
 
     globalThis.requestIdleCallback = ((callback: IdleRequestCallback) => {
       callback({ didTimeout: false, timeRemaining: () => 50 });
@@ -282,6 +294,81 @@ describe('PaidMediaClientPage brand context', () => {
       expect(latestSelectorPlatform).toBe('all');
     });
     expect(latestAssignedAccountIds).toBeUndefined();
+  });
+
+  describe('which ad account the page opens on (Home | Vivo47, 2026-10-07)', () => {
+    const BERNA = 'act_1164707387246066';
+    const DANIEL = 'act_941792232690867';
+    const VIVO_MKT = 'act_1779847382038564';
+    const lastPair = () => renderedContextPairs[renderedContextPairs.length - 1];
+    const renderVivo = () =>
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-vivo"
+          brandName="Home | Vivo47"
+          initialAccounts={[]}
+          initialAdAccountId={BERNA}
+        />,
+      );
+
+    beforeEach(() => {
+      optimizerAdAccounts = {
+        isSuccess: true,
+        data: [
+          { platform: 'google_ads', account_id: '3710693645', name: 'Vivo 47' },
+          { platform: 'meta_ads', account_id: BERNA, name: 'Berna Pavón New' },
+          { platform: 'meta_ads', account_id: DANIEL, name: 'Daniel Gutierrez Buendia' },
+          { platform: 'meta_ads', account_id: VIVO_MKT, name: 'VIVO47 MKT' },
+        ],
+      };
+      optimizerBrandPortfolios = {
+        isSuccess: true,
+        isError: false,
+        brandPortfolios: [
+          { ad_account_id: VIVO_MKT, status: 'active', daily_total: 900 },
+          { ad_account_id: VIVO_MKT, status: 'active', daily_total: 967.74 },
+        ],
+      };
+    });
+
+    it('with nothing saved, moves off the alphabetical seed to the account holding the portfolios', async () => {
+      renderVivo();
+
+      await waitFor(() =>
+        expect(lastPair()).toEqual({ brandId: 'brand-vivo', adAccountId: VIVO_MKT }),
+      );
+      expect(window.localStorage.getItem('continuum:scale:ad-account:brand-vivo:meta')).toBeNull();
+    });
+
+    it('waits for the portfolio list before applying the portfolio default', async () => {
+      optimizerBrandPortfolios = { brandPortfolios: [], isSuccess: false, isError: false };
+      renderVivo();
+
+      await waitFor(() => expect(renderedContextPairs.length).toBeGreaterThan(0));
+      expect(lastPair()).toEqual({ brandId: 'brand-vivo', adAccountId: BERNA });
+    });
+
+    it('reopens on the saved choice for this brand', async () => {
+      window.localStorage.setItem('continuum:scale:ad-account:brand-vivo:meta', DANIEL);
+      optimizerBrandPortfolios = { brandPortfolios: [], isSuccess: false, isError: false };
+      renderVivo();
+
+      await waitFor(() =>
+        expect(lastPair()).toEqual({ brandId: 'brand-vivo', adAccountId: DANIEL }),
+      );
+    });
+
+    it('remembers a pick and never overrides it with the default', async () => {
+      renderVivo();
+      await waitFor(() => expect(lastPair()?.adAccountId).toBe(VIVO_MKT));
+
+      act(() => latestAccountSelect?.(BERNA));
+
+      await waitFor(() =>
+        expect(lastPair()).toEqual({ brandId: 'brand-vivo', adAccountId: BERNA }),
+      );
+      expect(window.localStorage.getItem('continuum:scale:ad-account:brand-vivo:meta')).toBe(BERNA);
+    });
   });
 
   it('does not turn a Goal URL prompt into ordinary Jaina chat input', async () => {

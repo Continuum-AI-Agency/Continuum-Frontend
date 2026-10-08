@@ -44,7 +44,7 @@ export function JainaEntryChips(props: JainaEntryChipsProps) {
   const questions = entries.map((entry) => (
     <a
       className="rounded-full border border-primary/40 bg-background px-3 py-1 text-foreground text-sm transition-colors hover:border-primary hover:text-primary"
-      href={jainaPromptHref(entry.prompt, platform)}
+      href={jainaPromptHref(entry.prompt, platform, { newConversation: true })}
       key={entry.key}
     >
       {entry.label}

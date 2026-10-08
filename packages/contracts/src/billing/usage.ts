@@ -7,6 +7,10 @@ import { z } from 'zod';
  * UP to the cent, drawn rollover → included → purchased; whatever is left is overage that
  * `billing-meter-report` pushes to the Stripe meter. Agent subsystems are tracked only —
  * never drawn from anything that could block, never overage.
+ *
+ * X API calls (`x` subsystem and bucket) bill the same way — X's list price × 1.15, whole
+ * credits — but draw only the brand's prepaid X wallet; their overage goes to the
+ * `continuum_x_usage` meter, and only while the owner opted in to X auto-billing.
  */
 
 export const BILLING_MARKUP = 1.15;
@@ -19,6 +23,8 @@ export const USAGE_SUBSYSTEMS = [
   'trends',
   'edge',
   'mcp',
+  /** X (Twitter) API calls, drawn from the separate prepaid X wallet. */
+  'x',
 ] as const;
 export const usageSubsystemSchema = z.enum(USAGE_SUBSYSTEMS);
 export type UsageSubsystem = z.infer<typeof usageSubsystemSchema>;
@@ -28,7 +34,23 @@ export const USAGE_MODALITIES = ['text', 'image', 'video', 'provider_call'] as c
 export const usageModalitySchema = z.enum(USAGE_MODALITIES);
 export type UsageModality = z.infer<typeof usageModalitySchema>;
 
-export const USAGE_BUCKETS = ['studio', 'agent'] as const;
+export const USAGE_BUCKETS = ['studio', 'agent', 'x'] as const;
+
+/**
+ * The `billing.model_pricing` keys of X's pay-per-use API (provider_call, priced per resource).
+ * A post that carries a link is X's $0.20 rate; `mediaUpload` has no pricing row yet, so it
+ * records at $0 flagged `unpriced` until X's console shows a charge. Edge functions mirror these
+ * by value (supabase/functions/fetch-organic-analytics/lib/x.ts).
+ */
+export const X_USAGE_MODELS = {
+  postCreate: 'x:post_create',
+  postCreateWithUrl: 'x:post_create_url',
+  postRead: 'x:post_read',
+  postReadOwned: 'x:post_read_owned',
+  postDelete: 'x:post_delete',
+  mediaUpload: 'x:media_upload',
+} as const;
+export type XUsageModel = (typeof X_USAGE_MODELS)[keyof typeof X_USAGE_MODELS];
 export const usageBucketCodeSchema = z.enum(USAGE_BUCKETS);
 export type UsageBucketCode = z.infer<typeof usageBucketCodeSchema>;
 

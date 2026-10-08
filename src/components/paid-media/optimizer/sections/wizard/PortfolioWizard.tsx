@@ -4,11 +4,15 @@
 // pipeline both paths (a suggestion, from scratch) share — the two hand-duplicated
 // pipelines this replaces could disagree about what a portfolio was created with.
 //
-// Data paths are unchanged from before: suggestions from optimizer-suggest, the picker from
-// paid-media-metrics snapshots + inventory, create through optimizer_create_portfolio,
-// enroll through optimizer-enroll (by ad-set ids, or by campaign id when whole campaigns
-// were chosen), then a first cycle. Creating in Autopilot is allowed here because the
-// create RPC now stores the guardrails the DB requires.
+// Data paths: suggestions from optimizer-suggest, the picker from paid-media-metrics
+// snapshots + inventory, create through optimizer_create_portfolio, enroll through
+// optimizer-enroll (by ad-set ids, or by campaign id when whole campaigns were chosen), then a
+// first cycle. Creating in Autopilot is allowed here because the create RPC now stores the
+// guardrails the DB requires.
+//
+// A cross-platform suggestion's ticked Google campaigns are enrolled after the Meta ad sets
+// through optimizer_add_portfolio_members. With every Meta ad set unticked the portfolio is
+// born on the Google account instead (optimizer_create_platform_portfolio), recommend-only.
 
 import type { AdSetSnapshot, PortfolioSuggestion } from '@continuum/contracts';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from 'lucide-react';
@@ -33,6 +37,10 @@ import {
   draftFromSuggestion,
   effectiveTargetMetric,
   emptyDraft,
+  enrollLabel,
+  memberPayload,
+  platformHost,
+  selectedMembers,
   stepIssues,
   WIZARD_STEPS,
   type WizardDraft,
@@ -77,7 +85,10 @@ export function PortfolioWizard({
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
+  const { create, enroll, createPlatform, addMembers, run } = useOptimizerMutations(
+    brandId,
+    adAccountId,
+  );
   const inventoryRead = useOptimizerAdsetInventory(brandId, adAccountId, true);
   const accountEnrollmentsRead = useOptimizerAccountEnrollments(brandId, adAccountId);
   const claims = useMemo(
@@ -130,7 +141,8 @@ export function PortfolioWizard({
   const issues = stepIssues(draft, step, { selectedBudgetSum, blockedCount });
   const stepIndex = STEP_ORDER.indexOf(step);
   const isLast = stepIndex === STEP_ORDER.length - 1;
-  const busy = create.isPending || enroll.isPending;
+  const busy =
+    create.isPending || enroll.isPending || createPlatform.isPending || addMembers.isPending;
 
   function goTo(next: WizardStep) {
     setStep(next);
@@ -168,6 +180,27 @@ export function PortfolioWizard({
     setStep('assets');
   }
 
+  async function enrollMeta(portfolio_id: string) {
+    if (draft.assetMode === 'campaign' && draft.campaignIds.length > 0) {
+      // One enroll per campaign: the server takes every eligible ad set in it.
+      for (const campaignId of draft.campaignIds) {
+        await enroll.mutateAsync({ portfolio_id, campaign_id: campaignId });
+      }
+      return;
+    }
+    const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
+    const adset_names: Record<string, string> = {};
+    for (const id of draft.adsetIds) {
+      const name = nameById.get(id);
+      if (name && name.trim().length > 0) adset_names[id] = name;
+    }
+    await enroll.mutateAsync({
+      portfolio_id,
+      adset_ids: draft.adsetIds,
+      ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
+    });
+  }
+
   async function submit() {
     if (issues.length > 0 || busy) return;
     setFailure(null);
@@ -176,30 +209,25 @@ export function PortfolioWizard({
       selectedBudgetSum,
       level: draft.assetMode,
     });
+    const members = selectedMembers(draft);
+    const host = platformHost(draft);
     try {
-      const { portfolio_id } = await create.mutateAsync({
-        brand_id: brandId,
-        ad_account_id: adAccountId,
-        config,
-      });
+      const { portfolio_id } = host
+        ? await createPlatform.mutateAsync({
+            brand_id: brandId,
+            platform: host.platform,
+            account_id: host.account_id,
+            config,
+          })
+        : await create.mutateAsync({
+            brand_id: brandId,
+            ad_account_id: adAccountId,
+            config,
+          });
       setCreatedId(portfolio_id);
-      if (draft.assetMode === 'campaign' && draft.campaignIds.length > 0) {
-        // One enroll per campaign: the server takes every eligible ad set in it.
-        for (const campaignId of draft.campaignIds) {
-          await enroll.mutateAsync({ portfolio_id, campaign_id: campaignId });
-        }
-      } else {
-        const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
-        const adset_names: Record<string, string> = {};
-        for (const id of draft.adsetIds) {
-          const name = nameById.get(id);
-          if (name && name.trim().length > 0) adset_names[id] = name;
-        }
-        await enroll.mutateAsync({
-          portfolio_id,
-          adset_ids: draft.adsetIds,
-          ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
-        });
+      if (!host) await enrollMeta(portfolio_id);
+      if (members.length > 0) {
+        await addMembers.mutateAsync({ portfolio_id, members: memberPayload(members) });
       }
       run.mutate(portfolio_id);
       onCreated?.(portfolio_id);
@@ -314,7 +342,7 @@ export function PortfolioWizard({
               <p className="text-destructive text-xs" role="alert">
                 {failure}
                 {createdId
-                  ? ' The portfolio exists — fix the above and press Create again to enroll, or add ad sets from Manage.'
+                  ? ' The portfolio exists — fix the above and press Create again to enroll, or add members from Manage.'
                   : ''}
               </p>
             ) : issues.length > 0 ? (
@@ -341,9 +369,7 @@ export function PortfolioWizard({
                 ) : (
                   <CheckIcon aria-hidden className="size-3.5" />
                 )}
-                {busy
-                  ? 'Creating…'
-                  : `Create & enroll ${draft.adsetIds.length} ad set${draft.adsetIds.length === 1 ? '' : 's'}`}
+                {busy ? 'Creating…' : enrollLabel(draft)}
               </Button>
             ) : (
               <Button

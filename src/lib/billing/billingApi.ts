@@ -8,6 +8,7 @@ import {
   type BillingPlanChangeResponse,
   type BillingPortalResponse,
   billingApiErrorSchema,
+  type CreditWallet,
   billingCheckoutReceiptSchema,
   billingCheckoutRequestSchema,
   billingCheckoutResponseSchema,
@@ -109,7 +110,10 @@ async function callBillingApi<T>(
 }
 
 export function fetchBillingOverview(brandId: string): Promise<BillingOverview> {
-  return callBillingApi(`brands/${brandId}/overview`, billingOverviewSchema, { method: 'GET' });
+  // `include=x` opts in to the X API wallet; billing-api leaves it out for older clients.
+  return callBillingApi(`brands/${brandId}/overview?include=x`, billingOverviewSchema, {
+    method: 'GET',
+  });
 }
 
 export function fetchCheckoutReceipt(
@@ -156,10 +160,13 @@ export function changePlan(
   });
 }
 
-/** Auto-bill Canvas overage to the card on file: adds or removes the metered subscription item. */
+/**
+ * Auto-bill overage to the card on file — Canvas, or the X API wallet with `meter: 'x'` — by
+ * adding or removing that metered item on the subscription.
+ */
 export function setOverageBilling(
   brandId: string,
-  input: { enabled: boolean },
+  input: { enabled: boolean; meter?: CreditWallet },
 ): Promise<BillingOverageResponse> {
   return callBillingApi(`brands/${brandId}/overage`, billingOverageResponseSchema, {
     method: 'POST',
@@ -167,11 +174,15 @@ export function setOverageBilling(
   });
 }
 
+/** One-time credit packs for the Canvas wallet, or the X API wallet with `wallet: 'x'`. */
 export function startCreditCheckout(
   brandId: string,
-  input: { packs: number; successUrl: string; cancelUrl: string },
+  input: { packs: number; wallet?: CreditWallet; successUrl: string; cancelUrl: string },
 ): Promise<BillingCreditCheckoutResponse> {
-  trackBillingEvent('checkout_started', { kind: 'credits', packs: input.packs });
+  trackBillingEvent('checkout_started', {
+    kind: input.wallet === 'x' ? 'x_credits' : 'credits',
+    packs: input.packs,
+  });
   return callBillingApi(`brands/${brandId}/credits/checkout`, billingCreditCheckoutResponseSchema, {
     method: 'POST',
     body: billingCreditCheckoutRequestSchema.parse({

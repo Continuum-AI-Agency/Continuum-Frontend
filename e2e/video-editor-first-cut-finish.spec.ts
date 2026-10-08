@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { loadavg, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   type EditorClip,
@@ -21,6 +21,7 @@ import { GoogleAuth } from 'google-auth-library';
 import { z } from 'zod';
 import { prodSql } from '../../Continuum-Backend/scripts/_bench/managementSql';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
+import { openCreativeSpendLedger } from '../../Continuum-Backend/scripts/lib/creativeSpendLedger';
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { ffprobe, type Probe } from './video-editor-journey/frames';
@@ -105,6 +106,17 @@ const EXPORT_BUDGET_MS = 20 * 60_000;
 const RUN = randomUUID().slice(0, 8);
 const FIXTURE_FOLDER = `${BRAND}/video-editor-bench/first-cut-finish-${RUN}`;
 const JOB_ID = /^job_[0-9a-f]{32}$/;
+/** The video-parity wave's spend ledger; a paid run books its upper bound here before it spends. */
+const LEDGER = resolve(
+  __dirname,
+  '../../artifacts/video-studio-climb/floor-2026-10-05/spend-video-parity-20261005.json',
+);
+/**
+ * One run's upper bound: a Lyria bed (≤ 3 calls, $0.18), three paper edits ($0.09), the
+ * headlines ($0.01), cold STT of the six reels and two b-roll clips (≤ $0.08), and three
+ * production Render exports with their egress (≈ $0.05).
+ */
+const RUN_USD = 0.41;
 
 const { url: supabaseUrl, serviceRoleKey } = EXPORT_ONLY
   ? loadLocalSupabaseEnv()
@@ -416,6 +428,15 @@ test(BENCH, async ({ browser }) => {
       note(
         `net zero baseline: ${assetsBefore.size} media.assets rows, ${objectsBefore.size} objects under ${BRAND}/`,
       );
+      const ledger = openCreativeSpendLedger(LEDGER, `first-cut-finish-${RUN}`, 100);
+      try {
+        ledger
+          .budget('google', RUN_USD)
+          .reserve(`video-parity-20261005:eng:f33:first-cut-finish:${RUN}`, RUN_USD);
+      } finally {
+        ledger.close();
+      }
+      note(`spend: $${RUN_USD.toFixed(2)} reserved on the wave ledger before any paid call`);
 
       // ── Render, as the Backend will reach it ────────────────────────────────────────
       const health = await renderIdentity
@@ -584,6 +605,9 @@ test(BENCH, async ({ browser }) => {
       )
         return;
       exercised.add('draft');
+      // f33's speed sample: Brief submit → the finished draft's summary, in ms.
+      note(`speed samples: ${JSON.stringify({ finished_draft: [draft.ms] })}`);
+      note(`load at the finished draft: ${loadavg()[0]?.toFixed(1)}`);
       check(
         'the summary shows a headline for each of the three variants',
         draft.rows.every((row) => row.headline.length > 0),

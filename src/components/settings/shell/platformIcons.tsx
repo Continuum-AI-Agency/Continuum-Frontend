@@ -94,7 +94,7 @@ export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
 
 // Provider groups that are surfaced but not yet open to users. Rendered
 // greyed-out / disabled across connect surfaces. Re-enable by removing the key.
-export const COMING_SOON_PROVIDER_GROUPS: ReadonlySet<ProviderGroup> = new Set(['x']);
+export const COMING_SOON_PROVIDER_GROUPS: ReadonlySet<ProviderGroup> = new Set<ProviderGroup>();
 
 export const isProviderComingSoon = (group: string): boolean =>
   COMING_SOON_PROVIDER_GROUPS.has(group as ProviderGroup);

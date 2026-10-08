@@ -24,7 +24,7 @@ import {
   sampleNumericTrack,
   samplePositionTrack,
 } from '@continuum/contracts';
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import {
@@ -1091,43 +1091,94 @@ test(BENCH, async ({ browser }) => {
   expect(failures, 'graded FAIL steps').toBe(0);
 });
 
-test('retained project journey: native splits and deletes preserve stored picture and gain', async ({
-  browser,
-}) => {
+// f42/f43: the 48-case vintage-looks matrix runs as one test per canvas format (16 cases each,
+// each inside the unchanged 900 s budget; one test needed 877 s of it on a quiet machine). The
+// three record into one Recorder, and one envelope prints after the last, failing unless every
+// shard and all 48 cases completed. Every other journey is still one test.
+const VINTAGE_FORMATS = ['portrait', 'landscape', 'square'] as const;
+type VintageFormat = (typeof VINTAGE_FORMATS)[number];
+const vintageProof = VINTAGE_LOOK_JOURNEY
+  ? createBenchRecorder('videoeditor:motion:e2e:bench:vintage-looks', [])
+  : null;
+const vintageRun = {
+  completed: [] as VintageFormat[],
+  collageSaveMs: [] as number[],
+  lookSaveMs: [] as number[],
+};
+
+test.describe('retained project', () => {
+  if (VINTAGE_LOOK_JOURNEY) test.describe.configure({ mode: 'serial' });
+  for (const shard of VINTAGE_LOOK_JOURNEY ? VINTAGE_FORMATS : [undefined])
+    test(`retained project journey: native splits and deletes preserve stored picture and gain${shard ? ` (${shard} looks)` : ''}`, ({
+      browser,
+    }) => retainedProjectJourney(browser, shard));
+  test.afterAll(() => {
+    if (!vintageProof) return;
+    vintageProof.record(
+      'all three format shards of the 48-case look matrix completed',
+      vintageRun.completed.length === VINTAGE_FORMATS.length ? 'PASS' : 'FAIL',
+      JSON.stringify(vintageRun.completed),
+    );
+    vintageProof.notes.unshift(
+      `speed samples: ${JSON.stringify({ collage_save: vintageRun.collageSaveMs, look_save: vintageRun.lookSaveMs })}`,
+    );
+    const lookCeiling =
+      vintageRun.lookSaveMs.length === 48 &&
+      vintageRun.lookSaveMs.every((ms) => ms > 0 && ms <= 1000);
+    vintageProof.record(
+      'all48 native look saves meet the one-second operation ceiling',
+      lookCeiling ? 'PASS' : 'FAIL',
+      JSON.stringify(vintageRun.lookSaveMs),
+    );
+    const collageCeiling =
+      vintageRun.collageSaveMs.length === 3 &&
+      vintageRun.collageSaveMs.every((ms) => ms > 0 && ms <= 1000);
+    vintageProof.record(
+      'all native collage saves meet the one-second local editor-operation ceiling',
+      collageCeiling ? 'PASS' : 'FAIL',
+      JSON.stringify(vintageRun.collageSaveMs),
+    );
+    vintageProof.print();
+  });
+});
+
+async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
   test.skip(
     process.env.VIDEO_EDITOR_CURVE_JOURNEY !== '1',
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
-  const proof = createBenchRecorder(
-    AUTO_CAPTIONS_ONLY
-      ? 'video-editor:e2e:bench'
-      : COLLAGE_JOURNEY
-        ? VINTAGE_LOOK_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:vintage-looks'
-          : 'videoeditor:motion:e2e:bench:collage'
-        : KEYFRAME_LOCAL || MENU_JOURNEY
-          ? BENCH
-          : STAGE_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:stage-handles'
-            : NESTED_CONTROLS_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:composition-controls'
-              : NESTED_AUDIO_JOURNEY
-                ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
-                : NESTED_JOURNEY
-                  ? 'videoeditor:motion:e2e:bench:retained-nested'
-                  : CAPTION_JOURNEY
-                    ? 'videoeditor:motion:e2e:bench:retained-captions'
-                    : SPEECH_JOURNEY
-                      ? ANIMATED_SPEECH_JOURNEY
-                        ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
-                        : 'videoeditor:motion:e2e:bench:speech-jumps'
-                      : PARENT_JOURNEY
-                        ? 'videoeditor:motion:e2e:bench:retained-parent'
-                        : TEXT_JOURNEY
-                          ? 'videoeditor:motion:e2e:bench:retained-text'
-                          : 'videoeditor:motion:e2e:bench:retained-project',
-    [],
-  );
+  const proof =
+    vintageProof ??
+    createBenchRecorder(
+      AUTO_CAPTIONS_ONLY
+        ? 'video-editor:e2e:bench'
+        : COLLAGE_JOURNEY
+          ? VINTAGE_LOOK_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:vintage-looks'
+            : 'videoeditor:motion:e2e:bench:collage'
+          : KEYFRAME_LOCAL || MENU_JOURNEY
+            ? BENCH
+            : STAGE_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:stage-handles'
+              : NESTED_CONTROLS_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:composition-controls'
+                : NESTED_AUDIO_JOURNEY
+                  ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+                  : NESTED_JOURNEY
+                    ? 'videoeditor:motion:e2e:bench:retained-nested'
+                    : CAPTION_JOURNEY
+                      ? 'videoeditor:motion:e2e:bench:retained-captions'
+                      : SPEECH_JOURNEY
+                        ? ANIMATED_SPEECH_JOURNEY
+                          ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
+                          : 'videoeditor:motion:e2e:bench:speech-jumps'
+                        : PARENT_JOURNEY
+                          ? 'videoeditor:motion:e2e:bench:retained-parent'
+                          : TEXT_JOURNEY
+                            ? 'videoeditor:motion:e2e:bench:retained-text'
+                            : 'videoeditor:motion:e2e:bench:retained-project',
+      [],
+    );
   proof.notes.push(
     `store target: ${LOCAL_CURVE_JOURNEY ? 'local loopback Supabase, existing authorization migration' : 'hosted designated bench store'}`,
   );
@@ -1697,11 +1748,13 @@ test('retained project journey: native splits and deletes preserve stored pictur
       const sourceFrames = new Map<string, string>();
       const editTimings = [];
       const comparisons = [];
-      for (const [format, width, height] of [
-        ['portrait', 324, 576],
-        ['landscape', 576, 324],
-        ['square', 576, 576],
-      ] as const) {
+      for (const [format, width, height] of (
+        [
+          ['portrait', 324, 576],
+          ['landscape', 576, 324],
+          ['square', 576, 576],
+        ] as const
+      ).filter(([format]) => !shard || format === shard)) {
         await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
         await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
         const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
@@ -2695,7 +2748,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                     samples,
                   });
                   writeFileSync(
-                    join(folder, 'vintage-results.json'),
+                    join(folder, `vintage-results${shard ? `-${shard}` : ''}.json`),
                     JSON.stringify(vintageResults, null, 2),
                   );
                 }
@@ -2718,26 +2771,27 @@ test('retained project journey: native splits and deletes preserve stored pictur
         JSON.stringify({ editTimings, comparisons, photos }, null, 2),
       );
       proof.notes.push(
-        `speed samples: ${JSON.stringify({ collage_save: editTimings.map((sample) => sample.durationMs) })}`,
-      );
-      proof.notes.push(
         `All native collage pointer-release→response-end samples: ${JSON.stringify(editTimings.map((s) => s.durationMs))}`,
       );
       if (VINTAGE_LOOK_JOURNEY) {
+        // The run-wide 48-save and collage ceilings are graded once, after the last shard.
+        vintageRun.collageSaveMs.push(...editTimings.map((sample) => sample.durationMs));
+        vintageRun.lookSaveMs.push(...vintageResults.map((r) => r.saveMs));
+        assert(
+          `${shard}: all16 native look saves of this format ran`,
+          vintageResults.length === 16,
+          JSON.stringify(vintageResults.map((r) => r.tag)),
+        );
+      } else {
         proof.notes.push(
-          `speed samples: ${JSON.stringify({ look_save: vintageResults.map((r) => r.saveMs) })}`,
+          `speed samples: ${JSON.stringify({ collage_save: editTimings.map((sample) => sample.durationMs) })}`,
         );
         assert(
-          'all48 native look saves meet the one-second operation ceiling',
-          vintageResults.length === 48 &&
-            vintageResults.every((r) => r.saveMs > 0 && r.saveMs <= 1000),
+          'all native collage saves meet the one-second local editor-operation ceiling',
+          editTimings.length === 21 &&
+            editTimings.every((s) => s.durationMs > 0 && s.durationMs <= 1000),
         );
       }
-      assert(
-        'all native collage saves meet the one-second local editor-operation ceiling',
-        editTimings.length === (VINTAGE_LOOK_JOURNEY ? 3 : 21) &&
-          editTimings.every((s) => s.durationMs > 0 && s.durationMs <= 1000),
-      );
     }
     let speechCaseIndex = 0;
     for (const interpolation of !SPEECH_JOURNEY
@@ -6501,6 +6555,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         JSON.stringify(autoCaptionMs),
       );
     }
+    if (shard) vintageRun.completed.push(shard);
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
@@ -6654,7 +6709,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
     } finally {
       for (const server of servers.reverse()) server.stop();
       proof.notes.push(`local media retained: ${folder}`);
-      proof.print();
+      if (!shard) proof.print();
     }
   }
-});
+}

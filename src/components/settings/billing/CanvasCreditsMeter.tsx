@@ -1,6 +1,6 @@
 'use client';
 
-import type { CreditPackOffer } from '@continuum/contracts';
+import type { CreditPackOffer, CreditWallet } from '@continuum/contracts';
 import { useState } from 'react';
 import {
   PromoCodeRedeem,
@@ -8,7 +8,14 @@ import {
   useCreditCheckout,
 } from '@/components/billing/TopUpDialog';
 import { Button } from '@/components/ui/button';
-import { type CanvasCreditsView, formatCredits, formatUsd } from '@/lib/billing/billingViewModel';
+import {
+  type CanvasCreditsView,
+  formatCredits,
+  formatUsd,
+  X_LINK_POST_CREDITS,
+  X_POST_CREDITS,
+  type XWalletView,
+} from '@/lib/billing/billingViewModel';
 import { DEFAULT_TOP_UP_PACKS } from '@/lib/billing/topUp';
 import { cn } from '@/lib/utils';
 
@@ -122,18 +129,42 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
   );
 }
 
+/** The prepaid X API wallet: one balance, spent per X call at X's list price × 1.15. */
+export function XCreditsMeter({ x }: { x: XWalletView }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-muted-foreground">
+        <span
+          className="font-mono text-xl font-semibold text-foreground tabular-nums"
+          data-testid="x-credits-available"
+        >
+          {formatCredits(x.balanceCredits)}
+        </span>{' '}
+        X API credits · about {formatCredits(x.postsLeft)} posts
+      </p>
+      <p className="max-w-[70ch] text-xs text-muted-foreground">
+        X charges per API call, and this balance pays for it: {X_POST_CREDITS} credits a post,{' '}
+        {X_LINK_POST_CREDITS} for a post with a link, and about 1 credit per 8 posts read for analytics.
+        Canvas credits are never used for X.
+      </p>
+    </div>
+  );
+}
+
 /** The same pack picker as the Top up dialog, returning to Billing after Checkout. */
 export function BuyCreditsControl({
   brandId,
   offer,
   purchasedCredits,
+  wallet = 'canvas',
 }: {
   brandId: string;
   offer: CreditPackOffer;
   purchasedCredits: number;
+  wallet?: CreditWallet;
 }) {
   const [packs, setPacks] = useState(DEFAULT_TOP_UP_PACKS);
-  const { buy, redirecting } = useCreditCheckout(brandId, purchasedCredits);
+  const { buy, redirecting } = useCreditCheckout(brandId, purchasedCredits, wallet);
 
   return (
     <div className="space-y-3">
@@ -145,10 +176,15 @@ export function BuyCreditsControl({
       />
       <div className="flex justify-end">
         <Button disabled={redirecting} aria-busy={redirecting} onClick={() => buy(packs)}>
-          {redirecting ? 'Opening checkout…' : `Buy credits · ${formatUsd(packs * offer.priceUsd)}`}
+          {redirecting
+            ? 'Opening checkout…'
+            : `Buy ${wallet === 'x' ? 'X ' : ''}credits · ${formatUsd(packs * offer.priceUsd)}`}
         </Button>
       </div>
-      <PromoCodeRedeem brandId={brandId} purchasedCreditsBefore={purchasedCredits} />
+      {/* Promo codes (CONTINUUM200) are for Canvas credits only. */}
+      {wallet === 'canvas' ? (
+        <PromoCodeRedeem brandId={brandId} purchasedCreditsBefore={purchasedCredits} />
+      ) : null}
     </div>
   );
 }

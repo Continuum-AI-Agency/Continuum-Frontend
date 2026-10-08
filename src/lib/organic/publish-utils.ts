@@ -97,6 +97,9 @@ export const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
     "We couldn't prepare your media for publishing. Re-attach the creative and try again.",
   media_upload_failed: "We couldn't upload your media to the platform. Try again in a moment.",
   unsupported_format: "This post format isn't supported on that platform.",
+  // X is pay-per-use: every post is paid from the brand's prepaid X API credits.
+  credits_exhausted:
+    'This brand is out of X API credits. Buy X credits in Billing (or turn on X auto-billing), then publish again.',
 };
 
 export function describePublishError(code: string, fallback: string): string {

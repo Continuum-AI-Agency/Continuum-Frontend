@@ -150,6 +150,10 @@ function PlanAction({
           Your only plan. To cancel it, open Manage payment method.
         </p>
       );
+    case 'requires_organic':
+      return (
+        <p className="text-xs text-muted-foreground">Add Organic Plus first — Trends+ builds on it.</p>
+      );
   }
 }
 

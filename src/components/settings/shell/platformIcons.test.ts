@@ -3,8 +3,8 @@ import { describe, expect, it } from 'bun:test';
 import { COMING_SOON_PROVIDER_GROUPS, isProviderComingSoon } from './platformIcons';
 
 describe('isProviderComingSoon', () => {
-  it('treats X as coming soon', () => {
-    expect(isProviderComingSoon('x')).toBe(true);
+  it('opens X now that it publishes (2026-10-06)', () => {
+    expect(isProviderComingSoon('x')).toBe(false);
   });
 
   it('treats live providers as available', () => {
@@ -18,8 +18,7 @@ describe('isProviderComingSoon', () => {
     expect(isProviderComingSoon('')).toBe(false);
   });
 
-  it('matches the coming-soon set', () => {
-    expect(COMING_SOON_PROVIDER_GROUPS.has('x')).toBe(true);
-    expect(COMING_SOON_PROVIDER_GROUPS.size).toBe(1);
+  it('holds nothing back today', () => {
+    expect(COMING_SOON_PROVIDER_GROUPS.size).toBe(0);
   });
 });

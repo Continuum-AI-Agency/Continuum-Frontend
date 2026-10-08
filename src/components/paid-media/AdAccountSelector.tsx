@@ -52,7 +52,22 @@ type AdAccountSelectorProps = {
    * connect/assign recovery state, not the reachable superset.
    */
   assignedAccountIds?: string[] | null;
+  /**
+   * Accounts already known with their names (the brand's assigned accounts). Listed
+   * first and shown at once, so the picker never waits on the integration summary or
+   * the timeline lookup to render an account the page can already name.
+   */
+  knownAccounts?: AdAccount[];
+  /** The account to auto-select when the current selection is missing or not visible. */
+  preferredAccountId?: string | null;
+  /** Receives auto-selections, so the caller can tell them from a person's pick. */
+  onAutoSelect?: (accountId: string) => void;
 };
+
+function findAccount(accounts: AdAccount[], accountId: string): AdAccount | undefined {
+  const wanted = bareAccountId(accountId);
+  return accounts.find((account) => bareAccountId(account.id) === wanted);
+}
 
 // After this long without a resolved account list we stop showing a disabled
 // "Loading accounts" control and surface a real recovery path (BUG-003).
@@ -65,6 +80,9 @@ export function AdAccountSelector({
   platform = 'meta',
   initialTimelineAccounts,
   assignedAccountIds,
+  knownAccounts,
+  preferredAccountId,
+  onAutoSelect,
 }: AdAccountSelectorProps) {
   const isGoogleAds = platform === 'google-ads';
   const isAll = platform === 'all';
@@ -89,14 +107,20 @@ export function AdAccountSelector({
     const seen = new Set<string>();
     const merged: AdAccount[] = [];
 
+    const pushAccount = (account: AdAccount) => {
+      const key = bareAccountId(account.id);
+      if (!account.id || seen.has(key)) return;
+      seen.add(key);
+      merged.push(account);
+    };
     const pushIntegrationAccounts = (accounts: BrandIntegrationAccountSummary[] | undefined) => {
       (accounts ?? []).forEach((account) => {
         const id = account.externalAccountId ?? account.integrationAccountId;
-        if (!id || seen.has(id)) return;
-        seen.add(id);
-        merged.push({ id, name: account.name });
+        if (id) pushAccount({ id, name: account.name });
       });
     };
+
+    (knownAccounts ?? []).forEach(pushAccount);
 
     // Google Ads accounts come straight from the brand integration summary —
     // the Meta-only timeline endpoint has no Google equivalent.
@@ -120,15 +144,11 @@ export function AdAccountSelector({
       return merged;
     }
 
-    timelineAccounts.forEach((account) => {
-      if (seen.has(account.id)) return;
-      seen.add(account.id);
-      merged.push(account);
-    });
+    timelineAccounts.forEach(pushAccount);
     pushIntegrationAccounts(integrations?.facebook?.accounts);
 
     return merged;
-  }, [integrations, timelineAccounts, isGoogleAds, isAll, isLinkedIn, isOpenAi]);
+  }, [integrations, timelineAccounts, knownAccounts, isGoogleAds, isAll, isLinkedIn, isOpenAi]);
 
   // Scope to the brand's ASSIGNED accounts when the caller provides that set.
   // `null`/`undefined` ⇒ feature off (show every reachable account, today's
@@ -206,16 +226,24 @@ export function AdAccountSelector({
   // selection is NOT among the visible (assigned) accounts, e.g. a server-seeded
   // account the brand can reach but hasn't assigned. Without the second clause the
   // shared selection could stay pinned to an account the optimizer will reject.
+  // Known accounts are enough to choose from; waiting on the timeline lookup is only
+  // needed when nothing is known yet.
+  const hasKnownAccounts = (knownAccounts?.length ?? 0) > 0;
   React.useEffect(() => {
-    if (!timelineAccountsLoaded) return;
+    if (!timelineAccountsLoaded && !hasKnownAccounts) return;
     if (visibleAccounts.length === 0) return;
-    const selectionVisible =
-      selectedAccountId != null &&
-      visibleAccounts.some((account) => account.id === selectedAccountId);
-    if (!selectionVisible) {
-      onSelect(visibleAccounts[0].id);
-    }
-  }, [timelineAccountsLoaded, selectedAccountId, visibleAccounts, onSelect]);
+    if (selectedAccountId != null && findAccount(visibleAccounts, selectedAccountId)) return;
+    const preferred = preferredAccountId ? findAccount(visibleAccounts, preferredAccountId) : null;
+    (onAutoSelect ?? onSelect)((preferred ?? visibleAccounts[0]).id);
+  }, [
+    timelineAccountsLoaded,
+    hasKnownAccounts,
+    selectedAccountId,
+    preferredAccountId,
+    visibleAccounts,
+    onSelect,
+    onAutoSelect,
+  ]);
 
   // A hung account load can otherwise sit forever on a disabled "Loading
   // accounts" control. Once we've been settling with nothing to show past the
@@ -238,7 +266,12 @@ export function AdAccountSelector({
   }, [refresh]);
 
   const resolved = !isLoading && timelineAccountsLoaded;
-  const showRecovery = isError || timedOut || (resolved && visibleAccounts.length === 0);
+  // An integration-summary failure only dead-ends the picker when nothing else named an
+  // account; the known accounts are still the right ones to offer.
+  const showRecovery =
+    (isError && visibleAccounts.length === 0) ||
+    timedOut ||
+    (resolved && visibleAccounts.length === 0);
 
   if (showRecovery) {
     return (
@@ -268,7 +301,7 @@ export function AdAccountSelector({
   }
 
   const selectedAccount = selectedAccountId
-    ? visibleAccounts.find((account) => account.id === selectedAccountId)
+    ? findAccount(visibleAccounts, selectedAccountId)
     : undefined;
 
   return (
@@ -280,11 +313,11 @@ export function AdAccountSelector({
             size="sm"
             role="combobox"
             aria-expanded={open}
-            disabled={isLoading || visibleAccounts.length === 0}
+            disabled={visibleAccounts.length === 0}
             className="h-8 min-w-[12rem] max-w-[24rem] justify-between px-2 text-xs font-normal sm:min-w-[16rem]"
           >
             <span className="truncate">
-              {isLoading
+              {visibleAccounts.length === 0
                 ? 'Loading accounts...'
                 : selectedAccount
                   ? selectedAccount.name
@@ -315,7 +348,7 @@ export function AdAccountSelector({
                   <Check
                     className={cn(
                       'mr-1.5 h-3.5 w-3.5',
-                      selectedAccountId === account.id ? 'opacity-100' : 'opacity-0',
+                      selectedAccount?.id === account.id ? 'opacity-100' : 'opacity-0',
                     )}
                   />
                   <span className="truncate text-xs">{account.name}</span>

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildGoogleOverview,
   campaignTypeOf,
+  completeDaysWindow,
   figureWindowOf,
   type GoogleAccountOverview,
   type GoogleTopCampaigns,
+  googleCurrencyOf,
   percentAgainst,
   windowRangeLabel,
 } from './googleAdsOverviewModel';
@@ -100,5 +102,43 @@ describe('the small words', () => {
     expect(figureWindowOf(8)).toBe('d7');
     expect(figureWindowOf(30)).toBe('d30');
     expect(figureWindowOf(3)).toBe('none');
+  });
+});
+
+describe('completeDaysWindow — the window the producer reads', () => {
+  it('is the 7 complete UTC days ending yesterday, never today', () => {
+    expect(completeDaysWindow(7, new Date('2026-10-07T21:24:39Z'))).toEqual({
+      since: '2026-09-30',
+      until: '2026-10-06',
+    });
+  });
+
+  it('turns over at UTC midnight, not at local midnight', () => {
+    expect(completeDaysWindow(7, new Date('2026-10-08T00:30:00Z'))).toEqual({
+      since: '2026-10-01',
+      until: '2026-10-07',
+    });
+  });
+});
+
+describe('googleCurrencyOf — the code the read carries', () => {
+  it("takes the edge's own currency code, upper-cased", () => {
+    expect(googleCurrencyOf({ currency: 'mxn' })).toBe('MXN');
+    expect(googleCurrencyOf({ currency_code: 'MXN' })).toBe('MXN');
+  });
+
+  it('is null when the read carries no code, never a guess', () => {
+    expect(googleCurrencyOf({})).toBeNull();
+    expect(googleCurrencyOf({ currency: '' })).toBeNull();
+    expect(googleCurrencyOf(null)).toBeNull();
+  });
+
+  it('lands on the overview the reads fold into', () => {
+    const overview = buildGoogleOverview(
+      { ...account(100), currency: 'MXN' },
+      campaigns([row('1', 100, 1, 'SEARCH')]),
+    );
+    expect(overview.currency).toBe('MXN');
+    expect(buildGoogleOverview(account(100), campaigns([])).currency).toBeNull();
   });
 });

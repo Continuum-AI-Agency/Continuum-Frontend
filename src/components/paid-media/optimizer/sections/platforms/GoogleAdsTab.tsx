@@ -26,7 +26,15 @@ import {
 } from './googleAdsOverviewModel';
 import { PlatformChip } from './PlatformChip';
 import { PlatformConnectLink } from './PlatformConnectLink';
-import { type GoogleAdsOverviewState, useGoogleAdsOverview } from './useGoogleAdsOverview';
+import { PlatformReadingNote } from './PlatformReadingNote';
+import {
+  type GoogleAdsOverviewState,
+  type GoogleReadWindow,
+  useGoogleAdsOverview,
+} from './useGoogleAdsOverview';
+
+/** Said once, where the window is named, when no source names the account's currency. */
+const UNKNOWN_CURRENCY = 'currency not reported by Google';
 
 function signedPct(pct: number): string {
   return pct > 0 ? `+${pct}%` : `${pct}%`;
@@ -203,7 +211,16 @@ function EmptyState({
   );
 }
 
-export function GoogleAdsTabView({ state }: { state: GoogleAdsOverviewState }) {
+export function GoogleAdsTabView({
+  state,
+  readingNote = true,
+  onCreatePortfolio,
+}: {
+  state: GoogleAdsOverviewState;
+  /** False when the frame above already said what these figures are. */
+  readingNote?: boolean;
+  onCreatePortfolio?: () => void;
+}) {
   switch (state.status) {
     case 'loading':
       return (
@@ -260,13 +277,22 @@ export function GoogleAdsTabView({ state }: { state: GoogleAdsOverviewState }) {
               </span>
               <span aria-hidden="true">·</span>
               <span>attribution: what Google reports</span>
+              {currency ? null : (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span data-testid="google-currency-unknown">{UNKNOWN_CURRENCY}</span>
+                </>
+              )}
             </div>
           </section>
           <Tiles currency={currency} overview={overview} />
-          <p className="px-1 text-muted-foreground text-xs" data-testid="google-not-managed">
-            The Optimizer reads Google but does not manage it yet: no recommendations or portfolios
-            here until Google campaigns can join a portfolio.
-          </p>
+          {readingNote ? (
+            <PlatformReadingNote
+              onCreatePortfolio={onCreatePortfolio}
+              platform="google_ads"
+              where="above"
+            />
+          ) : null}
         </div>
       );
     }
@@ -302,6 +328,7 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
     <section className="space-y-2" data-testid="google-breakdown">
       <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
         By campaign type · {windowRangeLabel(overview.since, overview.until)} · what Google reports
+        {account.currency ? '' : ` · ${UNKNOWN_CURRENCY}`}
       </p>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {groups.map((group) => (
@@ -328,15 +355,26 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
 export function GoogleAdsTab({
   brandId,
   mode = 'full',
+  window = null,
+  readingNote = true,
+  onCreatePortfolio,
 }: {
   brandId: string;
   /** 'breakdown' when the multi-platform frame already leads the tab. */
   mode?: 'full' | 'breakdown';
+  /** The producer's window, so this read states the same dates as the frame above it. */
+  window?: GoogleReadWindow | null;
+  readingNote?: boolean;
+  onCreatePortfolio?: () => void;
 }) {
-  const state = useGoogleAdsOverview(brandId);
+  const state = useGoogleAdsOverview(brandId, window);
   return mode === 'breakdown' ? (
     <GoogleCampaignTypeBreakdown state={state} />
   ) : (
-    <GoogleAdsTabView state={state} />
+    <GoogleAdsTabView
+      onCreatePortfolio={onCreatePortfolio}
+      readingNote={readingNote}
+      state={state}
+    />
   );
 }
