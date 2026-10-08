@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, jest, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 const rpc = mock(async () => ({ data: [], error: null }));
@@ -30,6 +30,7 @@ afterEach(() => {
 });
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
+const OTHER_ID = '33333333-3333-4333-8333-333333333333';
 
 function portfolioRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -51,7 +52,7 @@ function portfolioRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('optimizer React Query reads', () => {
-  it('uses the brand/account key and serves a fresh portfolio read from React Query', async () => {
+  it('keys the portfolio read by brand alone and serves a fresh read from React Query', async () => {
     rpc.mockResolvedValueOnce({ data: [portfolioRow()], error: null });
     const { result, rerender } = renderHook(
       () => useOptimizerPortfolios('22222222-2222-4222-8222-222222222222', 'act_1'),
@@ -61,12 +62,7 @@ describe('optimizer React Query reads', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
     expect(rpc).toHaveBeenCalledTimes(1);
-    expect(optimizerQueryKeys.portfolios('brand', 'act_1')).toEqual([
-      'optimizer',
-      'portfolios',
-      'brand',
-      'act_1',
-    ]);
+    expect(optimizerQueryKeys.portfolios('brand')).toEqual(['optimizer', 'portfolios', 'brand']);
 
     rerender();
     expect(rpc).toHaveBeenCalledTimes(1);
@@ -156,6 +152,62 @@ describe('optimizer React Query reads', () => {
     expect(result.current.data).toEqual([]);
   });
 
+  it('answers the page shell and the tab from ONE read of the brand-scoped RPC', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [portfolioRow(), portfolioRow({ id: OTHER_ID, ad_account_id: 'act_2' })],
+      error: null,
+    });
+    const wrapper = createWrapper();
+    const { result } = renderHook(
+      () => ({
+        shell: useOptimizerPortfolios(BRAND, null),
+        tab: useOptimizerPortfolios(BRAND, 'act_1'),
+      }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.tab.isSuccess).toBe(true));
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(result.current.shell.data).toHaveLength(2);
+    expect(result.current.tab.data.map((row) => row.id)).toEqual([portfolioRow().id]);
+    expect(result.current.tab.otherAccountIds).toEqual(['act_2']);
+  });
+
+  it('re-scopes an account switch from the read in hand, with no second request', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [portfolioRow(), portfolioRow({ id: OTHER_ID, ad_account_id: 'act_2' })],
+      error: null,
+    });
+    const { result, rerender } = renderHook(
+      ({ account }: { account: string }) => useOptimizerPortfolios(BRAND, account),
+      { wrapper: createWrapper(), initialProps: { account: 'act_1' } },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    rerender({ account: 'act_2' });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data.map((row) => row.id)).toEqual([OTHER_ID]);
+    expect(result.current.otherAccountIds).toEqual(['act_1']);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the last answer when a background refetch fails', async () => {
+    rpc.mockResolvedValueOnce({ data: [portfolioRow()], error: null });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, 'act_1'), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+    await result.current.refetch();
+
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5_000 });
+    expect(result.current.hasAnswer).toBe(true);
+    expect(result.current.data).toHaveLength(1);
+  });
+
   it('keeps the read disabled until a brand exists', () => {
     const { result } = renderHook(() => useOptimizerPortfolios('', null), {
       wrapper: createWrapper(),
@@ -164,6 +216,76 @@ describe('optimizer React Query reads', () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data).toEqual([]);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+/** The optimizer surface's critical path on a fake clock. The RPC answers in 200 ms — the
+ *  measured production latency of optimizer_list_portfolios for Vivo 47 — and the tab mounts
+ *  the way it does on the Scale page: after the page shell's brand-wide read has landed. */
+describe('portfolio read critical path (fake timers)', () => {
+  const RPC_MS = 200;
+
+  async function advanceUntil(done: () => boolean, limitMs = 5_000): Promise<number> {
+    let elapsed = 0;
+    while (!done() && elapsed < limitMs) {
+      await act(async () => {
+        jest.advanceTimersByTime(10);
+      });
+      elapsed += 10;
+    }
+    return elapsed;
+  }
+
+  it('paints the tab from the shell read: one RPC, no wait after mount, no read on switch', async () => {
+    jest.useFakeTimers();
+    try {
+      rpc.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  data: [portfolioRow(), portfolioRow({ id: OTHER_ID, ad_account_id: 'act_2' })],
+                  error: null,
+                }),
+              RPC_MS,
+            ),
+          ),
+      );
+      const wrapper = createWrapper();
+      const shell = renderHook(() => useOptimizerPortfolios(BRAND, null), { wrapper });
+      const shellMs = await advanceUntil(() => shell.result.current.isSuccess);
+
+      const tab = renderHook(
+        ({ account }: { account: string }) => useOptimizerPortfolios(BRAND, account),
+        { wrapper, initialProps: { account: 'act_1' } },
+      );
+      const tabFreshMs = await advanceUntil(
+        () => tab.result.current.isSuccess && !tab.result.current.isFetching,
+      );
+      const callsAfterMount = rpc.mock.calls.length;
+
+      tab.rerender({ account: 'act_2' });
+      const switchFreshMs = await advanceUntil(
+        () => tab.result.current.isSuccess && !tab.result.current.isFetching,
+      );
+
+      console.info(
+        `[critical-path] shell ${shellMs}ms · tab fresh +${tabFreshMs}ms after mount · ` +
+          `switch fresh +${switchFreshMs}ms · RPCs ${callsAfterMount} → ${rpc.mock.calls.length}`,
+      );
+      // The clock steps 10 ms, and React Query notifies on the next tick.
+      expect(shellMs).toBe(RPC_MS + 10);
+      expect(tabFreshMs).toBe(0);
+      expect(switchFreshMs).toBe(0);
+      expect(callsAfterMount).toBe(1);
+      expect(rpc.mock.calls.length).toBe(1);
+      expect(tab.result.current.data.map((row) => row.id)).toEqual([OTHER_ID]);
+    } finally {
+      rpc.mockReset();
+      rpc.mockImplementation(async () => ({ data: [], error: null }));
+      jest.useRealTimers();
+    }
   });
 });
 

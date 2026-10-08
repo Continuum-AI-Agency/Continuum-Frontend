@@ -84,6 +84,27 @@ function OptimizerSkeleton() {
   );
 }
 
+function RefreshFailedNotice({ onRetry }: { onRetry: () => void }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs font-normal text-muted-foreground"
+      data-testid="optimizer-refresh-failed"
+      role="status"
+    >
+      Couldn't refresh — showing the last read.
+      <Button
+        className="h-6 px-1.5 text-xs"
+        onClick={onRetry}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        Retry
+      </Button>
+    </span>
+  );
+}
+
 export function OptimizerTab({
   brandId,
   adAccountId,
@@ -174,9 +195,11 @@ export function OptimizerTab({
     return <OptimizerSkeleton />;
   }
 
-  // The portfolio read errored/timed out → the optimizer backend is unreachable.
-  // Show a clear offline state (with retry) rather than a misleading empty state.
-  if (portfoliosQuery.isError) {
+  // The portfolio read errored/timed out with nothing read before → the optimizer backend is
+  // unreachable. Show a clear offline state (with retry) rather than a misleading empty state.
+  // A failed REFRESH is a different fact: React Query keeps the last answer, so the surface
+  // keeps painting it and says so in the header instead of blanking the page.
+  if (portfoliosQuery.isError && !portfoliosQuery.hasAnswer) {
     return (
       <div className="min-h-0 overflow-y-auto py-6">
         <OptimizerOffline onRetry={portfoliosQuery.refetch} />
@@ -323,6 +346,9 @@ export function OptimizerTab({
             <span className="inline-flex items-center gap-2">
               <GaugeCircleIcon className="size-4" aria-hidden="true" />
               Optimizer
+              {portfoliosQuery.isError ? (
+                <RefreshFailedNotice onRetry={() => void portfoliosQuery.refetch()} />
+              ) : null}
             </span>
           }
           action={

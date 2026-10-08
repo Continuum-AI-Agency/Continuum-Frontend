@@ -57,17 +57,25 @@ describe('the All frame', () => {
     const leads = rankedKinds(EASY_FIT_MP1).find((kind) => kind.kind === 'leads');
     if (!leads) throw new Error('leads missing');
     expect(kindTileLabel(EASY_FIT_MP1, leads)).toBe('Leads · 3 platforms');
-    expect(kindTileSub(EASY_FIT_MP1, leads)).toBe('36.83 MXN each · Google cheapest at 31.40 MXN');
+    expect(kindTileSub(EASY_FIT_MP1, leads)).toBe(
+      '36.83 MXN each · no target · Google cheapest at 31.40 MXN',
+    );
     const conversations = rankedKinds(EASY_FIT_MP1)[0];
     if (!conversations) throw new Error('conversations missing');
     expect(kindTileLabel(EASY_FIT_MP1, conversations)).toBe('Conversations · Meta');
-    expect(kindTileSub(EASY_FIT_MP1, conversations)).toBe('39.95 MXN each');
+    expect(kindTileSub(EASY_FIT_MP1, conversations)).toBe('39.95 MXN each · no target');
   });
 
   it('says a kind with spend and no results instead of a cost of zero', () => {
     const purchases = rankedKinds(EASY_FIT_MP1).find((kind) => kind.kind === 'purchases');
     if (!purchases) throw new Error('purchases missing');
     expect(kindTileSub(EASY_FIT_MP1, purchases)).toBe('75.60 MXN spent, no results');
+  });
+
+  it('says a kind with no spend has no target either', () => {
+    const purchases = rankedKinds(EASY_FIT_MP1).find((kind) => kind.kind === 'purchases');
+    if (!purchases) throw new Error('purchases missing');
+    expect(kindTileSub(EASY_FIT_MP1, { ...purchases, spend: 0 })).toBe('no spend · no target');
   });
 
   it('gives the headline the three largest kinds with their cheapest platform', () => {

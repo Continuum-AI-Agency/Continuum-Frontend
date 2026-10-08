@@ -176,9 +176,9 @@ async function readEdgeErrorMessage(error: unknown): Promise<string> {
 
 export const optimizerQueryKeys = {
   root: ['optimizer'] as const,
-  portfoliosRoot: ['optimizer', 'portfolios'] as const,
-  portfolios: (brandId: string, adAccountId: string | null) =>
-    ['optimizer', 'portfolios', brandId, adAccountId ?? 'all'] as const,
+  /** Brand-scoped, like the RPC behind it: every account view reads the same entry and
+   *  narrows it with `select`, so the page shell and the tab share one request. */
+  portfolios: (brandId: string) => ['optimizer', 'portfolios', brandId] as const,
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
   creativeSwapJobs: (brandId: string) => ['optimizer', 'creative-swap-jobs', brandId] as const,
@@ -326,34 +326,15 @@ function scopeToAccount(
   };
 }
 
-/**
- * The brand's portfolios already read under ANY account key, re-scoped to `adAccountId`.
- * The RPC is brand-scoped and the account filter runs here, so when the page settles on a
- * different account than the one it mounted with, the answer is already in hand: the surface
- * paints from it instead of returning to its skeleton for a second identical read.
- */
-export function cachedPortfolioScope(
-  queryClient: QueryClient,
-  brandId: string,
-  adAccountId: string | null,
-): PortfolioScope | undefined {
-  const cached = queryClient.getQueriesData<PortfolioScope>({
-    queryKey: [...optimizerQueryKeys.portfoliosRoot, brandId],
-  });
-  const hit = cached.find(([, scope]) => scope != null)?.[1];
-  return hit ? scopeToAccount(hit.brandPortfolios, adAccountId, hit.droppedRowCount) : undefined;
-}
+type BrandPortfolios = { rows: PortfolioListItem[]; dropped: number };
 
-async function fetchPortfolios(
-  brandId: string,
-  adAccountId: string | null,
-): Promise<PortfolioScope> {
+/** The RPC is brand-scoped; the account filter is `scopeToAccount`, applied per view. */
+async function fetchPortfolios(brandId: string): Promise<BrandPortfolios> {
   const { data, error } = await getClient().rpc('optimizer_list_portfolios', {
     p_brand_id: brandId,
   });
   if (error) throw new Error('optimizer_list_portfolios unreachable');
-  const { rows, dropped } = parsePortfolioRows('optimizer_list_portfolios', data ?? []);
-  return scopeToAccount(rows, adAccountId, dropped);
+  return parsePortfolioRows('optimizer_list_portfolios', data ?? []);
 }
 
 async function fetchAdAccounts(brandId: string): Promise<AdAccount[]> {
@@ -1247,25 +1228,37 @@ function useOptimizerRead<T>({
 /** The selected account's portfolios. `data` stays the PortfolioListItem[] every
  *  consumer already renders; the scope counts ride alongside so the surface can tell
  *  "this brand has no portfolios" (onboarding) apart from "they are all on another ad
- *  account" (a notice naming that account). */
+ *  account" (a notice naming that account).
+ *
+ *  One cache entry per brand: the page shell (account null) and the tab (the selected
+ *  account) used to key separately, so the tab re-ran the identical RPC after the shell's
+ *  read landed, and every account switch ran it again. `hasAnswer` separates "never read"
+ *  from "read once, the latest refresh failed" — React Query keeps the last data on a
+ *  failed refetch, and the surface must keep painting it rather than go offline. */
 export function useOptimizerPortfolios(brandId: string, adAccountId: string | null) {
-  const queryClient = useQueryClient();
-  const query = useOptimizerRead({
-    queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
-    queryFn: () => fetchPortfolios(brandId, adAccountId),
-    empty: EMPTY_PORTFOLIO_SCOPE,
+  const select = useCallback(
+    (brand: BrandPortfolios) => scopeToAccount(brand.rows, adAccountId, brand.dropped),
+    [adAccountId],
+  );
+  const query = useQuery({
+    queryKey: optimizerQueryKeys.portfolios(brandId),
+    queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
+    select,
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
-    placeholderData: () => cachedPortfolioScope(queryClient, brandId, adAccountId),
+    gcTime: THIRTY_MINUTES,
+    retry: 1,
   });
+  const scope = query.data ?? EMPTY_PORTFOLIO_SCOPE;
 
   return {
     ...query,
-    data: query.data.portfolios,
-    brandPortfolios: query.data.brandPortfolios,
-    brandPortfolioCount: query.data.brandPortfolioCount,
-    otherAccountIds: query.data.otherAccountIds,
-    droppedRowCount: query.data.droppedRowCount,
+    hasAnswer: query.data !== undefined,
+    data: scope.portfolios,
+    brandPortfolios: scope.brandPortfolios,
+    brandPortfolioCount: scope.brandPortfolioCount,
+    otherAccountIds: scope.otherAccountIds,
+    droppedRowCount: scope.droppedRowCount,
   };
 }
 
@@ -2416,15 +2409,17 @@ export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown
   return expired;
 }
 
-/** Warm the lightweight overview reads before the Optimization tab mounts. */
-export function usePrefetchOptimizerOverview(brandId: string, adAccountId: string | null) {
+/** Warm the lightweight overview reads before the Optimization tab mounts. `_adAccountId`
+ *  stays in the signature the page shell calls with: the portfolio read is brand-scoped, so
+ *  every account view is warmed by the same entry. */
+export function usePrefetchOptimizerOverview(brandId: string, _adAccountId: string | null) {
   const queryClient = useQueryClient();
 
   return useCallback(() => {
     if (!brandId) return;
     void queryClient.prefetchQuery({
-      queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
-      queryFn: () => withReadTimeout(fetchPortfolios(brandId, adAccountId)),
+      queryKey: optimizerQueryKeys.portfolios(brandId),
+      queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
       staleTime: FIVE_MINUTES,
     });
     void queryClient.prefetchQuery({
@@ -2432,7 +2427,7 @@ export function usePrefetchOptimizerOverview(brandId: string, adAccountId: strin
       queryFn: () => withReadTimeout(fetchRenewals(brandId)),
       staleTime: FIVE_MINUTES,
     });
-  }, [adAccountId, brandId, queryClient]);
+  }, [brandId, queryClient]);
 }
 
 /** Warm a portfolio's detail-workspace reads before it opens — fired from a card's

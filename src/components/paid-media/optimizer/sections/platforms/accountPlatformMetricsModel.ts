@@ -139,14 +139,16 @@ export function kindTileLabel(metrics: AccountPlatformMetrics, kind: KindAcrossP
   return `${words} · ${kind.platforms.length} platforms`;
 }
 
-/** "41.20 MXN each · Google buys them cheapest at 31.40 MXN" — or why there is no cost. */
+/** "41.20 MXN each · no target · Google cheapest at 31.40 MXN" — or why there is no cost.
+ *  Targets belong to portfolios, so an account-wide result has none, and the tile says so
+ *  rather than leaving a neutral border unexplained. */
 export function kindTileSub(metrics: AccountPlatformMetrics, kind: KindAcrossPlatforms): string {
   if (kind.cost_per_result == null) {
     return kind.spend > 0
       ? `${formatCurrency(kind.spend, kind.currency)} spent, no results`
-      : 'no spend';
+      : 'no spend · no target';
   }
-  const parts = [`${formatCurrency(kind.cost_per_result, kind.currency)} each`];
+  const parts = [`${formatCurrency(kind.cost_per_result, kind.currency)} each`, 'no target'];
   const cheapest = cheapestFor(metrics, kind);
   if (cheapest) {
     parts.push(

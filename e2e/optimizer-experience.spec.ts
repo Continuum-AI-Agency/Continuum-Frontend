@@ -1664,6 +1664,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         'jaina-entry-chips',
         'account-tiles',
       ];
+      if (report.ids.includes('platform-comparison')) expectedIds.push('platform-comparison');
       if (report.ids.includes('overview-recommendations'))
         expectedIds.push('overview-recommendations');
       expectedIds.push('portfolio-rows');

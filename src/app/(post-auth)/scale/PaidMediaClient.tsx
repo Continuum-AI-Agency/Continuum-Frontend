@@ -46,6 +46,7 @@ import {
   readSavedAdAccount,
   saveAdAccount,
 } from './adAccountSelection';
+import { OptimizerSurfaceSkeleton } from './OptimizerSurfaceSkeleton';
 
 const PAID_MEDIA_TABS = ['dashboard', 'performance', 'campaigns', 'jaina'] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
@@ -89,31 +90,6 @@ function JainaSkeleton() {
     <div className="flex flex-col h-full">
       <Skeleton className="flex-1 m-4 rounded-xl" />
       <Skeleton className="h-12 m-4 rounded-lg" />
-    </div>
-  );
-}
-
-function OptimizerSurfaceSkeleton() {
-  return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
-      <div className="flex items-center justify-between gap-3 border-border/70 border-b px-4 py-3">
-        <Skeleton className="h-5 w-28 shrink-0 rounded-md" />
-        <Skeleton className="h-8 w-72 min-w-0 shrink rounded-md" />
-      </div>
-      <div className="min-h-0 space-y-3 overflow-hidden p-3">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-        </div>
-        <Skeleton className="h-[min(20rem,45vh)] rounded-lg" />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <Skeleton className="h-36 rounded-lg" />
-          <Skeleton className="h-36 rounded-lg" />
-          <Skeleton className="h-36 rounded-lg" />
-        </div>
-      </div>
     </div>
   );
 }

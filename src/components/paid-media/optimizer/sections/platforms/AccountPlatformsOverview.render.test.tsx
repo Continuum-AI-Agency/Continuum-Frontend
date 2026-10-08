@@ -112,6 +112,25 @@ describe('AllPlatformsTiles — the per-platform second line (feature 04)', () =
     container.querySelector(`[data-testid="${testId}"] [data-testid="tile-breakdown"]`)
       ?.textContent ?? null;
 
+  it('says a result tile has no target and keeps its per-platform line', () => {
+    const { container } = render(
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+    );
+    // The O1 e2e grades exactly this: a result tile without "target <n>" reads neutral and
+    // says "no target" or "no results".
+    const kindTiles = [...container.querySelectorAll('[data-testid^="tile-kind-"]')];
+    expect(kindTiles.length).toBe(3);
+    for (const node of kindTiles) {
+      expect(node.getAttribute('data-state')).toBe('none');
+      const text = node.textContent ?? '';
+      expect(text.includes('no target') || text.includes('no results')).toBe(true);
+    }
+    expect(tile(container, 'tile-kind-leads')).toContain('no target');
+    expect(breakdownOf(container, 'tile-kind-leads')).toBe(
+      'Meta · 78 · Google · 118 · TikTok · 18',
+    );
+  });
+
   it('splits a result bought on several platforms by platform, under the cost line', () => {
     const { container } = render(
       <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
