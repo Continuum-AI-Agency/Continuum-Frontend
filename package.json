@@ -62,6 +62,7 @@
     "billing:gates:fe:bench": "playwright test --config playwright.billing-gates.config.ts --workers=1",
     "brands:session-tenancy:e2e:bench": "set -a; . ./.env.local; set +a; playwright test --config playwright.brand-session-tenancy.config.ts --workers=1",
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
+    "perfplus:ui:bench": "playwright test --config playwright.perfplus.config.ts --workers=1",
     "paid:parity:e2e:bench": "playwright test --config playwright.paid-parity.config.ts --workers=1",
     "integrations:google-assets-render:e2e:bench": "bun run src/lib/integrations/google-assets-render.bench.ts",
     "organic:x:metrics:e2e:bench": "playwright test --config playwright.organic-x-metrics.config.ts --workers=1",
