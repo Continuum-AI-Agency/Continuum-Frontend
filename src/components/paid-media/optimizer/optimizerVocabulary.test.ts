@@ -130,13 +130,9 @@ function spanishStrings(paths: readonly string[]): string[] {
 /**
  * Spanish that is known, owned elsewhere, and on its way out. Each entry names the string
  * exactly, so the list can only shrink: an exemption whose string is gone fails below and has
- * to be deleted. The portfolio workspace's disclosure is asserted verbatim by the portfolio
- * hero e2e, which belongs to the hero session; it moves to English with that test.
+ * to be deleted.
  */
-const KNOWN_SPANISH = [
-  '/sections/PortfolioDetailWorkspace.tsx: Ver detalle',
-  '/sections/PortfolioDetailWorkspace.tsx: Ocultar detalle',
-];
+const KNOWN_SPANISH: string[] = [];
 
 describe('optimizer user-visible vocabulary', () => {
   const files = sourceFiles(ROOT);

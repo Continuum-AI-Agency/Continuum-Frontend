@@ -92,11 +92,13 @@ import { buildPortfolioHeadline } from './detail/headlineModel';
 import { buildHeroHeader, type HeroSetting } from './detail/heroHeaderModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
+import { PortfolioHeaderBar } from './detail/PortfolioHeaderLine';
 import { PortfolioHero } from './detail/PortfolioHero';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
 import { SuggestionAsk } from './detail/SuggestionAsk';
 import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
+import { vsTargetColumn } from './detail/vsTargetColumn';
 import {
   OptimizerActionsPortfolioGroup,
   useAudienceCardActions,
@@ -548,554 +550,554 @@ export function PortfolioDetailWorkspace({
       nameById: adsetNameById,
     }),
   );
-  const adsetColumns = kpiColumns({ currency, maxCiCost: maxCiCpa, metric });
+  // The table reads the distance to the target off a small bar per row, when there is one.
+  const adsetColumns = [
+    ...kpiColumns({ currency, maxCiCost: maxCiCpa, metric }),
+    ...(targetDisplay != null ? [vsTargetColumn({ target: targetDisplay, metric, currency })] : []),
+  ];
 
   const dailyTrendsQuery = useOptimizerAdDailyTrends(brandId, adAccountId, selectedAdsetId);
   const adsetAdsQuery = useOptimizerAdsetAds(brandId, adAccountId, selectedAdsetId);
   const adAnglesQuery = useOptimizerAdAngles(brandId, adAccountId, selectedAdsetId);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-border/70 border-b bg-muted/10 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            aria-label="Back to portfolios"
-            className="size-8 shrink-0"
-            onClick={onClose}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <ArrowLeftIcon className="size-4" />
-          </Button>
-          <AdsetActionMenu
-            label={portfolio.name}
-            onArchive={() => {
-              archive.mutate(portfolio.id);
-              onClose();
-            }}
-            onRun={() => run.mutate(portfolio.id)}
-          >
-            {/* Navigation chrome only: the mode, freshness, settings and Run now live in the
-                portfolio's own name line (PortfolioHeaderLine) on the Performance tab. */}
-            <h2 className="min-w-0 truncate font-semibold text-sm tracking-tight">
-              {portfolio.name}
-            </h2>
-          </AdsetActionMenu>
-        </div>
-      </header>
-
-      {/* Internal sections — a shallow, instant swap (no server round-trip). Performance
-          is the whole cycle instrument; Manage edits config; Activity is the approvals
-          slot a later agent fills with the executing Action Log. */}
-      <Tabs
-        value={section}
-        onValueChange={(value) => onSectionChange(value as WorkspaceSection)}
-        className="min-h-0 flex-1"
-      >
-        <TabsList className="mx-3 mt-2 h-8 w-fit shrink-0">
-          <TabsTrigger value="performance" className="px-3 text-xs">
-            Performance
-          </TabsTrigger>
-          <TabsTrigger value="manage" className="px-3 text-xs">
-            Manage
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="px-3 text-xs">
-            Activity
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="performance" className="min-h-0 space-y-3 overflow-y-auto p-3">
-          {/* Both "Run now" triggers in this workspace used to fire into a void — no success,
-            no skip reason, no error. */}
-          <RunOutcomeNotice outcome={run.data} isPending={run.isPending} />
-
-          {firstCycle === 'error' ? (
-            <OptimizerReadError
-              error={performanceQuery.error}
-              onRetry={() => void performanceQuery.refetch()}
-              subject="this portfolio's cycle"
-            />
-          ) : null}
-
-          {firstCycle === 'waiting' ? (
-            <div
-              role="status"
-              aria-busy="true"
-              className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-foreground"
-            >
-              <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
-              <span>
-                Scoring your first cycle — this can take up to a couple of minutes. Results appear
-                here automatically; you can keep working.
-              </span>
-            </div>
-          ) : null}
-
-          {/* The poll stops at two minutes. Past that the spinner would keep animating with
-              nothing behind it, so hand the wait back to the user instead. */}
-          {firstCycle === 'stalled' ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-3 text-foreground text-xs">
-              <span className="flex-1">
-                The first cycle hasn't landed yet. It normally scores within a couple of minutes —
-                the scheduler will keep trying.
-              </span>
+    // Internal sections — a shallow, instant swap (no server round-trip). Performance is the
+    // whole cycle instrument; Manage edits config; Activity is the approvals slot. The tabs
+    // sit in the portfolio's one bar, between its name and its controls.
+    <Tabs
+      className="flex h-full min-h-0 flex-col gap-0"
+      onValueChange={(value) => onSectionChange(value as WorkspaceSection)}
+      value={section}
+    >
+      <header className="border-border/70 border-b px-4 py-2">
+        <PortfolioHeaderBar
+          back={
+            <>
               <Button
-                className="h-7 gap-1.5 px-2 text-xs"
-                onClick={() => void performanceQuery.refetch()}
+                aria-label="Back to portfolios"
+                className="h-7 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                onClick={onClose}
                 size="sm"
                 type="button"
-                variant="secondary"
+                variant="ghost"
               >
-                <RefreshCwIcon aria-hidden className="size-3.5" />
-                Check again
+                <ArrowLeftIcon />
+                Portfolios
               </Button>
-            </div>
-          ) : null}
-
-          <PortfolioHero
-            beforeAfter={{
-              model: beforeAfter,
-              currency: currency ?? null,
-              words: resultWords(metric.kpiField, metric.resultLabel),
-              window: resolvedRange.window,
-              target: targetDisplay ?? null,
-            }}
-            currency={currency ?? null}
-            dailyTotal={portfolio.daily_total ?? null}
-            explainHref={jainaPromptHref(
-              `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
-            )}
-            header={{
-              header: heroHeader,
-              platforms: OPTIMIZER_PORTFOLIO_PLATFORMS,
-              onEditSetting,
-              onSecondary,
-              secondaryPending: setPaused.isPending,
-              onRun: () => run.mutate(portfolio.id),
-              running: run.isPending,
-            }}
-            headline={headline}
-            items={items}
-            jaina={{ portfolio, read: headline.read }}
-            nextCycleAt={portfolio.next_realloc_at ?? null}
-            onCta={onHeroCta}
-            onEditSetting={onEditSetting}
-            stale={isStale(portfolio)}
-            portfolioId={portfolio.id}
-            view={heroView}
-          />
-
-          {/* One text row per platform, with the attribution source named once (frontend.html §3). */}
-          <ByPlatform portfolioId={portfolio.id} />
-
-          {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
-              distance to the target is read off the bottom half of this table. */}
-          <OptimizerPanel
-            bodyClassName="space-y-2.5"
-            meta={
-              <span className="text-xs text-muted-foreground">
-                {costCiLegend(metric)} · expand a row for its creative verdicts
+              <span aria-hidden className="text-muted-foreground">
+                /
               </span>
-            }
-            title={`${metric.costLabel} per ad set`}
+            </>
+          }
+          header={heroHeader}
+          name={
+            <AdsetActionMenu
+              label={portfolio.name}
+              onArchive={() => {
+                archive.mutate(portfolio.id);
+                onClose();
+              }}
+              onRun={() => run.mutate(portfolio.id)}
+            >
+              <h2 className="min-w-0 truncate font-semibold text-sm tracking-tight">
+                {portfolio.name}
+              </h2>
+            </AdsetActionMenu>
+          }
+          onRun={() => run.mutate(portfolio.id)}
+          onSecondary={onSecondary}
+          platforms={OPTIMIZER_PORTFOLIO_PLATFORMS}
+          running={run.isPending}
+          secondaryPending={setPaused.isPending}
+          tabs={
+            <TabsList className="h-8 shrink-0" variant="line">
+              <TabsTrigger className="px-2 text-sm" value="performance">
+                Performance
+              </TabsTrigger>
+              <TabsTrigger className="px-2 text-sm" value="manage">
+                Manage
+              </TabsTrigger>
+              <TabsTrigger className="px-2 text-sm" value="activity">
+                Activity
+              </TabsTrigger>
+            </TabsList>
+          }
+        />
+      </header>
+
+      <TabsContent
+        className="min-h-0 space-y-8 overflow-y-auto px-4 py-5 md:px-6"
+        value="performance"
+      >
+        {/* Both "Run now" triggers in this workspace used to fire into a void — no success,
+          no skip reason, no error. */}
+        <RunOutcomeNotice outcome={run.data} isPending={run.isPending} />
+
+        {firstCycle === 'error' ? (
+          <OptimizerReadError
+            error={performanceQuery.error}
+            onRetry={() => void performanceQuery.refetch()}
+            subject="this portfolio's cycle"
+          />
+        ) : null}
+
+        {firstCycle === 'waiting' ? (
+          <div
+            role="status"
+            aria-busy="true"
+            className="flex items-center gap-2 rounded-lg bg-primary/5 px-4 py-3 text-foreground text-xs"
           >
-            <InsightDataTable
-              columns={adsetColumns}
-              defaultSort={{ columnId: 'cost', direction: 'desc' }}
-              emptyState="No scored ad sets in the latest cycle."
-              searchable
-              searchPlaceholder="Search ad sets by name or ID…"
-              searchValue={(row) => `${row.name ?? ''} ${row.adsetId}`}
-              expandedContent={(row) => (
-                <AdsetCreativeVerdicts
-                  accountId={adAccountId}
-                  adsetId={row.adsetId}
-                  brandId={brandId}
-                  currency={currency}
-                />
-              )}
-              getRowId={(row) => row.adsetId}
-              rowActions={(row) => (
-                <Button
-                  aria-label={`Chart the creatives in ${row.name ?? row.adsetId}`}
-                  aria-pressed={selectedAdsetId === row.adsetId}
-                  className={cn(
-                    'size-7',
-                    selectedAdsetId === row.adsetId && 'bg-muted text-primary',
-                  )}
-                  onClick={() =>
-                    onSelectAdset(selectedAdsetId === row.adsetId ? null : row.adsetId)
-                  }
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <LineChartIcon className="size-3.5" />
-                </Button>
-              )}
-              rows={adsetRows}
+            <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
+            <span>
+              Scoring your first cycle — this can take up to a couple of minutes. Results appear
+              here automatically; you can keep working.
+            </span>
+          </div>
+        ) : null}
+
+        {/* The poll stops at two minutes. Past that the spinner would keep animating with
+            nothing behind it, so hand the wait back to the user instead. */}
+        {firstCycle === 'stalled' ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 px-4 py-3 text-foreground text-xs">
+            <span className="flex-1">
+              The first cycle hasn't landed yet. It normally scores within a couple of minutes — the
+              scheduler will keep trying.
+            </span>
+            <Button
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => void performanceQuery.refetch()}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              <RefreshCwIcon aria-hidden className="size-3.5" />
+              Check again
+            </Button>
+          </div>
+        ) : null}
+
+        <PortfolioHero
+          beforeAfter={{
+            model: beforeAfter,
+            currency: currency ?? null,
+            words: resultWords(metric.kpiField, metric.resultLabel),
+            window: resolvedRange.window,
+            target: targetDisplay ?? null,
+          }}
+          currency={currency ?? null}
+          dailyTotal={portfolio.daily_total ?? null}
+          explainHref={jainaPromptHref(
+            `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
+          )}
+          header={heroHeader}
+          headline={headline}
+          items={items}
+          jaina={{ portfolio, read: headline.read }}
+          nextCycleAt={portfolio.next_realloc_at ?? null}
+          onCta={onHeroCta}
+          onEditSetting={onEditSetting}
+          stale={isStale(portfolio)}
+          portfolioId={portfolio.id}
+          view={heroView}
+        />
+
+        {/* One text row per platform, with the attribution source named once (frontend.html §3). */}
+        <ByPlatform portfolioId={portfolio.id} />
+
+        {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
+            distance to the target is read off the bottom half of this table. */}
+        <OptimizerPanel
+          meta={<>{costCiLegend(metric)} · expand a row for its creative verdicts</>}
+          title={`${metric.costLabel} per ad set`}
+        >
+          <InsightDataTable
+            columns={adsetColumns}
+            defaultSort={{ columnId: 'cost', direction: 'desc' }}
+            emptyState="No scored ad sets in the latest cycle."
+            searchable
+            searchPlaceholder="Search ad sets by name or ID…"
+            searchValue={(row) => `${row.name ?? ''} ${row.adsetId}`}
+            expandedContent={(row) => (
+              <AdsetCreativeVerdicts
+                accountId={adAccountId}
+                adsetId={row.adsetId}
+                brandId={brandId}
+                currency={currency}
+              />
+            )}
+            getRowId={(row) => row.adsetId}
+            rowActions={(row) => (
+              <Button
+                aria-label={`Chart the creatives in ${row.name ?? row.adsetId}`}
+                aria-pressed={selectedAdsetId === row.adsetId}
+                className={cn('size-7', selectedAdsetId === row.adsetId && 'bg-muted text-primary')}
+                onClick={() => onSelectAdset(selectedAdsetId === row.adsetId ? null : row.adsetId)}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <LineChartIcon className="size-3.5" />
+              </Button>
+            )}
+            rows={adsetRows}
+          />
+        </OptimizerPanel>
+
+        {/* The one period every panel below reports on, and the objective recap for it. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-foreground">
+            {resolvedRange.label}
+            {resolvedRange.flightMissing ? (
+              <span className="ml-2 font-normal text-xs text-muted-foreground">
+                set a flight in Manage to report on it
+              </span>
+            ) : null}
+          </p>
+          <DateRangeControl hasFlight={hasFlight} onChange={onRangeChange} value={range} />
+        </div>
+        <DataState
+          error={
+            <ChartError message="The recap could not load." onRetry={snapshotsQuery.refetch} />
+          }
+          loading={<ChartSkeleton className="h-24" />}
+          status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
+        >
+          <ObjectiveCostRecap
+            currency={currency}
+            metric={metric}
+            range={resolvedRange}
+            recap={recap}
+            target={targetDisplay}
+          />
+        </DataState>
+
+        {noRecommendations ? (
+          <SignalReadinessCard
+            objective={portfolio.objective as OptimizationObjective}
+            snapshots={snapshotsQuery.data}
+          />
+        ) : null}
+
+        <OptimizerPanel
+          meta={
+            <span className="text-xs text-muted-foreground">
+              hover a cycle for its metrics + actions
+            </span>
+          }
+          title={`${metric.costLabel} timeline`}
+        >
+          <DataState
+            error={
+              <ChartError
+                message={`The ${metric.costLabel} timeline could not load.`}
+                onRetry={cpaSeriesQuery.refetch}
+              />
+            }
+            loading={<ChartSkeleton className="h-[300px]" />}
+            status={chartStatus(cpaSeriesQuery)}
+          >
+            <CpaHeroTimeline
+              eventsByTs={eventsByTs}
+              confidenceBand={latestRun?.confidence?.band}
+              currency={currency}
+              objective={portfolio.objective}
+              series={cpaSeriesInRange}
+              targetCpa={targetDisplay}
+            />
+          </DataState>
+        </OptimizerPanel>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          <OptimizerPanel
+            meta={
+              <ConversionVolumeBadge
+                confidence={latestRun?.confidence ?? null}
+                resultLabel={resultWord}
+              />
+            }
+            title="Conversion volume"
+          >
+            <ConversionVolumePanel
+              confidence={latestRun?.confidence ?? null}
+              nameById={nameById}
+              resultLabel={resultWord}
             />
           </OptimizerPanel>
 
-          {/* The one period every panel below reports on, and the objective recap for it. */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-foreground">
-              {resolvedRange.label}
-              {resolvedRange.flightMissing ? (
-                <span className="ml-2 font-normal text-xs text-muted-foreground">
-                  set a flight in Manage to report on it
+          <OptimizerPanel
+            meta={
+              flightPacing.kind === 'ready' ? (
+                <span className="text-xs text-muted-foreground">
+                  {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
                 </span>
-              ) : null}
-            </p>
-            <DateRangeControl hasFlight={hasFlight} onChange={onRangeChange} value={range} />
-          </div>
-          <DataState
-            error={
-              <ChartError message="The recap could not load." onRetry={snapshotsQuery.refetch} />
+              ) : null
             }
-            loading={<ChartSkeleton className="h-24" />}
-            status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
+            title="Flight pacing"
           >
-            <ObjectiveCostRecap
+            <FlightPacing
               currency={currency}
-              metric={metric}
-              range={resolvedRange}
-              recap={recap}
-              target={targetDisplay}
+              model={flightPacing}
+              onSetFlight={() => onSectionChange('manage')}
             />
-          </DataState>
-
-          {noRecommendations ? (
-            <SignalReadinessCard
-              objective={portfolio.objective as OptimizationObjective}
-              snapshots={snapshotsQuery.data}
-            />
-          ) : null}
+          </OptimizerPanel>
 
           <OptimizerPanel
             meta={
               <span className="text-xs text-muted-foreground">
-                hover a cycle for its metrics + actions
+                within-ad-set creative wins · {resolvedRange.lookback}
               </span>
             }
-            title={`${metric.costLabel} timeline`}
+            title="Angle to run next"
           >
             <DataState
               error={
                 <ChartError
-                  message={`The ${metric.costLabel} timeline could not load.`}
-                  onRetry={cpaSeriesQuery.refetch}
+                  message="The creative angle standing could not load."
+                  onRetry={winratesQuery.refetch}
                 />
               }
-              loading={<ChartSkeleton className="h-[300px]" />}
-              status={chartStatus(cpaSeriesQuery)}
+              loading={<ChartSkeleton className="h-32" />}
+              status={chartStatus(winratesQuery)}
             >
-              <CpaHeroTimeline
-                eventsByTs={eventsByTs}
-                confidenceBand={latestRun?.confidence?.band}
-                currency={currency}
-                objective={portfolio.objective}
-                series={cpaSeriesInRange}
-                targetCpa={targetDisplay}
-              />
+              <AdsetAngleStanding currency={currency} rows={angleRows} />
             </DataState>
           </OptimizerPanel>
+        </div>
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <OptimizerPanel
-              meta={
-                <ConversionVolumeBadge
-                  confidence={latestRun?.confidence ?? null}
-                  resultLabel={resultWord}
-                />
-              }
-              title="Conversion volume"
-            >
-              <ConversionVolumePanel
-                confidence={latestRun?.confidence ?? null}
-                nameById={nameById}
-                resultLabel={resultWord}
-              />
-            </OptimizerPanel>
-
-            <OptimizerPanel
-              meta={
-                flightPacing.kind === 'ready' ? (
-                  <span className="text-xs text-muted-foreground">
-                    {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
-                  </span>
-                ) : null
-              }
-              title="Flight pacing"
-            >
-              <FlightPacing
-                currency={currency}
-                model={flightPacing}
-                onSetFlight={() => onSectionChange('manage')}
-              />
-            </OptimizerPanel>
-
+        {/* The two red-to-green ramps — the step funnel and the reallocation flow — wait
+            behind a disclosure: the news above already says where the cost comes from. */}
+        <details className="group" data-testid="portfolio-detail-more">
+          <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+            <span className="group-open:hidden">Show detail</span>
+            <span className="hidden group-open:inline">Hide detail</span>
+          </summary>
+          <div className="mt-5 grid grid-cols-1 gap-8 lg:grid-cols-2">
             <OptimizerPanel
               meta={
                 <span className="text-xs text-muted-foreground">
-                  within-ad-set creative wins · {resolvedRange.lookback}
+                  step conversion · {funnelMeta}
                 </span>
               }
-              title="Angle to run next"
+              title="Conversion funnel"
             >
               <DataState
                 error={
                   <ChartError
-                    message="The creative angle standing could not load."
-                    onRetry={winratesQuery.refetch}
+                    message="The conversion funnel could not load."
+                    onRetry={snapshotsQuery.refetch}
                   />
                 }
                 loading={<ChartSkeleton className="h-32" />}
-                status={chartStatus(winratesQuery)}
+                status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
               >
-                <AdsetAngleStanding currency={currency} rows={angleRows} />
+                <StepFunnel objective={portfolio.objective} window={funnelWindow} />
               </DataState>
             </OptimizerPanel>
-          </div>
-
-          {/* The two red-to-green ramps — the step funnel and the reallocation flow — wait
-              behind a disclosure: the news above already says where the cost comes from. */}
-          <details className="group" data-testid="portfolio-detail-more">
-            <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
-              <span className="group-open:hidden">Ver detalle</span>
-              <span className="hidden group-open:inline">Ocultar detalle</span>
-            </summary>
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <OptimizerPanel
-                meta={
-                  <span className="text-xs text-muted-foreground">
-                    step conversion · {funnelMeta}
-                  </span>
-                }
-                title="Conversion funnel"
-              >
-                <DataState
-                  error={
-                    <ChartError
-                      message="The conversion funnel could not load."
-                      onRetry={snapshotsQuery.refetch}
-                    />
-                  }
-                  loading={<ChartSkeleton className="h-32" />}
-                  status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
-                >
-                  <StepFunnel objective={portfolio.objective} window={funnelWindow} />
-                </DataState>
-              </OptimizerPanel>
-              <OptimizerPanel
-                action={
-                  canApplyReallocation ? (
-                    <ApplyReallocationDialog
-                      accountId={adAccountId}
-                      brandId={brandId}
-                      currency={currency ?? null}
-                      portfolioId={portfolio.id}
-                      runId={latestRunId}
-                    />
-                  ) : null
-                }
-                bodyClassName="space-y-2"
-                title="Reallocation"
-              >
-                {/* Observe is where a suggestion-created portfolio silently lands. When
-                the engine has actually scored moves and observe is the only reason
-                none of them happened, that fact deserves the promotion control next
-                to it — not a buried explainer and a trip to Manage. */}
-                {isObserveWithMoves ? (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2">
-                    <p className="min-w-0 text-warning text-xs">
-                      Observe mode — the optimizer wants to move budget across{' '}
-                      {movedCount === 1 ? '1 ad set' : `${movedCount} ad sets`}, but it never writes
-                      in this mode.
-                    </p>
-                    <Button
-                      className="h-6 shrink-0 px-2 text-xs"
-                      disabled={update.isPending}
-                      onClick={() =>
-                        update.mutate({
-                          portfolio_id: portfolio.id,
-                          patch: { apply_mode: 'recommend' },
-                        })
-                      }
-                      size="xs"
-                      type="button"
-                      variant="secondary"
-                    >
-                      {update.isPending ? 'Switching…' : 'Switch to Recommend'}
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {applyModeExplainer(portfolio.apply_mode)}
-                  </p>
-                )}
-                {update.isError ? (
-                  <p className="text-xs text-destructive" role="status">
-                    Could not change the mode. Nothing on Meta was touched — try again, or set it
-                    from Manage.
-                  </p>
-                ) : null}
-                {/* The move as a picture and a sentence first; the sortable table below stays
-                  for anyone who wants the exact numbers per row. */}
-                <ReallocationStory
-                  currency={currency}
-                  defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
-                  items={items}
-                  metric={metric}
-                  nameById={adsetNameById}
-                  snapshotById={snapshotById}
-                  target={targetDisplay}
-                />
-                <details className="group">
-                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                    Exact figures per ad set
-                  </summary>
-                  <div className="pt-2">
-                    <ReallocationFlow
-                      budgetSource={portfolio.budget_source}
-                      currency={currency}
-                      items={items}
-                      nameById={adsetNameById}
-                      objective={portfolio.objective}
-                      snapshotById={snapshotById}
-                    />
-                  </div>
-                </details>
-                {/* Held/approved budget approve+execute now lives in the Activity tab's unified
-                  queue (it owns approval, the drain, and the receipts). This panel stays a
-                  read view of the proposed reallocation. */}
-              </OptimizerPanel>
-            </div>
-          </details>
-
-          {selectedAdsetId ? (
-            <>
-              <OptimizerPanel
-                meta={
-                  <span className="text-xs text-muted-foreground">
-                    {adsetNameById.get(selectedAdsetId) || selectedAdsetId}
-                  </span>
-                }
-                title="Creatives"
-              >
-                <DataState
-                  error={
-                    <ChartError
-                      message="This ad set's creatives could not load."
-                      onRetry={dailyTrendsQuery.refetch}
-                    />
-                  }
-                  loading={<ChartSkeleton className="h-40" />}
-                  status={combinedChartStatus(dailyTrendsQuery, adsetAdsQuery)}
-                >
-                  <AdSetTimeline
-                    ads={adsetAdsQuery.data}
-                    angles={adAnglesQuery.data}
-                    currency={currency}
-                    metric={chartMetric}
-                    onMetricChange={onMetricChange}
-                    trends={dailyTrendsQuery.data}
+            <OptimizerPanel
+              action={
+                canApplyReallocation ? (
+                  <ApplyReallocationDialog
+                    accountId={adAccountId}
+                    brandId={brandId}
+                    currency={currency ?? null}
+                    portfolioId={portfolio.id}
+                    runId={latestRunId}
                   />
-                </DataState>
-              </OptimizerPanel>
-              <OptimizerPanel
-                meta={<span className="text-xs text-muted-foreground">ROAS vs break-even</span>}
-                title="Ad-set profitability"
-              >
-                <DataState
-                  error={
-                    <ChartError
-                      message="Ad-set profitability could not load."
-                      onRetry={dailyTrendsQuery.refetch}
-                    />
-                  }
-                  loading={<ChartSkeleton className="h-24" />}
-                  status={chartStatus(dailyTrendsQuery)}
-                >
-                  <RoasProfitLine points={adSetRoasSeries(dailyTrendsQuery.data)} />
-                </DataState>
-              </OptimizerPanel>
-            </>
-          ) : null}
-        </TabsContent>
+                ) : null
+              }
+              bodyClassName="space-y-2"
+              title="Reallocation"
+            >
+              {/* Observe is where a suggestion-created portfolio silently lands. When
+              the engine has actually scored moves and observe is the only reason
+              none of them happened, that fact deserves the promotion control next
+              to it — not a buried explainer and a trip to Manage. */}
+              {isObserveWithMoves ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/5 px-3 py-2">
+                  <p className="min-w-0 text-warning text-xs">
+                    Observe mode — the optimizer wants to move budget across{' '}
+                    {movedCount === 1 ? '1 ad set' : `${movedCount} ad sets`}, but it never writes
+                    in this mode.
+                  </p>
+                  <Button
+                    className="h-6 shrink-0 px-2 text-xs"
+                    disabled={update.isPending}
+                    onClick={() =>
+                      update.mutate({
+                        portfolio_id: portfolio.id,
+                        patch: { apply_mode: 'recommend' },
+                      })
+                    }
+                    size="xs"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {update.isPending ? 'Switching…' : 'Switch to Recommend'}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {applyModeExplainer(portfolio.apply_mode)}
+                </p>
+              )}
+              {update.isError ? (
+                <p className="text-xs text-destructive" role="status">
+                  Could not change the mode. Nothing on Meta was touched — try again, or set it from
+                  Manage.
+                </p>
+              ) : null}
+              {/* The move as a picture and a sentence first; the sortable table below stays
+                for anyone who wants the exact numbers per row. */}
+              <ReallocationStory
+                currency={currency}
+                defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
+                items={items}
+                metric={metric}
+                nameById={adsetNameById}
+                snapshotById={snapshotById}
+                target={targetDisplay}
+              />
+              <details className="group">
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                  Exact figures per ad set
+                </summary>
+                <div className="pt-2">
+                  <ReallocationFlow
+                    budgetSource={portfolio.budget_source}
+                    currency={currency}
+                    items={items}
+                    nameById={adsetNameById}
+                    objective={portfolio.objective}
+                    snapshotById={snapshotById}
+                  />
+                </div>
+              </details>
+              {/* Held/approved budget approve+execute now lives in the Activity tab's unified
+                queue (it owns approval, the drain, and the receipts). This panel stays a
+                read view of the proposed reallocation. */}
+            </OptimizerPanel>
+          </div>
+        </details>
 
-        <TabsContent value="manage" className="min-h-0 overflow-y-auto p-3">
-          <PortfolioManagePanel
-            adAccountId={adAccountId}
-            brandId={brandId}
+        {selectedAdsetId ? (
+          <>
+            <OptimizerPanel
+              meta={
+                <span className="text-xs text-muted-foreground">
+                  {adsetNameById.get(selectedAdsetId) || selectedAdsetId}
+                </span>
+              }
+              title="Creatives"
+            >
+              <DataState
+                error={
+                  <ChartError
+                    message="This ad set's creatives could not load."
+                    onRetry={dailyTrendsQuery.refetch}
+                  />
+                }
+                loading={<ChartSkeleton className="h-40" />}
+                status={combinedChartStatus(dailyTrendsQuery, adsetAdsQuery)}
+              >
+                <AdSetTimeline
+                  ads={adsetAdsQuery.data}
+                  angles={adAnglesQuery.data}
+                  currency={currency}
+                  metric={chartMetric}
+                  onMetricChange={onMetricChange}
+                  trends={dailyTrendsQuery.data}
+                />
+              </DataState>
+            </OptimizerPanel>
+            <OptimizerPanel
+              meta={<span className="text-xs text-muted-foreground">ROAS vs break-even</span>}
+              title="Ad-set profitability"
+            >
+              <DataState
+                error={
+                  <ChartError
+                    message="Ad-set profitability could not load."
+                    onRetry={dailyTrendsQuery.refetch}
+                  />
+                }
+                loading={<ChartSkeleton className="h-24" />}
+                status={chartStatus(dailyTrendsQuery)}
+              >
+                <RoasProfitLine points={adSetRoasSeries(dailyTrendsQuery.data)} />
+              </DataState>
+            </OptimizerPanel>
+          </>
+        ) : null}
+      </TabsContent>
+
+      <TabsContent value="manage" className="min-h-0 overflow-y-auto p-3">
+        <PortfolioManagePanel
+          adAccountId={adAccountId}
+          brandId={brandId}
+          currency={currency}
+          focusSetting={manageFocus}
+          onDone={() => onSectionChange('performance')}
+          onFocusSettingDone={clearManageFocus}
+          portfolio={portfolio}
+        />
+      </TabsContent>
+
+      <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3">
+        {/* Asking is always available — it is the door that exists precisely BECAUSE the
+            cycle raised nothing today, so gating it behind pending work would close it
+            exactly when it is wanted. The server owns the floor (90s cooldown, four per
+            category per UTC day); these controls read it rather than guess. */}
+        <SuggestionAsk
+          error={ask.error instanceof Error ? ask.error.message : null}
+          gates={suggestionsQuery.data.gates}
+          onAsk={onAsk}
+          pending={asking}
+        />
+        {/* ONE list: every category the brief weighed, and the suggestions this person
+            asked for, with one CTA handler between them. An asked row whose plan names a
+            queue row focuses that row in the group below instead of duplicating it. */}
+        {readRows.length > 0 ? (
+          <DailyReadList
+            busyRowId={busyRowId}
             currency={currency}
-            focusSetting={manageFocus}
-            onDone={() => onSectionChange('performance')}
-            onFocusSettingDone={clearManageFocus}
+            expandedRowId={expandedAskedRowId}
+            failure={buildFailure}
+            isWaiting={isReadRowWaiting}
+            onCta={onReadCta}
+            onDismiss={onReadDismiss}
+            renderExpansion={renderAskedExpansion}
+            rows={readRows}
+            source={heroView.source}
+          />
+        ) : null}
+        {/* The same unified queue the account-wide Actions tab renders, scoped to THIS
+            portfolio: budget moves + recommendations, approved and executed on Meta from
+            here. The group carries its own search + approve/execute toolbar.
+            pendingWorkCount comes from the LIST read, so a failed performance read (which
+            zeroes movedCount) can no longer hide a portfolio's own actionable work. */}
+        {pendingWorkCount(portfolio) > 0 ||
+        movedCount > 0 ||
+        askedRecIds.length > 0 ||
+        focusRowKey !== null ? (
+          <OptimizerActionsPortfolioGroup
+            adAccountId={adAccountId}
+            askedRecommendationIds={askedRecIds}
+            brandId={brandId}
+            focusRowKey={focusRowKey}
+            onFocusRowConsumed={() => setFocusRowKey(null)}
             portfolio={portfolio}
           />
-        </TabsContent>
-
-        <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3">
-          {/* Asking is always available — it is the door that exists precisely BECAUSE the
-              cycle raised nothing today, so gating it behind pending work would close it
-              exactly when it is wanted. The server owns the floor (90s cooldown, four per
-              category per UTC day); these controls read it rather than guess. */}
-          <SuggestionAsk
-            error={ask.error instanceof Error ? ask.error.message : null}
-            gates={suggestionsQuery.data.gates}
-            onAsk={onAsk}
-            pending={asking}
-          />
-          {/* ONE list: every category the brief weighed, and the suggestions this person
-              asked for, with one CTA handler between them. An asked row whose plan names a
-              queue row focuses that row in the group below instead of duplicating it. */}
-          {readRows.length > 0 ? (
-            <DailyReadList
-              busyRowId={busyRowId}
-              currency={currency}
-              expandedRowId={expandedAskedRowId}
-              failure={buildFailure}
-              isWaiting={isReadRowWaiting}
-              onCta={onReadCta}
-              onDismiss={onReadDismiss}
-              renderExpansion={renderAskedExpansion}
-              rows={readRows}
-              source={heroView.source}
-            />
-          ) : null}
-          {/* The same unified queue the account-wide Actions tab renders, scoped to THIS
-              portfolio: budget moves + recommendations, approved and executed on Meta from
-              here. The group carries its own search + approve/execute toolbar.
-              pendingWorkCount comes from the LIST read, so a failed performance read (which
-              zeroes movedCount) can no longer hide a portfolio's own actionable work. */}
-          {pendingWorkCount(portfolio) > 0 ||
-          movedCount > 0 ||
-          askedRecIds.length > 0 ||
-          focusRowKey !== null ? (
-            <OptimizerActionsPortfolioGroup
-              adAccountId={adAccountId}
-              askedRecommendationIds={askedRecIds}
-              brandId={brandId}
-              focusRowKey={focusRowKey}
-              onFocusRowConsumed={() => setFocusRowKey(null)}
-              portfolio={portfolio}
-            />
-          ) : (
-            <Card className="border-dashed bg-muted/10">
-              <CardHeader>
-                <CardTitle className="text-sm">
-                  No pending actions for this portfolio yet.
-                </CardTitle>
-                <CardDescription>
-                  Budget moves and recommendations that need your decision appear here.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
+        ) : (
+          <Card className="border-dashed bg-muted/10">
+            <CardHeader>
+              <CardTitle className="text-sm">No pending actions for this portfolio yet.</CardTitle>
+              <CardDescription>
+                Budget moves and recommendations that need your decision appear here.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
+      </TabsContent>
+    </Tabs>
   );
 }

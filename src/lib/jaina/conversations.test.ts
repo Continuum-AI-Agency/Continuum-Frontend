@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
   backendConversationMessagesResponseSchema,
+  formatSessionActivity,
   mapConversationMessageRow,
   mapConversationSessionRow,
   normalizeTimestamp,
+  sessionActivityAt,
   toConversationPreview,
 } from './conversations';
 
@@ -220,5 +222,59 @@ describe('normalizeTimestamp', () => {
     expect(normalizeTimestamp('2026-03-06T10:00:00-08:00', 'fallback')).toBe(
       '2026-03-06T18:00:00.000Z',
     );
+  });
+});
+
+describe('sessionActivityAt', () => {
+  const base = {
+    lastMessageAt: null,
+    updatedAt: '2026-10-08T18:05:00.000Z',
+    createdAt: '2026-10-01T09:00:00.000Z',
+  };
+
+  it('prefers the last message time when the row carries one', () => {
+    expect(sessionActivityAt({ ...base, lastMessageAt: '2026-10-08T17:00:00.000Z' })).toBe(
+      '2026-10-08T17:00:00.000Z',
+    );
+  });
+
+  // The Backend's session upserts null last_message_at after the message write stamps it, so a
+  // conversation with turns arrives with no last-message time: the last upsert is the last turn.
+  it('falls back to the last update when last_message_at was nulled', () => {
+    expect(sessionActivityAt(base)).toBe('2026-10-08T18:05:00.000Z');
+  });
+
+  it('falls back to creation when the update time is unusable', () => {
+    expect(sessionActivityAt({ ...base, updatedAt: 'not a date' })).toBe(
+      '2026-10-01T09:00:00.000Z',
+    );
+  });
+});
+
+describe('formatSessionActivity', () => {
+  const now = new Date(2026, 9, 9, 15, 0);
+  const local = (month: number, day: number, hours: number, minutes: number, year = 2026) =>
+    new Date(year, month, day, hours, minutes).toISOString();
+
+  it('shows only the clock time for today', () => {
+    expect(formatSessionActivity(local(9, 9, 14, 32), now)).toBe('14:32');
+    expect(formatSessionActivity(local(9, 9, 9, 5), now)).toBe('09:05');
+  });
+
+  it('says Yesterday for the previous calendar day, even under 24 hours ago', () => {
+    expect(formatSessionActivity(local(9, 8, 18, 5), now)).toBe('Yesterday 18:05');
+  });
+
+  it('shows month and day for anything older this year', () => {
+    expect(formatSessionActivity(local(9, 3, 16, 20), now)).toBe('Oct 3 · 16:20');
+  });
+
+  it('adds the year for an earlier year', () => {
+    expect(formatSessionActivity(local(11, 30, 8, 0, 2025), now)).toBe('Dec 30, 2025 · 08:00');
+  });
+
+  it('renders nothing for a missing or invalid time', () => {
+    expect(formatSessionActivity(null, now)).toBe('');
+    expect(formatSessionActivity('garbage', now)).toBe('');
   });
 });

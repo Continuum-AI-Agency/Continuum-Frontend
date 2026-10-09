@@ -7,11 +7,10 @@
 // re-read past the edge cache.
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Megaphone, Pause, Play, RotateCw } from 'lucide-react';
+import { ChevronRight, RotateCw } from 'lucide-react';
 import * as React from 'react';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
-import { EmptyState, ErrorRetryState } from '@/components/shared/state';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -34,7 +33,7 @@ import {
   scaleEntitiesKeyPrefix,
   scaleEntitiesQueryOptions,
 } from './campaignsClient';
-import { EntityStatusPill, humanizeStatus } from './EntityStatusPill';
+import { humanizeStatus } from './EntityStatusPill';
 import {
   type EntityStatusSettlement,
   EntityStatusSheet,
@@ -63,7 +62,18 @@ const ROW_TEST_ID: Record<EntityLevel, string> = {
   ad: 'scale-ad-row',
 };
 
-const INDENT = ['pl-3', 'pl-9', 'pl-[3.75rem]'];
+const INDENT = ['pl-1', 'pl-7', 'pl-[3.25rem]'];
+
+const HEAD = 'h-8 font-normal text-2xs text-muted-foreground uppercase tracking-wider';
+
+/** Quiet text action: shown on row hover or focus where a pointer can hover and the table is
+ *  wide; always shown on touch screens and in narrow panels, where there is no hover to find it. */
+const ROW_ACTION = cn(
+  'text-muted-foreground hover:text-foreground transition-opacity motion-reduce:transition-none',
+  '@lg/campaigns:[@media(hover:hover)]:opacity-0',
+  '@lg/campaigns:[@media(hover:hover)]:group-hover/row:opacity-100',
+  '@lg/campaigns:[@media(hover:hover)]:group-focus-within/row:opacity-100',
+);
 
 /** Meta budgets are in the currency's minor unit; zero-decimal currencies (JPY, KRW, ...) have
  *  none. ponytail: ISO minor units via Intl; Meta's own offset table differs for a few (e.g.
@@ -194,74 +204,72 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
       data-state={state}
       aria-busy={state === 'loading' || isRefreshing}
       aria-labelledby="scale-campaigns-heading"
-      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background"
+      className="@container/campaigns grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
     >
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-border/70 border-b px-4 py-2.5">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <h2 id="scale-campaigns-heading" className="font-medium text-sm">
-            Campaigns
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-1 pb-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h2 id="scale-campaigns-heading" className="font-semibold text-base tabular-nums">
+            {page ? `${rows.length} ${rows.length === 1 ? 'campaign' : 'campaigns'}` : 'Campaigns'}
           </h2>
           {page ? (
-            <span className="text-muted-foreground text-xs tabular-nums">
-              {rows.length} {rows.length === 1 ? 'campaign' : 'campaigns'}
-              {pausedCount > 0 ? ` · ${pausedCount} paused` : ''}
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
+              {pausedCount > 0 ? <span>{pausedCount} paused</span> : null}
+              {pausedCount > 0 && page.fetchedAt ? <span aria-hidden="true">·</span> : null}
+              <CacheAge fetchedAt={page.fetchedAt} />
             </span>
           ) : null}
-        </div>
-        <div className="flex items-center gap-3">
           {page && campaigns.isError ? (
             <span className="text-destructive text-xs">Refresh failed, showing the last read</span>
           ) : null}
-          {page ? <CacheAge fetchedAt={page.fetchedAt} /> : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void refreshAll()}
-            disabled={isRefreshing || state === 'loading'}
-          >
-            <RotateCw
-              aria-hidden="true"
-              className={cn(isRefreshing && 'motion-safe:animate-spin')}
-            />
-            Refresh
-          </Button>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="text-muted-foreground"
+          onClick={() => void refreshAll()}
+          disabled={isRefreshing || state === 'loading'}
+        >
+          <RotateCw aria-hidden="true" className={cn(isRefreshing && 'motion-safe:animate-spin')} />
+          Refresh
+        </Button>
       </header>
 
       <div className="min-h-0 overflow-auto">
         {state === 'error' ? (
-          <ErrorRetryState
-            title="Couldn't load campaigns"
-            message={errorMessage(campaigns.error)}
-            onRetry={() => void campaigns.refetch()}
-          />
+          <QuietState role="alert" title="Couldn't load campaigns">
+            {errorMessage(campaigns.error)}{' '}
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              className="px-1"
+              onClick={() => void campaigns.refetch()}
+            >
+              Retry
+            </Button>
+          </QuietState>
         ) : state === 'empty' ? (
-          <EmptyState
-            media={<Megaphone />}
-            headline="No active or paused campaigns"
-            description="Campaigns on this Meta ad account appear here, including paused ones Jaina builds for you to review before they go live."
-          />
+          <QuietState title="No active or paused campaigns">
+            Campaigns on this Meta ad account appear here, including paused ones Jaina builds for
+            you to review before they go live.
+          </QuietState>
         ) : (
-          <Table className="min-w-[40rem] table-fixed">
+          <Table className="table-fixed">
             <colgroup>
               <col />
-              <col className="w-40" />
-              <col className="w-36" />
-              <col className="w-32" />
+              <col className="hidden w-36 @md/campaigns:table-column" />
+              <col className="w-28" />
+              <col className="w-24" />
             </colgroup>
-            <TableHeader className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
+            <TableHeader className="sticky top-0 z-10 bg-background [&_tr]:border-border/60">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-9 pl-[2.625rem] font-normal text-muted-foreground text-xs">
-                  Name
-                </TableHead>
-                <TableHead className="h-9 font-normal text-muted-foreground text-xs">
+                <TableHead className={cn(HEAD, 'pl-[2.875rem]')}>Name</TableHead>
+                <TableHead className={cn(HEAD, 'hidden @md/campaigns:table-cell')}>
                   Status
                 </TableHead>
-                <TableHead className="h-9 text-right font-normal text-muted-foreground text-xs">
-                  Budget
-                </TableHead>
-                <TableHead className="h-9 pr-4">
+                <TableHead className={cn(HEAD, 'text-right')}>Budget / day</TableHead>
+                <TableHead className="h-8 pr-1">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
@@ -295,6 +303,26 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
         onSettled={handleSettled}
       />
     </section>
+  );
+}
+
+function QuietState({
+  title,
+  role,
+  children,
+}: {
+  title: string;
+  role?: 'alert';
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role={role}
+      className="mx-auto flex max-w-sm flex-col items-center gap-1 px-4 py-16 text-center"
+    >
+      <p className="font-medium text-sm">{title}</p>
+      <p className="text-muted-foreground text-xs">{children}</p>
+    </div>
   );
 }
 
@@ -354,7 +382,7 @@ function EntityBranch({
         data-testid={ROW_TEST_ID[level]}
         data-entity-id={row.id}
         data-status={row.status}
-        className={cn('border-border/50', depth > 0 && 'bg-muted/15')}
+        className="group/row border-border/60 hover:bg-muted/30"
       >
         <TableCell className={cn('py-2', INDENT[depth])}>
           <div className="flex min-w-0 items-center gap-1.5">
@@ -378,43 +406,57 @@ function EntityBranch({
             ) : (
               <span aria-hidden="true" className="size-6 shrink-0" />
             )}
-            <span
-              title={row.name}
-              className={cn(
-                'truncate',
-                level === 'campaign' ? 'font-medium' : level === 'ad' && 'text-muted-foreground',
-              )}
-            >
-              {row.name}
-            </span>
+            <StatusDot status={row.status} />
+            <div className="flex min-w-0 flex-col">
+              <span
+                title={row.name}
+                className={cn(
+                  'truncate',
+                  level === 'campaign' ? 'font-medium' : 'text-muted-foreground',
+                )}
+              >
+                {row.name}
+              </span>
+              <span className="truncate text-2xs text-muted-foreground @md/campaigns:hidden">
+                {humanizeStatus(row.status)}
+                {delivery ? ` · ${delivery}` : ''}
+              </span>
+            </div>
           </div>
         </TableCell>
-        <TableCell className="py-2">
-          <div className="flex min-w-0 flex-col items-start gap-0.5">
-            <EntityStatusPill status={row.status} />
+        <TableCell className="hidden py-2 @md/campaigns:table-cell">
+          <div className="flex min-w-0 flex-col text-xs">
+            <span className={cn(row.status !== 'ACTIVE' && 'text-muted-foreground')}>
+              {humanizeStatus(row.status)}
+            </span>
             {delivery ? (
-              <span className="max-w-full truncate text-2xs text-muted-foreground" title={delivery}>
+              <span className="truncate text-2xs text-muted-foreground" title={delivery}>
                 {delivery}
               </span>
             ) : null}
           </div>
         </TableCell>
-        <TableCell className="py-2 text-right tabular-nums">
+        <TableCell
+          className={cn(
+            'py-2 text-right tabular-nums',
+            (depth > 0 || row.status !== 'ACTIVE') && 'text-muted-foreground',
+          )}
+        >
           {budget ?? <span className="text-muted-foreground">—</span>}
         </TableCell>
-        <TableCell className="py-2 pr-4 text-right">
+        <TableCell className="py-2 pr-1 text-right">
           {action ? (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="xs"
               data-testid={
                 action.tool === 'pause_meta_entity' ? 'scale-row-pause' : 'scale-row-unpause'
               }
               aria-label={`${action.tool === 'pause_meta_entity' ? 'Pause' : 'Unpause'} ${levelNoun(level)} ${row.name}`}
               onClick={() => context.onAction(row, level, parentId)}
+              className={ROW_ACTION}
             >
-              {action.tool === 'pause_meta_entity' ? <Pause /> : <Play />}
               {action.tool === 'pause_meta_entity' ? 'Pause' : 'Unpause'}
             </Button>
           ) : null}
@@ -424,6 +466,25 @@ function EntityBranch({
         <ChildRows level={childLevel} parentId={row.id} depth={depth + 1} context={context} />
       ) : null}
     </>
+  );
+}
+
+/** Green when it delivers, muted when paused, red when deleted. The word sits beside it. */
+function StatusDot({ status }: { status: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'size-1.5 shrink-0 rounded-full',
+        status === 'ACTIVE'
+          ? 'bg-success'
+          : status === 'DELETED'
+            ? 'bg-destructive/70'
+            : status === 'PAUSED'
+              ? 'bg-muted-foreground/60'
+              : 'bg-muted-foreground/30',
+      )}
+    />
   );
 }
 
@@ -491,12 +552,12 @@ function ChildRows({
 
 function MessageRow({ depth, children }: { depth: number; children: React.ReactNode }) {
   return (
-    <TableRow className="border-border/50 bg-muted/15 hover:bg-muted/15">
+    <TableRow className="border-border/60 hover:bg-transparent">
       <TableCell
         colSpan={4}
         className={cn('py-2.5 text-muted-foreground text-xs whitespace-normal', INDENT[depth])}
       >
-        <span className="pl-7">{children}</span>
+        <span className="pl-[2.625rem]">{children}</span>
       </TableCell>
     </TableRow>
   );
@@ -505,22 +566,20 @@ function MessageRow({ depth, children }: { depth: number; children: React.ReactN
 function SkeletonRow({ depth }: { depth: number }) {
   const bar = 'rounded-md bg-muted/70 motion-safe:animate-pulse';
   return (
-    <TableRow aria-hidden="true" className="border-border/50 hover:bg-transparent">
+    <TableRow aria-hidden="true" className="border-border/60 hover:bg-transparent">
       <TableCell className={cn('py-3', INDENT[depth])}>
         <div className="flex items-center gap-2">
           <div className={cn('size-5', bar)} />
           <div className={cn('h-4 w-1/2', bar)} />
         </div>
       </TableCell>
-      <TableCell className="py-3">
-        <div className={cn('h-5 w-16 rounded-full', bar)} />
+      <TableCell className="hidden py-3 @md/campaigns:table-cell">
+        <div className={cn('h-4 w-14', bar)} />
       </TableCell>
       <TableCell className="py-3">
         <div className={cn('ml-auto h-4 w-16', bar)} />
       </TableCell>
-      <TableCell className="py-3 pr-4">
-        <div className={cn('ml-auto h-6 w-16', bar)} />
-      </TableCell>
+      <TableCell className="py-3 pr-1" />
     </TableRow>
   );
 }

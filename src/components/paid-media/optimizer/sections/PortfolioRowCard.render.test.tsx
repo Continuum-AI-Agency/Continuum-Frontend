@@ -116,7 +116,9 @@ describe('PortfolioRowCard — one line per portfolio', () => {
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
     expect(figure(container, 'cost').textContent).toBe('$40.00');
-    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead · target $30.00');
+    expect(figure(container, 'target').textContent).toBe('$30.00');
+    expect(figure(container, 'target').getAttribute('data-figure-raw')).toBe('30');
+    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead');
     expect(figure(container, 'results').textContent).toBe('50');
     expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
     expect(figure(container, 'spend').textContent).toBe('$2,000');
@@ -141,12 +143,37 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     expect(spend.getAttribute('data-figure-unit')).toBe('currency');
   });
 
-  it('says "no target" under the cost when the portfolio set none', () => {
+  it('says "no target" beside the cost, and draws no bar, when the portfolio set none', () => {
     const pf = portfolio();
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
-    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead · no target');
+    expect(getByTestId('portfolio-row-cost').textContent).toContain('no target');
+    expect(queryByTestId('portfolio-cost-bar')).toBeNull();
+  });
+
+  it('fills the bar to the share of the target the cost uses, capped at the target', () => {
+    const under = portfolio({ cpa_target: 50 });
+    const { getByTestId } = render(
+      <PortfolioRowCard currency="USD" portfolio={under} window={windowFor(under)} />,
+    );
+    const fill = getByTestId('portfolio-cost-bar').firstElementChild as HTMLElement;
+    expect(fill.style.width).toBe('80%');
+    cleanup();
+    const over = portfolio({ cpa_target: 30 });
+    const again = render(
+      <PortfolioRowCard currency="USD" portfolio={over} window={windowFor(over)} />,
+    );
+    const capped = again.getByTestId('portfolio-cost-bar').firstElementChild as HTMLElement;
+    expect(capped.style.width).toBe('100%');
+  });
+
+  it('is a hairline row, not a bordered card', () => {
+    const { getByTestId } = render(<PortfolioRowCard currency="USD" portfolio={portfolio()} />);
+    const row = getByTestId('portfolio-row');
+    expect(row.className).not.toContain('bg-card');
+    expect(row.className).not.toMatch(/(^|\s)border(\s|$)/);
+    expect(row.parentElement?.className).toContain('border-t');
   });
 
   it('spells the window in the account currency, or leaves it bare without one', () => {
@@ -248,20 +275,26 @@ describe('PortfolioRowCard — the state chip', () => {
     expect(chipFor(portfolio())).toEqual({ text: 'no target', state: 'none' });
   });
 
-  it('appends the decisions waiting, singular and plural', () => {
-    expect(chipFor(portfolio({ cpa_target: 30, pending_recommendations: 3 })).text).toBe(
-      '33% over · 3 decisions',
-    );
-    cleanup();
+  it('counts the decisions waiting in their own primary badge, not in the state', () => {
+    const pending = (pf: PortfolioListItem) => {
+      const { getByTestId, queryByTestId } = render(
+        <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
+      );
+      const result = {
+        state: getByTestId('portfolio-state-chip').textContent,
+        count: queryByTestId('portfolio-pending-count')?.textContent ?? null,
+      };
+      cleanup();
+      return result;
+    };
+    expect(pending(portfolio({ cpa_target: 30, pending_recommendations: 3 }))).toEqual({
+      state: '33% over',
+      count: '3',
+    });
     expect(
-      chipFor(portfolio({ cpa_target: 30, pending_recommendations: 0, pending_budget_moves: 1 }))
-        .text,
-    ).toBe('33% over · 1 decision');
-    cleanup();
-    const { getByTestId } = render(
-      <PortfolioRowCard currency="USD" portfolio={portfolio({ pending_recommendations: 2 })} />,
-    );
-    expect(getByTestId('portfolio-state-chip').textContent).toBe('no cycle yet · 2 decisions');
+      pending(portfolio({ cpa_target: 30, pending_recommendations: 0, pending_budget_moves: 1 })),
+    ).toEqual({ state: '33% over', count: '1' });
+    expect(pending(portfolio({ cpa_target: 30 }))).toEqual({ state: '33% over', count: null });
   });
 
   it('maps every tile state to its own tone', () => {
@@ -419,7 +452,8 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
     const { getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
-    expect(getByTestId('portfolio-state-chip').textContent).toBe('33% over · 2 decisions');
+    expect(getByTestId('portfolio-state-chip').textContent).toBe('33% over');
+    expect(getByTestId('portfolio-pending-count').textContent).toBe('2');
     expect(getByTestId('stale-chip')).toBeTruthy();
   });
 });

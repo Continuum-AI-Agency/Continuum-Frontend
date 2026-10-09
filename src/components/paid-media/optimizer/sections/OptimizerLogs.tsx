@@ -15,12 +15,20 @@
 
 import type { OptimizerFeedWindowDays, OptimizerLogRow } from '@continuum/contracts';
 import { ScrollTextIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import * as typeScale from '../typeScale';
 import { useOptimizerLogs } from '../useOptimizerData';
-import { FeedFooter, FeedSkeleton, PortfolioFilter, RowHeader } from './feedChrome';
+import { FeedFooter, FeedSkeleton, PortfolioFilter } from './feedChrome';
+import {
+  FeedToolbar,
+  groupByDay,
+  QuietTextButton,
+  TimelineDay,
+  TimelineEntry,
+  type TimelineTone,
+} from './feedTimeline';
 import {
   ALL_PORTFOLIOS,
   distinctPortfolioNames,
@@ -33,23 +41,17 @@ import { OptimizerReadError } from './OptimizerReadError';
 type OptimizerLogsProps = {
   brandId: string;
   windowDays?: OptimizerFeedWindowDays;
+  /** The host's filters (feed switch, window), drawn on the same line as the portfolio filter. */
+  controls?: ReactNode;
 };
 
-const LEVEL_STYLES: Record<OptimizerLogRow['level'], string> = {
-  info: 'border-border/70 bg-muted/40 text-muted-foreground',
-  warn: 'border-warning/40 bg-warning/10 text-warning',
-  error: 'border-destructive/40 bg-destructive/10 text-destructive',
+// An error is red on the dot; a warning keeps a muted dot but names itself, so a skip or a
+// drift is not mistaken for a quiet cycle. Info carries nothing extra.
+const LEVEL_TONE: Record<OptimizerLogRow['level'], TimelineTone> = {
+  info: 'neutral',
+  warn: 'neutral',
+  error: 'stopped',
 };
-
-function LevelBadge({ level }: { level: OptimizerLogRow['level'] }) {
-  return (
-    <span
-      className={`${typeScale.label} mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 font-semibold${LEVEL_STYLES[level]}`}
-    >
-      {level}
-    </span>
-  );
-}
 
 function FactList({ facts }: { facts: LifecycleFact[] }) {
   if (facts.length === 0) return null;
@@ -89,24 +91,33 @@ function DetailList({ lines }: { lines: string[] }) {
 export function LifecycleLogRow({ row }: { row: OptimizerLogRow }) {
   const read = readLifecycleRow(row);
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
-      <LevelBadge level={row.level} />
-      <div className="min-w-0 flex-1">
-        <RowHeader title={read.title} ts={row.ts} />
+    <TimelineEntry data-level={row.level} tone={LEVEL_TONE[row.level]} ts={row.ts}>
+      <p className="text-sm leading-snug">
+        <span className="font-semibold text-foreground">{read.title}</span>
+        {row.level === 'warn' ? (
+          <span className={`${typeScale.label} ml-2 font-semibold text-warning`}>warn</span>
+        ) : null}
         {row.portfolio_name ? (
-          <span className="text-xs text-muted-foreground">{row.portfolio_name}</span>
+          <span className="text-muted-foreground text-xs"> · {row.portfolio_name}</span>
         ) : null}
-        {read.summary ? (
-          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{read.summary}</p>
-        ) : null}
-        <FactList facts={read.facts} />
-        <DetailList lines={read.detail} />
-      </div>
-    </li>
+      </p>
+      {read.summary ? (
+        <p
+          className={cn(
+            'mt-0.5 text-xs leading-relaxed',
+            row.level === 'error' ? 'text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {read.summary}
+        </p>
+      ) : null}
+      <FactList facts={read.facts} />
+      <DetailList lines={read.detail} />
+    </TimelineEntry>
   );
 }
 
-export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
+export function OptimizerLogs({ brandId, windowDays = 7, controls }: OptimizerLogsProps) {
   const logsQuery = useOptimizerLogs(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
   const [archiveRequested, setArchiveRequested] = useState(false);
@@ -119,17 +130,27 @@ export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
     setArchiveRequested(false);
   }, [windowDays]);
 
-  if (logsQuery.isLoading) return <FeedSkeleton />;
+  if (logsQuery.isLoading) {
+    return (
+      <div className="space-y-3">
+        <FeedToolbar controls={controls} />
+        <FeedSkeleton />
+      </div>
+    );
+  }
 
   // Before this branch existed, a failed read fell straight through to "No optimizer
   // activity yet" — the outage and the genuinely-quiet brand rendered identically.
   if (logsQuery.isError) {
     return (
-      <OptimizerReadError
-        error={logsQuery.error}
-        onRetry={() => void logsQuery.refetch()}
-        subject="the server log"
-      />
+      <div className="space-y-3">
+        <FeedToolbar controls={controls} />
+        <OptimizerReadError
+          error={logsQuery.error}
+          onRetry={() => void logsQuery.refetch()}
+          subject="the server log"
+        />
+      </div>
     );
   }
 
@@ -143,11 +164,14 @@ export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
     archiveRows.length === 0;
   if (nothingLoaded && (windowDays !== 30 || archiveExhaustedEmpty)) {
     return (
-      <EmptyState
-        headline="The optimizer has not run yet"
-        media={<ScrollTextIcon aria-hidden="true" />}
-        description="Cycle results, skips and failures appear here. Anything the optimizer changed on the ad account is in Actions."
-      />
+      <div className="space-y-3">
+        <FeedToolbar controls={controls} />
+        <EmptyState
+          headline="The optimizer has not run yet"
+          media={<ScrollTextIcon aria-hidden="true" />}
+          description="Cycle results, skips and failures appear here. Anything the optimizer changed on the ad account is in Actions."
+        />
+      </div>
     );
   }
 
@@ -160,25 +184,29 @@ export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
   const showLoadOlder = windowDays === 30 && !logsQuery.hasNextPage && !archiveRequested;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="space-y-2">
+      <FeedToolbar controls={controls}>
         <PortfolioFilter
           names={portfolioNames}
           value={effectivePortfolio}
           onChange={setPortfolio}
           label="Filter the server log by portfolio"
         />
-      </div>
+      </FeedToolbar>
       {visible.length === 0 && combined.length > 0 ? (
-        <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">
+        <p className="py-6 text-center text-muted-foreground text-xs">
           No events for this portfolio in what has loaded.
         </p>
       ) : visible.length === 0 ? null : (
-        <ul className="space-y-2">
-          {visible.map((row) => (
-            <LifecycleLogRow key={`${row.id}-${row.ts}`} row={row} />
+        <div data-testid="server-log-timeline">
+          {groupByDay(visible, (row) => row.ts).map((day) => (
+            <TimelineDay key={day.label} label={day.label}>
+              {day.items.map((row) => (
+                <LifecycleLogRow key={`${row.id}-${row.ts}`} row={row} />
+              ))}
+            </TimelineDay>
           ))}
-        </ul>
+        </div>
       )}
       <FeedFooter
         loaded={combined.length}
@@ -200,15 +228,9 @@ export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
       />
       {showLoadOlder ? (
         <div className="flex justify-end">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={() => setArchiveRequested(true)}
-          >
+          <QuietTextButton onClick={() => setArchiveRequested(true)}>
             Load older history
-          </Button>
+          </QuietTextButton>
         </div>
       ) : null}
       {archiveRequested && archiveQuery.isError ? (

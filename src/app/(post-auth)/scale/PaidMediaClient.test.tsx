@@ -14,8 +14,10 @@ let latestPlatformChange: ((platform: 'linkedin') => void) | null = null;
 let latestAccountSelect: ((accountId: string) => void) | null = null;
 let latestSelectorPlatform: string | null = null;
 let latestAssignedAccountIds: string[] | null | undefined;
+let latestChip: { brandName: string; brandLogoUrl?: string | null; platforms: string[] } | null =
+  null;
 let searchParamsValue = 'tab=jaina';
-const routerReplaceMock = mock(() => {});
+const routerReplaceMock = mock((_href: string, _options?: unknown) => {});
 let optimizerAdAccounts: {
   data: Array<{ account_id: string; platform?: string; name?: string | null }>;
   isSuccess: boolean;
@@ -104,7 +106,9 @@ mock.module('@/components/paid-media/AdAccountSelector', () => ({
     onSelect: (accountId: string) => void;
     platform: string;
     assignedAccountIds?: string[] | null;
+    chip?: { brandName: string; brandLogoUrl?: string | null; platforms: string[] };
   }) => {
+    latestChip = props.chip ?? null;
     latestAccountSelect = props.onSelect;
     latestSelectorPlatform = props.platform;
     latestAssignedAccountIds = props.assignedAccountIds;
@@ -152,6 +156,7 @@ mock.module('motion/react', () => ({
 }));
 
 const { default: PaidMediaClientPage } = await import('./PaidMediaClient');
+const { screen } = await import('@testing-library/react');
 
 describe('PaidMediaClientPage brand context', () => {
   beforeEach(() => {
@@ -162,6 +167,7 @@ describe('PaidMediaClientPage brand context', () => {
     latestAccountSelect = null;
     latestSelectorPlatform = null;
     latestAssignedAccountIds = undefined;
+    latestChip = null;
     searchParamsValue = 'tab=jaina';
     routerReplaceMock.mockReset();
     optimizerAdAccounts = { data: [], isSuccess: false };
@@ -385,5 +391,71 @@ describe('PaidMediaClientPage brand context', () => {
 
     await waitFor(() => expect(renderedContextPairs.length).toBeGreaterThan(0));
     expect(routerReplaceMock).not.toHaveBeenCalled();
+  });
+
+  describe('the one-bar shell', () => {
+    it('drops the Scale title and offers Optimizer, Campaigns and Jaina, never Dashboard', async () => {
+      searchParamsValue = '';
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-a"
+          brandName="Brand A"
+          initialAccounts={[{ id: 'act_1', name: 'Account One' }]}
+          initialAdAccountId="act_1"
+        />,
+      );
+
+      await waitFor(() => expect(screen.getByTestId('scale-header-bar')).toBeTruthy());
+      expect(screen.queryByTestId('page-header')).toBeNull();
+      const triggers = ['Optimizer', 'Campaigns', 'Jaina', 'Dashboard'].map(
+        (label) => screen.queryAllByRole('button', { name: label }).length,
+      );
+      expect(triggers).toEqual([1, 1, 1, 0]);
+    });
+
+    it('dresses the account selector as the brand chip with its connected platforms', async () => {
+      optimizerAdAccounts = {
+        isSuccess: true,
+        data: [
+          { platform: 'meta_ads', account_id: 'act_1', name: 'Account One' },
+          { platform: 'google_ads', account_id: '3710693645', name: 'Google One' },
+        ],
+      };
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-a"
+          brandName="Brand A"
+          brandLogoUrl="https://example.com/logo.png"
+          initialAccounts={[{ id: 'act_1', name: 'Account One' }]}
+          initialAdAccountId="act_1"
+        />,
+      );
+
+      await waitFor(() =>
+        expect(latestChip).toEqual({
+          brandName: 'Brand A',
+          brandLogoUrl: 'https://example.com/logo.png',
+          platforms: ['meta', 'google_ads'],
+        }),
+      );
+    });
+
+    it("opens the What's working view from the bar's link", async () => {
+      searchParamsValue = 'tab=performance';
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-a"
+          brandName="Brand A"
+          initialAccounts={[{ id: 'act_1', name: 'Account One' }]}
+          initialAdAccountId="act_1"
+        />,
+      );
+
+      const link = await screen.findByTestId('whats-working-link');
+      act(() => link.click());
+      await waitFor(() => expect(routerReplaceMock).toHaveBeenCalled());
+      expect(String(routerReplaceMock.mock.calls.at(-1)?.[0])).toContain('tab=whats-working');
+      expect(link.getAttribute('aria-current')).toBe('page');
+    });
   });
 });

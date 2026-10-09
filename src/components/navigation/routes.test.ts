@@ -82,26 +82,24 @@ describe('navigation structure', () => {
     ]);
   });
 
-  it('nests Scale sub-routes as Jaina / Paid Analytics / Paid Optimization', () => {
+  it('nests Performance + sub-routes as Optimizer then Jaina, with Dashboards hidden', () => {
     const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Performance +');
-    expect(scale?.items.map((i) => i.label)).toEqual([
-      'Jaina',
-      'Paid Analytics',
-      'Paid Optimization',
-    ]);
-    expect(scale?.items.map((i) => i.href)).toEqual([
-      '/scale?tab=jaina',
-      '/scale?tab=dashboard',
-      '/scale?tab=performance',
-    ]);
+    expect(scale?.items.map((i) => i.label)).toEqual(['Optimizer', 'Jaina']);
+    expect(scale?.items.map((i) => i.href)).toEqual(['/scale?tab=performance', '/scale?tab=jaina']);
+    // Dashboards is unfinished: no sidebar entry, from any group.
+    expect(
+      APP_NAVIGATION_GROUPS.flatMap((g) => g.items).some((i) => i.href === '/scale?tab=dashboard'),
+    ).toBe(false);
   });
 
-  it('disambiguates the Agent and Analytics sub-labels across Organic and Scale', () => {
-    const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Organic');
-    const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Scale');
+  it('never repeats a sub-label across Organic + and Performance +', () => {
+    const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Organic +');
+    const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Performance +');
     const organicLabels = organic?.items.map((i) => i.label) ?? [];
     const scaleLabels = scale?.items.map((i) => i.label) ?? [];
 
+    expect(organicLabels.length).toBeGreaterThan(0);
+    expect(scaleLabels.length).toBeGreaterThan(0);
     // No bare "Agent"/"Analytics" survives, and no label is shared across areas.
     for (const label of [...organicLabels, ...scaleLabels]) {
       expect(label).not.toBe('Agent');
@@ -157,12 +155,7 @@ describe('navigation structure', () => {
       APP_NAVIGATION_GROUPS.flatMap((g) => g.items)
         .filter((i) => i.product === product)
         .map((i) => i.label);
-    expect(byProduct('paid_media')).toEqual([
-      'Jaina',
-      'Paid Analytics',
-      'Paid Optimization',
-      'Forge',
-    ]);
+    expect(byProduct('paid_media')).toEqual(['Optimizer', 'Jaina', 'Forge']);
     expect(byProduct('organic_agent')).toEqual(['Organic Agent', 'Organic Analytics', 'Calendar']);
     expect(byProduct('studio')).toEqual(['Canvas']);
     // Free surfaces never lock.

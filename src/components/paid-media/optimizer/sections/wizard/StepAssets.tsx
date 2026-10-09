@@ -36,6 +36,7 @@ import {
 import { PlatformGroupHeader } from '../../picker/MultiPlatformPicker';
 import { PlatformConnectLink } from '../platforms/PlatformConnectLink';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
+import { questionHeading } from './OptionRow';
 import {
   type AssetMode,
   memberBlockReason,
@@ -156,7 +157,7 @@ export function StepAssets({
     return (
       <div className="space-y-3">
         <div>
-          <h3 className="font-semibold text-sm tracking-tight">What should it manage?</h3>
+          <h3 className={questionHeading}>What should it manage?</h3>
           <p className="text-xs text-muted-foreground">
             This account has no Meta ad sets. Pick the campaigns the portfolio should hold.
           </p>
@@ -170,7 +171,7 @@ export function StepAssets({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-sm tracking-tight">What should it manage?</h3>
+          <h3 className={questionHeading}>What should it manage?</h3>
           <p className="text-xs text-muted-foreground">
             {assetMode === 'adset'
               ? 'Pick ad sets one by one, by name or ID. Their budgets move as one pool.'
@@ -218,9 +219,9 @@ export function StepAssets({
           selectedAdsetIds={selectedIds}
         />
       ) : (
-        <ul className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card">
+        <ul className="divide-y divide-border/60 border-border/60 border-y">
           {sections.length === 0 ? (
-            <li className="px-3 py-3 text-xs text-muted-foreground">
+            <li className="py-3 text-xs text-muted-foreground">
               {isLoading ? 'Loading campaigns…' : 'No campaigns with eligible ad sets here yet.'}
             </li>
           ) : null}
@@ -229,7 +230,7 @@ export function StepAssets({
             const checked = eligible.length > 0 && eligible.every((id) => selected.has(id));
             const id = `wizard-campaign-${section.campaignId}`;
             return (
-              <li className="flex items-center gap-3 px-3 py-2" key={section.campaignId}>
+              <li className="flex items-center gap-3 py-2.5" key={section.campaignId}>
                 <Checkbox
                   aria-label={`Select campaign ${section.campaignName}`}
                   checked={checked}
@@ -264,10 +265,7 @@ export function StepAssets({
         </p>
       ) : null}
       {warnings.blockedCount > 0 ? (
-        <p
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-          role="alert"
-        >
+        <p className="text-xs text-destructive" role="alert">
           {warnings.blockedCount} selected{' '}
           {warnings.blockedCount === 1 ? 'ad set is' : 'ad sets are'} held by another brand&rsquo;s
           portfolio you cannot edit. Deselect {warnings.blockedCount === 1 ? 'it' : 'them'} to
@@ -329,7 +327,7 @@ function OtherPlatformMembers({
   return (
     <section
       aria-label="Members on other platforms"
-      className="space-y-2 rounded-lg border border-border/70 bg-card p-3"
+      className="space-y-3 border-border/60 border-t pt-4"
       data-testid="wizard-other-platform-members"
     >
       <p className="text-xs text-muted-foreground">
@@ -344,7 +342,7 @@ function OtherPlatformMembers({
             hierarchy={scratch ? 'Campaigns' : 'Campaigns proposed'}
             platform={group.platform}
           />
-          <ul className="divide-y divide-border/60 pl-2">
+          <ul className="divide-y divide-border/60">
             {group.members.map((member) => {
               const key = memberKey(member);
               const id = `wizard-member-${key}`;
@@ -385,7 +383,7 @@ function OtherPlatformMembers({
       ))}
       {missing.map((platform) => (
         <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 border-dashed px-2 py-1.5"
+          className="flex flex-wrap items-center justify-between gap-2 py-1"
           data-platform={platform}
           data-testid="wizard-platform-empty"
           key={platform}

@@ -1,11 +1,11 @@
 'use client';
 
-// Step 1 — where to start. Each suggestion is a card a person can read in one glance:
+// Step 1 — where to start. Each suggestion is a borderless row a person can read in one glance:
 // what it groups, what it spends, what a result costs, and a strip of dots showing how
 // that cost spreads across its ad sets (the spread is the reason to optimize them
 // together). One button takes the suggestion into the wizard; "Explore" opens the full
 // ad-set and creative view for anyone who wants to look first. Starting from scratch is
-// the same size card, not a footnote.
+// a row of its own, not a footnote.
 //
 // A cross-platform suggestion ("Leads // All platforms") says which platforms it spans and how
 // many members each one brings, chip by chip; a Meta-only card reads exactly as before.
@@ -28,6 +28,7 @@ import * as typeScale from '../../typeScale';
 import { PlatformChip } from '../platforms/PlatformChip';
 import { SuggestionExplorer } from '../SuggestionExplorer';
 import { CONVERSION_OBJECTIVES } from '../suggestionModel';
+import { questionHeading } from './OptionRow';
 import { suggestionPlatformCounts } from './wizardModel';
 
 export type SuggestionOverride = { objective: OptimizationObjective; mode: OptimizationModeDto };
@@ -125,25 +126,15 @@ function SuggestionCard({
   const platformCounts = suggestionPlatformCounts(suggestion);
 
   return (
-    <article
-      className={cn(
-        'flex flex-col gap-2.5 rounded-lg border bg-card p-3 transition-colors',
-        exploring ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/70',
-      )}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-sm tracking-tight">{suggestion.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <Badge className="text-xs" variant="secondary">
-              {humanize(suggestion.objective)}
-            </Badge>
-            <Badge className="text-xs" variant="teal">
-              {humanize(suggestion.mode)}
-            </Badge>
-          </div>
-        </div>
-        <SparklesIcon aria-hidden className="size-4 shrink-0 text-primary" />
+    <article className="flex flex-col gap-2.5 py-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="min-w-0 truncate font-semibold text-sm tracking-tight">{suggestion.name}</p>
+        <Badge className="text-xs" variant="secondary">
+          {humanize(suggestion.objective)}
+        </Badge>
+        <Badge className="text-xs" variant="teal">
+          {humanize(suggestion.mode)}
+        </Badge>
       </div>
 
       {platformCounts ? (
@@ -162,22 +153,24 @@ function SuggestionCard({
         </ul>
       ) : null}
 
-      <dl className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-md bg-muted/40 px-2 py-1.5">
+      <dl className="flex flex-wrap gap-x-8 gap-y-2">
+        <div>
           <dt className={`${typeScale.label} text-muted-foreground`}>
             {platformCounts ? 'Members' : 'Ad sets'}
           </dt>
-          <dd className="font-semibold text-sm tabular-nums">{suggestion.summary.adsets}</dd>
+          <dd className="font-mono font-semibold text-base tabular-nums">
+            {suggestion.summary.adsets}
+          </dd>
         </div>
-        <div className="rounded-md bg-muted/40 px-2 py-1.5">
+        <div>
           <dt className={`${typeScale.label} text-muted-foreground`}>Per day</dt>
-          <dd className="font-semibold text-sm tabular-nums">
+          <dd className="font-mono font-semibold text-base tabular-nums">
             {formatCurrency(suggestion.daily_total, currency)}
           </dd>
         </div>
-        <div className="rounded-md bg-muted/40 px-2 py-1.5">
+        <div>
           <dt className={`${typeScale.label} text-muted-foreground`}>{metric.costLabel}</dt>
-          <dd className="font-semibold text-sm tabular-nums">
+          <dd className="font-mono font-semibold text-base tabular-nums">
             {blended != null ? formatCpa(blended, currency) : '—'}
           </dd>
         </div>
@@ -195,7 +188,7 @@ function SuggestionCard({
         </p>
       ) : null}
 
-      <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+      <div className="flex items-center justify-between gap-2">
         {canExplore ? (
           <Button
             aria-expanded={exploring}
@@ -263,11 +256,12 @@ export function StepStart({
   }, [active, snapshots]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="space-y-2">
+        <h3 className={questionHeading}>Where should it start?</h3>
         <div className="flex items-center gap-2">
-          <SparklesIcon className="size-4 text-primary" />
-          <h3 className="font-semibold text-sm tracking-tight">Start from a suggestion</h3>
+          <SparklesIcon aria-hidden className="size-4 text-primary" />
+          <h4 className="font-semibold text-sm tracking-tight">Start from a suggestion</h4>
           {suggestions.length > 0 ? (
             <span className="text-muted-foreground text-xs">
               grouped from this account&rsquo;s active ad sets
@@ -276,21 +270,19 @@ export function StepStart({
         </div>
 
         {isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            <Skeleton className="h-40 rounded-lg" />
-            <Skeleton className="h-40 rounded-lg" />
+          <div className="space-y-3">
+            <Skeleton className="h-28 rounded-lg" />
+            <Skeleton className="h-28 rounded-lg" />
           </div>
         ) : isError ? (
-          <p className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-warning text-xs">
+          <p className="py-2 text-warning text-xs">
             Suggestions are unavailable — the optimizer service is offline. You can still build a
             portfolio from scratch.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="divide-y divide-border/60 border-border/60 border-b">
             {suggestions.length === 0 ? (
-              <p className="rounded-lg border border-border/70 border-dashed bg-muted/10 px-4 py-3 text-muted-foreground text-xs md:col-span-2 2xl:col-span-3">
-                {emptyMessage}
-              </p>
+              <p className="py-3 text-muted-foreground text-xs">{emptyMessage}</p>
             ) : null}
             {suggestions.map((suggestion) => (
               <SuggestionCard
@@ -308,7 +300,7 @@ export function StepStart({
               />
             ))}
             <button
-              className="flex min-h-40 flex-col items-start justify-between gap-2 rounded-lg border border-border/70 border-dashed bg-muted/10 p-3 text-left transition-colors hover:bg-muted/30"
+              className="flex w-full flex-col items-start gap-1.5 py-4 text-left transition-colors hover:text-foreground"
               onClick={onScratch}
               type="button"
             >

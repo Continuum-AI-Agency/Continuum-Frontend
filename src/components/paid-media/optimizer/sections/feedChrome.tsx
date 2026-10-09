@@ -6,7 +6,6 @@
 // of what has loaded, a copyable platform receipt, and an honest "load more" that appears only
 // when the RPC's own cursor says there IS more.
 
-import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -128,36 +127,6 @@ export function ReceiptToken({
   );
 }
 
-export function FeedWindowControl({
-  value,
-  onChange,
-}: {
-  value: OptimizerFeedWindowDays;
-  onChange: (days: OptimizerFeedWindowDays) => void;
-}) {
-  return (
-    <fieldset className="flex flex-wrap items-center gap-1 border-0 p-0">
-      <legend className="sr-only">Show events from the last</legend>
-      {OPTIMIZER_FEED_WINDOW_DAYS.map((days) => (
-        <button
-          key={days}
-          type="button"
-          aria-pressed={value === days}
-          onClick={() => onChange(days)}
-          className={cn(
-            'inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium tabular-nums transition-colors',
-            value === days
-              ? 'border-primary/40 bg-primary/10 text-primary'
-              : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
-          )}
-        >
-          {days}d
-        </button>
-      ))}
-    </fieldset>
-  );
-}
-
 export function PortfolioFilter({
   names,
   value,
@@ -224,8 +193,8 @@ export function FeedFooter({
         <Button
           type="button"
           size="sm"
-          variant="outline"
-          className="h-7 text-xs"
+          variant="ghost"
+          className="h-7 text-xs text-muted-foreground"
           disabled={isFetchingMore}
           onClick={onLoadMore}
         >

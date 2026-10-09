@@ -9,6 +9,10 @@
 // wrote to with that platform's receipt,
 // and whether it can still be undone.
 //
+// The account-wide feed renders as a timeline grouped by day (feedTimeline): a clock time, a
+// dot for how it went, the change, its portfolio and why, and the undo on the right.
+// `ActionRow` is the denser bordered row the portfolio Actions group still lists.
+//
 // Revert is gated on the row's own `reversible` flag from the RPC — never on a client guess —
 // and a row that has already been undone renders as "reverted" instead of offering the button
 // again.
@@ -16,7 +20,7 @@
 import { type OptimizerFeedWindowDays, PortfolioAdsetSchema } from '@continuum/contracts';
 import { skipToken, useQueries } from '@tanstack/react-query';
 import { ArrowRightIcon, ListChecksIcon, Undo2Icon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { formatCurrency } from '../format';
@@ -26,9 +30,13 @@ import {
   optimizerQueryKeys,
   useOptimizerActions,
 } from '../useOptimizerData';
-import { ActionFeaturedCard } from './ActionFeaturedCard';
-import { ActionGridCard } from './ActionGridCard';
-import type { ActionEntityNames } from './actionCardParts';
+import {
+  ActionDelta,
+  type ActionEntityNames,
+  ActionRevertControl,
+  actionEntity,
+  printChangeValue,
+} from './actionCardParts';
 import {
   type ActionChange,
   actionPlatform,
@@ -40,8 +48,15 @@ import {
   revertState,
 } from './actionRows';
 import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
-import { groupActionFeed, type MoveDecision } from './crossPlatformMove/moveDecisionModel';
+import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
 import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
+import {
+  FeedToolbar,
+  groupByDay,
+  TimelineDay,
+  TimelineEntry,
+  type TimelineTone,
+} from './feedTimeline';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PlatformChip } from './platforms/PlatformChip';
@@ -55,6 +70,8 @@ type OptimizerActionFeedProps = {
    *  bare: an account whose currency nobody recorded is not an account that spends dollars. */
   currency: string | null;
   windowDays?: OptimizerFeedWindowDays;
+  /** The host's filters (feed switch, window), drawn on the same line as the portfolio filter. */
+  controls?: ReactNode;
 };
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -163,35 +180,6 @@ export function ActionRow({
   );
 }
 
-/**
- * Which action leads the feed: the NEWEST one, by its own timestamp.
- *
- * The rows carry no impact figure (a budget write's before/after is not its effect), so
- * "highest impact" would be a guess dressed as a ranking. The RPC already returns newest
- * first; reading `ts` rather than trusting position keeps the rule true if that ever changes.
- * The rest keep the feed's order.
- */
-export function splitFeaturedAction(rows: OptimizerActionFeedRow[]): {
-  featured: OptimizerActionFeedRow | null;
-  rest: OptimizerActionFeedRow[];
-} {
-  let featuredIndex = -1;
-  let newest = Number.NEGATIVE_INFINITY;
-  rows.forEach((row, index) => {
-    const at = new Date(row.ts).getTime();
-    const comparable = Number.isFinite(at) ? at : Number.NEGATIVE_INFINITY;
-    if (featuredIndex === -1 || comparable > newest) {
-      featuredIndex = index;
-      newest = comparable;
-    }
-  });
-  if (featuredIndex === -1) return { featured: null, rest: [] };
-  return {
-    featured: rows[featuredIndex] ?? null,
-    rest: rows.filter((_, index) => index !== featuredIndex),
-  };
-}
-
 const EnrolledRosterSchema = z.array(PortfolioAdsetSchema);
 
 /** Folds the cached rosters into one id → name map. Module-level so `useQueries` keeps its
@@ -234,16 +222,100 @@ export function useActionEntityNames(rows: OptimizerActionFeedRow[]): ActionEnti
   });
 }
 
-// Written out whole because Tailwind reads source text. Fewer cards than a full row get
-// fewer columns, so two cards fill the width instead of leaving two empty cells beside them.
-const GRID_COLUMNS: Record<number, string> = {
-  1: 'grid-cols-1',
-  2: 'grid-cols-1 sm:grid-cols-2',
-  3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-};
-const GRID_COLUMNS_FULL = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
+function readOutcome(row: OptimizerActionFeedRow): string | null {
+  const value = (row as Record<string, unknown>).outcome;
+  return typeof value === 'string' ? value.toLowerCase() : null;
+}
 
-function ActionFeedCards({
+const STOPPED_OUTCOMES = new Set(['failed', 'refused', 'error']);
+const ASKING_DECISIONS = new Set(['pending', 'proposed', 'asked']);
+const LANDED_DECISIONS = new Set(['approved', 'applied']);
+
+/**
+ * How an action reads on the timeline's dot. A refused or failed write and a pause are red; a
+ * write that landed (a budget, an unpause, a restructure) is green; a recommendation still
+ * waiting on someone is primary, because it asks a decision. Settings, rejected decisions and
+ * rows that were since undone stay muted: nothing about them is still in force or still asks.
+ */
+export function actionTone(row: OptimizerActionFeedRow): TimelineTone {
+  const outcome = readOutcome(row);
+  if (outcome && STOPPED_OUTCOMES.has(outcome)) return 'stopped';
+  if (row.reverted_by) return 'neutral';
+  const change = readActionChange(row);
+  const after = typeof change.after === 'string' ? change.after.toLowerCase() : null;
+  switch (row.op) {
+    case 'budget':
+    case 'convert':
+      return 'landed';
+    case 'status':
+      return after === 'paused' ? 'stopped' : after === 'active' ? 'landed' : 'neutral';
+    case 'decision':
+      if (after && ASKING_DECISIONS.has(after)) return 'asks';
+      return after && LANDED_DECISIONS.has(after) ? 'landed' : 'neutral';
+    default:
+      return 'neutral';
+  }
+}
+
+function ActionTimelineEntry({
+  row,
+  brandId,
+  currency,
+  entityNames,
+}: {
+  row: OptimizerActionFeedRow;
+  brandId: string;
+  currency: string | null;
+  entityNames: ActionEntityNames;
+}) {
+  const change = readActionChange(row);
+  const entity = actionEntity(row, entityNames);
+  const platform = actionPlatform(row);
+  const receipt = readReceiptTrace(row);
+  // A settings row is named by its portfolio already; printing it twice says nothing new.
+  const portfolioSuffix = row.portfolio_name && row.op !== 'setting' ? row.portfolio_name : null;
+
+  return (
+    <TimelineEntry
+      action={<ActionRevertControl row={row} brandId={brandId} currency={currency} />}
+      data-action-id={row.id}
+      tone={actionTone(row)}
+      ts={row.ts}
+    >
+      <p className="text-sm leading-snug">
+        <span className="font-semibold text-foreground">{change.label}</span>{' '}
+        <span className="text-foreground" title={entity.id ?? undefined}>
+          {entity.name}
+        </span>
+        {portfolioSuffix ? (
+          <span className="text-muted-foreground text-xs"> · {portfolioSuffix}</span>
+        ) : null}
+      </p>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
+        <span className="inline-flex items-center gap-1.5" data-figure-role="change">
+          <span className="font-mono tabular-nums">
+            {printChangeValue(change, change.before, currency)}
+          </span>
+          <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
+          <span className="font-mono font-semibold text-foreground tabular-nums">
+            {printChangeValue(change, change.after, currency)}
+          </span>
+          <ActionDelta change={change} />
+        </span>
+        <span>· {actorLabel(row)}</span>
+        <PlatformChip platform={platform} />
+      </div>
+      {row.justification ? (
+        <p className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
+          Why: {row.justification}
+        </p>
+      ) : null}
+      {receipt ? <ReceiptToken value={receipt} platform={platform} /> : null}
+    </TimelineEntry>
+  );
+}
+
+function ActionTimeline({
   rows,
   brandId,
   currency,
@@ -254,45 +326,34 @@ function ActionFeedCards({
 }) {
   const entityNames = useActionEntityNames(rows);
   // A cross-platform move is ONE decision, however many writes it took: its legs fold into a
-  // single card ahead of the single writes, which keep the featured + grid layout.
+  // single entry where its newest write stood.
   const items = groupActionFeed(rows);
-  const moves: MoveDecision[] = items.flatMap((item) => (item.kind === 'move' ? [item.move] : []));
-  const singles = items.flatMap((item) => (item.kind === 'single' ? [item.row] : []));
-  const { featured, rest } = splitFeaturedAction(singles);
-  if (!featured && moves.length === 0) return null;
+  const days = groupByDay(items, (item) => (item.kind === 'move' ? item.move.ts : item.row.ts));
   return (
-    <div className="space-y-3">
-      {moves.length > 0 ? (
-        <ul className="space-y-3" data-testid="move-decisions">
-          {moves.map((move) => (
-            <MoveDecisionCard brandId={brandId} currency={currency} key={move.moveId} move={move} />
-          ))}
-        </ul>
-      ) : null}
-      {featured ? (
-        <ActionFeaturedCard
-          row={featured}
-          brandId={brandId}
-          currency={currency}
-          entityNames={entityNames}
-        />
-      ) : null}
-      {rest.length > 0 ? (
-        <ul
-          className={`grid items-stretch gap-3 ${GRID_COLUMNS[rest.length] ?? GRID_COLUMNS_FULL}`}
-          data-testid="action-grid"
-        >
-          {rest.map((row) => (
-            <ActionGridCard
-              key={row.id}
-              row={row}
-              brandId={brandId}
-              currency={currency}
-              entityNames={entityNames}
-            />
-          ))}
-        </ul>
-      ) : null}
+    <div data-testid="action-timeline">
+      {days.map((day) => (
+        <TimelineDay key={day.label} label={day.label} testId="action-day">
+          {day.items.map((item) =>
+            item.kind === 'move' ? (
+              <MoveDecisionCard
+                brandId={brandId}
+                className="space-y-2 rounded-none border-0 bg-transparent py-2 pr-0 pl-[4.75rem]"
+                currency={currency}
+                key={item.move.moveId}
+                move={item.move}
+              />
+            ) : (
+              <ActionTimelineEntry
+                brandId={brandId}
+                currency={currency}
+                entityNames={entityNames}
+                key={item.row.id}
+                row={item.row}
+              />
+            ),
+          )}
+        </TimelineDay>
+      ))}
     </div>
   );
 }
@@ -301,32 +362,46 @@ export function OptimizerActionFeed({
   brandId,
   currency,
   windowDays = 7,
+  controls,
 }: OptimizerActionFeedProps) {
   const actionsQuery = useOptimizerActions(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
 
-  if (actionsQuery.isLoading) return <FeedSkeleton />;
+  if (actionsQuery.isLoading) {
+    return (
+      <div className="space-y-3">
+        <FeedToolbar controls={controls} />
+        <FeedSkeleton />
+      </div>
+    );
+  }
 
   // A failed read must never render as "nothing has happened" — the outage and the genuinely
   // quiet brand look identical otherwise.
   if (actionsQuery.isError) {
     return (
-      <OptimizerReadError
-        error={actionsQuery.error}
-        onRetry={() => void actionsQuery.refetch()}
-        subject="the action feed"
-      />
+      <div className="space-y-3">
+        <FeedToolbar controls={controls} />
+        <OptimizerReadError
+          error={actionsQuery.error}
+          onRetry={() => void actionsQuery.refetch()}
+          subject="the action feed"
+        />
+      </div>
     );
   }
 
   const actions = actionsQuery.data;
   if (actions.length === 0) {
     return (
-      <EmptyState
-        headline="Nothing has changed yet"
-        media={<ListChecksIcon aria-hidden="true" />}
-        description="Budget writes, pauses, setting edits and recommendation decisions appear here with their before, their after, and a one-click undo."
-      />
+      <div className="space-y-3">
+        <FeedToolbar controls={controls} />
+        <EmptyState
+          headline="Nothing has changed yet"
+          media={<ListChecksIcon aria-hidden="true" />}
+          description="Budget writes, pauses, setting edits and recommendation decisions appear here with their before, their after, and a one-click undo."
+        />
+      </div>
     );
   }
 
@@ -339,21 +414,21 @@ export function OptimizerActionFeed({
   const visible = filterByPortfolio(actions, effectivePortfolio);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="space-y-2">
+      <FeedToolbar controls={controls}>
         <PortfolioFilter
           names={portfolioNames}
           value={effectivePortfolio}
           onChange={setPortfolio}
           label="Filter actions by portfolio"
         />
-      </div>
+      </FeedToolbar>
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">
+        <p className="py-6 text-center text-muted-foreground text-xs">
           No actions for this portfolio in what has loaded.
         </p>
       ) : (
-        <ActionFeedCards rows={visible} brandId={brandId} currency={currency} />
+        <ActionTimeline rows={visible} brandId={brandId} currency={currency} />
       )}
       <FeedFooter
         loaded={actions.length}

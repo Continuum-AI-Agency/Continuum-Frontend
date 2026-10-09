@@ -1,25 +1,21 @@
 'use client';
 
-// The lead: the portfolio's main recommendation, read like a piece of news.
+// The lead: the portfolio's main recommendation, as the first line Jaina wrote in "What the
+// Optimizer found" (P1, "Lectura continua").
 //
-// Claim above, the band in the middle, one or two lines of why below, the action at the
-// bottom. The band (./CardBand) is the card's own evidence drawn, with the figure on its
-// top-left corner, and it is `flex-1`: whatever height the row gives the card becomes picture,
-// never a gap. Nothing else in the card is allowed to grow.
-//
-// Its box is the row's column, the same box every other card in the row gets: `CARD_FRAME`
-// fills the cell, shares the row's height, and floors its own height against the cell's width.
-// The lead is louder than an insight in what it carries — the Jaina chip, the chosen-over
-// line, the Explain link — never in its size. See ./cardShape.
+// One finding per line, no frame: the coloured tag on the left (scale green, pause red, creative
+// amber), the claim in semibold with its reason under it in muted, the action on the right.
+// The lead is louder than an insight in what it carries — Jaina's attribution, the chosen-over
+// line, the Explain link — never in its box. Its evidence picture (./CardBand) opens under it.
+// The line's columns are decided in ./cardShape.
 
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
-import { Pill } from '@/components/kibo-ui/pill';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { HeroCta } from '../heroModel';
 import { CardBand } from './CardBand';
-import { CARD_FRAME } from './cardShape';
-import type { NewsCardModel } from './newsModel';
+import { FINDING_ROW } from './cardShape';
+import type { FindingTagTone, NewsCardModel } from './newsModel';
 
 /** The money this card is worth, read against the portfolio's daily total. Null when the
  *  finding carries no sized money at all. */
@@ -33,34 +29,74 @@ export type NewsCardProps = {
   tier: NewsTier;
   /** 'draft read' when no model has written today's words yet. */
   draft: boolean;
-  /** The as-of / next-cycle line, composed by the caller. */
-  asOfLine: string | null;
   explainHref: string;
   onCta: (cta: HeroCta) => void;
 };
 
-/** The chips above a card: what kind of finding, and how much it is worth. */
-export function CardChips({
+const TAG_TEXT: Record<FindingTagTone, string> = {
+  good: 'text-success',
+  bad: 'text-destructive',
+  warn: 'text-warning',
+  muted: 'text-muted-foreground',
+};
+
+const TIER_TEXT: Record<NonNullable<NewsTier>['tone'], string> = {
+  destructive: 'text-destructive',
+  warning: 'text-warning',
+  muted: 'text-muted-foreground',
+};
+
+/** The left column of a finding: its coloured tag, what kind it is, and what it is worth. */
+export function FindingTagCell({ card, tier }: { card: NewsCardModel; tier: NewsTier }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 @[36rem]/news:flex-col">
+      <span
+        className={cn('font-semibold text-xs uppercase tracking-wide', TAG_TEXT[card.tag.tone])}
+        data-testid="finding-tag"
+        data-tone={card.tag.tone}
+        title={card.eyebrow}
+      >
+        {card.tag.label}
+      </span>
+      {card.tag.detail ? (
+        <span className="text-muted-foreground text-xs">{card.tag.detail}</span>
+      ) : null}
+      {tier ? (
+        <span className={cn('text-xs', TIER_TEXT[tier.tone])} data-testid="finding-tier">
+          {tier.label}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** The finding's own evidence, drawn — one click away under the reason. */
+export function FindingEvidence({
   card,
-  tier,
-  children,
+  currency,
+  resultLabel,
 }: {
   card: NewsCardModel;
-  tier: NewsTier;
-  children?: React.ReactNode;
+  currency: string | null;
+  resultLabel: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-      <Pill className="shrink-0 text-xs" variant="default">
-        {card.eyebrow}
-      </Pill>
-      {tier ? (
-        <Pill className="shrink-0 text-xs" variant={tier.tone}>
-          {tier.label}
-        </Pill>
-      ) : null}
-      {children}
-    </div>
+    <details className="group/evidence">
+      <summary className="w-fit cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+        <span className="group-open/evidence:hidden">Show the evidence</span>
+        <span className="hidden group-open/evidence:inline">Hide the evidence</span>
+      </summary>
+      <div className="pt-2">
+        <CardBand
+          currency={currency}
+          figure={card.figure}
+          id={card.id}
+          resultLabel={resultLabel}
+          tone={card.tone}
+          visual={card.visual}
+        />
+      </div>
+    </details>
   );
 }
 
@@ -70,70 +106,57 @@ export function NewsCard({
   resultLabel,
   tier,
   draft,
-  asOfLine,
   explainHref,
   onCta,
 }: NewsCardProps) {
   const cta = card.cta;
   return (
-    <article
-      className={cn(
-        'flex-col gap-1.5 overflow-hidden rounded-lg border border-border/60 bg-card px-4 pt-3.5 pb-3',
-        CARD_FRAME,
-      )}
-      data-testid="portfolio-news-lead"
-    >
-      <CardChips card={card} tier={tier}>
-        <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
-          <SparklesIcon aria-hidden className="size-3" /> Jaina{draft ? ' · draft read' : ''}
-        </span>
-      </CardChips>
-      {card.subject ? (
-        <p className="truncate text-muted-foreground text-xs" data-testid="news-subject">
-          {card.subject}
+    <article className={FINDING_ROW} data-testid="portfolio-news-lead">
+      <FindingTagCell card={card} tier={tier} />
+      <div className="flex min-w-0 flex-col gap-1">
+        {card.subject ? (
+          <p className="truncate text-muted-foreground text-xs" data-testid="news-subject">
+            {card.subject}
+          </p>
+        ) : null}
+        <h3
+          className="text-balance font-semibold text-foreground text-sm leading-snug"
+          data-testid="hero-headline"
+        >
+          {card.claim}
+        </h3>
+        {card.reason ? (
+          <p className="text-muted-foreground text-xs leading-snug">{card.reason}</p>
+        ) : null}
+        {card.chosenOver ? (
+          <p className="text-muted-foreground text-xs" data-testid="news-chosen-over">
+            <span className="font-medium text-foreground">Chosen over the biggest number:</span>{' '}
+            {card.chosenOver}
+          </p>
+        ) : null}
+        {/* `text-primary` is this app's foreground utility; Jaina speaks in the brand colour. */}
+        <p className="inline-flex flex-wrap items-center gap-x-1.5 text-(--primary) text-xs">
+          <SparklesIcon aria-hidden className="size-3" />
+          <span>Jaina{draft ? ' · draft read' : ''}</span>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <a
+            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+            href={explainHref}
+          >
+            Explain with Jaina <ExternalLinkIcon aria-hidden className="size-3" />
+          </a>
         </p>
-      ) : null}
-      <h2
-        className="line-clamp-2 text-balance font-semibold text-base text-foreground leading-snug"
-        data-testid="hero-headline"
-      >
-        {card.claim}
-      </h2>
-
-      <CardBand
-        currency={currency}
-        figure={card.figure}
-        id={card.id}
-        resultLabel={resultLabel}
-        tone={card.tone}
-        visual={card.visual}
-      />
-
-      {card.reason ? (
-        <p className="line-clamp-2 text-muted-foreground text-sm leading-snug">{card.reason}</p>
-      ) : null}
-      {card.chosenOver ? (
-        <p className="line-clamp-2 text-muted-foreground text-xs" data-testid="news-chosen-over">
-          <span className="font-medium text-foreground">Chosen over the biggest number:</span>{' '}
-          {card.chosenOver}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2 pt-0.5">
-        {cta ? (
+        <FindingEvidence card={card} currency={currency} resultLabel={resultLabel} />
+      </div>
+      {cta ? (
+        <div className="@[36rem]/news:justify-self-end">
           <Button onClick={() => onCta(cta)} size="sm" type="button">
             {cta.label}
           </Button>
-        ) : null}
-        <a
-          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-8 gap-1 px-2 text-xs')}
-          href={explainHref}
-        >
-          Explain with Jaina <ExternalLinkIcon aria-hidden className="size-3" />
-        </a>
-      </div>
-
-      {asOfLine ? <p className="text-muted-foreground text-xs">{asOfLine}</p> : null}
+        </div>
+      ) : null}
     </article>
   );
 }

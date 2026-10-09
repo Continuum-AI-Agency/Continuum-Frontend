@@ -7,12 +7,11 @@
 // deploy, and the screen said nothing about when — so a stale answer and a current one were
 // indistinguishable, and nobody could ask for a fresh one.
 //
-// A figure without a date cannot be checked. This line is the date, and the button beside it
+// A figure without a date cannot be checked. This line is the date, and the text link beside it
 // is the way to ask again. The server owns the floor (a 30-minute cooldown, three re-reads per
 // account per UTC day); this only ever reports what the server already decided, so the control
 // never offers a re-read that will be refused.
 
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { AccountReadRefresh } from '../../useOptimizerData';
 
@@ -145,12 +144,12 @@ export function AccountReadFreshness({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground',
+        'inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground',
         className,
       )}
       data-testid="account-read-freshness"
     >
-      <p className="flex flex-wrap items-center gap-x-1.5">
+      <span className="inline-flex flex-wrap items-center gap-x-1.5">
         {taken ? (
           <span data-testid="account-read-taken">
             {taken}
@@ -168,24 +167,23 @@ export function AccountReadFreshness({
             {note}
           </span>
         ) : null}
-      </p>
-      <span className="flex items-center gap-2">
+      </span>
+      <span className="inline-flex items-center gap-2">
         {error ? (
           <span className="text-destructive" data-testid="account-read-refresh-error">
             {error}
           </span>
         ) : null}
         {offersControl ? (
-          <Button
+          <button
+            className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-default disabled:text-muted-foreground disabled:no-underline"
             data-testid="account-read-refresh"
             disabled={!canAsk}
             onClick={onRequest}
-            size="xs"
             type="button"
-            variant="outline"
           >
             {requesting || running ? 'Re-reading…' : 'Re-read'}
-          </Button>
+          </button>
         ) : null}
       </span>
     </div>

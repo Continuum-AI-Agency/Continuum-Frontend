@@ -38,10 +38,8 @@ export function OptimizerOnboarding({
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       {/* One line, laid out horizontally. The hero used to be a 6rem-tall centered block that
           ate the fold before the user saw a single ad set. */}
-      <header className="flex shrink-0 items-center gap-3 border-border/70 border-b px-4 py-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground">
-          <GaugeCircleIcon className="size-4" aria-hidden="true" />
-        </span>
+      <header className="flex shrink-0 items-center gap-3 border-border/60 border-b px-4 py-3">
+        <GaugeCircleIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
           <h2 className="font-semibold text-sm tracking-tight">Put ad sets under the Optimizer</h2>
           {/* Says what the user gets, then the money-safety promise. The old line
@@ -55,7 +53,7 @@ export function OptimizerOnboarding({
         </div>
       </header>
 
-      <div className="min-h-0 overflow-y-auto p-4">
+      <div className="min-h-0 overflow-y-auto px-4 py-5">
         <PortfolioSetup
           brandId={brandId}
           adAccountId={adAccountId}

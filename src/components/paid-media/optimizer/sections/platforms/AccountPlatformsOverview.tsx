@@ -8,7 +8,8 @@
 // rows already split, and every figure node carries its provenance for the digit gate.
 
 import type { AccountPlatformMetrics } from '@continuum/contracts';
-import { KpiTile } from '../../components/KpiTile';
+import { cn } from '@/lib/utils';
+import { KpiRow, KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
 import {
@@ -52,7 +53,7 @@ export function AllPlatformsHeadline({ metrics }: { metrics: AccountPlatformMetr
   const clauses = headlineKindClauses(metrics);
   return (
     <p
-      className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
+      className={`${typeScale.headline} max-w-[62ch] text-foreground`}
       data-source="account-platform-metrics"
       data-testid="overview-headline"
     >
@@ -131,7 +132,10 @@ export function AllPlatformsHeadline({ metrics }: { metrics: AccountPlatformMetr
         </span>
       ))}
       {clauses.length > 0 ? '. ' : ''}
-      <span className="tabular-nums" data-testid="overview-decisions">
+      <span
+        className={cn('tabular-nums', metrics.decisions_waiting > 0 && 'text-primary')}
+        data-testid="overview-decisions"
+      >
         {decisionsSentence(metrics.decisions_waiting)}
       </span>
     </p>
@@ -172,12 +176,9 @@ export function AllPlatformsTiles({
   const connected = connectedTotals(metrics).length;
   const showPlatforms = 3 + kinds.length < MIN_TILES;
   return (
-    <div
-      className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6"
-      data-source="account-platform-metrics"
-      data-testid="account-tiles"
-    >
+    <KpiRow source="account-platform-metrics" testId="account-tiles">
       <KpiTile
+        emphasis="hero"
         figure={figureProps('tiles.spend', total, currency, window)}
         label={`Spend · ${windowDaysLabel(metrics)}`}
         sub={spendSplitLabel(metrics)}
@@ -189,6 +190,7 @@ export function AllPlatformsTiles({
                 .join(' · ')
             : formatCurrency(total ?? metrics.spend_by_currency[0]?.spend ?? 0, currency)
         }
+        variant="inline"
       />
       {kinds.map((kind) => (
         <KpiTile
@@ -199,20 +201,22 @@ export function AllPlatformsTiles({
           sub={kindTileSub(metrics, kind)}
           testId={`tile-kind-${kind.kind}`}
           value={formatResults(kind.results)}
+          variant="inline"
         />
       ))}
       <KpiTile
         action={
           metrics.decisions_waiting > 0 ? (
             <button
-              className="text-primary text-xs hover:underline"
+              className="font-semibold text-primary text-xs hover:underline"
               onClick={onOpenActions}
               type="button"
             >
-              Review
+              Review →
             </button>
           ) : null
         }
+        emphasis={metrics.decisions_waiting > 0 ? 'decision' : undefined}
         figure={figureProps(
           'tiles.decisions-waiting',
           metrics.decisions_waiting,
@@ -228,6 +232,7 @@ export function AllPlatformsTiles({
         }
         testId="tile-decisions"
         value={String(metrics.decisions_waiting)}
+        variant="inline"
       />
       <KpiTile
         figure={figureProps('tiles.on-autopilot', metrics.autopilot.on, null, 'none', 'count')}
@@ -240,7 +245,13 @@ export function AllPlatformsTiles({
               : `${metrics.autopilot.total - metrics.autopilot.on} recommend, do not apply`
         }
         testId="tile-autopilot"
-        value={`${metrics.autopilot.on} of ${metrics.autopilot.total}`}
+        value={
+          <>
+            {metrics.autopilot.on}
+            <span className="text-muted-foreground/60">/{metrics.autopilot.total}</span>
+          </>
+        }
+        variant="inline"
       />
       {showPlatforms ? (
         <KpiTile
@@ -249,9 +260,10 @@ export function AllPlatformsTiles({
           sub={connected === 3 ? 'Meta, Google and TikTok read' : 'connect the rest in Settings'}
           testId="tile-platforms"
           value={`${connected} of 3`}
+          variant="inline"
         />
       ) : null}
-    </div>
+    </KpiRow>
   );
 }
 

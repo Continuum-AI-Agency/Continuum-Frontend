@@ -118,6 +118,7 @@ mock.module('../useOptimizerData', () => ({
   useOptimizerPortfolioEfficiency: () => efficiency,
   // A card's own control asks the service through this; nothing here confirms a write.
   useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
+  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
 const { OptimizerOverview, kindTileSub, autopilotTileSub, cardActionsOf } = await import(
@@ -239,7 +240,11 @@ function twentyMinutesAgo(): string {
   return new Date(Date.now() - 20 * 60_000).toISOString();
 }
 
-function mount(portfolios: PortfolioListItem[] = EASY_FIT, pendingCount = 4) {
+function mount(
+  portfolios: PortfolioListItem[] = EASY_FIT,
+  pendingCount = 4,
+  chromeInShell?: boolean,
+) {
   const onOpenActions = mock(() => {});
   const onSelect = mock((_id: string) => {});
   const onCreate = mock(() => {});
@@ -248,6 +253,7 @@ function mount(portfolios: PortfolioListItem[] = EASY_FIT, pendingCount = 4) {
     <OptimizerOverview
       adAccountId="act_easyfit"
       brandId="b1"
+      chromeInShell={chromeInShell}
       currency="MXN"
       onCreatePortfolio={onCreate}
       onOpenActions={onOpenActions}
@@ -467,24 +473,39 @@ describe('OptimizerOverview — the tiles', () => {
     expect(tiles(getByTestId('account-tiles'))).toHaveLength(6);
   });
 
-  it('takes its top border colour from the state, never from a chart', () => {
+  it('carries the state on the cell, draws no box and no state border, and no chart', () => {
     const { getByTestId } = mount();
     const conversations = getByTestId('tile-kind-conversations');
     expect(conversations.getAttribute('data-state')).toBe('bad');
-    expect(conversations.className).toContain('border-t-destructive');
-    const leads = getByTestId('tile-kind-leads');
-    expect(leads.getAttribute('data-state')).toBe('warn');
-    expect(leads.className).toContain('border-t-warning');
+    expect(conversations.getAttribute('data-variant')).toBe('inline');
+    expect(conversations.className).not.toContain('border-t-destructive');
+    expect(conversations.className).not.toContain('bg-card');
+    expect(getByTestId('tile-kind-leads').getAttribute('data-state')).toBe('warn');
     expect(getByTestId('tile-kind-purchases').getAttribute('data-state')).toBe('none');
-    expect(getByTestId('tile-kind-purchases').className).toContain('border-t-border');
+    expect(getByTestId('tile-spend').getAttribute('data-emphasis')).toBe('hero');
     expect(getByTestId('account-tiles').querySelector('svg')).toBeNull();
+  });
+
+  it('colours only the cost that moved against last week: cheaper reads green', () => {
+    const { getByTestId } = mount();
+    const delta = getByTestId('tile-kind-conversations').querySelector(
+      '[data-testid="cost-prior-delta"]',
+    );
+    expect(delta?.textContent).toBe('−3% vs prev. week');
+    expect(delta?.getAttribute('data-direction')).toBe('down');
+    expect(delta?.className).toContain('text-success');
+    expect(delta?.getAttribute('title')).toBe('prev. week 41.37 MXN');
+    // A kind with no prior cost gets no delta at all — none is invented.
+    expect(
+      getByTestId('tile-kind-purchases').querySelector('[data-testid="cost-prior-delta"]'),
+    ).toBeNull();
   });
 
   it('says cost, target and last week under a result kind', () => {
     const { getByTestId } = mount();
     expect(getByTestId('tile-kind-conversations').textContent).toContain('516');
     expect(getByTestId('tile-kind-conversations').textContent).toContain(
-      '39.95 MXN · target 30.00 MXN · prev. week 41.37 MXN',
+      '39.95 MXN each · target 30.00 MXN · −3% vs prev. week',
     );
     expect(getByTestId('tile-kind-leads').textContent).toContain('target 25.00 MXN–35.00 MXN');
     expect(getByTestId('tile-kind-purchases').textContent).toContain('408 MXN no results');
@@ -512,7 +533,7 @@ describe('OptimizerOverview — the tiles', () => {
     expect(spend.textContent).toContain('23,911 MXN');
     expect(spend.textContent).toContain('3,416 MXN per day · plan 4,184 MXN');
     expect(spend.getAttribute('data-state')).toBe('warn');
-    expect(getByTestId('tile-autopilot').textContent).toContain('3 of 4');
+    expect(getByTestId('tile-autopilot').textContent).toContain('3/4');
     expect(getByTestId('tile-autopilot').textContent).toContain(
       'Prueba recommends, does not apply',
     );
@@ -534,9 +555,7 @@ describe('the tile words', () => {
       EASY_FIT.map((row, index) => [row.id, portfolioWindow(row, EASY_FIT_SERIES[index] ?? [])]),
     );
     const [conversations, leads, purchases] = resultKinds(EASY_FIT, windows as never);
-    expect(kindTileSub(conversations as never, 'MXN')).toBe(
-      '39.95 MXN · target 30.00 MXN · prev. week 41.37 MXN',
-    );
+    expect(kindTileSub(conversations as never, 'MXN')).toBe('39.95 MXN each · target 30.00 MXN');
     expect(kindTileSub(leads as never, 'MXN')).toContain('target 25.00 MXN–35.00 MXN');
     expect(kindTileSub(purchases as never, 'MXN')).toBe('408 MXN no results');
   });
@@ -813,6 +832,22 @@ describe('OptimizerOverview — the header', () => {
       FORMULARIOS,
     ]);
     expect(getByTestId('book-line').textContent).toBe('2 portfolios · 17 ad sets · 4 lost');
+  });
+
+  it('puts the book on the meta line, beside the window', () => {
+    const { getByTestId } = mount();
+    expect(getByTestId('overview-subline').contains(getByTestId('book-line'))).toBe(true);
+  });
+
+  it('leaves the platform tabs and the toolbar to the shell when it draws them', () => {
+    const { getByTestId, queryByTestId, queryByRole } = mount(EASY_FIT, 4, true);
+    expect(queryByTestId('platform-tabs')).toBeNull();
+    expect(queryByTestId('overview-weekly-report')).toBeNull();
+    expect(queryByRole('button', { name: 'New portfolio' })).toBeNull();
+    expect(queryByRole('button', { name: /Review 4 pending/ })).toBeNull();
+    // The figures, the book and the decision tile's own Review stay.
+    expect(getByTestId('book-line').textContent).toBe('4 portfolios · 36 ad sets');
+    expect(getByTestId('tile-decisions').querySelector('button')?.textContent).toBe('Review →');
   });
 });
 

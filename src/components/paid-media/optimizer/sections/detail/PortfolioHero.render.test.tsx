@@ -31,6 +31,7 @@ import { buildPortfolioHeadline } from './headlineModel';
 import { buildHeroHeader, type HeroPortfolio, type HeroSetting } from './heroHeaderModel';
 import type { HeroView } from './heroModel';
 import { type RealBodyName, readBody } from './news/realBodies.fixture';
+import { PortfolioHeaderBar } from './PortfolioHeaderLine';
 import { PortfolioHero, type PortfolioHeroProps } from './PortfolioHero';
 import type { RecapModel } from './recapModel';
 
@@ -290,7 +291,7 @@ describe('the day’s news is one row, highest impact on the left', () => {
     ),
   ];
 
-  it('fills the row in the brief’s ranking, three across, every card in the same frame', () => {
+  it('lists the findings in the brief’s ranking, one line each, with no frame', () => {
     const { container } = mount(threeCards());
     const cells = cellsOf(container);
     expect(
@@ -303,17 +304,30 @@ describe('the day’s news is one row, highest impact on the left', () => {
       ),
     ).toEqual(['aleira', 'iteso', 'budget']);
     const row = container.querySelector('[data-testid="portfolio-news-row"]');
-    expect(row?.className).toContain('@[56rem]/news:grid-cols-3');
-    expect(row?.className).toContain('@[36rem]/news:grid-cols-2');
-    const frames = [...container.querySelectorAll('article')].map((a) => a.className);
-    for (const frame of frames) {
-      expect(frame).toContain('h-full');
-      expect(frame).toContain('w-full');
-      expect(frame).not.toContain('max-w-[');
+    expect(row?.className).toContain('divide-y');
+    const lines = [...container.querySelectorAll('article')].map((a) => a.className.split(/\s+/));
+    expect(lines.length).toBe(3);
+    for (const line of lines) {
+      expect(line).toContain('@[36rem]/news:grid-cols-[8rem_minmax(0,1fr)_auto]');
+      for (const token of ['border', 'rounded-lg', 'bg-card']) expect(line).not.toContain(token);
     }
+    // Under one heading that counts them and dates the read.
+    expect(container.querySelector('[data-testid="portfolio-findings"] h3')?.textContent).toBe(
+      'What the Optimizer found',
+    );
+    expect(
+      container.querySelector('[data-testid="portfolio-findings-meta"]')?.textContent,
+    ).toContain('3 findings · ');
+    // Each finding under its coloured tag: the two pauses red, the budget move muted.
+    const tags = [...container.querySelectorAll('[data-testid="finding-tag"]')];
+    expect(tags.map((t) => [t.textContent, t.getAttribute('data-tone')])).toEqual([
+      ['Pause', 'bad'],
+      ['Pause', 'bad'],
+      ['Budget', 'muted'],
+    ]);
   });
 
-  it('puts the maximum to the left of a lead Jaina chose over it', () => {
+  it('puts the maximum above a lead Jaina chose over it', () => {
     const v = threeCards();
     v.brief = {
       ...v.brief,
@@ -334,7 +348,7 @@ describe('the day’s news is one row, highest impact on the left', () => {
     expect(cells[1]?.textContent).toContain('Chosen over the biggest number');
   });
 
-  it('holds a fourth card behind "1 more finding" instead of stranding it on a second row', () => {
+  it('holds a fourth finding behind "1 more finding"', () => {
     const v = threeCards();
     v.brief = {
       ...v.brief,
@@ -435,40 +449,44 @@ function wholeHero(
     target: portfolio.cpa_target ?? null,
     timeZone: MEXICO,
   });
+  // The bar above the hero is the workspace's; it is mounted here as the workspace mounts it,
+  // so the name line and the read are asserted together.
   return render(
-    <PortfolioHero
-      beforeAfter={{
-        model: beforeAfter,
-        currency: null,
-        words: resultWords(metric.kpiField, metric.resultLabel),
-        window: 'd7',
-        target: portfolio.cpa_target ?? null,
-      }}
-      currency={null}
-      dailyTotal={dailyTotal}
-      explainHref="#"
-      header={{
-        header,
-        platforms: ['meta'],
-        onEditSetting: (setting) => handlers.edits?.push(setting),
-        onSecondary: () => undefined,
-        onRun: () => handlers.runs?.push(1),
-        running: false,
-      }}
-      headline={headline}
-      items={report.latest_items}
-      jaina={{
-        portfolio: { id: portfolio.id, name: portfolio.name, objective: portfolio.objective },
-        read: headline.read,
-        onAsk: (href) => handlers.asks?.push(href),
-      }}
-      nextCycleAt={null}
-      onCta={() => undefined}
-      onEditSetting={(setting) => handlers.edits?.push(setting)}
-      portfolioId="p1"
-      view={v}
-      {...handlers.over}
-    />,
+    <>
+      <PortfolioHeaderBar
+        header={header}
+        onRun={() => handlers.runs?.push(1)}
+        onSecondary={() => undefined}
+        platforms={['meta']}
+        running={false}
+      />
+      <PortfolioHero
+        beforeAfter={{
+          model: beforeAfter,
+          currency: null,
+          words: resultWords(metric.kpiField, metric.resultLabel),
+          window: 'd7',
+          target: portfolio.cpa_target ?? null,
+        }}
+        currency={null}
+        dailyTotal={dailyTotal}
+        explainHref="#"
+        header={header}
+        headline={headline}
+        items={report.latest_items}
+        jaina={{
+          portfolio: { id: portfolio.id, name: portfolio.name, objective: portfolio.objective },
+          read: headline.read,
+          onAsk: (href) => handlers.asks?.push(href),
+        }}
+        nextCycleAt={null}
+        onCta={() => undefined}
+        onEditSetting={(setting) => handlers.edits?.push(setting)}
+        portfolioId="p1"
+        view={v}
+        {...handlers.over}
+      />
+    </>,
   );
 }
 
@@ -477,13 +495,17 @@ const follows = (a: Element | null | undefined, b: Element | null | undefined) =
 
 describe('PortfolioHero — the blocks, in the redesign’s order, from each real body', () => {
   for (const name of ['formularios', 'prueba', 'mensajes', 'tours'] as const) {
-    it(`${name}: one module — header, anchor, sentences, tiles, last cycle, Jaina — then the cards`, () => {
+    it(`${name}: the bar, then one unframed read — anchor, sentences, facts, tiles, last cycle, Jaina — then the findings`, () => {
       const { container } = wholeHero(name);
       const hero = container.querySelector('[data-testid="portfolio-hero"]');
+      // The name line is the bar above the read, not part of it.
+      const bar = container.querySelector('[data-testid="portfolio-header"]');
+      expect(hero?.querySelector('[data-testid="portfolio-header"]')).toBeNull();
+      expect(follows(bar, hero)).toBe(true);
       const ids = [
-        'portfolio-header',
         'portfolio-anchor',
         'portfolio-headline',
+        'header-facts',
         'portfolio-tiles',
         'portfolio-before-after',
         'portfolio-jaina',
@@ -492,31 +514,30 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       const nodes = ids.map((id) => hero?.querySelector(`[data-testid="${id}"]`) ?? null);
       expect(nodes.map(Boolean)).toEqual(ids.map(() => true));
       for (let i = 1; i < nodes.length; i += 1) expect(follows(nodes[i - 1], nodes[i])).toBe(true);
-      // One surface: the module carries the frame, the blocks inside it carry none.
+      // No box: neither the read nor any block inside it carries a frame.
       const module = hero?.querySelector('[data-testid="portfolio-module"]');
-      const moduleClass = module?.getAttribute('class') ?? '';
+      const moduleClass = (module?.getAttribute('class') ?? '').split(/\s+/);
       for (const token of ['rounded-lg', 'border', 'bg-card']) {
-        expect(moduleClass.split(/\s+/)).toContain(token);
+        expect(moduleClass).not.toContain(token);
       }
       for (const id of ids.slice(0, -1)) {
         const node = module?.querySelector(`[data-testid="${id}"]`);
         expect(node).toBeTruthy();
-        if (id === 'portfolio-tiles') continue;
         expect((node?.getAttribute('class') ?? '').split(/\s+/)).not.toContain('border');
       }
-      // The cards sit below the module, not inside it.
+      // The findings sit below the read, not inside it.
       expect(module?.querySelector('[data-testid="portfolio-news-row"]')).toBeNull();
       // The anchor figure is the one 44px role.
       const anchor = hero?.querySelector('[data-testid="portfolio-anchor"]');
       expect(anchor?.querySelectorAll('[data-figure-role="anchor"]').length).toBe(1);
-      // Jaina's bar is the module's last child, with its five questions and no frame of its own.
+      // Jaina's bar closes the read, with its five questions and no frame of its own.
       expect(module?.lastElementChild?.getAttribute('data-testid')).toBe('portfolio-jaina');
       const band = hero?.querySelector(
         '[data-testid="portfolio-jaina"] [data-testid="jaina-entry-chips"]',
       );
       expect(band?.querySelectorAll('a').length).toBe(5);
       expect(band?.getAttribute('class') ?? '').not.toContain('border');
-      // Four frameless tiles, each with a state on its top rule and no chart inside.
+      // Four tiles with no box and no top rule, split by hairlines, no chart inside.
       const tiles = [
         ...(hero?.querySelectorAll('[data-testid="portfolio-tiles"] [data-testid^="tile-"]') ?? []),
       ];
@@ -530,10 +551,14 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
         expect(['ok', 'warn', 'bad', 'none']).toContain(tile.getAttribute('data-state'));
         expect(tile.querySelector('svg, canvas')).toBeNull();
         const classes = (tile.getAttribute('class') ?? '').split(/\s+/);
-        expect(classes).toContain('border-t-2');
         expect(classes).toContain('border-0');
+        expect(classes).not.toContain('border-t-2');
         expect(classes).not.toContain('bg-card');
       }
+      // The hairlines sit between the tiles, never before the first.
+      const cells = [...(hero?.querySelector('[data-testid="portfolio-tiles"]')?.children ?? [])];
+      expect(cells[0]?.getAttribute('class') ?? '').not.toContain('border-l');
+      expect(cells[1]?.getAttribute('class') ?? '').toContain('border-l');
     });
 
     it(`${name}: no vital-sign band, no full-width green or red bar, no dollar sign, no micro type`, () => {
@@ -552,7 +577,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
         'portfolio-jaina',
       ];
       const bars = blocks
-        .flatMap((id) => [...(hero?.querySelectorAll(`[data-testid="${id}"] *`) ?? [])])
+        .flatMap((id) => [...(container.querySelectorAll(`[data-testid="${id}"] *`) ?? [])])
         .filter((node) => node.getAttribute('data-testid') !== 'header-mode')
         .filter((node) =>
           /\bbg-(success|destructive)(\/\d+)?\b/.test(node.getAttribute('class') ?? ''),
@@ -691,20 +716,20 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     const runs: number[] = [];
     const { container, getByText } = wholeHero('prueba', { edits, runs });
     const chips = [...container.querySelectorAll('[data-testid="header-chip"]')];
-    // Objective, strategy and window in the grey line; the target under the anchor; the
-    // budget in the spend tile.
+    // The target under the anchor; objective, strategy and window in the grey line under the
+    // sentences; the budget in the spend tile.
     expect(chips.map((c) => c.getAttribute('data-setting'))).toEqual([
+      'target',
       'objective',
       'strategy',
       'window',
-      'target',
       'budget',
     ]);
     expect(chips.map((c) => c.textContent)).toEqual([
+      'target 25.00',
       'objective: leads',
       'Balanced',
       '14 days',
-      'target 25.00',
       'plan 110',
     ]);
     // Plain grey text, not pills.
@@ -713,7 +738,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     expect(header?.querySelector('[data-setting="budget"], [data-setting="target"]')).toBeNull();
     for (const chip of chips) fireEvent.click(chip);
     fireEvent.click(getByText('Run now'));
-    expect(edits).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
+    expect(edits).toEqual(['target', 'objective', 'strategy', 'window', 'budget']);
     expect(runs).toEqual([1]);
     expect(getByText('Review moves')).toBeTruthy();
     expect(container.querySelector('[data-testid="header-adsets"]')?.textContent).toBe('3 ad sets');
@@ -725,11 +750,12 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       over: { view: { ...v, state: 'first_cycle' }, items: report.latest_items },
     });
     const hero = container.querySelector('[data-testid="portfolio-hero"]');
-    expect(hero?.querySelector('[data-testid="portfolio-header"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="portfolio-header"]')).toBeTruthy();
+    expect(hero?.querySelector('[data-testid="header-facts"]')).toBeTruthy();
     expect(hero?.querySelector('[data-testid="jaina-ask"]')).toBeTruthy();
-    // The same one surface, with Jaina's bar at its foot.
+    // The same unframed read, with Jaina's bar closing it.
     const module = hero?.querySelector('[data-testid="portfolio-module"]');
-    expect(module?.getAttribute('class')).toContain('bg-card');
+    expect(module?.getAttribute('class')).not.toContain('bg-card');
     expect(module?.lastElementChild?.getAttribute('data-testid')).toBe('portfolio-jaina');
     expect(hero?.querySelector('[data-testid="portfolio-anchor"]')).toBeNull();
     expect(hero?.querySelector('[data-testid="jaina-read"]')).toBeNull();

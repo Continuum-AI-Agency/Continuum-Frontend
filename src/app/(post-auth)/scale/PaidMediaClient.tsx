@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactFlowProvider } from '@xyflow/react';
-import { Maximize2, Minimize2, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -14,13 +14,16 @@ import { CampaignsTabSkeleton } from '@/components/paid-media/campaigns/Campaign
 import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/usePrefetchScaleCampaigns';
 import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
+  AD_PLATFORMS,
+  connectedPlatforms,
+} from '@/components/paid-media/optimizer/sections/platforms/platformTabsModel';
+import {
   useOptimizerAdAccounts,
   useOptimizerPortfolios,
   usePrefetchOptimizerOverview,
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import { useOptimizerUrlState } from '@/components/paid-media/optimizer/useOptimizerUrlState';
 import { PaidSetupDiagnostics } from '@/components/paid-media/PaidSetupDiagnostics';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -47,8 +50,17 @@ import {
   saveAdAccount,
 } from './adAccountSelection';
 import { OptimizerSurfaceSkeleton } from './OptimizerSurfaceSkeleton';
+import { ScaleHeaderBar } from './ScaleHeaderBar';
 
-const PAID_MEDIA_TABS = ['dashboard', 'performance', 'campaigns', 'jaina'] as const;
+// `dashboard` is unfinished: no tab or sidebar entry leads to it, but a direct link still opens
+// it. `whats-working` is the view the bar's "What's working" link opens.
+const PAID_MEDIA_TABS = [
+  'dashboard',
+  'performance',
+  'campaigns',
+  'jaina',
+  'whats-working',
+] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
 function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
@@ -115,8 +127,17 @@ const ScaleCompanionCanvas = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
+// What's working: the kill / scale / iterate calls, with the win-rate explorer as their pop-out.
+const WhatsWorkingAdsCard = dynamic(
+  () =>
+    import('@/components/paid-media/dashboard/whats-working/WhatsWorkingAdsCard').then(
+      (mod) => mod.WhatsWorkingAdsCard,
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-lg" /> },
+);
+
 // The win-rate explorer is a pop-out, not a tab: it needs full height, and the
-// dashboard keeps only the compact kill/scale/iterate calls.
+// view keeps only the compact kill/scale/iterate calls.
 const WhatsWorkingExplorerPopover = dynamic(
   () =>
     import('@/components/paid-media/dashboard/whats-working/WhatsWorkingExplorerPopover').then(
@@ -143,6 +164,7 @@ const CampaignsTab = dynamic(
 type PaidMediaClientPageProps = {
   brandProfileId: string;
   brandName: string;
+  brandLogoUrl?: string | null;
   initialAccounts?: AdAccount[];
   initialAdAccountId?: string | null;
   deploymentEnvironment?: AutomationDeploymentEnvironment;
@@ -160,6 +182,7 @@ type SavedAccountChoice = { key: string; accountId: string | null };
 export default function PaidMediaClientPage({
   brandProfileId,
   brandName,
+  brandLogoUrl = null,
   initialAccounts,
   initialAdAccountId,
   deploymentEnvironment = 'production',
@@ -252,6 +275,17 @@ export default function PaidMediaClientPage({
     if (!optimizerAccounts.isSuccess) return undefined;
     return assignedAccountsForPlatform(optimizerAccounts.data, platform);
   }, [platform, optimizerAccounts.isSuccess, optimizerAccounts.data]);
+  // The platforms that feed the module, as the account chip's stacked marks.
+  const accountChip = React.useMemo(() => {
+    const connected = optimizerAccounts.isSuccess
+      ? connectedPlatforms(optimizerAccounts.data)
+      : null;
+    return {
+      brandName,
+      brandLogoUrl,
+      platforms: connected ? AD_PLATFORMS.filter((candidate) => connected[candidate]) : [],
+    };
+  }, [brandName, brandLogoUrl, optimizerAccounts.isSuccess, optimizerAccounts.data]);
 
   // Read after mount: storage is per-viewer and the server render cannot see it. The key
   // pins the read to its brand and platform so a stale read never applies to the next one.
@@ -313,7 +347,7 @@ export default function PaidMediaClientPage({
     [setSelectedAdAccount],
   );
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
-    normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
+    normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'performance'),
   );
   const [creativeRequest, setCreativeRequest] = React.useState<CampaignCreativeRequest | null>(
     null,
@@ -571,17 +605,9 @@ export default function PaidMediaClientPage({
 
   if (!mounted) {
     return (
-      <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
-        <Skeleton className="h-9 w-[min(20rem,50vw)] rounded-md" />
-        <div className="rounded-lg border bg-card px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <Skeleton className="h-8 w-[min(18rem,45vw)] rounded-md" />
-            <Skeleton className="h-8 w-[min(22rem,48vw)] rounded-md" />
-          </div>
-        </div>
-        <div className="min-h-0 rounded-xl border bg-card p-3">
-          <Skeleton className="h-full min-h-0 w-full rounded-lg" />
-        </div>
+      <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden px-[var(--app-shell-pad-inline)] py-2">
+        <Skeleton className="h-8 w-[min(28rem,80%)] rounded-md" />
+        <Skeleton className="h-full min-h-0 w-full rounded-lg" />
       </div>
     );
   }
@@ -591,31 +617,26 @@ export default function PaidMediaClientPage({
       <div
         role="status"
         aria-label="Switching Scale brand context"
-        className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2"
+        className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden px-[var(--app-shell-pad-inline)] py-2"
       >
         <span className="sr-only">Switching Scale to {brandName}</span>
-        <Skeleton className="h-9 w-[min(20rem,50vw)] rounded-md" />
-        <Skeleton className="h-12 w-full rounded-lg" />
-        <Skeleton className="h-full min-h-0 w-full rounded-xl" />
+        <Skeleton className="h-8 w-[min(28rem,80%)] rounded-md" />
+        <Skeleton className="h-full min-h-0 w-full rounded-lg" />
       </div>
     );
   }
 
+  const whatsWorkingAvailable = platform === 'meta' && Boolean(selectedAdAccount);
+
   return (
-    <div className="@container/paid box-border h-full min-h-0 w-full max-w-none overflow-hidden px-0 py-1">
+    <div className="@container/paid box-border h-full min-h-0 w-full max-w-none overflow-hidden">
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-[var(--app-shell-gap)] overflow-hidden"
+        className="flex h-full min-h-0 flex-col gap-0 overflow-hidden"
       >
-        <PageHeader
-          title="Scale"
-          description="Paid media command center — connect and assign an ad account to unlock campaign pacing, DCO actions, and Jaina."
-          className="px-[var(--app-shell-pad-inline)]"
-        />
-
-        <div className="flex min-h-9 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] rounded-lg border border-border/70 bg-muted/10 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-          <div data-tour-id="paid-account-selector" className="inline-flex">
+        <ScaleHeaderBar>
+          <div data-tour-id="paid-account-selector" className="inline-flex min-w-0">
             <AdAccountSelector
               brandId={brandProfileId}
               platform={activeTab === 'jaina' ? 'all' : platform}
@@ -626,20 +647,18 @@ export default function PaidMediaClientPage({
               assignedAccountIds={assignedAccountIds}
               knownAccounts={knownAccounts}
               preferredAccountId={preferredAccountId}
+              chip={accountChip}
             />
           </div>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-            {platform === 'meta' && selectedAdAccount ? (
-              <WhatsWorkingExplorerPopover brandId={brandProfileId} />
-            ) : null}
+          <div className="ms-auto flex shrink-0 items-center gap-2">
             {activeTab === 'jaina' ? (
               <>
                 <Button
                   type="button"
-                  variant={isCanvasOpen ? 'outline' : 'secondary'}
+                  variant={isCanvasOpen ? 'outline' : 'ghost'}
                   size="sm"
                   onClick={handleToggleCanvas}
-                  className="h-8 gap-1.5 px-2 text-xs"
+                  className="h-7 gap-1.5 px-2 text-xs"
                   aria-pressed={isCanvasOpen}
                 >
                   {isCanvasOpen ? (
@@ -654,7 +673,7 @@ export default function PaidMediaClientPage({
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsJainaFullscreen((v) => !v)}
-                  className="h-8 w-8 p-0"
+                  className="h-7 w-7 p-0"
                   aria-label={isJainaFullscreen ? 'Exit full screen' : 'Full screen'}
                   aria-pressed={isJainaFullscreen}
                 >
@@ -666,19 +685,24 @@ export default function PaidMediaClientPage({
                 </Button>
               </>
             ) : null}
-            <TabsList className="h-8">
-              <TabsTrigger
-                value="dashboard"
-                className="px-3 text-xs"
-                onMouseEnter={() => {
-                  void import('@/components/paid-media/dashboard/PaidMediaDashboard');
-                }}
-                onFocus={() => {
-                  void import('@/components/paid-media/dashboard/PaidMediaDashboard');
-                }}
+            {whatsWorkingAvailable ? (
+              <button
+                type="button"
+                onClick={() => handleTabChange('whats-working')}
+                aria-current={activeTab === 'whats-working' ? 'page' : undefined}
+                data-testid="whats-working-link"
+                className={cn(
+                  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary transition-colors',
+                  'hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  activeTab === 'whats-working' && 'bg-primary/10',
+                )}
               >
-                Dashboard
-              </TabsTrigger>
+                <Sparkles aria-hidden="true" className="size-3.5" />
+                <span className="hidden sm:inline">What&apos;s working</span>
+                <span className="sr-only sm:hidden">What&apos;s working</span>
+              </button>
+            ) : null}
+            <TabsList className="h-8">
               <TabsTrigger
                 value="performance"
                 className="px-3 text-xs"
@@ -691,7 +715,7 @@ export default function PaidMediaClientPage({
                   prefetchOptimizerOverview();
                 }}
               >
-                Optimization
+                Optimizer
               </TabsTrigger>
               {platform === 'meta' ? (
                 <TabsTrigger
@@ -724,9 +748,12 @@ export default function PaidMediaClientPage({
               </TabsTrigger>
             </TabsList>
           </div>
-        </div>
+        </ScaleHeaderBar>
 
-        <TabsContent value="dashboard" className="box-border flex min-h-0 flex-col overflow-hidden">
+        <TabsContent
+          value="dashboard"
+          className="box-border flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
           {/* A saved dashboard is something you READ, so it belongs with the numbers rather
            *  than inside the chat that happened to produce it. Jaina is the conversation; what
            *  the conversation left behind lives here. The panel reads the Jaina brand scope, so
@@ -808,7 +835,7 @@ export default function PaidMediaClientPage({
           </div>
         </TabsContent>
 
-        <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
+        <TabsContent value="performance" className="box-border min-h-0 flex-1 overflow-hidden">
           {selectedAdAccount ? (
             <OptimizerTab
               brandId={brandProfileId}
@@ -821,7 +848,7 @@ export default function PaidMediaClientPage({
           )}
         </TabsContent>
 
-        <TabsContent value="campaigns" className="box-border min-h-0 overflow-hidden">
+        <TabsContent value="campaigns" className="box-border min-h-0 flex-1 overflow-hidden">
           {!selectedAdAccount ? (
             renderBlockedState()
           ) : platform === 'meta' ? (
@@ -837,13 +864,16 @@ export default function PaidMediaClientPage({
           )}
         </TabsContent>
 
-        <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">
+        <TabsContent
+          value="jaina"
+          className="box-border flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
           <JainaBrandScopeProvider adAccountId={selectedAdAccount} brandId={brandProfileId}>
             <div
               ref={canvasShellRef}
               className={cn(
-                'relative flex flex-1 min-h-0 overflow-hidden rounded-lg border bg-background/70',
-                isJainaFullscreen && 'fixed inset-0 z-50 rounded-none border-none',
+                'relative flex min-h-0 flex-1 overflow-hidden',
+                isJainaFullscreen && 'fixed inset-0 z-50 bg-background',
               )}
             >
               <div className="min-h-0 min-w-0 flex-1">
@@ -870,6 +900,7 @@ export default function PaidMediaClientPage({
                   onOperatorActionSettled={companionDeploy.settled}
                   onOpenAccountRead={handleOpenAccountRead}
                   goalsAccessEnabled={goalsAccessEnabled}
+                  showAccountScope={false}
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
                 />
               </div>
@@ -926,6 +957,26 @@ export default function PaidMediaClientPage({
               </AnimatePresence>
             </div>
           </JainaBrandScopeProvider>
+        </TabsContent>
+
+        <TabsContent
+          value="whats-working"
+          className="box-border min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-3"
+        >
+          {whatsWorkingAvailable ? (
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
+              <div className="flex justify-end">
+                <WhatsWorkingExplorerPopover brandId={brandProfileId} />
+              </div>
+              <WhatsWorkingAdsCard adAccountId={selectedAdAccount} brandId={brandProfileId} />
+            </div>
+          ) : !selectedAdAccount ? (
+            renderBlockedState()
+          ) : (
+            <div className="flex h-full items-center justify-center p-4 text-muted-foreground text-sm">
+              What&apos;s working reads Meta ad accounts.
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -123,11 +123,7 @@ export function ByPlatformView({
   const sourceSuffix = view.sourceIsNotPlatform ? attributionSourceName(header.used) : null;
   const resultKind = metrics.result_kind.replace(/s$/, '');
   return (
-    <section
-      aria-label="By platform"
-      className="rounded-lg border border-border/60 p-3"
-      data-testid="by-platform"
-    >
+    <section aria-label="By platform" data-testid="by-platform">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-semibold text-sm">By platform</h3>
         <p className="text-muted-foreground text-xs" data-testid="by-platform-attribution">
@@ -158,10 +154,6 @@ export function ByPlatform({ portfolioId }: { portfolioId: string }) {
   const state = usePortfolioMetrics(portfolioId);
   const caps = usePortfolioPlatformCaps(portfolioId);
   return (
-    <ByPlatformView
-      nonMetaMember={capsHoldNonMetaMember(caps)}
-      now={new Date()}
-      state={state}
-    />
+    <ByPlatformView nonMetaMember={capsHoldNonMetaMember(caps)} now={new Date()} state={state} />
   );
 }

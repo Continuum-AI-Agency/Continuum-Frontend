@@ -117,7 +117,7 @@ export function AutopilotScopesField({
         activate it. Stop halts all of these.
       </p>
       {noActor ? (
-        <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-600 dark:text-amber-400">
           Autopilot needs a person to act as. Toggle any scope once so your account is recorded as
           the approver.
         </p>

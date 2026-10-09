@@ -1,30 +1,24 @@
 'use client';
 
-// What a portfolio opens on: ONE module, then the cards (docs/performance-plus-redesign/
-// portafolio-unificado.html, idea D "número ancla", decided 29/09 with four tiles). The six
-// framed blocks it replaces — name line, Jaina panel, sentences, tiles, last-cycle line,
-// before/after boxes — read as six things; the module reads as one. One surface, sections
-// separated by space, never by frames inside it:
+// What a portfolio opens on (P1, "Lectura continua"): a continuous read with no box around
+// it. The bar above it (./PortfolioHeaderLine, mounted by the workspace) carries the name, the
+// mode, the tabs and the controls; this is everything under it, separated by space, never by
+// frames:
 //
-//   1. the name, the mode pill and one grey line of facts, the controls on the right
-//      (./PortfolioHeaderLine);
-//   2. the anchor number — cost per result, 44px, in the colour of the target — beside the
-//      news: the status sentence, Jaina's read when she wrote something it does not say, the
-//      opportunity, a blocker only when one exists (./PortfolioAnchor, ./PortfolioHeadline);
-//   3. four frameless tiles chosen for what the portfolio buys (./PortfolioTiles);
-//   4. the last cycle and its projection in one caption (./BeforeAfterStrip);
-//   5. Jaina's bar across the module's foot (./JainaPortfolioPanel);
+//   1. the anchor number — cost per result, very large, in the colour of the target — with its
+//      unit, target and the window before (./PortfolioAnchor); beside it the news: the status
+//      sentence, Jaina's read when she wrote something it does not say, the opportunity, a
+//      blocker only when one exists (./PortfolioHeadline), and the grey line of facts whose
+//      settings open Manage (./PortfolioHeaderLine);
+//   2. four tiles in one row, split by thin vertical hairlines (./PortfolioTiles);
+//   3. the last cycle and its projection in one caption (./BeforeAfterStrip);
+//   4. Jaina's bar, a light primary band (./JainaPortfolioPanel);
 //
-// and below the module the recommendation cards, ONE ROW, highest impact on the left
-// (./news), the rest behind "N more".
-//
-// The card row is the one layout decision left here. Three equal columns on a desktop pane,
-// two on a tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
-// `NEWS_ROW` in ./news/cardShape). Every card fills its column and the cards in a row share
-// a height. The order is the brief's own ranking — `buildPortfolioNews` hands the cards back
-// sorted — and the lead is not always first: when Jaina picked a lower candidate the maximum
-// stands to its left, and the lead's "chosen over the biggest number" line explains the pair.
-// A fourth card sits behind "N more" rather than wrapping into a lone card with blank beside it.
+// and under it "What the Optimizer found": the day's findings as a list, one line each,
+// highest impact first, the rest behind "N more findings" (./news). The order is the brief's
+// own ranking — `buildPortfolioNews` hands the cards back sorted — and the lead is not always
+// first: when Jaina picked a lower candidate the maximum stands above it, and the lead's
+// "chosen over the biggest number" line explains the pair.
 //
 // Entrance is a short stagger; everything is static under prefers-reduced-motion.
 
@@ -36,16 +30,16 @@ import { cn } from '@/lib/utils';
 import { asOfLine } from '../recQueueModel';
 import { BeforeAfterStrip, type BeforeAfterStripProps } from './BeforeAfterStrip';
 import { anchorOf, type PortfolioHeadline as HeadlineModel, relevantTiles } from './headlineModel';
-import type { HeroSetting } from './heroHeaderModel';
+import type { HeroHeader, HeroSetting } from './heroHeaderModel';
 import type { HeroCta, HeroView } from './heroModel';
 import { JainaPortfolioPanel, type JainaPortfolioPanelProps } from './JainaPortfolioPanel';
-import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE } from './news/cardShape';
+import { NEWS_LIST, NEWS_PANE, NEWS_ROW_SIZE } from './news/cardShape';
 import { InsightCard } from './news/InsightCard';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
 import { buildPortfolioNews, type NewsCardModel } from './news/newsModel';
 import { PortfolioAnchor } from './PortfolioAnchor';
-import { PortfolioHeaderLine, type PortfolioHeaderLineProps } from './PortfolioHeaderLine';
+import { PortfolioFactsLine } from './PortfolioHeaderLine';
 import { PortfolioHeadline } from './PortfolioHeadline';
 import { PortfolioTiles } from './PortfolioTiles';
 
@@ -57,12 +51,8 @@ const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
-/** The module: the portfolio's one framed surface. Its children carry no frame of their own. */
-// No overflow-hidden: it would clip — and hide from the scale sweep — anything pushed past the
-// pane's edge. Jaina's bar rounds its own bottom corners instead.
-const MODULE = 'flex flex-col gap-4 rounded-lg border border-border/70 bg-card';
-/** The module's padding, on everything but Jaina's bar, which runs edge to edge at its foot. */
-const MODULE_BODY = 'flex flex-col gap-4 px-4 pt-4 md:px-5 md:pt-5';
+/** The read above the findings: blocks separated by space, no frame around or inside it. */
+const MODULE = 'flex flex-col gap-5';
 
 const tileVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
@@ -99,8 +89,9 @@ export type PortfolioHeroProps = {
   stale?: boolean;
   onCta: (cta: HeroCta) => void;
   explainHref: string;
-  /** The blocks above the cards. Absent, the hero is the news alone. */
-  header?: PortfolioHeaderLineProps;
+  /** The grey line of facts under the sentences; the name and controls live in the bar.
+   *  Absent with the other blocks, the hero is the findings alone. */
+  header?: HeroHeader;
   jaina?: JainaPortfolioPanelProps;
   headline?: HeadlineModel;
   beforeAfter?: BeforeAfterStripProps;
@@ -144,17 +135,19 @@ export function PortfolioHero({
     [dailyTotal],
   );
 
+  const facts = header ? (
+    <PortfolioFactsLine header={header} onEditSetting={onEditSetting} />
+  ) : null;
+
   if (view.state === 'first_cycle') {
     return (
-      <section className={cn(NEWS_PANE, 'flex flex-col gap-3')} data-testid="portfolio-hero">
+      <section className={cn(NEWS_PANE, 'flex flex-col gap-6')} data-testid="portfolio-hero">
         <div className={MODULE} data-testid="portfolio-module">
-          <div className={cn(MODULE_BODY, !jaina && 'pb-4 md:pb-5')}>
-            {header ? <PortfolioHeaderLine {...header} /> : null}
-            <div className="h-24 animate-pulse rounded-md bg-muted/70" />
-            <p className="text-muted-foreground text-xs">
-              Jaina writes her first read after the first cycle.
-            </p>
-          </div>
+          {facts}
+          <div className="h-24 animate-pulse rounded-md bg-muted/70" />
+          <p className="text-muted-foreground text-xs">
+            Jaina writes her first read after the first cycle.
+          </p>
           {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </div>
       </section>
@@ -165,14 +158,12 @@ export function PortfolioHero({
 
   const cell = (card: NewsCardModel) => (
     <motion.div
-      className={NEWS_CELL}
       data-testid="portfolio-news-cell"
       key={card.id}
       variants={card === news.lead ? heroVariants : tileVariants}
     >
       {card === news.lead ? (
         <NewsCard
-          asOfLine={asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle'}
           card={card}
           currency={currency}
           draft={view.brief.model === 'deterministic'}
@@ -208,58 +199,71 @@ export function PortfolioHero({
     ? relevantTiles({ headline, brief: view.brief, items, dailyTotal, currency })
     : [];
   const hasModule = Boolean(header || headline || beforeAfter || jaina);
+  const asOf = asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle';
+  const findingCount = news.cards.length;
 
   return (
     <motion.section
       animate="visible"
-      className={cn(NEWS_PANE, 'flex flex-col gap-3')}
+      className={cn(NEWS_PANE, 'flex flex-col gap-6')}
       data-testid="portfolio-hero"
       initial={play ? 'hidden' : false}
       variants={groupVariants}
     >
       {hasModule ? (
         <motion.div className={MODULE} data-testid="portfolio-module" variants={tileVariants}>
-          <div className={cn(MODULE_BODY, !jaina && 'pb-4 md:pb-5')}>
-            {header ? <PortfolioHeaderLine {...header} /> : null}
-            {headline && anchor ? (
-              <div className="grid grid-cols-1 items-start gap-4 @[40rem]/news:grid-cols-[2fr_3fr] @[40rem]/news:gap-6">
-                <PortfolioAnchor
-                  anchor={anchor}
-                  currency={currency}
-                  onEditSetting={onEditSetting}
-                  window={beforeAfter?.window ?? view.brief.growth.window}
-                />
+          {headline && anchor ? (
+            <div className="grid grid-cols-1 items-start gap-4 @[40rem]/news:grid-cols-[auto_minmax(0,1fr)] @[40rem]/news:gap-9">
+              <PortfolioAnchor
+                anchor={anchor}
+                currency={currency}
+                onEditSetting={onEditSetting}
+                window={beforeAfter?.window ?? view.brief.growth.window}
+              />
+              <div className="flex min-w-0 max-w-[64ch] flex-col gap-2">
                 <PortfolioHeadline headline={headline} onEditSetting={onEditSetting} />
+                {facts}
               </div>
-            ) : null}
-            {tiles.length > 0 ? (
-              <PortfolioTiles onEditSetting={onEditSetting} tiles={tiles} />
-            ) : null}
-            {beforeAfter ? (
-              // The workspace hands the strip its words in the Overview's vocabulary; the
-              // module speaks the headline's.
-              <BeforeAfterStrip {...beforeAfter} words={headline?.words ?? beforeAfter.words} />
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            facts
+          )}
+          {tiles.length > 0 ? <PortfolioTiles onEditSetting={onEditSetting} tiles={tiles} /> : null}
+          {beforeAfter ? (
+            // The workspace hands the strip its words in the Overview's vocabulary; the
+            // module speaks the headline's.
+            <BeforeAfterStrip {...beforeAfter} words={headline?.words ?? beforeAfter.words} />
+          ) : null}
           {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </motion.div>
       ) : null}
 
-      <motion.div className={NEWS_ROW} data-testid="portfolio-news-row" variants={groupVariants}>
-        {row.map(cell)}
-      </motion.div>
+      <section className="flex flex-col gap-1" data-testid="portfolio-findings">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h3 className="font-semibold text-foreground text-sm">What the Optimizer found</h3>
+          <p className="text-muted-foreground text-xs" data-testid="portfolio-findings-meta">
+            {findingCount} finding{findingCount === 1 ? '' : 's'} · {asOf}
+          </p>
+        </div>
+        <motion.div className={NEWS_LIST} data-testid="portfolio-news-row" variants={groupVariants}>
+          {row.map(cell)}
+        </motion.div>
 
-      {more.length > 0 ? (
-        <details className="group" data-testid="portfolio-news-more">
-          <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
-            <span className="group-open:hidden">
-              {more.length} more finding{more.length === 1 ? '' : 's'}
-            </span>
-            <span className="hidden group-open:inline">Fewer findings</span>
-          </summary>
-          <div className={cn(NEWS_ROW, 'mt-3')}>{more.map(cell)}</div>
-        </details>
-      ) : null}
+        {more.length > 0 ? (
+          <details
+            className="group border-border/60 border-t pt-3"
+            data-testid="portfolio-news-more"
+          >
+            <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+              <span className="group-open:hidden">
+                {more.length} more finding{more.length === 1 ? '' : 's'}
+              </span>
+              <span className="hidden group-open:inline">Fewer findings</span>
+            </summary>
+            <div className={NEWS_LIST}>{more.map(cell)}</div>
+          </details>
+        ) : null}
+      </section>
     </motion.section>
   );
 }

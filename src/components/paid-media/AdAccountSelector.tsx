@@ -1,9 +1,14 @@
 'use client';
 
-import { Check, ChevronsUpDown, PlugZapIcon, RefreshCwIcon } from 'lucide-react';
+import { Check, ChevronDown, ChevronsUpDown, PlugZapIcon, RefreshCwIcon } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
-
+import { BrandAvatar } from '@/components/brand/BrandAvatar';
+import { PlatformIcon } from '@/components/paid-media/optimizer/sections/platforms/PlatformChip';
+import {
+  type AdPlatform,
+  PLATFORM_NAMES,
+} from '@/components/paid-media/optimizer/sections/platforms/platformTabsModel';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Command,
@@ -34,6 +39,14 @@ export type AdAccount = {
 // hook never has to reach into a component module to normalize an id.
 export type { bareAccountId };
 
+/** The account chip look (Performance+ top bar): the brand as an avatar and a name, the
+ *  platforms that feed the module as stacked marks, and the selected account beside them. */
+export type AdAccountChip = {
+  brandName: string;
+  brandLogoUrl?: string | null;
+  platforms: readonly AdPlatform[];
+};
+
 type AdAccountSelectorProps = {
   brandId: string;
   selectedAccountId: string | null;
@@ -62,7 +75,51 @@ type AdAccountSelectorProps = {
   preferredAccountId?: string | null;
   /** Receives auto-selections, so the caller can tell them from a person's pick. */
   onAutoSelect?: (accountId: string) => void;
+  /** Render the trigger as the brand chip instead of the plain account combobox. */
+  chip?: AdAccountChip;
 };
+
+function ChipTrigger({
+  chip,
+  accountLabel,
+  ...buttonProps
+}: React.ComponentProps<typeof Button> & { chip: AdAccountChip; accountLabel: string }) {
+  const platformNames = chip.platforms.map((platform) => PLATFORM_NAMES[platform]).join(', ');
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-8 min-w-0 max-w-[min(26rem,100%)] gap-2 rounded-full bg-background py-0 pr-2.5 pl-1 text-xs font-medium"
+      data-testid="ad-account-chip"
+      {...buttonProps}
+    >
+      <BrandAvatar name={chip.brandName} logoUrl={chip.brandLogoUrl} size="sm" />
+      <span className="truncate">{chip.brandName}</span>
+      <span className="hidden min-w-0 truncate font-normal text-muted-foreground sm:inline">
+        {accountLabel}
+      </span>
+      {chip.platforms.length > 0 ? (
+        <span
+          className="inline-flex shrink-0 items-center -space-x-1"
+          data-testid="ad-account-chip-platforms"
+          title={platformNames}
+        >
+          <span className="sr-only">{platformNames}</span>
+          {chip.platforms.map((platform) => (
+            <span
+              className="grid size-4 place-items-center rounded-full bg-background ring-2 ring-background"
+              data-platform={platform}
+              key={platform}
+            >
+              <PlatformIcon className="size-3" platform={platform} />
+            </span>
+          ))}
+        </span>
+      ) : null}
+      <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 opacity-60" />
+    </Button>
+  );
+}
 
 function findAccount(accounts: AdAccount[], accountId: string): AdAccount | undefined {
   const wanted = bareAccountId(accountId);
@@ -83,6 +140,7 @@ export function AdAccountSelector({
   knownAccounts,
   preferredAccountId,
   onAutoSelect,
+  chip,
 }: AdAccountSelectorProps) {
   const isGoogleAds = platform === 'google-ads';
   const isAll = platform === 'all';
@@ -303,28 +361,38 @@ export function AdAccountSelector({
   const selectedAccount = selectedAccountId
     ? findAccount(visibleAccounts, selectedAccountId)
     : undefined;
+  const triggerLabel =
+    visibleAccounts.length === 0
+      ? 'Loading accounts...'
+      : selectedAccount
+        ? selectedAccount.name
+        : 'Select ad account';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
-          <Button
-            variant="outline"
-            size="sm"
-            role="combobox"
-            aria-expanded={open}
-            disabled={visibleAccounts.length === 0}
-            className="h-8 min-w-[12rem] max-w-[24rem] justify-between px-2 text-xs font-normal sm:min-w-[16rem]"
-          >
-            <span className="truncate">
-              {visibleAccounts.length === 0
-                ? 'Loading accounts...'
-                : selectedAccount
-                  ? selectedAccount.name
-                  : 'Select ad account'}
-            </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-          </Button>
+          chip ? (
+            <ChipTrigger
+              chip={chip}
+              accountLabel={triggerLabel}
+              role="combobox"
+              aria-expanded={open}
+              disabled={visibleAccounts.length === 0}
+            />
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              role="combobox"
+              aria-expanded={open}
+              disabled={visibleAccounts.length === 0}
+              className="h-8 min-w-[12rem] max-w-[24rem] justify-between px-2 text-xs font-normal sm:min-w-[16rem]"
+            >
+              <span className="truncate">{triggerLabel}</span>
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            </Button>
+          )
         }
       />
 

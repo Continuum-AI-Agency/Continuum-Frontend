@@ -19,7 +19,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { collectSessionTags } from '@/lib/agents/session-filters';
 import { GOALS_PRODUCTION_DISABLED_REASON } from '@/lib/goals/access';
-import type { JainaConversationSession } from '@/lib/jaina/conversations';
+import {
+  formatSessionActivity,
+  type JainaConversationSession,
+  sessionActivityAt,
+} from '@/lib/jaina/conversations';
 import { cn } from '@/lib/utils';
 import { JainaGoalsSidebarPanel } from './JainaGoalsSidebarPanel';
 
@@ -55,18 +59,6 @@ const AGENT_OPTIONS = [
 // sidebar sits in a full-width tab and in a 420px floating panel on a desktop screen.
 const SIDEBAR_BASE_CLASS =
   'flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur @3xl/jaina:border-b-0 @3xl/jaina:border-r';
-
-function formatSessionTimestamp(value: string | null): string {
-  if (!value) return 'No activity';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'No activity';
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
 
 function getSessionTitle(
   session: JainaConversationSession,
@@ -234,6 +226,7 @@ export function JainaConversationSidebar({
                 const isActive = session.sessionId === activeSessionId;
                 const isDeleting = deletingSessionId === session.sessionId;
                 const isGenerating = generatingSessionIds?.has(session.sessionId) ?? false;
+                const activityAt = sessionActivityAt(session);
                 return (
                   <div
                     key={session.sessionId}
@@ -282,9 +275,13 @@ export function JainaConversationSidebar({
                             {session.lastMessageRole ?? 'session'}
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground">
-                          {formatSessionTimestamp(session.lastMessageAt)}
-                        </span>
+                        <time
+                          className="text-xs tabular-nums text-muted-foreground"
+                          data-testid={`jaina-conversation-time-${session.sessionId}`}
+                          dateTime={activityAt ?? undefined}
+                        >
+                          {formatSessionActivity(activityAt)}
+                        </time>
                       </div>
                     </button>
                     {onUpdateConversationTags ? (

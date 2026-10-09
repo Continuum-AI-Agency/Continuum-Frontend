@@ -62,6 +62,32 @@ describe('AdAccountSelector with known accounts', () => {
     cleanup();
   });
 
+  it('dresses the trigger as the brand chip: initials, brand, account and platform marks', () => {
+    const { getByRole, getByTestId } = render(
+      <AdAccountSelector
+        brandId="brand-vivo"
+        selectedAccountId="act_1779847382038564"
+        onSelect={() => {}}
+        knownAccounts={VIVO_KNOWN}
+        assignedAccountIds={VIVO_ASSIGNED}
+        chip={{ brandName: 'Home Vivo47', platforms: ['meta', 'google_ads'] }}
+      />,
+    );
+
+    const trigger = getByRole('combobox');
+    expect(trigger.getAttribute('data-testid')).toBe('ad-account-chip');
+    expect(trigger.textContent).toContain('HV');
+    expect(trigger.textContent).toContain('Home Vivo47');
+    expect(trigger.textContent).toContain('VIVO47 MKT');
+    const marks = getByTestId('ad-account-chip-platforms');
+    expect(
+      [...marks.querySelectorAll('[data-platform]')].map((mark) =>
+        mark.getAttribute('data-platform'),
+      ),
+    ).toEqual(['meta', 'google_ads']);
+    expect(marks.textContent).toContain('Meta, Google');
+  });
+
   it('shows the selected known account while the integration summary is still loading', () => {
     const { getByRole } = render(
       <AdAccountSelector

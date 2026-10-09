@@ -37,7 +37,7 @@ describe('PortfolioCreateView', () => {
     );
   });
 
-  it('fires onBack when the Back button is clicked', () => {
+  it('fires onBack from the "← Portfolios" breadcrumb', () => {
     const onBack = mock(() => {});
     const { getByRole } = render(
       <PortfolioCreateView
@@ -49,7 +49,7 @@ describe('PortfolioCreateView', () => {
       />,
     );
 
-    fireEvent.click(getByRole('button', { name: 'Back' }));
+    fireEvent.click(getByRole('button', { name: 'Back to portfolios' }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 

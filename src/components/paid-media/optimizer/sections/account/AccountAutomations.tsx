@@ -10,11 +10,10 @@
 // screen and a database come to disagree.
 //
 // The ceilings need the defaults the read was composed under to say which value is actually
-// in force, so until the first read lands the panel says so rather than guessing 'recommend'
+// in force, so until the first read lands the section says so rather than guessing 'recommend'
 // and presenting the guess as a setting.
 
 import type { PortfolioListItem } from '@continuum/contracts';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { ApplyModePill } from '../../ApplyModePill';
 import { humanize } from '../../format';
@@ -25,7 +24,7 @@ import {
   useOptimizerAccountRead,
 } from '../../useOptimizerData';
 import { staleCount } from '../portfolioStaleness';
-import { FamilyCeilings } from './FamilyCeilings';
+import { FamilyCeilings, FamilyCeilingsHeading } from './FamilyCeilings';
 
 export type AccountAutomationsProps = {
   brandId: string;
@@ -58,7 +57,7 @@ export function AccountAutomations({
   const stale = staleCount(autopilot);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-8">
       {defaults && approvalMaps.data ? (
         <FamilyCeilings
           current={approvalMaps.data.families}
@@ -69,57 +68,54 @@ export function AccountAutomations({
           onSetFamily={(family, state) => approvals.setFamily.mutate({ family, state })}
         />
       ) : (
-        <p
-          className="rounded-lg border border-border/60 border-dashed bg-muted/10 px-4 py-3 text-muted-foreground text-xs"
-          data-testid="family-ceilings-pending"
-        >
-          What this account may do on its own appears once the first account read has landed.
-        </p>
+        <section className="space-y-2">
+          <FamilyCeilingsHeading />
+          <p className="text-muted-foreground text-xs" data-testid="family-ceilings-pending">
+            The controls appear once the first account read has landed.
+          </p>
+        </section>
       )}
 
-      <section
-        className="overflow-hidden rounded-lg border border-border/60 bg-card"
-        data-testid="portfolio-autonomy"
-      >
-        <SectionHeader
-          meta={
-            <span className="text-xs text-muted-foreground" data-testid="portfolio-autonomy-meta">
-              {autopilot.length} of {portfolios.length} on autopilot
-              {stopped > 0 ? ` · ${stopped} stopped` : ''}
-              {stale > 0 ? ` · ${stale} stale` : ''}
-            </span>
-          }
-          title="Per portfolio"
-        />
+      <section className="space-y-1" data-testid="portfolio-autonomy">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h3 className="font-semibold text-foreground text-sm">Per portfolio</h3>
+          <span
+            className="text-muted-foreground text-xs tabular-nums"
+            data-testid="portfolio-autonomy-meta"
+          >
+            {autopilot.length} of {portfolios.length} on autopilot
+            {stopped > 0 ? ` · ${stopped} stopped` : ''}
+            {stale > 0 ? ` · ${stale} stale` : ''}
+          </span>
+        </div>
         <ul className="divide-y divide-border/60">
           {portfolios.map((portfolio) => (
             <li
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-2.5"
+              className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2.5"
               data-portfolio={portfolio.id}
               key={portfolio.id}
             >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-foreground text-xs">{portfolio.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {humanize(portfolio.objective)} · {waitingLine(portfolio)}
-                </p>
+              <div className="min-w-0 flex-1 basis-40">
+                <p className="truncate font-medium text-foreground text-sm">{portfolio.name}</p>
+                <p className="text-muted-foreground text-xs">{humanize(portfolio.objective)}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <ApplyModePill
-                  applyMode={portfolio.apply_mode}
-                  autopilotPaused={portfolio.autopilot_paused}
-                  scopes={portfolio.autopilot_scopes ?? null}
-                />
-                <Button
-                  className="h-7 px-2 text-xs"
-                  onClick={() => onManagePortfolio(portfolio.id)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  Manage
-                </Button>
-              </div>
+              <ApplyModePill
+                applyMode={portfolio.apply_mode}
+                autopilotPaused={portfolio.autopilot_paused}
+                scopes={portfolio.autopilot_scopes ?? null}
+              />
+              <span className="text-muted-foreground text-xs tabular-nums">
+                {waitingLine(portfolio)}
+              </span>
+              <Button
+                className="ml-auto h-7 px-2 text-xs"
+                onClick={() => onManagePortfolio(portfolio.id)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Manage
+              </Button>
             </li>
           ))}
         </ul>

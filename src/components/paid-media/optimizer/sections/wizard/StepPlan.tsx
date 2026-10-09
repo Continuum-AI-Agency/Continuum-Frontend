@@ -2,7 +2,7 @@
 
 // Step 4 — the plan and who applies it. A name, the daily budget (matched to the selection
 // unless typed), an optional flight with its budget typed per day, per month or as a whole,
-// and the autonomy tier as three cards. Choosing Autopilot fills its two guardrails with
+// and the autonomy tier. Choosing Autopilot fills its two guardrails with
 // sensible defaults, so it is one click away rather than locked behind fields nobody
 // explained; both stay editable.
 
@@ -15,6 +15,7 @@ import { BudgetHint } from '../../advisor/SetupAdvisor';
 import { currencyFieldSuffix, formatCurrency } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { TierCards } from '../fields/TierCards';
+import { questionHeading } from './OptionRow';
 import { planReadout, suggestedGuardrails, type WizardDraft } from './wizardModel';
 
 const GRANULARITY_LABEL: Record<BudgetGranularity, string> = {
@@ -72,50 +73,54 @@ export function StepPlan({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="wizard-name">Name</Label>
-          <Input
-            disabled={disabled}
-            id="wizard-name"
-            onChange={(event) => onChange({ name: event.target.value })}
-            placeholder="e.g. Prospecting · Purchases"
-            value={draft.name}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="wizard-daily">Daily budget{unit}</Label>
-          <Input
-            disabled={disabled}
-            id="wizard-daily"
-            inputMode="decimal"
-            onChange={(event) => onChange({ dailyTotal: event.target.value })}
-            onKeyDown={acceptSuggestionOnTab(advice.suggestedDailyTotal, (value) =>
-              onChange({ dailyTotal: value }),
-            )}
-            placeholder={suggestionPlaceholder(
-              advice.suggestedDailyTotal ??
-                (selectedBudgetSum > 0 ? Math.round(selectedBudgetSum) : null),
-              '4200',
-            )}
-            value={draft.dailyTotal}
-          />
-          <BudgetHint
-            advice={advice}
-            currency={currency}
-            disabled={disabled}
-            onUse={(value) => onChange({ dailyTotal: value })}
-          />
-          {draft.dailyTotal.trim() === '' && selectedBudgetSum > 0 ? (
-            <p className="text-xs text-muted-foreground tabular-nums">
-              Blank matches the selection: {formatCurrency(selectedBudgetSum, currency)}/day today.
-            </p>
-          ) : null}
+    <div className="space-y-7">
+      <div className="space-y-3">
+        <h3 className={questionHeading}>What should it spend?</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="wizard-name">Name</Label>
+            <Input
+              disabled={disabled}
+              id="wizard-name"
+              onChange={(event) => onChange({ name: event.target.value })}
+              placeholder="e.g. Prospecting · Purchases"
+              value={draft.name}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="wizard-daily">Daily budget{unit}</Label>
+            <Input
+              disabled={disabled}
+              id="wizard-daily"
+              inputMode="decimal"
+              onChange={(event) => onChange({ dailyTotal: event.target.value })}
+              onKeyDown={acceptSuggestionOnTab(advice.suggestedDailyTotal, (value) =>
+                onChange({ dailyTotal: value }),
+              )}
+              placeholder={suggestionPlaceholder(
+                advice.suggestedDailyTotal ??
+                  (selectedBudgetSum > 0 ? Math.round(selectedBudgetSum) : null),
+                '4200',
+              )}
+              value={draft.dailyTotal}
+            />
+            <BudgetHint
+              advice={advice}
+              currency={currency}
+              disabled={disabled}
+              onUse={(value) => onChange({ dailyTotal: value })}
+            />
+            {draft.dailyTotal.trim() === '' && selectedBudgetSum > 0 ? (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                Blank matches the selection: {formatCurrency(selectedBudgetSum, currency)}/day
+                today.
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 p-3">
+      <div className="space-y-3 border-border/60 border-t pt-5">
         <div>
           <h3 className="font-semibold text-sm tracking-tight">Flight (optional)</h3>
           <p className="text-xs text-muted-foreground">
@@ -187,11 +192,11 @@ export function StepPlan({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <h3 className="font-semibold text-sm tracking-tight">Who applies the moves?</h3>
+      <div className="space-y-3">
+        <h3 className={questionHeading}>Who applies the moves?</h3>
         <TierCards disabled={disabled} onSelect={selectTier} value={draft.applyMode} />
         {draft.applyMode === 'autopilot' ? (
-          <div className="grid gap-3 rounded-md border border-border/60 bg-muted/10 p-3 sm:grid-cols-2">
+          <div className="grid gap-3 pt-1 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="wizard-max-daily">Max autopilot spend/day{unit}</Label>
               <Input

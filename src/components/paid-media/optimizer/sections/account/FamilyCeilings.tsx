@@ -8,7 +8,7 @@
 // switch is capped by something nobody can reach, and every account runs forever on the
 // shipped defaults.
 //
-// It is an open panel on the Automations tab, not a folded strip. It used to be a one-line
+// It is an open list on the Automations tab, not a folded strip. It used to be a one-line
 // `<details>` between the account read and the portfolio list on Overview, and a control that
 // has to be found before it can be used is a control that stays on its defaults.
 //
@@ -21,8 +21,6 @@ import {
   type InsightState,
   insightStateSchema,
 } from '@continuum/contracts';
-import { SectionHeader } from '@/components/shared/SectionHeader';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const STATE_COPY: Record<InsightState, { label: string; hint: string }> = {
@@ -52,67 +50,78 @@ function stateOf(
   return shipped.success ? shipped.data : 'recommend';
 }
 
+/** The section title, shared with the pending note so the tab reads the same before and after
+ *  the first account read lands. */
+export function FamilyCeilingsHeading() {
+  return (
+    <div className="space-y-0.5">
+      <h2 className="font-semibold text-base text-foreground tracking-tight">
+        What this account may do on its own
+      </h2>
+      <p className="text-muted-foreground text-xs">
+        Every portfolio on this account, unless its own settings say less.
+      </p>
+    </div>
+  );
+}
+
 export function FamilyCeilings({ current, defaults, onSetFamily, error }: FamilyCeilingsProps) {
   return (
-    <section
-      className="overflow-hidden rounded-lg border border-border/60 bg-card"
-      data-testid="family-ceilings"
-    >
-      <SectionHeader
-        meta={
-          <span className="text-xs text-muted-foreground">
-            every portfolio on this account, unless its own settings say less
-          </span>
-        }
-        title="What this account is allowed to do on its own"
-      />
-      <div className="space-y-1 px-4 py-3">
+    <section className="space-y-2" data-testid="family-ceilings">
+      <FamilyCeilingsHeading />
+      <div className="divide-y divide-border/60">
         {APPROVABLE_FAMILIES.map((family) => {
           const active = stateOf(family, current, defaults);
           const untouched = !insightStateSchema.safeParse(current[family]).success;
           return (
             <div
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 py-1.5"
+              className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3"
               data-family={family}
               key={family}
             >
-              <div className="min-w-0">
-                <p className="text-foreground text-xs">{ACTION_FAMILY_COPY[family].label}</p>
-                <p className="text-xs text-muted-foreground">{ACTION_FAMILY_COPY[family].body}</p>
+              <div className="min-w-0 flex-1 basis-56">
+                <p className="font-semibold text-foreground text-sm">
+                  {ACTION_FAMILY_COPY[family].label}
+                </p>
+                <p className="text-muted-foreground text-xs">{ACTION_FAMILY_COPY[family].body}</p>
+                {/* Says the value is the one we shipped, not one anybody chose — so a row nobody
+                 *  has touched does not read as a decision someone made. */}
+                {untouched ? (
+                  <p className="text-muted-foreground/80 text-xs" data-testid="family-shipped">
+                    Not set — using what we ship for this kind of account.
+                  </p>
+                ) : null}
               </div>
-              <div className="flex shrink-0 items-center gap-1">
+              <fieldset className="ml-auto inline-flex shrink-0 gap-0.5 rounded-lg border-0 bg-muted/60 p-0.5">
+                <legend className="sr-only">{ACTION_FAMILY_COPY[family].label}</legend>
                 {insightStateSchema.options.map((state) => (
-                  <Button
+                  <button
                     aria-pressed={state === active}
-                    className={cn('text-xs', state === active && 'ring-1 ring-primary')}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 font-medium text-xs transition-colors',
+                      state === active
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
                     data-state-option={state}
                     key={state}
                     onClick={() => onSetFamily(family, state)}
-                    size="sm"
                     title={STATE_COPY[state].hint}
                     type="button"
-                    variant={state === active ? 'secondary' : 'ghost'}
                   >
                     {STATE_COPY[state].label}
-                  </Button>
+                  </button>
                 ))}
-              </div>
-              {/* Says the value is the one we shipped, not one anybody chose — so a row nobody
-               *  has touched does not read as a decision someone made. */}
-              {untouched ? (
-                <p className="w-full text-xs text-muted-foreground" data-testid="family-shipped">
-                  Not set — using what we ship for this kind of account.
-                </p>
-              ) : null}
+              </fieldset>
             </div>
           );
         })}
-        {error ? (
-          <p className="text-xs text-destructive" data-testid="family-error">
-            {error}
-          </p>
-        ) : null}
       </div>
+      {error ? (
+        <p className="text-xs text-destructive" data-testid="family-error">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }

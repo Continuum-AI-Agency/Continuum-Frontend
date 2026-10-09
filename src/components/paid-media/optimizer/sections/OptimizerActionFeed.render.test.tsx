@@ -123,8 +123,8 @@ describe('OptimizerActionFeed', () => {
     expect(screen.getAllByText('Daily budget').length).toBeGreaterThan(0);
     expect(screen.getByText('$5,000')).toBeTruthy();
     expect(screen.getByText('$4,500')).toBeTruthy();
-    expect(within(screen.getByTestId('action-featured')).getByText('Autopilot')).toBeTruthy();
-    expect(screen.getByText('Earned a larger share of the pool.')).toBeTruthy();
+    expect(screen.getByTestId('action-timeline').textContent).toContain('Autopilot');
+    expect(screen.getByText('Why: Earned a larger share of the pool.')).toBeTruthy();
     expect(screen.getByText('AbC123traceZ')).toBeTruthy();
   });
 
@@ -200,58 +200,67 @@ describe('OptimizerActionFeed', () => {
   });
 });
 
-// "Destacada + grilla": the newest action leads as a card of its own, everything else sits in
-// an even grid of square cards below it. The rows these tests build are what the RPC returns.
-describe('OptimizerActionFeed — featured card and grid', () => {
-  const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+// The account feed is a timeline: grouped by day, one line per action with its clock time, a
+// dot for how it went, the change, its portfolio and why, and the undo on the right.
+describe('OptimizerActionFeed — timeline by day', () => {
+  const yesterdayNoon = () => {
+    const at = new Date();
+    at.setDate(at.getDate() - 1);
+    at.setHours(12, 0, 0, 0);
+    return at.toISOString();
+  };
   const nth = (index: number, over: Partial<OptimizerActionFeedRow> = {}) =>
     action({
       id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, '0')}`,
-      ts: minutesAgo(10 + index * 10),
+      ts: new Date().toISOString(),
       entity_id: `12025130388068${String(index).padStart(4, '0')}`,
       ...over,
     });
-  const gridCards = () => Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
+  const entries = () =>
+    Array.from(
+      screen.getByTestId('action-timeline').querySelectorAll<HTMLElement>('li[data-action-id]'),
+    );
 
-  // The RPC is newest-first, but the rule is "the newest action", not "whatever came first".
-  it('features the most recent action and grids the rest in feed order', () => {
-    const newest = nth(9, { ts: minutesAgo(1), entity_id: '999000111' });
-    actionsState = { data: [nth(1), nth(2), newest, nth(3)], isLoading: false };
+  it('groups the actions under Today and Yesterday, keeping the feed order', () => {
+    actionsState = {
+      data: [nth(1), nth(2), nth(3, { ts: yesterdayNoon() })],
+      isLoading: false,
+    };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const featured = screen.getByTestId('action-featured');
-    expect(within(featured).getByText('999000111')).toBeTruthy();
-    expect(gridCards().map((card) => card.getAttribute('data-action-id'))).toEqual([
+    const days = screen.getAllByTestId('action-day');
+    expect(days.map((day) => day.getAttribute('data-day'))).toEqual(['Today', 'Yesterday']);
+    expect(within(days[1] as HTMLElement).getByText('12:00')).toBeTruthy();
+    expect(entries().map((entry) => entry.getAttribute('data-action-id'))).toEqual([
       nth(1).id,
       nth(2).id,
       nth(3).id,
     ]);
   });
 
-  it('renders only the featured card when there is a single action', () => {
-    actionsState = { data: [nth(1)], isLoading: false };
+  it('draws every action as a line, never a bordered card', () => {
+    actionsState = { data: [nth(1), nth(2), nth(3)], isLoading: false };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(screen.getByTestId('action-featured')).toBeTruthy();
-    expect(screen.queryByTestId('action-grid')).toBeNull();
+    for (const entry of entries()) {
+      expect(entry.className).not.toMatch(/\bborder\b|rounded-lg|bg-card/);
+      expect(entry.querySelector('time')?.className).toContain('font-mono');
+    }
   });
 
-  it('grids 2 actions without a single empty placeholder cell', () => {
-    actionsState = { data: [nth(1), nth(2)], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const cards = gridCards();
-    expect(cards).toHaveLength(1);
-    expect(cards.every((card) => card.getAttribute('data-action-id'))).toBe(true);
-  });
-
-  it('grids 9 actions as 8 real cards and no placeholders', () => {
+  it('colours the dot by how the action went', () => {
     actionsState = {
-      data: Array.from({ length: 9 }, (_, index) => nth(index + 1)),
+      data: [
+        nth(1),
+        nth(2, { op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } }),
+        nth(3, { family: 'decision', op: 'decision', before: null, after: { status: 'pending' } }),
+        nth(4, { family: 'settings', op: 'setting', entity_id: 'daily_total', reversible: false }),
+      ],
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const cards = gridCards();
-    expect(cards).toHaveLength(8);
-    expect(cards.every((card) => card.getAttribute('data-action-id'))).toBe(true);
-    expect(screen.getByTestId('action-grid').className).toContain('lg:grid-cols-4');
+    const tones = entries().map((entry) =>
+      entry.querySelector('[data-tone]')?.getAttribute('data-tone'),
+    );
+    expect(tones).toEqual(['landed', 'stopped', 'asks', 'neutral']);
   });
 
   it('prints money in the account currency code, before → after, with the signed delta', () => {
@@ -260,61 +269,45 @@ describe('OptimizerActionFeed — featured card and grid', () => {
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
-    const featured = screen.getByTestId('action-featured');
-    expect(within(featured).getByText('6,340 MXN')).toBeTruthy();
-    expect(within(featured).getByText('6,974 MXN')).toBeTruthy();
-    expect(within(featured).getByText('+10%')).toBeTruthy();
-    expect(featured.textContent).not.toContain('$');
+    const timeline = screen.getByTestId('action-timeline');
+    expect(within(timeline).getByText('6,340 MXN')).toBeTruthy();
+    expect(within(timeline).getByText('6,974 MXN')).toBeTruthy();
+    expect(within(timeline).getByText('+10%')).toBeTruthy();
+    expect(timeline.textContent).not.toContain('$');
   });
 
   // An account whose currency nobody recorded is not an account that spends dollars.
   it('prints a bare number when the account currency is unknown', () => {
     actionsState = {
-      data: [nth(1), nth(2, { before: { minor: 634000 }, after: { minor: 570600 } })],
+      data: [nth(1, { before: { minor: 634000 }, after: { minor: 570600 } })],
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency={null} />);
-    const [card] = gridCards();
-    expect(within(card).getByText('5,706')).toBeTruthy();
-    expect(within(card).getByText('-10%')).toBeTruthy();
-    expect(card.textContent).not.toContain('$');
+    const timeline = screen.getByTestId('action-timeline');
+    expect(within(timeline).getByText('5,706')).toBeTruthy();
+    expect(within(timeline).getByText('-10%')).toBeTruthy();
+    expect(timeline.textContent).not.toContain('$');
   });
 
-  it('opens the full detail — why, before/after, receipt — when a grid card is clicked', async () => {
+  it('names the portfolio beside the change, and keeps a reverted action reading as reverted', () => {
     actionsState = {
-      data: [nth(1), nth(2, { justification: 'Cost per result doubled in three days.' })],
+      data: [nth(1, { reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })],
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(screen.queryByText('Cost per result doubled in three days.')).toBeNull();
-    fireEvent.click(within(gridCards()[0]).getByRole('button'));
-    const dialog = await waitFor(() => screen.getByRole('dialog'));
-    expect(within(dialog).getByText('Cost per result doubled in three days.')).toBeTruthy();
-    expect(within(dialog).getByText('$5,000')).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Revert' })).toBeTruthy();
+    const [entry] = entries();
+    expect(entry?.textContent).toContain('· Prospecting');
+    expect(within(entry as HTMLElement).getByText('Reverted')).toBeTruthy();
+    expect(entry?.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe('neutral');
   });
 
-  it('keeps a reverted grid action reading as reverted in its detail', async () => {
-    actionsState = {
-      data: [nth(1), nth(2, { reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })],
-      isLoading: false,
-    };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(within(gridCards()[0]).getByText('Reverted')).toBeTruthy();
-    fireEvent.click(within(gridCards()[0]).getByRole('button'));
-    const dialog = await waitFor(() => screen.getByRole('dialog'));
-    expect(within(dialog).getByText('Reverted')).toBeTruthy();
-  });
-
-  it('uses no sub-text-xs type anywhere inside the cards', () => {
+  it('uses no sub-text-xs type anywhere in the timeline', () => {
     actionsState = {
       data: [nth(1, { justification: 'why' }), nth(2), nth(3)],
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    for (const id of ['action-featured', 'action-grid']) {
-      expect(screen.getByTestId(id).outerHTML).not.toMatch(/text-(2|3)xs/);
-    }
+    expect(screen.getByTestId('action-timeline').outerHTML).not.toMatch(/text-(2|3)xs/);
   });
 });
 
@@ -327,49 +320,24 @@ describe('OptimizerActionFeed — entity names', () => {
       { adset_id: KNOWN_ID, adset_name: 'Lookalike 3% — Spain', active: true },
     ]);
 
-  it('shows a known ad set name as the entity line and the id small and secondary', () => {
+  it('shows a known ad set name, with its id kept on hover', () => {
     seedRoster();
     actionsState = { data: [action()], isLoading: false };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const featured = screen.getByTestId('action-featured');
-    expect(within(featured).getByRole('heading').textContent).toBe('Lookalike 3% — Spain');
-    const id = within(featured).getByText(KNOWN_ID);
-    expect(id.className).toContain('font-mono');
-    expect(id.className).toContain('text-xs');
-  });
-
-  it('names a grid card too, and keeps the id reachable in its detail', async () => {
-    seedRoster();
-    actionsState = {
-      data: [
-        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001', ts: new Date().toISOString() }),
-        action({
-          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
-          ts: new Date(Date.now() - 60_000).toISOString(),
-        }),
-      ],
-      isLoading: false,
-    };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const [card] = Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
-    expect(within(card).getByText('Lookalike 3% — Spain')).toBeTruthy();
-    expect(within(card).getByText(KNOWN_ID).className).toContain('font-mono');
-    fireEvent.click(within(card).getByRole('button'));
-    const dialog = await waitFor(() => screen.getByRole('dialog'));
-    expect(within(dialog).getByText('Lookalike 3% — Spain')).toBeTruthy();
-    expect(within(dialog).getByText(KNOWN_ID)).toBeTruthy();
+    const name = within(screen.getByTestId('action-timeline')).getByText('Lookalike 3% — Spain');
+    expect(name.getAttribute('title')).toBe(KNOWN_ID);
   });
 
   it('falls back to the id when no name is known for it', () => {
     seedRoster();
     actionsState = { data: [action({ entity_id: '555000111' })], isLoading: false };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const featured = screen.getByTestId('action-featured');
-    expect(within(featured).getByRole('heading').textContent).toBe('555000111');
-    expect(within(featured).queryByText('Lookalike 3% — Spain')).toBeNull();
+    const timeline = screen.getByTestId('action-timeline');
+    expect(within(timeline).getByText('555000111')).toBeTruthy();
+    expect(within(timeline).queryByText('Lookalike 3% — Spain')).toBeNull();
   });
 
-  it('gives the revert trigger inside the cards at least text-xs', () => {
+  it('gives the revert trigger at least text-xs', () => {
     actionsState = { data: [action()], isLoading: false };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
     const trigger = screen.getByRole('button', { name: 'Revert' });
@@ -385,32 +353,25 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
     Array.from(node.querySelectorAll('[data-testid="platform-chip"]')).map((chip) =>
       chip.getAttribute('data-platform'),
     );
+  const timeline = () => screen.getByTestId('action-timeline');
 
-  it('puts a Meta chip on the featured card and on every grid card', () => {
+  it('puts a Meta chip on every action', () => {
     actionsState = {
       data: [
         action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001' }),
-        action({
-          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
-          ts: new Date(Date.now() - 60_000).toISOString(),
-        }),
-        action({
-          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000003',
-          ts: new Date(Date.now() - 120_000).toISOString(),
-        }),
+        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002' }),
+        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000003' }),
       ],
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(chipsIn(screen.getByTestId('action-featured'))).toEqual(['meta']);
-    const cards = Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
-    expect(cards.map(chipsIn)).toEqual([['meta'], ['meta']]);
+    expect(chipsIn(timeline())).toEqual(['meta', 'meta', 'meta']);
   });
 
   it('labels the copyable receipt as the Meta trace id', () => {
     actionsState = { data: [action()], isLoading: false };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const receipt = within(screen.getByTestId('action-featured')).getByTestId('receipt-token');
+    const receipt = within(timeline()).getByTestId('receipt-token');
     expect(receipt.getAttribute('aria-label')).toBe('Copy Meta trace id AbC123traceZ');
     expect(within(receipt).getByTestId('receipt-label').textContent).toBe('Meta trace id');
   });
@@ -421,51 +382,21 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const featured = screen.getByTestId('action-featured');
-    expect(chipsIn(featured)).toEqual(['google_ads']);
-    const receipt = within(featured).getByTestId('receipt-token');
+    expect(chipsIn(timeline())).toEqual(['google_ads']);
+    const receipt = within(timeline()).getByTestId('receipt-token');
     expect(receipt.getAttribute('aria-label')).toBe('Copy Google request id req-9Xy');
-    expect(featured.textContent).not.toContain('Meta');
+    expect(timeline().textContent).not.toContain('Meta');
   });
 
   it('falls back to Meta when the row names a platform the contract does not know', () => {
     actionsState = { data: [action({ platform: 'snapchat' })], isLoading: false };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(chipsIn(screen.getByTestId('action-featured'))).toEqual(['meta']);
-  });
-
-  it('names the platform in the detail of a grid card too', async () => {
-    actionsState = {
-      data: [
-        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001' }),
-        action({
-          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
-          ts: new Date(Date.now() - 60_000).toISOString(),
-          platform: 'tiktok_ads',
-          receipt: { request_id: 'tt-req-1' },
-        }),
-      ],
-      isLoading: false,
-    };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    const [card] = Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
-    fireEvent.click(within(card).getByRole('button'));
-    const dialog = await waitFor(() => screen.getByRole('dialog'));
-    expect(chipsIn(dialog)).toEqual(['tiktok_ads']);
-    expect(within(dialog).getByTestId('receipt-token').getAttribute('aria-label')).toBe(
-      'Copy TikTok request id tt-req-1',
-    );
+    expect(chipsIn(timeline())).toEqual(['meta']);
   });
 
   it('never puts a chip inside a figure, and figures never take a platform colour', () => {
     actionsState = {
-      data: [
-        action(),
-        action({
-          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000009',
-          ts: new Date(Date.now() - 60_000).toISOString(),
-        }),
-      ],
+      data: [action(), action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000009' })],
       isLoading: false,
     };
     const { container } = render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
@@ -533,7 +464,7 @@ describe('a cross-platform move in the action feed', () => {
   const legRow = (over: Record<string, unknown>) =>
     action({ move_id: MOVE, outcome: 'applied', ...over } as Partial<OptimizerActionFeedRow>);
 
-  it('folds the legs into one Decision card beside the single writes', () => {
+  it('folds the legs into one Decision entry beside the single writes', () => {
     actionsState = {
       data: [
         action({ id: 'single-1', entity_id: '120251303880680999' }),
@@ -569,9 +500,9 @@ describe('a cross-platform move in the action feed', () => {
         .getAllByTestId('receipt-token')
         .map((t) => t.textContent),
     ).toEqual([expect.stringContaining('8f2-trace'), expect.stringContaining('0c1-req')]);
-    // The single write still renders as its own card, and no leg leaks out as one.
+    // The single write still renders as its own entry, and no leg leaks out as one.
     expect(
-      screen.queryByText('24274603133', { selector: '[data-testid="action-grid"] *' }),
-    ).toBeNull();
+      screen.getByTestId('action-timeline').querySelectorAll('li[data-action-id]'),
+    ).toHaveLength(1);
   });
 });

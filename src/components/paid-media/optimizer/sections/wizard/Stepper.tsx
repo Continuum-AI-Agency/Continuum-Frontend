@@ -1,6 +1,8 @@
 'use client';
 
-// The wizard's four steps as a row of numbered pills. Completed steps are clickable so an
+// The wizard's four steps. In a wide container they stand as a vertical list beside the step
+// (done in green with the answer they hold, the current one tinted, the rest muted); in a narrow
+// one the same list lies down as a compact row on top. Completed steps are clickable so an
 // operator can go back and change one answer without unwinding the rest.
 
 import { CheckIcon } from 'lucide-react';
@@ -11,44 +13,44 @@ type StepperProps = {
   current: WizardStep;
   completed: ReadonlySet<WizardStep>;
   onSelect: (step: WizardStep) => void;
+  /** The short answer a done step holds, e.g. "14 ad sets". */
+  values?: Partial<Record<WizardStep, string>>;
 };
 
-export function Stepper({ current, completed, onSelect }: StepperProps) {
+export function Stepper({ current, completed, onSelect, values = {} }: StepperProps) {
   return (
-    <ol className="flex flex-wrap items-center gap-2" aria-label="Portfolio setup steps">
+    <ol
+      aria-label="Portfolio setup steps"
+      className="flex gap-1 overflow-x-auto @4xl:flex-col @4xl:overflow-visible"
+    >
       {WIZARD_STEPS.map((step, index) => {
         const done = completed.has(step.id);
         const active = step.id === current;
         const reachable = done || active;
+        const value = done && !active ? values[step.id] : undefined;
         return (
-          <li className="flex items-center gap-2" key={step.id}>
+          <li className="shrink-0" key={step.id}>
             <button
               aria-current={active ? 'step' : undefined}
               className={cn(
-                'flex items-center gap-2 rounded-full border px-2.5 py-1 text-left text-xs transition-colors',
-                active && 'border-primary/60 bg-accent/40 text-foreground',
-                done && !active && 'border-border/70 text-foreground hover:bg-muted/30',
-                !reachable && 'border-border/50 text-muted-foreground',
+                'flex w-full items-baseline gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors @4xl:py-2',
+                active && 'bg-primary/10 font-semibold text-primary',
+                done && !active && 'text-success hover:bg-muted/40',
+                !reachable && 'text-muted-foreground',
               )}
               disabled={!reachable}
               onClick={() => onSelect(step.id)}
+              title={step.hint}
               type="button"
             >
-              <span
-                className={cn(
-                  'grid size-5 place-items-center rounded-full text-xs font-semibold',
-                  done ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-                  active && !done && 'bg-primary/15 text-primary',
-                )}
-              >
-                {done ? <CheckIcon aria-hidden className="size-3" /> : index + 1}
+              <span aria-hidden className="w-3 shrink-0 font-mono text-xs tabular-nums">
+                {done && !active ? <CheckIcon className="size-3.5 translate-y-0.5" /> : index + 1}
               </span>
-              <span className="font-medium">{step.label}</span>
-              <span className="hidden text-xs text-muted-foreground lg:inline">{step.hint}</span>
+              <span className="whitespace-nowrap @4xl:whitespace-normal">
+                {step.label}
+                {value ? <span className="hidden font-normal @4xl:inline"> · {value}</span> : null}
+              </span>
             </button>
-            {index < WIZARD_STEPS.length - 1 ? (
-              <span aria-hidden className="h-px w-4 bg-border" />
-            ) : null}
           </li>
         );
       })}

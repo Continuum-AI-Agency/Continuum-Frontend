@@ -15,7 +15,11 @@ import {
   createDashboardWelcomeToastOptions,
   shouldShowDashboardWelcomeToast,
 } from '@/lib/ui/dashboardWelcomeToast';
-import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from './navigation/routes';
+import {
+  APP_HEADER_MODULE_SLOT_ID,
+  APP_NAVIGATION,
+  APP_NAVIGATION_FOOTER,
+} from './navigation/routes';
 
 function DashboardHeaderInner({ changelogEntries }: { changelogEntries: ChangelogEntry[] }) {
   useDashboardWelcomeToast();
@@ -55,7 +59,11 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-3">
+      {/* A page's own controls beside the module pill (the Scale page's account chip and module
+       *  tabs). The page portals into it; everywhere else it stays empty. */}
+      <div id={APP_HEADER_MODULE_SLOT_ID} className="flex min-w-0 flex-1 items-center gap-2" />
+
+      <div className="ml-auto flex shrink-0 items-center gap-3">
         <ClientRenderInbox />
         <WhatsNewBell entries={changelogEntries} />
         <NotificationsBell />

@@ -73,10 +73,10 @@ describe('AllPlatformsTiles', () => {
     expect(tile(container, 'tile-kind-leads')).toContain('Google cheapest at 31.40 MXN');
     expect(tile(container, 'tile-kind-purchases')).toContain('75.60 MXN spent, no results');
     expect(tile(container, 'tile-decisions')).toContain('6');
-    expect(tile(container, 'tile-autopilot')).toContain('4 of 5');
+    expect(tile(container, 'tile-autopilot')).toContain('4/5');
     expect(tile(container, 'tile-autopilot')).toContain('1 recommend, do not apply');
     expect(container.querySelector('[data-testid="tile-platforms"]')).toBeNull();
-    fireEvent.click(within(getByTestId('tile-decisions')).getByText('Review'));
+    fireEvent.click(within(getByTestId('tile-decisions')).getByText('Review →'));
     expect(onOpenActions).toHaveBeenCalledTimes(1);
   });
 

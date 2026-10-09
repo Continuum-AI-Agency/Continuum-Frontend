@@ -71,8 +71,7 @@ const REFUSAL_PROMPT = 'A red bicycle leaning on a white wall';
 const PAID_MEDIA_LOCKS = [
   'Forge (needs Performance Plus)',
   'Jaina (needs Performance Plus)',
-  'Paid Analytics (needs Performance Plus)',
-  'Paid Optimization (needs Performance Plus)',
+  'Optimizer (needs Performance Plus)',
 ];
 
 const recorder = createBenchRecorder('billing:gates:fe:bench', [

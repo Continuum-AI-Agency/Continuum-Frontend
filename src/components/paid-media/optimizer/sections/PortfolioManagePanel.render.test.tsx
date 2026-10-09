@@ -227,9 +227,24 @@ describe('PortfolioManagePanel — config form', () => {
   it('renders the editable objective section', () => {
     renderPanel();
     expect(screen.getByText('Objective')).toBeDefined();
-    // The panel is organized into slot-in sections.
-    expect(screen.getByText('Identity')).toBeDefined();
-    expect(screen.getByText('Strategy')).toBeDefined();
+    // The panel is one sheet: hairline-separated sections, each reachable from the index.
+    expect(screen.getByRole('heading', { name: 'Identity' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Strategy' })).toBeDefined();
+    const index = screen.getByRole('navigation', { name: 'Manage sections' });
+    expect(within(index).getByRole('button', { name: 'Identity' })).toBeDefined();
+    expect(within(index).getByRole('button', { name: 'Daily limits' })).toBeDefined();
+  });
+
+  it('marks the section an index entry jumps to as the current one', () => {
+    renderPanel();
+    const index = screen.getByRole('navigation', { name: 'Manage sections' });
+    const plan = within(index).getByRole('button', { name: 'Plan' });
+    expect(plan.getAttribute('aria-current')).toBeNull();
+    fireEvent.click(plan);
+    expect(plan.getAttribute('aria-current')).toBe('location');
+    expect(
+      within(index).getByRole('button', { name: 'Identity' }).getAttribute('aria-current'),
+    ).toBeNull();
   });
 
   it('keeps an enrolled paused ad set visible and lets the operator remove it', () => {
@@ -561,7 +576,7 @@ describe('the custom conversion an advertiser names', () => {
 describe('PortfolioManagePanel — Attribution', () => {
   it('shows the three source cards, the default in use, and no note on a Meta-only portfolio', () => {
     renderPanel();
-    expect(screen.getByText('Attribution')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Attribution' })).toBeDefined();
     const cards = screen.getAllByTestId('attribution-card');
     expect(cards.map((card) => card.dataset.kind)).toEqual(['platform', 'ga4', 'spreadsheet']);
     expect(cards[0]?.dataset.inUse).toBe('true');

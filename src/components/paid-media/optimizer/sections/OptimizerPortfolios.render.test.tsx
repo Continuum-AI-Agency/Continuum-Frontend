@@ -16,10 +16,19 @@ const realOptimizerData = await import('../useOptimizerData');
 
 /** What today's account read found, per test. Empty by default: most cases are not about it. */
 let accountReadCandidates: unknown[] = [];
+let archivedPortfolios: unknown[] = [];
+/** Each portfolio's efficiency series, in the order the portfolios arrive. Empty = no cycle. */
+let efficiencySeries: unknown[][] = [];
 
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
-  useOptimizerArchivedPortfolios: () => ({ data: [] }),
+  useOptimizerArchivedPortfolios: () => ({ data: archivedPortfolios }),
+  useOptimizerPortfolioEfficiency: () => ({
+    series: efficiencySeries,
+    pending: false,
+    failed: 0,
+    retryFailed: () => {},
+  }),
   // The foot band's source. Stubbed rather than stripped, because the band is now part of
   // what this file renders — leaving the hook out is how "No QueryClient set" gets in.
   useOptimizerAccountRead: () => ({ data: { read: { candidates: accountReadCandidates } } }),
@@ -75,6 +84,8 @@ function renderList(
 
 afterEach(() => {
   accountReadCandidates = [];
+  efficiencySeries = [];
+  archivedPortfolios = [];
   cleanup();
 });
 
@@ -141,27 +152,26 @@ describe('OptimizerPortfolios', () => {
     expect(onPrefetchPortfolio).toHaveBeenCalledWith('p1');
   });
 
-  // The whole point of the band: a finding must read the SAME way here as on the Overview,
-  // in the detector's own figure — not as money on one screen and a percentage on the other.
-  it('carries today’s finding under the card, led by the detector’s own figure', () => {
+  // A finding must read the SAME way here as on the Overview, in the detector's own figure —
+  // not as money on one screen and a percentage on the other. Here it is ONE muted line.
+  it('carries today’s finding as one line under the name, led by the detector’s own figure', () => {
     accountReadCandidates = [candidate()];
     const { getByTestId } = renderList();
 
-    const band = getByTestId('portfolio-lead');
-    expect(band.getAttribute('data-detector')).toBe('dead_tail');
-    expect(band.textContent).toContain('Spending on nothing');
-    expect(band.textContent).toContain('$69.75');
-    expect(band.textContent).toContain('a day buying nothing');
-    // Money drops to the support line, in both periods, and names what the account buys.
-    expect(band.textContent).toContain('$2,093/mo');
-    expect(band.textContent).toContain('leads');
+    const line = getByTestId('portfolio-lead');
+    expect(line.tagName).toBe('P');
+    expect(line.getAttribute('data-detector')).toBe('dead_tail');
+    expect(line.textContent).toBe('Spending on nothing · $69.75 a day buying nothing');
+    const figure = line.querySelector('[data-figure="portfolios.p1.lead.figure"]');
+    expect(figure?.getAttribute('data-figure-raw')).toBe('69.75');
   });
 
-  it('renders no band on a portfolio today’s read says nothing about', () => {
+  it('says what the portfolio buys under the name when today’s read says nothing about it', () => {
     accountReadCandidates = [candidate({ portfolio_ids: ['other'] })];
-    const { queryByTestId } = renderList();
+    const { queryByTestId, getByRole } = renderList();
 
     expect(queryByTestId('portfolio-lead')).toBeNull();
+    expect(getByRole('button', { name: 'Open Prospecting' }).textContent).toContain('Lead');
   });
 
   // The brand-wide scope is a navigation list across every ad account the brand owns, and an
@@ -265,5 +275,97 @@ describe('OptimizerPortfolios — a portfolio dead on Meta reads stale', () => {
       'last cycle 48 days ago',
     );
     expect(reporte.querySelector('[data-testid="roster-chip"]')).toBeNull();
+  });
+});
+
+describe('OptimizerPortfolios — a live table, one row per portfolio', () => {
+  // 2,000 over the window for 50 leads = 40 per lead.
+  const cycle = {
+    cycle_ts: '2026-09-27T06:00:00Z',
+    spend_d3: 900,
+    conv_d3: 20,
+    spend_d7: 2000,
+    conv_d7: 50,
+    spend_d14: 4200,
+    conv_d14: 100,
+    adsets: 2,
+  };
+
+  it('labels the columns once, above the rows', () => {
+    const { getByTestId } = renderList();
+    expect(getByTestId('portfolio-table-header').textContent).toBe(
+      'PortfolioCost vs targetPer dayAd setsPendingStatus',
+    );
+  });
+
+  it('draws no boxed card — rows are separated by hairlines', () => {
+    const { getByRole } = renderList();
+    const row = getByRole('button', { name: 'Open Prospecting' });
+    expect(row.className).not.toContain('border');
+    expect(row.className).not.toContain('bg-card');
+    expect(row.parentElement?.className).toContain('border-t');
+  });
+
+  it('quotes cost per result against its target, coloured by the verdict', () => {
+    efficiencySeries = [[cycle]];
+    const { container, getByRole } = renderList({
+      portfolios: [portfolio({ id: 'p1', name: 'Prospecting', cpa_target: 30 })],
+    });
+    const row = getByRole('button', { name: 'Open Prospecting' });
+    expect(row.getAttribute('data-state')).toBe('bad');
+    const cost = container.querySelector('[data-figure="portfolios.p1.cost"]');
+    expect(cost?.textContent).toBe('$40.00');
+    expect(cost?.className).toContain('text-destructive');
+    expect(container.querySelector('[data-figure="portfolios.p1.target"]')?.textContent).toBe(
+      '$30.00',
+    );
+    expect(container.querySelector('[data-testid="portfolio-cost-bar"]')).not.toBeNull();
+    expect(row.querySelector('[data-testid="portfolio-state-chip"]')?.textContent).toBe('33% over');
+  });
+
+  it('still names the target before the first cycle, and says no cycle has run', () => {
+    const { container, getByRole } = renderList({
+      portfolios: [portfolio({ id: 'p1', name: 'Prospecting', cpa_target: 30 })],
+    });
+    expect(container.querySelector('[data-figure="portfolios.p1.cost"]')?.textContent).toBe('—');
+    expect(container.querySelector('[data-figure="portfolios.p1.target"]')?.textContent).toBe(
+      '$30.00',
+    );
+    const row = getByRole('button', { name: 'Open Prospecting' });
+    expect(row.querySelector('[data-testid="portfolio-state-chip"]')?.textContent).toBe(
+      'no cycle yet',
+    );
+  });
+
+  it('prints the daily budget with provenance and the pending count as a badge', () => {
+    const { container, getByTestId } = renderList({
+      portfolios: [
+        portfolio({
+          id: 'p1',
+          name: 'Prospecting',
+          pending_recommendations: 2,
+          pending_budget_moves: 1,
+        }),
+      ],
+    });
+    const daily = container.querySelector('[data-figure="portfolios.p1.daily"]');
+    expect(daily?.textContent).toBe('$500');
+    expect(daily?.getAttribute('data-figure-raw')).toBe('500');
+    expect(getByTestId('portfolio-pending-count').textContent).toBe('3');
+  });
+
+  it('shows no pending badge when nothing waits', () => {
+    const { queryByTestId } = renderList();
+    expect(queryByTestId('portfolio-pending-count')).toBeNull();
+  });
+
+  it('keeps archived portfolios collapsed, then restores from a quiet row', () => {
+    archivedPortfolios = [portfolio({ id: 'a1', name: 'Old campaign', status: 'archived' })];
+    const { getByRole, queryByText, getByText } = renderList();
+    expect(queryByText('Old campaign')).toBeNull();
+    fireEvent.click(getByRole('button', { name: /Archived \(1\)/ }));
+    const row = getByText('Old campaign').closest('li');
+    expect(row?.className).not.toContain('border-dashed');
+    expect(row?.textContent).toContain('Restore');
   });
 });

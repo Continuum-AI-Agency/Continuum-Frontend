@@ -17,6 +17,11 @@ type PortfoliosState = {
 
 let portfolios: PortfoliosState;
 let pendingSecondaryRead = false;
+let view = 'overview';
+let platformTab = 'all';
+const setView = mock((_next: string) => undefined);
+const setPlatform = mock((_next: string) => undefined);
+let overviewProps: Record<string, unknown> | null = null;
 const refetch = mock(async () => undefined);
 
 mock.module('./useOptimizerData', () => ({
@@ -39,7 +44,9 @@ mock.module('./useOptimizerData', () => ({
 
 mock.module('./useOptimizerUrlState', () => ({
   useOptimizerUrlState: () => ({
-    view: 'overview',
+    view,
+    platform: platformTab,
+    setPlatform,
     portfolioId: null,
     adsetId: null,
     metric: 'cpa',
@@ -52,13 +59,20 @@ mock.module('./useOptimizerUrlState', () => ({
     setMetric: () => undefined,
     setRange: () => undefined,
     setSection: () => undefined,
-    setView: () => undefined,
+    setView,
   }),
+}));
+
+mock.module('./sections/platforms/useAccountPlatformMetrics', () => ({
+  useAccountPlatformMetrics: () => ({ status: 'loading' }),
 }));
 
 const stub = (testId: string) => () => <div data-testid={testId} />;
 mock.module('./sections/OptimizerOverview', () => ({
-  OptimizerOverview: stub('overview-section'),
+  OptimizerOverview: (props: Record<string, unknown>) => {
+    overviewProps = props;
+    return <div data-testid="overview-section" />;
+  },
 }));
 mock.module('./sections/account/AccountAutomations', () => ({
   AccountAutomations: stub('automations-section'),
@@ -113,6 +127,11 @@ function renderTab() {
 beforeEach(() => {
   portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [PORTFOLIO] };
   pendingSecondaryRead = false;
+  view = 'overview';
+  platformTab = 'all';
+  overviewProps = null;
+  setView.mockClear();
+  setPlatform.mockClear();
 });
 
 afterEach(() => {
@@ -157,5 +176,59 @@ describe('OptimizerTab loading behaviour', () => {
     expect(screen.queryByText('Loading optimizer')).toBeNull();
     expect(screen.getByTestId('overview-section')).toBeTruthy();
     expect(screen.queryByTestId('optimizer-refresh-failed')).toBeNull();
+  });
+});
+
+describe('OptimizerTab second bar', () => {
+  it('orders the sub-views Overview, Portfolios, Actions, Automations, Activity', () => {
+    renderTab();
+
+    const tabs = screen.getAllByRole('tab').filter((tab) => !tab.dataset.testid);
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Overview',
+      'Portfolios',
+      'Actions',
+      'Automations',
+      'Activity',
+    ]);
+    expect(screen.queryByText('Optimizer')).toBeNull();
+  });
+
+  it("draws the Overview's platform switch and actions in the bar, and tells the Overview so", () => {
+    portfolios = {
+      ...portfolios,
+      data: [{ ...PORTFOLIO, pending_recommendations: 3 } as PortfolioListItem],
+    };
+    renderTab();
+
+    expect(overviewProps?.chromeInShell).toBe(true);
+    expect(screen.getByTestId('platform-tabs')).toBeTruthy();
+    expect(screen.getByTestId('platform-tab-tiktok_ads').textContent).toContain('Connect');
+
+    fireEvent.click(screen.getByTestId('platform-tab-google_ads'));
+    expect(setPlatform).toHaveBeenCalledWith('google_ads');
+
+    fireEvent.click(screen.getByTestId('overview-review-pending'));
+    expect(setView).toHaveBeenCalledWith('actions');
+    expect(screen.getByTestId('overview-weekly-report').getAttribute('href')).toContain(
+      'tab=jaina',
+    );
+    expect(screen.getByRole('button', { name: 'New portfolio' })).toBeTruthy();
+  });
+
+  it('keeps the Overview actions off a platform the Overview does not manage', () => {
+    platformTab = 'google_ads';
+    renderTab();
+
+    expect(screen.getByTestId('platform-tabs')).toBeTruthy();
+    expect(screen.queryByTestId('overview-toolbar')).toBeNull();
+  });
+
+  it('shows neither the platform switch nor the Overview actions on another sub-view', () => {
+    view = 'portfolios';
+    renderTab();
+
+    expect(screen.queryByTestId('platform-tabs')).toBeNull();
+    expect(screen.queryByTestId('overview-toolbar')).toBeNull();
   });
 });

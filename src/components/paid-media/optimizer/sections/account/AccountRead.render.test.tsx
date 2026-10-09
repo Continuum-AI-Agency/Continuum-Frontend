@@ -37,6 +37,8 @@ mock.module('../../useOptimizerData', () => ({
       };
     },
   }),
+  // The card's control can undo an applied write; nothing in these tests applies one.
+  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
 import type { AccountCandidate } from '@continuum/contracts';

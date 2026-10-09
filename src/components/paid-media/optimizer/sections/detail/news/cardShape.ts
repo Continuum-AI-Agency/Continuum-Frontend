@@ -1,66 +1,34 @@
-// The news row: how the day's cards share the width, and why the ROW decides it.
+// "What the Optimizer found": how the day's findings sit on the page, and why the LIST decides it.
 //
-// THE COMPLAINT THIS ANSWERS. The lead card sat alone on the left at 34rem with fourteen
-// hundred pixels of nothing beside it, then a line of prose, then two smaller cards that
-// again filled half the pane. Each card had been given its own width cap so that no grid
-// could stretch it into a letterbox — which was correct about the letterbox and wrong about
-// the screen: the cap moved the blank from inside the cards to beside them. A card that
-// cannot be stretched can still be stranded.
+// The findings used to be a row of framed cards — three equal columns, each card floored to an
+// aspect band so its evidence picture had room. The one-bar redesign (P1, "Lectura continua")
+// reads them as a list instead: one finding per line, a coloured tag on the left, the claim and
+// its reason in the middle, the action on the right, hairlines between them and no frame at all.
+// The evidence picture is still drawn, one click away under each finding (./CardBand).
 //
-// So the width is now the row's to give. The row is three equal columns on a desktop pane,
-// two on a tablet, one on a phone — measured on the PANE (a container query), never the
-// viewport, because the detail pane is not the window and a side panel narrows it. Every
-// card fills its column, and the cards in one row share one height.
-//
-// The letterbox is still unreachable, by a different mechanism. Each cell is a container of
-// its own and the card floors its height against the CELL's width — `min-h` in `cqw` — so a
-// card can never be flatter than the aspect band no matter how wide the pane is. The band
-// is enforced on the card's own root; the row cannot switch it off.
+// Every breakpoint is measured on the PANE (a container query), never the viewport, because the
+// detail pane is not the window and a side panel narrows it. Below the tablet width the tag sits
+// above the claim and the action drops under it, so a 390px panel never scrolls sideways.
+
+/** The pane width, in rem, at which a finding spreads into its three columns. */
+export const FINDING_ROW_BREAKPOINT_REM = 36;
+
+/** How many findings the list shows before the rest go behind "N more findings". */
+export const NEWS_ROW_SIZE = 3;
 
 /**
- * The band a news card's box sits in, as width ÷ height.
- *
- * Below `min` a card is a tall ribbon and its figure has nowhere to sit beside its argument;
- * above `max` it is the letterbox the floor exists to prevent. Square is 1.
- */
-export const CARD_ASPECT_BAND = { min: 0.5, max: 1.5 } as const;
-
-/** The pane widths, in rem, at which the row earns another column. */
-export const NEWS_ROW_BREAKPOINT_REM = { tablet: 36, desktop: 56 } as const;
-
-/** The columns the row holds at each width. */
-export const NEWS_ROW_COLUMNS = { phone: 1, tablet: 2, desktop: 3 } as const;
-
-/** How many cards the first row shows before the rest go behind a disclosure. */
-export const NEWS_ROW_SIZE = NEWS_ROW_COLUMNS.desktop;
-
-/**
- * The name the pane registers under, so the row's breakpoints ask about the pane and not
+ * The name the pane registers under, so the list's breakpoint asks about the pane and not
  * about the window.
  */
 export const NEWS_PANE = '@container/news';
 
-/**
- * The row's classes, written out because Tailwind reads source text and cannot see a
- * template literal. `cardShape.test.ts` parses the rem values back out of this string and
- * checks them against `NEWS_ROW_BREAKPOINT_REM`, so the two cannot drift apart silently.
- */
-export const NEWS_ROW =
-  'grid items-stretch gap-3 grid-cols-1 @[36rem]/news:grid-cols-2 @[56rem]/news:grid-cols-3';
-
-/** A cell: a container, so the card inside can floor its height against the cell's width. */
-export const NEWS_CELL = '@container/news-cell min-w-0';
-
-/** The floor the band implies, as a share of the cell's width: 100 ÷ the widest ratio. */
-export function cardMinHeightCqw(): number {
-  return Math.round((100 / CARD_ASPECT_BAND.max) * 100) / 100;
-}
+/** The list: hairlines between findings, never a frame around them. */
+export const NEWS_LIST = 'flex flex-col divide-y divide-border/60';
 
 /**
- * The frame on every card's root. One frame, because the cards in a row share a column
- * width and a height; a lead is louder than an insight in its type, never in its box.
- *
- * `h-full` is what makes the cards in one row the same height, and `min-h` in `cqw` is what
- * keeps a card inside the aspect band at any column width.
+ * One finding's line, written out because Tailwind reads source text and cannot see a template
+ * literal. `cardShape.test.ts` parses the rem value back out of this string and checks it
+ * against `FINDING_ROW_BREAKPOINT_REM`, so the two cannot drift apart silently.
  */
-export const CARD_FRAME = 'flex h-full w-full min-h-[66.67cqw]';
+export const FINDING_ROW =
+  'grid grid-cols-1 gap-x-5 gap-y-2 py-3 @[36rem]/news:grid-cols-[8rem_minmax(0,1fr)_auto] @[36rem]/news:items-baseline';

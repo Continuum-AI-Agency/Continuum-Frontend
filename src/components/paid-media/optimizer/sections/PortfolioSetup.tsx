@@ -142,7 +142,7 @@ export function PortfolioSetup({
   const accountObjective = React.useMemo(() => dominantAccountObjective(snapshots), [snapshots]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="space-y-5">
       {showAccountHeader ? (
         <AccountHeader
           currency={resolvedCurrency}
@@ -258,11 +258,11 @@ function AccountHeader({
   currency: string | null;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-card px-4 py-3">
-      <div className="min-w-0">
-        <p className="text-muted-foreground text-xs">Optimizing account</p>
-        <p className="truncate font-semibold text-sm tracking-tight">{name}</p>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border/60 border-b pb-3">
+      <p className="min-w-0 truncate text-sm">
+        <span className="text-muted-foreground">Optimizing account </span>
+        <span className="font-semibold tracking-tight">{name}</span>
+      </p>
       <div className="flex items-center gap-1.5">
         {platform ? (
           <Badge className="text-xs" variant="outline">
@@ -297,7 +297,7 @@ function TrackingGapBanner({
   samples: string[];
 }) {
   return (
-    <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-warning text-xs">
+    <div className="flex gap-2 text-warning text-xs">
       <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
       <div>
         <p>

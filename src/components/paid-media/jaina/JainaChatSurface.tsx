@@ -121,6 +121,7 @@ import {
   jainaConversationRunsHydrationResponseSchema,
   jainaConversationUiListResponseSchema,
   mapConversationCreateResponse,
+  sessionActivityAt,
 } from '@/lib/jaina/conversations';
 import {
   type OperatorActionOutcome,
@@ -266,6 +267,9 @@ type JainaChatSurfaceProps = {
    */
   onOpenAccountRead?: (readId: string) => void;
   goalsAccessEnabled?: boolean;
+  /** False where the host already shows the brand and ad account (the Scale page's header
+   *  chip); the canvas panel has no such chip and keeps them in the chat header. */
+  showAccountScope?: boolean;
   className?: string;
 };
 
@@ -690,13 +694,20 @@ const hasGateState = (message: JainaChatMessage): boolean =>
   (message.pendingToolApprovals?.length ?? 0) > 0 ||
   Object.keys(message.resolvedApprovals ?? {}).length > 0;
 
+// A session whose last_message_at was lost still has an update time; sort on the same
+// fallback the sidebar prints, so the list order and the shown time never disagree.
+function activityTime(session: JainaConversationSession): number {
+  const at = sessionActivityAt(session);
+  return at ? new Date(at).getTime() : 0;
+}
+
 function sortConversationSessions(
   sessions: JainaConversationSession[],
 ): JainaConversationSession[] {
   const sorted = [...sessions];
   sorted.sort((a, b) => {
-    const aLast = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-    const bLast = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    const aLast = activityTime(a);
+    const bLast = activityTime(b);
     if (aLast !== bLast) return bLast - aLast;
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
@@ -742,6 +753,7 @@ export function JainaChatSurface({
   onAutoSendConsumed,
   onOpenAccountRead,
   goalsAccessEnabled = process.env.NODE_ENV !== 'production',
+  showAccountScope = true,
   className,
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
@@ -2859,6 +2871,7 @@ export function JainaChatSurface({
         <JainaHeader
           brandName={brandName}
           adAccountId={adAccountId}
+          showAccountScope={showAccountScope}
           campaignId={campaignId}
           onClearMemory={handleClearMemory}
           onClearConversation={handleClearConversation}

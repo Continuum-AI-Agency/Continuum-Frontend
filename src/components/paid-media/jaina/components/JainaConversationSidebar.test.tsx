@@ -44,3 +44,40 @@ describe('JainaConversationSidebar', () => {
     expect(screen.getByText('Create campaign Goal')).not.toBeNull();
   });
 });
+
+describe('JainaConversationSidebar activity time', () => {
+  it('shows when the chat was last active even when last_message_at came back null', () => {
+    const updatedAt = new Date();
+    updatedAt.setHours(14, 32, 0, 0);
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[
+          {
+            sessionId: 'session-2',
+            brandId: null,
+            adAccountId: null,
+            title: 'Budget question',
+            lastMessageRole: 'assistant',
+            lastMessagePreview: null,
+            lastMessageAt: null,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: updatedAt.toISOString(),
+            initiator: 'user',
+            initiatorAgent: null,
+            callerRunId: null,
+            callerSessionId: null,
+            crossCallId: null,
+            tags: [],
+            preview: null,
+          },
+        ]}
+      />,
+    );
+
+    const time = screen.getByTestId('jaina-conversation-time-session-2');
+    expect(time.textContent).toBe('14:32');
+    expect(screen.queryByText('No activity')).toBeNull();
+  });
+});

@@ -1,9 +1,10 @@
 'use client';
 
-// The "All" tab's optional MP3 block: the connected platforms side by side, one column each,
-// with the same four figures in the same order. The cheapest is said in a sentence and marked
-// "cheapest" in its column — never by colour. A viewer can hide it; the choice is kept in this
-// browser (comparisonPreference.ts) and a hidden row leaves one line to bring it back.
+// The "All" tab's optional MP3 block: the connected platforms compared as a plain table, one
+// row each, with the same four figures in the same columns and a hairline between rows. A
+// platform that spent nothing keeps its row, greyed. The cheapest is said in a sentence and
+// marked "cheapest" in its row — never by colour. A viewer can hide it; the choice is kept in
+// this browser (comparisonPreference.ts) and a hidden row leaves one line to bring it back.
 
 import type { AccountPlatformMetrics } from '@continuum/contracts';
 import { useEffect, useState } from 'react';
@@ -18,38 +19,27 @@ import {
   windowDaysLabel,
 } from './accountPlatformMetricsModel';
 import { readComparisonHidden, writeComparisonHidden } from './comparisonPreference';
-import { PlatformChip } from './PlatformChip';
+import { platformColor } from './PlatformChip';
 import {
   buildPlatformComparison,
   type ComparisonColumn,
   cheapestSentence,
   type PlatformComparison,
 } from './platformComparisonModel';
+import { PLATFORM_NAMES } from './platformTabsModel';
 
 function pct(share: number): string {
   return `${Math.round(share * 100)}%`;
 }
 
-function Figure({
-  label,
-  text,
-  figure,
-}: {
-  label: string;
-  text: string;
-  figure: ReturnType<typeof figureProps>;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="font-mono font-semibold text-sm tabular-nums" {...figure}>
-        {text}
-      </dd>
-    </div>
-  );
+const NUMBER_CELL = 'py-2 pl-3 text-right font-mono tabular-nums';
+
+/** A platform that spent nothing in the window: its row stays, greyed, so the absence reads. */
+function idle(column: ComparisonColumn): boolean {
+  return column.spend === 0 || (column.spend == null && column.results == null);
 }
 
-function Column({
+function Row({
   column,
   row,
   metrics,
@@ -59,55 +49,63 @@ function Column({
   metrics: AccountPlatformMetrics;
 }) {
   const window = figureWindowOfMetrics(metrics);
-  const words = row.kind ? kindWords(row.kind) : null;
   const key = (name: string) => `comparison.${column.platform}.${name}`;
+  const muted = idle(column);
   return (
-    <div
-      className="min-w-0 space-y-2 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+    <tr
+      className={cn(
+        'border-border/60 border-t',
+        muted ? 'text-muted-foreground' : 'text-foreground',
+      )}
       data-cheapest={column.cheapest ? 'true' : undefined}
+      data-idle={muted ? 'true' : undefined}
       data-platform={column.platform}
       data-testid="comparison-column"
     >
-      <div className="flex flex-wrap items-center gap-1.5">
-        <PlatformChip platform={column.platform} />
-        <span className="text-muted-foreground text-xs" data-testid="comparison-currency">
-          {column.currency ?? 'several currencies'}
+      <th className="py-2 pr-3 text-left font-normal" scope="row">
+        <span className="inline-flex flex-wrap items-center gap-x-2">
+          <span
+            aria-hidden="true"
+            className={cn('size-2 shrink-0 rounded-full', platformColor(column.platform).dot)}
+          />
+          {PLATFORM_NAMES[column.platform]}
+          {row.currency == null ? (
+            <span className="text-muted-foreground text-xs" data-testid="comparison-currency">
+              {column.currency ?? 'several currencies'}
+            </span>
+          ) : null}
+          {column.cheapest ? (
+            <span className="font-semibold text-xs" data-testid="comparison-cheapest">
+              · cheapest
+            </span>
+          ) : null}
         </span>
-        {column.cheapest ? (
-          <span className="font-semibold text-foreground text-xs" data-testid="comparison-cheapest">
-            · cheapest
-          </span>
-        ) : null}
-      </div>
-      <dl className="space-y-1">
-        <Figure
-          figure={figureProps(key('spend'), column.spend, column.currency, window)}
-          label={`Spend · ${windowDaysLabel(metrics)}`}
-          text={
-            column.spend == null ? 'not added up' : formatCurrency(column.spend, column.currency)
-          }
-        />
-        <Figure
-          figure={figureProps(key('results'), column.results, null, window, 'count')}
-          label={words ? capitalise(words.many) : 'Results'}
-          text={column.results == null ? 'none bought' : formatResults(column.results)}
-        />
-        <Figure
-          figure={figureProps(key('cost'), column.costPerResult, column.currency, window)}
-          label={words ? `Cost per ${words.one}` : 'Cost per result'}
-          text={
-            column.costPerResult == null
-              ? '—'
-              : formatCurrency(column.costPerResult, column.currency)
-          }
-        />
-        <Figure
-          figure={figureProps(key('share'), column.shareOfResults, null, window, 'percent')}
-          label={words ? `Share of ${words.many}` : 'Share of results'}
-          text={column.shareOfResults == null ? '—' : pct(column.shareOfResults)}
-        />
-      </dl>
-    </div>
+      </th>
+      <td
+        className={NUMBER_CELL}
+        {...figureProps(key('spend'), column.spend, column.currency, window)}
+      >
+        {column.spend == null ? 'not added up' : formatCurrency(column.spend, column.currency)}
+      </td>
+      <td
+        className={NUMBER_CELL}
+        {...figureProps(key('results'), column.results, null, window, 'count')}
+      >
+        {column.results == null ? '0' : formatResults(column.results)}
+      </td>
+      <td
+        className={NUMBER_CELL}
+        {...figureProps(key('cost'), column.costPerResult, column.currency, window)}
+      >
+        {column.costPerResult == null ? '—' : formatCurrency(column.costPerResult, column.currency)}
+      </td>
+      <td
+        className={NUMBER_CELL}
+        {...figureProps(key('share'), column.shareOfResults, null, window, 'percent')}
+      >
+        {column.shareOfResults == null ? '—' : pct(column.shareOfResults)}
+      </td>
+    </tr>
   );
 }
 
@@ -201,38 +199,52 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
       </div>
     );
   }
+  const words = row.kind ? kindWords(row.kind) : null;
   return (
     <section
       aria-label="Platforms side by side"
-      className="space-y-2"
+      className="space-y-1.5 px-1"
       data-source="account-platform-metrics"
       data-testid="platform-comparison"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={`${typeScale.label} font-semibold text-muted-foreground`}>
-          Platforms side by side{row.kind ? ` · ${kindWords(row.kind).many}` : ''}
+          Platforms side by side{words ? ` · ${words.many}` : ''}
         </p>
         {toggleButton}
       </div>
-      <p
-        className={cn(typeScale.body, 'px-1 font-semibold text-foreground')}
-        data-testid="comparison-sentence"
-      >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[22rem] border-collapse text-sm">
+          <thead>
+            <tr className="text-muted-foreground text-xs">
+              <th className="py-1.5 pr-3 text-left font-medium" scope="col">
+                {words ? `${capitalise(words.many)} by platform` : 'Platform'}
+              </th>
+              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
+                Spend · {windowDaysLabel(metrics)}
+              </th>
+              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
+                {words ? capitalise(words.many) : 'Results'}
+              </th>
+              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
+                {words ? `Cost per ${words.one}` : 'Cost per result'}
+              </th>
+              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
+                Share
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {row.columns.map((column) => (
+              <Row column={column} key={column.platform} metrics={metrics} row={row} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-foreground text-xs" data-testid="comparison-sentence">
         {cheapestSentence(row)}
       </p>
-      <div
-        className={cn(
-          'grid grid-cols-1 gap-2',
-          row.columns.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3',
-        )}
-      >
-        {row.columns.map((column) => (
-          <Column column={column} key={column.platform} metrics={metrics} row={row} />
-        ))}
-      </div>
-      <div className="px-1">
-        <TotalsLine metrics={metrics} row={row} />
-      </div>
+      <TotalsLine metrics={metrics} row={row} />
     </section>
   );
 }

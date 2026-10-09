@@ -27,8 +27,9 @@ import { REAL_BODIES, type RealBodyName, readBody } from './realBodies.fixture';
 
 afterEach(cleanup);
 
-// The news row, rendered from each real optimizer-status body with the currency these
-// accounts actually carry — none. Every card must draw a picture of its own evidence.
+// The findings list, rendered from each real optimizer-status body with the currency these
+// accounts actually carry — none. Every finding must draw a picture of its own evidence, one
+// click away under it.
 
 function cardsOf(name: RealBodyName): Element[] {
   const { report, view, dailyTotal } = readBody(name);
@@ -55,12 +56,13 @@ const bandOf = (card: Element | undefined) => card?.querySelector('[data-testid=
 
 describe('every card on every real body', () => {
   for (const name of Object.keys(REAL_BODIES) as RealBodyName[]) {
-    it(`${name}: no card without a visual, and the visual fills the band`, () => {
+    it(`${name}: no finding without a visual, drawn in a band of one fixed height`, () => {
       const cards = cardsOf(name);
       expect(cards.length).toBeGreaterThan(0);
       for (const card of cards) {
         const band = bandOf(card);
-        expect(band?.getAttribute('class')).toContain('flex-1');
+        expect(band?.getAttribute('class')).toContain('h-36');
+        expect(band?.closest('details')).toBeTruthy();
         const visual = band?.querySelector('[data-testid="news-visual"]');
         expect(visual?.getAttribute('role')).toBe('img');
         expect(visual?.getAttribute('aria-label')?.length ?? 0).toBeGreaterThan(10);

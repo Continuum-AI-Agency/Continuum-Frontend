@@ -4,7 +4,8 @@
 // sheet overlay. Modeled on OptimizerOnboarding: the same grid-rows shell + single
 // scroll region wrapping PortfolioSetup (start-from-a-suggestion cards + build-by-hand
 // path, unchanged). Because this is reached FROM an existing portfolio list rather than
-// the empty state, the header carries a Back control instead of an onboarding pitch.
+// the empty state, the header is a breadcrumb back to it ("← Portfolios / New portfolio")
+// instead of an onboarding pitch.
 
 import { ArrowLeftIcon } from 'lucide-react';
 
@@ -28,21 +29,25 @@ export function PortfolioCreateView({
 }: PortfolioCreateViewProps) {
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-border/70 border-b bg-muted/10 px-4 py-3">
-        <h2 className="font-semibold text-sm tracking-tight">New portfolio</h2>
+      <header className="flex shrink-0 items-center gap-1.5 border-border/60 border-b px-4 py-2.5">
         <Button
-          className="h-7 gap-1.5 px-2 text-xs"
+          aria-label="Back to portfolios"
+          className="-ml-2 h-7 gap-1.5 px-2 font-normal text-muted-foreground text-sm"
           onClick={onBack}
           size="sm"
           type="button"
           variant="ghost"
         >
           <ArrowLeftIcon className="size-3.5" aria-hidden="true" />
-          Back
+          Portfolios
         </Button>
+        <span aria-hidden="true" className="text-muted-foreground text-sm">
+          /
+        </span>
+        <h2 className="font-semibold text-sm tracking-tight">New portfolio</h2>
       </header>
 
-      <div className="min-h-0 overflow-y-auto p-4">
+      <div className="min-h-0 overflow-y-auto px-4 py-5">
         <PortfolioSetup
           adAccountId={adAccountId}
           brandId={brandId}

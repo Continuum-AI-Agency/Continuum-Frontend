@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 
-import type { JainaConversationSession } from '@/lib/jaina/conversations';
+import { type JainaConversationSession, sessionActivityAt } from '@/lib/jaina/conversations';
 
 export const JAINA_CONVERSATION_SIDEBAR_CACHE_TTL_MS = 60 * 1000;
 
@@ -26,13 +26,20 @@ export function makeJainaConversationScopeKey(scope: ConversationScope): string 
   return `${scope.brandProfileId}:${scope.adAccountId}`;
 }
 
+// A session whose last_message_at was lost still has an update time; sort on the same
+// fallback the sidebar prints, so the list order and the shown time never disagree.
+function activityTime(session: JainaConversationSession): number {
+  const at = sessionActivityAt(session);
+  return at ? new Date(at).getTime() : 0;
+}
+
 function sortConversationSessions(
   sessions: JainaConversationSession[],
 ): JainaConversationSession[] {
   const sorted = [...sessions];
   sorted.sort((a, b) => {
-    const aLast = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-    const bLast = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    const aLast = activityTime(a);
+    const bLast = activityTime(b);
     if (aLast !== bLast) return bLast - aLast;
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });

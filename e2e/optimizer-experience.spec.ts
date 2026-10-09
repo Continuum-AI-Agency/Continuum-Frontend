@@ -625,7 +625,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(
         page.getByTestId('portfolio-tiles').locator('[data-testid^="tile-"]'),
       ).toHaveCount(4);
-      await expect(page.getByTestId('portfolio-detail-more')).toContainText('Ver detalle');
+      await expect(page.getByTestId('portfolio-detail-more')).toContainText('Show detail');
       await shoot(page, '02-portfolio-detail');
     } finally {
       await context.close();
@@ -851,7 +851,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         timeout: 120_000,
       });
 
-      const back = page.getByRole('button', { name: 'Back', exact: true });
+      const back = page.getByRole('button', { name: 'Back to portfolios', exact: true });
       await expect(back).toBeVisible();
       await shoot(page, '10-create-view');
 
@@ -999,16 +999,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
         firstPage.filter((row) => row.family === 'money').map((row) => readActionChange(row).label),
       ),
     ];
-    // Undo is offered on the FEATURED card only — the newest row by `ts`, the rule
-    // splitFeaturedAction in OptimizerActionFeed applies — and only when the server marks that
-    // row reversible and not yet reverted. The grid cards below it carry no revert control.
-    const featured = firstPage.reduce<OptimizerActionFeedRow | null>(
-      (newest, row) => (!newest || Date.parse(row.ts) > Date.parse(newest.ts) ? row : newest),
-      null,
-    );
-    const revertible = featured && revertState(featured).kind === 'available' ? 1 : 0;
+    // Undo is offered on every row of the timeline the server marks reversible and not yet
+    // reverted — the gate is the row's own flag, never a client guess.
+    const revertible = firstPage.filter((row) => revertState(row).kind === 'available').length;
     console.log(
-      `[optimizer-bench] action feed at run start (${FEED_WINDOW_DAYS}d): ${total} rows over ${pages.length} page(s); page 1 ${firstPage.length} rows, labels ${JSON.stringify(labels)}, featured row revertible: ${revertible === 1}`,
+      `[optimizer-bench] action feed at run start (${FEED_WINDOW_DAYS}d): ${total} rows over ${pages.length} page(s); page 1 ${firstPage.length} rows, labels ${JSON.stringify(labels)}, revertible rows: ${revertible}`,
     );
     expect(
       total,
@@ -1043,7 +1038,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(actorLine.first()).toBeVisible();
       console.log(`[optimizer-bench] first action actor: "${await actorLine.first().innerText()}"`);
 
-      // UNDO: the featured row offers it exactly when the server marks it reversible and not yet
+      // UNDO: each row offers it exactly when the server marks it reversible and not yet
       // reverted. The trigger is counted, never clicked.
       const revertTriggers = page.getByRole('button', { name: /^(Revert|Unpause)$/ });
       await expect(revertTriggers).toHaveCount(revertible);
@@ -1148,7 +1143,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       const order = await page.evaluate(() => {
         const hero = document.querySelector('[data-testid="portfolio-hero"]');
         const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
-        const header = pick('portfolio-header');
+        // The name line is the workspace bar above the hero, not part of it.
+        const header = document.querySelector('[data-testid="portfolio-header"]');
         const chips = pick('jaina-entry-chips');
         const news = pick('portfolio-news-row');
         if (!header || !chips || !news) return { header: !!header, chips: !!chips, news: !!news };
@@ -1348,7 +1344,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
       const report = await page.evaluate(() => {
         const hero = document.querySelector('[data-testid="portfolio-hero"]');
         const panel = hero?.closest('[role="tabpanel"]') ?? document.body;
-        const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
+        // The name line is the workspace bar above the hero; everything else lives inside it.
+        const pick = (id: string) =>
+          id === 'portfolio-header'
+            ? document.querySelector(`[data-testid="${id}"]`)
+            : (hero?.querySelector(`[data-testid="${id}"]`) ?? null);
         const follows = (a: Element | null, b: Element | null) =>
           Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
         const blocks = [
@@ -1405,7 +1405,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         return {
           present,
           ordered,
-          headerName: pick('portfolio-header')?.querySelector('h3')?.textContent ?? '',
+          headerName: pick('portfolio-header')?.querySelector('h2')?.textContent ?? '',
           facts: [...(hero?.querySelectorAll('[data-testid="header-chip"]') ?? [])].map((chip) =>
             chip.getAttribute('data-setting'),
           ),
@@ -1453,8 +1453,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.ordered).toBe(true);
       expect(report.oneSurface).toBe(true);
       expect(report.headerName).toBe(FORMULARIOS_PORTFOLIO_NAME);
-      // Each setting beside the figure it governs: the grey line, the anchor, the spend tile.
-      expect(report.facts).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
+      // Each setting beside the figure it governs: the anchor (left column, so first), the
+      // grey line, the spend tile.
+      expect(report.facts).toEqual(['target', 'objective', 'strategy', 'window', 'budget']);
 
       // The anchor: the cost per result at 44px, and the two windows by their dates.
       expect(report.anchorText).toMatch(/^(\d[\d,]*(\.\d+)?|—)$/);
@@ -1497,7 +1498,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // The body: the ad-set ranking first; the funnel and the reallocation behind the
       // disclosure, closed.
       expect(report.firstBodyBlock).toContain('per ad set');
-      expect(report.moreSummary).toBe('Ver detalle');
+      expect(report.moreSummary).toBe('Show detail');
       expect(report.moreOpen).toBe(false);
       expect(report.moreHolds).toEqual({ funnel: true, reallocation: true });
       await shoot(page, '19-formularios-hero');
@@ -1601,8 +1602,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
         const ordered = sequence.every(
           (node, i) => i === 0 || follows(sequence[i - 1] ?? null, node),
         );
+        // A tile's own platform breakdown line shares the prefix; it is part of a tile, not one.
         const tiles = [
-          ...(inner('account-tiles')?.querySelectorAll('[data-testid^="tile-"]') ?? []),
+          ...(inner('account-tiles')?.querySelectorAll(
+            '[data-testid^="tile-"]:not([data-testid="tile-breakdown"])',
+          ) ?? []),
         ];
         const tileStates = tiles.map((tile) => tile.getAttribute('data-state'));
         const tileBorders = tiles.map((tile) =>
@@ -1653,17 +1657,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
       });
       console.log(`[optimizer-bench] Overview O1: ${JSON.stringify(report)}`);
 
-      // In this order and nothing else: the platform tabs (every brand, Meta-only included — a
-      // platform it has not connected stays in the row and says Connect), the header line, the
-      // sentence block, the band, the tiles, the cards (when a read has landed), the rows.
-      // Nothing — the "not available yet" note included — sits between the tabs and the hero.
-      const expectedIds = [
-        'platform-tabs',
-        '(div)',
-        'overview-hero',
-        'jaina-entry-chips',
-        'account-tiles',
-      ];
+      // In this order and nothing else: the sentence block, the Ask Jaina strip, the tiles, the
+      // platform comparison and the cards (when a read has landed), the rows. The platform tabs
+      // live in the Performance+ bar above the Overview — every brand, Meta-only included, a
+      // platform it has not connected stays in the row and says Connect — and exactly once.
+      await expect(page.getByTestId('platform-tabs')).toHaveCount(1);
+      const expectedIds = ['overview-hero', '(div)', 'account-tiles'];
       if (report.ids.includes('platform-comparison')) expectedIds.push('platform-comparison');
       if (report.ids.includes('overview-recommendations'))
         expectedIds.push('overview-recommendations');
@@ -1673,13 +1672,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.jainaLabel).toBe(true);
       expect(report.jainaLinks).toBeGreaterThanOrEqual(4);
 
-      // Four to six tiles, each coloured by a state on its top border and never by a chart.
+      // Four to six tiles on one borderless row: each carries its state, none draws a box or a
+      // state border, and none is a chart.
       expect(report.tiles).toBeGreaterThanOrEqual(4);
       expect(report.tiles).toBeLessThanOrEqual(6);
       for (const state of report.tileStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
-      for (const border of report.tileBorders) {
-        expect(border).toMatch(/^border-t-(success|warning|destructive|border)$/);
-      }
+      for (const border of report.tileBorders) expect(border).toBe('');
       expect(report.tileCharts).toBe(0);
       expect(report.heroCharts).toBe(0);
       // A result kind with no target reads neutral and says so; one with no results says that.
@@ -1783,6 +1781,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
           .map((el) => `${rem(el).toFixed(3)}rem ${describe(el)}`);
         const expectedFigure: Record<string, number> = {
           tile: 22,
+          hero: 32,
           headline: 21,
           lead: 21,
           anchor: 44,

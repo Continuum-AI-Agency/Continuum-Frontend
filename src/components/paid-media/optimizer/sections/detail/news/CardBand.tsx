@@ -1,12 +1,12 @@
 'use client';
 
-// The band: the middle of every news card, tinted in the card's tone, growing (`flex-1`) to
-// take whatever height the row gives the card. The card's own evidence fills it and the figure
-// sits in its top-left corner, so the number and its proof read as one object.
+// The band: a finding's own evidence, drawn — tinted faintly in the finding's tone, with the
+// figure in its top-left corner so the number and its proof read as one object. It opens under
+// a finding in "What the Optimizer found" (./NewsCard, ./InsightCard) at one fixed height.
 //
 // Every visual is drawn in a 100 × 100 box stretched to the band (`preserveAspectRatio=none`,
 // strokes kept crisp by `vector-effect`), and every label is positioned in % inside it. The
-// area is sized by the card, never by the chart. Shapes stay in the lower part of the box so
+// area is sized by the band, never by the chart. Shapes stay in the lower part of the box so
 // the top-left corner is free for the figure. Which visual a card draws, and why, is decided
 // in ./cardVisual; this file only draws it.
 
@@ -18,10 +18,10 @@ import type { CardFigure, CardTone, CardVisual } from './cardVisual';
 import { resultNoun } from './cardVisual';
 
 const BAND_TONE: Record<CardTone, string> = {
-  bad: 'bg-destructive/5 border-destructive/15',
-  primary: 'bg-primary/5 border-primary/15',
-  warn: 'bg-warning/5 border-warning/15',
-  neutral: 'bg-muted/40 border-border/60',
+  bad: 'bg-destructive/5',
+  primary: 'bg-primary/5',
+  warn: 'bg-warning/5',
+  neutral: 'bg-muted/40',
 };
 
 type Align = 'start' | 'middle' | 'end';
@@ -714,7 +714,7 @@ export type CardBandProps = {
 export function CardBand({ id, visual, figure, tone, currency, resultLabel }: CardBandProps) {
   return (
     <div
-      className={cn('-mx-4 relative mt-1.5 mb-1 min-h-32 flex-1 border-y', BAND_TONE[tone])}
+      className={cn('relative h-36 w-full rounded-md', BAND_TONE[tone])}
       data-testid="news-band"
       data-tone={tone}
       data-visual={visual.kind}

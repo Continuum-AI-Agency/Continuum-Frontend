@@ -1,6 +1,6 @@
-// The row rule, proved against the class strings that actually ship.
+// The list rule, proved against the class strings that actually ship.
 //
-// Tailwind cannot read a template literal, so the row and the frame have to be written out as
+// Tailwind cannot read a template literal, so the list and the line have to be written out as
 // text — and a constant that is written out twice is a constant that drifts. These tests parse
 // the numbers back OUT of the class strings and check them against the numbers the rule is
 // stated in, so the literal and the arithmetic cannot disagree without something going red.
@@ -9,91 +9,55 @@ import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  CARD_ASPECT_BAND,
-  CARD_FRAME,
-  cardMinHeightCqw,
-  NEWS_CELL,
+  FINDING_ROW,
+  FINDING_ROW_BREAKPOINT_REM,
+  NEWS_LIST,
   NEWS_PANE,
-  NEWS_ROW,
-  NEWS_ROW_BREAKPOINT_REM,
-  NEWS_ROW_COLUMNS,
   NEWS_ROW_SIZE,
 } from './cardShape';
 
-/** `@[36rem]/news:grid-cols-2` → { 36: 2 }, plus the unprefixed `grid-cols-1` under 0. */
-function columnsByWidth(classes: string): Map<number, number> {
-  const out = new Map<number, number>();
-  for (const token of classes.split(/\s+/)) {
-    const scoped = /^@\[([0-9.]+)rem\]\/news:grid-cols-(\d+)$/.exec(token);
-    if (scoped) out.set(Number(scoped[1]), Number(scoped[2]));
-    const plain = /^grid-cols-(\d+)$/.exec(token);
-    if (plain) out.set(0, Number(plain[1]));
-  }
-  return out;
-}
+const tokens = (classes: string): string[] => classes.split(/\s+/);
 
-/** The column count the row holds at a pane width, read from the classes as CSS would. */
-function columnsAt(paneRem: number): number {
-  const rules = [...columnsByWidth(NEWS_ROW)].sort(([a], [b]) => a - b);
-  let columns = 0;
-  for (const [minWidth, count] of rules) if (paneRem >= minWidth) columns = count;
-  return columns;
-}
-
-describe('the row decides the column count, by the pane’s width', () => {
-  it('holds one column on a phone, two on a tablet, three on a desktop', () => {
-    expect(columnsAt(0)).toBe(NEWS_ROW_COLUMNS.phone);
-    expect(columnsAt(NEWS_ROW_BREAKPOINT_REM.tablet - 1)).toBe(NEWS_ROW_COLUMNS.phone);
-    expect(columnsAt(NEWS_ROW_BREAKPOINT_REM.tablet)).toBe(NEWS_ROW_COLUMNS.tablet);
-    expect(columnsAt(NEWS_ROW_BREAKPOINT_REM.desktop - 1)).toBe(NEWS_ROW_COLUMNS.tablet);
-    expect(columnsAt(NEWS_ROW_BREAKPOINT_REM.desktop)).toBe(NEWS_ROW_COLUMNS.desktop);
-    expect(columnsAt(120)).toBe(NEWS_ROW_COLUMNS.desktop);
+describe('a finding is one line, spread by the pane’s width', () => {
+  it('stacks on a phone and spreads into tag · claim · action at the tablet width', () => {
+    expect(tokens(FINDING_ROW)).toContain('grid-cols-1');
+    const spread = tokens(FINDING_ROW).find((token) =>
+      /^@\[[0-9.]+rem\]\/news:grid-cols-/.test(token),
+    );
+    expect(spread).toBe(
+      `@[${FINDING_ROW_BREAKPOINT_REM}rem]/news:grid-cols-[8rem_minmax(0,1fr)_auto]`,
+    );
   });
 
   it('asks the pane, never the viewport', () => {
     expect(NEWS_PANE).toBe('@container/news');
-    expect(NEWS_ROW).not.toMatch(/(^|\s)(sm|md|lg|xl|2xl):/);
-    for (const token of NEWS_ROW.split(/\s+/)) {
-      if (token.startsWith('@')) expect(token).toMatch(/^@\[[0-9.]+rem\]\/news:/);
+    for (const classes of [FINDING_ROW, NEWS_LIST]) {
+      expect(classes).not.toMatch(/(^|\s)(sm|md|lg|xl|2xl):/);
+      for (const token of tokens(classes)) {
+        if (token.startsWith('@')) expect(token).toMatch(/^@\[[0-9.]+rem\]\/news:/);
+      }
     }
   });
 
-  it('never uses auto-fit — the count is the rule, not whatever happens to fit', () => {
-    expect(NEWS_ROW).not.toContain('auto-fit');
+  it('separates findings with hairlines, never frames', () => {
+    expect(tokens(NEWS_LIST)).toContain('divide-y');
+    for (const classes of [FINDING_ROW, NEWS_LIST]) {
+      for (const frame of ['border', 'rounded-lg', 'bg-card']) {
+        expect(tokens(classes)).not.toContain(frame);
+      }
+    }
   });
 
-  it('stretches the cells so the cards in one row share a height', () => {
-    expect(NEWS_ROW).toContain('items-stretch');
-    expect(CARD_FRAME).toContain('h-full');
-  });
-
-  it('shows exactly one desktop row before the disclosure', () => {
-    expect(NEWS_ROW_SIZE).toBe(NEWS_ROW_COLUMNS.desktop);
-  });
-});
-
-describe('a card fills its column and floors its own height', () => {
-  it('fills the column: no cap, no fixed width', () => {
-    expect(CARD_FRAME).toContain('w-full');
-    expect(CARD_FRAME).not.toMatch(/(^|\s)max-w-/);
-    expect(CARD_FRAME).not.toMatch(/(^|\s)w-\[/);
-  });
-
-  it('floors its height against its cell’s width, at the band’s widest ratio', () => {
-    const found = /min-h-\[([0-9.]+)cqw\]/.exec(CARD_FRAME);
-    expect(found).not.toBeNull();
-    expect(Number(found?.[1])).toBe(cardMinHeightCqw());
-    expect(100 / cardMinHeightCqw()).toBeCloseTo(CARD_ASPECT_BAND.max, 2);
-    // The cell is the container the floor reads, so the floor is a real length.
-    expect(NEWS_CELL).toContain('@container/news-cell');
+  it('shows three findings before the disclosure', () => {
+    expect(NEWS_ROW_SIZE).toBe(3);
   });
 });
 
-describe('the card components, not their callers, own the shape', () => {
+describe('the finding components, not their callers, own the line', () => {
   const source = (file: string): string => readFileSync(join(import.meta.dir, file), 'utf8');
 
-  it.each(['NewsCard.tsx', 'InsightCard.tsx'])('%s puts the frame on its own root', (file) => {
-    expect(source(file)).toContain('CARD_FRAME');
+  it.each(['NewsCard.tsx', 'InsightCard.tsx'])('%s puts the line on its own root', (file) => {
+    expect(source(file)).toContain('className={FINDING_ROW}');
   });
 
   it.each([
@@ -103,29 +67,25 @@ describe('the card components, not their callers, own the shape', () => {
     expect(source(file)).not.toMatch(/className\??:\s*string/);
   });
 
-  it('the hero mounts the row and writes no viewport grid of its own', () => {
+  it('the hero mounts the list and writes no viewport grid of its own', () => {
     const hero = readFileSync(join(import.meta.dir, '..', 'PortfolioHero.tsx'), 'utf8');
-    expect(hero).toContain('NEWS_ROW');
+    expect(hero).toContain('NEWS_LIST');
     expect(hero).toContain('NEWS_PANE');
     expect(hero).not.toMatch(/\b(sm|md|lg|xl):grid-cols/);
   });
 });
 
-describe('the band is the part of the card that grows', () => {
+describe('the band draws the evidence at one fixed height', () => {
   const band = readFileSync(join(import.meta.dir, 'CardBand.tsx'), 'utf8');
 
-  it('takes the leftover height as picture, never as a gap', () => {
-    expect(band).toMatch(/className=\{cn\('[^']*\bflex-1\b/);
-  });
-
-  it('stretches every drawing to the band instead of sizing the band to the drawing', () => {
+  it('sizes the band, never the drawing', () => {
+    expect(band).toMatch(/className=\{cn\('[^']*\bh-36\b/);
     expect(band).toContain('preserveAspectRatio="none"');
     expect(band).toContain('viewBox="0 0 100 100"');
   });
 
-  it.each(['NewsCard.tsx', 'InsightCard.tsx'])('%s lets nothing but the band grow', (file) => {
+  it.each(['NewsCard.tsx', 'InsightCard.tsx'])('%s draws it behind a disclosure', (file) => {
     const card = readFileSync(join(import.meta.dir, file), 'utf8');
-    expect(card).toContain('<CardBand');
-    expect(card).not.toContain('mt-auto');
+    expect(card).toMatch(/<FindingEvidence|<CardBand/);
   });
 });

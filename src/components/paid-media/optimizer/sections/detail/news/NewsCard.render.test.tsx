@@ -23,6 +23,7 @@ afterEach(cleanup);
 const card = (over: Partial<NewsCardModel> = {}): NewsCardModel => ({
   id: 'budget:as-1',
   eyebrow: 'Budget · raise',
+  tag: { label: 'Scale', tone: 'good', detail: null },
   subject: null,
   claim: 'Move $66/day onto Cold, which buys leads cheaper.',
   reason: 'Cold is 33% cheaper per lead than the portfolio average.',
@@ -36,11 +37,10 @@ const card = (over: Partial<NewsCardModel> = {}): NewsCardModel => ({
 });
 
 describe('NewsCard — the lead', () => {
-  it('reads claim, band, why and action, and sends the click on', () => {
+  it('reads tag, claim, why, evidence and action on one line, and sends the click on', () => {
     const clicks: string[] = [];
     const { container, getByText } = render(
       <NewsCard
-        asOfLine="As of Sep 19 at 6:10 AM"
         card={card()}
         currency="USD"
         draft={false}
@@ -51,11 +51,23 @@ describe('NewsCard — the lead', () => {
       />,
     );
     const text = container.textContent ?? '';
-    expect(text).toContain('Budget · raise');
-    expect(text).toContain('High impact');
+    const tag = container.querySelector('[data-testid="finding-tag"]');
+    expect(tag?.textContent).toBe('Scale');
+    expect(tag?.getAttribute('data-tone')).toBe('good');
+    expect(tag?.getAttribute('class')).toContain('text-success');
+    expect(tag?.getAttribute('title')).toBe('Budget · raise');
+    expect(container.querySelector('[data-testid="finding-tier"]')?.textContent).toBe(
+      'High impact',
+    );
     expect(text).toContain('Move $66/day onto Cold');
     expect(text).toContain('Cold is 33% cheaper');
-    expect(text).toContain('As of Sep 19 at 6:10 AM');
+    // No frame: the line is a grid row, never a card.
+    const line = container.querySelector('[data-testid="portfolio-news-lead"]');
+    for (const token of ['border', 'rounded-lg', 'bg-card']) {
+      expect((line?.getAttribute('class') ?? '').split(/\s+/)).not.toContain(token);
+    }
+    // The evidence picture is one click away, under the reason.
+    expect(container.querySelector('details summary')?.textContent).toContain('Show the evidence');
     const band = container.querySelector('[data-testid="news-band"]');
     expect(band?.getAttribute('data-visual')).toBe('budget_move');
     expect(band?.querySelector('[data-testid="news-figure"]')?.textContent).toContain('+$66.00');
@@ -68,7 +80,6 @@ describe('NewsCard — the lead', () => {
   it('says why this and not the biggest number, when the brief chose one', () => {
     const { container } = render(
       <NewsCard
-        asOfLine={null}
         card={card({ chosenOver: 'The larger pause needs a week of data before it is safe.' })}
         currency="USD"
         draft
@@ -87,7 +98,6 @@ describe('NewsCard — the lead', () => {
   it('prints bare figures for an unknown currency, never a dollar sign', () => {
     const { container } = render(
       <NewsCard
-        asOfLine={null}
         card={card()}
         currency={null}
         draft={false}
@@ -111,6 +121,7 @@ describe('InsightCard', () => {
         card={card({
           id: 'rec:2',
           eyebrow: 'Creative · fatigue',
+          tag: { label: 'Creative', tone: 'warn', detail: 'fatigue' },
           claim: 'Creative on Warm',
           visual: {
             kind: 'ctr_step',
@@ -133,6 +144,10 @@ describe('InsightCard', () => {
     const insight = container.querySelector('[data-testid="portfolio-news-insight"]');
     expect(insight?.textContent).toContain('Creative on Warm');
     expect(insight?.textContent).toContain('Medium impact');
+    const tag = insight?.querySelector('[data-testid="finding-tag"]');
+    expect(tag?.textContent).toBe('Creative');
+    expect(tag?.getAttribute('class')).toContain('text-warning');
+    expect(insight?.textContent).toContain('fatigue');
     const band = insight?.querySelector('[data-testid="news-band"]');
     expect(band?.getAttribute('data-visual')).toBe('ctr_step');
     expect(band?.textContent).toContain('14-day CTR 0.68%');

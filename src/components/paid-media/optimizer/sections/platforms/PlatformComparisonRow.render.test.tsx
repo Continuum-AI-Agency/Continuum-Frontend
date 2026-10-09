@@ -27,29 +27,46 @@ const TWO_CURRENCIES = buildMetrics([
   },
 ]);
 
-describe('PlatformComparisonRow — the columns', () => {
-  it('shows one column per connected platform, Meta, Google, TikTok', () => {
+describe('PlatformComparisonRow — the table', () => {
+  it('shows one row per connected platform, Meta, Google, TikTok', () => {
     const { getAllByTestId } = render(<PlatformComparisonRow metrics={EASY_FIT_MP1} />);
     expect(
       getAllByTestId('comparison-column').map((node) => node.getAttribute('data-platform')),
     ).toEqual(['meta', 'google_ads', 'tiktok_ads']);
   });
 
-  it('gives every column the same four figures in the same order', () => {
-    const { getAllByTestId } = render(<PlatformComparisonRow metrics={EASY_FIT_MP1} />);
-    const labels = getAllByTestId('comparison-column').map((column) =>
-      [...column.querySelectorAll('dt')].map((node) => node.textContent),
+  it('is a plain table: one header row, the same four figures per platform, no card per column', () => {
+    const { getAllByTestId, getByTestId } = render(
+      <PlatformComparisonRow metrics={EASY_FIT_MP1} />,
     );
-    for (const columnLabels of labels) {
-      expect(columnLabels).toEqual(['Spend · 7 days', 'Leads', 'Cost per lead', 'Share of leads']);
-    }
+    const table = getByTestId('platform-comparison').querySelector('table');
+    expect(
+      [...(table?.querySelectorAll('thead th') ?? [])].map((node) => node.textContent),
+    ).toEqual(['Leads by platform', 'Spend · 7 days', 'Leads', 'Cost per lead', 'Share']);
     const google = getAllByTestId('comparison-column')[1];
-    expect([...(google?.querySelectorAll('dd') ?? [])].map((node) => node.textContent)).toEqual([
+    expect([...(google?.querySelectorAll('td') ?? [])].map((node) => node.textContent)).toEqual([
       '11,200 MXN',
       '118',
       '31.40 MXN',
       '55%',
     ]);
+    for (const row of getAllByTestId('comparison-column')) {
+      expect(row.tagName).toBe('TR');
+      expect(row.className).not.toContain('rounded');
+      expect(row.className).toContain('border-t');
+    }
+  });
+
+  it('greys a platform that spent nothing in the window, and keeps its row', () => {
+    const metrics = buildMetrics([
+      META_TOTALS,
+      { ...GOOGLE_TOTALS, spend: 0, share_of_spend: 0, unclassified_spend: 0, results_by_kind: [] },
+    ]);
+    const { getAllByTestId } = render(<PlatformComparisonRow metrics={metrics} />);
+    const [meta, google] = getAllByTestId('comparison-column');
+    expect(meta?.getAttribute('data-idle')).toBeNull();
+    expect(google?.getAttribute('data-idle')).toBe('true');
+    expect(google?.className).toContain('text-muted-foreground');
   });
 
   it('names the cheapest in a sentence and with a word in its column, not by colour', () => {
@@ -65,18 +82,18 @@ describe('PlatformComparisonRow — the columns', () => {
     expect(marked[0]?.textContent).toBe('· cheapest');
   });
 
-  it('totals the account in its one currency, and every column says its currency', () => {
-    const { getByTestId, getAllByTestId } = render(
+  it('totals the account in its one currency, which every spend figure carries', () => {
+    const { getByTestId, getAllByTestId, queryByTestId } = render(
       <PlatformComparisonRow metrics={EASY_FIT_MP1} />,
     );
     expect(getByTestId('comparison-totals').textContent).toBe(
       'All platforms: 38,411 MXN · 214 leads · 36.83 MXN per lead',
     );
-    expect(getAllByTestId('comparison-currency').map((node) => node.textContent)).toEqual([
-      'MXN',
-      'MXN',
-      'MXN',
-    ]);
+    for (const row of getAllByTestId('comparison-column')) {
+      expect(row.querySelector('td')?.textContent).toContain('MXN');
+    }
+    // One currency: no separate currency label beside each platform's name.
+    expect(queryByTestId('comparison-currency')).toBeNull();
   });
 
   it('with two currencies says so and shows no totals, no share and no cheapest', () => {

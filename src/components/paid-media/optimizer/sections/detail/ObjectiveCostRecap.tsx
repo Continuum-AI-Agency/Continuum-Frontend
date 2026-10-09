@@ -87,7 +87,7 @@ function Tile({
   explain?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border/70 bg-card px-3 py-2.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className={`${typeScale.label} text-muted-foreground`}>{label}</span>
         {explain}
@@ -154,7 +154,15 @@ export function ObjectiveCostRecap({
           : 'danger';
 
   return (
-    <div className={cn('grid grid-cols-2 gap-2 lg:grid-cols-4', className)}>
+    // No boxes: the four tiles are split by thin vertical hairlines — tiles 2 and 4 in the
+    // two-column grid, every tile but the first in the four-column one.
+    <div
+      className={cn(
+        'grid grid-cols-2 gap-x-4 gap-y-4 lg:grid-cols-4',
+        '[&>*]:border-border/60 [&>*:nth-child(even)]:border-l [&>*:nth-child(even)]:pl-4 lg:[&>*:nth-child(3)]:border-l lg:[&>*:nth-child(3)]:pl-4',
+        className,
+      )}
+    >
       <Tile
         chip={
           delta.spend != null ? (

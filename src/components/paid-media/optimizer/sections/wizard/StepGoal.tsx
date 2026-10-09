@@ -1,6 +1,6 @@
 'use client';
 
-// Step 3 — the goal. The objective as a grid of cards, the metric the target is priced
+// Step 3 — the goal. The objective as radio rows, the metric the target is priced
 // in (with the alternative where one exists), the target itself with the account's own
 // number as a hint, and the mode said in a sentence. Scale mode opens its plan right here:
 // grow by X% every N days, up to a ceiling.
@@ -18,20 +18,6 @@ import {
   analogObjectiveSchema,
   getOptimizationMetricDefinition,
 } from '@continuum/contracts';
-import {
-  DownloadIcon,
-  EyeIcon,
-  GoalIcon,
-  HeartIcon,
-  LinkIcon,
-  type LucideIcon,
-  MessageCircleIcon,
-  MousePointerClickIcon,
-  PlayIcon,
-  ShoppingCartIcon,
-  UserPlusIcon,
-  UsersIcon,
-} from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -41,12 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 import { TargetHint } from '../../advisor/SetupAdvisor';
 import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { MODES, OBJECTIVES } from '../suggestionModel';
 import { ANALOG_LABEL, buildConversionDescriptor } from './conversionDescriptor';
+import { OptionRow, questionHeading } from './OptionRow';
 import {
   DEFAULT_SCALE_CADENCE_DAYS,
   DEFAULT_SCALE_GROWTH_PCT,
@@ -54,23 +40,6 @@ import {
   MODE_COPY,
   type WizardDraft,
 } from './wizardModel';
-
-const OBJECTIVE_ICON: Record<OptimizationObjective, LucideIcon> = {
-  purchase: ShoppingCartIcon,
-  app_install: DownloadIcon,
-  signup: UserPlusIcon,
-  lead: UsersIcon,
-  conversations: MessageCircleIcon,
-  traffic: MousePointerClickIcon,
-  link_clicks: LinkIcon,
-  thruplays: PlayIcon,
-  post_engagement: HeartIcon,
-  awareness: EyeIcon,
-  clicks: MousePointerClickIcon,
-  // A conversion only the advertiser can name, so the icon says "a target you defined"
-  // rather than borrowing the glyph of whichever objective it happens to behave like.
-  custom: GoalIcon,
-};
 
 type StepGoalProps = {
   draft: WizardDraft;
@@ -93,40 +62,27 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
     onChange({ conversion: { ...draft.conversion, ...patch } });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       <div className="space-y-2">
-        <h3 className="font-semibold text-sm tracking-tight">What is this portfolio buying?</h3>
-        <fieldset className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <h3 className={questionHeading}>What is this portfolio buying?</h3>
+        <fieldset className="grid min-w-0 gap-x-6 @md:grid-cols-2 @2xl:grid-cols-3">
           <legend className="sr-only">Objective</legend>
-          {OBJECTIVES.map((objective) => {
-            const Icon = OBJECTIVE_ICON[objective];
-            const active = draft.objective === objective;
-            return (
-              <button
-                aria-pressed={active}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors',
-                  active
-                    ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40'
-                    : 'border-border/70 bg-card hover:bg-muted/30',
-                )}
-                disabled={disabled}
-                key={objective}
-                onClick={() => onChange({ objective, targetMetric: null })}
-                type="button"
-              >
-                <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                <span className="font-medium">{humanize(objective)}</span>
-              </button>
-            );
-          })}
+          {OBJECTIVES.map((objective) => (
+            <OptionRow
+              active={draft.objective === objective}
+              disabled={disabled}
+              key={objective}
+              onSelect={() => onChange({ objective, targetMetric: null })}
+              title={humanize(objective)}
+            />
+          ))}
         </fieldset>
       </div>
 
       {draft.objective === 'custom' ? (
-        <div className="space-y-2.5 rounded-lg border border-border/70 bg-card p-3">
+        <div className="space-y-2.5">
           <div>
-            <h4 className="font-semibold text-xs tracking-tight">
+            <h4 className="font-semibold text-sm tracking-tight">
               Which conversion, and how does it behave?
             </h4>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -251,10 +207,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
               </SelectContent>
             </Select>
           ) : (
-            <p
-              className="flex h-9 items-center rounded-md border border-border/60 bg-muted/30 px-3 text-sm"
-              id="wizard-target-metric"
-            >
+            <p className="flex h-9 items-center font-medium text-sm" id="wizard-target-metric">
               {metric.costLabel}
             </p>
           )}
@@ -292,24 +245,18 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
       </div>
 
       <div className="space-y-2">
-        <h3 className="font-semibold text-sm tracking-tight">How should it optimize?</h3>
-        <fieldset className="grid min-w-0 gap-2 sm:grid-cols-3">
+        <h3 className={questionHeading}>How should it optimize?</h3>
+        <fieldset className="min-w-0">
           <legend className="sr-only">Mode</legend>
           {MODES.map((mode) => {
-            const active = draft.mode === mode;
             const copy = MODE_COPY[mode];
             return (
-              <button
-                aria-pressed={active}
-                className={cn(
-                  'rounded-lg border px-3 py-2 text-left transition-colors',
-                  active
-                    ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40'
-                    : 'border-border/70 bg-card hover:bg-muted/30',
-                )}
+              <OptionRow
+                active={draft.mode === mode}
+                body={copy.body}
                 disabled={disabled}
                 key={mode}
-                onClick={() =>
+                onSelect={() =>
                   onChange({
                     mode: mode as OptimizationModeDto,
                     ...(mode === 'scale' &&
@@ -322,17 +269,14 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                       : {}),
                   })
                 }
-                type="button"
-              >
-                <span className="block font-semibold text-xs">{copy.title}</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">{copy.body}</span>
-              </button>
+                title={copy.title}
+              />
             );
           })}
         </fieldset>
 
         {draft.mode === 'scale' ? (
-          <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-3">
+          <div className="space-y-2 pt-2">
             <p className="text-xs">
               Grow the budget{' '}
               <span className="font-medium text-foreground">{draft.scaleGrowthPct || '…'}%</span>{' '}

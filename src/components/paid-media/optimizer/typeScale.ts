@@ -28,6 +28,10 @@ export const headline = 'text-[21px] font-semibold leading-snug tracking-tight';
 /** The number in a tile — 22px mono, one size in every tile. */
 export const figureTile = 'font-mono font-semibold text-[22px] tabular-nums leading-none';
 
+/** The one protagonist number of an inline figure row (the Overview's spend) — 32px mono.
+ *  Larger than a tile, smaller than a portfolio's anchor; one per row. */
+export const figureHero = 'font-mono font-semibold text-[32px] tabular-nums leading-none';
+
 /** The figure a headline leads with — 21px mono. */
 export const figureHeadline = 'font-mono font-semibold text-[21px] tabular-nums leading-tight';
 

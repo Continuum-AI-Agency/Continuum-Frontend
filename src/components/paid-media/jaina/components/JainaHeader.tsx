@@ -1,7 +1,6 @@
 'use client';
 import { Archive, Layers, RotateCcw, Target, X } from 'lucide-react';
 
-import React from 'react';
 import { ActiveProjectSelect, useActiveProjectOptional } from '@/components/projects';
 import {
   AlertDialog,
@@ -20,6 +19,9 @@ type JainaHeaderProps = {
   brandName: string;
   campaignId?: string | null;
   adAccountId?: string | null;
+  /** False where the host already names the brand and ad account above the chat (the Scale
+   *  page's account chip in the app header), so the chat does not repeat them. */
+  showAccountScope?: boolean;
   onClearMemory: () => void;
   onClearConversation: () => void;
   onStop: () => void;
@@ -30,6 +32,7 @@ export function JainaHeader({
   brandName,
   campaignId,
   adAccountId,
+  showAccountScope = true,
   onClearMemory,
   onClearConversation,
   onStop,
@@ -48,12 +51,14 @@ export function JainaHeader({
         </div>
 
         <div className="hidden sm:flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
-          <div className="flex items-center gap-1.5 shrink-0 text-xs uppercase tracking-wider font-semibold text-muted-foreground">
-            <Archive className="size-3" />
-            <span className="truncate max-w-[100px]">{brandName}</span>
-          </div>
+          {showAccountScope && (
+            <div className="flex items-center gap-1.5 shrink-0 text-xs uppercase tracking-wider font-semibold text-muted-foreground">
+              <Archive className="size-3" />
+              <span className="truncate max-w-[100px]">{brandName}</span>
+            </div>
+          )}
 
-          {adAccountId && (
+          {showAccountScope && adAccountId && (
             <div className="flex items-center gap-1.5 shrink-0 text-xs uppercase tracking-wider font-semibold text-muted-foreground">
               <Layers className="size-3" />
               <span className="font-mono truncate max-w-[120px]">{adAccountId}</span>

@@ -11,10 +11,9 @@
 // chatter has no revert. The split is the server's (optimizer_list_actions vs the narrowed
 // optimizer_list_logs); this only chooses which of the two to render.
 
-import type { OptimizerFeedWindowDays } from '@continuum/contracts';
+import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { FeedWindowControl } from './feedChrome';
 import { OptimizerActionFeed } from './OptimizerActionFeed';
 import { OptimizerLogs } from './OptimizerLogs';
 
@@ -24,6 +23,43 @@ const FEEDS: { value: ActivityFeed; label: string }[] = [
   { value: 'actions', label: 'Actions' },
   { value: 'server', label: 'Server log' },
 ];
+
+const WINDOWS = OPTIMIZER_FEED_WINDOW_DAYS.map((days) => ({ value: days, label: `${days}d` }));
+
+/** A segmented switch: one track, the chosen option lifted onto the page colour. */
+function Segmented<TValue extends string | number>({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string;
+  options: readonly { value: TValue; label: string }[];
+  value: TValue;
+  onChange: (value: TValue) => void;
+}) {
+  return (
+    <fieldset className="inline-flex shrink-0 gap-0.5 rounded-lg border-0 bg-muted/60 p-0.5">
+      <legend className="sr-only">{legend}</legend>
+      {options.map((option) => (
+        <button
+          aria-pressed={value === option.value}
+          className={cn(
+            'rounded-md px-2.5 py-1 font-medium text-xs tabular-nums transition-colors',
+            value === option.value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
 
 export function OptimizerActivity({
   brandId,
@@ -35,36 +71,28 @@ export function OptimizerActivity({
   const [feed, setFeed] = useState<ActivityFeed>('actions');
   const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <fieldset className="flex flex-wrap items-center gap-1 border-0 p-0">
-          <legend className="sr-only">Choose a feed</legend>
-          {FEEDS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={feed === option.value}
-              onClick={() => setFeed(option.value)}
-              className={cn(
-                'inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium transition-colors',
-                feed === option.value
-                  ? 'border-primary/40 bg-primary/10 text-primary'
-                  : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </fieldset>
-        <FeedWindowControl value={windowDays} onChange={setWindowDays} />
-      </div>
+  // The feed switch and the window ride on the same line as the feed's own portfolio filter;
+  // the feed draws that line because only it knows which portfolios it has loaded.
+  const controls = (
+    <>
+      <Segmented legend="Choose a feed" onChange={setFeed} options={FEEDS} value={feed} />
+      <Segmented
+        legend="Show events from the last"
+        onChange={setWindowDays}
+        options={WINDOWS}
+        value={windowDays}
+      />
+    </>
+  );
 
-      {feed === 'actions' ? (
-        <OptimizerActionFeed brandId={brandId} currency={currency} windowDays={windowDays} />
-      ) : (
-        <OptimizerLogs brandId={brandId} windowDays={windowDays} />
-      )}
-    </div>
+  return feed === 'actions' ? (
+    <OptimizerActionFeed
+      brandId={brandId}
+      controls={controls}
+      currency={currency}
+      windowDays={windowDays}
+    />
+  ) : (
+    <OptimizerLogs brandId={brandId} controls={controls} windowDays={windowDays} />
   );
 }

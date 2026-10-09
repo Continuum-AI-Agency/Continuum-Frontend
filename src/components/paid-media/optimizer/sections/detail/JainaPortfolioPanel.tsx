@@ -1,8 +1,8 @@
 'use client';
 
-// Jaina's bar at the foot of the portfolio module (portafolio-unificado.html, idea D): a field
-// to ask her about this portfolio and the five prepared questions, in one soft primary band
-// that closes the module's bottom edge. The page has ONE place that talks to Jaina.
+// Jaina's bar under the portfolio read (P1, "Lectura continua"): a field to ask her about
+// this portfolio and the five prepared questions, in one light primary band with no border.
+// The page has ONE place that talks to Jaina.
 //
 // Her read no longer lives here. When a model wrote it and it says something the status
 // sentence does not, it is one attributed line under that sentence (./PortfolioHeadline);
@@ -50,7 +50,7 @@ export function JainaPortfolioPanel({
   };
   return (
     <section
-      className={cn('rounded-b-lg bg-primary/10 px-4 py-3', className)}
+      className={cn('rounded-xl bg-primary/8 px-4 py-2.5', className)}
       data-testid="portfolio-jaina"
     >
       <JainaEntryChips frame={false} layout="row" portfolio={portfolio}>

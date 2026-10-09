@@ -1,7 +1,7 @@
 'use client';
 
-// The number the portfolio module is anchored on (portafolio-unificado.html, idea D): the
-// cost per result, large, in the colour of where it sits against the target. Under it the
+// The number the portfolio read is anchored on (P1, "Lectura continua"): the cost per
+// result, very large, in the colour of where it sits against the target. Under it the
 // unit and the target — the target clickable into Manage — and the selected range beside the
 // one before it, each named by its dates. What it says is decided in ./headlineModel
 // (anchorOf); this file only draws it.

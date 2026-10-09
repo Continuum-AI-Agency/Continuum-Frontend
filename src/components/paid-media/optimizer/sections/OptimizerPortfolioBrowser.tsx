@@ -15,9 +15,12 @@ import { ArrowRightLeftIcon, Maximize2, ShieldQuestionIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
+import * as typeScale from '../typeScale';
+import { PendingCell, PortfolioRowName } from './PortfolioRowCard';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 
 type OptimizerPortfolioBrowserProps = {
@@ -41,20 +44,20 @@ function PortfolioBrowserRow({
   const crossAccount = plan.kind === 'switch-then-open';
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
+    <li className="flex flex-wrap items-center justify-between gap-3 px-2 py-2.5">
       <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 font-medium text-sm tracking-tight">
-          <span className="truncate">{portfolio.name}</span>
-          <ApplyModePill
-            applyMode={portfolio.apply_mode}
-            autopilotPaused={portfolio.autopilot_paused}
-          />
-          {pendingWorkCount(portfolio) > 0 ? (
-            <Badge variant="secondary" className="text-xs">
-              {pendingWorkCount(portfolio)} pending
-            </Badge>
-          ) : null}
-        </p>
+        <PortfolioRowName
+          badges={
+            <>
+              <ApplyModePill
+                applyMode={portfolio.apply_mode}
+                autopilotPaused={portfolio.autopilot_paused}
+              />
+              <PendingCell count={pendingWorkCount(portfolio)} />
+            </>
+          }
+          name={portfolio.name}
+        />
         <p className="mt-0.5 text-muted-foreground text-xs tabular-nums">
           {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
           {portfolio.adset_count === 1 ? 'set' : 'sets'}
@@ -98,18 +101,20 @@ export function OptimizerPortfolioBrowser({
 }: OptimizerPortfolioBrowserProps) {
   if (groups.length === 0) {
     return (
-      <p className="rounded-lg border border-border/70 border-dashed px-3 py-6 text-center text-muted-foreground text-xs">
+      <p className="px-2 py-6 text-center text-muted-foreground text-xs">
         This brand has no portfolios yet.
       </p>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {groups.map((group) => (
-        <section key={group.accountId} className="space-y-2">
-          <header className="flex items-center gap-2 px-1">
-            <h4 className="truncate font-semibold text-xs tracking-tight">{group.label}</h4>
+        <section key={group.accountId} className="space-y-1">
+          <header className="flex items-center gap-2 px-2">
+            <h4 className={cn('truncate font-semibold text-muted-foreground', typeScale.label)}>
+              {group.label}
+            </h4>
             {group.isSelected ? (
               <Badge variant="teal" className="text-xs">
                 Selected
@@ -119,7 +124,7 @@ export function OptimizerPortfolioBrowser({
               {group.portfolios.length}
             </span>
           </header>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border/60 border-border/60 border-t">
             {group.portfolios.map((portfolio) => (
               <PortfolioBrowserRow
                 key={portfolio.id}

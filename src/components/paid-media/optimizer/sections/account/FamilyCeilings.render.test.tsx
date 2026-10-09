@@ -17,7 +17,7 @@ describe('what this account may do on its own', () => {
     );
     expect(container.querySelector('details')).toBeNull();
     expect(getByTestId('family-ceilings').textContent).toContain(
-      'What this account is allowed to do on its own',
+      'What this account may do on its own',
     );
     expect(container.querySelectorAll('[aria-pressed]').length).toBeGreaterThan(0);
   });

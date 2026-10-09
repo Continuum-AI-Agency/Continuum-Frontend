@@ -25,7 +25,9 @@ import type {
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useSetupAdvice } from '../../advisor/SetupAdvisor';
+import { humanize } from '../../format';
 import { buildClaimMap, previewMoves } from '../../picker/campaignGroups';
 import { buildPortfolioPickerEntities } from '../../picker/portfolioPickerEntities';
 import {
@@ -46,10 +48,12 @@ import {
   effectiveTargetMetric,
   emptyDraft,
   enrollLabel,
+  MODE_COPY,
   memberPayload,
   platformHost,
   selectedMembers,
   selectedMembersBudget,
+  selectionByPlatform,
   stepIssues,
   WIZARD_STEPS,
   type WizardDraft,
@@ -82,6 +86,18 @@ type PortfolioWizardProps = {
 };
 
 const STEP_ORDER: WizardStep[] = WIZARD_STEPS.map((step) => step.id);
+
+/** The short answer each step holds, shown beside it once it is done. */
+function stepValues(draft: WizardDraft): Partial<Record<WizardStep, string>> {
+  const selection = selectionByPlatform(draft)
+    .map((entry) => entry.label)
+    .join(' + ');
+  return {
+    start: draft.source === 'suggestion' ? 'Suggestion' : 'From scratch',
+    assets: selection || undefined,
+    goal: `${humanize(draft.objective)} · ${MODE_COPY[draft.mode].title}`,
+  };
+}
 
 export function PortfolioWizard({
   brandId,
@@ -266,19 +282,30 @@ export function PortfolioWizard({
   }
 
   const showSummary = step !== 'start';
+  const reached = new Set<WizardStep>([...completed, step]);
 
+  // Three columns once the container is wide (steps · the step · summary); narrow, the step
+  // list lies down on top and the summary follows the step. The page scrolls as one.
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <Stepper completed={completed} current={step} onSelect={goTo} />
-
+    <div className="@container">
       <div
-        className={
+        className={cn(
+          'grid gap-6 @4xl:gap-9',
           showSummary
-            ? 'grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]'
-            : 'min-h-0 flex-1'
-        }
+            ? '@4xl:grid-cols-[12rem_minmax(0,1fr)_17.5rem]'
+            : '@4xl:grid-cols-[12rem_minmax(0,1fr)]',
+        )}
       >
-        <div className="min-h-0 overflow-y-auto pr-1">
+        <div className="min-w-0 @4xl:sticky @4xl:top-0 @4xl:self-start">
+          <Stepper
+            completed={completed}
+            current={step}
+            onSelect={goTo}
+            values={stepValues(draft)}
+          />
+        </div>
+
+        <div className="@container min-w-0 space-y-6">
           {step === 'start' ? (
             <StepStart
               accountId={adAccountId}
@@ -350,10 +377,60 @@ export function PortfolioWizard({
               selectedBudgetSum={selectedBudgetSum}
             />
           ) : null}
+
+          {step !== 'start' ? (
+            <footer className="space-y-2 border-border/60 border-t pt-4">
+              <div className="flex items-center gap-2">
+                <Button className="gap-1.5" onClick={back} size="sm" type="button" variant="ghost">
+                  <ArrowLeftIcon aria-hidden className="size-3.5" />
+                  Back
+                </Button>
+                {isLast ? (
+                  <Button
+                    className="gap-1.5"
+                    disabled={issues.length > 0 || busy}
+                    onClick={() => void submit()}
+                    size="sm"
+                    type="button"
+                  >
+                    {busy ? (
+                      <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+                    ) : (
+                      <CheckIcon aria-hidden className="size-3.5" />
+                    )}
+                    {busy ? 'Creating…' : enrollLabel(draft)}
+                  </Button>
+                ) : (
+                  <Button
+                    className="gap-1.5"
+                    disabled={issues.length > 0}
+                    onClick={advance}
+                    size="sm"
+                    type="button"
+                  >
+                    Next
+                    <ArrowRightIcon aria-hidden className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+              {failure ? (
+                <p className="text-destructive text-xs" role="alert">
+                  {failure}
+                  {createdId
+                    ? ' The portfolio exists — fix the above and press Create again to enroll, or add members from Manage.'
+                    : ''}
+                </p>
+              ) : issues.length > 0 ? (
+                <p className="text-xs text-muted-foreground" role="status">
+                  {issues[0]}
+                </p>
+              ) : null}
+            </footer>
+          ) : null}
         </div>
 
         {showSummary ? (
-          <div className="min-h-0 lg:overflow-y-auto">
+          <div className="min-w-0 @4xl:sticky @4xl:top-0 @4xl:self-start">
             <WizardSummary
               advice={advice}
               brandId={brandId}
@@ -363,63 +440,12 @@ export function PortfolioWizard({
               onChangeSelection={(adsetIds) => patch({ adsetIds, campaignIds: [] })}
               onUseBudget={(value) => patch({ dailyTotal: value })}
               onUseTarget={(value) => patch({ target: value })}
+              reached={reached}
               selectedBudgetSum={selectedBudgetSum}
             />
           </div>
         ) : null}
       </div>
-
-      {step !== 'start' ? (
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-border/60 border-t pt-3">
-          <div className="min-w-0 flex-1">
-            {failure ? (
-              <p className="text-destructive text-xs" role="alert">
-                {failure}
-                {createdId
-                  ? ' The portfolio exists — fix the above and press Create again to enroll, or add members from Manage.'
-                  : ''}
-              </p>
-            ) : issues.length > 0 ? (
-              <p className="text-xs text-muted-foreground" role="status">
-                {issues[0]}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button className="gap-1.5" onClick={back} size="sm" type="button" variant="outline">
-              <ArrowLeftIcon aria-hidden className="size-3.5" />
-              Back
-            </Button>
-            {isLast ? (
-              <Button
-                className="gap-1.5"
-                disabled={issues.length > 0 || busy}
-                onClick={() => void submit()}
-                size="sm"
-                type="button"
-              >
-                {busy ? (
-                  <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
-                ) : (
-                  <CheckIcon aria-hidden className="size-3.5" />
-                )}
-                {busy ? 'Creating…' : enrollLabel(draft)}
-              </Button>
-            ) : (
-              <Button
-                className="gap-1.5"
-                disabled={issues.length > 0}
-                onClick={advance}
-                size="sm"
-                type="button"
-              >
-                Next
-                <ArrowRightIcon aria-hidden className="size-3.5" />
-              </Button>
-            )}
-          </div>
-        </footer>
-      ) : null}
     </div>
   );
 }

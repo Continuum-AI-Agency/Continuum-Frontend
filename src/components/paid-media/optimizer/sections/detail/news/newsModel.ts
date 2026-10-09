@@ -36,10 +36,23 @@ const MODULE_LABEL: Record<string, string> = {
 
 type BriefCandidate = PortfolioBrief['candidates'][number];
 
+/** The colour a finding's tag reads in: scale green, pause red, creative amber, else muted. */
+export type FindingTagTone = 'good' | 'bad' | 'warn' | 'muted';
+
+/** The one-word tag a finding is listed under in "What the Optimizer found". */
+export type FindingTag = {
+  label: string;
+  tone: FindingTagTone;
+  /** What kind of finding it is, in the evidence's words: "sustained cost", "fatigue". */
+  detail: string | null;
+};
+
 export type NewsCardModel = {
   id: string;
   /** The module and what kind of finding it is, above the card: "Pause · sustained cost". */
   eyebrow: string;
+  /** The coloured tag the finding is listed under: "Scale", "Pause", "Creative". */
+  tag: FindingTag;
   /** The ad set the card is about, when the claim does not already name it. */
   subject: string | null;
   /** One sentence. The claim, as written — never regenerated here. */
@@ -61,20 +74,49 @@ export type NewsCardModel = {
   cta: HeroCta | null;
 };
 
+/** What kind of finding the evidence says this is: "sustained cost", "fatigue", "raise". */
+function kindOf(module: string, visual: CardVisual, resultLabel: string): string | null {
+  switch (visual.kind) {
+    case 'cost_vs_reference':
+      return 'sustained cost';
+    case 'spend_blocks':
+      return `zero ${resultLabel.toLowerCase()}`;
+    case 'ctr_step':
+      return 'fatigue';
+    case 'budget_move':
+      return module === 'budget' ? (visual.to > visual.from ? 'raise' : 'cut') : null;
+    default:
+      return null;
+  }
+}
+
 /** The finding named by its evidence, so a reader knows the kind before reading a word. */
 function eyebrowFor(module: string, visual: CardVisual, resultLabel: string): string {
   const base = MODULE_LABEL[module] ?? module;
-  switch (visual.kind) {
-    case 'cost_vs_reference':
-      return `${base} · sustained cost`;
-    case 'spend_blocks':
-      return `${base} · zero ${resultLabel.toLowerCase()}`;
-    case 'ctr_step':
-      return `${base} · fatigue`;
-    case 'budget_move':
-      return module === 'budget' ? `${base} · ${visual.to > visual.from ? 'raise' : 'cut'}` : base;
+  const kind = kindOf(module, visual, resultLabel);
+  return kind ? `${base} · ${kind}` : base;
+}
+
+/**
+ * The tag a finding is listed under. A budget move that raises an ad set is a scale; every
+ * other module keeps its own name. Colour carries the direction only — scale green, pause red,
+ * creative amber — so a list of findings reads as a list of verbs before a word of it.
+ */
+function tagFor(module: string, visual: CardVisual, resultLabel: string): FindingTag {
+  const detail = kindOf(module, visual, resultLabel);
+  switch (module) {
+    case 'pause':
+      return { label: MODULE_LABEL.pause, tone: 'bad', detail };
+    case 'creative':
+      return { label: MODULE_LABEL.creative, tone: 'warn', detail };
+    case 'budget':
+      return visual.kind === 'budget_move' && visual.to > visual.from
+        ? { label: 'Scale', tone: 'good', detail: null }
+        : { label: MODULE_LABEL.budget, tone: 'muted', detail };
+    case 'none':
+      return { label: 'Today', tone: 'muted', detail: 'nothing to change' };
     default:
-      return base;
+      return { label: MODULE_LABEL[module] ?? module, tone: 'muted', detail };
   }
 }
 
@@ -148,6 +190,7 @@ export function buildPortfolioNews(args: {
   const lead: NewsCardModel = {
     id: hero.candidate_id ?? 'hero',
     eyebrow: calm ? 'Today · nothing to change' : eyebrowFor(hero.module, heroVisual, resultLabel),
+    tag: tagFor(hero.module, heroVisual, resultLabel),
     subject: calm
       ? items.length > 0
         ? `${items.length} ad set${items.length === 1 ? '' : 's'}`
@@ -177,6 +220,7 @@ export function buildPortfolioNews(args: {
     insights.push({
       id: candidate.id,
       eyebrow: eyebrowFor(candidate.module, visual, resultLabel),
+      tag: tagFor(candidate.module, visual, resultLabel),
       subject: subjectFor(candidate.adset_name ?? null, claim),
       claim,
       reason: candidate.reason,

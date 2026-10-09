@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 
-import { Panel } from '@/components/shared/Panel';
 import { cn } from '@/lib/utils';
 
-// The shared Panel plus the optimizer surface's card chrome. Kept as its own
-// component because the optimizer still reads as a stack of discrete cards,
-// unlike the flattened dashboard panes.
+// One section of the optimizer's portfolio read (P1, "Lectura continua"): a heading, its muted
+// meta beside it, an optional action on the right, then the content. No border, no radius, no
+// card surface — sections are told apart by the whitespace between them, so a chart or a table
+// inside one never ends up as a box inside a box.
 export function OptimizerPanel({
   title,
   meta,
@@ -22,20 +22,15 @@ export function OptimizerPanel({
   bodyClassName?: string;
 }) {
   return (
-    <Panel
-      title={title}
-      meta={
-        // The shared header keeps its right cluster from shrinking, so a long legend beside
-        // the title pushed the whole header past a phone's panel. Below `sm` it wraps instead.
-        meta ? (
-          <span className="block max-w-[55vw] text-right sm:max-w-none">{meta}</span>
-        ) : undefined
-      }
-      action={action}
-      bodyClassName={bodyClassName}
-      className={cn('overflow-hidden rounded-lg border bg-card text-card-foreground', className)}
-    >
-      {children}
-    </Panel>
+    <section className={cn('flex min-w-0 flex-col gap-3', className)}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h3 className="font-semibold text-foreground text-sm">{title}</h3>
+          {meta ? <div className="min-w-0 text-muted-foreground text-xs">{meta}</div> : null}
+        </div>
+        {action}
+      </div>
+      <div className={cn('min-w-0', bodyClassName)}>{children}</div>
+    </section>
   );
 }

@@ -347,3 +347,50 @@ export function normalizeTimestamp(value: string | undefined, fallback: string):
   if (Number.isNaN(parsed.getTime())) return fallback;
   return parsed.toISOString();
 }
+
+/**
+ * When the conversation was last active. `lastMessageAt` is the right answer but is often null:
+ * the Backend's message write stamps `last_message_at`, and every later session upsert in the same
+ * turn (runtime/server.ts passes no `lastMessageAt`) writes NULL back over it in the conflict
+ * update. `updatedAt` is bumped by each of those upserts, so it is the time of the last turn;
+ * `createdAt` covers a row nothing has touched since it was born.
+ */
+export function sessionActivityAt(
+  session: Pick<JainaConversationSession, 'lastMessageAt' | 'updatedAt' | 'createdAt'>,
+): string | null {
+  for (const candidate of [session.lastMessageAt, session.updatedAt, session.createdAt]) {
+    if (candidate && !Number.isNaN(new Date(candidate).getTime())) return candidate;
+  }
+  return null;
+}
+
+const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+function clockTime(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+/** A conversation's last activity in the viewer's local time: "14:32" today, "Yesterday 18:05",
+ *  "Oct 3 · 16:20" earlier this year, "Oct 3, 2025 · 16:20" before it. */
+export function formatSessionActivity(value: string | null, now: Date = new Date()): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const dayDelta = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (dayDelta <= 0) return clockTime(date);
+  if (dayDelta === 1) return `Yesterday ${clockTime(date)}`;
+  const day =
+    date.getFullYear() === now.getFullYear() ? MONTH_DAY.format(date) : MONTH_DAY_YEAR.format(date);
+  return `${day} · ${clockTime(date)}`;
+}

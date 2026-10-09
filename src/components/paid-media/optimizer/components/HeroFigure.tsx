@@ -1,15 +1,16 @@
-// The one element every tile figure and every hero figure renders through. Four roles,
-// one size per role (see ../typeScale): a tile's number, a headline's figure, the account
-// lead card's figure, and the portfolio module's anchor number. Provenance attributes from `figureProps` spread straight onto it, so
+// The one element every tile figure and every hero figure renders through. Five roles,
+// one size per role (see ../typeScale): a tile's number, an inline row's protagonist, a
+// headline's figure, the account lead card's figure, and the portfolio module's anchor number. Provenance attributes from `figureProps` spread straight onto it, so
 // the raw value, currency and window keep travelling on the same node as the text.
 
 import { cn } from '@/lib/utils';
-import { figureAnchor, figureHeadline, figureLead, figureTile } from '../typeScale';
+import { figureAnchor, figureHeadline, figureHero, figureLead, figureTile } from '../typeScale';
 
-export type HeroFigureKind = 'tile' | 'headline' | 'lead' | 'anchor';
+export type HeroFigureKind = 'tile' | 'hero' | 'headline' | 'lead' | 'anchor';
 
 const KIND_CLASS: Record<HeroFigureKind, string> = {
   tile: figureTile,
+  hero: figureHero,
   headline: figureHeadline,
   lead: figureLead,
   anchor: figureAnchor,

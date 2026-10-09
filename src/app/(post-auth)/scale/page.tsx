@@ -19,8 +19,8 @@ export default async function PaidMediaPage() {
   const denied = await ProductGate('scale');
   if (denied) return denied;
 
-  const brandName =
-    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'Untitled brand';
+  const activeBrand = brandSummaries.find((brand) => brand.id === activeBrandId);
+  const brandName = activeBrand?.name ?? 'Untitled brand';
 
   // Fetch accounts in parallel with layout; campaign indexes load client-side
   // after account selection to avoid a sequential server waterfall.
@@ -42,6 +42,7 @@ export default async function PaidMediaPage() {
       <PaidMediaClientPage
         brandProfileId={activeBrandId}
         brandName={brandName}
+        brandLogoUrl={activeBrand?.logoUrl ?? null}
         initialAccounts={initialAccounts}
         initialAdAccountId={firstAccountId}
         deploymentEnvironment={resolveAutomationDeploymentEnvironment({

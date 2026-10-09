@@ -541,7 +541,7 @@ export function CampaignAdsetPicker({
 
   if (isError) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+      <p className="flex items-center gap-2 py-2 text-xs text-destructive">
         <ServerCrash className="size-4 shrink-0" aria-hidden="true" />
         Couldn't load this account's ad sets. Retry in a moment.
       </p>
@@ -550,7 +550,7 @@ export function CampaignAdsetPicker({
 
   if (counts.total === 0) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border border-border/60 border-dashed px-3 py-6 text-xs text-muted-foreground">
+      <p className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
         <SearchX className="size-4 shrink-0" aria-hidden="true" />
         No ad sets found on this account.
       </p>
@@ -587,13 +587,13 @@ export function CampaignAdsetPicker({
       ) : null}
 
       {inventoryFreshness?.isError ? (
-        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+        <p className="text-xs text-warning">
           Inactive Meta ad sets are temporarily unavailable. Active and already-enrolled rows remain
           editable.
         </p>
       ) : null}
       {inventoryFreshness?.partial || inventoryFreshness?.truncated ? (
-        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+        <p className="text-xs text-warning">
           Meta returned a partial ad-set inventory. Refresh before making broad membership changes.
         </p>
       ) : null}
@@ -614,7 +614,7 @@ export function CampaignAdsetPicker({
       ) : null}
 
       {counts.eligible === 0 ? (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+        <p className="flex items-start gap-2 text-xs text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
           {counts.inactive > 0 && !isCampaignMode
             ? 'No active ad sets are currently optimizable. Inactive rows may be enrolled, but remain held until Meta reports them active.'
@@ -623,7 +623,7 @@ export function CampaignAdsetPicker({
       ) : null}
 
       {rows.length === 0 ? (
-        <p className="flex items-center gap-2 rounded-lg border border-border/60 border-dashed px-3 py-6 text-xs text-muted-foreground">
+        <p className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
           <SearchX className="size-4 shrink-0" aria-hidden="true" />
           Nothing matches this search or filter.
         </p>
@@ -633,8 +633,8 @@ export function CampaignAdsetPicker({
         // in a `display: table` div, and sticky does not survive that. Lifting the header out is
         // the fix; the overlay scrollbar takes no layout width, so the two tables stay aligned on
         // the shared GRID_COLS template.)
-        <div className="min-h-0 overflow-hidden rounded-lg border border-border/60">
-          <Table containerClassName="overflow-visible" className="grid bg-card">
+        <div className="min-h-0 overflow-hidden border-border/60 border-y">
+          <Table containerClassName="overflow-visible" className="grid">
             <TableHeader className="grid">
               <TableRow
                 className={cn(

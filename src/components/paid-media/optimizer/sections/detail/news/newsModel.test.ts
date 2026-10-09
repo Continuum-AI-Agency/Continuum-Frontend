@@ -97,6 +97,8 @@ describe('buildPortfolioNews', () => {
       signed: true,
     });
     expect(news.lead?.eyebrow).toBe('Budget · raise');
+    // A budget move that raises the ad set is listed as a scale, in green.
+    expect(news.lead?.tag).toEqual({ label: 'Scale', tone: 'good', detail: null });
     expect(news.lead?.impactPerDay).toBe(14);
     expect(news.lead?.cta?.label).toBe('Review the budget moves');
   });
@@ -175,6 +177,7 @@ describe('buildPortfolioNews', () => {
       target: 70,
     });
     expect(news.lead?.eyebrow).toBe('Today · nothing to change');
+    expect(news.lead?.tag).toEqual({ label: 'Today', tone: 'muted', detail: 'nothing to change' });
     expect(news.lead?.subject).toBe('1 ad set');
     expect(news.lead?.visual).toEqual({
       kind: 'cost_line',
@@ -266,5 +269,35 @@ describe('cards — the row order is the brief’s own ranking', () => {
     });
     const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
     expect(news.cards.map((c) => c.id)).toEqual(['hero']);
+  });
+});
+
+describe('the tag each finding is listed under', () => {
+  const tagOf = (module: BriefCandidate['module'], items: CycleItemRow[] = []) =>
+    buildPortfolioNews({
+      view: view({
+        brief: brief({
+          hero: { ...brief().hero, module, candidate_id: 'rec:1' },
+          candidates: [candidate({ id: 'rec:1', module, kind: module })],
+        }),
+      }),
+      items,
+      target: 70,
+    }).lead?.tag;
+
+  it('reads a pause red and a creative amber', () => {
+    expect(tagOf('pause')).toMatchObject({ label: 'Pause', tone: 'bad' });
+    expect(tagOf('creative')).toMatchObject({ label: 'Creative', tone: 'warn' });
+  });
+
+  it('keeps a budget move that cuts, and any other module, muted under its own name', () => {
+    expect(
+      buildPortfolioNews({
+        view: view(),
+        items: [item({ current_budget: 186, final_budget: 120, change_abs: -66 })],
+        target: 70,
+      }).lead?.tag,
+    ).toEqual({ label: 'Budget', tone: 'muted', detail: 'cut' });
+    expect(tagOf('audience')).toMatchObject({ label: 'Audience', tone: 'muted' });
   });
 });

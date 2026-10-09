@@ -3,9 +3,9 @@
 // Overview — the optimizer's front page, as the Performance+ redesign orders it (proposal O1,
 // docs/performance-plus-redesign/overview.html). Above the fold, in this order and nothing
 // else: one sentence with figures (what the account spent over the window, what each result
-// kind cost against its target, how many decisions wait); a sub-line with the window and when
-// the read was taken; the band that asks Jaina; four to six tiles whose top border is a state;
-// the recommendation cards in impact order with the lead marked; and the portfolios as
+// kind cost against its target, how many decisions wait); a meta line with the window, the
+// book and when the read was taken; the band that asks Jaina; one editorial row of four to six
+// figures with no boxes, spend as the hero; the recommendation cards in impact order with the lead marked; and the portfolios as
 // one-line rows, sortable by distance to target.
 //
 // Nothing here is a chart and nothing is prose written by a model. The sentence and the tiles
@@ -15,7 +15,8 @@
 // account read; the read's own narrative, its footnotes and its charts are not shown.
 //
 // Above all of it sits the platform tab row (All · Meta · Google · TikTok, kept in ?platform=,
-// docs/optimizer-multiplatform/frontend.html §2). "All" is the MP1 frame: its sentence and
+// docs/optimizer-multiplatform/frontend.html §2) and the toolbar, unless the page shell draws
+// both in its own top bar (`chromeInShell`). "All" is the MP1 frame: its sentence and
 // tiles come from ONE producer, public.optimizer_get_account_platform_metrics, so they span the
 // three platforms without adding two currencies or two result kinds together. "Meta" is the O1
 // above, unchanged. Google and TikTok lead with their own rows of the same producer, then what
@@ -33,7 +34,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
-import { KpiTile } from '../components/KpiTile';
+import { KpiRow, KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import * as typeScale from '../typeScale';
@@ -62,6 +63,7 @@ import {
   resultKinds,
   sortPortfolioRows,
   spendState,
+  vsPriorLabel,
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
@@ -108,14 +110,18 @@ type OptimizerOverviewProps = {
   onSelectPortfolio: (portfolioId: string) => void;
   onCreatePortfolio: () => void;
   onPrefetchPortfolio?: (portfolioId: string) => void;
+  /** The page shell draws the platform tabs and the toolbar (Review pending, Weekly report,
+   *  New portfolio) in its own top bar, so the Overview leaves them out. */
+  chromeInShell?: boolean;
 };
 
-/** The tile's second line for one result kind: cost, target, and last week — or why not. */
+/** The tile's second line for one result kind: cost and target — or why not. The move against
+ *  last week is its own element (KindPriorDelta), the one place the row spends colour. */
 export function kindTileSub(kind: ResultKind, currency: string | null | undefined): string {
   if (kind.costPerResult == null) {
     return kind.spend > 0 ? `${formatCurrency(kind.spend, currency)} no results` : 'no spend';
   }
-  const parts = [formatCpa(kind.costPerResult, currency)];
+  const parts = [`${formatCpa(kind.costPerResult, currency)} each`];
   if (kind.targetRange == null) parts.push('no target');
   else if (kind.targetRange.min === kind.targetRange.max)
     parts.push(`target ${formatCpa(kind.targetRange.min, currency)}`);
@@ -123,9 +129,34 @@ export function kindTileSub(kind: ResultKind, currency: string | null | undefine
     parts.push(
       `target ${formatCpa(kind.targetRange.min, currency)}–${formatCpa(kind.targetRange.max, currency)}`,
     );
-  if (kind.priorCostPerResult != null)
-    parts.push(`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`);
   return parts.join(' · ');
+}
+
+/** A cost's move against last week, coloured by direction: cheaper is green, dearer is red.
+ *  Nothing when the kind has no prior cost to compare with. */
+export function KindPriorDelta({
+  kind,
+  currency,
+}: {
+  kind: ResultKind;
+  currency: string | null | undefined;
+}) {
+  const label = vsPriorLabel(kind.vsPriorPct);
+  if (label == null || kind.vsPriorPct == null || kind.priorCostPerResult == null) return null;
+  return (
+    <span
+      className={cn(
+        'tabular-nums',
+        kind.vsPriorPct < 0 && 'text-success',
+        kind.vsPriorPct > 0 && 'text-destructive',
+      )}
+      data-direction={kind.vsPriorPct < 0 ? 'down' : kind.vsPriorPct > 0 ? 'up' : 'flat'}
+      data-testid="cost-prior-delta"
+      title={`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 /** The tile's second line for autopilot: who only recommends, or what is stopped. */
@@ -170,6 +201,7 @@ export function OptimizerOverview({
   onSelectPortfolio,
   onCreatePortfolio,
   onPrefetchPortfolio,
+  chromeInShell = false,
 }: OptimizerOverviewProps) {
   const [sortKey, setSortKey] = useState<RowSortKey>('distance');
   const [sortDir, setSortDir] = useState<RowSortDir>('asc');
@@ -265,14 +297,23 @@ export function OptimizerOverview({
   // "All" spans every platform, so its questions carry none; a platform's tab carries its own.
   const jainaPlatform = platformTab === 'all' ? null : platformTab;
   const jainaBand = (
-    <JainaEntryChips entries={jainaEntries} label="Ask Jaina" platform={jainaPlatform} />
+    <div className="rounded-lg bg-primary/5 px-3 py-2">
+      <JainaEntryChips
+        entries={jainaEntries}
+        frame={false}
+        label="Ask Jaina"
+        platform={jainaPlatform}
+      />
+    </div>
   );
 
   const portfolioNoun = portfolios.length === 1 ? 'portfolio' : 'portfolios';
 
   // Every brand gets the four tabs: a missing Google or TikTok tab reads as "we don't do
   // Google", where a tab that says Connect reads as "you haven't connected it yet".
-  const tabs = <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />;
+  const tabs = chromeInShell ? null : (
+    <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />
+  );
   if (!rendersManagedOverview(platformTab)) {
     return (
       <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
@@ -295,15 +336,8 @@ export function OptimizerOverview({
   return (
     <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
       {tabs}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold text-foreground" data-testid="book-line">
-          {portfolios.length} {portfolioNoun} · {book.managed}{' '}
-          {book.managed === 1 ? 'ad set' : 'ad sets'}
-          {book.gone > 0 ? (
-            <span className="font-normal text-muted-foreground"> · {book.gone} lost</span>
-          ) : null}
-        </p>
-        <div className="flex items-center gap-2">
+      {chromeInShell ? null : (
+        <div className="flex flex-wrap items-center justify-end gap-2 px-1">
           {pendingCount > 0 ? (
             <Button
               className="h-7 gap-1.5 px-2 text-xs"
@@ -341,7 +375,7 @@ export function OptimizerOverview({
             New portfolio
           </Button>
         </div>
-      </div>
+      )}
 
       {allFrame?.status === 'error' ? (
         <p
@@ -354,12 +388,12 @@ export function OptimizerOverview({
       ) : null}
 
       {/* 1 — the sentence. Every figure in it is one of the tiles below, said in a row. */}
-      <section className="space-y-1 px-1" data-testid="overview-hero">
+      <section className="space-y-1.5 px-1" data-testid="overview-hero">
         {multiplatform ? (
           <AllPlatformsHeadline metrics={multiplatform} />
         ) : allFrame?.status === 'loading' ? (
           <p
-            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            className={`${typeScale.headline} text-muted-foreground`}
             data-pending="true"
             data-testid="overview-headline"
           >
@@ -367,7 +401,7 @@ export function OptimizerOverview({
           </p>
         ) : efficiency.failed > 0 && !efficiency.pending ? (
           <p
-            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            className={`${typeScale.headline} text-muted-foreground`}
             data-incomplete="true"
             data-testid="overview-headline"
           >
@@ -385,7 +419,7 @@ export function OptimizerOverview({
           </p>
         ) : spend ? (
           <p
-            className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
+            className={`${typeScale.headline} max-w-[62ch] text-foreground`}
             data-testid="overview-headline"
           >
             The account spent{' '}
@@ -436,13 +470,16 @@ export function OptimizerOverview({
               </span>
             ))}
             {clauses.length > 0 ? '. ' : ' '}
-            <span className="tabular-nums" data-testid="overview-decisions">
+            <span
+              className={cn('tabular-nums', pendingCount > 0 && 'text-primary')}
+              data-testid="overview-decisions"
+            >
               {capitalise(decisionsLabel(pendingCount))}.
             </span>
           </p>
         ) : (
           <p
-            className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
+            className={`${typeScale.headline} text-muted-foreground`}
             data-pending={efficiency.pending ? 'true' : undefined}
             data-testid="overview-headline"
           >
@@ -451,7 +488,8 @@ export function OptimizerOverview({
               : `No portfolio has a measured cycle yet. ${capitalise(decisionsLabel(pendingCount))}.`}
           </p>
         )}
-        {/* 2 — the sub-line: the window the figures cover, and when the read was taken. */}
+        {/* 2 — the meta line: the window the figures cover, what they cover, and when the read
+         *  was taken, with the way to ask for another as a text link. */}
         <div
           className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
           data-testid="overview-subline"
@@ -461,16 +499,24 @@ export function OptimizerOverview({
           ) : window ? (
             <span data-testid="overview-window">{window}</span>
           ) : null}
-          {(multiplatform || window) && accountRead.data ? <span aria-hidden="true">·</span> : null}
+          {multiplatform || window ? <span aria-hidden="true">·</span> : null}
+          <span data-testid="book-line">
+            {portfolios.length} {portfolioNoun} · {book.managed}{' '}
+            {book.managed === 1 ? 'ad set' : 'ad sets'}
+            {book.gone > 0 ? ` · ${book.gone} lost` : null}
+          </span>
           {accountRead.data ? (
-            <AccountReadFreshness
-              error={requestRead.error instanceof Error ? requestRead.error.message : null}
-              onRequest={() => requestRead.mutate()}
-              readyAt={accountRead.data.ready_at}
-              refresh={accountRead.data.refresh}
-              requesting={requestRead.isPending}
-              utcDay={accountRead.data.utc_day}
-            />
+            <>
+              <span aria-hidden="true">·</span>
+              <AccountReadFreshness
+                error={requestRead.error instanceof Error ? requestRead.error.message : null}
+                onRequest={() => requestRead.mutate()}
+                readyAt={accountRead.data.ready_at}
+                refresh={accountRead.data.refresh}
+                requesting={requestRead.isPending}
+                utcDay={accountRead.data.utc_day}
+              />
+            </>
           ) : null}
         </div>
       </section>
@@ -478,15 +524,15 @@ export function OptimizerOverview({
       {/* 3 — the band that asks Jaina, with the questions of the tab a person is on. */}
       {jainaBand}
 
-      {/* 4 — the radiography: four to six tiles, each with a state on its top border. */}
+      {/* 4 — the editorial row: spend as the hero, then each result kind with its cost, the
+       *  decisions waiting and autopilot — no boxes, a hairline between cells. Colour goes only
+       *  to a cost that moved against last week, and to the decisions that ask for a person. */}
       {multiplatform ? (
         <AllPlatformsTiles metrics={multiplatform} onOpenActions={onOpenActions} />
       ) : allFrame?.status === 'loading' ? null : (
-        <div
-          className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6"
-          data-testid="account-tiles"
-        >
+        <KpiRow testId="account-tiles">
           <KpiTile
+            emphasis="hero"
             figure={figureProps('tiles.spend', spend?.spend ?? null, currency, 'd7')}
             label={`Spend · ${WINDOW_DAYS} days`}
             state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
@@ -499,6 +545,7 @@ export function OptimizerOverview({
             }
             testId="tile-spend"
             value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
+            variant="inline"
           />
           {kinds.slice(0, MAX_KIND_TILES).map((kind) => (
             <KpiTile
@@ -506,23 +553,31 @@ export function OptimizerOverview({
               key={kind.kind}
               label={capitalise(kind.words.many)}
               state={kind.state}
-              sub={kindTileSub(kind, currency)}
+              sub={
+                <>
+                  {kindTileSub(kind, currency)}
+                  {kind.vsPriorPct != null && kind.priorCostPerResult != null ? ' · ' : null}
+                  <KindPriorDelta currency={currency} kind={kind} />
+                </>
+              }
               testId={`tile-kind-${kind.kind}`}
               value={kind.results.toLocaleString('en-US')}
+              variant="inline"
             />
           ))}
           <KpiTile
             action={
               pendingCount > 0 ? (
                 <button
-                  className="text-xs text-primary hover:underline"
+                  className="font-semibold text-primary text-xs hover:underline"
                   onClick={onOpenActions}
                   type="button"
                 >
-                  Review
+                  Review →
                 </button>
               ) : null
             }
+            emphasis={pendingCount > 0 ? 'decision' : undefined}
             figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
             label="Decisions"
             sub={
@@ -532,6 +587,7 @@ export function OptimizerOverview({
             }
             testId="tile-decisions"
             value={String(pendingCount)}
+            variant="inline"
           />
           <KpiTile
             figure={figureProps('tiles.on-autopilot', autopilot.autopilot, null, 'none', 'count')}
@@ -539,9 +595,15 @@ export function OptimizerOverview({
             state={autopilot.paused > 0 ? 'warn' : 'none'}
             sub={autopilotTileSub(autopilot)}
             testId="tile-autopilot"
-            value={`${autopilot.autopilot} of ${autopilot.total}`}
+            value={
+              <>
+                {autopilot.autopilot}
+                <span className="text-muted-foreground/60">/{autopilot.total}</span>
+              </>
+            }
+            variant="inline"
           />
-        </div>
+        </KpiRow>
       )}
 
       {/* 4b — the platforms side by side (MP3): optional, hidden per viewer. */}

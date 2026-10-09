@@ -59,8 +59,8 @@ export type AppNavigationGroup = {
 // Sub-routes for the Organic section. Shown as flat nested items under the
 // "Organic" section header (Hessian-style), and reused as the parent's items
 // for breadcrumb resolution. Labels are area-qualified so "Organic Agent" and
-// "Organic Analytics" never collide with Scale's "Jaina"/"Paid Analytics" when
-// read outside their section header (breadcrumb, command palette, tooltip).
+// "Organic Analytics" never collide with a Performance + label when read outside
+// their section header (breadcrumb, command palette, tooltip).
 const ORGANIC_ITEMS: AppNavigationItem[] = [
   {
     label: 'Organic Agent',
@@ -91,11 +91,18 @@ const ORGANIC_ITEMS: AppNavigationItem[] = [
   },
 ];
 
-// Sub-routes for the Scale section. The Scale agent is Jaina; "Paid Analytics"
-// and "Paid Optimization" mirror Organic's qualified labels so no sub-label is
-// ambiguous across areas. "Paid Optimization" is the campaign performance
-// surface (the Scale page tab keyed as "performance").
+// Sub-routes for Performance +, in the order a person works: the Optimizer first, then Jaina.
+// "Dashboards" (/scale?tab=dashboard) is unfinished and stays out of the sidebar until it ships;
+// the route still works for a direct link. Under the "Performance +" header the names need no
+// area prefix, and none of them collides with an Organic + label.
 const SCALE_ITEMS: AppNavigationItem[] = [
+  {
+    label: 'Optimizer',
+    href: '/scale?tab=performance',
+    icon: Gauge,
+    accentColor: 'text-amber-500',
+    product: 'paid_media',
+  },
   {
     label: 'Jaina',
     href: '/scale?tab=jaina',
@@ -103,21 +110,11 @@ const SCALE_ITEMS: AppNavigationItem[] = [
     accentColor: 'text-amber-500',
     product: 'paid_media',
   },
-  {
-    label: 'Paid Analytics',
-    href: '/scale?tab=dashboard',
-    icon: Activity,
-    accentColor: 'text-amber-500',
-    product: 'paid_media',
-  },
-  {
-    label: 'Paid Optimization',
-    href: '/scale?tab=performance',
-    icon: Gauge,
-    accentColor: 'text-amber-500',
-    product: 'paid_media',
-  },
 ];
+
+/** Where a page draws its own controls into the app header, right of the module pill. Empty on
+ *  every page that does not portal into it. */
+export const APP_HEADER_MODULE_SLOT_ID = 'app-header-module-slot';
 
 const HOME: AppNavigationItem = { label: 'Home', href: '/dashboard', icon: Home };
 const CANVAS: AppNavigationItem = {
