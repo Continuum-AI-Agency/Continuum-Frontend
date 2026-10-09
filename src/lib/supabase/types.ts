@@ -20634,6 +20634,41 @@ export type Database = {
         }
         Relationships: []
       }
+      template_colour_fields: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          template_key: string
+          updated_at: string
+          updated_by: string | null
+          variable_key: string
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          template_key: string
+          updated_at?: string
+          updated_by?: string | null
+          variable_key: string
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          template_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          variable_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_colour_fields_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
       template_layer_views: {
         Row: {
           asset_id: string
@@ -29872,6 +29907,10 @@ export type Database = {
         Args: { p_ad_account_id: string; p_brand_id: string }
         Returns: Json
       }
+      optimizer_get_action_audit: {
+        Args: { p_audit_id: string; p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_get_adhoc_suggestions: {
         Args: { p_limit?: number; p_portfolio_id: string }
         Returns: Json
@@ -30004,6 +30043,14 @@ export type Database = {
       optimizer_get_portfolio_performance: {
         Args: { p_limit?: number; p_portfolio_id: string }
         Returns: Json
+      }
+      optimizer_get_portfolio_platform_actions: {
+        Args: { p_portfolio_id: string }
+        Returns: {
+          accounts: number
+          allowed_actions: Json
+          platform: string
+        }[]
       }
       optimizer_get_portfolio_platform_caps: {
         Args: { p_portfolio_id: string }
@@ -30500,6 +30547,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      optimizer_set_portfolio_platform_actions: {
+        Args: {
+          p_allowed_actions: Json
+          p_platform: string
+          p_portfolio_id: string
+        }
+        Returns: Json
+      }
       optimizer_set_portfolio_platform_cap: {
         Args: {
           p_daily_cap_minor: number
@@ -30541,6 +30596,14 @@ export type Database = {
       }
       optimizer_unenroll_adset: {
         Args: { p_adset_id: string; p_portfolio_id: string }
+        Returns: undefined
+      }
+      optimizer_unenroll_entity: {
+        Args: {
+          p_entity_id: string
+          p_platform: string
+          p_portfolio_id: string
+        }
         Returns: undefined
       }
       optimizer_update_portfolio: {
