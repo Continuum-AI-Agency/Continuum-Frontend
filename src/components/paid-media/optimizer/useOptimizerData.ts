@@ -16,6 +16,9 @@ import {
   type AccountEnrollment,
   AccountEnrollmentSchema,
   type ActionFamily,
+  type ActionRevertRequest,
+  type ActionRevertResponse,
+  ActionRevertResponseSchema,
   type AdAccount,
   AdAccountSchema,
   type AdDailyTrend,
@@ -2688,7 +2691,16 @@ const ApplyActionResultSchema = z
     reason: z.string().optional(),
     detail: z.string().optional(),
     legs: z
-      .array(z.object({ status: z.string(), error: z.string().optional() }).passthrough())
+      .array(
+        z
+          .object({
+            status: z.string(),
+            /** The leg's apply_audits row: what a same-day undo names. */
+            auditId: z.string().nullable().optional(),
+            error: z.string().optional(),
+          })
+          .passthrough(),
+      )
       .optional(),
   })
   .passthrough();
@@ -2736,6 +2748,37 @@ export function useApplyOptimizerActions() {
     mutationFn: applyOptimizerActions,
     onSuccess: (data) => {
       if (data && data.dryRun === false) {
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+      }
+    },
+  });
+}
+
+/** Undo one applied Google write (an /apply/actions leg's auditId) through
+ *  optimizer-apply-action-revert → service /apply/actions/revert. dryRun:true checks every guard
+ *  and Google's validate_only, writing nothing; dryRun:false writes the recorded before back.
+ *  authorized_by is never sent: the edge names the signed-in person. */
+async function revertOptimizerAction(
+  request: ActionRevertRequest,
+): Promise<ActionRevertResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-action-revert', {
+    body: {
+      portfolio_id: request.portfolio_id,
+      audit_id: request.audit_id,
+      dryRun: request.dryRun ?? true,
+    },
+  });
+  if (error) throw new Error('optimizer-apply-action-revert unreachable');
+  const parsed = ActionRevertResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export function useRevertOptimizerAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: revertOptimizerAction,
+    onSuccess: (data) => {
+      if (data?.ok && data.dryRun === false) {
         void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
       }
     },

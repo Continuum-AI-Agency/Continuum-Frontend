@@ -5,7 +5,12 @@
 // validate_only — so the person reads Google's verdict before anything is written; confirming
 // sends the same action for real. A TikTok write shows the button disabled and says why: the
 // service has no TikTok connection to write through.
+//
+// A live write that lands can be undone the same way (optimizer-apply-action-revert): the dialog
+// switches to the undo, asks Google to check it first, and writes the recorded before back only
+// on confirm. The Undo stays on the card after the dialog closes.
 
+import type { ActionRevertResponse } from '@continuum/contracts';
 import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -20,7 +25,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { type ApplyActionsResponse, useApplyOptimizerActions } from '../../useOptimizerData';
+import {
+  type ApplyActionsResponse,
+  useApplyOptimizerActions,
+  useRevertOptimizerAction,
+} from '../../useOptimizerData';
 import {
   type CardActionVerdict,
   type CardWrite,
@@ -30,9 +39,30 @@ import {
   previewVerdict,
   resultVerdict,
   TIKTOK_NOT_CONNECTED_NOTE,
+  undoAuditIdOf,
+  undoPreviewVerdict,
+  undoRestoresText,
+  undoResultVerdict,
 } from './platformCardActionModel';
 
 type Phase = 'checking' | 'checked' | 'applying' | 'done';
+type Mode = 'apply' | 'undo';
+
+type UndoState = {
+  phase: Phase;
+  preview: CardActionVerdict | null;
+  canConfirm: boolean;
+  result: CardActionVerdict | null;
+  restores: string | null;
+};
+
+const UNDO_START: UndoState = {
+  phase: 'checking',
+  preview: null,
+  canConfirm: false,
+  result: null,
+  restores: null,
+};
 
 const TONE_CLASS: Record<CardActionVerdict['tone'], string> = {
   ok: 'border-success/40 bg-success/10 text-success',
@@ -44,6 +74,15 @@ const UNREACHABLE: CardActionVerdict = {
   tone: 'failed',
   text: 'We could not reach the optimizer. Nothing was written.',
 };
+
+function Pending({ children }: { children: string }) {
+  return (
+    <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
+      <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+      {children}
+    </p>
+  );
+}
 
 function Verdict({ verdict, testId }: { verdict: CardActionVerdict; testId: string }) {
   return (
@@ -94,6 +133,10 @@ export function PlatformCardActionControl({
   onClose,
 }: PlatformCardActionControlProps) {
   const apply = useApplyOptimizerActions();
+  const revert = useRevertOptimizerAction();
+  const [mode, setMode] = useState<Mode>('apply');
+  const [undoAuditId, setUndoAuditId] = useState<string | null>(null);
+  const [undo, setUndo] = useState<UndoState>(UNDO_START);
   const [open, setOpenState] = useState(startOpen);
   const [phase, setPhase] = useState<Phase>('checking');
   const [preview, setPreview] = useState<CardActionVerdict | null>(null);
@@ -109,6 +152,7 @@ export function PlatformCardActionControl({
     });
 
   const check = async () => {
+    setMode('apply');
     setPhase('checking');
     setPreview(null);
     setResult(null);
@@ -126,11 +170,55 @@ export function PlatformCardActionControl({
   const confirm = async () => {
     setPhase('applying');
     try {
-      setResult(resultVerdict(await send(false), currency));
+      const response = await send(false);
+      setResult(resultVerdict(response, currency));
+      setUndoAuditId(undoAuditIdOf(response));
     } catch {
       setResult(UNREACHABLE);
     }
     setPhase('done');
+  };
+
+  const sendUndo = (auditId: string, dryRun: boolean): Promise<ActionRevertResponse | null> =>
+    revert.mutateAsync({ portfolio_id: portfolioId, audit_id: auditId, dryRun });
+
+  const checkUndo = async () => {
+    if (undoAuditId == null) return;
+    setMode('undo');
+    setUndo(UNDO_START);
+    try {
+      const response = await sendUndo(undoAuditId, true);
+      setUndo({
+        ...UNDO_START,
+        phase: 'checked',
+        preview: undoPreviewVerdict(response),
+        canConfirm: response?.result.status === 'would_revert',
+        restores: response
+          ? undoRestoresText(response.result.restores, response.result.kind, currency)
+          : null,
+      });
+    } catch {
+      setUndo({ ...UNDO_START, phase: 'checked', preview: UNREACHABLE });
+    }
+  };
+
+  const confirmUndo = async () => {
+    if (undoAuditId == null) return;
+    setUndo((state) => ({ ...state, phase: 'applying' }));
+    let verdict: CardActionVerdict;
+    try {
+      const response = await sendUndo(undoAuditId, false);
+      verdict = undoResultVerdict(response);
+      if (response?.result.status === 'reverted') setUndoAuditId(null);
+    } catch {
+      verdict = UNREACHABLE;
+    }
+    setUndo((state) => ({ ...state, phase: 'done', result: verdict }));
+  };
+
+  const openUndo = () => {
+    setOpenState(true);
+    void checkUndo();
   };
 
   const setOpen = (next: boolean) => {
@@ -148,69 +236,130 @@ export function PlatformCardActionControl({
   });
 
   const change = cardActionChange(write, currency);
+  const undoing = mode === 'undo';
 
   return (
-    <AlertDialog onOpenChange={setOpen} open={open}>
-      {startOpen ? null : (
-        <AlertDialogTrigger
-          render={
-            <Button
-              data-testid="platform-card-action"
-              size="sm"
-              type="button"
-              variant="secondary"
-            />
-          }
-        >
-          {cardActionLabel(write)}
-        </AlertDialogTrigger>
-      )}
-      <AlertDialogContent data-testid="platform-card-action-dialog">
-        <AlertDialogHeader>
-          <AlertDialogTitle>{cardActionTitle(write)}</AlertDialogTitle>
-          <AlertDialogDescription>
-            We ask the platform to check it first. Nothing is written until you confirm.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {change ? (
-          <p
-            className="text-foreground text-sm tabular-nums"
-            data-testid="platform-card-action-change"
+    <>
+      <AlertDialog onOpenChange={setOpen} open={open}>
+        {startOpen ? null : (
+          <AlertDialogTrigger
+            render={
+              <Button
+                data-testid="platform-card-action"
+                size="sm"
+                type="button"
+                variant="secondary"
+              />
+            }
           >
-            {change}
-          </p>
-        ) : null}
-        {phase === 'checking' ? (
-          <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
-            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-            Asking the platform to check it…
-          </p>
-        ) : null}
-        {preview && phase !== 'done' ? (
-          <Verdict testId="platform-card-action-preview" verdict={preview} />
-        ) : null}
-        {phase === 'applying' ? (
-          <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
-            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-            Applying…
-          </p>
-        ) : null}
-        {result ? <Verdict testId="platform-card-action-result" verdict={result} /> : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel>{phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
-          {phase === 'done' ? null : (
-            <Button
-              data-testid="platform-card-action-confirm"
-              disabled={!canConfirm || phase !== 'checked'}
-              onClick={() => void confirm()}
-              size="sm"
-              type="button"
-            >
-              Confirm
-            </Button>
+            {cardActionLabel(write)}
+          </AlertDialogTrigger>
+        )}
+        <AlertDialogContent data-testid="platform-card-action-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {undoing ? `Undo: ${cardActionTitle(write)}` : cardActionTitle(write)}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {undoing
+                ? 'We ask Google to check the undo first. Nothing is written until you confirm.'
+                : 'We ask the platform to check it first. Nothing is written until you confirm.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {undoing ? (
+            <UndoBody state={undo} />
+          ) : (
+            <>
+              {change ? (
+                <p
+                  className="text-foreground text-sm tabular-nums"
+                  data-testid="platform-card-action-change"
+                >
+                  {change}
+                </p>
+              ) : null}
+              {phase === 'checking' ? <Pending>Asking the platform to check it…</Pending> : null}
+              {preview && phase !== 'done' ? (
+                <Verdict testId="platform-card-action-preview" verdict={preview} />
+              ) : null}
+              {phase === 'applying' ? <Pending>Applying…</Pending> : null}
+              {result ? <Verdict testId="platform-card-action-result" verdict={result} /> : null}
+            </>
           )}
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {(undoing ? undo.phase : phase) === 'done' ? 'Close' : 'Cancel'}
+            </AlertDialogCancel>
+            {undoing ? (
+              undo.phase === 'done' ? null : (
+                <Button
+                  data-testid="platform-card-undo-confirm"
+                  disabled={!undo.canConfirm || undo.phase !== 'checked'}
+                  onClick={() => void confirmUndo()}
+                  size="sm"
+                  type="button"
+                >
+                  Confirm undo
+                </Button>
+              )
+            ) : phase === 'done' ? (
+              undoAuditId ? (
+                <Button
+                  data-testid="platform-card-action-undo"
+                  onClick={() => void checkUndo()}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Undo
+                </Button>
+              ) : null
+            ) : (
+              <Button
+                data-testid="platform-card-action-confirm"
+                disabled={!canConfirm || phase !== 'checked'}
+                onClick={() => void confirm()}
+                size="sm"
+                type="button"
+              >
+                Confirm
+              </Button>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {undoAuditId && !open ? (
+        <Button
+          data-testid="platform-card-undo"
+          onClick={openUndo}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          Undo
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
+function UndoBody({ state }: { state: UndoState }) {
+  return (
+    <>
+      {state.restores ? (
+        <p
+          className="text-foreground text-sm tabular-nums"
+          data-testid="platform-card-undo-restores"
+        >
+          {state.restores}
+        </p>
+      ) : null}
+      {state.phase === 'checking' ? <Pending>Asking Google to check the undo…</Pending> : null}
+      {state.preview && state.phase !== 'done' ? (
+        <Verdict testId="platform-card-undo-preview" verdict={state.preview} />
+      ) : null}
+      {state.phase === 'applying' ? <Pending>Undoing…</Pending> : null}
+      {state.result ? <Verdict testId="platform-card-undo-result" verdict={state.result} /> : null}
+    </>
   );
 }

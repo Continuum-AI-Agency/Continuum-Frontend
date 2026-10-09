@@ -13,9 +13,12 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { optimizerQueryKeys, useOptimizerMutations, useOptimizerPortfolios } = await import(
-  './useOptimizerData'
-);
+const {
+  optimizerQueryKeys,
+  useOptimizerMutations,
+  useOptimizerPortfolios,
+  useRevertOptimizerAction,
+} = await import('./useOptimizerData');
 
 function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -415,5 +418,77 @@ describe('runCycle outcomes', () => {
   it('treats runId:null with no skip reason as malformed, not as success', async () => {
     rpc.mockResolvedValueOnce({ data: { ...RAN, runId: null }, error: null } as never);
     expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
+  });
+});
+
+describe('useRevertOptimizerAction', () => {
+  const PORTFOLIO = '5aaf5931-7407-4940-aab6-52e914bced45';
+  const AUDIT = '0f0f0f0f-0000-4000-8000-000000000001';
+  const envelope = (status: string, dryRun: boolean) => ({
+    ok: status === 'would_revert' || status === 'reverted',
+    dryRun,
+    runId: '0c0c0c0c-0000-4000-8000-000000000001',
+    result: {
+      status,
+      audit_id: AUDIT,
+      revert_audit_id: null,
+      kind: 'set_budget',
+      ref: null,
+      restores: { minor: 117_900, currency: 'MXN' },
+    },
+  });
+
+  function renderRevert() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useRevertOptimizerAction(), { wrapper });
+    return { result, invalidate };
+  }
+
+  it('previews through the revert edge and never names who authorized it', async () => {
+    rpc.mockResolvedValueOnce({ data: envelope('would_revert', true), error: null } as never);
+    const { result, invalidate } = renderRevert();
+    let answer: unknown;
+    await act(async () => {
+      answer = await result.current.mutateAsync({
+        portfolio_id: PORTFOLIO,
+        audit_id: AUDIT,
+        dryRun: true,
+      });
+    });
+    expect(rpc).toHaveBeenCalledWith('optimizer-apply-action-revert', {
+      body: { portfolio_id: PORTFOLIO, audit_id: AUDIT, dryRun: true },
+    });
+    expect((answer as { result: { status: string } }).result.status).toBe('would_revert');
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the optimizer after a real undo lands', async () => {
+    rpc.mockResolvedValueOnce({ data: envelope('reverted', false), error: null } as never);
+    const { result, invalidate } = renderRevert();
+    await act(async () => {
+      await result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT, dryRun: false });
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: optimizerQueryKeys.root });
+  });
+
+  it('reads an undecodable reply as null and an edge error as unreachable', async () => {
+    rpc.mockResolvedValueOnce({ data: { result: { status: 'undone' } }, error: null } as never);
+    const { result } = renderRevert();
+    let answer: unknown = 'unset';
+    await act(async () => {
+      answer = await result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT });
+    });
+    expect(answer).toBeNull();
+
+    rpc.mockResolvedValueOnce({ data: null, error: new Error('500') } as never);
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT }),
+      ).rejects.toThrow('optimizer-apply-action-revert unreachable');
+    });
   });
 });

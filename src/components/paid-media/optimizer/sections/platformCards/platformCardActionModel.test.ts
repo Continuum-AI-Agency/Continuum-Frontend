@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { ActionRevertResponse } from '@continuum/contracts';
 import type { ApplyActionsResponse } from '../../useOptimizerData';
 import {
   ADD_GOOGLE_KEYWORD,
@@ -25,6 +26,10 @@ import {
   cardWriteOf,
   previewVerdict,
   resultVerdict,
+  undoAuditIdOf,
+  undoPreviewVerdict,
+  undoRestoresText,
+  undoResultVerdict,
   withTerms,
 } from './platformCardActionModel';
 
@@ -199,5 +204,237 @@ describe('resultVerdict', () => {
     ).toBe(
       'Other campaigns spend this budget too, so changing it would move them as well. Nothing was written.',
     );
+  });
+});
+
+describe('previewVerdict on a bid target past the per-cycle bound', () => {
+  it('names the bound the service read, and says it was not applied', () => {
+    const verdict = previewVerdict(
+      answer({
+        status: 'refused',
+        reason: 'preflight_failed:0:guardrail',
+        detail:
+          'bid_target_change: target_cpa_micros 35000000 to 25000000 moves 0.2857, over max_change_pct_per_cycle 0.2 (the default: the portfolio sets none)',
+      }),
+      'MXN',
+    );
+    expect(verdict).toEqual({
+      tone: 'refused',
+      text: 'Moves the Google Ads bid target more than 20% in a day — not applied. Nothing was written.',
+    });
+  });
+
+  it("reads the portfolio's own bound when it sets one", () => {
+    expect(
+      previewVerdict(
+        answer({
+          status: 'refused',
+          reason: 'guardrail',
+          detail:
+            'bid_target_change: target_roas 3 to 4 moves 0.3333, over max_change_pct_per_cycle 0.15',
+        }),
+        null,
+      ).text,
+    ).toBe(
+      'Moves the Google Ads bid target more than 15% in a day — not applied. Nothing was written.',
+    );
+  });
+
+  it('keeps the general limit copy for a guardrail that is not a bid target move', () => {
+    expect(
+      previewVerdict(
+        answer({
+          status: 'refused',
+          reason: 'guardrail',
+          detail: 'daily_change: 0.31 over max_change_pct_per_cycle 0.2',
+        }),
+        null,
+      ).text,
+    ).toBe("It goes past one of this portfolio's limits. Nothing was written.");
+  });
+
+  it("words Google's auto-apply refusal", () => {
+    expect(
+      resultVerdict(answer({ status: 'refused', reason: 'auto_apply_enabled' }, false), null).text,
+    ).toBe(
+      "Google's auto-apply recommendations are on for this account, so we do not write to it. Nothing was written.",
+    );
+  });
+});
+
+const AUDIT_ID = '0f0f0f0f-0000-4000-8000-000000000001';
+const RUN_ID = '0c0c0c0c-0000-4000-8000-000000000001';
+const campaignRef = (RAISE_GOOGLE_BUDGET as CardWrite).ref;
+
+const undoAnswer = (
+  result: Partial<ActionRevertResponse['result']> & Pick<ActionRevertResponse['result'], 'status'>,
+  dryRun = true,
+): ActionRevertResponse => ({
+  ok: result.status === 'would_revert' || result.status === 'reverted',
+  dryRun,
+  runId: RUN_ID,
+  result: {
+    audit_id: AUDIT_ID,
+    revert_audit_id: null,
+    kind: 'set_budget',
+    ref: campaignRef,
+    restores: { minor: 117_900, currency: 'MXN' },
+    ...result,
+  },
+});
+
+describe('undoAuditIdOf', () => {
+  const applied = (legs: unknown[], status = 'applied'): ApplyActionsResponse => ({
+    ok: true,
+    dryRun: false,
+    results: [{ status, kind: 'set_budget', legs } as ApplyActionsResponse['results'][number]],
+  });
+
+  it("names the first leg's audit row of an applied write", () => {
+    expect(undoAuditIdOf(applied([{ status: 'applied', auditId: AUDIT_ID }]))).toBe(AUDIT_ID);
+  });
+
+  it('offers no undo for anything but an applied write', () => {
+    expect(undoAuditIdOf(applied([{ status: 'applied', auditId: AUDIT_ID }], 'scheduled'))).toBe(
+      null,
+    );
+    expect(undoAuditIdOf(applied([{ status: 'applied', auditId: null }]))).toBeNull();
+    expect(undoAuditIdOf(applied([]))).toBeNull();
+    expect(undoAuditIdOf(null)).toBeNull();
+  });
+});
+
+describe('undoRestoresText', () => {
+  it('says the money it puts back', () => {
+    expect(undoRestoresText({ minor: 117_900, currency: 'MXN' }, 'set_budget', null)).toBe(
+      'Back to 1,179.00 MXN',
+    );
+  });
+
+  it('says the status it puts back', () => {
+    expect(undoRestoresText({ status: 'active' }, 'set_status', null)).toBe('Back to active');
+  });
+
+  it("names Google's bid setting, in currency units, never as the portfolio's goal", () => {
+    expect(
+      undoRestoresText({ field: 'target_cpa_micros', value: 35_000_000 }, 'set_bid_target', 'MXN'),
+    ).toBe('Google Ads bid target back to 35.00 MXN');
+    expect(undoRestoresText({ field: 'target_roas', value: 3.5 }, 'set_bid_target', null)).toBe(
+      'Google Ads target ROAS (bid setting) back to 350%',
+    );
+  });
+
+  it('counts the criteria an undo removes', () => {
+    expect(undoRestoresText({ removes: ['c/1~2'] }, 'add_keyword', null)).toBe('Removes 1 keyword');
+    expect(undoRestoresText({ removes: ['c/1~2', 'c/1~3'] }, 'add_negatives', null)).toBe(
+      'Removes 2 negative keywords',
+    );
+  });
+
+  it('says nothing when the service named nothing', () => {
+    expect(undoRestoresText(null, null, null)).toBeNull();
+  });
+});
+
+describe('undoPreviewVerdict', () => {
+  it('lets a person confirm only what Google accepted', () => {
+    expect(undoPreviewVerdict(undoAnswer({ status: 'would_revert' }))).toEqual({
+      tone: 'ok',
+      text: 'Google checked the undo (validate_only ok). Nothing changes until you confirm.',
+    });
+  });
+
+  it('says someone changed it since, with what the service read', () => {
+    expect(
+      undoPreviewVerdict(
+        undoAnswer({
+          status: 'conflict',
+          reason: 'conflict',
+          detail: 'target_cpa_micros reads 52000000; the write left 51000000',
+        }),
+      ),
+    ).toEqual({
+      tone: 'refused',
+      text: 'Changed in Google Ads since — not undone. target_cpa_micros reads 52000000; the write left 51000000.',
+    });
+  });
+
+  it('words each refusal', () => {
+    const refusal = (reason: string) =>
+      undoPreviewVerdict(undoAnswer({ status: 'refused', reason, detail: 'x' })).text;
+    expect(refusal('already_reverted')).toBe(
+      'This change was already undone. Nothing was written.',
+    );
+    expect(refusal('not_applied')).toBe(
+      'This change never landed, so there is nothing to undo. Nothing was written.',
+    );
+    expect(refusal('move_leg')).toBe(
+      'This change is one side of a budget move between platforms, which is undone as a whole, never alone. Nothing was written.',
+    );
+    expect(refusal('auto_apply_enabled')).toBe(
+      "Google's auto-apply recommendations are on for this account, so we do not write to it. Nothing was written.",
+    );
+    expect(refusal('guardrail')).toBe(
+      "Undoing it goes past one of this portfolio's limits — not undone. Nothing was written.",
+    );
+    expect(refusal('some_new_reason')).toBe('Some new reason. Nothing was written.');
+  });
+
+  it('names the Google Ads bid target when the undo itself would move it past the bound', () => {
+    expect(
+      undoPreviewVerdict(
+        undoAnswer({
+          status: 'refused',
+          reason: 'guardrail',
+          detail:
+            'bid_target_change: target_cpa_micros 25000000 to 35000000 moves 0.4, over max_change_pct_per_cycle 0.2',
+        }),
+      ).text,
+    ).toBe(
+      'Undoing it moves the Google Ads bid target more than 20% in a day — not undone. Nothing was written.',
+    );
+  });
+
+  it('says it could not read an answer when there is none', () => {
+    expect(undoPreviewVerdict(null)).toEqual({
+      tone: 'failed',
+      text: "We could not read the platform's answer. Nothing was written.",
+    });
+  });
+});
+
+describe('undoResultVerdict', () => {
+  it('says the undo landed', () => {
+    expect(undoResultVerdict(undoAnswer({ status: 'reverted' }, false))).toEqual({
+      tone: 'ok',
+      text: 'Undone. The previous value is back and recorded in Activity.',
+    });
+  });
+
+  it('says an attempted undo did not land, with why', () => {
+    expect(
+      undoResultVerdict(
+        undoAnswer(
+          { status: 'failed', reason: 'write_failed', detail: 'google:INTERNAL_ERROR' },
+          false,
+        ),
+      ),
+    ).toEqual({
+      tone: 'failed',
+      text: 'The undo did not land: google:INTERNAL_ERROR. Check Activity before trying again.',
+    });
+  });
+
+  it('never calls a preview an undo', () => {
+    expect(undoResultVerdict(undoAnswer({ status: 'would_revert' }, false)).tone).toBe('refused');
+  });
+
+  it('carries conflicts and refusals through', () => {
+    expect(
+      undoResultVerdict(undoAnswer({ status: 'conflict', reason: 'conflict' }, false)),
+    ).toEqual({ tone: 'refused', text: 'Changed in Google Ads since — not undone.' });
+    expect(
+      undoResultVerdict(undoAnswer({ status: 'refused', reason: 'already_reverted' }, false)).text,
+    ).toBe('This change was already undone. Nothing was written.');
   });
 });

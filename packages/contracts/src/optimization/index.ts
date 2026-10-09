@@ -4,7 +4,11 @@
 export * from './account-card-html';
 // The portfolio brief: the growth read and the one highest-impact thing to do today.
 export * from './account-chart';
+export * from './account-platform-metrics';
 export * from './account-strategy';
+// Optimizer multiplatform (vendored from the monorepo): actions, neutral snapshot, metrics, sheet attribution.
+export * from './action';
+export * from './action-revert';
 // One normalized row of public.continuum_action_stream, and the fold that makes a change
 // and its undo read as ONE entry. Shared by every surface that narrates what we did.
 export * from './action-stream';
@@ -14,6 +18,7 @@ export * from './adhoc-suggestions';
 // Setup advisor — what a selection will actually DO under an objective/budget/target, said
 // before the portfolio is created. Shared so an agent gets the same warnings a human does.
 export * from './advisor';
+export * from './attribution-sheet';
 // Audience proposals: the daily audience analysis for F2/F3 ad sets, its approval, and
 // what the worker read back from Meta after creating the new ad set.
 export * from './audience-proposals';
@@ -35,9 +40,14 @@ export * from './mcp';
 // Money in a sentence: the one symbol/code/digit rule for prose the Backend, the engine and a
 // prompted model compose, mirroring the Frontend's formatCurrency exactly.
 export * from './money';
+export * from './multiplatform-snapshot';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
+export * from './platform-card';
+// Platform-only signals the Google and TikTok rules read (search terms, keywords, bids, assets, creatives).
+export * from './platform-signals';
 export * from './portfolio-brief';
+export * from './portfolio-metrics';
 // The one reporting range: presets, custom windows, and how a spec resolves to dates.
 export * from './range';
 // The title (entity + figure + comparison) and the typed action beside it, for every
@@ -49,12 +59,3 @@ export * from './stored-account-read';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';
-// Optimizer multiplatform (vendored from the monorepo): actions, neutral snapshot, metrics, sheet attribution.
-export * from './action';
-export * from './multiplatform-snapshot';
-export * from './portfolio-metrics';
-export * from './attribution-sheet';
-export * from './account-platform-metrics';
-export * from './platform-card';
-// Platform-only signals the Google and TikTok rules read (search terms, keywords, bids, assets, creatives).
-export * from './platform-signals';

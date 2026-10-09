@@ -3,7 +3,14 @@
 // engine's OptimizerAction, unchanged — the card words it and never rebuilds it, so what a
 // person approves is exactly what the service runs.
 
-import type { NativeLevel, OptimizerAction, PlatformCard } from '@continuum/contracts';
+import type {
+  ActionRevertResponse,
+  ActionRevertResult,
+  NativeLevel,
+  OptimizerAction,
+  PlatformCard,
+  RevertRestores,
+} from '@continuum/contracts';
 import type { ApplyActionResult, ApplyActionsResponse } from '../../useOptimizerData';
 import { formatMinorExact } from '../crossPlatformMove/queuedMoveModel';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
@@ -166,6 +173,8 @@ const REFUSAL_WORDS: Readonly<Record<string, string>> = {
   allowlist_required: 'TikTok needs this account on an allowlist for this change',
   read_failed: 'we could not read the live value to check it',
   human_approval_required: 'a person has to approve it',
+  auto_apply_enabled:
+    "Google's auto-apply recommendations are on for this account, so we do not write to it",
 };
 
 /** Google's error codes a refusal carries ("google:CODE"), in a person's words. */
@@ -212,8 +221,25 @@ function googleDetailInWords(detail: string, currency: string | null): string | 
   return words.length > 0 ? words.join('; ') : null;
 }
 
+/** A bid target held by the per-cycle bound: the service's detail names the bound it read
+ *  ("over max_change_pct_per_cycle 0.2"), the portfolio's own or the 20% default. */
+function boundedMovePct(detail: string | undefined): number | null {
+  if (!detail?.startsWith('bid_target_change:')) return null;
+  const cap = /max_change_pct_per_cycle (\d+(?:\.\d+)?)/.exec(detail)?.[1];
+  return cap ? Math.round(Number(cap) * 100) : null;
+}
+
+function boundedMoveInWords(detail: string | undefined): string | null {
+  const pct = boundedMovePct(detail);
+  return pct == null
+    ? null
+    : `Moves the Google Ads bid target more than ${pct}% in a day — not applied.`;
+}
+
 function refusalInWords(result: ApplyActionResult, currency: string | null): string {
   const reason = bareReason(result.reason);
+  const bounded = reason === 'guardrail' ? boundedMoveInWords(result.detail) : null;
+  if (bounded) return bounded;
   const why = reason ? (REFUSAL_WORDS[reason] ?? codeInWords(reason)) : 'it was not accepted';
   const google =
     reason === 'validate_only_error' && result.detail
@@ -287,6 +313,130 @@ export function resultVerdict(
       return {
         tone: 'failed',
         text: `${result.detail ? `It failed: ${result.detail}.` : 'It failed.'} Check Activity before trying again.`,
+      };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The undo (same-day undo of an applied Google write, optimizer-apply-action-revert)
+// ---------------------------------------------------------------------------
+
+/** The apply_audits row an undo names: the first leg of a write that landed. */
+export function undoAuditIdOf(response: ApplyActionsResponse | null): string | null {
+  const result = response?.results[0];
+  if (result?.status !== 'applied') return null;
+  return result.legs?.[0]?.auditId ?? null;
+}
+
+/** The value the undo puts back: "Back to …", or for a bid target "Google Ads bid target back to …". */
+export function undoRestoresText(
+  restores: RevertRestores | null,
+  kind: ActionRevertResult['kind'],
+  currency: string | null,
+): string | null {
+  if (restores == null) return null;
+  if ('minor' in restores) return `Back to ${formatMinorExact(restores.minor, restores.currency)}`;
+  if ('status' in restores) return `Back to ${restores.status}`;
+  // Google's bid setting, never the portfolio's CPA goal: the copy names it as Google's.
+  if ('field' in restores) {
+    return restores.field === 'target_cpa_micros'
+      ? `Google Ads bid target back to ${bidTargetLabel(restores.value / MICROS, 'target_cpa', currency)}`
+      : `Google Ads target ROAS (bid setting) back to ${bidTargetLabel(restores.value, 'target_roas', currency)}`;
+  }
+  const count = restores.removes.length;
+  const noun = kind === 'add_negatives' ? 'negative keyword' : 'keyword';
+  return `Removes ${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** Why the service would not undo it, in a person's words (contracts ACTION_REVERT_REFUSALS
+ *  plus the platform's own refusals). */
+const UNDO_REFUSAL_WORDS: Readonly<Record<string, string>> = {
+  already_reverted: 'This change was already undone.',
+  not_applied: 'This change never landed, so there is nothing to undo.',
+  move_leg:
+    'This change is one side of a budget move between platforms, which is undone as a whole, never alone.',
+  auto_apply_enabled: `${REFUSAL_WORDS.auto_apply_enabled}.`,
+  guardrail: "Undoing it goes past one of this portfolio's limits — not undone.",
+  audit_not_found: 'We could not find this change on this portfolio.',
+  unsupported_platform: 'This change is undone from its own platform, not here.',
+  is_a_revert: 'This change is itself an undo.',
+  no_receipt: 'The platform kept no receipt for this change, so it cannot be undone here.',
+  unreadable_action: 'We could not read what this change did, so it cannot be undone here.',
+};
+
+function undoRefusalInWords(reason: string | undefined, detail: string | undefined): string {
+  const bare = bareReason(reason);
+  if (bare == null) return 'It was not accepted.';
+  const pct = bare === 'guardrail' ? boundedMovePct(detail) : null;
+  if (pct != null) {
+    return `Undoing it moves the Google Ads bid target more than ${pct}% in a day — not undone.`;
+  }
+  return UNDO_REFUSAL_WORDS[bare] ?? `${capitalized(codeInWords(bare))}.`;
+}
+
+function withPeriod(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function undoConflictInWords(detail: string | undefined): string {
+  const lead = 'Changed in Google Ads since — not undone.';
+  return detail ? `${lead} ${withPeriod(detail)}` : lead;
+}
+
+const UNREADABLE_UNDO = "We could not read the platform's answer.";
+
+/** What the undo's dry run found, before anyone confirms. */
+export function undoPreviewVerdict(response: ActionRevertResponse | null): CardActionVerdict {
+  const result = response?.result;
+  if (!result) return { tone: 'failed', text: `${UNREADABLE_UNDO} ${NOTHING_WRITTEN}` };
+  switch (result.status) {
+    case 'would_revert':
+      return {
+        tone: 'ok',
+        text: 'Google checked the undo (validate_only ok). Nothing changes until you confirm.',
+      };
+    case 'reverted':
+      return { tone: 'ok', text: 'This change was already undone.' };
+    case 'conflict':
+      return { tone: 'refused', text: undoConflictInWords(result.detail) };
+    case 'refused':
+      return {
+        tone: 'refused',
+        text: `${undoRefusalInWords(result.reason, result.detail)} ${NOTHING_WRITTEN}`,
+      };
+    case 'failed':
+      return {
+        tone: 'failed',
+        text: `${result.detail ? `The check failed: ${result.detail}.` : 'The check failed.'} ${NOTHING_WRITTEN}`,
+      };
+  }
+}
+
+/** What the real undo did. */
+export function undoResultVerdict(response: ActionRevertResponse | null): CardActionVerdict {
+  const result = response?.result;
+  if (!result) {
+    return { tone: 'failed', text: `${UNREADABLE_UNDO} Check Activity before trying again.` };
+  }
+  switch (result.status) {
+    case 'reverted':
+      return { tone: 'ok', text: 'Undone. The previous value is back and recorded in Activity.' };
+    case 'would_revert':
+      return {
+        tone: 'refused',
+        text: `The service only checked the undo and wrote nothing. ${NOTHING_WRITTEN}`,
+      };
+    case 'conflict':
+      return { tone: 'refused', text: undoConflictInWords(result.detail) };
+    case 'refused':
+      return {
+        tone: 'refused',
+        text: `${undoRefusalInWords(result.reason, result.detail)} ${NOTHING_WRITTEN}`,
+      };
+    case 'failed':
+      return {
+        tone: 'failed',
+        text: `${result.detail ? `The undo did not land: ${result.detail}.` : 'The undo did not land.'} Check Activity before trying again.`,
       };
   }
 }
