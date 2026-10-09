@@ -1602,11 +1602,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
         const ordered = sequence.every(
           (node, i) => i === 0 || follows(sequence[i - 1] ?? null, node),
         );
-        // A tile's own platform breakdown line shares the prefix; it is part of a tile, not one.
+        // The grid's direct children are the tiles. A tile's own caption carries a `tile-`
+        // prefixed test id too (KpiTile's `tile-breakdown`, 2026-10-05), so a descendant query
+        // counted a caption as a seventh tile with no state.
         const tiles = [
-          ...(inner('account-tiles')?.querySelectorAll(
-            '[data-testid^="tile-"]:not([data-testid="tile-breakdown"])',
-          ) ?? []),
+          ...(inner('account-tiles')?.querySelectorAll(':scope > [data-testid^="tile-"]') ?? []),
         ];
         const tileStates = tiles.map((tile) => tile.getAttribute('data-state'));
         const tileBorders = tiles.map((tile) =>

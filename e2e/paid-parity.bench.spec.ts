@@ -67,11 +67,20 @@ test.use({ channel: 'chrome' });
 
 const { serviceRoleKey } = pinProdSupabase();
 
-// The same verified production pair optimizer:e2e:bench browses: the AGENCY "Easy Fit" row
+// The same verified production pair optimizer:e2e:bench browses: an "Easy Fit" brand row
 // owns the live portfolios; the bench user is its member. A mismatched (brand, member) pair
-// reads an EMPTY world and grades nothing.
+// reads an EMPTY world and grades nothing — and the Optimizer shell then lands on onboarding,
+// with no tab bar and no tiles, so every locator below reads as "missing".
+//
+// Easy Fit has TWO brand profiles on the same Meta account (Backend scripts/_bench/accounts.ts:
+// `easyfitVivo47` and `easyFit`) and the portfolios have already moved between them once
+// (2026-10-09: the agency row 148583e0 owned none, 6f597f42 owned all four). Which row owns
+// them today is read at run time, not pinned.
 const OWNER_EMAIL = 'mercadotecniavivo@gmail.com';
-const AGENCY_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
+const EASY_FIT_BRAND_IDS = [
+  '148583e0-5538-462b-8d3a-acd25b80344e',
+  '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64',
+] as const;
 /** Owns the live portfolios and their ad sets. */
 const PORTFOLIO_ACCOUNT_ID = '521903353286118';
 
@@ -95,7 +104,10 @@ const admin: SupabaseClient = createClient(PROD_SUPABASE_URL, serviceRoleKey, {
  * re-reads the whole file, so the LAST envelope on stdout is the cumulative one.
  */
 type Grade = 'PASS' | 'WARN' | 'SKIP' | 'FAIL';
-type Entry = { step: string; grade: Grade; detail?: string } | { note: string };
+type Entry =
+  | { step: string; grade: Grade; detail?: string }
+  | { note: string }
+  | { fact: 'account-currency'; value: string };
 const LEDGER_PATH =
   process.env.PAID_PARITY_RUN_LEDGER ?? join(tmpdir(), `paid-parity-${process.pid}.jsonl`);
 const benchStartedAt = process.env.PAID_PARITY_RUN_STARTED_AT ?? new Date().toISOString();
@@ -118,6 +130,18 @@ function record(step: string, grade: Grade, detail?: string): void {
   console.log(`${glyph} ${grade.padEnd(4)} ${step}${detail ? ` — ${detail}` : ''}`);
 }
 
+/** A fact read once (the account's currency on the wire) that every later surface grades
+ *  against. In the ledger, not in module state: the worker that read it is replaced after a
+ *  failed test, and the next worker must not grade money figures against 'none'. */
+function rememberAccountCurrency(value: string): void {
+  persist({ fact: 'account-currency', value });
+}
+
+function accountCurrencyOnRecord(): string | 'none' {
+  const fact = entries().find((e): e is { fact: 'account-currency'; value: string } => 'fact' in e);
+  return fact?.value ?? 'none';
+}
+
 function note(message: string): void {
   persist({ note: message });
   console.log(`· ${message}`);
@@ -125,7 +149,7 @@ function note(message: string): void {
 
 function printBenchEnvelope(): void {
   const all = entries();
-  const graded = all.filter((e): e is Exclude<Entry, { note: string }> => 'step' in e);
+  const graded = all.filter((e): e is Extract<Entry, { step: string }> => 'step' in e);
   const notes = all.filter((e): e is { note: string } => 'note' in e).map((e) => e.note);
   const counts = { pass: 0, warn: 0, skip: 0, fail: 0 };
   for (const result of graded) {
@@ -875,7 +899,6 @@ let benchUserId: string;
 let originalActiveBrandId: string | null = null;
 let context: BrowserContext;
 let page: Page;
-let accountCurrency: string | 'none' = 'none';
 
 async function readActiveBrandPreference(): Promise<string | null> {
   const { data, error } = await admin
@@ -886,6 +909,37 @@ async function readActiveBrandPreference(): Promise<string | null> {
     .maybeSingle();
   if (error) throw new Error(`[paid-parity] preference read failed: ${error.message}`);
   return (data as { active_brand_id?: string } | null)?.active_brand_id ?? null;
+}
+
+/** The Easy Fit brand row that owns ENROLLED portfolios on the pinned account today, and
+ *  that the bench user is a member of — the two facts the whole bench stands on. Resolved
+ *  through the same RPC the page calls, so the bench pins the world the screen will read. */
+async function resolvePortfolioBrand(): Promise<string> {
+  const seen: string[] = [];
+  for (const brandId of EASY_FIT_BRAND_IDS) {
+    const { data: membership, error: memberError } = await admin
+      .schema('brand_profiles')
+      .from('permissions')
+      .select('user_id')
+      .eq('brand_profile_id', brandId)
+      .eq('user_id', benchUserId)
+      .limit(1);
+    if (memberError) throw new Error(`[paid-parity] membership read failed: ${memberError.message}`);
+    const { data, error } = await admin.rpc('optimizer_list_portfolios', { p_brand_id: brandId });
+    if (error) throw new Error(`[paid-parity] optimizer_list_portfolios failed: ${error.message}`);
+    const enrolled = rows(data).filter(
+      (row) =>
+        bareAccountId(str(row.ad_account_id) ?? '') === PORTFOLIO_ACCOUNT_ID &&
+        (num(row.adset_count) ?? 0) > 0,
+    );
+    const member = (membership ?? []).length > 0;
+    seen.push(`${brandId.slice(0, 8)}: ${enrolled.length} enrolled, member=${member}`);
+    if (member && enrolled.length > 0) return brandId;
+  }
+  throw new Error(
+    `PREMISE DRIFT: no Easy Fit brand both owns enrolled portfolios on ${PORTFOLIO_ACCOUNT_ID} ` +
+      `and has ${OWNER_EMAIL} as a member. Read: ${seen.join(' | ')}`,
+  );
 }
 
 async function selectBrand(brandId: string): Promise<void> {
@@ -982,6 +1036,7 @@ function gradeSurface(surface: string, nodes: FigureNode[]): boolean {
   const money = nodes.filter(
     (n) => n.unit === 'currency' || n.unit === 'per-period' || n.unit === 'per-month',
   );
+  const accountCurrency = accountCurrencyOnRecord();
   const foreign = money.filter((n) => n.currency !== accountCurrency);
   record(
     `${surface}.currency`,
@@ -1045,8 +1100,11 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     storageState = minted.state;
     benchUserId = minted.userId;
     originalActiveBrandId = await readActiveBrandPreference();
-    await selectBrand(AGENCY_BRAND_ID);
-    console.log(`[paid-parity] active brand before: ${originalActiveBrandId ?? '(none)'}`);
+    const portfolioBrandId = await resolvePortfolioBrand();
+    await selectBrand(portfolioBrandId);
+    console.log(
+      `[paid-parity] active brand before: ${originalActiveBrandId ?? '(none)'} · pinned: ${portfolioBrandId}`,
+    );
 
     context = await browser.newContext({ storageState });
     context.on('request', (request) => {
@@ -1059,6 +1117,22 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     });
     page = await context.newPage();
     await captureOptimizerReads(page);
+  });
+
+  // A test that dies before its first grade — a locator that never appears, a capture that
+  // never lands — used to leave the ledger empty, and an empty ledger printed BENCH GREEN
+  // under the red Playwright summary. The test's own outcome is a graded step, so the
+  // envelope can never say less than the run did.
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright insists the first parameter is a fixture pattern, and this hook needs none.
+  test.afterEach(async ({}, testInfo) => {
+    const title = testInfo.title.split(' — ')[0] ?? testInfo.title;
+    if (testInfo.status === 'skipped') {
+      record(`${title}.test`, 'SKIP', testInfo.annotations.find((a) => a.type === 'skip')?.description);
+      return;
+    }
+    const ok = testInfo.status === testInfo.expectedStatus;
+    const reason = testInfo.errors[0]?.message?.split('\n')[0];
+    record(`${title}.test`, ok ? 'PASS' : 'FAIL', ok ? undefined : `${testInfo.status}: ${reason ?? 'no message'}`);
   });
 
   test.afterAll(async () => {
@@ -1083,7 +1157,8 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
       (row) => bareAccountId(str(row.account_id) ?? '') === PORTFOLIO_ACCOUNT_ID,
     );
     const code = (str(account?.currency) ?? '').trim().toUpperCase();
-    accountCurrency = /^[A-Z]{3}$/.test(code) ? code : 'none';
+    const accountCurrency = /^[A-Z]{3}$/.test(code) ? code : 'none';
+    rememberAccountCurrency(accountCurrency);
     note(
       `account ${PORTFOLIO_ACCOUNT_ID} currency on the wire: ${str(account?.currency) ?? 'null'} → ${accountCurrency}`,
     );

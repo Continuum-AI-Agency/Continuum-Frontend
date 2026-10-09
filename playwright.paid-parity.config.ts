@@ -26,8 +26,10 @@ process.env.PLAYWRIGHT_BASE_URL = baseURL;
 // Playwright tears the worker down after a failed test and starts a fresh one, so grades
 // kept in module state would vanish with it. Every worker appends to ONE run-scoped file
 // and the envelope is re-read from it, so the last envelope printed is the cumulative one.
-process.env.PAID_PARITY_RUN_STARTED_AT = new Date().toISOString();
-process.env.PAID_PARITY_RUN_LEDGER = join(tmpdir(), `paid-parity-${Date.now()}.jsonl`);
+// Every worker evaluates this file again: an unconditional assignment gave each worker its own
+// ledger and its own clock, and the envelope stopped being cumulative the moment a test failed.
+process.env.PAID_PARITY_RUN_STARTED_AT ??= new Date().toISOString();
+process.env.PAID_PARITY_RUN_LEDGER ??= join(tmpdir(), `paid-parity-${Date.now()}.jsonl`);
 
 export default defineConfig({
   testDir: './e2e',
