@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   clipOfSlot,
   duplicateSlotRoles,
+  templateColourFieldsRequestSchema,
   templateSlotAsRenderVariable,
   templateSlotDefaultFitsKind,
   templateSourceSlotEditRequestSchema,
@@ -180,5 +181,27 @@ describe('templateSourceSlotEditRequestSchema', () => {
       slots: [{ slotKey: 'a', role: 'headline' }],
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe('templateColourFieldsRequestSchema', () => {
+  const brandId = '11111111-1111-4111-8111-111111111111';
+  it('takes public render keys for one template', () => {
+    expect(
+      templateColourFieldsRequestSchema.safeParse({
+        brandId,
+        templateKey: '184',
+        keys: ['template_field_3'],
+      }).success,
+    ).toBe(true);
+  });
+  it('refuses a private physical field name and a request with no brand', () => {
+    expect(
+      templateColourFieldsRequestSchema.safeParse({ brandId, templateKey: '184', keys: ['f_ab12'] })
+        .success,
+    ).toBe(false);
+    expect(
+      templateColourFieldsRequestSchema.safeParse({ templateKey: '184', keys: [] }).success,
+    ).toBe(false);
   });
 });

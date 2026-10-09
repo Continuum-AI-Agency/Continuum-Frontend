@@ -11,7 +11,7 @@
 // needs no fonts and turn a pre-flight refusal into a blank render. Intent is not a parse.
 
 import { z } from 'zod';
-import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
+import { apiRenderVariableKeySchema, apiRenderVariableKindSchema } from '../ai-studio/api-renders';
 import { slotRoleSchema } from '../ai-studio/slot-roles';
 
 /**
@@ -119,6 +119,26 @@ export const templateSourceSlotEditRequestSchema = z
   })
   .strict();
 export type TemplateSourceSlotEditRequest = z.infer<typeof templateSourceSlotEditRequestSchema>;
+
+/**
+ * The render fields of one published template a person marked as colours.
+ *
+ * Keyed by the RENDER variable, not a parse slot: the parse never contains a colour port, so
+ * `template_field_3` exists only in the published contract. Only promotes text to colour — a
+ * colour the forge detected is never in this list and cannot be turned off here.
+ */
+export const templateColourFieldsSchema = z
+  .object({
+    templateKey: z.string().min(1).max(64),
+    keys: z.array(apiRenderVariableKeySchema).max(200),
+  })
+  .strict();
+export type TemplateColourFields = z.infer<typeof templateColourFieldsSchema>;
+
+export const templateColourFieldsRequestSchema = templateColourFieldsSchema
+  .extend({ brandId: z.string().uuid() })
+  .strict();
+export type TemplateColourFieldsRequest = z.infer<typeof templateColourFieldsRequestSchema>;
 
 /**
  * Two slots may not claim one role.
