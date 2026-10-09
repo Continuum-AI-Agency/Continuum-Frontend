@@ -66,6 +66,7 @@
     "perfplus:visual:bench": "playwright test --config playwright.perfplus-visual.config.ts --workers=1",
     "perfplus:tiktok:honesty:ui:bench": "playwright test --config playwright.perfplus-tiktok.config.ts --workers=1",
     "perfplus:crawler:bench": "playwright test --config playwright.perfplus-crawler.config.ts --workers=1",
+    "perfplus:failures:bench": "playwright test --config playwright.perfplus-failures.config.ts --workers=1",
     "perfplus:ui:bench": "playwright test --config playwright.perfplus.config.ts --workers=1",
     "paid:parity:e2e:bench": "playwright test --config playwright.paid-parity.config.ts --workers=1",
     "integrations:google-assets-render:e2e:bench": "bun run src/lib/integrations/google-assets-render.bench.ts",
