@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { rpcFailure } from './rpcFailure';
 
 // Collection-scoped roles (media.collection_members). Everything runs on the caller's own
 // session: RLS decides who can read a member list (a restricted collection's list is its
@@ -16,27 +17,6 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 // manager). No service role — the database is the gate, this route only relays.
 
 type MemberRow = { user_id: string; role: string; added_by: string | null; created_at: string };
-
-function rpcFailure(error: { code?: string; message: string }): Response {
-  const status =
-    error.code === '42501'
-      ? 403
-      : error.code === 'P0002'
-        ? 404
-        : error.code === '22023'
-          ? 422
-          : 500;
-  if (status === 500) console.error('[library/collections/members] write failed', error);
-  const message =
-    status === 403
-      ? 'Only a brand owner, admin or the collection manager can change access'
-      : status === 404
-        ? 'Collection not found'
-        : status === 422
-          ? 'That person is not a member of this brand'
-          : 'Could not change access';
-  return NextResponse.json({ error: message }, { status });
-}
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
