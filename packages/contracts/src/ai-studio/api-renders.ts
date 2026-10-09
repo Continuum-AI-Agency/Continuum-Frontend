@@ -17,8 +17,13 @@ export const apiRenderMasterDownloadRequestSchema = z
     brandId: z.string().uuid(),
     outputId: z.string().min(1),
     format: z.enum(['mov', 'mxf']),
+    remaster: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((request) => request.remaster !== true || request.format === 'mxf', {
+    message: 'Remaster is available for MXF only',
+    path: ['remaster'],
+  });
 export type ApiRenderMasterDownloadRequest = z.infer<typeof apiRenderMasterDownloadRequestSchema>;
 export const apiRenderMasterDownloadResponseSchema = z
   .object({ path: z.string().startsWith('/') })
@@ -29,6 +34,42 @@ export const apiRenderMasterDownloadStatusSchema = z
     status: z.enum(['processing', 'ready', 'failed']),
   })
   .strict();
+/** Measured file facts; null means the probe could not establish that fact. */
+export const apiRenderFileSpecsSchema = z
+  .object({
+    outputId: z.string().min(1),
+    status: z.enum(['measured', 'unavailable']),
+    video: z
+      .object({
+        codec: z.string().nullable(),
+        profile: z.string().nullable(),
+        frameRate: z.number().positive().nullable(),
+        frameRateRational: z.string().nullable(),
+        bitDepth: z.number().int().positive().nullable(),
+      })
+      .strict()
+      .nullable(),
+    audioStreams: z
+      .array(
+        z
+          .object({
+            index: z.number().int().nonnegative(),
+            codec: z.string().nullable(),
+            channels: z.number().int().positive().nullable(),
+            sampleRate: z.number().int().positive().nullable(),
+            bitDepth: z.number().int().positive().nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+    probedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+export type ApiRenderFileSpecs = z.infer<typeof apiRenderFileSpecsSchema>;
+
+export const apiRenderFileSpecsRoute = (jobId: string, outputId: string) =>
+  `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}/outputs/${encodeURIComponent(outputId)}/specs`;
+
 export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
 export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
 export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
@@ -553,6 +594,7 @@ export const encodeSettingsSchema = z
     audio: z
       .object({
         enabled: z.boolean().optional(),
+        layout: z.enum(['stereo', 'broadcast-4x-aes3']).optional(),
         codec: z.enum(['aac', 'pcm_s16le', 'pcm_s24le']).optional(),
         bitrate: z
           .string()
@@ -619,6 +661,7 @@ export type ApiRenderEncodeOverride = EncodeBlock;
 export const ENCODE_SETTING_KEYS = [
   'fps',
   'audio.enabled',
+  'audio.layout',
   'audio.codec',
   'audio.bitrate',
   'audio.sampleRate',
@@ -721,7 +764,7 @@ export const ENCODE_STYLES = [
   {
     id: 'broadcast',
     label: 'Broadcast',
-    description: 'MXF (DNxHR HQ, OP1a, 48 kHz PCM) plus the MP4.',
+    description: 'MXF (DNxHR HQ, OP1a, four mono AES3 tracks, 24-bit / 48 kHz) plus the MP4.',
     files: ['mp4', 'mxf'],
   },
   {

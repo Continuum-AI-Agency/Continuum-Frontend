@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import type { EncodeSettings } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   cleanup,
@@ -8,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   chooseOption,
   installPickerDomGlobals,
@@ -69,7 +70,9 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 // `request` too: other modules import the bare function, and Bun shares this mock across a multi-file run.
 mock.module('@/lib/api/http', () => ({ http: { request }, request }));
 
-const { OutputSettingsPanel } = await import('./OutputSettingsPanel');
+const { OutputSettingsPanel, EncodeSettingsFields, setEncodeLeaves } = await import(
+  './OutputSettingsPanel'
+);
 
 installPickerDomGlobals();
 
@@ -105,6 +108,102 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('OutputSettingsPanel', () => {
+  test('unset inherited and own settings can add Broadcast without a null dereference', async () => {
+    function EmptySettings() {
+      const [settings, setSettings] = useState<EncodeSettings | undefined>(undefined);
+      return (
+        <EncodeSettingsFields
+          settings={settings}
+          inherited={[{ container: 'mp4', settings: undefined }]}
+          onSet={(changes) => setSettings((previous) => setEncodeLeaves(previous, changes))}
+        />
+      );
+    }
+    render(<EmptySettings />);
+    fireEvent.click(screen.getByText('MXF (DNxHR)'));
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+  });
+
+  test('Stereo stays dormant when MXF is turned off and saving the other files remains possible', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
+    fireEvent.click(screen.getByText('MXF (DNxHR)'));
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+    openSelect('MXF audio layout');
+    chooseOption('Stereo');
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Stereo'));
+    fireEvent.click(screen.getByText('MXF (DNxHR)'));
+    expect(screen.queryByRole('combobox', { name: 'MXF audio layout' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: { default: { fps: 25 }, outputs: { square: { audio: { layout: 'stereo' } } } },
+        },
+      },
+    ]);
+  });
+  test('MXF defaults to Broadcast independently of inherited channels and saves explicit Stereo', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      encode: {
+        ...contract().encode,
+        stored: {
+          default: { audio: { channels: 2 }, files: { mp4: false, mov: false, mxf: true } },
+        },
+      },
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+    expect(screen.queryByRole('combobox', { name: 'Channels' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Audio codec' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Sample rate' })).toBeNull();
+    expect(screen.getByText(/24-bit PCM at 48 kHz/)).toBeTruthy();
+    openSelect('MXF audio layout');
+    chooseOption('Stereo');
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Stereo'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: {
+            default: {
+              audio: { channels: 2, layout: 'stereo' },
+              files: { mp4: false, mov: false, mxf: true },
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  test('turning MXF audio off explains that the file will have no audio tracks', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      encode: {
+        ...contract().encode,
+        stored: { default: { files: { mp4: false, mov: false, mxf: true } } },
+      },
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+    openSelect('Audio');
+    chooseOption('Off');
+    await waitFor(() =>
+      expect(
+        screen.getByText('MXF audio is off. The file will have no audio tracks.'),
+      ).toBeTruthy(),
+    );
+  });
   test('reuses the contract already loaded by the template detail', async () => {
     const client = new QueryClient();
     client.setQueryData(forgeQueryKeys.contract('brand-1', null, '133'), contract());
