@@ -1,6 +1,6 @@
 'use client';
 
-import type { ElementRecord } from '@continuum/contracts';
+import { type ElementRecord, isElementPersonCategory } from '@continuum/contracts';
 import { Layers } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/referenceDrop';
@@ -14,6 +14,10 @@ export function ElementCard({
   previewUrl?: string;
   onSelect: (id: string) => void;
 }) {
+  // A character sheet is portrait: its top is the name, the profile and the turnaround.
+  const fit = isElementPersonCategory(element.category)
+    ? 'object-cover object-top'
+    : 'object-cover';
   return (
     <HoverCard>
       <HoverCardTrigger
@@ -37,7 +41,7 @@ export function ElementCard({
       >
         <div className="flex aspect-video w-full items-center justify-center bg-muted/30">
           {previewUrl ? (
-            <img src={previewUrl} alt={element.name} className="h-full w-full object-cover" />
+            <img src={previewUrl} alt={element.name} className={`h-full w-full ${fit}`} />
           ) : (
             <Layers className="size-5 text-muted-foreground" />
           )}
@@ -49,7 +53,7 @@ export function ElementCard({
       </HoverCardTrigger>
       <HoverCardContent className="rounded-lg shadow-none">
         {previewUrl ? (
-          <img src={previewUrl} alt="" className="mb-3 aspect-video w-full object-cover" />
+          <img src={previewUrl} alt="" className={`mb-3 aspect-video w-full ${fit}`} />
         ) : null}
         <p className="text-sm font-medium">{element.name}</p>
         <p className="mt-1 text-xs text-muted-foreground">

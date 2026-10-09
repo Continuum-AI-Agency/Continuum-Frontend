@@ -32,6 +32,7 @@ import {
   type ElementCategory,
   type ElementRecord,
   elementDefaultReferenceAssetId,
+  isElementPersonCategory,
   useElementMutations,
   useElements,
   useSignedAssetUrls,
@@ -109,7 +110,13 @@ export function ElementsPanel({
                 mutations.create.mutate(
                   { ...input, facts: [] },
                   {
-                    onSuccess: (created) => setView({ kind: 'detail', elementId: created.id }),
+                    onSuccess: (created) => {
+                      setView({ kind: 'detail', elementId: created.id });
+                      // A person is made as their character sheet: it starts now and becomes
+                      // the Element's reference when it lands (the server pins a first sheet).
+                      if (isElementPersonCategory(created.category))
+                        mutations.generateReference.mutate(created.id);
+                    },
                   },
                 )
               }
