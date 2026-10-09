@@ -1010,6 +1010,15 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
     ]);
   });
 
+  // JG-figure-tokenizer-gaps: a serialized series is two figures, and a date is none.
+  it('reads each figure inside a nested-array string, not one token across the comma', () => {
+    expect(numbersInText('[15986.35,0]')).toEqual([15986.35, 0]);
+  });
+
+  it('reads no figure out of an ISO date', () => {
+    expect(numbersInText('date_start 2026-08-25, date_stop 2026-08-25')).toEqual([]);
+  });
+
   const templateFigure = (id: string, value: number | null, unit: string, currency = null) => ({
     id,
     label: `label ${id}`,

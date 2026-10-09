@@ -99,3 +99,27 @@ describe('cpaHeatFill', () => {
     expect(fill).not.toMatch(/#[0-9a-f]{3,6}/i);
   });
 });
+
+describe('maxCiUpperBound — the plausibility ceiling (UX-chart-scale-one-event-interval)', () => {
+  // Since ac525e7 costInterval is Garwood's exact interval: hi is finite from ONE event, at
+  // 39.5× the estimate. A cost per result is spend ÷ a count of at least one, so no figure on
+  // the axis may exceed the spend behind the interval — cpa × events — and a 1-event ad set
+  // must not stretch every other bar in the row to a fortieth of its width.
+  const spend = 339.7;
+  const oneEvent = item({ cpa: spend, hi: spend * 39.5, events: 1 });
+  const twentyFiveEvents = item({ cpa: 50, hi: 75, events: 25 });
+
+  it('a 1-event interval scales the row by its spend, not by its 39.5× upper bound', () => {
+    expect(maxCiUpperBound([oneEvent])).toBeLessThanOrEqual(spend);
+  });
+
+  it('a well-measured interval keeps scaling by its upper bound', () => {
+    expect(maxCiUpperBound([twentyFiveEvents])).toBe(75);
+  });
+
+  it('one noisy ad set does not amputate the measured ones beside it', () => {
+    const max = maxCiUpperBound([oneEvent, twentyFiveEvents]);
+    expect(max).toBeLessThanOrEqual(spend);
+    expect(pct(75, max)).toBeGreaterThan(20);
+  });
+});
