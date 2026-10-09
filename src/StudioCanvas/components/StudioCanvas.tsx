@@ -59,6 +59,7 @@ import { buildReferenceNodes, type ReferenceMediaItem } from '../utils/buildRefe
 import { computeReadyNodeIds, computeStyledEdges } from '../utils/edgeStyling';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
+import { arrivalFrameKey } from '../utils/frameArrival';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
@@ -163,14 +164,24 @@ function Flow({
   const seedFocus = organicPlannerSeed ? seedFocusNodeId(organicPlannerSeed) : undefined;
   const targetNodeId = focusNodeId ?? seedFocus;
 
+  // One automatic frame per target, and per arrival batch. A position change used
+  // to be part of the key, so dragging the focused node — or any later edit while
+  // ?focusNodeId= was still in the URL — animated the camera back to its midpoint.
   const focusedNodeRef = useRef<string | null>(null);
+  const framedArrivalRef = useRef<string | null>(null);
+  const cameraRoomRef = useRef(activeRoomId);
+  useEffect(() => {
+    if (cameraRoomRef.current === activeRoomId) return;
+    cameraRoomRef.current = activeRoomId;
+    focusedNodeRef.current = null;
+    framedArrivalRef.current = null;
+  }, [activeRoomId]);
   useEffect(() => {
     if (!targetNodeId || isLoading || !canvasReady) return;
+    if (focusedNodeRef.current === targetNodeId) return;
     const target = nodes.find((node) => node.id === targetNodeId);
     if (!target) return;
-    const focusKey = `${targetNodeId}:${target.position.x}:${target.position.y}`;
-    if (focusedNodeRef.current === focusKey) return;
-    focusedNodeRef.current = focusKey;
+    focusedNodeRef.current = targetNodeId;
     if (target.type === 'string') {
       // React Flow's initial whole-room fit can finish after this effect. Wait
       // for that camera move, then center the off-screen, unmeasured text node.
@@ -179,7 +190,7 @@ function Flow({
       setNodes(nodes.map((node) => ({ ...node, selected: node.id === targetNodeId })));
       void (async () => {
         await fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 0 });
-        if (focusedNodeRef.current !== focusKey) return;
+        if (focusedNodeRef.current !== targetNodeId) return;
         await setCenter(target.position.x + width / 2, target.position.y + height / 2, {
           zoom: 0.8,
           duration: 0,
@@ -190,7 +201,7 @@ function Flow({
     setNodes(nodes.map((node) => ({ ...node, selected: node.id === targetNodeId })));
     if (!focusNodeId) return;
     requestAnimationFrame(() => {
-      if (focusedNodeRef.current !== focusKey) return;
+      if (focusedNodeRef.current !== targetNodeId) return;
       void fitView({ nodes: [target], padding: 0.65, duration: 350 });
     });
   }, [canvasReady, fitView, focusNodeId, setCenter, targetNodeId, isLoading, nodes, setNodes]);
@@ -201,17 +212,24 @@ function Flow({
   // indistinguishable from never having arrived, which is #307 again for a producer
   // that cannot navigate with a ?focusNodeId=. Fit the WHOLE canvas rather than just
   // the arrival: framing the new nodes alone pushes the user's own work off screen,
-  // the same defect pointed the other way. Only genuinely new ids reach here, so an
-  // update to existing nodes never moves the viewport under the user.
+  // the same defect pointed the other way.
+  // The arrival ids stay set after that first frame. Keying the effect on `nodes`
+  // without remembering the batch re-ran fitView on every edit, measurement, and
+  // pan-driven mount, which animated the camera back to the graph midpoint.
   // ponytail: React Flow's default minZoom (0.5) caps how far this can pull back, so a
   // canvas wider than ~2 viewports still leaves nodes outside — narrow the frame to the
   // arrival plus what is already in view, or lower minZoom, if that becomes the complaint.
   const { arrivedNodeIds } = realtime;
   useEffect(() => {
-    if (arrivedNodeIds.length === 0) return;
     if (targetNodeId) return;
-    if (!arrivedNodeIds.some((id) => nodes.some((node) => node.id === id))) return;
+    const key = arrivalFrameKey(
+      framedArrivalRef.current,
+      arrivedNodeIds,
+      new Set(nodes.map((node) => node.id)),
+    );
+    if (!key) return;
     const handle = requestAnimationFrame(() => {
+      framedArrivalRef.current = key;
       fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 });
     });
     return () => cancelAnimationFrame(handle);
