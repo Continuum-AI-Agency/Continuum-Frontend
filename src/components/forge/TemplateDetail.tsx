@@ -1782,6 +1782,7 @@ export function TemplateDetail({
               }}
               onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
               initialComp={initialComp}
+              templateKey={templateKey}
             />
           </TabsContent>
           <TabsContent value="variables" keepMounted>

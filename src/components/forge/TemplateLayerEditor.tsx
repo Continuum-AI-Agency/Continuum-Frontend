@@ -30,6 +30,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { previewMarkup } from '@/components/forge/layerPreviewSvg';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
+import { TemplateColourFields } from '@/components/forge/TemplateColourFields';
 import { TemplateLayerInspector } from '@/components/forge/TemplateLayerInspector';
 import { type StackRow, TemplateLayerList } from '@/components/forge/TemplateLayerList';
 import { TemplateWireframe } from '@/components/forge/TemplateWireframe';
@@ -140,6 +141,7 @@ export function TemplateLayerEditor({
   onSaved,
   onOpenVariant,
   initialComp,
+  templateKey,
 }: {
   brandId: string;
   assetId: string;
@@ -152,6 +154,8 @@ export function TemplateLayerEditor({
   onOpenVariant?: (assetId: string) => void | Promise<void>;
   /** A composition to open on, by name — an output row's Edit in the gallery. */
   initialComp?: string;
+  /** The published render template, once promoted: its fields can be marked as colours. */
+  templateKey?: string | null;
 }) {
   const catalog = useQuery({
     queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
@@ -336,7 +340,8 @@ export function TemplateLayerEditor({
     parse?.comps[0];
   // A full parse counts the comp's layers; the compact one the page may hold does not.
   const layerCount = defaultComp?.layerCount;
-  const placeholderRows = typeof layerCount === 'number' && layerCount > 0 ? Math.min(layerCount, 12) : 6;
+  const placeholderRows =
+    typeof layerCount === 'number' && layerCount > 0 ? Math.min(layerCount, 12) : 6;
 
   useEffect(() => {
     if (!unsaved) return;
@@ -696,6 +701,13 @@ export function TemplateLayerEditor({
                     />
                   </div>
                 ))}
+                {templateKey ? (
+                  <TemplateColourFields
+                    brandId={brandId}
+                    assetId={assetId}
+                    templateKey={templateKey}
+                  />
+                ) : null}
               </CollapsibleContent>
             </Collapsible>
           </aside>

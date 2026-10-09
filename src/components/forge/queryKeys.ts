@@ -15,6 +15,8 @@ export const forgeQueryKeys = {
   templateSources: (brandId: string) => ['forge', brandId, 'template-sources'] as const,
   templateVariables: (brandId: string, assetId: string, versionId: string) =>
     ['forge', brandId, 'template-variables', assetId, versionId] as const,
+  colourFields: (brandId: string, assetId: string, templateKey: string) =>
+    ['forge', brandId, 'colour-fields', assetId, templateKey] as const,
   templateFonts: (brandId: string, assetId: string, versionId: string) =>
     ['forge', brandId, 'template-fonts', assetId, versionId] as const,
   layerInventory: (brandId: string, assetId: string, versionId: string) =>

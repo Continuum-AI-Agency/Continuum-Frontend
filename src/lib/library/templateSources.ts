@@ -28,6 +28,7 @@ import {
   type RenameTemplateSourceRequest,
   readFontNames,
   type SaveTemplateRevisionRequest,
+  type TemplateColourFields,
   type TemplateFontAliasRequest,
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
@@ -36,6 +37,7 @@ import {
   type TemplateTextMoveRequest,
   type TemplateTextMoveResponse,
   type TemplateVariant,
+  templateColourFieldsSchema,
   templateFontAliasRequestSchema,
   templateFontCandidatesResponseSchema,
   templateFontHealResultSchema,
@@ -491,6 +493,31 @@ export async function saveTemplateVariables(
   await unwrap(response, 'Saving variables');
 }
 
+/** The render fields of one published template a person marked as colours. */
+export async function fetchTemplateColourFields(
+  brandId: string,
+  assetId: string,
+  templateKey: string,
+): Promise<TemplateColourFields> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/colour-fields?brandId=${encodeURIComponent(brandId)}&templateKey=${encodeURIComponent(templateKey)}`,
+  );
+  return templateColourFieldsSchema.parse(await unwrap(response, 'Colour fields'));
+}
+
+/** Replaces the set: the keys sent are the template's marked colours afterwards. */
+export async function saveTemplateColourFields(
+  brandId: string,
+  assetId: string,
+  fields: TemplateColourFields,
+): Promise<TemplateColourFields> {
+  const response = await authorizedFetch(`/api/ai-studio/templates/${assetId}/colour-fields`, {
+    method: 'PUT',
+    body: JSON.stringify({ brandId, ...fields }),
+  });
+  return templateColourFieldsSchema.parse(await unwrap(response, 'Saving colour fields'));
+}
+
 /** Every layer a design-import template's source file stacks, and the arrangements saved on it. */
 export async function fetchDesignLayers(
   brandId: string,
@@ -673,7 +700,9 @@ export async function fetchTemplateLayerInventory(
   const query = new URLSearchParams({ brandId, versionId });
   return templateLayerInventorySchema.parse(
     await unwrap(
-      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/layers?${query}`),
+      await authorizedFetch(
+        `/api/ai-studio/templates/${encodeURIComponent(assetId)}/layers?${query}`,
+      ),
       'Layers',
     ),
   );
