@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import type { CycleRunReport } from '@continuum/contracts';
 import mensajes from '../../../../../../packages/contracts/src/optimization/fixtures/optimizer-status-mensajes.json';
 import formularios from '../../__fixtures__/optimizer-status-formularios.json';
+import test1Google from '../../__fixtures__/optimizer-status-test1-google.json';
 import tours from '../../__fixtures__/optimizer-status-tours.json';
 import { parseReport } from '../../reportModel';
 import { goalMismatchOf, readMismatchMessage } from './goalMismatch';
@@ -182,5 +183,18 @@ describe('goalMismatchOf — a Google Ads portfolio names campaigns', () => {
     const one = asGoogle(tours);
     one.latest_items = one.latest_items.slice(0, 1);
     expect(read(one)?.text).toStartWith('The one campaign bids');
+  });
+});
+
+describe('goalMismatchOf — Test 1, the real Google-only Vivo 47 cycle', () => {
+  // optimizer_get_portfolio_performance for "Test 1 — Google Ads (Vivo 47)", run 5d52714f
+  // (2026-10-09): the first cycle recorded with platform google_ads. PMax is held kpi_mismatch.
+  it('names the held PMax campaign as a campaign, from the engine sentence', () => {
+    const report = parseReport(test1Google as unknown as CycleRunReport);
+    if (!report) throw new Error('fixture did not parse');
+    const mismatch = goalMismatchOf({ report, measures: 'leads' });
+    expect(mismatch).toMatchObject({ scope: 'some', mismatched: 1, total: 2, entities: 'campaigns' });
+    expect(mismatch?.text).toStartWith('1 of 2 campaigns');
+    expect(mismatch?.text).not.toContain('ad set');
   });
 });

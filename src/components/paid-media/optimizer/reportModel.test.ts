@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { CycleRunReport, PortfolioListItem } from '@continuum/contracts';
 import { FreezeReasonSchema } from '@continuum/contracts';
+import test1Google from './__fixtures__/optimizer-status-test1-google.json';
+import { entityOf } from './entityNoun';
 
 import {
   actionRoute,
@@ -613,5 +615,16 @@ describe('freezeLabel off Meta', () => {
       expect(freezeLabel('unsupported_budget', entity)?.label).toBe('Held · CBO/lifetime');
       expect(freezeLabel('kpi_mismatch', entity)?.hint).toStartWith('This ad set is bidding');
     }
+  });
+});
+
+describe('freezeLabel — Test 1, the real Google-only Vivo 47 cycle', () => {
+  it('the held PMax campaign reads as a Google campaign', () => {
+    const report = parseReport(test1Google as unknown as CycleRunReport);
+    const held = report?.latest_items.find((item) => item.diagnostics?.freezeReason);
+    expect(held?.adset_id).toBe('24331887298');
+    const label = freezeLabel(held?.diagnostics?.freezeReason, entityOf(held));
+    expect(label?.label).toBe('Held · different goal');
+    expect(label?.hint).toStartWith('This campaign is bidding');
   });
 });
