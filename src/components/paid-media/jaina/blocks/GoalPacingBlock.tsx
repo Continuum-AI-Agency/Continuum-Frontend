@@ -24,6 +24,7 @@ import type { GoalPacingBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { JAINA_TYPE } from '../reading';
 import { BlockHeading } from './BlockHeading';
+import { JAINA_MODULE } from './modules';
 
 type GoalPacingBlockProps = { block: GoalPacingBlockV2; isStreaming: boolean };
 
@@ -50,7 +51,11 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
   const spentShare = block.budget > 0 ? Math.min(1, block.spent / block.budget) : 0;
 
   return (
-    <section data-testid="goal-pacing-block">
+    <section
+      className={JAINA_MODULE.neutral}
+      data-jaina-module="block"
+      data-testid="goal-pacing-block"
+    >
       <BlockHeading
         title={block.title}
         leading={<CalmRule play testId="goal-pacing-calm-rule" />}

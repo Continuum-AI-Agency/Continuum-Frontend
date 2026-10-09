@@ -284,7 +284,9 @@ describe('JainaReportV2 — the answer reads as the answer', () => {
     const summary = screen.getByText('Account performance summary');
     expect(summary.className).toContain('text-foreground');
     expect(summary.className).toContain('text-xl');
-    expect(summary.className).toContain('font-medium');
+    // The lead sentence: the answer step at semibold, so it outweighs every module under it.
+    expect(summary.className).toContain('font-semibold');
+    expect(summary.className).not.toContain('font-medium');
     expect(summary.className).not.toContain('text-muted-foreground');
   });
 
@@ -365,6 +367,31 @@ describe('JainaReportV2 — the justification under the answer', () => {
         before.compareDocumentPosition(followUps as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeGreaterThan(0);
     }
+  });
+
+  it('sets two consecutive WHY blocks side by side on a wide answer, in the backend’s order', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          blocks: [
+            moduleBlock('scope', 'data_scope', 'Data scope'),
+            moduleBlock('reading', 'insight_list', 'What stands out'),
+            moduleBlock('more', 'insight_list', 'What else'),
+            moduleBlock('moves', 'actions', 'Next moves'),
+          ],
+        }}
+        isStreaming={false}
+      />,
+    );
+    const run = document.querySelector('[data-report-run="why"]');
+    expect(run?.className).toContain('@3xl:grid-cols-2');
+    expect(
+      Array.from(run?.querySelectorAll('[data-testid^="module-"]') ?? []).map((node) =>
+        node.getAttribute('data-testid'),
+      ),
+    ).toEqual(['module-reading', 'module-more']);
+    expect(moduleIdsIn('answer')).toEqual(['scope', 'reading', 'more', 'moves']);
   });
 
   it('sets the justification below the answer', () => {

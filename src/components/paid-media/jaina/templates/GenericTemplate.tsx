@@ -32,10 +32,7 @@ export function GenericSectionBody({ block, section }: TemplateSectionBodyProps)
       {section.items.length > 0 ? (
         <ul className="space-y-2">
           {section.items.map((item) => (
-            <li
-              key={item.id}
-              className={cn('rounded-md border border-border/50 px-3 py-2', JAINA_TYPE.body)}
-            >
+            <li key={item.id} className={cn('rounded-xl bg-muted/40 px-3 py-2.5', JAINA_TYPE.body)}>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="font-medium text-foreground">{item.title}</span>
                 <FigureById

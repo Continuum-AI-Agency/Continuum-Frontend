@@ -19,12 +19,13 @@ import type { SurveyBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { JAINA_TYPE } from '../reading';
 import { BlockHeading } from './BlockHeading';
+import { JAINA_MODULE } from './modules';
 
 type SurveyBlockProps = { block: SurveyBlockV2; isStreaming: boolean };
 
 export default function SurveyBlock({ block }: SurveyBlockProps) {
   return (
-    <section data-testid="survey-block">
+    <section className={JAINA_MODULE.neutral} data-jaina-module="block" data-testid="survey-block">
       <BlockHeading
         title={block.title}
         leading={<CalmRule play testId="survey-calm-rule" />}

@@ -174,8 +174,15 @@ describe('formatters', () => {
   it('renders percentages and money, with an em dash for nulls', () => {
     expect(percent(0.755)).toBe('76%');
     expect(percent(null)).toBe('—');
-    expect(money(12)).toBe('$12.00');
-    expect(money(null)).toBe('—');
+    expect(money(12, 'USD')).toBe('$12.00');
+    expect(money(null, 'USD')).toBe('—');
+  });
+
+  it('prints money in the account currency, never a dollar sign on a peso account', () => {
+    expect(money(64.1, 'MXN')).toBe('64.10 MXN');
+    expect(money(1240, 'MXN')).toBe('1,240 MXN');
+    // An unknown currency is not dollars: the bare figure, no symbol.
+    expect(money(12, null)).toBe('12.00');
   });
 
   it('labels the cohort multiple only when the assembler computed one', () => {

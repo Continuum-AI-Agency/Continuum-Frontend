@@ -74,7 +74,7 @@ function SectionCard({
         <div className="prose prose-invert max-w-none">
           <SafeMarkdown
             content={section.summary}
-            className="text-base leading-relaxed text-white/70"
+            className="text-base leading-relaxed text-muted-foreground"
             mode={isStreaming ? 'streaming' : 'static'}
           />
         </div>
@@ -85,21 +85,23 @@ function SectionCard({
           {section.highlights.map((highlight, hIndex) => {
             const Icon = severityIcon[highlight.severity];
             return (
-              <div key={hIndex} className="rounded-lg border border-white/5 bg-white/5 p-3">
+              <div key={hIndex} className="rounded-xl bg-muted/40 p-3">
                 <div className="flex gap-3 items-start">
                   <div className={`mt-0.5 ${severityTextClass[highlight.severity]}`}>
                     <Icon className="size-4" />
                   </div>
                   <div className="flex-1 space-y-1">
                     {highlight.title && (
-                      <span className="text-sm font-semibold text-white/90">{highlight.title}</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {highlight.title}
+                      </span>
                     )}
-                    <span className="text-sm text-white/70">{highlight.text}</span>
+                    <span className="text-sm text-muted-foreground">{highlight.text}</span>
                     {highlight.impact && (
                       <Pill variant={severityColor[highlight.severity]}>{highlight.impact}</Pill>
                     )}
                     {highlight.evidence && highlight.evidence.length > 0 && (
-                      <div className="mt-2 text-xs text-white/50">
+                      <div className="mt-2 text-xs text-muted-foreground">
                         Evidence: {highlight.evidence.join(', ')}
                       </div>
                     )}
@@ -120,26 +122,25 @@ function SectionCard({
       {sectionTables.length > 0 && (
         <div className="space-y-4">
           {sectionTables.map((table, tIndex) => (
-            <div
-              key={tIndex}
-              className="min-w-0 rounded-lg border border-white/10 bg-black/20 overflow-hidden"
-            >
+            <div key={tIndex} className="min-w-0 overflow-hidden rounded-xl bg-muted/40">
               {table.title ? (
-                <div className="border-b border-white/10 bg-white/5 px-4 py-2">
-                  <span className="text-sm font-medium text-white/85">{table.title}</span>
+                <div className="px-4 pt-3 pb-1">
+                  <span className="text-sm font-medium text-foreground">{table.title}</span>
                   {table.subtitle ? (
-                    <span className="text-xs text-white/60 block mt-0.5">{table.subtitle}</span>
+                    <span className="text-xs text-muted-foreground block mt-0.5">
+                      {table.subtitle}
+                    </span>
                   ) : null}
                 </div>
               ) : null}
               <div className="w-full max-w-full overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-white/5 border-b border-white/10">
+                  <thead className="border-b border-foreground/5">
                     <tr>
                       {table.headers.map((header, headerIndex) => (
                         <th
                           key={headerIndex}
-                          className="text-left px-4 py-3 text-white/70 font-medium uppercase text-xs tracking-wider whitespace-nowrap"
+                          className="text-left px-4 py-3 text-muted-foreground font-medium uppercase text-xs tracking-wider whitespace-nowrap"
                         >
                           {header}
                         </th>
@@ -148,12 +149,12 @@ function SectionCard({
                   </thead>
                   <tbody>
                     {table.rows.map((row, rowIndex) => (
-                      <tr
-                        key={rowIndex}
-                        className="border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors"
-                      >
+                      <tr key={rowIndex} className="border-b border-foreground/5 last:border-b-0">
                         {row.map((cell, cellIndex) => (
-                          <td key={cellIndex} className="px-4 py-3 text-white/80 whitespace-nowrap">
+                          <td
+                            key={cellIndex}
+                            className="px-4 py-3 text-foreground whitespace-nowrap"
+                          >
                             {cell}
                           </td>
                         ))}
@@ -169,17 +170,14 @@ function SectionCard({
 
       {section.actions && section.actions.length > 0 && (
         <div className="space-y-3 pt-2">
-          <span className="text-sm font-semibold text-white/80 uppercase tracking-wider">
+          <span className="text-sm font-semibold text-foreground uppercase tracking-wider">
             Recommended Actions
           </span>
           {section.actions.map((action, aIndex) => (
-            <div
-              key={aIndex}
-              className="rounded-lg border border-white/5 bg-white/5 border-l-4 border-l-indigo-500 p-3"
-            >
+            <div key={aIndex} className="rounded-xl bg-primary/10 p-3">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white/90">
+                  <span className="text-sm font-semibold text-foreground">
                     {action.title || 'Action'}
                   </span>
                   <div className="flex gap-2">
@@ -189,7 +187,7 @@ function SectionCard({
                     )}
                   </div>
                 </div>
-                <span className="text-sm text-white/70">{action.rationale}</span>
+                <span className="text-sm text-muted-foreground">{action.rationale}</span>
               </div>
             </div>
           ))}

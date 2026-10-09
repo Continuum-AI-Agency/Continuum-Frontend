@@ -60,7 +60,7 @@ function Frame({ brandId, frame }: { brandId: string; frame: JainaHyperframe }) 
       data-testid="optimizer-hyperframe"
     >
       <div
-        className="relative overflow-hidden rounded-lg border border-border/60 bg-card"
+        className="relative overflow-hidden rounded-xl bg-muted/40"
         // The card is square by design — it is read in a chat column and in a feed — so the
         // box keeps that ratio instead of guessing a height.
         style={{ aspectRatio: `${frame.width} / ${frame.height}` }}

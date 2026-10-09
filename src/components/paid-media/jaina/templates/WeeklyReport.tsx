@@ -24,7 +24,9 @@ import type {
   WeeklyTileRead,
 } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
-import { JAINA_TABLE, JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
+import { TILE_FIGURE } from '../blocks/MetricTiles';
+import { JAINA_MODULE, MODULE_TINT } from '../blocks/modules';
+import { JAINA_TABLE, JAINA_TYPE, JUDGEMENT_TEXT, READ_JUDGEMENT } from '../reading';
 import { FigureById, FigureText } from './Figure';
 import { GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
 import type { TemplateHeroProps, TemplateRenderer } from './types';
@@ -69,10 +71,7 @@ function Header({ header }: { header: WeeklyReportBody['header'] }) {
     { key: 'b', name: 'Period B', period: header.period_b },
   ] as const;
   return (
-    <header
-      data-testid="weekly-report-header"
-      className="space-y-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
-    >
+    <header data-testid="weekly-report-header" className="space-y-2">
       <p className={cn('font-semibold text-foreground', JAINA_TYPE.body)}>
         {header.brand_name}
         <span className="font-normal text-muted-foreground"> · {header.ad_account_id}</span>
@@ -112,10 +111,13 @@ function Tile({ tile, figures }: { tile: WeeklyReportTile; figures: Figures }) {
     <li
       data-tile={tile.id}
       data-tile-read={tile.read}
-      className="min-w-0 space-y-1 rounded-lg border border-border/60 bg-card px-3 py-2"
+      className={cn(
+        'min-w-0 space-y-1 rounded-xl p-3 sm:p-4',
+        MODULE_TINT[READ_JUDGEMENT[tile.read]],
+      )}
     >
       <Label>{tile.label}</Label>
-      <p className={cn('text-foreground', JAINA_TYPE.figure)}>
+      <p className={cn(TILE_FIGURE, 'text-foreground')}>
         <FigureById figures={figures} id={tile.figure_id} />
       </p>
       <p className={cn('text-muted-foreground', JAINA_TYPE.table)}>
@@ -158,7 +160,7 @@ function PeriodTable({
   figures: Figures;
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border/60">
+    <div className={JAINA_TABLE.wrap}>
       <table className={JAINA_TABLE.table} data-testid="weekly-report-period-table">
         <thead>
           <tr className={JAINA_TABLE.headRow}>
@@ -221,7 +223,7 @@ function ObjectiveSection({
     <section
       data-objective={section.objective}
       data-objective-active={section.active ? 'true' : 'false'}
-      className="break-inside-avoid space-y-3 rounded-lg border border-border/60 px-3 py-3"
+      className={cn('break-inside-avoid space-y-3', JAINA_MODULE.neutral)}
     >
       <h4 className={cn('font-semibold text-foreground', JAINA_TYPE.body)}>{section.label}</h4>
       <p
@@ -239,18 +241,14 @@ function ObjectiveSection({
       ) : (
         <p
           data-testid="weekly-report-no-active"
-          className={cn('rounded-md bg-muted/40 px-3 py-2 text-muted-foreground', JAINA_TYPE.body)}
+          className={cn('text-muted-foreground', JAINA_TYPE.body)}
         >
           <FigureText text={section.no_active_note ?? 'No active campaigns.'} figures={figures} />
         </p>
       )}
       <div className="grid gap-2 md:grid-cols-3">
         {THREE_PARTS.map(({ key, label }) => (
-          <div
-            key={key}
-            data-part={key}
-            className="space-y-1 rounded-md border border-border/50 bg-muted/20 px-3 py-2"
-          >
+          <div key={key} data-part={key} className="space-y-1">
             <Label>{label}</Label>
             <p className={cn('text-foreground', JAINA_TYPE.table)}>
               <FigureText text={section[key]} figures={figures} />
@@ -273,7 +271,7 @@ function RecommendationCard({
     <li
       data-recommendation={card.id}
       data-priority={card.priority}
-      className="break-inside-avoid space-y-2 rounded-lg border border-border/60 bg-card px-3 py-3"
+      className={cn('break-inside-avoid space-y-2', JAINA_MODULE.decision)}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p
@@ -285,7 +283,7 @@ function RecommendationCard({
         <span
           data-part="priority"
           className={cn(
-            'shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-foreground',
+            'shrink-0 rounded-full bg-background/80 px-2.5 py-0.5 text-foreground',
             JAINA_TYPE.table,
           )}
         >
@@ -323,7 +321,7 @@ function RecommendationCard({
             <span
               data-impact-basis={card.impact.basis}
               className={cn(
-                'rounded border border-border px-1.5 text-muted-foreground',
+                'rounded bg-background/80 px-1.5 text-muted-foreground',
                 JAINA_TYPE.label,
               )}
             >

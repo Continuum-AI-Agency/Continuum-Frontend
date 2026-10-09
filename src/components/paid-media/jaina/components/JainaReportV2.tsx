@@ -25,6 +25,7 @@ import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { EntityNamesProvider, entityNamesOf } from '../blocks/entityNames';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { JAINA_LEAD, JAINA_MODULE_GAP } from '../blocks/modules';
 import { narrativeThreeOf } from '../blocks/narrativeShape';
 import { JainaProse } from '../blocks/prose';
 import { normalizeJainaMarkdownTables } from '../jainaUtils';
@@ -45,6 +46,7 @@ import {
   TemplateJustification,
 } from '../templates/TemplateBlock';
 import {
+  type AnswerStratum,
   JainaJustificationSection,
   partitionReportBlocks,
   SectionLabel,
@@ -63,6 +65,24 @@ const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
   pending: 'bg-muted text-muted-foreground',
 };
 
+type StratumRun = { stratum: AnswerStratum; blocks: CheckpointReportV2['blocks'] };
+
+/**
+ * The answer's blocks as runs of one stratum, in the Backend's order — nothing moves. A run
+ * is what a stratum label sits over, and a run of two or more WHY blocks (a reading beside an
+ * insight list) is what sits side by side on a wide answer.
+ */
+function runsByStratum(blocks: CheckpointReportV2['blocks']): StratumRun[] {
+  const runs: StratumRun[] = [];
+  for (const block of blocks) {
+    const stratum = stratumOfBlock(block);
+    const last = runs[runs.length - 1];
+    if (last && last.stratum === stratum) last.blocks.push(block);
+    else runs.push({ stratum, blocks: [block] });
+  }
+  return runs;
+}
+
 // Supplementary report context (reasoning, objectives, sources). These ride along
 // in every persisted report but were previously dropped at the schema; surfacing
 // them keeps a thin/degraded report from looking empty.
@@ -76,9 +96,9 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
   }
 
   return (
-    <div className="space-y-3 border-t border-border/40 pt-3">
+    <div className={cn('flex flex-col', JAINA_MODULE_GAP)}>
       {objectives.length > 0 ? (
-        <details className="group rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+        <details className="group rounded-xl bg-muted/40 px-3 py-2.5 sm:px-4">
           <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground">
             Execution objectives ({objectives.length})
           </summary>
@@ -103,7 +123,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
       ) : null}
 
       {reasoning.length > 0 ? (
-        <details className="group rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+        <details className="group rounded-xl bg-muted/40 px-3 py-2.5 sm:px-4">
           <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground">
             Analysis
           </summary>
@@ -299,9 +319,12 @@ export function JainaReportV2({
     }
   }, [report, show, visibleBlocks]);
 
+  // An answer is modules separated by space: no card around it, no rule between its parts.
+  // The section is the container the modules query, so the same answer lays its reading out
+  // side by side in a wide chat and stacks it in a 390px panel.
   const content = (
-    <section className="mt-4 space-y-4">
-      <div className="space-y-4">
+    <section className="@container mt-4 flex flex-col gap-4">
+      <div className={cn('flex flex-col', JAINA_MODULE_GAP)}>
         {citationCount > 0 ? (
           <div className="flex items-center">
             <Badge
@@ -331,7 +354,7 @@ export function JainaReportV2({
           <div data-report-part="sentence">
             <JainaProse
               content={normalizeJainaMarkdownTables(report.executive_summary)}
-              className={JAINA_ANSWER_PROSE}
+              className={cn(JAINA_ANSWER_PROSE, JAINA_LEAD)}
               mode={isStreaming ? 'streaming' : 'static'}
             />
           </div>
@@ -339,7 +362,7 @@ export function JainaReportV2({
 
         {/* The rest of the answer — the reading, the moves — set as part of it. */}
         {sections.answer.length > 0 ? (
-          <div data-report-section="answer" className="space-y-4">
+          <div data-report-section="answer" className={cn('flex flex-col', JAINA_MODULE_GAP)}>
             {/* A templated answer puts its sentence and chart here and its steps under the
              *  justification below — the same answer/justification split as every block.
              *
@@ -348,18 +371,25 @@ export function JainaReportV2({
              *  when the stratum changes, never a block moved to sit under one. The J2 card's
              *  own parts (the window line, the tiles, a three-box narrative) label themselves
              *  and take none: see `stratumOfBlock`. */}
-            {sections.answer.map((block, index) => {
-              const stratum = stratumOfBlock(block);
-              const previous = index > 0 ? stratumOfBlock(sections.answer[index - 1]) : null;
+            {runsByStratum(sections.answer).map(({ stratum, blocks }) => {
+              const rendered = blocks.map((block) =>
+                isAnswerTemplateBlock(block) ? (
+                  <TemplateExecutive key={block.block_id} block={block} />
+                ) : (
+                  <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
+                ),
+              );
               return (
-                <Fragment key={block.block_id}>
-                  {stratum !== 'answer' && stratum !== previous ? (
+                <Fragment key={blocks[0].block_id}>
+                  {stratum !== 'answer' ? (
                     <SectionLabel stratum={stratum} language={language} />
                   ) : null}
-                  {isAnswerTemplateBlock(block) ? (
-                    <TemplateExecutive block={block} />
+                  {stratum === 'why' && blocks.length > 1 ? (
+                    <div className="grid gap-3 @3xl:grid-cols-2" data-report-run="why">
+                      {rendered}
+                    </div>
                   ) : (
-                    <BlockRenderer block={block} isStreaming={isStreaming} />
+                    rendered
                   )}
                 </Fragment>
               );
@@ -389,9 +419,9 @@ export function JainaReportV2({
         {!isStreaming && orderedBlocks.length > 0 ? (
           <fieldset
             aria-label="Report modules"
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
+            className="flex flex-wrap items-center gap-2 border-0 p-0"
           >
-            <legend className="px-1 text-xs font-medium text-muted-foreground">
+            <legend className="mb-1 text-xs font-medium text-muted-foreground">
               Report modules
             </legend>
             {orderedBlocks.map((block) => {
@@ -417,7 +447,7 @@ export function JainaReportV2({
         {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
       </div>
 
-      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+      <footer className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
           Export the visible modules as a PDF or a self-contained HTML file.
         </span>

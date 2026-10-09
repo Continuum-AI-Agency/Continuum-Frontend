@@ -169,7 +169,12 @@ function CreativeRow({
   if (verdict) {
     return (
       <li>
-        <VerdictHoverCard freshUrl={freshUrl} onRecover={onRecover} verdict={verdict}>
+        <VerdictHoverCard
+          currency={currency}
+          freshUrl={freshUrl}
+          onRecover={onRecover}
+          verdict={verdict}
+        >
           {body}
         </VerdictHoverCard>
       </li>

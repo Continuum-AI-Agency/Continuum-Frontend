@@ -1,7 +1,8 @@
 'use client';
 
 // The first line of every report: what window, what timezone, what source, what caveats.
-// Never buried — a number without its scope is a number the reader cannot trust.
+// Never buried — a number without its scope is a number the reader cannot trust. A plain
+// muted line, not a module: it frames the modules under it rather than being one of them.
 
 import type { DataScopeBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
@@ -18,12 +19,9 @@ const SOURCE_LABEL: Record<DataScopeBlockV2['source'], string> = {
 
 export default function DataScopeBlock({ block }: DataScopeBlockProps) {
   return (
-    <div
-      className={cn('rounded-md border border-border/60 bg-muted/20 px-3 py-2', JAINA_TYPE.table)}
-      data-testid="data-scope-block"
-    >
-      <p className="text-foreground">
-        <span className="font-medium">Scope:</span> {block.dates}
+    <div className={cn('text-muted-foreground', JAINA_TYPE.table)} data-testid="data-scope-block">
+      <p>
+        <span className="font-medium text-foreground">Scope:</span> {block.dates}
         {block.timezone ? ` · ${block.timezone}` : ''} · {SOURCE_LABEL[block.source]}
       </p>
       {block.notes.length > 0 ? (

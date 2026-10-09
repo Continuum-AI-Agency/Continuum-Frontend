@@ -195,14 +195,18 @@ export const JAINA_TYPE = {
  * each drew their own — two borders, two header weights, 14px cells beside 12px cells in
  * the same answer. Column heads are labels (12px caps), cells are table size, digits are
  * tabular so the columns line up.
+ *
+ * No frame: a table sits inside a module (`blocks/modules.ts`), whose fill already says where
+ * it begins and ends. Rows are separated by the faintest hairline the ink allows, and the
+ * outer columns sit flush with the module's own text.
  */
 export const JAINA_TABLE = {
-  wrap: 'overflow-x-auto rounded-lg border border-border/60',
+  wrap: 'overflow-x-auto',
   table: `w-full ${JAINA_TYPE.table} tabular-nums`,
-  headRow: 'border-b border-border/60 bg-muted/30',
-  th: `px-3 py-2 ${JAINA_TYPE.label} text-muted-foreground`,
-  row: 'border-b border-border/30 last:border-0',
-  td: 'px-3 py-2',
+  headRow: 'border-b border-foreground/5',
+  th: `px-2 py-1.5 first:pl-0 last:pr-0 ${JAINA_TYPE.label} text-muted-foreground`,
+  row: 'border-b border-foreground/5 last:border-0',
+  td: 'px-2 py-1.5 first:pl-0 last:pr-0',
 } as const;
 
 /**

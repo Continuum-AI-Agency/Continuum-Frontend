@@ -50,7 +50,7 @@ function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
     <span className="flex flex-wrap gap-1">
       {flags.map((flag) => (
         <span
-          className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-3xs text-amber-600 dark:text-amber-400"
+          className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400"
           key={flag}
           title={FLAG_TOOLTIP[flag] ?? GENERIC_FLAG_TOOLTIP}
         >
@@ -74,7 +74,7 @@ function WinRateLine({ row, showFunnel }: { row: CreativeWinRateRow; showFunnel:
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-foreground text-xs">{categoryValueLabel(row)}</span>
           {showFunnel ? (
-            <span className="shrink-0 rounded bg-muted px-1 text-3xs text-muted-foreground uppercase">
+            <span className="shrink-0 rounded bg-muted px-1 text-xs text-muted-foreground uppercase">
               {row.funnelStage}
             </span>
           ) : null}
@@ -98,7 +98,7 @@ function WinRateLine({ row, showFunnel }: { row: CreativeWinRateRow; showFunnel:
         {percent(row.spendShare)}
       </span>
       <span className="text-right text-muted-foreground text-xs tabular-nums">
-        {money(row.medianCpa)}
+        {money(row.medianCpa, row.currency)}
       </span>
     </li>
   );
@@ -114,7 +114,7 @@ function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel
         <span className="font-medium text-foreground text-xs">
           {DIMENSION_LABEL[group.dimension]}
         </span>
-        <span className="text-3xs text-muted-foreground tabular-nums">
+        <span className="text-xs text-muted-foreground tabular-nums">
           {group.rows.length} categor{group.rows.length === 1 ? 'y' : 'ies'}
         </span>
       </p>
@@ -129,7 +129,7 @@ function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel
       </ul>
       {group.rows.length > ROWS_PER_GROUP ? (
         <button
-          className="w-full px-2 py-1 text-left text-3xs text-muted-foreground hover:text-foreground"
+          className="w-full px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground"
           onClick={() => setExpanded((value) => !value)}
           type="button"
         >
@@ -177,14 +177,14 @@ function ExplorerBody({ brandId }: { brandId: string }) {
         <Tabs onValueChange={(value) => setFunnel(value as FunnelTab)} value={funnel}>
           <TabsList className="h-7">
             {FUNNEL_TABS.map((tab) => (
-              <TabsTrigger className="px-2 text-3xs uppercase" key={tab} value={tab}>
+              <TabsTrigger className="px-2 text-xs uppercase" key={tab} value={tab}>
                 {tab}
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
         <label
-          className="flex items-center gap-2 text-3xs text-muted-foreground"
+          className="flex items-center gap-2 text-xs text-muted-foreground"
           htmlFor="whats-working-thin-evidence"
         >
           <Switch
@@ -197,7 +197,7 @@ function ExplorerBody({ brandId }: { brandId: string }) {
       </div>
 
       <div className="max-h-[60vh] min-h-0 flex-1 space-y-2 overflow-y-auto">
-        <p className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem_4.5rem] gap-2 px-2 text-3xs text-muted-foreground">
+        <p className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem_4.5rem] gap-2 px-2 text-xs text-muted-foreground">
           <span>Category</span>
           <span className="text-right">Win rate</span>
           <span className="text-right">Ads</span>
@@ -224,11 +224,11 @@ function ExplorerBody({ brandId }: { brandId: string }) {
 
       {report ? (
         <div className="space-y-1 border-border/60 border-t pt-2">
-          <p className="text-3xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {report.sourceCounts.labeled} creatives labeled across {report.sourceCounts.ads} ads
             {refreshedAt ? ` · refreshed ${new Date(refreshedAt).toLocaleString()}` : ''}
           </p>
-          <p className="text-3xs text-muted-foreground">{report.attributionNote}</p>
+          <p className="text-xs text-muted-foreground">{report.attributionNote}</p>
         </div>
       ) : null}
     </div>
@@ -242,9 +242,9 @@ export function WhatsWorkingExplorerPopover({ brandId }: { brandId: string }) {
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
         render={
-          <Button className="h-8 gap-1.5 px-2 text-xs" size="sm" type="button" variant="secondary">
+          <Button className="h-7 gap-1.5 px-2 text-xs" size="sm" type="button" variant="ghost">
             <Sparkles className="size-3.5" />
-            What&apos;s working
+            Win rates by category
           </Button>
         }
       />
@@ -253,10 +253,10 @@ export function WhatsWorkingExplorerPopover({ brandId }: { brandId: string }) {
         className="flex max-h-[80vh] w-[40rem] max-w-[92vw] flex-col gap-0 p-0"
       >
         <div className="space-y-1 border-border/60 border-b p-4">
-          <p className="font-medium text-foreground text-sm">What&apos;s Working — Ads</p>
+          <p className="font-medium text-foreground text-sm">Win rates by category</p>
           <p className="text-muted-foreground text-xs">
-            Win rate by creative category over the last 30 days, segmented by funnel stage. Kill,
-            scale, and iterate calls stay on the dashboard.
+            Win rate by creative category over the last 30 days, segmented by funnel stage. The
+            kill, scale and iterate calls are under Ads.
           </p>
         </div>
         {open ? <ExplorerBody brandId={brandId} /> : null}

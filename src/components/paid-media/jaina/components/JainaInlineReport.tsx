@@ -148,7 +148,7 @@ export function JainaInlineReport({
   };
 
   return (
-    <section className="mt-6 space-y-6 border-t border-border/60 pt-6">
+    <section className="mt-6 space-y-6">
       <header className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold tracking-tight">
           {report.report_title || 'Checkpoint Analysis'}
@@ -187,10 +187,7 @@ export function JainaInlineReport({
           <span className="text-sm font-medium text-foreground/85">Checkpoint Blocks</span>
           <div className="space-y-2">
             {report.blocks.map((block) => (
-              <div
-                key={block.block_id}
-                className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
-              >
+              <div key={block.block_id} className="rounded-xl bg-muted/40 px-3 py-2.5">
                 <div className="mb-1 flex items-center gap-2">
                   <Pill variant="outline" className="text-xs uppercase tracking-wide">
                     {blockLabel(block.category)}
@@ -231,7 +228,7 @@ export function JainaInlineReport({
         </div>
       ) : null}
 
-      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+      <footer className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
           Export includes summary, metrics, charts, tables, recommendations, and follow-up prompts.
         </span>

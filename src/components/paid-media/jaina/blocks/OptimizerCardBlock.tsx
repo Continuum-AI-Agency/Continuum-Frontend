@@ -147,8 +147,9 @@ export function OptimizerCardBlock({
     );
   }
 
+  // The provenance line closes the module as plain muted text: no rule above it, no band.
   const foot = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-border/60 border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-2 text-xs text-muted-foreground">
       <span>{readDate ? `read of ${readDate}` : 'from a stored read'}</span>
       {onOpenRead ? (
         <button
@@ -164,16 +165,11 @@ export function OptimizerCardBlock({
 
   if (card.size === 'strip') {
     return (
-      <figure
-        className="my-3 overflow-hidden rounded-lg border border-border/60"
-        data-testid="optimizer-strip"
-      >
-        <div className="grid sm:grid-cols-3">
+      <figure className="my-3" data-testid="optimizer-strip">
+        {/* Three findings, three borderless modules side by side; the gap separates them. */}
+        <div className="grid gap-3 sm:grid-cols-3">
           {resolved.map(({ id, candidate }) => (
-            <div
-              className="min-w-0 space-y-2 border-border/60 border-b p-4 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0"
-              key={id}
-            >
+            <div className="min-w-0 space-y-2 rounded-xl bg-muted/40 p-4" key={id}>
               {candidate ? (
                 <>
                   <Body candidate={candidate} currency={currency} />
@@ -195,17 +191,14 @@ export function OptimizerCardBlock({
 
   const only = resolved[0];
   return (
-    <figure
-      className="my-3 overflow-hidden rounded-lg border border-border/60"
-      data-testid="optimizer-card"
-    >
+    <figure className="my-3" data-testid="optimizer-card">
       {only?.candidate ? (
-        <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
+        <div className="grid items-center gap-4 rounded-xl bg-muted/40 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
           <Body candidate={only.candidate} currency={currency} />
           <Chart candidate={only.candidate} currency={currency} />
         </div>
       ) : (
-        <div className="p-4">
+        <div className="rounded-xl bg-muted/40 p-4">
           <Cleared
             candidateId={only?.id ?? ''}
             servingCitedRead={servingCitedRead}

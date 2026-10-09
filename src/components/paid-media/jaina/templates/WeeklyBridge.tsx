@@ -206,11 +206,7 @@ function StepRow({
   open: boolean;
 }) {
   return (
-    <details
-      open={open}
-      data-step={item.id}
-      className="group rounded-md border border-border/50 bg-card/40 open:bg-muted/20"
-    >
+    <details open={open} data-step={item.id} className="group rounded-xl bg-muted/40">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2">
         <span className="min-w-0 flex-1">
           <span

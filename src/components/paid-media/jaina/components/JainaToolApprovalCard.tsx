@@ -42,6 +42,17 @@ import { ApprovalChangeTable } from './ApprovalChangeTable';
 
 export type ToolApprovalDecision = JainaToolAction['decision'];
 
+/**
+ * An approval asks for a decision, so it is the answer's decision module: the primary tint,
+ * no border, no shadow. The actions row keeps the module's inset, and the secondary action
+ * sits on white beside the primary purple one.
+ */
+const DECISION_MODULE =
+  'rounded-xl border-0 bg-primary/10 pb-4 [&>[data-slot=card-footer]]:px-4 [&>[data-slot=card-footer]>button:first-child]:bg-background';
+
+/** A panel of exact values inside the decision module: white, borderless. */
+const VALUES_PANEL = 'rounded-lg bg-background/80';
+
 /** Tool name → what the human is actually being asked to allow. */
 const TOOL_LABELS: Record<string, string> = {
   audience_group_publish: 'Publish audience group to Meta',
@@ -140,18 +151,20 @@ export function JainaToolApprovalCard({
   const preview = approval.preview?.rows.length ? approval.preview : null;
 
   return (
-    <AgentDecisionCard>
-      <AgentCardEyebrow
-        label="Approval required"
-        right={<ApprovalStatus decided={optimisticDecision} expired={expired} />}
-      />
+    <AgentDecisionCard className={DECISION_MODULE}>
+      <div className="px-4 pt-4">
+        <AgentCardEyebrow
+          label="Approval required"
+          right={<ApprovalStatus decided={optimisticDecision} expired={expired} />}
+        />
+      </div>
       <AgentCardBody>
         <AgentCardTitle>{title}</AgentCardTitle>
 
         {groupVersionId ? <AudienceGroupSummary groupVersionId={groupVersionId} /> : null}
 
         {preview ? (
-          <div className="mt-3 rounded-md border border-border/50 bg-muted/20 px-1 py-1.5">
+          <div className={`mt-3 px-1 py-1.5 ${VALUES_PANEL}`}>
             <ApprovalChangeTable preview={preview} />
           </div>
         ) : null}
@@ -163,16 +176,14 @@ export function JainaToolApprovalCard({
          * failure mode this gate exists to stop.
          */}
         {preview ? (
-          <details className="mt-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
-            <summary className="cursor-pointer text-muted-foreground text-xs">
-              Exact input
-            </summary>
+          <details className={`mt-2 px-3 py-2 ${VALUES_PANEL}`}>
+            <summary className="cursor-pointer text-muted-foreground text-xs">Exact input</summary>
             <div className="mt-2">
               <ProposedInput input={approval.input} />
             </div>
           </details>
         ) : (
-          <div className="mt-3 rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
+          <div className={`mt-3 px-3 py-2.5 ${VALUES_PANEL}`}>
             <ProposedInput input={approval.input} />
           </div>
         )}

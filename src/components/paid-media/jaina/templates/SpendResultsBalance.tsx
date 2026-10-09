@@ -19,7 +19,8 @@ import {
   type TemplateSection,
 } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
-import { JAINA_TABLE, JAINA_TYPE, JUDGEMENT_RULE, JUDGEMENT_TEXT } from '../reading';
+import { MODULE_TINT } from '../blocks/modules';
+import { JAINA_TABLE, JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText, figureAttributes, figureById, figureTitle } from './Figure';
 import { GenericHero, GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
 import type { TemplateHeroProps, TemplateRenderer, TemplateSectionBodyProps } from './types';
@@ -332,10 +333,7 @@ function WhyPanels({ block, section }: TemplateSectionBodyProps) {
           key={item.id}
           data-panel={item.id}
           data-tone={item.tone}
-          className={cn(
-            'rounded-md border border-l-4 border-border/50 bg-muted/20 px-3 py-2',
-            JUDGEMENT_RULE[TONE_JUDGEMENT[item.tone]],
-          )}
+          className={cn('rounded-xl p-3 sm:p-4', MODULE_TINT[TONE_JUDGEMENT[item.tone]])}
         >
           <p className={cn('font-semibold text-foreground', JAINA_TYPE.body)}>{item.title}</p>
           <p className={cn('mt-1 text-muted-foreground', JAINA_TYPE.body)}>

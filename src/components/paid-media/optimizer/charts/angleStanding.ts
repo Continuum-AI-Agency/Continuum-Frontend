@@ -103,7 +103,7 @@ export function portfolioAngleRanking(rows: readonly AdsetCreativeWinRateRow[]):
 }
 
 /** Values are closed angle ids (`angle_id`); a person reads the display name. */
-const angleName = (value: string | undefined): string =>
+export const angleName = (value: string | undefined): string =>
   value && value in GLOBAL_ANGLE_LABELS
     ? GLOBAL_ANGLE_LABELS[value as GlobalAngleId]
     : (value ?? '');
@@ -119,7 +119,7 @@ function buildAction(
     case 'double_down':
       return `Build the next ads around "${angleName(recommended?.value)}" — it beats this ad set's median ${kpiLabel} in ${Math.round((recommended?.winRate ?? 0) * 100)}% of its ads.`;
     case 'introduce':
-      return `Try "${angleName(recommended?.value)}" here — it wins elsewhere in this portfolio and has never run in this ad set.`;
+      return `Try "${angleName(recommended?.value)}" here — it wins in other ad sets and has never run in this one.`;
     case 'rebuild_craft':
       return `Keep the "${angleName(current?.value)}" angle but rebuild the execution — it already carries most of the spend and is not beating the ad set's own median.`;
     default:

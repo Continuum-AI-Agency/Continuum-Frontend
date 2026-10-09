@@ -17,14 +17,14 @@ export function JainaReportRecommendations({
   if (!recommendations || recommendations.length === 0) return null;
 
   return (
-    <div id="recommendations" className="space-y-4 pt-4 border-t border-white/5">
+    <div id="recommendations" className="space-y-4">
       <h3 className="text-lg font-semibold text-primary/80">Priority Recommendations</h3>
       <div className="space-y-3">
         {recommendations.map((item, index) => (
           <Task
             key={`${item.title || 'rec'}-${index}`}
             status="pending"
-            className="bg-white/5 border-white/5 rounded-lg overflow-hidden hover:bg-white/10 transition-colors"
+            className="overflow-hidden rounded-xl border-0 bg-primary/10"
           >
             <TaskTrigger title={item.title || 'Recommendation'} />
             <TaskContent>

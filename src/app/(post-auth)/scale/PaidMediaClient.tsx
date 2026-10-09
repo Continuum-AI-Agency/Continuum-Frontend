@@ -53,18 +53,20 @@ import { OptimizerSurfaceSkeleton } from './OptimizerSurfaceSkeleton';
 import { ScaleHeaderBar } from './ScaleHeaderBar';
 
 // `dashboard` is unfinished: no tab or sidebar entry leads to it, but a direct link still opens
-// it. `whats-working` is the view the bar's "What's working" link opens.
+// it. `creative-insights` is the view the bar's "Creative Insights" link opens; it replaced
+// "What's working", whose `whats-working` links still land on it.
 const PAID_MEDIA_TABS = [
   'dashboard',
   'performance',
   'campaigns',
   'jaina',
-  'whats-working',
+  'creative-insights',
 ] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
 function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
   if (value === 'budget') return 'performance';
+  if (value === 'whats-working') return 'creative-insights';
   return PAID_MEDIA_TABS.some((tab) => tab === value) ? (value as PaidMediaTab) : null;
 }
 
@@ -127,23 +129,14 @@ const ScaleCompanionCanvas = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
-// What's working: the kill / scale / iterate calls, with the win-rate explorer as their pop-out.
-const WhatsWorkingAdsCard = dynamic(
+// Creative Insights: the account's angles, the next angle per ad set, and the kill / scale /
+// iterate calls, with the win-rate explorer as a pop-out in its header.
+const CreativeInsightsPage = dynamic(
   () =>
-    import('@/components/paid-media/dashboard/whats-working/WhatsWorkingAdsCard').then(
-      (mod) => mod.WhatsWorkingAdsCard,
+    import('@/components/paid-media/creative-insights/CreativeInsightsPage').then(
+      (mod) => mod.CreativeInsightsPage,
     ),
   { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-lg" /> },
-);
-
-// The win-rate explorer is a pop-out, not a tab: it needs full height, and the
-// view keeps only the compact kill/scale/iterate calls.
-const WhatsWorkingExplorerPopover = dynamic(
-  () =>
-    import('@/components/paid-media/dashboard/whats-working/WhatsWorkingExplorerPopover').then(
-      (mod) => mod.WhatsWorkingExplorerPopover,
-    ),
-  { ssr: false },
 );
 
 // The "performance" tab slot now hosts the Paid Media Optimizer surface. The
@@ -626,7 +619,7 @@ export default function PaidMediaClientPage({
     );
   }
 
-  const whatsWorkingAvailable = platform === 'meta' && Boolean(selectedAdAccount);
+  const creativeInsightsAvailable = platform === 'meta' && Boolean(selectedAdAccount);
 
   return (
     <div className="@container/paid box-border h-full min-h-0 w-full max-w-none overflow-hidden">
@@ -685,21 +678,21 @@ export default function PaidMediaClientPage({
                 </Button>
               </>
             ) : null}
-            {whatsWorkingAvailable ? (
+            {creativeInsightsAvailable ? (
               <button
                 type="button"
-                onClick={() => handleTabChange('whats-working')}
-                aria-current={activeTab === 'whats-working' ? 'page' : undefined}
+                onClick={() => handleTabChange('creative-insights')}
+                aria-current={activeTab === 'creative-insights' ? 'page' : undefined}
                 data-testid="whats-working-link"
                 className={cn(
                   'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary transition-colors',
                   'hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  activeTab === 'whats-working' && 'bg-primary/10',
+                  activeTab === 'creative-insights' && 'bg-primary/10',
                 )}
               >
                 <Sparkles aria-hidden="true" className="size-3.5" />
-                <span className="hidden sm:inline">What&apos;s working</span>
-                <span className="sr-only sm:hidden">What&apos;s working</span>
+                <span className="hidden sm:inline">Creative Insights</span>
+                <span className="sr-only sm:hidden">Creative Insights</span>
               </button>
             ) : null}
             <TabsList className="h-8">
@@ -960,21 +953,18 @@ export default function PaidMediaClientPage({
         </TabsContent>
 
         <TabsContent
-          value="whats-working"
-          className="box-border min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-3"
+          value="creative-insights"
+          className="box-border min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-4"
         >
-          {whatsWorkingAvailable ? (
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
-              <div className="flex justify-end">
-                <WhatsWorkingExplorerPopover brandId={brandProfileId} />
-              </div>
-              <WhatsWorkingAdsCard adAccountId={selectedAdAccount} brandId={brandProfileId} />
+          {creativeInsightsAvailable ? (
+            <div className="mx-auto w-full max-w-5xl">
+              <CreativeInsightsPage adAccountId={selectedAdAccount} brandId={brandProfileId} />
             </div>
           ) : !selectedAdAccount ? (
             renderBlockedState()
           ) : (
             <div className="flex h-full items-center justify-center p-4 text-muted-foreground text-sm">
-              What&apos;s working reads Meta ad accounts.
+              Creative Insights reads Meta ad accounts.
             </div>
           )}
         </TabsContent>

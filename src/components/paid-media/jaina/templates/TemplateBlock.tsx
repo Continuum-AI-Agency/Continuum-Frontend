@@ -7,6 +7,8 @@
 // block through `BlockRenderer` gets both, stacked (the default export).
 
 import type { AnswerTemplateBlockV2, CheckpointBlockV2 } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
+import { JAINA_LEAD } from '../blocks/modules';
 import { JAINA_ANSWER_PROSE } from '../reading';
 import { FigureText } from './Figure';
 import { Steps } from './layouts/Steps';
@@ -18,8 +20,8 @@ export const isAnswerTemplateBlock = (block: CheckpointBlockV2): block is Answer
 export function TemplateExecutive({ block }: { block: AnswerTemplateBlockV2 }) {
   const { Hero } = TEMPLATE_RENDERERS[block.template_id];
   return (
-    <div className="space-y-2" data-template={block.template_id} data-template-part="executive">
-      <p className={JAINA_ANSWER_PROSE}>
+    <div className="space-y-3" data-template={block.template_id} data-template-part="executive">
+      <p className={cn(JAINA_ANSWER_PROSE, JAINA_LEAD)}>
         <FigureText text={block.executive.sentence} figures={block.figures} />
       </p>
       <Hero block={block} />

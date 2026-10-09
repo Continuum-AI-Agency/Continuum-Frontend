@@ -29,6 +29,10 @@
 // imported, so this surface breathes on the one rhythm every other surface breathes on.
 // The sizes are the answer's own scale (`JAINA_TYPE`): every figure is a figure, and the
 // rank a row carries is its position and `data-priority`, not a larger typeface.
+//
+// The block is the answer's "now what": a decision module on the primary tint, no border and
+// no rule down the rows — the moves are separated by space, and each move's sentence is set
+// semibold because it is the line the reader acts on.
 
 import { CalmRule } from '@/components/paid-media/optimizer/sections/account/candidateHeadline';
 import { formatValue } from '@/lib/jaina/formatValue';
@@ -37,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { JAINA_TYPE } from '../reading';
 import { BlockHeading } from './BlockHeading';
 import { BlockSourcesFooter, CitationChips } from './citations';
+import { JAINA_MODULE } from './modules';
 import { InlineProse } from './prose';
 
 type ActionsBlockProps = { block: ActionsBlockV2; isStreaming: boolean };
@@ -76,7 +81,11 @@ function evidenceFigure(evidence: ActionRow['evidence']): string {
 
 export default function ActionsBlock({ block }: ActionsBlockProps) {
   return (
-    <section data-testid="actions-block">
+    <section
+      className={JAINA_MODULE.decision}
+      data-jaina-module="decision"
+      data-testid="actions-block"
+    >
       <BlockHeading
         title={block.title}
         leading={<CalmRule play testId="actions-calm-rule" />}
@@ -85,7 +94,6 @@ export default function ActionsBlock({ block }: ActionsBlockProps) {
       <ol className="space-y-3">
         {block.rows.map((row) => (
           <li
-            className="border-border/40 border-l pl-3"
             data-priority={row.priority}
             data-testid="actions-row"
             key={`${row.priority}|${row.entity.id ?? row.entity.name}|${row.action}`}
@@ -105,11 +113,11 @@ export default function ActionsBlock({ block }: ActionsBlockProps) {
               </span>
             </p>
             <p
-              className={cn('mt-0.5 text-foreground', JAINA_TYPE.body)}
+              className={cn('mt-0.5 font-semibold text-foreground', JAINA_TYPE.body)}
               data-testid="actions-sentence"
             >
               <span
-                className="font-medium"
+                className="font-semibold"
                 data-entity-id={row.entity.id ?? undefined}
                 data-entity-level={row.entity.level ?? undefined}
                 data-testid="actions-entity"
@@ -117,12 +125,18 @@ export default function ActionsBlock({ block }: ActionsBlockProps) {
                 {row.entity.name}
               </span>
               {entityKindLabel(row.entity) ? (
-                <span className="text-muted-foreground"> ({entityKindLabel(row.entity)})</span>
+                <span className="font-normal text-muted-foreground">
+                  {' '}
+                  ({entityKindLabel(row.entity)})
+                </span>
               ) : null}
               {' — '}
               <InlineProse text={row.action} />
               {row.sizing ? (
-                <span className="text-muted-foreground tabular-nums"> · {row.sizing}</span>
+                <span className="font-normal text-muted-foreground tabular-nums">
+                  {' '}
+                  · {row.sizing}
+                </span>
               ) : null}
               <CitationChips citeIds={row.cite_ids} citations={block.citations} className="ml-1" />
             </p>

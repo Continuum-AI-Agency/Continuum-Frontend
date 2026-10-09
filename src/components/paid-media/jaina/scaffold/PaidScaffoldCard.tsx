@@ -149,7 +149,7 @@ function ViewSwitch({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex items-center gap-1 rounded-md border p-0.5">
+      <div className="flex items-center gap-1 rounded-md bg-background/80 p-0.5">
         {(
           [
             ['graph', 'Graph', Network],
@@ -204,7 +204,10 @@ const OUTLINE_LIMIT = 6;
 function ScaffoldOutline({ tree, currency }: { tree: ScaffoldTree; currency: string | null }) {
   const hidden = tree.adSets.length - OUTLINE_LIMIT;
   return (
-    <ul className="divide-y rounded-md border text-sm" data-testid="scaffold-outline">
+    <ul
+      className="divide-y divide-foreground/5 rounded-xl bg-background/80 text-sm"
+      data-testid="scaffold-outline"
+    >
       {tree.campaign ? (
         <li className="truncate px-2.5 py-1.5 font-medium" title={tree.campaign.name}>
           {tree.campaign.name}
@@ -236,7 +239,7 @@ function DeployBlockers({ blockers }: { blockers: DeployBlocker[] }) {
   if (blockers.length === 0) return null;
   return (
     <div
-      className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm"
+      className="rounded-lg bg-warning/10 px-3 py-2.5 text-sm"
       data-testid="scaffold-deploy-blockers"
     >
       <p className="font-medium">Before this can deploy</p>
@@ -442,7 +445,9 @@ export function PaidScaffoldCard({
 
   return (
     <>
+      {/* A plan awaiting a decision: the answer's decision module — primary tint, no border. */}
       <AgentDecisionCard
+        className="rounded-xl border-0 bg-primary/10"
         data-testid="paid-scaffold-card"
         data-scaffold-version={scaffold.scaffoldId}
       >
@@ -499,7 +504,7 @@ export function PaidScaffoldCard({
           {preview && !decided ? (
             <section className="flex flex-col gap-1.5" data-testid="scaffold-gate-preview">
               <h4 className="font-medium text-foreground text-sm">What deploying creates</h4>
-              <div className="rounded-lg border bg-muted/20 px-1 py-1.5">
+              <div className="rounded-lg bg-background/80 px-1 py-1.5">
                 <ApprovalChangeTable preview={preview} />
               </div>
             </section>
@@ -528,7 +533,7 @@ export function PaidScaffoldCard({
                   <p className="text-muted-foreground text-sm">Loading the scaffold…</p>
                 )
               ) : view === 'graph' ? (
-                <div className="h-[380px] overflow-hidden rounded-md border">
+                <div className="h-[380px] overflow-hidden rounded-lg bg-background">
                   {tree && width !== null ? (
                     <ScaffoldTreeCanvas
                       inline
@@ -555,7 +560,7 @@ export function PaidScaffoldCard({
                 Creative slot
                 <select
                   aria-label="Creative slot"
-                  className="min-w-0 rounded border bg-background p-1"
+                  className="min-w-0 rounded bg-background p-1"
                   value={selectedAd.pathKey}
                   onChange={(event) => setSelectedPathKey(event.target.value)}
                 >
@@ -596,7 +601,7 @@ export function PaidScaffoldCard({
 
           {deployError ? (
             <p
-              className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive text-sm"
+              className="rounded-lg bg-destructive/5 px-3 py-2 text-destructive text-sm"
               data-testid="scaffold-deploy-error"
               role="alert"
             >
@@ -606,7 +611,7 @@ export function PaidScaffoldCard({
         </AgentCardBody>
 
         {liveApproval && onDecide && approval && gate?.gate === 'publish' ? (
-          <AgentActions className="flex-wrap">
+          <AgentActions className="flex-wrap px-4 pb-4">
             <AgentButton
               variant="ghost"
               disabled={isStreaming}
@@ -630,7 +635,7 @@ export function PaidScaffoldCard({
             </AgentButton>
           </AgentActions>
         ) : deployMode !== 'none' ? (
-          <AgentActions className="mt-0 flex-wrap justify-between gap-2 border-t px-4 py-3">
+          <AgentActions className="mt-0 flex-wrap justify-between gap-2 px-4 py-3">
             <p className="min-w-0 max-w-[40ch] text-muted-foreground text-xs leading-snug">
               {deployRequested
                 ? 'Opening the approval below…'
@@ -756,7 +761,7 @@ function ScaffoldReceiptNotice({ scaffold }: { scaffold: JainaScaffoldState }) {
 
   if (unrecorded.length > 0) {
     return (
-      <div className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-sm">
+      <div className="rounded-md bg-warning/10 p-2.5 text-sm">
         <p className="font-medium">
           {unrecorded.length} object{unrecorded.length === 1 ? '' : 's'} may exist on Meta without a
           record.

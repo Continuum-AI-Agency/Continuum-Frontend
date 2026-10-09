@@ -175,7 +175,9 @@ describe('SpendResultsBalance justification', () => {
       'gap',
     ]);
     expect(panels.map((panel) => panel.getAttribute('data-tone'))).toEqual(['good', 'warn']);
-    expect(panels[0]?.className).toContain('border-l-success');
+    // The good panel takes the green wash; the panels draw no border.
+    expect(panels[0]?.className).toContain('from-success/10');
+    expect(panels[0]?.className).not.toMatch(/\bborder\b/);
     expect(panels[1]?.textContent).toBe(
       'Qué cambiaría el repartoSi SEDE D // MENSAJES // AGOSTO 2026 rindiera en equilibrio (índice 1.00), con el mismo gasto traería 341 conversaciones en vez de 266. Esa es la brecha: 75 conversaciones en este mes.',
     );

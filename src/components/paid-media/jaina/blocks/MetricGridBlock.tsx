@@ -12,6 +12,7 @@ import {
   JUDGEMENT_LABEL,
   JUDGEMENT_TEXT,
   type Judgement,
+  judgeDelta,
   judgeValue,
   READ_JUDGEMENT,
 } from '../reading';
@@ -36,6 +37,8 @@ type Figure = {
   /** The prior period's figure in the metric's own format, with its window. */
   prior: string | null;
   read: MetricTileRead | null;
+  /** Which way the figure moved against its target or prior, judged — tints the tile. */
+  tone: Judgement;
 };
 
 /** A metric's value printed in its own format — the figure and its prior share this. */
@@ -79,18 +82,35 @@ function readOf(metric: MetricItemV2, language: AnswerLanguage): MetricTileRead 
   };
 }
 
+/**
+ * The direction a tile's module is tinted with. The read wins — the Backend derived it
+ * against the target or the prior — and the delta's own judgement (the same one `DeltaBadge`
+ * paints) speaks only when there is no read. Anything else keeps the neutral fill.
+ */
+function toneOf(
+  metric: MetricItemV2,
+  deltaPct: number | undefined,
+  goodWhenDown: boolean,
+): Judgement {
+  if (metric.read) return READ_JUDGEMENT[metric.read];
+  return judgeDelta({ change: deltaPct, goodWhenDown });
+}
+
 function toFigure(metric: MetricItemV2, composed: boolean, language: AnswerLanguage): Figure {
+  const deltaPct = resolveDeltaPct(metric);
+  const goodWhenDown = fallsAreGood(metric.label);
   return {
     label: metric.label,
     value: printMetric(metric, metric.value),
-    deltaPct: resolveDeltaPct(metric),
-    goodWhenDown: fallsAreGood(metric.label),
+    deltaPct,
+    goodWhenDown,
     // The contract has carried `severity` with four values all along and this block threw it
     // away. It is the model's own judgement of the figure; nothing downstream is entitled to
     // re-derive it — WHEN a model wrote it. On a composed grid nobody did: see `composed`.
     judgement: judgeValue(composed ? explicitSeverity(metric.severity) : metric.severity),
     prior: priorLine(metric, language),
     read: readOf(metric, language),
+    tone: toneOf(metric, deltaPct, goodWhenDown),
   };
 }
 
@@ -107,6 +127,7 @@ const toTile = (figure: Figure): MetricTile => ({
     ) : null,
   prior: figure.prior,
   read: figure.read,
+  tone: figure.tone,
 });
 
 /**

@@ -38,6 +38,7 @@ import { BlockHeading } from './BlockHeading';
 import { chartHeight, chartShapeOf, tickAreaHeight, wrapTickLabel } from './chartShape';
 import { displayEntity, type EntityNames, useEntityNames } from './entityNames';
 import { type MetricTile, MetricTiles } from './MetricTiles';
+import { JAINA_MODULE } from './modules';
 
 type ChartBlockProps = { block: ChartBlockV2; isStreaming: boolean };
 
@@ -346,8 +347,13 @@ export function ChartBlock({ block }: ChartBlockProps) {
   // entities than three there is neither, and the block is its figures as tiles.
   const shape = chartShapeOf(block);
 
+  // The chart keeps its plot and loses its frame: it sits on the neutral module fill. A chart
+  // that degrades to tiles takes no fill of its own — each tile is already a module.
   return (
-    <div>
+    <div
+      className={shape.earnsChart ? JAINA_MODULE.neutral : undefined}
+      data-jaina-module={shape.earnsChart ? 'block' : undefined}
+    >
       <BlockHeading
         title={block.title}
         provenance={block.provenance}

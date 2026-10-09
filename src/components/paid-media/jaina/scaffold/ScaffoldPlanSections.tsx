@@ -75,14 +75,11 @@ export function ScaffoldSummaryStrip({ summary }: { summary: ScaffoldSummary }) 
 
   return (
     <div className="@container">
-      <dl
-        className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border @lg:grid-cols-3"
-        data-testid="scaffold-summary"
-      >
+      <dl className="grid grid-cols-2 gap-3 @lg:grid-cols-3" data-testid="scaffold-summary">
         {cells.map((cell) => (
           <div
             key={cell.key}
-            className="flex min-w-0 flex-col gap-0.5 bg-card px-3 py-2.5"
+            className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-background/80 px-3 py-2.5"
             data-testid={`scaffold-summary-${cell.key}`}
           >
             <dt className="text-muted-foreground text-xs">{cell.label}</dt>
@@ -128,7 +125,7 @@ export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
       {entries.length === 0 ? (
         <p className="text-muted-foreground text-sm">No evidence was recorded for this version.</p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="divide-y divide-foreground/5 rounded-xl bg-background/80">
           {shown.map((entry, index) => (
             <li
               key={`${entry.decision}:${entry.path_key ?? 'all'}:${index}`}
@@ -193,7 +190,7 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
   return (
     <section className="flex flex-col gap-1.5" data-testid="scaffold-audiences">
       <SectionHeading>Audiences</SectionHeading>
-      <ul className="divide-y rounded-lg border">
+      <ul className="divide-y divide-foreground/5 rounded-xl bg-background/80">
         {audiences.map((audience) => (
           <li
             key={audience.key}
@@ -258,7 +255,7 @@ function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: st
       <div
         className={cn(
           'relative flex size-16 items-center justify-center overflow-hidden rounded-md bg-muted',
-          tile.format ? 'border' : 'border border-dashed',
+          !tile.format && 'border border-dashed',
         )}
       >
         {src ? (
@@ -313,7 +310,7 @@ export function ScaffoldCreatives({
           />
         ))}
         {hidden > 0 ? (
-          <li className="flex size-16 items-center justify-center rounded-md border text-muted-foreground text-xs tabular-nums">
+          <li className="flex size-16 items-center justify-center rounded-md bg-background/80 text-muted-foreground text-xs tabular-nums">
             +{hidden}
           </li>
         ) : null}

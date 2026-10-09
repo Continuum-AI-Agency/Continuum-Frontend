@@ -440,7 +440,7 @@ describe('PaidMediaClientPage brand context', () => {
       );
     });
 
-    it("opens the What's working view from the bar's link", async () => {
+    it("opens the Creative Insights view from the bar's link", async () => {
       searchParamsValue = 'tab=performance';
       render(
         <PaidMediaClientPage
@@ -452,10 +452,26 @@ describe('PaidMediaClientPage brand context', () => {
       );
 
       const link = await screen.findByTestId('whats-working-link');
+      expect(link.textContent).toContain('Creative Insights');
       act(() => link.click());
       await waitFor(() => expect(routerReplaceMock).toHaveBeenCalled());
-      expect(String(routerReplaceMock.mock.calls.at(-1)?.[0])).toContain('tab=whats-working');
+      expect(String(routerReplaceMock.mock.calls.at(-1)?.[0])).toContain('tab=creative-insights');
       expect(link.getAttribute('aria-current')).toBe('page');
+    });
+
+    it('keeps old tab=whats-working links landing on Creative Insights', async () => {
+      searchParamsValue = 'tab=whats-working';
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-a"
+          brandName="Brand A"
+          initialAccounts={[{ id: 'act_1', name: 'Account One' }]}
+          initialAdAccountId="act_1"
+        />,
+      );
+
+      const link = await screen.findByTestId('whats-working-link');
+      await waitFor(() => expect(link.getAttribute('aria-current')).toBe('page'));
     });
   });
 });

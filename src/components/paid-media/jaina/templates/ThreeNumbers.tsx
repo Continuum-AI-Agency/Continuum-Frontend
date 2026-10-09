@@ -12,6 +12,8 @@
 
 import { formatFigure, type TemplateChart, type TemplateFigure } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
+import { TILE_FIGURE } from '../blocks/MetricTiles';
+import { MODULE_TINT } from '../blocks/modules';
 import { JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText, figureAttributes, figureById, figureTitle } from './Figure';
 import { GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
@@ -57,12 +59,12 @@ function NumberPanel({
         : 'risk';
   return (
     <div
-      className="min-w-0 rounded-md border border-border/60 bg-muted/20 px-3.5 py-3"
+      className={cn('min-w-0 rounded-xl p-3 sm:p-4', MODULE_TINT[judgement])}
       data-three-number={id}
     >
       <div className={cn('truncate text-muted-foreground', JAINA_TYPE.label)}>{figure.label}</div>
       <div className="mt-1">
-        <FigureById figures={figures} id={id} className={JAINA_TYPE.figure} />
+        <FigureById figures={figures} id={id} className={cn(TILE_FIGURE)} />
       </div>
       {prior && change && direction ? (
         <div

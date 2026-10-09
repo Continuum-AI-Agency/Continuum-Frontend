@@ -64,7 +64,7 @@ export function JainaReportCharts({ charts, showHeading = true }: JainaReportCha
   if (normalizedCharts.length === 0) return null;
 
   return (
-    <div className="space-y-4 pt-4 border-t border-white/5">
+    <div className="space-y-4">
       {showHeading ? <h3 className="text-lg font-semibold text-primary/80">Key Trends</h3> : null}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {normalizedCharts.map((chart, index) => (
@@ -353,7 +353,7 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
 
 function ChartCard({ chart }: { chart: NormalizedChart }) {
   return (
-    <div className="min-w-0 rounded-lg border border-white/10 bg-black/20">
+    <div className="min-w-0 rounded-xl bg-muted/40">
       <div className="space-y-4 p-3">
         <div className="space-y-1">
           <span className="text-base font-medium">{chart.title}</span>

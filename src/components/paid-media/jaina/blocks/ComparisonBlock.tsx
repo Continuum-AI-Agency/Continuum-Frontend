@@ -15,6 +15,7 @@ import {
 import { BlockHeading } from './BlockHeading';
 import { BlockSourcesFooter, CitationChips } from './citations';
 import { MediaText } from './mediaText';
+import { JAINA_MODULE } from './modules';
 
 type ComparisonBlockProps = { block: ComparisonBlockV2; isStreaming: boolean };
 
@@ -30,7 +31,7 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
   ];
 
   return (
-    <div>
+    <div className={JAINA_MODULE.neutral} data-jaina-module="block">
       <BlockHeading title={block.title} />
       <div className={JAINA_TABLE.wrap}>
         <table className={JAINA_TABLE.table}>

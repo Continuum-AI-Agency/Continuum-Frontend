@@ -9,7 +9,7 @@ export function JainaReportMetrics({ metrics }: JainaReportMetricsProps) {
   if (!metrics || metrics.length === 0) return null;
 
   return (
-    <div className="space-y-4 pt-4 border-t border-white/5">
+    <div className="space-y-4">
       <h3 className="text-lg font-semibold text-primary/80">Performance Snapshot</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {metrics.map((metric, index) => (
@@ -43,7 +43,7 @@ function MetricCard({ item }: { item: FrontendCheckpointReport['performance_snap
   const statusVariant = resolveMetricStatusColor(metric.status, numericChange, hasChange);
 
   return (
-    <div className="rounded-lg border border-white/5 bg-white/5 p-4 hover:bg-white/10 transition-colors">
+    <div className="rounded-xl bg-muted/40 p-4">
       <div className="flex flex-col gap-1">
         <span className="text-xs text-muted-foreground uppercase tracking-wider">
           {String(metric.metric ?? metric.label ?? 'Metric')}

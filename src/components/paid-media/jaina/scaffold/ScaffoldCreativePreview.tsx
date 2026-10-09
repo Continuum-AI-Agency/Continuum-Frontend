@@ -60,7 +60,7 @@ export function ScaffoldCreativePreview({
   return (
     <section
       aria-label={`Creative for ${name}`}
-      className="mt-2 flex flex-col gap-2 rounded-md border p-3"
+      className="mt-2 flex flex-col gap-2 rounded-lg bg-background/80 p-3"
     >
       <p className="text-xs font-medium">{name}</p>
       {preview ? (
@@ -79,7 +79,7 @@ export function ScaffoldCreativePreview({
           Format
           <select
             aria-label="Creative format"
-            className="rounded border bg-background p-1"
+            className="rounded bg-background p-1"
             value={format}
             disabled={disabled || busy}
             onChange={(event) => setFormat(event.target.value === 'video' ? 'video' : 'image')}

@@ -48,7 +48,7 @@ export function ApprovalChangeTable({ preview }: { preview: JainaApprovalPreview
         </TableCaption>
       ) : null}
       <TableHeader>
-        <TableRow className="hover:bg-transparent">
+        <TableRow className="border-foreground/5 hover:bg-transparent">
           <TableHead className="h-8 px-2 text-xs font-medium">Field</TableHead>
           <TableHead className="h-8 px-2 text-xs font-medium">Before</TableHead>
           <TableHead className="h-8 px-2 text-xs font-medium">After</TableHead>
@@ -57,7 +57,7 @@ export function ApprovalChangeTable({ preview }: { preview: JainaApprovalPreview
       </TableHeader>
       <TableBody>
         {preview.rows.map((row) => (
-          <TableRow key={row.field} className="hover:bg-transparent">
+          <TableRow key={row.field} className="border-foreground/5 hover:bg-transparent">
             <TableCell className="px-2 py-1.5 font-mono text-muted-foreground text-xs">
               {row.field}
             </TableCell>

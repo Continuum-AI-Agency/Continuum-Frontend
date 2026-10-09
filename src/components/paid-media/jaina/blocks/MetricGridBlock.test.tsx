@@ -98,6 +98,31 @@ describe('MetricGridBlock — figures a reader can scan down a column', () => {
     expect(screen.getByRole('img', { name: 'Down 19%, good' })).toBeTruthy();
   });
 
+  it('tints a tile by the judged direction of its figure, and draws no border', () => {
+    render(
+      <MetricGridBlock
+        block={gridOf([
+          metric({ label: 'Cost per result', change: 19, change_direction: 'down' }),
+          metric({ label: 'Leads', change: 12, change_direction: 'down' }),
+          metric({ label: 'Spend', value: 87_552, change: null, change_direction: null }),
+        ])}
+        isStreaming={false}
+      />,
+    );
+    const tiles = Array.from(document.querySelectorAll('[data-jaina-tile]'));
+    expect(tiles.map((tile) => tile.getAttribute('data-jaina-tile'))).toEqual([
+      'positive',
+      'risk',
+      'unjudged',
+    ]);
+    expect(tiles[0].className).toContain('from-success/10');
+    expect(tiles[1].className).toContain('from-destructive/10');
+    expect(tiles[2].className).toContain('bg-muted/40');
+    for (const node of [screen.getByTestId('metric-grid-block'), ...tiles]) {
+      expect(node.outerHTML).not.toMatch(/\bborder\b/);
+    }
+  });
+
   it('leaves a MODEL-JUDGED unremarkable figure in the ink colour, never a decorative one', () => {
     // `dataset_id: null` is a grid the model wrote itself, which is every turn whose
     // registry holds no scalar_group. Its `neutral` is a reading — "we looked and it is

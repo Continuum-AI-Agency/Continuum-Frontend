@@ -13,6 +13,7 @@ import { JAINA_TABLE, JAINA_TYPE } from '../reading';
 import { BlockHeading } from './BlockHeading';
 import { CreativeCell } from './CreativeCell';
 import { MediaText } from './mediaText';
+import { JAINA_MODULE } from './modules';
 
 type DataTableBlockProps = { block: DataTableBlockV2; isStreaming: boolean };
 
@@ -52,7 +53,7 @@ function SegmentEvidence({
   currency: string | null;
 }) {
   return (
-    <li className="rounded-md border border-border/60 p-2">
+    <li className="rounded-lg bg-background/70 p-2">
       <p className="font-medium text-foreground">{segment.audienceCellId}</p>
       <dl className="mt-1 grid gap-1 text-xs text-muted-foreground">
         <div>
@@ -172,8 +173,13 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
   const cardFields = block.render_mode === 'creative_cards' ? block.card_fields : null;
   const columnsByKey = new Map(block.columns.map((column) => [column.key, column]));
 
+  // A table is one neutral module; creative cards are each their own module, so the block
+  // around them takes no fill.
   return (
-    <div>
+    <div
+      className={cardFields ? undefined : JAINA_MODULE.neutral}
+      data-jaina-module={cardFields ? undefined : 'block'}
+    >
       <BlockHeading
         title={block.title}
         provenance={block.provenance}
@@ -212,7 +218,7 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
               <li key={rowIndex}>
                 <article
                   aria-label={title}
-                  className="h-full overflow-hidden rounded-xl border border-border/60 bg-card"
+                  className="h-full overflow-hidden rounded-xl bg-muted/40"
                 >
                   <CreativeCell
                     label={creativeLabel}

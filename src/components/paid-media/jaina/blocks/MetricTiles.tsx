@@ -1,8 +1,12 @@
 'use client';
 
-// A row of figures read at a glance: label above, figure below, each in its own cell of one
-// bordered grid. The metric grid is this; a chart that does not earn its space degrades to
-// this. One drawing so a tile is a tile wherever it appears.
+// A row of figures read at a glance: label above, figure below, each tile its own borderless
+// module on the neutral fill (`modules.ts`), separated from the next by the gap alone. The
+// metric grid is this; a chart that does not earn its space degrades to this. One drawing so
+// a tile is a tile wherever it appears.
+//
+// A tile whose figure moved against its prior or its target carries a `tone`: the module takes
+// a faint green or red wash from the top and the FIGURE takes the colour — never the card.
 //
 // A J2 tile carries two more lines under the figure: the prior period it is compared with
 // ("vs 24,214 · Sep 14–20") and the one-word read of that comparison, coloured by what it
@@ -10,7 +14,8 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { JAINA_TYPE } from '../reading';
+import { JAINA_TYPE, type Judgement } from '../reading';
+import { MODULE_TINT } from './modules';
 
 export type MetricTileRead = {
   /** The word the reader sees, in the answer's language. */
@@ -35,7 +40,12 @@ export type MetricTile = {
   prior?: string | null;
   /** The one-word read against the target or the prior, coloured by state. */
   read?: MetricTileRead | null;
+  /** The judged direction of the figure vs its prior or target; tints the module. */
+  tone?: Judgement | null;
 };
+
+/** The tile's figure: large, mono, tabular — the protagonist of its module. */
+export const TILE_FIGURE = `${JAINA_TYPE.figure} text-xl leading-tight [overflow-wrap:anywhere]`;
 
 export function MetricTiles({
   tiles,
@@ -44,17 +54,21 @@ export function MetricTiles({
   return (
     <dl
       {...rest}
-      className={cn(
-        'grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-px overflow-hidden rounded-lg border border-border/60 bg-border/40',
-        rest.className,
-      )}
+      className={cn('grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3', rest.className)}
     >
       {tiles.map((tile) => (
-        <div key={tile.key} className="flex flex-col gap-1 bg-background px-3 py-2.5">
+        <div
+          key={tile.key}
+          className={cn(
+            'flex flex-col gap-1 rounded-xl p-3 sm:p-4',
+            MODULE_TINT[tile.tone ?? 'unjudged'],
+          )}
+          data-jaina-tile={tile.tone ?? 'unjudged'}
+        >
           <dt className={cn(JAINA_TYPE.label, 'text-muted-foreground')}>{tile.label}</dt>
-          <dd className="flex items-baseline gap-1.5">
+          <dd className="flex flex-wrap items-baseline gap-x-1.5">
             <span
-              className={cn(JAINA_TYPE.figure, tile.valueClassName ?? 'text-foreground')}
+              className={cn(TILE_FIGURE, tile.valueClassName ?? 'text-foreground')}
               title={tile.title}
             >
               {tile.value}

@@ -12,6 +12,7 @@ import {
   hasThinEvidence,
   type PaidCreativeVerdict,
 } from '@continuum/contracts';
+import { formatCurrency } from '@/components/paid-media/optimizer/format';
 
 // The funnel filter, the thin-evidence rule and the two selectors moved into
 // `@continuum/contracts` when the automations `whats_working` source began
@@ -72,16 +73,13 @@ export const categoryValueLabel = (row: Pick<CreativeWinRateRow, 'dimension' | '
 export const percent = (value: number | null): string =>
   value === null ? '—' : `${Math.round(value * 100)}%`;
 
-// KNOWN WRONG for non-USD accounts, and deliberately left that way for now. The
-// creative report carries no money currency (its `currency` field is the KPI kind:
-// purchases | leads | clicks), and the honest fix is to stamp the ad account's
-// currency into the report at assembly time — it is generated server-side from that
-// account and already knows it. Resolving it client-side instead would mean pulling
-// the optimizer's account hook into this directory, and a sibling spec mock.modules
-// that module process-wide. A wrong symbol on an MXN account misreads by ~20x, so
-// this is a real defect, not cosmetic.
-export const money = (value: number | null): string =>
-  value === null ? '—' : `$${value.toFixed(2)}`;
+// Money in the AD ACCOUNT's currency, through the optimizer's formatter: an unknown code
+// prints the bare figure rather than "$", because "$" on a peso account misreads by ~20x.
+// The report itself carries no money currency (its win-rate rows do, per account; its
+// verdicts do not), so callers pass the account's code — useAdAccountCurrency on a page,
+// row.currency in the explorer.
+export const money = (value: number | null, currency: string | null | undefined): string =>
+  formatCurrency(value, currency);
 
 export const isHttpUrl = (value: string | null | undefined): value is string =>
   typeof value === 'string' && /^https?:\/\//.test(value);

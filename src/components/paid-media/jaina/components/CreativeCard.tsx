@@ -127,7 +127,7 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
             initial={{ opacity: 0, scale: 0.88 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.22, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-border/50 transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-primary/50 hover:shadow-lg hover:z-10"
+            className="relative w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg bg-muted/40 transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-primary/50 hover:shadow-lg hover:z-10"
             style={{ transformOrigin: 'bottom center' }}
           >
             <AspectRatio ratio={1}>
@@ -190,7 +190,7 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
           )}
 
           {creative.post_copy && (
-            <p className="line-clamp-4 border-l-2 border-border pl-2 text-xs leading-relaxed text-foreground/75">
+            <p className="line-clamp-4 rounded-md bg-muted/40 px-2 py-1.5 text-xs leading-relaxed text-foreground/75">
               {creative.post_copy}
             </p>
           )}

@@ -4,6 +4,7 @@ import type { CheckpointBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { type AnswerLanguage, SECTION_LABELS } from '../answerLanguage';
 import { BlockHeading } from '../blocks/BlockHeading';
+import { FLATTEN_NESTED_MODULE, JAINA_MODULE_GAP } from '../blocks/modules';
 import { narrativeThreeOf } from '../blocks/narrativeShape';
 import { JAINA_TYPE } from '../reading';
 
@@ -78,6 +79,9 @@ export function SectionLabel({ stratum, language, id }: SectionLabelProps) {
  * fold rather than printed twice. The first fold is open by default (J3's rule, adopted by
  * the recommendation: everything that is neither the answer nor its reading folds, and the
  * reader still sees the first table without a click); the rest open on demand.
+ *
+ * The fold IS the module: the neutral fill, no border. The block inside would draw its own
+ * module, so its fill is flattened into the fold's rather than stacked on it.
  */
 function EvidenceFold({
   block,
@@ -90,11 +94,11 @@ function EvidenceFold({
 }) {
   return (
     <details
-      className="group rounded-lg border border-border/50"
+      className="group rounded-xl bg-muted/40"
       data-evidence-fold={block.block_id}
       open={open}
     >
-      <summary className="cursor-pointer list-none px-3 py-2 marker:content-none">
+      <summary className="cursor-pointer list-none px-3 py-2.5 marker:content-none sm:px-4">
         <BlockHeading
           title={block.title}
           provenance={block.provenance}
@@ -104,7 +108,14 @@ function EvidenceFold({
         />
       </summary>
       {/* The block draws this same heading for itself; inside the fold the summary is it. */}
-      <div className="px-3 pb-3 [&_[data-block-heading]]:hidden">{children}</div>
+      <div
+        className={cn(
+          'px-3 pb-3 sm:px-4 sm:pb-4 [&_[data-block-heading]]:hidden',
+          FLATTEN_NESTED_MODULE,
+        )}
+      >
+        {children}
+      </div>
     </details>
   );
 }
@@ -145,7 +156,7 @@ export function JainaJustificationSection({
     <section
       aria-labelledby={headingId}
       data-report-section="justification"
-      className={cn('space-y-3 border-t border-border/50 pt-4', className)}
+      className={cn('flex flex-col', JAINA_MODULE_GAP, className)}
     >
       <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <h3
@@ -157,7 +168,7 @@ export function JainaJustificationSection({
         </h3>
         <p className="text-xs text-muted-foreground">{labels.evidenceDetail}</p>
       </header>
-      <div className="space-y-3">
+      <div className={cn('flex flex-col', JAINA_MODULE_GAP)}>
         {leading}
         {blocks.map((block, index) =>
           fold ? (

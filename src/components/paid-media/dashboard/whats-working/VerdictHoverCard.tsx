@@ -22,6 +22,8 @@ type VerdictHoverCardProps = {
   verdict: PaidCreativeVerdict;
   freshUrl: string | null;
   onRecover: (adId: string) => void;
+  /** The ad account's ISO currency. Unknown prints bare figures, never "$". */
+  currency?: string | null;
   /** Single element: it becomes the hover-card trigger via Base UI `render`. */
   children: ReactElement;
 };
@@ -30,6 +32,7 @@ export function VerdictHoverCard({
   verdict,
   freshUrl,
   onRecover,
+  currency = null,
   children,
 }: VerdictHoverCardProps) {
   const media = mediaFromPaidVerdict({
@@ -52,7 +55,7 @@ export function VerdictHoverCard({
               onRecover={() => onRecover(verdict.adId)}
             />
           ) : (
-            <span className="grid size-full place-items-center text-3xs text-muted-foreground">
+            <span className="grid size-full place-items-center text-xs text-muted-foreground">
               No preview
             </span>
           )}
@@ -63,13 +66,13 @@ export function VerdictHoverCard({
           <div className="flex flex-wrap items-center gap-1">
             <span
               className={cn(
-                'rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide',
+                'rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
                 VERDICT_STYLE[verdict.verdict],
               )}
             >
               {verdict.verdict}
             </span>
-            <span className="rounded bg-muted px-1 py-px text-3xs uppercase text-muted-foreground">
+            <span className="rounded bg-muted px-1 py-px text-xs uppercase text-muted-foreground">
               {verdict.funnelStage}
             </span>
           </div>
@@ -77,12 +80,12 @@ export function VerdictHoverCard({
 
         <p className="text-xs text-muted-foreground">{verdict.reason}</p>
 
-        <div className="flex items-center justify-between border-border/60 border-t pt-2 text-3xs text-muted-foreground tabular-nums">
-          <span>30d spend {money(verdict.spend)}</span>
-          <span>CPA {money(verdict.cpa)}</span>
+        <div className="flex items-center justify-between border-border/60 border-t pt-2 text-xs text-muted-foreground tabular-nums">
+          <span>30d spend {money(verdict.spend, currency)}</span>
+          <span>CPA {money(verdict.cpa, currency)}</span>
         </div>
         {cohortMultiple ? (
-          <p className="text-3xs text-muted-foreground tabular-nums">{cohortMultiple}</p>
+          <p className="text-xs text-muted-foreground tabular-nums">{cohortMultiple}</p>
         ) : null}
       </HoverCardContent>
     </HoverCard>

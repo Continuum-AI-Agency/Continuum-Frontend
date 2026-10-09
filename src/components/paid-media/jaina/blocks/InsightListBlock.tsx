@@ -4,10 +4,11 @@ import { EyeIcon, HelpCircleIcon, LightbulbIcon, ZapIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
-import { JAINA_TYPE, JUDGEMENT_LABEL, JUDGEMENT_RULE, judgeValue } from '../reading';
+import { JAINA_TYPE, JUDGEMENT_LABEL, JUDGEMENT_TEXT, judgeValue } from '../reading';
 import { BlockHeading } from './BlockHeading';
 import { BlockSourcesFooter, CitationChips } from './citations';
 import { EvidenceTooltip } from './EvidenceTooltip';
+import { JAINA_MODULE } from './modules';
 import { InlineProse } from './prose';
 
 type InsightListBlockProps = { block: InsightListBlockV2; isStreaming: boolean };
@@ -24,8 +25,9 @@ const itemTypeIcon: Record<ItemType, IconComponent> = {
 };
 
 export default function InsightListBlock({ block }: InsightListBlockProps) {
+  // One neutral module; the items inside are separated by space, never by a rule or a card.
   return (
-    <div>
+    <div className={JAINA_MODULE.neutral} data-jaina-module="block">
       {block.title && (
         <BlockHeading
           title={block.title}
@@ -34,24 +36,22 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
           evidenceRefs={block.evidence_refs}
         />
       )}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {block.items.map((item, index) => {
           const Icon: IconComponent = itemTypeIcon[item.item_type as ItemType] ?? LightbulbIcon;
           // Through `reading.ts` rather than a local emerald/amber/red map: one answer to
-          // "why is this rule red", and design tokens that follow the theme.
+          // "why is this item red", and design tokens that follow the theme. The judgement
+          // colours the item's icon; the item itself draws no rule.
           const judgement = judgeValue(item.severity as Severity | null | undefined);
 
           return (
             <div
               key={index}
-              className={cn(
-                'rounded-lg border border-border/60 border-l-2 bg-background/80 px-3 py-2.5',
-                JUDGEMENT_RULE[judgement],
-              )}
+              data-judgement={judgement}
               title={`${item.title}: ${JUDGEMENT_LABEL[judgement]}`}
             >
               <div className="flex items-start gap-1.5">
-                <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                <Icon className={cn('mt-1 size-3.5 shrink-0', JUDGEMENT_TEXT[judgement])} />
                 <span className={cn('min-w-0 flex-1 font-medium text-foreground', JAINA_TYPE.body)}>
                   {item.title}
                 </span>
@@ -64,7 +64,10 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
                 ) : null}
                 {item.priority && (
                   <span
-                    className={cn('shrink-0 rounded-full bg-muted px-1.5 py-0.5', JAINA_TYPE.label)}
+                    className={cn(
+                      'shrink-0 rounded-full bg-background/80 px-1.5 py-0.5',
+                      JAINA_TYPE.label,
+                    )}
                   >
                     {item.priority}
                   </span>
