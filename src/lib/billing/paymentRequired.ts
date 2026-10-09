@@ -19,6 +19,7 @@ const PRODUCT_LABEL: Record<BillingPaymentRequired['product'], string> = {
   paid_media: 'Paid media',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'Social Listening',
 };
 
 export function parsePaymentRequired(status: number, body: unknown): BillingPaymentRequired | null {

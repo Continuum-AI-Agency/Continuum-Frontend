@@ -20,6 +20,7 @@ const PRODUCT_FEATURES: Record<ProductCode, string> = {
   paid_media: 'Jaina, Forge ad creation, approvals and optimizer',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'Social Listening',
 };
 
 /** `payment_failed`: on the subscription, but Stripe is retrying a declined renewal. */
@@ -190,6 +191,7 @@ export const NEED_LABEL: Record<ProductCode, string> = {
   paid_media: 'paid media',
   trends: 'Trends',
   mcp: 'MCP connections',
+  listening: 'Social Listening',
 };
 
 export function toBillingView(

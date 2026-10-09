@@ -11,7 +11,7 @@ export * from './usage';
  * `billing.apply_stripe_projection`; admins and Contract clients write it directly.
  */
 
-export const PRODUCT_CODES = ['studio', 'organic_agent', 'paid_media', 'trends', 'mcp'] as const;
+export const PRODUCT_CODES = ['studio', 'organic_agent', 'paid_media', 'trends', 'mcp', 'listening'] as const;
 export const productCodeSchema = z.enum(PRODUCT_CODES);
 export type ProductCode = z.infer<typeof productCodeSchema>;
 
