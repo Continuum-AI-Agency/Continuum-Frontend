@@ -137,8 +137,8 @@ export function platformCardActionLabel(card: PlatformCard): string | null {
       return 'Add as exact keyword';
     case 'google_bid_target': {
       const direction = card.proposed_target < card.current_target ? 'Lower' : 'Raise';
-      const name = card.strategy === 'target_cpa' ? 'target CPA' : 'target ROAS';
-      return `${direction} the ${name} to ${bidTargetLabel(card.proposed_target, card.strategy, card.currency)}`;
+      const name = card.strategy === 'target_cpa' ? 'tCPA' : 'tROAS';
+      return `${direction} the Google Ads bid target (${name}) to ${bidTargetLabel(card.proposed_target, card.strategy, card.currency)}`;
     }
     case 'google_low_quality_keyword':
       return 'Pause keyword';
@@ -370,12 +370,12 @@ export function platformCardTitle(card: PlatformCard): string {
       return `"${card.term}" brought ${plural(card.conversions, 'conversion', 'conversions')}${cost} in ${card.window_days} days and is not a keyword yet`;
     }
     case 'google_bid_target': {
-      const name = card.strategy === 'target_cpa' ? 'target CPA' : 'target ROAS';
+      const name = card.strategy === 'target_cpa' ? 'tCPA' : 'tROAS';
       const actual =
         card.actual != null
           ? `, actual ${bidTargetLabel(card.actual, card.strategy, card.currency)} over ${card.window_days} days`
           : '';
-      return `${card.campaign_name}: ${name} ${bidTargetLabel(card.current_target, card.strategy, card.currency)}${actual}`;
+      return `${card.campaign_name}: Google Ads bid target (${name}) ${bidTargetLabel(card.current_target, card.strategy, card.currency)}${actual}`;
     }
     case 'google_low_quality_keyword':
       return `"${card.keyword}" has Quality Score ${card.quality_score}/10 and spent ${formatCurrency(card.spend, card.currency)} in ${card.window_days} days with ${plural(card.conversions, 'conversion', 'conversions')}`;

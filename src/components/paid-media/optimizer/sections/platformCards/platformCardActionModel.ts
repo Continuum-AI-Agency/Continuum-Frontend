@@ -74,8 +74,9 @@ function entityName(write: CardWrite): string {
   return `"${write.ref.name ?? write.ref.id}"`;
 }
 
+// The platform's bid setting, named so it is never read as the portfolio's CPA goal.
 function bidName(field: 'target_cpa_micros' | 'target_roas'): string {
-  return field === 'target_cpa_micros' ? 'target CPA' : 'target ROAS';
+  return field === 'target_cpa_micros' ? 'bid target (tCPA)' : 'bid target (tROAS)';
 }
 
 /** The verb on the card's button. */

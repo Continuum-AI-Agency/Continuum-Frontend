@@ -80,7 +80,7 @@ describe('cardActionLabel', () => {
     expect(cardActionLabel(write(PAUSE_GOOGLE_CAMPAIGN))).toBe('Pause campaign');
     expect(cardActionLabel(write(PAUSE_TIKTOK_AD_GROUP))).toBe('Pause ad group');
     expect(cardActionLabel(write(RAISE_GOOGLE_BUDGET))).toBe('Apply new budget');
-    expect(cardActionLabel(write(LOWER_GOOGLE_TCPA))).toBe('Apply new target CPA');
+    expect(cardActionLabel(write(LOWER_GOOGLE_TCPA))).toBe('Apply new bid target (tCPA)');
     expect(cardActionLabel(write(ADD_GOOGLE_NEGATIVES))).toBe('Add 3 negatives');
     expect(cardActionLabel(write(ADD_GOOGLE_KEYWORD))).toBe('Add as exact keyword');
   });
@@ -95,7 +95,7 @@ describe('cardActionTitle', () => {
       'Change the campaign budget of "VIVO 47-EKATAR" on Google',
     );
     expect(cardActionTitle(write(LOWER_GOOGLE_TCPA))).toBe(
-      'Change the target CPA of "VIVO 47-EKATAR" on Google',
+      'Change the bid target (tCPA) of "VIVO 47-EKATAR" on Google',
     );
     expect(cardActionTitle(write(ADD_GOOGLE_NEGATIVES))).toBe(
       'Add 3 negatives to the campaign "VIVO 47-EKATAR" on Google',

@@ -157,7 +157,7 @@ describe('a Google write on a platform card', () => {
   it('labels each write by what it does', () => {
     const cases = [
       [actions.PAUSE_GOOGLE_CAMPAIGN, fixtures.GOOGLE_LOW_QUALITY_KEYWORD, 'Pause campaign'],
-      [actions.LOWER_GOOGLE_TCPA, fixtures.GOOGLE_BID_TARGET, 'Apply new target CPA'],
+      [actions.LOWER_GOOGLE_TCPA, fixtures.GOOGLE_BID_TARGET, 'Apply new bid target (tCPA)'],
       [actions.ADD_GOOGLE_KEYWORD, fixtures.GOOGLE_PROMOTE_TERM, 'Add as exact keyword'],
     ] as const;
     for (const [action, card, label] of cases) {

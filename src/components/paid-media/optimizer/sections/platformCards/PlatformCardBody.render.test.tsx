@@ -305,7 +305,7 @@ describe('Google bid target', () => {
   it('shows the current target, the actual cost and the proposal, with the cooldown in words', () => {
     const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_BID_TARGET} />);
     expect(getByRole('heading').textContent).toBe(
-      'Search | Leads MX: target CPA 35.00 MXN, actual 31.40 MXN over 14 days',
+      'Search | Leads MX: Google Ads bid target (tCPA) 35.00 MXN, actual 31.40 MXN over 14 days',
     );
     expect(getByTestId('platform-card-bid').textContent).toBe(
       'Current target35.00 MXNActual, 14 days31.40 MXNProposed32.00 MXN',
@@ -313,7 +313,9 @@ describe('Google bid target', () => {
     expect(getByTestId('platform-card-cooldown').textContent).toBe(
       'The target last changed 3 days ago. Google is still relearning, so wait 4 more days before changing it again.',
     );
-    expect(platformCardActionLabel(GOOGLE_BID_TARGET)).toBe('Lower the target CPA to 32.00 MXN');
+    expect(platformCardActionLabel(GOOGLE_BID_TARGET)).toBe(
+      'Lower the Google Ads bid target (tCPA) to 32.00 MXN',
+    );
   });
 
   it('reads a target ROAS as a percentage and says when the cooldown is over', () => {
@@ -326,9 +328,9 @@ describe('Google bid target', () => {
       days_since_last_change: 12,
     });
     expect(platformCardTitle(roas)).toBe(
-      'Search | Leads MX: target ROAS 300%, actual 360% over 14 days',
+      'Search | Leads MX: Google Ads bid target (tROAS) 300%, actual 360% over 14 days',
     );
-    expect(platformCardActionLabel(roas)).toBe('Raise the target ROAS to 340%');
+    expect(platformCardActionLabel(roas)).toBe('Raise the Google Ads bid target (tROAS) to 340%');
     expect(bidCooldownNote(12)).toBe(
       "The target last changed 12 days ago, past Google's 7-day relearning period.",
     );
