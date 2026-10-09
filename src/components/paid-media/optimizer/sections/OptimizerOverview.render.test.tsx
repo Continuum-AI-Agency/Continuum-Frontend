@@ -118,6 +118,7 @@ mock.module('../useOptimizerData', () => ({
   useOptimizerPortfolioEfficiency: () => efficiency,
   // A card's own control asks the service through this; nothing here confirms a write.
   useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
+  useRevertOptimizerAction: () => ({ mutateAsync: async () => null }),
 }));
 
 const { OptimizerOverview, kindTileSub, autopilotTileSub, cardActionsOf } = await import(

@@ -37,6 +37,8 @@ mock.module('../../useOptimizerData', () => ({
       };
     },
   }),
+  // Same-day Undo lives on the same control; nothing here reverts.
+  useRevertOptimizerAction: () => ({ mutateAsync: async () => null }),
 }));
 
 import type { AccountCandidate } from '@continuum/contracts';
