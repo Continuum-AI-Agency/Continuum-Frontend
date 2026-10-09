@@ -116,7 +116,7 @@ describe('toBillingView — states', () => {
           status: 'active',
           // get_brand_entitlements returns products alphabetically; the panel lists them in
           // catalog order so a contract brand reads like the plan cards.
-          products: ['organic_agent', 'paid_media', 'studio'],
+          products: ['listening', 'organic_agent', 'paid_media', 'studio'],
         },
       }),
     );
@@ -126,6 +126,7 @@ describe('toBillingView — states', () => {
         'AI Canvas',
         'Organic agent, calendar and posting',
         'Jaina, Forge ad creation, approvals and optimizer',
+        'Brand listening: mentions of your brand and competitors',
       ],
       autoBilling: { enabled: false, capUsd: null, disabledReason: AUTO_BILLING_CONTRACT },
     });

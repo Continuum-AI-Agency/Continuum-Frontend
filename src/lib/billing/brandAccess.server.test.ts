@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { type BrandAccessClient, readBrandAccess } from './brandAccess.server';
+import { decideProductGate, lockedProducts, onboardingNeedsPlan } from './productAccess';
 
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b2';
 
@@ -82,6 +83,31 @@ describe('readBrandAccess', () => {
     const access = await readBrandAccess(BRAND_ID, client);
     expect(access.billingLive).toBe(true);
     expect(access.products).toEqual([]);
+  });
+
+  test('StarCraft Contract access survives the Listening grant returned by the live RPC', async () => {
+    consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const brandId = 'b17d8151-a9b9-4579-b1d2-7e8f01c2e9dc';
+    const products = ['listening', 'mcp', 'organic_agent', 'paid_media', 'studio', 'trends'];
+    const read = {
+      ...entitlements(products),
+      brandId,
+      planCode: 'grandfathered',
+      billingModel: 'contract',
+      plans: [],
+      addons: ['provider_apify', 'provider_exa', 'provider_serpapi'],
+      trendsTier: 'pro',
+    };
+    const { client } = fakeClient({ data: read, error: null }, { data: { tier: 0 }, error: null });
+    const access = await readBrandAccess(brandId, client);
+    expect(access.products).toEqual(products);
+    expect(access.entitlements).toEqual(read);
+    expect(lockedProducts(access)).toEqual([]);
+    expect(onboardingNeedsPlan(access)).toBe(false);
+    for (const surface of ['ai-studio', 'organic', 'scale', 'approvals', 'forge'] as const) {
+      expect(decideProductGate(surface, access)).toEqual({ kind: 'allow' });
+    }
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   test('any other error fails CLOSED — live, no products — and logs the serialized error', async () => {

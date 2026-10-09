@@ -46,6 +46,15 @@ describe('billing contracts', () => {
     expect(brandEntitlementsSchema.parse(entitlements).billingModel).toBe('stripe');
   });
 
+  it('accepts Listening without dropping other grants and still rejects unknown products', () => {
+    const products = ['listening', 'mcp', 'organic_agent', 'paid_media', 'studio', 'trends'];
+    const read = { ...entitlements, billingModel: 'contract', plans: [], products };
+    expect(brandEntitlementsSchema.parse(read).products).toEqual(products);
+    expect(
+      brandEntitlementsSchema.safeParse({ ...read, products: [...products, 'unknown_product'] }).success,
+    ).toBe(false);
+  });
+
   it('parses a full overview in either Stripe mode', () => {
     const overview = {
       brandId,
