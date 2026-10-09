@@ -275,13 +275,21 @@ export function ElementCreateForm({
         </div>
       ) : null}
 
+      {needsRights ? (
+        <p className="text-xs text-muted-foreground">
+          Creating this {ELEMENT_CATEGORY_LABEL[category].toLowerCase()} makes their character sheet
+          — turnaround, expressions, poses, costume and palette — from these photos. Three paid
+          image calls, about two minutes.
+        </p>
+      ) : null}
+
       <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Create Element
+          {needsRights ? 'Create and make character sheet' : 'Create Element'}
         </Button>
       </div>
     </form>

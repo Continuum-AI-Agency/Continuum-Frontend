@@ -16,6 +16,13 @@ import { History, Loader2, Plus, RotateCw, Star, Upload, X } from 'lucide-react'
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -37,6 +44,7 @@ import {
   type ElementRecord,
   elementNodeEmission,
   elementRequiresRightsNote,
+  isElementPersonCategory,
   useSignedAssetUrls,
 } from '@/lib/ai-studio/elements';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
@@ -47,6 +55,9 @@ import { HeadlessElementReview } from './HeadlessElementReview';
 /** The measured cost of one reference generation — the Wave-2 bench run timed 16.7s.
  *  Quoted so the wait is a stated cost rather than an unexplained hang. */
 const ELEMENT_GENERATION_COPY = 'One paid image call, usually 15–20 seconds.';
+/** A person's reference is the continuity sheet: three image calls, two of them in parallel.
+ *  `elements:character-sheet:bench` timed 54.5 s and 64.9 s on the Easy Fit actresses (10-06). */
+const CHARACTER_SHEET_GENERATION_COPY = 'Three paid image calls, usually about two minutes.';
 
 /**
  * Seconds actually elapsed since the generation started.
@@ -141,6 +152,10 @@ export function ElementDetail({
   const emission = elementNodeEmission(element);
   const needsRights = elementRequiresRightsNote(category);
   const missingRights = needsRights && !rightsNote.trim();
+  // The STORED category decides the sheet's framing: it is what the sheet was generated for.
+  const isCharacter = isElementPersonCategory(element.category);
+  const sheetNoun = isCharacter ? 'character sheet' : 'reference sheet';
+  const [sheetOpen, setSheetOpen] = React.useState(false);
 
   // Newest first for reading; the version number stays the stored position.
   const history = element.referenceHistory
@@ -193,20 +208,60 @@ export function ElementDetail({
         updatedAt={element.updatedAt}
       />
       <div className="flex flex-col gap-2">
-        <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
+        <div
+          className={cn(
+            'flex w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30',
+            isCharacter ? 'aspect-[3/4]' : 'aspect-video',
+          )}
+        >
           {referenceUrl ? (
-            // biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset.
-            <img
-              src={referenceUrl}
-              alt={`${element.name} reference sheet`}
-              className="h-full w-full object-contain"
-            />
+            <button
+              type="button"
+              className="h-full w-full cursor-zoom-in"
+              onClick={() => setSheetOpen(true)}
+              aria-label={`Open the ${element.name} ${sheetNoun}`}
+            >
+              {/* biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset. */}
+              <img
+                src={referenceUrl}
+                alt={`${element.name} ${sheetNoun}`}
+                className="h-full w-full object-contain"
+              />
+            </button>
           ) : (
             <p className="px-6 text-center text-xs text-muted-foreground">
-              No reference sheet yet — this Element falls back to its source images.
+              {isCharacter
+                ? isGenerating
+                  ? `Making the character sheet… ${elapsed}s`
+                  : 'No character sheet yet — generate one from the source photos.'
+                : 'No reference sheet yet — this Element falls back to its source images.'}
             </p>
           )}
         </div>
+        {referenceUrl ? (
+          <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+            {/* Above the Elements panel, which is itself a z-[110] sheet. */}
+            <DialogContent
+              className="z-[120] flex h-[94vh] w-[96vw] max-w-[96vw] flex-col gap-2 sm:max-w-[96vw]"
+              overlayClassName="z-[120]"
+            >
+              <DialogHeader>
+                <DialogTitle>{element.name}</DialogTitle>
+                <DialogDescription>
+                  <a href={referenceUrl} target="_blank" rel="noreferrer" className="underline">
+                    Open full size
+                  </a>
+                </DialogDescription>
+              </DialogHeader>
+              {/* biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset. */}
+              <img
+                src={referenceUrl}
+                alt={`${element.name} ${sheetNoun}`}
+                className="min-h-0 flex-1 object-contain"
+              />
+            </DialogContent>
+          </Dialog>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {element.defaultReferenceAssetId
             ? ELEMENT_PREVIEW_COPY
@@ -232,12 +287,20 @@ export function ElementDetail({
           ) : (
             <RotateCw className="mr-2 h-4 w-4" />
           )}
-          {isGenerating ? `Generating sheet… ${elapsed}s` : 'Generate candidate sheet'}
+          {isGenerating
+            ? `Generating sheet… ${elapsed}s`
+            : isCharacter
+              ? 'Generate character sheet'
+              : 'Generate candidate sheet'}
         </Button>
         <p className="text-xs text-muted-foreground">
           {isGenerating
-            ? ELEMENT_GENERATION_COPY
-            : 'A generated sheet is only a candidate. Nothing changes until you confirm it.'}
+            ? isCharacter
+              ? CHARACTER_SHEET_GENERATION_COPY
+              : ELEMENT_GENERATION_COPY
+            : isCharacter && history.length === 0
+              ? "The first sheet becomes this character's reference. Later ones wait for your confirmation."
+              : 'A generated sheet is only a candidate. Nothing changes until you confirm it.'}
         </p>
         {generateError ? (
           <p className="text-xs text-destructive" role="alert">

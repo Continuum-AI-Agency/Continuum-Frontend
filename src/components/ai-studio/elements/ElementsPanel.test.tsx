@@ -6,6 +6,34 @@ mock.module('@/lib/api/http', () => ({
   http: { request: requestMock },
 }));
 
+// The real Select is a Base UI popup; a native select drives the same `onValueChange`
+// (the same stand-in ElementCreateForm.test uses).
+mock.module('@/components/ui/select', () => ({
+  Select: ({
+    children,
+    value,
+    onValueChange,
+  }: {
+    children: ReactNode;
+    value: string;
+    onValueChange: (value: string) => void;
+  }) => (
+    <select
+      aria-label="Category"
+      value={value}
+      onChange={(event) => onValueChange(event.target.value)}
+    >
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SelectItem: ({ children, value }: { children: ReactNode; value: string }) => (
+    <option value={value}>{children}</option>
+  ),
+}));
+
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -18,6 +46,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import type React from 'react';
+import type { ReactNode } from 'react';
 import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { ElementsPanel } from './ElementsPanel';
 
@@ -166,6 +195,52 @@ describe('ElementsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(await screen.findByText('No Elements yet')).toBeTruthy();
+  });
+
+  it("makes a person's character sheet as soon as they are created", async () => {
+    const created = buildElement({
+      id: 'new-1',
+      category: 'character',
+      rightsNote: 'own employee, consent on file',
+      members: [{ assetId: 'asset-1', position: 0 }],
+    });
+    requestMock.mockImplementation((async (options: { path: string; method?: string }) => {
+      if (options.method === 'POST' && options.path.endsWith('/new-1/reference'))
+        return { element: created, referenceAssetId: 'sheet-1', becameDefault: true };
+      if (options.method === 'POST') return { element: created };
+      return { elements: [created] };
+    }) as never);
+    renderPanel({
+      initialView: 'create',
+      uploadAsset: mock(async () => ({
+        assetId: 'asset-1',
+        versionId: 'version-1',
+        signedUrl: 'https://storage/asset-1.png',
+      })),
+    });
+
+    fireEvent.change(document.getElementById('element-images') as HTMLInputElement, {
+      target: { files: [new File(['x'], 'face.png', { type: 'image/png' })] },
+    });
+    fireEvent.change(await screen.findByLabelText('Category'), { target: { value: 'character' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Aria' } });
+    fireEvent.change(await screen.findByLabelText('Rights basis'), {
+      target: { value: 'own employee, consent on file' },
+    });
+    const submit = screen.getByRole('button', { name: 'Create and make character sheet' });
+    await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(submit);
+
+    await waitFor(() => {
+      expect(
+        requestMock.mock.calls.some(
+          ([options]) =>
+            (options as { path: string; method?: string }).method === 'POST' &&
+            (options as { path: string }).path.endsWith('/new-1/reference'),
+        ),
+      ).toBe(true);
+    });
+    expect(await screen.findByTestId('element-detail')).toBeTruthy();
   });
 
   it('opens one Element detail from the list', async () => {
