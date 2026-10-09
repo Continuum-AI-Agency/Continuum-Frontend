@@ -32,6 +32,7 @@ import {
   type ApiRenderDraftSourcesStatusRequest,
   type ApiRenderDraftSourcesStatusResponse,
   type ApiRenderEnvironmentListResponse,
+  type ApiRenderFileSpecs,
   type ApiRenderInputSet,
   type ApiRenderInputSetListResponse,
   type ApiRenderJob,
@@ -54,6 +55,8 @@ import {
   apiRenderDestinationRoute,
   apiRenderDraftSourcesStatusResponseSchema,
   apiRenderEnvironmentListResponseSchema,
+  apiRenderFileSpecsRoute,
+  apiRenderFileSpecsSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
   apiRenderJobListResponseSchema,
@@ -290,6 +293,12 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderMasterDownloadResponseSchema,
+    });
+  },
+  getFileSpecs(brandId: string, jobId: string, outputId: string) {
+    return http.request<ApiRenderFileSpecs>({
+      path: `${apiRenderFileSpecsRoute(jobId, outputId)}?${query({ brandId })}`,
+      schema: apiRenderFileSpecsSchema,
     });
   },
   masterDownloadStatus(path: string) {

@@ -99,11 +99,17 @@ const FIELDS: Array<{
     text: (value) => (value ? 'On' : 'Off'),
   },
   {
+    key: 'audio.layout',
+    label: 'MXF audio layout',
+    values: (files) => (files.includes('mxf') ? ['broadcast-4x-aes3', 'stereo'] : []),
+    text: (value) => (value === 'stereo' ? 'Stereo' : 'Broadcast 4× AES3'),
+  },
+  {
     key: 'audio.codec',
     label: 'Audio codec',
     values: (files) => [
       ...(onAny(files, 'mp4', 'mov') ? ['aac'] : []),
-      ...(onAny(files, 'mov', 'mxf') ? ['pcm_s16le', 'pcm_s24le'] : []),
+      ...(files.includes('mov') ? ['pcm_s16le', 'pcm_s24le'] : []),
     ],
   },
   {
@@ -116,13 +122,13 @@ const FIELDS: Array<{
   {
     key: 'audio.sampleRate',
     label: 'Sample rate',
-    values: () => [44100, 48000],
+    values: (files) => (onAny(files, 'mp4', 'mov', 'webm') ? [44100, 48000] : []),
     text: (value) => `${Number(value) / 1000} kHz`,
   },
   {
     key: 'audio.channels',
     label: 'Channels',
-    values: () => range(1, 8),
+    values: (files) => (onAny(files, 'mp4', 'mov', 'webm') ? range(1, 8) : []),
     text: (value) => (value === 1 ? '1 (mono)' : value === 2 ? '2 (stereo)' : String(value)),
   },
   {
@@ -305,6 +311,15 @@ export function EncodeSettingsFields({
           </p>
         ) : null}
       </fieldset>
+      {filesOn.includes('mxf') ? (
+        <p className="text-xs text-muted-foreground sm:col-span-2">
+          {inherited.every(
+            ({ settings: base }) => mergeEncodeSettings(base, settings)?.audio?.enabled === false,
+          )
+            ? 'MXF audio is off. The file will have no audio tracks.'
+            : 'MXF uses 24-bit PCM at 48 kHz. Broadcast carries the full mix on CH1–2 and CH3–4 as four mono AES3 tracks (L, R, L, R) and requires source audio. Channel count applies to other files.'}
+        </p>
+      ) : null}
       {FIELDS.map((field) => {
         const values = field.values(filesOn);
         if (values.length === 0) return null;
@@ -318,6 +333,8 @@ export function EncodeSettingsFields({
             ),
           ),
         ];
+        if (field.key === 'audio.layout' && fallback.length === 0)
+          fallback.push('Broadcast 4× AES3');
         const isCleared = cleared.includes(field.key);
         const placeholder = isCleared
           ? 'Cleared (template)'

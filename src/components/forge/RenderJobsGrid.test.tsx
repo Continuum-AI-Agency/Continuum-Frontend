@@ -11,6 +11,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type {
+  ApiRenderFileSpecs,
   ApiRenderJob,
   ApiRenderTemplateSummary,
   ForgeOutputLibraryState,
@@ -152,6 +153,27 @@ const prepareMasterDownload = mock(async () => ({
   path: '/api/ai-studio/renders/master-downloads/test',
 }));
 const masterDownloadStatus = mock(async () => ({ status: 'failed' as const }));
+const getFileSpecs = mock(
+  async (_brandId: string, _jobId: string, outputId: string): Promise<ApiRenderFileSpecs> => ({
+    outputId,
+    status: 'measured' as const,
+    video: {
+      codec: 'dnxhd',
+      profile: 'DNXHR HQ',
+      frameRate: 25,
+      frameRateRational: '25/1',
+      bitDepth: 8,
+    },
+    audioStreams: [1, 2, 3, 4].map((index) => ({
+      index,
+      codec: 'pcm_s24le',
+      channels: 1,
+      sampleRate: 48000,
+      bitDepth: 24,
+    })),
+    probedAt: '2026-10-09T00:00:00Z',
+  }),
+);
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
@@ -185,6 +207,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     libraryState,
     prepareMasterDownload,
     masterDownloadStatus,
+    getFileSpecs,
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -199,6 +222,7 @@ mock.module('@/lib/supabase/realtime', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { RenderFileSpecs } from './RenderFileSpecs';
 import { RenderJobsGrid } from './RenderJobsGrid';
 
 const BRAND = BASE.brandId;
@@ -271,6 +295,7 @@ beforeEach(() => {
   listTemplates.mockClear();
   prepareMasterDownload.mockClear();
   masterDownloadStatus.mockClear();
+  getFileSpecs.mockClear();
 });
 
 afterEach(() => {
@@ -1024,7 +1049,67 @@ describe('RenderJobsGrid', () => {
       within(preview).getByText('This browser can’t play this file. Download it below.'),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Download MXF' })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getAllByText(/4 tracks × 1 channel/).length).toBeGreaterThan(0),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remake broadcast MXF' }));
+    await waitFor(() =>
+      expect(prepareMasterDownload).toHaveBeenCalledWith(reel.id, {
+        brandId: BRAND,
+        outputId: 'hash-Story_9_16_ab12cd.mxf',
+        format: 'mxf',
+        remaster: true,
+      }),
+    );
   }, 30_000);
+
+  test('unavailable specs can be retried without inventing a bit depth', async () => {
+    const output = {
+      id: 'unknown',
+      kind: 'video' as const,
+      fileName: 'Unknown.mp4',
+      mimeType: 'video/mp4',
+      url: 'https://cdn.test/Unknown.mp4',
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    getFileSpecs.mockImplementationOnce(async () => ({
+      outputId: output.id,
+      status: 'unavailable',
+      video: null,
+      audioStreams: null,
+      probedAt: null,
+    }));
+    getFileSpecs.mockImplementationOnce(async () => ({
+      outputId: output.id,
+      status: 'measured',
+      video: {
+        codec: 'h264',
+        profile: null,
+        frameRate: 25,
+        frameRateRational: '25/1',
+        bitDepth: null,
+      },
+      audioStreams: [{ index: 1, codec: 'aac', channels: 2, sampleRate: 44100, bitDepth: null }],
+      probedAt: '2026-10-09T00:00:00Z',
+    }));
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderFileSpecs brandId={BRAND} jobId={BASE.id} output={output} />
+      </QueryClientProvider>,
+    );
+    const retry = await screen.findByRole('button', { name: 'Retry specs for Unknown.mp4' });
+    expect(screen.getByText(/Specs unavailable/)).toBeTruthy();
+    fireEvent.click(retry);
+    expect(await screen.findByText(/unknown bit depth/)).toBeTruthy();
+    expect(screen.getByText(/44.1 kHz/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry specs for Unknown.mp4' })).toBeNull();
+    expect(getFileSpecs).toHaveBeenCalledTimes(2);
+  });
 
   test('an MP4-only render offers on-demand MOV and MXF downloads for that exact output', async () => {
     const output = {
