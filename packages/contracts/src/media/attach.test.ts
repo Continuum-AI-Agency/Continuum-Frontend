@@ -92,6 +92,13 @@ describe('findMultiVideoSelectionError', () => {
     );
   });
 
+  it('allows multiple videos only when the caller explicitly targets a carousel', () => {
+    const twoVideos = [videoRef(), videoRef({ assetId: 'asset-vid-2' })];
+    expect(findMultiVideoSelectionError(twoVideos, 'CAROUSEL')).toBeNull();
+    expect(findMultiVideoSelectionError(twoVideos, 'REEL')).toBe('Only one video per post');
+    expect(findMultiVideoSelectionError(twoVideos)).toBe('Only one video per post');
+  });
+
   it('allows a single video, and any number of images', () => {
     expect(findMultiVideoSelectionError([videoRef()])).toBeNull();
     expect(
@@ -223,6 +230,17 @@ describe('shapeUserSuppliedMedia — an explicitly named format', () => {
   it('keeps each slide’s real kind, so publish does not send a video as an image', () => {
     const { publishingAssets } = shapeUserSuppliedMedia(mixed, { format: 'CAROUSEL' });
     expect(publishingAssets.map((asset) => asset.kind)).toEqual(['video', 'image']);
+  });
+
+  it('keeps two videos in an explicitly selected carousel', () => {
+    const twoVideos = [videoRef({ assetId: 'v1' }), videoRef({ assetId: 'v2' })];
+    const { contentPatch, publishingAssets } = shapeUserSuppliedMedia(twoVideos, {
+      format: 'CAROUSEL',
+    });
+    expect(contentPatch.format).toBe('CAROUSEL');
+    expect(publishingAssets.map((asset) => asset.assetId)).toEqual(['v1', 'v2']);
+    expect(publishingAssets.map((asset) => asset.kind)).toEqual(['video', 'video']);
+    expect(publishingAssets.map((asset) => asset.slideIndex)).toEqual([0, 1]);
   });
 
   it('still infers when no format is named — the same verdict as before', () => {

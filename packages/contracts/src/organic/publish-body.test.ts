@@ -294,3 +294,71 @@ describe('savedPublishOptions', () => {
     expect(savedPublishOptions({ instagram: { firstComment: 42 } }, 'instagram')).toBeUndefined();
   });
 });
+
+describe('mixed carousel selections', () => {
+  it('sends five images and two trailing videos in the selected order', () => {
+    const assets = Array.from({ length: 7 }, (_, index) => ({
+      role: 'primary',
+      kind: index < 5 ? ('image' as const) : ('video' as const),
+      slideIndex: index,
+      storageUrl: `https://cdn.example/${index}.${index < 5 ? 'jpg' : 'mp4'}`,
+    }));
+    const body = buildPublishBody(
+      draft({ format: 'CAROUSEL', publishingAssets: assets }),
+      'instagram',
+      'ig-1',
+      'brand-1',
+    );
+    expect(body.postType).toBe('CAROUSEL');
+    if (body.postType !== 'CAROUSEL') throw new Error('Expected a carousel');
+    expect(body.items).toEqual(
+      assets.map((asset) =>
+        asset.kind === 'video' ? { videoUrl: asset.storageUrl } : { imageUrl: asset.storageUrl },
+      ),
+    );
+  });
+
+  it('preserves a reduced user selection instead of resurrecting generated slides', () => {
+    const body = buildPublishBody(
+      draft({
+        format: 'CAROUSEL',
+        publishingAssets: [
+          { role: 'primary', kind: 'image', storageUrl: 'https://cdn.example/chosen.jpg' },
+        ],
+        mediaSuggestion: {
+          assets: [
+            { order: 1, assetUrl: 'https://cdn.example/old-1.jpg' },
+            { order: 2, assetUrl: 'https://cdn.example/old-2.jpg' },
+          ],
+        },
+      }),
+      'instagram',
+      'ig-1',
+      'brand-1',
+    );
+    if (body.postType !== 'CAROUSEL') throw new Error('Expected a carousel');
+    expect(body.items).toEqual([{ imageUrl: 'https://cdn.example/chosen.jpg' }]);
+  });
+
+  it('keeps generated video MIME types in the fallback carousel', () => {
+    const body = buildPublishBody(
+      draft({
+        format: 'CAROUSEL',
+        mediaSuggestion: {
+          assets: [
+            { order: 1, assetUrl: 'https://cdn.example/one.jpg', mimeType: 'image/jpeg' },
+            { order: 2, assetUrl: 'https://cdn.example/two.mp4', mimeType: 'video/mp4' },
+          ],
+        },
+      }),
+      'instagram',
+      'ig-1',
+      'brand-1',
+    );
+    if (body.postType !== 'CAROUSEL') throw new Error('Expected a carousel');
+    expect(body.items).toEqual([
+      { imageUrl: 'https://cdn.example/one.jpg' },
+      { videoUrl: 'https://cdn.example/two.mp4' },
+    ]);
+  });
+});

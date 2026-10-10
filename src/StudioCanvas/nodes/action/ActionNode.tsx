@@ -185,7 +185,7 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 </div>
               ) : null}
               <Button
-                className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-xs opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                className="nodrag absolute left-1.5 top-1.5 z-10 h-6 px-2 text-xs opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
                 size="sm"
                 disabled={!implemented || data.isExecuting}
                 onMouseDown={(event) => event.stopPropagation()}

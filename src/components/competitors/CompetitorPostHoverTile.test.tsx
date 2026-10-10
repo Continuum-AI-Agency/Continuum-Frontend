@@ -167,6 +167,15 @@ describe('CompetitorPostHoverTile face', () => {
 });
 
 describe('InspirationAnalysePanel', () => {
+  it('renders native seek controls for the analyzed reel video', () => {
+    const { container } = wrap(
+      <InspirationAnalysePanel brandId="b1" view={view()} open onOpenChange={() => {}} />,
+    );
+
+    const video = container.querySelector('video');
+    expect(video?.getAttribute('controls')).not.toBeNull();
+  });
+
   it('offers Analyse when the post has not been analysed', () => {
     const { getByRole, queryByRole } = wrap(
       <InspirationAnalysePanel brandId="b1" view={view()} open onOpenChange={() => {}} />,

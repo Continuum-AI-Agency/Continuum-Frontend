@@ -203,8 +203,17 @@ describe('useDraftMediaPlacement', () => {
     expect(result.current.canUndo).toBe(false);
   });
 
-  // invalid kind — video onto carousel slot
-  it('place() returns invalid_kind error when placing a video onto a carousel slot', async () => {
+  // Carousel slides carry their actual media kind.
+  it('place() preserves mixed media when replacing one carousel slide with a video', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      format: 'CAROUSEL',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, assetId: 'i1', bucket: 'media-library', storagePath: 'i1.jpg', storageUrl: 'https://cdn/i1.jpg' },
+        { kind: 'image', slideIndex: 1, assetId: 'i2', bucket: 'media-library', storagePath: 'i2.jpg', storageUrl: 'https://cdn/i2.jpg' },
+      ],
+    };
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
     const video = makeVideoAsset();
 
@@ -213,11 +222,61 @@ describe('useDraftMediaPlacement', () => {
       err = result.current.place([video], { kind: 'carousel_slide', slideIndex: 0 });
     });
 
-    expect(err).not.toBeNull();
-    expect(err?.type).toBe('invalid_kind');
-    // updateDraft must NOT have been called.
-    expect(mockUpdateDraft).not.toHaveBeenCalled();
-    expect(result.current.error?.type).toBe('invalid_kind');
+    expect(err).toBeNull();
+    const assets = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> })
+      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    expect(assets.map((asset) => asset.kind)).toEqual(['video', 'image']);
+    expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('place() replaces one carousel position without dropping the other mixed slides', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      format: 'CAROUSEL',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        ...[1, 2, 3, 4, 5].map((n) => ({
+          kind: 'image',
+          slideIndex: n - 1,
+          assetId: `i${n}`,
+          bucket: 'media-library',
+          storagePath: `i${n}.jpg`,
+          storageUrl: `https://cdn/i${n}.jpg`,
+        })),
+        ...[1, 2].map((n) => ({
+          kind: 'video',
+          slideIndex: n + 4,
+          assetId: `v${n}`,
+          bucket: 'media-library',
+          storagePath: `v${n}.mp4`,
+          storageUrl: `https://cdn/v${n}.mp4`,
+          mimeType: 'video/mp4',
+        })),
+      ],
+    };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    const replacement = makeVideoAsset({
+      id: 'replacement',
+      storagePath: 'replacement.mp4',
+      signedUrl: 'https://cdn/replacement.mp4',
+    });
+
+    let err: ReturnType<typeof result.current.place> = null;
+    await act(async () => {
+      err = result.current.place([replacement], { kind: 'carousel_slide', slideIndex: 5 });
+    });
+
+    expect(err).toBeNull();
+    const draft = storedDraft as {
+      format: string;
+      publishingAssets: Array<{ assetId?: string; kind: string; slideIndex: number }>;
+    };
+    expect(draft.format).toBe('CAROUSEL');
+    expect(draft.publishingAssets).toHaveLength(7);
+    expect(draft.publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex).map((a) => a.assetId)).toEqual([
+      'i1', 'i2', 'i3', 'i4', 'i5', 'replacement', 'v2',
+    ]);
   });
 
   // empty selection
@@ -259,6 +318,27 @@ describe('useDraftMediaPlacement', () => {
     expect(sorted[0].storagePath).toBe('b.jpg');
     expect(sorted[1].storagePath).toBe('c.jpg');
     expect(sorted[2].storagePath).toBe('a.jpg');
+  });
+
+  it('reorderSlides() reorders images and videos together by slide position', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      format: 'CAROUSEL',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a' },
+        { kind: 'video', slideIndex: 1, storagePath: 'b.mp4', storageUrl: 'b' },
+        { kind: 'image', slideIndex: 2, storagePath: 'c.jpg', storageUrl: 'c' },
+      ],
+    };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => result.current.reorderSlides(0, 2));
+
+    const sorted = (storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> })
+      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    expect(sorted.map((asset) => asset.storagePath)).toEqual(['b.mp4', 'c.jpg', 'a.jpg']);
+    expect(sorted.map((asset) => asset.slideIndex)).toEqual([0, 1, 2]);
   });
 
   // removeSlide — min 1 guard
@@ -313,6 +393,27 @@ describe('useDraftMediaPlacement', () => {
     expect(sorted[1].slideIndex).toBe(1);
   });
 
+  it('removeSlide() removes and reindexes a video slide in a mixed carousel', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      format: 'CAROUSEL',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a' },
+        { kind: 'video', slideIndex: 1, storagePath: 'b.mp4', storageUrl: 'b' },
+        { kind: 'image', slideIndex: 2, storagePath: 'c.jpg', storageUrl: 'c' },
+      ],
+    };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => result.current.removeSlide(1));
+
+    const sorted = (storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> })
+      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    expect(sorted.map((asset) => asset.storagePath)).toEqual(['a.jpg', 'c.jpg']);
+    expect(sorted.map((asset) => asset.slideIndex)).toEqual([0, 1]);
+  });
+
   // replaceSlide — swaps one slide in place, preserving order
   it('replaceSlide(position, asset) swaps one slide and preserves the rest', async () => {
     storedDraft = {
@@ -345,12 +446,16 @@ describe('useDraftMediaPlacement', () => {
     expect(sorted[1].slideIndex).toBe(1);
   });
 
-  // replaceSlide — rejects video (carousels are image-only)
-  it('replaceSlide() rejects a video asset', async () => {
+  // replaceSlide — supports video while preserving other slides.
+  it('replaceSlide() replaces one image with a video and keeps the rest', async () => {
     storedDraft = {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'user_supplied' },
-      publishingAssets: [{ kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a' }],
+      format: 'CAROUSEL',
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, assetId: 'i1', storagePath: 'a.jpg', storageUrl: 'a' },
+        { kind: 'image', slideIndex: 1, assetId: 'i2', storagePath: 'b.jpg', storageUrl: 'b' },
+      ],
     };
 
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -360,7 +465,34 @@ describe('useDraftMediaPlacement', () => {
       err = result.current.replaceSlide(0, makeVideoAsset());
     });
 
-    expect(err?.type).toBe('invalid_kind');
+    expect(err).toBeNull();
+    const assets = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> })
+      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    expect(assets.map((asset) => asset.kind)).toEqual(['video', 'image']);
+    expect(assets).toHaveLength(2);
+  });
+
+  it('addSlide() appends a video after existing carousel media', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      format: 'CAROUSEL',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a' },
+        { kind: 'video', slideIndex: 1, storagePath: 'b.mp4', storageUrl: 'b' },
+      ],
+    };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => result.current.addSlide(makeVideoAsset({ id: 'v3', storagePath: 'c.mp4' })));
+
+    const sorted = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number; storagePath: string }> })
+      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    expect(sorted.map((asset) => [asset.kind, asset.storagePath])).toEqual([
+      ['image', 'a.jpg'],
+      ['video', 'b.mp4'],
+      ['video', 'c.mp4'],
+    ]);
   });
 
   // A post has one video slot, so a 2-video selection must be refused — not shaped

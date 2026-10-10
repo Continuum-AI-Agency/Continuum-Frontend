@@ -177,4 +177,29 @@ describe('MediaSelectPopover — one video per post', () => {
       'a2',
     ]);
   });
+
+  it('allows mixed and multiple-video selections only when format is CAROUSEL', () => {
+    const onAttachAssets = mock();
+    setup({ format: 'CAROUSEL', onAttachAssets });
+    fireEvent.click(screen.getByLabelText('Clip One'));
+    fireEvent.click(screen.getByLabelText('Asset One'));
+    fireEvent.click(screen.getByLabelText('Clip Two'));
+
+    expect(screen.queryByText('Only one video per post')).toBeNull();
+    fireEvent.click(screen.getByText(/Attach/));
+    expect((onAttachAssets.mock.calls[0][0] as Array<{ id: string }>).map((a) => a.id)).toEqual([
+      'v1', 'a1', 'v2',
+    ]);
+  });
+
+  it('continues to refuse multiple videos for an explicitly selected reel', () => {
+    const onAttachAssets = mock();
+    setup({ format: 'REEL', onAttachAssets });
+    fireEvent.click(screen.getByLabelText('Clip One'));
+    fireEvent.click(screen.getByLabelText('Clip Two'));
+
+    expect(screen.getByText('Only one video per post')).toBeTruthy();
+    expect((screen.getByText(/Attach/).closest('button') as HTMLButtonElement).disabled).toBe(true);
+    expect(onAttachAssets).not.toHaveBeenCalled();
+  });
 });

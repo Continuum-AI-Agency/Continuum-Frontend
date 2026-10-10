@@ -1121,6 +1121,7 @@ export function OrganicDraftPreview({
   const interactiveMediaNode =
     !isHyperframeFormat && brandProfileId ? (
       <MediaSelectPopover
+        format={publishFormat}
         brandProfileId={brandProfileId}
         open={mediaSelectOpen}
         onOpenChange={(open) => {
@@ -1691,7 +1692,9 @@ export function OrganicDraftPreview({
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
-                    Publish to {publishPlatformLabel(publishPlatform)}
+                    {isMultiPlatform
+                      ? 'Publish now'
+                      : `Publish to ${publishPlatformLabel(publishPlatform)}`}
                   </>
                 )}
               </button>
