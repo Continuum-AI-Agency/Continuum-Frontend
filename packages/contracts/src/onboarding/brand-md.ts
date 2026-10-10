@@ -110,7 +110,7 @@ export const brandMdTokensSchema = z.object({
   personality: brandPersonalityTokenSchema.nullable().default(null),
   imagery: brandImageryTokenSchema.nullable().default(null),
   audience: brandAudienceTokenSchema.nullable().default(null),
-  generation: brandGenerationPreferencesSchema.nullable().default(null),
+  generation: brandGenerationPreferencesSchema.nullable().optional(),
 });
 export type BrandMdTokens = z.infer<typeof brandMdTokensSchema>;
 

@@ -175,7 +175,7 @@ describe('serializeBrandMd / parseBrandMd round-trip', () => {
 describe('parseBrandMd tolerance (never throws)', () => {
   it('round-trips per-brand generation preferences while old books default cleanly', () => {
     const legacy = parseBrandMd('---\nschema_version: 1\nbrand_name: Mocky\n---\n# Body');
-    expect(legacy.tokens?.generation).toBeNull();
+    expect(legacy.tokens?.generation).toBeUndefined();
 
     const tokens = brandMdTokensSchema.parse({
       brand_name: 'Mocky',
