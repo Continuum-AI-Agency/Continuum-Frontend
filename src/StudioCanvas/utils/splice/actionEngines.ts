@@ -15,6 +15,7 @@ import {
   parseAspectRatio,
   splitRanges,
   stitchItems,
+  trimRange,
 } from '../actions/videoOps';
 import type { ClipEffectSpec } from '../render/effectSpec';
 import { loadMediabunny } from './appendRange';
@@ -450,6 +451,28 @@ export async function renderSplitParts(args: ActionEngineArgs): Promise<ActionEn
  * ops and belong in `runAction`'s `SYNC_OPS`, not here.
  */
 export const ACTION_ENGINES: Partial<Record<ActionId, ActionEngine>> = {
+  'video.trim': async (args) => {
+    const blob = requireInput(args, 'in');
+    const facts = await probeClip(blob);
+    const range = trimRange(facts.durationSec, args.config);
+    return toResult(
+      await composeTimeline({
+        items: [
+          {
+            itemId: 'action-trim',
+            kind: 'video',
+            blob,
+            trimStartSec: range.startSec,
+            trimEndSec: range.endSec,
+          },
+        ],
+        videoBitrate: args.videoBitrate,
+        audioBitrate: args.audioBitrate,
+        signal: args.signal,
+        onProgress: args.onProgress,
+      }),
+    );
+  },
   'video.shader': singleClipEngine('action-shader', (config) => ({
     shaderStack: config.shaderStack as ShaderStackV1,
   })),

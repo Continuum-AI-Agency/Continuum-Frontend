@@ -88,6 +88,7 @@ export const ACTION_IDS = [
   'video.stitch',
   'video.audioBed',
   'video.split',
+  'video.trim',
   'video.crop',
   'video.pad',
   'video.watermark',
@@ -707,6 +708,25 @@ export const ACTION_DEFS = {
           trimStartSec === null || trimEndSec === null || trimEndSec > trimStartSec,
         { message: 'trimEndSec must be greater than trimStartSec', path: ['trimEndSec'] },
       ),
+  },
+  'video.trim': {
+    id: 'video.trim',
+    family: 'video',
+    label: 'Trim Shot',
+    description: 'Extracts one shot range, preserving its source audio.',
+    group: 'Assembly',
+    execution: 'worker',
+    inputs: singleVideoIn,
+    output: 'video',
+    config: z
+      .object({
+        trimStartSec: z.number().finite().min(0).default(0),
+        trimEndSec: z.number().finite().positive().nullable().default(null),
+      })
+      .refine(({ trimStartSec, trimEndSec }) => trimEndSec === null || trimEndSec > trimStartSec, {
+        message: 'Shot end must be after its start.',
+        path: ['trimEndSec'],
+      }),
   },
   'video.split': {
     id: 'video.split',

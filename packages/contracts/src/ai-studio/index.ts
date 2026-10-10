@@ -37,6 +37,7 @@ export * from './omni-gen';
 export * from './pipeline-manifest';
 export * from './pipeline-publication';
 export * from './pipeline-publication';
+export * from './product-swap';
 export * from './prompt-enrichment';
 export * from './render-check';
 export * from './render-output-format';

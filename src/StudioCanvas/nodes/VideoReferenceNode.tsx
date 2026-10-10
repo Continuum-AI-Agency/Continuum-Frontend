@@ -11,6 +11,7 @@ import {
   Copy,
   Loader2,
   RotateCw,
+  Scissors,
   Trash2,
   Unlink,
   Upload,
@@ -51,6 +52,7 @@ import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { MediaTrimStrip } from './media/MediaTrimStrip';
 import { CLEARED_TRIM } from './media/mediaTrim';
+import { ProductSwapPanel } from './ProductSwapPanel';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 // Mirrors the sizing this node has always used for a dropped clip.
@@ -73,6 +75,7 @@ export function VideoReferenceNode({
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
+  const [breakoutOpen, setBreakoutOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -306,6 +309,19 @@ export function VideoReferenceNode({
                     click that opens the file picker survives — React Flow only swallows the
                     click when the pointer actually moved. */}
                 <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
+                  {preview ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="nodrag absolute top-2 left-2 z-20 h-6 px-2 text-xs"
+                      aria-label="Break out video"
+                      onClick={() => setBreakoutOpen(true)}
+                    >
+                      <Scissors className="size-3" />
+                      Break out
+                    </Button>
+                  ) : null}
                   {refBadge && refBadge.tone !== 'error' && (
                     <div
                       className={cn(
@@ -440,6 +456,10 @@ export function VideoReferenceNode({
         <ContextMenuContent className="w-52">
           <ContextMenuLabel>Video Reference</ContextMenuLabel>
           <ContextMenuSeparator />
+          <ContextMenuItem disabled={!preview} onClick={() => setBreakoutOpen(true)}>
+            <Scissors className="mr-2 size-4" />
+            Break out video
+          </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
             <Copy className="mr-2 h-4 w-4" />
             Duplicate
@@ -462,6 +482,13 @@ export function VideoReferenceNode({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+      {breakoutOpen && preview ? (
+        <ProductSwapPanel
+          sourceNodeId={id}
+          sourceUrl={preview}
+          onClose={() => setBreakoutOpen(false)}
+        />
+      ) : null}
     </TooltipProvider>
   );
 }

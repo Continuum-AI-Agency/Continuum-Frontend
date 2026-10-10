@@ -38,6 +38,7 @@ const WAVE_3_VIDEO_ENGINES: ActionId[] = [
   'video.stitch',
   'video.audioBed',
   'video.split',
+  'video.trim',
   'video.crop',
   'video.pad',
   'video.greenscreen',
@@ -54,17 +55,9 @@ const WAVE_3_VIDEO_ENGINES: ActionId[] = [
  */
 const PENDING_RUN_ACTION_WIRING: ActionId[] = [];
 
-/**
- * Worker ops implemented WITHOUT an entry in `ACTION_ENGINES`. `video.overlay` and
- * `video.watermark` build their plan on the main thread and post `start_timeline`;
- * `video.subtitles` orchestrates an authenticated transcribe round trip and then posts
- * `start_single_source`; `video.removeBackground` is the fourth — its matting runs on a
- * Cloud Run GPU, so its runner is an authenticated call and an SSE read rather than a
- * frame loop (`ORCHESTRATED_OPS` in runAction.ts). All four have a runner and an enabled
- * Run button but no engine here. Named rather than loosened, so a FIFTH op arriving this
- * way has to say so.
- */
+/** These ops orchestrate outside the worker engine table; name each so new gaps cannot hide. */
 const IMPLEMENTED_OUTSIDE_THE_ENGINE_TABLE: ActionId[] = [
+  'video.editorialCaptions',
   'video.overlay',
   'video.watermark',
   'video.subtitles',
@@ -88,7 +81,7 @@ describe('ACTION_ENGINES', () => {
     expect(Object.keys(ACTION_ENGINES).sort()).toEqual([...WAVE_3_VIDEO_ENGINES].sort());
   });
 
-  it('leaves exactly the three worker ops that belong to another shell', () => {
+  it('names every worker op implemented outside this engine table', () => {
     // Named, not counted: an engine that quietly went missing would still pass a count.
     const missing = ACTION_IDS.filter(
       (id) => ACTION_DEFS[id].execution === 'worker' && !(id in ACTION_ENGINES),
@@ -97,6 +90,8 @@ describe('ACTION_ENGINES', () => {
       [
         // The subtitles shell.
         'video.subtitles',
+        // Editorial captions run through runAction's main-thread orchestrator.
+        'video.editorialCaptions',
         // The burn-in shell.
         'video.overlay',
         'video.watermark',

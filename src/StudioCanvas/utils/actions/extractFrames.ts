@@ -270,29 +270,64 @@ export async function extractSceneChangeFrames(
     const track = await input.getPrimaryVideoTrack();
     if (!track) throw new Error('This clip has no video track to pull frames from');
     const duration = await input.computeDuration();
-    const probeTimes = planFrameTimes(duration, { mode: 'sceneChange' });
-
-    const probeSink = new mb.CanvasSink(track, sinkOptions(probeWidth));
-    const diffs: number[] = [];
-    let previous: Uint8ClampedArray | null = null;
-    for await (const wrapped of probeSink.canvasesAtTimestamps(probeTimes)) {
-      if (!wrapped) {
-        // Keep the array parallel to `probeTimes`; a missing probe is simply not a cut.
-        diffs.push(0);
-        continue;
-      }
-      const pixels = readPixels(wrapped.canvas);
-      diffs.push(previous ? meanAbsDiff(previous, pixels) : 0);
-      previous = pixels;
-    }
-
-    const cuts = pickSceneChanges(diffs, threshold)
-      .map((index) => probeTimes[index])
-      .filter((time): time is number => time !== undefined);
+    const cuts = await sceneChangeTimes(mb, track, duration, { threshold, probeWidth });
     // ponytail: two decode passes — a cheap probe pass, then the cuts at output size.
     // One pass keeping every full-resolution probe would hold 240 stills in memory.
     return await decodeAt(mb, track, cuts, config?.maxWidth);
   } finally {
+    input.dispose();
+  }
+}
+
+async function sceneChangeTimes(
+  mb: MediabunnyModule,
+  track: MbVideoTrack,
+  duration: number,
+  config: { threshold: number; probeWidth: number; signal?: AbortSignal },
+): Promise<number[]> {
+  const times = planFrameTimes(duration, { mode: 'sceneChange' });
+  const sink = new mb.CanvasSink(track, sinkOptions(config.probeWidth));
+  const diffs: number[] = [];
+  let previous: Uint8ClampedArray | null = null;
+  for await (const wrapped of sink.canvasesAtTimestamps(times)) {
+    config.signal?.throwIfAborted();
+    if (!wrapped) {
+      diffs.push(0);
+      previous = null;
+      continue;
+    }
+    const pixels = readPixels(wrapped.canvas);
+    diffs.push(previous ? meanAbsDiff(previous, pixels) : 0);
+    previous = pixels;
+  }
+  return pickSceneChanges(diffs, config.threshold).map((index) => times[index]);
+}
+
+/** Suggested cuts only: the bounded probe grid is approximate and needs human review. */
+export async function detectSceneCuts(
+  blob: Blob,
+  signal?: AbortSignal,
+): Promise<{ durationSec: number; cutsSec: number[] }> {
+  signal?.throwIfAborted();
+  const mb = await loadMediabunny();
+  const input = new mb.Input({ source: new mb.BlobSource(blob), formats: mb.ALL_FORMATS });
+  const abort = () => input.dispose();
+  signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const track = await input.getPrimaryVideoTrack();
+    if (!track || !(await track.canDecode()))
+      throw new Error('This browser cannot decode the source video. Try an H.264 MP4.');
+    const durationSec = await track.computeDuration();
+    if (!Number.isFinite(durationSec) || durationSec <= 0)
+      throw new Error('The source video has no readable duration.');
+    const cuts = await sceneChangeTimes(mb, track, durationSec, {
+      threshold: DEFAULT_SCENE_THRESHOLD,
+      probeWidth: DEFAULT_PROBE_WIDTH,
+      signal,
+    });
+    return { durationSec, cutsSec: cuts.slice(1).filter((time) => time > 0 && time < durationSec) };
+  } finally {
+    signal?.removeEventListener('abort', abort);
     input.dispose();
   }
 }

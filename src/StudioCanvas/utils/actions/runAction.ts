@@ -463,6 +463,7 @@ const WORKER_OPS_WITH_ENGINES = new Set<ActionId>([
   'video.stitch',
   'video.audioBed',
   'video.split',
+  'video.trim',
   'video.crop',
   'video.pad',
   'video.greenscreen',

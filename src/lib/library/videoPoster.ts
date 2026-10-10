@@ -223,9 +223,15 @@ export async function generateVideoPoster(
       if (!track) return null;
 
       const durationSec = await track.computeDuration().catch(() => null);
-      const wanted = options?.selector
-        ? resolveVideoFrameTimestamp(durationSec, options.selector, options.timestampSec)
-        : resolvePosterTimestamp(durationSec, options?.timestampSec);
+      const wanted =
+        options?.selector === 'first'
+          ? Math.max(0, await track.getFirstTimestamp())
+          : options?.selector === 'last' && durationSec !== null && durationSec > 0
+            ? // Seek inside the final sample without assuming a source frame rate.
+              Math.max(0, durationSec - Math.max(Number.EPSILON, durationSec * Number.EPSILON))
+            : options?.selector
+              ? resolveVideoFrameTimestamp(durationSec, options.selector, options.timestampSec)
+              : resolvePosterTimestamp(durationSec, options?.timestampSec);
 
       // Source metadata off the already-open track. getDisplayWidth/Height are
       // rotation- and aspect-corrected, so a 1920x1080 file shot vertical reports
@@ -245,9 +251,9 @@ export async function generateVideoPoster(
         width: Math.max(64, Math.min(4096, Math.round(options?.maxWidth ?? POSTER_MAX_WIDTH))),
         fit: 'contain',
       });
-      // A seek past the last keyframe-decodable moment yields null; frame 0
-      // always exists, so it is the floor rather than a failure.
-      const wrapped = (await sink.getCanvas(wanted)) ?? (await sink.getCanvas(0));
+      // Automatic posters may fall back; an explicit endpoint must not silently become another frame.
+      const wrapped =
+        (await sink.getCanvas(wanted)) ?? (!options?.selector ? await sink.getCanvas(0) : null);
       if (!wrapped) return null;
 
       const { blob, mimeType } = await encodePoster(

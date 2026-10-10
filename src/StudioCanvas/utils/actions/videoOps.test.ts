@@ -27,12 +27,30 @@ import {
   splitAtCuts,
   splitRanges,
   stitchItems,
+  trimRange,
 } from './videoOps';
 
 const defaults = (id: keyof typeof ACTION_DEFS): Record<string, unknown> =>
   ACTION_DEFS[id].config.parse({}) as Record<string, unknown>;
 
 const blob = (name: string): Blob => new Blob([name], { type: 'video/mp4' });
+
+describe('trimRange', () => {
+  it('uses the whole source by default and keeps explicit shot times', () => {
+    expect(trimRange(7, { trimStartSec: 0, trimEndSec: null })).toEqual({ startSec: 0, endSec: 7 });
+    expect(trimRange(7, { trimStartSec: 2, trimEndSec: 5 })).toEqual({ startSec: 2, endSec: 5 });
+  });
+  it('refuses out-of-range, inverted and non-finite intervals', () => {
+    for (const config of [
+      { trimStartSec: -1 },
+      { trimStartSec: 2, trimEndSec: 2 },
+      { trimEndSec: 8 },
+      { trimStartSec: Number.POSITIVE_INFINITY },
+    ])
+      expect(() => trimRange(7, config)).toThrow('shot range');
+    expect(() => trimRange(0, {})).toThrow('shot range');
+  });
+});
 
 describe('gradeEffects', () => {
   it('carries all eight registry knobs onto the render spec', () => {

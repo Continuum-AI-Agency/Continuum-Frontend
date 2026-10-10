@@ -362,6 +362,22 @@ export interface SplitRange {
   endSec: number;
 }
 
+export function trimRange(durationSec: number, config: Record<string, unknown>): SplitRange {
+  const startSec = typeof config.trimStartSec === 'number' ? config.trimStartSec : 0;
+  const endSec = typeof config.trimEndSec === 'number' ? config.trimEndSec : durationSec;
+  if (
+    !Number.isFinite(durationSec) ||
+    !Number.isFinite(startSec) ||
+    !Number.isFinite(endSec) ||
+    startSec < 0 ||
+    endSec <= startSec ||
+    endSec > durationSec
+  ) {
+    throw new Error('The shot range must be inside the connected clip, with end after start');
+  }
+  return { startSec, endSec };
+}
+
 /**
  * `video.split` — the cut points, as ranges over the source.
  *
