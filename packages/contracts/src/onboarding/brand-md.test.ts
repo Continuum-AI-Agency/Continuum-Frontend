@@ -173,6 +173,28 @@ describe('serializeBrandMd / parseBrandMd round-trip', () => {
 });
 
 describe('parseBrandMd tolerance (never throws)', () => {
+  it('round-trips per-brand generation preferences while old books default cleanly', () => {
+    const legacy = parseBrandMd('---\nschema_version: 1\nbrand_name: Mocky\n---\n# Body');
+    expect(legacy.tokens?.generation).toBeNull();
+
+    const tokens = brandMdTokensSchema.parse({
+      brand_name: 'Mocky',
+      logo: { treatment_default: 'logo' },
+      generation: {
+        number_slides: false,
+        avoid_colors: ['#ff0000'],
+        additional_guidance: 'Use natural light.',
+      },
+    });
+    const parsed = parseBrandMd(serializeBrandMd({ tokens, body: '# Body' }));
+    expect(parsed.tokens?.logo?.treatment_default).toBe('logo');
+    expect(parsed.tokens?.generation).toMatchObject({
+      number_slides: false,
+      avoid_colors: ['#ff0000'],
+      additional_guidance: 'Use natural light.',
+    });
+  });
+
   it('returns tokens:null and whole input as body when there is no front matter', () => {
     const input = '# Just a title\nsome body';
     const parsed = parseBrandMd(input);

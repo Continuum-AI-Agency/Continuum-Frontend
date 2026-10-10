@@ -88,6 +88,15 @@ export const brandAudienceTokenSchema = z.object({
 });
 export type BrandAudienceToken = z.infer<typeof brandAudienceTokenSchema>;
 
+// Per-brand defaults for generated images/slides. These live in the existing
+// Brand Book token document so generation does not need a parallel settings row.
+export const brandGenerationPreferencesSchema = z.object({
+  number_slides: z.boolean().default(false),
+  avoid_colors: z.array(z.preprocess(canonicalHex, hexColorSchema)).max(24).default([]),
+  additional_guidance: z.string().max(1200).optional(),
+});
+export type BrandGenerationPreferences = z.infer<typeof brandGenerationPreferencesSchema>;
+
 // Strips unknown keys (does not reject), matching the DESIGN.md spec's
 // "accept unknown content, don't error" stance — a user-added custom key is
 // dropped rather than failing the whole document.
@@ -101,6 +110,7 @@ export const brandMdTokensSchema = z.object({
   personality: brandPersonalityTokenSchema.nullable().default(null),
   imagery: brandImageryTokenSchema.nullable().default(null),
   audience: brandAudienceTokenSchema.nullable().default(null),
+  generation: brandGenerationPreferencesSchema.nullable().default(null),
 });
 export type BrandMdTokens = z.infer<typeof brandMdTokensSchema>;
 
@@ -259,6 +269,14 @@ function tokensToPlain(tokens: BrandMdTokens): Record<string, unknown> {
       anchors: tokens.audience.anchors,
     });
     if (Object.keys(audience).length > 0) out.audience = audience;
+  }
+  if (tokens.generation) {
+    const generation = omitEmpty({
+      number_slides: tokens.generation.number_slides,
+      avoid_colors: tokens.generation.avoid_colors,
+      additional_guidance: tokens.generation.additional_guidance,
+    });
+    if (Object.keys(generation).length > 0) out.generation = generation;
   }
   return out;
 }

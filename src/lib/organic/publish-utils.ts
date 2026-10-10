@@ -18,6 +18,8 @@ const PUBLISHABLE_PLATFORMS = Object.keys(PLATFORM_CAPABILITIES) as PublishPlatf
 
 /** The platform a draft publishes to: its first tagged platform we can actually publish to. */
 export function inferPublishPlatform(draft: OrganicCalendarDraft): PublishPlatform | null {
+  const row = draft.groupMembers?.find((member) => member.backendDraftId === draft.backendDraftId);
+  if (row) return PUBLISHABLE_PLATFORMS.find((platform) => platform === row.platform) ?? null;
   return PUBLISHABLE_PLATFORMS.find((platform) => draft.platforms.includes(platform)) ?? null;
 }
 

@@ -21,6 +21,8 @@ import {
   tone,
   withColors,
   withFonts,
+  withGenerationPreferences,
+  withLogoTreatment,
   withSectionText,
   writeBrainDoc,
 } from './brandBrain';
@@ -210,6 +212,21 @@ describe('audience and visual identity', () => {
     const next = saved(audience.set(fixture(), 'Finance leads.'));
     expect(next.tokens.audience?.primary_summary).toBe('Finance leads.');
     expect(sectionText(next.body, SECTION_TITLES.audience)).toBe('Finance leads.');
+  });
+
+  it('persists logo and generation defaults without changing unrelated brand tokens', () => {
+    const original = fixture();
+    const next = saved(withGenerationPreferences(
+      withLogoTreatment(original, 'logo'),
+      { number_slides: true, avoid_colors: ['#ff0000'], additional_guidance: 'Use natural light.' },
+    ));
+    expect(next.tokens.logo?.treatment_default).toBe('logo');
+    expect(next.tokens.generation).toMatchObject({
+      number_slides: true,
+      avoid_colors: ['#ff0000'],
+      additional_guidance: 'Use natural light.',
+    });
+    expect(next.tokens.voice).toEqual(original.tokens.voice);
   });
 
   it('writes colors and fonts to the tokens and their prose lines', () => {

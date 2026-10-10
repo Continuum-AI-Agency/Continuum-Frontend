@@ -59,6 +59,16 @@ const openModelPicker = async (data: NanoGenNodeData) => {
 
 const modelItem = (label: string): HTMLElement => byText('[role="menuitemcheckbox"]', label);
 
+const openSizePicker = async (data: NanoGenNodeData) => {
+  renderNode(data);
+  await act(async () => {
+    fireEvent.contextMenu(document.querySelector('[data-testid="studio-node-preview"]') as Element);
+  });
+  await act(async () => {
+    fireEvent.click(byText('[role="menuitem"]', 'Size'));
+  });
+};
+
 /*
  * The picker used to be hardcoded JSX: every model always clickable, no notion of
  * whether the workspace could reach it. Picking FLUX.2 Max on a workspace without fal
@@ -149,5 +159,14 @@ describe('ImageGenBlock model picker', () => {
     expect(refused.textContent).toContain('Not enabled on this workspace');
     // A refusal of one fal model must not disable the rest of the picker.
     expect(modelItem('Nano Banana 2').getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('offers 4K on size-capable models and omits the size picker for fixed-size models', async () => {
+    await openSizePicker(nodeData({ model: 'nano-banana-2' }));
+    expect(modelItem('4K')).toBeTruthy();
+
+    cleanup();
+    await openSizePicker(nodeData({ model: 'nano-banana-2-lite' }));
+    expect(document.querySelector('[role="menuitem"]')?.textContent).not.toContain('Size');
   });
 });
