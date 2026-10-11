@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   saveTemplateLayerVariantRequestSchema,
+  templateEditableLayerSchema,
   templateLayerPreviewRequestSchema,
 } from './template-layer-edits';
 
@@ -9,6 +10,40 @@ const base = {
   expectedVersionId: '00000000-0000-4000-8000-000000000002',
 };
 describe('template edit boundary', () => {
+  test('accepts current Forge geometry facts without allowing unknown layer writes', () => {
+    const layer = {
+      compId: 1,
+      comp: 'DPLV 1440x1440',
+      layerId: 16810,
+      name: 'PrimaryCopy',
+      kind: 'text',
+      visible: true,
+      visibilityReason: null,
+      textReason: null,
+      text: 'New',
+      font: 'HeadingNow36CompBold',
+      fontSize: 70,
+      slotKeys: [],
+      visibilitySlotKeys: [],
+      index: 0,
+      position: [100, 50],
+      rotation: 0,
+      scale: [100, 100],
+      opacity: 100,
+      transformLocks: {},
+      parentName: null,
+      parentId: null,
+      designLayerId: null,
+      artboardId: null,
+      x: 100,
+      y: 50,
+      width: null,
+      height: null,
+      geometryReason: null,
+    };
+    expect(templateEditableLayerSchema.safeParse(layer).success).toBe(true);
+    expect(templateEditableLayerSchema.safeParse({ ...layer, x: Infinity }).success).toBe(false);
+  });
   test('rejects invalid sizes, duplicate layers and unknown writes; allows visibility false', () => {
     const layer = { compId: 63, layerId: 113, fontSize: 55 };
     expect(templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [layer] }).success).toBe(
