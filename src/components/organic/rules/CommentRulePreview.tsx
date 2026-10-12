@@ -30,6 +30,11 @@
 // - The button belongs INSIDE the message. What we send is one message whose
 //   payload carries `text` and `buttons` together, so drawing the button as a
 //   separate bubble would show a conversation that never happens.
+// - The link IN THE TEXT is the tracked address, because that is what is sent.
+//   An earlier version printed the destination there, so the preview showed a
+//   message nobody receives. A rule not saved yet has no short link — it is made
+//   on save — so that case is drawn as an absence rather than filled with the
+//   destination, which would be inventing the message all over again.
 // - The button opens the DESTINATION, never the tracked address. Opening the
 //   tracked one would record a click nobody made; opening the destination costs
 //   nothing and catches the one mistake a person can actually make here, which
@@ -153,14 +158,20 @@ function Warning({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function CommentRulePreview({ values }: { values: RuleFormValues }) {
+export function CommentRulePreview({
+  values,
+  trackedLinkUrl = null,
+}: {
+  values: RuleFormValues;
+  /** The short address the server built for this rule, or null before it is saved. */
+  trackedLinkUrl?: string | null;
+}) {
   const publicReply = values.publicReplyMessages.find((message) => message.trim() !== '');
   const dmText = values.replyMessage.trim();
   const hasLink = values.destinationUrl.trim() !== '';
   const buttonLabel = values.linkButtonLabel.trim();
   const openable = openableDestination(values.destinationUrl);
   const sendsLinkAsText = hasLink && buttonLabel === '';
-  const linkPreview = values.destinationUrl.trim();
   const sendsNothing = publicReply === undefined && dmText === '' && !hasLink;
 
   return (
@@ -217,7 +228,13 @@ export function CommentRulePreview({ values }: { values: RuleFormValues }) {
                     <>
                       {dmText === '' ? null : <br />}
                       <br />
-                      <span className="break-all text-primary">{linkPreview}</span>
+                      {trackedLinkUrl === null ? (
+                        <span className="italic text-muted-foreground">
+                          Your short link — created when you save
+                        </span>
+                      ) : (
+                        <span className="break-all text-primary">{trackedLinkUrl}</span>
+                      )}
                     </>
                   ) : null}
                 </p>

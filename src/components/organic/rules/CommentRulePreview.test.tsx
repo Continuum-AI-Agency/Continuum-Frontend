@@ -107,15 +107,32 @@ describe('the button', () => {
   });
 
   // The label is what creates the button. With none, the link travels in the
-  // text, which is the form that also works on instagram.com.
-  it('puts the link in the message when there is no button text', () => {
+  // text — and the link that travels is the TRACKED one, the address that counts
+  // the tap. This preview once printed the destination there instead, showing a
+  // message nobody receives.
+  it('puts the tracked link in the message when there is no button text', () => {
+    render(
+      <CommentRulePreview
+        values={values({ linkButtonLabel: '', destinationUrl: 'https://example.com/guide' })}
+        trackedLinkUrl="https://api.trycontinuum.ai/r/aB3xK9mQ2pLn"
+      />,
+    );
+    expect(screen.getByText('https://api.trycontinuum.ai/r/aB3xK9mQ2pLn')).toBeDefined();
+    expect(screen.queryByText('https://example.com/guide')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  // A rule not saved yet has no short link: it is created on save. Showing the
+  // destination in its place would be inventing the message; the absence is drawn
+  // as an absence, like every other one in this panel.
+  it('says the short link comes on save, rather than showing the destination', () => {
     render(
       <CommentRulePreview
         values={values({ linkButtonLabel: '', destinationUrl: 'https://example.com/guide' })}
       />,
     );
-    expect(screen.getByText('https://example.com/guide')).toBeDefined();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(/created when you save/i)).toBeDefined();
+    expect(screen.queryByText('https://example.com/guide')).toBeNull();
   });
 
   // Only what was observed — and both halves now have been: the app renders it,

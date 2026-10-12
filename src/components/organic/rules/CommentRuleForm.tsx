@@ -482,7 +482,7 @@ export function CommentRuleForm({
             </div>
 
             <div className="@2xl/rule-form:sticky @2xl/rule-form:top-0">
-              <CommentRulePreview values={previewValues} />
+              <CommentRulePreview values={previewValues} trackedLinkUrl={trackedLinkUrl} />
             </div>
           </div>
         </div>
