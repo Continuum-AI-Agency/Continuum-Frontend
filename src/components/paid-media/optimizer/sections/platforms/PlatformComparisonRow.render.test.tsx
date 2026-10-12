@@ -82,6 +82,20 @@ describe('PlatformComparisonRow — the table', () => {
     expect(marked[0]?.textContent).toBe('· cheapest');
   });
 
+  it('stamps each share node in percent points, the raw its "NN%" text is formatted from', () => {
+    const { getAllByTestId } = render(<PlatformComparisonRow metrics={EASY_FIT_MP1} />);
+    const shares = getAllByTestId('comparison-column').map((row) =>
+      row.querySelector('[data-figure$=".share"]'),
+    );
+    expect(shares).toHaveLength(3);
+    for (const node of shares) {
+      expect(node?.getAttribute('data-figure-unit')).toBe('percent');
+      const raw = Number(node?.getAttribute('data-figure-raw'));
+      expect(raw).toBeGreaterThan(1);
+      expect(node?.textContent).toBe(`${raw.toFixed(0)}%`);
+    }
+  });
+
   it('totals the account in its one currency, which every spend figure carries', () => {
     const { getByTestId, getAllByTestId, queryByTestId } = render(
       <PlatformComparisonRow metrics={EASY_FIT_MP1} />,

@@ -32,6 +32,12 @@ function pct(share: number): string {
   return `${Math.round(share * 100)}%`;
 }
 
+/** The model carries a share as a fraction (0.33); a figure node carries percent points
+ *  (raw 33 reads "33%"), the convention every percent node on the surface follows. */
+function sharePoints(share: number | null): number | null {
+  return share == null ? null : share * 100;
+}
+
 const NUMBER_CELL = 'py-2 pl-3 text-right font-mono tabular-nums';
 
 /** A platform that spent nothing in the window: its row stays, greyed, so the absence reads. */
@@ -101,7 +107,7 @@ function Row({
       </td>
       <td
         className={NUMBER_CELL}
-        {...figureProps(key('share'), column.shareOfResults, null, window, 'percent')}
+        {...figureProps(key('share'), sharePoints(column.shareOfResults), null, window, 'percent')}
       >
         {column.shareOfResults == null ? '—' : pct(column.shareOfResults)}
       </td>
