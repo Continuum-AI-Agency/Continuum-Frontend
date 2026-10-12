@@ -25,7 +25,9 @@ function tile(container: HTMLElement, testId: string): string {
 
 describe('AllPlatformsHeadline', () => {
   it('says the account spend, the window and the decisions in one sentence', () => {
-    const { getByTestId } = render(<AllPlatformsHeadline metrics={EASY_FIT_MP1} />);
+    const { getByTestId } = render(
+      <AllPlatformsHeadline metrics={EASY_FIT_MP1} pendingCount={6} />,
+    );
     const headline = getByTestId('overview-headline');
     expect(headline.textContent).toBe(
       'The account spent 38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
@@ -41,7 +43,7 @@ describe('AllPlatformsHeadline', () => {
 
   it('moves a cost against the prior window on its tile, cheaper in green', () => {
     const { getByTestId } = render(
-      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} pendingCount={6} onOpenActions={() => {}} />,
     );
     const delta = getByTestId('tile-kind-conversations').querySelector(
       '[data-testid="cost-prior-delta"]',
@@ -57,7 +59,7 @@ describe('AllPlatformsHeadline', () => {
 
   it('moves the spend against the prior window, neutral in colour', () => {
     const { getByTestId } = render(
-      <AllPlatformsTiles metrics={META_ONLY} onOpenActions={() => {}} />,
+      <AllPlatformsTiles metrics={META_ONLY} pendingCount={6} onOpenActions={() => {}} />,
     );
     const delta = getByTestId('spend-prior-delta');
     expect(delta.textContent).toBe('▲ 9%');
@@ -76,7 +78,7 @@ describe('AllPlatformsHeadline', () => {
         accounts: [{ account_id: 'g', currency: 'USD', ingested: true }],
       },
     ]);
-    const { getByTestId } = render(<AllPlatformsHeadline metrics={frame} />);
+    const { getByTestId } = render(<AllPlatformsHeadline metrics={frame} pendingCount={6} />);
     const text = getByTestId('overview-headline').textContent ?? '';
     expect(text).toStartWith(
       'The account spent 23,911 MXN and $11,200 in 7 days across two platforms.',
@@ -95,7 +97,7 @@ describe('AllPlatformsTiles', () => {
   it('renders spend with shares, each kind, decisions and autopilot — six tiles', () => {
     const onOpenActions = mock(() => {});
     const { container, getByTestId } = render(
-      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={onOpenActions} />,
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} pendingCount={6} onOpenActions={onOpenActions} />,
     );
     const tiles = getByTestId('account-tiles');
     expect(tiles.getAttribute('data-source')).toBe('account-platform-metrics');
@@ -118,12 +120,29 @@ describe('AllPlatformsTiles', () => {
     expect(onOpenActions).toHaveBeenCalledTimes(1);
   });
 
+  it('counts the decisions from the actions queue the Review button opens, not the producer', () => {
+    // The producer frame says 6; the portfolio list's pending work (what Review opens) says 19.
+    const { container, getByTestId } = render(
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} pendingCount={19} onOpenActions={() => {}} />,
+    );
+    const figure = container.querySelector('[data-figure="tiles.decisions-waiting"]');
+    expect(figure?.textContent).toBe('19');
+    expect(figure?.getAttribute('data-figure-raw')).toBe('19');
+    expect(getByTestId('tile-decisions').textContent).not.toContain('6');
+    const { getByTestId: headline } = render(
+      <AllPlatformsHeadline metrics={EASY_FIT_MP1} pendingCount={19} />,
+    );
+    expect(headline('overview-decisions').querySelector('.font-mono')?.textContent).toBe('19');
+  });
+
   it('adds a platforms tile when fewer than four would show', () => {
     const empty = buildMetrics(
       [{ ...META_TOTALS, share_of_spend: 1, results_by_kind: [], unclassified_spend: 23911 }],
       { decisions_waiting: 0, autopilot: { on: 0, total: 0 } },
     );
-    const { container } = render(<AllPlatformsTiles metrics={empty} onOpenActions={() => {}} />);
+    const { container } = render(
+      <AllPlatformsTiles metrics={empty} pendingCount={0} onOpenActions={() => {}} />,
+    );
     expect(tile(container, 'tile-platforms')).toContain('1 of 3');
     expect(tile(container, 'tile-decisions')).toContain('nothing waits for your decision');
     expect(tile(container, 'tile-autopilot')).toContain('no active portfolio');
@@ -139,7 +158,9 @@ describe('AllPlatformsTiles', () => {
         accounts: [{ account_id: 'g', currency: 'USD', ingested: true }],
       },
     ]);
-    const { container } = render(<AllPlatformsTiles metrics={frame} onOpenActions={() => {}} />);
+    const { container } = render(
+      <AllPlatformsTiles metrics={frame} pendingCount={6} onOpenActions={() => {}} />,
+    );
     expect(tile(container, 'tile-spend')).toContain('23,911 MXN · $11,200');
     expect(tile(container, 'tile-spend')).not.toContain('%');
   });
@@ -152,7 +173,7 @@ describe('AllPlatformsTiles — the per-platform second line (feature 04)', () =
 
   it('says a result tile has no target and keeps its per-platform line', () => {
     const { container } = render(
-      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} pendingCount={6} onOpenActions={() => {}} />,
     );
     // The O1 e2e grades exactly this: a result tile without "target <n>" reads neutral and
     // says "no target" or "no results".
@@ -171,7 +192,7 @@ describe('AllPlatformsTiles — the per-platform second line (feature 04)', () =
 
   it('splits a result bought on several platforms by platform, under the cost line', () => {
     const { container } = render(
-      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} pendingCount={6} onOpenActions={() => {}} />,
     );
     expect(breakdownOf(container, 'tile-kind-leads')).toBe(
       'Meta · 78 · Google · 118 · TikTok · 18',
@@ -180,7 +201,7 @@ describe('AllPlatformsTiles — the per-platform second line (feature 04)', () =
 
   it('omits the line when one platform alone bought the result', () => {
     const { container } = render(
-      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} pendingCount={6} onOpenActions={() => {}} />,
     );
     expect(breakdownOf(container, 'tile-kind-conversations')).toBeNull();
     expect(breakdownOf(container, 'tile-kind-purchases')).toBeNull();

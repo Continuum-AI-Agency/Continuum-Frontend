@@ -44,10 +44,17 @@ import { PlatformChip } from './PlatformChip';
 import { PlatformReadingNote } from './PlatformReadingNote';
 import { type AdPlatform, PLATFORM_NAMES } from './platformTabsModel';
 
-export function AllPlatformsHeadline({ metrics }: { metrics: AccountPlatformMetrics }) {
+export function AllPlatformsHeadline({
+  metrics,
+  pendingCount,
+}: {
+  metrics: AccountPlatformMetrics;
+  /** The actions queue the Review button opens; see `allPlatformsHeadlineSegments`. */
+  pendingCount: number;
+}) {
   return (
     <HeadlineSentence
-      segments={allPlatformsHeadlineSegments(metrics)}
+      segments={allPlatformsHeadlineSegments(metrics, pendingCount)}
       source="account-platform-metrics"
     />
   );
@@ -124,9 +131,14 @@ function KindSub({
 
 export function AllPlatformsTiles({
   metrics,
+  pendingCount,
   onOpenActions,
 }: {
   metrics: AccountPlatformMetrics;
+  /** The decisions tile counts the actions queue its Review button opens (the portfolio
+   *  list's pending recommendations and budget moves), the one source for the count on this
+   *  screen; the producer's `decisions_waiting` is not read here. */
+  pendingCount: number;
   onOpenActions: () => void;
 }) {
   const window = figureWindowOfMetrics(metrics);
@@ -166,7 +178,7 @@ export function AllPlatformsTiles({
       ))}
       <KpiTile
         action={
-          metrics.decisions_waiting > 0 ? (
+          pendingCount > 0 ? (
             <button
               className="font-semibold text-primary-ink text-xs hover:underline"
               onClick={onOpenActions}
@@ -176,22 +188,14 @@ export function AllPlatformsTiles({
             </button>
           ) : null
         }
-        emphasis={metrics.decisions_waiting > 0 ? 'decision' : undefined}
-        figure={figureProps(
-          'tiles.decisions-waiting',
-          metrics.decisions_waiting,
-          null,
-          'none',
-          'count',
-        )}
+        emphasis={pendingCount > 0 ? 'decision' : undefined}
+        figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
         label="Decisions"
         sub={
-          metrics.decisions_waiting > 0
-            ? 'waiting across your portfolios'
-            : 'nothing waits for your decision'
+          pendingCount > 0 ? 'waiting across your portfolios' : 'nothing waits for your decision'
         }
         testId="tile-decisions"
-        value={String(metrics.decisions_waiting)}
+        value={String(pendingCount)}
         variant="inline"
       />
       <KpiTile

@@ -173,8 +173,15 @@ export function kindPlatformSplit(kind: KindAcrossPlatforms): string | null {
 }
 
 /** The "All" sentence: the account's spend per currency, the window and the platforms it
- *  spans, and the decisions waiting. What each kind cost is on its tile. */
-export function allPlatformsHeadlineSegments(metrics: AccountPlatformMetrics): HeadlineSegment[] {
+ *  spans, and the decisions waiting. What each kind cost is on its tile.
+ *
+ *  `decisionsWaiting` is the actions queue the screen's Review button opens — the portfolio
+ *  list's pending recommendations and budget moves — not the producer's own
+ *  `decisions_waiting`, so the sentence, the tile and the bar's "Review N" count one thing. */
+export function allPlatformsHeadlineSegments(
+  metrics: AccountPlatformMetrics,
+  decisionsWaiting: number,
+): HeadlineSegment[] {
   const window = figureWindowOfMetrics(metrics);
   return accountHeadlineSegments({
     spends: metrics.spend_by_currency.map((row) => ({
@@ -187,7 +194,7 @@ export function allPlatformsHeadlineSegments(metrics: AccountPlatformMetrics): H
       ),
     })),
     span: `in ${windowDaysLabel(metrics)} ${platformCountLabel(metrics)}`,
-    decisions: metrics.decisions_waiting,
+    decisions: decisionsWaiting,
   });
 }
 

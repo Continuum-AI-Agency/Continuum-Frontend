@@ -412,7 +412,7 @@ export function OptimizerOverview({
       {/* 1 — the sentence. Every figure in it is one of the tiles below, said in a row. */}
       <section className="space-y-1.5 px-1" data-testid="overview-hero">
         {multiplatform ? (
-          <AllPlatformsHeadline metrics={multiplatform} />
+          <AllPlatformsHeadline metrics={multiplatform} pendingCount={pendingCount} />
         ) : allFrame?.status === 'loading' ? (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
@@ -503,7 +503,11 @@ export function OptimizerOverview({
        *  decisions waiting and autopilot — no boxes, a hairline between cells. Colour goes only
        *  to a cost that moved against last week, and to the decisions that ask for a person. */}
       {multiplatform ? (
-        <AllPlatformsTiles metrics={multiplatform} onOpenActions={onOpenActions} />
+        <AllPlatformsTiles
+          metrics={multiplatform}
+          onOpenActions={onOpenActions}
+          pendingCount={pendingCount}
+        />
       ) : allFrame?.status === 'loading' ? null : (
         <KpiRow testId="account-tiles">
           <KpiTile

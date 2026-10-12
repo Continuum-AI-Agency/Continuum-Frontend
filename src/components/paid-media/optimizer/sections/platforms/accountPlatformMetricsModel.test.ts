@@ -82,7 +82,7 @@ describe('the All frame', () => {
   });
 
   it('gives the headline spend, window and decisions — one sentence, no per-kind costs', () => {
-    const segments = allPlatformsHeadlineSegments(EASY_FIT_MP1);
+    const segments = allPlatformsHeadlineSegments(EASY_FIT_MP1, 6);
     expect(headlineText(segments)).toBe(
       'The account spent 38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
     );
