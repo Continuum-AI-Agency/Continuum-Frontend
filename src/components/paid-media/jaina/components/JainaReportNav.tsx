@@ -80,7 +80,7 @@ export function JainaReportNav({ idPrefix = 'jaina-report', report }: JainaRepor
               onClick={() => scrollToSection(getSectionId(item.key))}
               className={`text-left text-sm py-1.5 px-3 rounded-md transition-all duration-200 cursor-pointer border-l-2 ${
                 activeId === getSectionId(item.key)
-                  ? 'bg-white/5 text-primary border-primary font-medium'
+                  ? 'bg-white/5 text-primary-ink border-primary font-medium'
                   : 'text-muted-foreground hover:text-white hover:bg-white/5 border-transparent hover:border-white/20'
               }`}
             >

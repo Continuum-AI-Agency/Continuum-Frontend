@@ -1048,7 +1048,7 @@ function AdPreviewCard({
           href={ad.previewShareableLink}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline"
           onClick={(event) => event.stopPropagation()}
         >
           Preview
@@ -3372,7 +3372,7 @@ export function CampaignTimelineWorkspace({
                   >
                     <div className="mb-1 flex items-center justify-between px-1 text-2xs uppercase tracking-wide text-muted-foreground">
                       <span className="truncate">{group.label}</span>
-                      <span className={cn(group.isSelectedIndex ? 'text-primary' : undefined)}>
+                      <span className={cn(group.isSelectedIndex ? 'text-primary-ink' : undefined)}>
                         {group.count}
                       </span>
                     </div>

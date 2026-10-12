@@ -39,6 +39,87 @@ export type ScaleEntityPage = {
 
 export type ScaleScope = { brandId: string; adAccountId: string };
 
+/** The tab's status filter: which configured statuses a campaign row is shown under. */
+export type CampaignStatusBucket = 'active' | 'paused' | 'archived';
+
+export const CAMPAIGN_STATUS_BUCKETS: readonly CampaignStatusBucket[] = [
+  'active',
+  'paused',
+  'archived',
+];
+
+/** Archived and deleted rest together; every other configured status still delivers or can. */
+export function campaignStatusBucket(status: string): CampaignStatusBucket {
+  const upper = status.toUpperCase();
+  if (upper === 'PAUSED' || upper === 'CAMPAIGN_PAUSED') return 'paused';
+  if (upper === 'ARCHIVED' || upper === 'DELETED') return 'archived';
+  return 'active';
+}
+
+export function countCampaignBuckets(
+  rows: readonly Pick<ScaleEntityRow, 'status'>[],
+): Record<CampaignStatusBucket, number> {
+  const counts: Record<CampaignStatusBucket, number> = { active: 0, paused: 0, archived: 0 };
+  for (const row of rows) counts[campaignStatusBucket(row.status)] += 1;
+  return counts;
+}
+
+/**
+ * What the Budget column says for a row.
+ *
+ * Meta keeps the budget in ONE place: on the campaign when it optimizes the budget across its
+ * ad sets (CBO), otherwise on each ad set (ABO), and either daily or lifetime. A campaign read
+ * with neither budget is an ABO campaign, not a campaign without money: its budget is the sum
+ * of its delivering ad sets', which only the ad-set read carries.
+ */
+export type BudgetDisplay =
+  | { kind: 'amount'; minor: number; basis: 'daily' | 'lifetime'; source: 'self' | 'adsets' }
+  /** The budget lives on the ad sets and they were not read (or do not add up to one figure). */
+  | { kind: 'adsets' }
+  | null;
+
+const positiveMinor = (value: string | null): number | null => {
+  const minor = Number(value);
+  return value && Number.isFinite(minor) && minor > 0 ? minor : null;
+};
+
+function ownBudget(row: ScaleEntityRow): BudgetDisplay {
+  const daily = positiveMinor(row.dailyBudget);
+  if (daily !== null) return { kind: 'amount', minor: daily, basis: 'daily', source: 'self' };
+  const lifetime = positiveMinor(row.lifetimeBudget);
+  if (lifetime === null) return null;
+  return { kind: 'amount', minor: lifetime, basis: 'lifetime', source: 'self' };
+}
+
+/**
+ * The row's budget. For a campaign without its own, `adSets` (the campaign's ad-set read, when
+ * there is one) sums the ACTIVE ad sets' budgets — only when they share one basis, since a daily
+ * and a lifetime figure do not add up.
+ */
+export function budgetDisplay(
+  row: ScaleEntityRow,
+  level: EntityLevel,
+  adSets?: readonly ScaleEntityRow[] | null,
+): BudgetDisplay {
+  const own = ownBudget(row);
+  if (own || level !== 'campaign') return own;
+  if (!adSets) return { kind: 'adsets' };
+  const budgets = adSets
+    .filter((adSet) => adSet.status === 'ACTIVE')
+    .flatMap((adSet) => {
+      const budget = ownBudget(adSet);
+      return budget?.kind === 'amount' ? [budget] : [];
+    });
+  const basis = budgets[0]?.basis;
+  if (!basis || budgets.some((budget) => budget.basis !== basis)) return { kind: 'adsets' };
+  return {
+    kind: 'amount',
+    minor: budgets.reduce((sum, budget) => sum + budget.minor, 0),
+    basis,
+    source: 'adsets',
+  };
+}
+
 /**
  * Every campaign status `fetch-meta-campaigns` will list (its allow-list, `statuses.ts`): the tab
  * shows every campaign, and only the ACTIVE and PAUSED rows carry an action. Sent as a comma string

@@ -1,7 +1,8 @@
 'use client';
 
 // The number the portfolio read is anchored on (P1, "Lectura continua"): the cost per
-// result, very large, in the colour of where it sits against the target. Under it the
+// result, very large, in the colour of where it sits against the target — green at or under
+// it, red plainly over it, amber only within ANCHOR_WARN_PCT of it. Under it the
 // unit and the target — the target clickable into Manage — and the selected range beside the
 // one before it, each named by its dates. What it says is decided in ./headlineModel
 // (anchorOf); this file only draws it.
@@ -24,6 +25,7 @@ export type PortfolioAnchorProps = {
 const STATE_TEXT: Record<AnchorModel['state'], string> = {
   ok: 'text-success',
   warn: 'text-warning',
+  bad: 'text-destructive',
   none: 'text-foreground',
 };
 

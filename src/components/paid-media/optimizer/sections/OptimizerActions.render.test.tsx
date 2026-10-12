@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -10,7 +11,13 @@ import type { PortfolioListItem } from '@continuum/contracts';
 // React Query reads. This suite is about the CAUGHT-UP branch, so those are
 // stubbed to keep the test to one concern.
 mock.module('./OptimizerActionsPortfolioGroup', () => ({
-  OptimizerActionsPortfolioGroup: () => <div data-testid="portfolio-group" />,
+  // The group draws the lead it is handed at the head of its own header line.
+  OptimizerActionsPortfolioGroup: ({ headerLead }: { headerLead?: ReactNode }) => (
+    <>
+      {headerLead}
+      <div data-testid="portfolio-group" />
+    </>
+  ),
 }));
 
 const { OptimizerActions } = await import('./OptimizerActions');

@@ -428,6 +428,26 @@ describe('ActionRow — platform chip and receipt', () => {
   });
 });
 
+describe('ActionRow — the quiet Recently applied row', () => {
+  it('names the ad set it touched and keeps the raw id on hover only', async () => {
+    const { ActionRow } = await import('./OptimizerActionFeed');
+    const { container } = render(
+      <ul>
+        <ActionRow
+          brandId="brand-1"
+          currency="USD"
+          entityNames={new Map([['120251303880680236', 'EASY/BROAD/OCTUBRE']])}
+          row={action()}
+        />
+      </ul>,
+    );
+    const name = screen.getByText('EASY/BROAD/OCTUBRE');
+    expect(name.getAttribute('title')).toBe('120251303880680236');
+    expect(container.textContent).not.toContain('120251303880680236');
+    expect((container.querySelector('li') as HTMLElement).className).not.toMatch(/\bborder\b/);
+  });
+});
+
 // A yen budget is whole yen: the old hard-coded /100 printed it a hundred times too small.
 describe('money is divided by the currency’s own minor unit', () => {
   it('JPY prints the ledger figure whole; MXN divides by 100', () => {

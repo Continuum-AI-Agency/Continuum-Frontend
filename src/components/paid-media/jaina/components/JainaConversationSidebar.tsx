@@ -1,9 +1,8 @@
 'use client';
 
-import type { AgentSessionListFilters } from '@continuum/contracts';
+import { type AgentSessionListFilters, agentInitiatorLabel } from '@continuum/contracts';
 import { Loader2Icon, Plus, Trash2Icon } from 'lucide-react';
 import React from 'react';
-import { AgentInitiatorPill } from '@/components/chat/AgentInitiatorPill';
 import { ChatHistoryFilterBar } from '@/components/chat/ChatHistoryFilterBar';
 import {
   CollapseConversationsButton,
@@ -12,7 +11,6 @@ import {
 import { SessionTagEditor } from '@/components/chat/SessionTagEditor';
 import { useSessionSearch } from '@/components/chat/useSessionSearch';
 import { CreateCampaignGoalDialog } from '@/components/goals/CreateCampaignGoalDialog';
-import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -57,6 +55,11 @@ const AGENT_OPTIONS = [
 
 // Breakpoints are `@3xl/jaina` — the chat surface's own width — never viewport `md:`. The same
 // sidebar sits in a full-width tab and in a 420px floating panel on a desktop screen.
+// A row's tag and delete actions stay out of the list until the row is hovered or holds focus,
+// so the list reads as titles and times. Touch screens have no hover: there they always show.
+const ROW_ACTION_REVEAL =
+  'opacity-0 group-hover/conversation:opacity-100 group-focus-within/conversation:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100';
+
 const SIDEBAR_BASE_CLASS =
   'flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur @3xl/jaina:border-b-0 @3xl/jaina:border-r';
 
@@ -203,7 +206,7 @@ export function JainaConversationSidebar({
             />
           ) : null}
           <ScrollArea className="max-h-44 @3xl/jaina:max-h-none @3xl/jaina:flex-1 @3xl/jaina:min-h-0">
-            <div className="flex gap-2 p-2 @3xl/jaina:flex-col">
+            <div className="flex gap-1 p-2 @3xl/jaina:flex-col @3xl/jaina:gap-0.5">
               {isLoading && visibleSessions.length === 0 && !search.isActive ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
                   Loading conversations…
@@ -227,14 +230,17 @@ export function JainaConversationSidebar({
                 const isDeleting = deletingSessionId === session.sessionId;
                 const isGenerating = generatingSessionIds?.has(session.sessionId) ?? false;
                 const activityAt = sessionActivityAt(session);
+                const initiatorWord =
+                  session.initiator === 'agent'
+                    ? agentInitiatorLabel(session.initiatorAgent)
+                    : null;
+                const tags = tagsFor(session);
                 return (
                   <div
                     key={session.sessionId}
                     className={cn(
-                      'flex min-w-[220px] items-start gap-1 rounded-md border text-left transition-colors @3xl/jaina:min-w-0',
-                      isActive
-                        ? 'border-primary/70 bg-primary/10'
-                        : 'border-border/60 bg-background/40 hover:border-border hover:bg-background/70',
+                      'group/conversation flex min-w-[220px] items-start gap-0.5 rounded-md text-left transition-colors @3xl/jaina:min-w-0',
+                      isActive ? 'bg-primary/10' : 'hover:bg-muted/50',
                       isInteractionDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                     )}
                   >
@@ -242,55 +248,61 @@ export function JainaConversationSidebar({
                       type="button"
                       onClick={() => onSelectConversation(session.sessionId)}
                       disabled={isInteractionDisabled || isActive || isDeleting}
+                      aria-current={isActive ? 'true' : undefined}
                       data-testid={`jaina-conversation-${session.sessionId}`}
                       className={cn(
-                        'flex flex-1 flex-col items-start gap-1 px-3 py-2 text-left',
+                        'flex min-w-0 flex-1 flex-col items-start gap-0.5 px-2.5 py-2 text-left',
                         isInteractionDisabled || isDeleting
                           ? 'cursor-not-allowed'
                           : 'cursor-pointer',
                       )}
                     >
-                      <span className="text-xs font-medium line-clamp-2 w-full text-primary">
+                      <span
+                        className={cn(
+                          'line-clamp-2 w-full text-xs font-medium',
+                          isActive ? 'text-primary-ink' : 'text-foreground',
+                        )}
+                      >
                         {getSessionTitle(session, sessionTitleById)}
                       </span>
-                      <div className="flex w-full flex-wrap items-center gap-1">
-                        <AgentInitiatorPill
-                          initiator={session.initiator}
-                          initiatorAgent={session.initiatorAgent}
-                        />
-                        {tagsFor(session).map((tag) => (
-                          <Pill key={tag} variant="outline" className="text-muted-foreground">
-                            #{tag}
-                          </Pill>
-                        ))}
-                      </div>
-                      <div className="flex w-full items-center justify-between gap-2">
+                      <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                         {isGenerating ? (
-                          <span className="inline-flex items-center gap-1 text-primary">
+                          <span className="inline-flex shrink-0 items-center gap-1 text-primary-ink">
                             <Loader2Icon className="size-3 animate-spin" />
-                            <span className="text-xs uppercase tracking-wide">Working</span>
+                            Working
+                            <span aria-hidden="true" className="text-muted-foreground">
+                              ·
+                            </span>
                           </span>
-                        ) : (
-                          <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                            {session.lastMessageRole ?? 'session'}
-                          </span>
-                        )}
+                        ) : null}
                         <time
-                          className="text-xs tabular-nums text-muted-foreground"
+                          className="shrink-0 tabular-nums"
                           data-testid={`jaina-conversation-time-${session.sessionId}`}
                           dateTime={activityAt ?? undefined}
                         >
                           {formatSessionActivity(activityAt)}
                         </time>
-                      </div>
+                        {initiatorWord ? (
+                          <span className="shrink-0">
+                            <span aria-hidden="true">· </span>
+                            {initiatorWord}
+                          </span>
+                        ) : null}
+                        {tags.length > 0 ? (
+                          <span className="min-w-0 truncate">
+                            <span aria-hidden="true">· </span>
+                            {tags.map((tag) => `#${tag}`).join(' ')}
+                          </span>
+                        ) : null}
+                      </span>
                     </button>
                     {onUpdateConversationTags ? (
                       <SessionTagEditor
                         sessionId={session.sessionId}
-                        tags={tagsFor(session)}
+                        tags={tags}
                         disabled={isInteractionDisabled || isDeleting}
                         onChange={handleUpdateTags}
-                        className="mt-1"
+                        className={cn('mt-1.5', ROW_ACTION_REVEAL)}
                       />
                     ) : null}
                     <button
@@ -299,9 +311,10 @@ export function JainaConversationSidebar({
                       disabled={isInteractionDisabled || isDeleting}
                       aria-label={`Delete conversation ${getSessionTitle(session, sessionTitleById)}`}
                       className={cn(
-                        'mr-1 mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors',
+                        'mt-1.5 mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors',
+                        isDeleting ? 'opacity-100' : ROW_ACTION_REVEAL,
                         isInteractionDisabled || isDeleting
-                          ? 'cursor-not-allowed opacity-50'
+                          ? 'cursor-not-allowed'
                           : 'cursor-pointer hover:bg-destructive/10 hover:text-destructive',
                       )}
                     >

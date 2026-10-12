@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { jainaOperatorActionSchema } from '@continuum/contracts';
 import * as supabaseClientModule from '@/lib/supabase/client';
 import {
+  budgetDisplay,
   buildEntityStatusAction,
   CAMPAIGN_STATUSES,
+  campaignStatusBucket,
+  countCampaignBuckets,
   DEFAULT_PAUSE_REASON,
   DEFAULT_UNPAUSE_REASON,
   describeEntityStatusAction,
@@ -12,6 +15,7 @@ import {
   fetchScaleAds,
   fetchScaleCampaigns,
   readEntityStatusOutcome,
+  type ScaleEntityRow,
   ScaleLoadError,
 } from './campaignsClient';
 
@@ -312,5 +316,88 @@ describe('ensureOperationsSession', () => {
     await expect(ensureOperationsSession({ ...scope, sessionId: 's' })).rejects.toThrow(
       'Brand access denied',
     );
+  });
+});
+
+function entity(over: Partial<ScaleEntityRow> & { id: string }): ScaleEntityRow {
+  return {
+    name: over.id,
+    status: 'ACTIVE',
+    effectiveStatus: null,
+    dailyBudget: null,
+    lifetimeBudget: null,
+    ...over,
+  };
+}
+
+describe('budgetDisplay', () => {
+  it("reads a CBO campaign's own daily budget, then its lifetime one", () => {
+    expect(budgetDisplay(entity({ id: 'c', dailyBudget: '70000' }), 'campaign')).toEqual({
+      kind: 'amount',
+      minor: 70000,
+      basis: 'daily',
+      source: 'self',
+    });
+    expect(budgetDisplay(entity({ id: 'c', lifetimeBudget: '24000' }), 'campaign')).toEqual({
+      kind: 'amount',
+      minor: 24000,
+      basis: 'lifetime',
+      source: 'self',
+    });
+  });
+
+  // The Easy Fit shape from prod: every active campaign is ABO, the budgets sit on the ad sets
+  // (lifetime_budget "0" beside the daily one).
+  it('sums the ACTIVE ad sets of an ABO campaign', () => {
+    const adSets = [
+      entity({ id: 'a1', dailyBudget: '2719', lifetimeBudget: '0' }),
+      entity({ id: 'a2', dailyBudget: '2067', lifetimeBudget: '0' }),
+      entity({
+        id: 'a3',
+        status: 'PAUSED',
+        dailyBudget: '3347',
+        lifetimeBudget: '0',
+      }),
+    ];
+    expect(budgetDisplay(entity({ id: 'c' }), 'campaign', adSets)).toEqual({
+      kind: 'amount',
+      minor: 4786,
+      basis: 'daily',
+      source: 'adsets',
+    });
+  });
+
+  it('says the budget is on the ad sets when they were not read or do not add up', () => {
+    const abo = entity({ id: 'c' });
+    expect(budgetDisplay(abo, 'campaign')).toEqual({ kind: 'adsets' });
+    expect(budgetDisplay(abo, 'campaign', [])).toEqual({ kind: 'adsets' });
+    expect(
+      budgetDisplay(abo, 'campaign', [
+        entity({ id: 'a1', dailyBudget: '100' }),
+        entity({ id: 'a2', lifetimeBudget: '900' }),
+      ]),
+    ).toEqual({ kind: 'adsets' });
+  });
+
+  it('leaves an ad set without its own budget (inside a CBO campaign) blank', () => {
+    expect(budgetDisplay(entity({ id: 'a', lifetimeBudget: '0' }), 'adset')).toBeNull();
+  });
+});
+
+describe('campaign status buckets', () => {
+  it('files every configured status under Active, Paused or Archived', () => {
+    expect(campaignStatusBucket('ACTIVE')).toBe('active');
+    expect(campaignStatusBucket('WITH_ISSUES')).toBe('active');
+    expect(campaignStatusBucket('PAUSED')).toBe('paused');
+    expect(campaignStatusBucket('ARCHIVED')).toBe('archived');
+    expect(campaignStatusBucket('DELETED')).toBe('archived');
+    expect(
+      countCampaignBuckets([
+        { status: 'ACTIVE' },
+        { status: 'PAUSED' },
+        { status: 'PAUSED' },
+        { status: 'ARCHIVED' },
+      ]),
+    ).toEqual({ active: 1, paused: 2, archived: 1 });
   });
 });

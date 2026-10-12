@@ -14,8 +14,12 @@ import type {
   PlatformKindResult,
   PlatformTotals,
 } from '@continuum/contracts';
-import { type FigureWindow, formatCurrency } from '../../format';
-import { resultWords } from '../account/overviewModel';
+import { type FigureWindow, figureProps, formatCurrency } from '../../format';
+import {
+  accountHeadlineSegments,
+  type HeadlineSegment,
+  resultWords,
+} from '../account/overviewModel';
 import { AD_PLATFORMS, type AdPlatform, PLATFORM_NAMES } from './platformTabsModel';
 
 /** Room for six tiles on "All": spend, up to three result kinds, decisions, autopilot. */
@@ -168,24 +172,77 @@ export function kindPlatformSplit(kind: KindAcrossPlatforms): string | null {
   }).join(' · ');
 }
 
-/** One clause of the "All" sentence per kind: who buys it cheapest when two platforms do. */
-export type KindClause = {
-  kind: KindAcrossPlatforms;
-  words: { one: string; many: string };
-  cheapest: CheapestFact | null;
-  /** The single platform buying this kind, when only one does. */
-  only: AdPlatform | null;
+/** The "All" sentence: the account's spend per currency, the window and the platforms it
+ *  spans, and the decisions waiting. What each kind cost is on its tile. */
+export function allPlatformsHeadlineSegments(metrics: AccountPlatformMetrics): HeadlineSegment[] {
+  const window = figureWindowOfMetrics(metrics);
+  return accountHeadlineSegments({
+    spends: metrics.spend_by_currency.map((row) => ({
+      text: formatCurrency(row.spend, row.currency),
+      figure: figureProps(
+        `overview.spend.${row.currency ?? 'none'}`,
+        row.spend,
+        row.currency,
+        window,
+      ),
+    })),
+    span: `in ${windowDaysLabel(metrics)} ${platformCountLabel(metrics)}`,
+    decisions: metrics.decisions_waiting,
+  });
+}
+
+function pctMove(value: number, base: number): number | null {
+  if (base <= 0) return null;
+  return Math.round((value / base - 1) * 100);
+}
+
+/**
+ * The account's spend against the producer's prior window, in whole percent. Only when the
+ * account is one currency and every connected platform that was read carries its prior —
+ * a sum missing one platform's last week would read as growth that never happened.
+ */
+export function accountSpendDeltaPct(metrics: AccountPlatformMetrics): number | null {
+  const currency = oneCurrency(metrics);
+  const total = metrics.spend_by_currency[0]?.spend;
+  if (currency == null || total == null || metrics.prior_window == null) return null;
+  const read = connectedTotals(metrics).filter((row) => row.spend != null);
+  if (read.length === 0 || read.some((row) => row.prior_spend == null)) return null;
+  const prior = read.reduce((sum, row) => sum + (row.prior_spend ?? 0), 0);
+  return pctMove(total, prior);
+}
+
+export type KindPriorMove = {
+  /** The kind's cost per result over the prior window, across the platforms that buy it. */
+  priorCostPerResult: number;
+  /** Whole-percent move of this window's cost against it: negative is cheaper. */
+  pct: number;
 };
 
-export function headlineKindClauses(metrics: AccountPlatformMetrics): KindClause[] {
-  return rankedKinds(metrics)
-    .slice(0, MAX_KIND_TILES)
-    .map((kind) => ({
-      kind,
-      words: kindWords(kind.kind),
-      cheapest: cheapestFor(metrics, kind),
-      only: kind.platforms.length === 1 ? (kind.platforms[0]?.platform ?? null) : null,
-    }));
+/**
+ * One kind's cost against the prior window, from each platform's own prior. A platform's prior
+ * spend on the kind is its prior cost times its prior results; the producer sends no prior
+ * spend per kind, so a platform with no prior results (or no prior at all) leaves the account's
+ * prior unknown, and then there is no move rather than one computed from part of the account.
+ */
+export function kindPriorMove(
+  metrics: AccountPlatformMetrics,
+  kind: KindAcrossPlatforms,
+): KindPriorMove | null {
+  if (kind.cost_per_result == null || metrics.prior_window == null) return null;
+  let priorSpend = 0;
+  let priorResults = 0;
+  for (const entry of kind.platforms) {
+    const row = platformTotals(metrics, entry.platform)?.results_by_kind.find(
+      (candidate) => candidate.kind === kind.kind,
+    );
+    if (!row?.prior_results || row.prior_cost_per_result == null) return null;
+    priorSpend += row.prior_cost_per_result * row.prior_results;
+    priorResults += row.prior_results;
+  }
+  if (priorResults === 0) return null;
+  const priorCostPerResult = priorSpend / priorResults;
+  const pct = pctMove(kind.cost_per_result, priorCostPerResult);
+  return pct == null ? null : { priorCostPerResult, pct };
 }
 
 /** "Google takes 29% of the spend" — only when the producer could say it (one currency). */

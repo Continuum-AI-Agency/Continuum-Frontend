@@ -125,7 +125,7 @@ function RailTile({
 }) {
   return (
     <section
-      className="grid min-w-0 snap-start content-start gap-1.5 rounded-lg border border-border bg-card p-3"
+      className="grid min-w-0 snap-start content-start gap-1.5 border-border/60 border-t pt-2"
       data-testid={testId}
     >
       <TileLabel>{label}</TileLabel>
@@ -217,7 +217,7 @@ function BeforeAfter({
       data-testid="audience-before-after"
     >
       <section
-        className="grid min-w-0 content-start gap-2 rounded-lg border border-border bg-card p-3"
+        className="grid min-w-0 content-start gap-2 border-border/60 border-t pt-2"
         data-testid="audience-current"
       >
         <TileLabel>Current audience</TileLabel>
@@ -240,10 +240,10 @@ function BeforeAfter({
         <ArrowRightIcon className="size-4 rotate-90 @2xl:rotate-0" />
       </div>
       <section
-        className="grid min-w-0 content-start gap-2 rounded-lg border border-primary/60 bg-card p-3"
+        className="grid min-w-0 content-start gap-2 border-primary/60 border-t-2 pt-2"
         data-testid="audience-proposed"
       >
-        <TileLabel className="text-primary">Proposed audience</TileLabel>
+        <TileLabel className="text-primary-ink">Proposed audience</TileLabel>
         {comparison ? (
           <>
             <FacetList
@@ -461,7 +461,7 @@ function WhyTile({
           <CollapsibleContent>
             <p className="text-muted-foreground text-sm">{plan.rationale}</p>
           </CollapsibleContent>
-          <CollapsibleTrigger className="text-primary text-xs underline-offset-2 hover:underline">
+          <CollapsibleTrigger className="text-primary-ink text-xs underline-offset-2 hover:underline">
             {open ? 'Read less' : 'Read more'}
           </CollapsibleTrigger>
         </Collapsible>
@@ -489,7 +489,7 @@ function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
       ) : null}
       {hasLists ? (
         <Collapsible>
-          <CollapsibleTrigger className="inline-flex items-center gap-1 text-primary text-xs underline-offset-2 hover:underline">
+          <CollapsibleTrigger className="inline-flex items-center gap-1 text-primary-ink text-xs underline-offset-2 hover:underline">
             <ChevronDownIcon className="size-3.5" /> See the list
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -775,7 +775,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               Convert the campaign, then ask Jaina for the proposal again.
             </Muted>
             {props.cboPreview?.ok && props.cboPreview.dryRun !== false ? (
-              <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+              <div className="border-border/60 border-l pl-3">
                 <p className="mb-1 font-medium text-foreground">
                   Preview: {props.cboPreview.adset_budgets.length} ad set
                   {props.cboPreview.adset_budgets.length === 1 ? '' : 's'} with a daily budget of
@@ -975,7 +975,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   · {result.adset.effective_status ?? result.adset.status ?? ''}
                   {urls?.adset ? (
                     <a
-                      className="ml-1 inline-flex items-center gap-0.5 text-primary"
+                      className="ml-1 inline-flex items-center gap-0.5 text-primary-ink"
                       href={urls.adset}
                       rel="noreferrer"
                       target="_blank"
@@ -991,7 +991,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   {ad.effective_status ?? ad.status ?? ''}
                   {urls?.ads[index] ? (
                     <a
-                      className="ml-1 inline-flex items-center gap-0.5 text-primary"
+                      className="ml-1 inline-flex items-center gap-0.5 text-primary-ink"
                       href={urls.ads[index]}
                       rel="noreferrer"
                       target="_blank"
@@ -1012,7 +1012,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 <ChevronDownIcon className="size-3.5" /> What was implemented
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <dl className="mt-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-3 text-sm">
+                <dl className="mt-1.5 space-y-1.5 border-border/60 border-l pl-3 text-sm">
                   {implementedRows(result, plan).map((line) => (
                     <div className="flex items-baseline gap-2" key={`${line.label}:${line.value}`}>
                       <dt className="w-28 shrink-0 text-muted-foreground text-xs">{line.label}</dt>

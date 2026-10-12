@@ -237,7 +237,11 @@ export function ThreeNumbersSectionBody({ block, section }: TemplateSectionBodyP
                 'font-normal',
               )}
             >
-              <FigureText text={item.text} figures={block.figures} figureClassName="text-primary" />
+              <FigureText
+                text={item.text}
+                figures={block.figures}
+                figureClassName="text-primary-ink"
+              />
             </p>
           </div>
         ))}

@@ -260,7 +260,7 @@ export function StepStart({
       <div className="space-y-2">
         <h3 className={questionHeading}>Where should it start?</h3>
         <div className="flex items-center gap-2">
-          <SparklesIcon aria-hidden className="size-4 text-primary" />
+          <SparklesIcon aria-hidden className="size-4 text-primary-ink" />
           <h4 className="font-semibold text-sm tracking-tight">Start from a suggestion</h4>
           {suggestions.length > 0 ? (
             <span className="text-muted-foreground text-xs">
@@ -312,7 +312,7 @@ export function StepStart({
                 Pick the ad sets or campaigns yourself, on any connected platform, then set the
                 goal, the plan and who applies the moves.
               </span>
-              <span className="inline-flex items-center gap-1 text-primary text-xs">
+              <span className="inline-flex items-center gap-1 text-primary-ink text-xs">
                 Build it <ArrowRightIcon aria-hidden className="size-3.5" />
               </span>
             </button>

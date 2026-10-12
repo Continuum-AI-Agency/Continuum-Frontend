@@ -402,7 +402,7 @@ export function PaidMediaDashboard({
                     className={cn(
                       'h-8 min-w-[220px] justify-start gap-1.5 text-left text-xs font-normal',
                       customRangeOpen &&
-                        'border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20',
+                        'border-primary/60 bg-primary/5 text-primary-ink ring-1 ring-primary/20',
                     )}
                   >
                     <CalendarIcon className="h-3.5 w-3.5 shrink-0" />

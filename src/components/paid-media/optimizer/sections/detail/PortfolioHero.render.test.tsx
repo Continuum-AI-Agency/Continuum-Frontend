@@ -600,18 +600,28 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     const status = container.querySelector('[data-testid="headline-status"]');
     expect(status?.textContent).toBe('80 leads in 14 days at 45.69, 31% over the target of 35.00.');
     expect(status?.querySelectorAll('[data-testid="figure"]').length).toBe(4);
+    // Figures in mono inside the sentence; the comparison clause in a subtle red.
+    for (const figure of status?.querySelectorAll('[data-testid="figure"]') ?? []) {
+      expect(figure.getAttribute('class')).toContain('font-mono');
+    }
+    const comparison = status?.querySelector('[data-testid="headline-comparison"]');
+    expect(comparison?.textContent).toBe('31% over the target');
+    expect(comparison?.getAttribute('class')).toContain('text-destructive');
     const opportunity = container.querySelector('[data-testid="headline-opportunity"]');
+    // The opportunity reads lighter than the status: muted, regular weight.
+    expect(opportunity?.getAttribute('class')).toContain('text-muted-foreground');
     expect(opportunity?.textContent).toBe(
       'The opportunity: Ad set A pays 75.65 per lead; pausing it frees 43.23 a day.',
     );
     expect(container.querySelector('[data-testid="headline-blocker"]')).toBeNull();
-    // The anchor: the cost per result over the brief's window, amber over the target, and
-    // the picker's range beside the one before it, named by their dates.
+    // The anchor: the cost per result over the brief's window, red 31% over the target (amber
+    // is kept for within ANCHOR_WARN_PCT of it), and the picker's range beside the one before
+    // it, named by their dates.
     const anchor = container.querySelector('[data-testid="portfolio-anchor"]');
-    expect(anchor?.getAttribute('data-state')).toBe('warn');
+    expect(anchor?.getAttribute('data-state')).toBe('bad');
     const figure = anchor?.querySelector('[data-figure-role="anchor"]');
     expect(figure?.textContent).toBe('45.69');
-    expect(figure?.getAttribute('class')).toContain('text-warning');
+    expect(figure?.getAttribute('class')).toContain('text-destructive');
     expect(anchor?.querySelector('[data-testid="anchor-unit"]')?.textContent).toBe(
       'per lead·target 35.00·+31%',
     );
@@ -634,6 +644,17 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       'Ad sets on target3 of 9best Ad set E 25.07worst Ad set D 100',
     );
     expect(text('tile-decisions')).toBe('Decisions390.72/day at stake4 open opportunities');
+    // Tile figures stay in the foreground: the anchor is the one protagonist.
+    for (const tileFigure of container.querySelectorAll(
+      '[data-testid="portfolio-tiles"] [data-figure-role="tile"]',
+    )) {
+      expect(tileFigure.getAttribute('class') ?? '').not.toMatch(
+        /text-(success|warning|destructive|primary)/,
+      );
+    }
+    // Only a comparison line is coloured: the dearest ad set over the target.
+    const worst = container.querySelector('[data-testid="tile-adsets"] [data-testid="kpi-detail"]');
+    expect(worst?.getAttribute('class')).toContain('text-destructive');
     const strip = container.querySelector('[data-testid="portfolio-before-after"]');
     expect(strip?.querySelector('[data-testid="before-after-before"]')).toBeNull();
     expect(strip?.querySelector('[data-testid="before-after-after"]')).toBeNull();
@@ -643,6 +664,22 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     expect(strip?.querySelector('[data-testid="before-after-projection"]')?.textContent).toContain(
       'If the 2 pauses land, the projected cost with the 7 remaining ad sets is',
     );
+  });
+
+  it('FORMULARIOS: the decisions tile spends primary on its Review press alone', () => {
+    let reviews = 0;
+    const { container } = wholeHero('formularios', {
+      over: { onReviewDecisions: () => (reviews += 1) },
+    });
+    const tile = container.querySelector('[data-testid="tile-decisions"]');
+    const cta = tile?.querySelector<HTMLButtonElement>('[data-testid="decisions-review-cta"]');
+    expect(cta?.textContent).toBe('Review →');
+    expect(cta?.getAttribute('class')).toContain('text-primary-ink');
+    expect(tile?.querySelector('[data-figure-role="tile"]')?.getAttribute('class')).not.toContain(
+      'text-primary-ink',
+    );
+    if (cta) fireEvent.click(cta);
+    expect(reviews).toBe(1);
   });
 
   it('FORMULARIOS: Jaina’s read is one attributed line between the status and the opportunity', () => {

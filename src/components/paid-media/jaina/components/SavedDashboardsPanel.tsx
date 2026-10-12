@@ -114,7 +114,7 @@ export function SavedDashboardsPanel() {
                     {dashboard.window_label ? ` · covers ${dashboard.window_label}` : ''}
                   </span>
                   <a
-                    className="inline-flex items-center gap-1 text-primary text-xs hover:underline"
+                    className="inline-flex items-center gap-1 text-primary-ink text-xs hover:underline"
                     href={jainaPromptHref(refreshPrompt)}
                   >
                     <RefreshCwIcon className="size-3" /> Ask Jaina to refresh

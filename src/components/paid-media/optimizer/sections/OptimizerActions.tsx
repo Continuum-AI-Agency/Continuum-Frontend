@@ -69,33 +69,34 @@ export function OptimizerActions({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-10">
       {portfoliosWithPending.map((portfolio) => (
-        <div key={portfolio.id} className="space-y-1" data-testid="actions-portfolio">
-          <PlatformChips platforms={OPTIMIZER_PORTFOLIO_PLATFORMS} />
+        <div key={portfolio.id} data-testid="actions-portfolio">
           <OptimizerActionsPortfolioGroup
             brandId={brandId}
             adAccountId={adAccountId}
+            headerLead={<PlatformChips platforms={OPTIMIZER_PORTFOLIO_PLATFORMS} />}
             portfolio={portfolio}
           />
         </div>
       ))}
 
       {renewals.length > 0 ? (
-        <div>
-          <h3 className={`${typeScale.label} mb-2 px-1 font-semibold text-muted-foreground`}>
-            Approved renewals · tasks ({renewals.length})
+        <section>
+          <h3 className={`${typeScale.label} mb-1 font-semibold text-muted-foreground`}>
+            Approved renewals · tasks{' '}
+            <span className="font-mono tabular-nums">{renewals.length}</span>
           </h3>
-          <div className="space-y-2">
+          <ul className="divide-y divide-border/60 border-border/60 border-y">
             {renewals.map((task) => (
               <RenewalTaskRow key={task.id} brandId={brandId} task={task} />
             ))}
-          </div>
+          </ul>
           <p className="mt-2 text-xs text-muted-foreground">
             Approving a fatigue renewal opens a tracked task — the engine never auto-refreshes a
             creative. It leaves the pending feed and lands here until the team actions it.
           </p>
-        </div>
+        </section>
       ) : null}
     </div>
   );

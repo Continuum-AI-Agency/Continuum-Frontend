@@ -32,7 +32,7 @@ type AdsetAngleStandingProps = {
 const VERDICT_META: Record<AngleVerdict, { label: string; tone: string }> = {
   double_down: { label: 'Double down', tone: 'text-emerald-600 dark:text-emerald-400' },
   rebuild_craft: { label: 'Rebuild the craft', tone: 'text-amber-600 dark:text-amber-400' },
-  introduce: { label: 'Introduce', tone: 'text-primary' },
+  introduce: { label: 'Introduce', tone: 'text-primary-ink' },
   insufficient: { label: 'Needs a variant', tone: 'text-muted-foreground' },
 };
 

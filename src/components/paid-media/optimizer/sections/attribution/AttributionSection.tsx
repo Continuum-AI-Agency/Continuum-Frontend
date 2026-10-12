@@ -1,7 +1,7 @@
 'use client';
 
 // Manage → Attribution (frontend.html §4, decisiones 20): what this portfolio counts its
-// results with. Three cards — each platform's own (the default), GA4, the client's spreadsheet —
+// results with. Three sources, as hairline-separated rows — each platform's own (the default), GA4, the client's spreadsheet —
 // with the one in use marked. The spreadsheet card carries its last read, its coverage, its
 // last error, "Re-read now", and the setup flow. Reads come from optimizer_get_portfolio_metrics
 // (configured / used / conversions_by_source), so the card and the detail header agree.
@@ -56,20 +56,20 @@ function SourceCard({
 }) {
   return (
     <div
-      className={cn(
-        'space-y-1.5 rounded-md border p-3',
-        inUse ? 'border-primary/60 bg-primary/5' : 'border-border/60',
-      )}
+      className={cn('space-y-1.5 px-3 py-2.5', inUse && 'rounded-md bg-primary/10')}
       data-in-use={inUse}
       data-kind={kind}
       data-testid="attribution-card"
     >
-      <p className="flex flex-wrap items-center gap-2 font-medium text-xs">
+      <p
+        className={cn(
+          'flex flex-wrap items-center gap-2 font-medium text-xs',
+          inUse && 'text-primary-ink',
+        )}
+      >
         {attributionSourceName(kind)}
         {kind === 'platform' ? <span className="text-muted-foreground">default</span> : null}
-        {inUse ? (
-          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-primary">in use</span>
-        ) : null}
+        {inUse ? <span className="font-normal text-primary-ink">· in use</span> : null}
       </p>
       <p className="text-muted-foreground text-xs">{CARD_COPY[kind]}</p>
       {children}
@@ -120,7 +120,7 @@ export function AttributionSectionView({
       {metricsState.status === 'unavailable' && nonMetaMember ? (
         <MultiPlatformUnavailable detail="The source in use can't be read yet; results use each platform's own count." />
       ) : null}
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="divide-y divide-border/60">
         <SourceCard inUse={used === 'platform'} kind="platform" />
         <SourceCard inUse={used === 'ga4'} kind="ga4">
           {configured !== 'ga4' ? (

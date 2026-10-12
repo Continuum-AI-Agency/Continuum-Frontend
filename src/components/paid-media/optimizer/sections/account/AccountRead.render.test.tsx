@@ -143,7 +143,7 @@ function view(
 
 describe('AccountRead — the cards in rank order', () => {
   it('ranks on discounted money and marks only the first card as the principal one', () => {
-    const { container, getAllByText, getAllByTestId } = view([reallocation, candidate({})]);
+    const { container, getAllByText } = view([reallocation, candidate({})]);
     const cards = container.querySelectorAll('[data-testid="account-card"]');
     expect(cards).toHaveLength(2);
     // 102 recoverable outranks 66.67 at a better price.
@@ -151,9 +151,10 @@ describe('AccountRead — the cards in rank order', () => {
     expect(cards[0]?.getAttribute('data-lead')).toBe('true');
     expect(cards[1]?.getAttribute('data-lead')).toBe('false');
     expect(getAllByText('Lead')).toHaveLength(1);
-    // Only the principal card breathes.
-    const rules = getAllByTestId('account-card-rule');
-    expect(rules.map((rule) => rule.getAttribute('data-anim'))).toEqual(['calm', 'still']);
+    // No frame: each card is a module on a soft fill, the principal one tinted primary.
+    for (const card of cards) expect(card.className).not.toMatch(/(^|\s)border(\s|$)|bg-card/);
+    expect(cards[0]?.className).toContain('bg-primary/5');
+    expect(cards[1]?.className).toContain('bg-muted/50');
   });
 
   it('renders the root as the cards section', () => {
@@ -168,6 +169,9 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
     expect(container.querySelector('h3')?.textContent).toBe(
       'ITESO // AGOSTO - RTG: 101 MXN por lead, 2.9× la referencia de 35 MXN',
     );
+    // The figures sit in mono at the claim's own weight; the entity's name is left as written.
+    const figures = [...(container.querySelector('h3')?.querySelectorAll('.font-mono') ?? [])];
+    expect(figures.map((node) => node.textContent)).toEqual(['101 MXN', '2.9×', '35 MXN']);
     expect(container.textContent).toContain('Restaurar la entrega');
     // The figure lives in the title; no second lead figure under it.
     expect(container.querySelector('[data-headline]')).toBeNull();

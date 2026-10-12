@@ -49,7 +49,7 @@ const STATUS_ICON: Record<PaidSetupStepStatus, ComponentType<{ className?: strin
 
 const STATUS_ICON_CLASS: Record<PaidSetupStepStatus, string> = {
   done: 'text-emerald-500',
-  action_required: 'text-primary',
+  action_required: 'text-primary-ink',
   attention: 'text-amber-500',
   pending: 'text-muted-foreground',
 };

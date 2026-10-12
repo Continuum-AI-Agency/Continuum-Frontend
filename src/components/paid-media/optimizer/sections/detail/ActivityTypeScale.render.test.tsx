@@ -78,7 +78,8 @@ describe('SuggestionAsk — the optimizer type scale', () => {
     for (const category of ['audience', 'budget', 'creative']) {
       const icon = screen.getByTestId(`suggestion-ask-icon:${category}`);
       expect(icon.querySelector('svg')).not.toBeNull();
-      expect(icon.className).toContain('size-12');
+      // A small glyph beside the label — the row is one quiet line, not three icon cards.
+      expect(icon.className).toContain('size-8');
     }
     expect(screen.getByTestId('suggestion-ask-icon:audience').innerHTML).toContain('lucide-users');
     expect(screen.getByTestId('suggestion-ask-icon:budget').innerHTML).toContain(
@@ -104,16 +105,21 @@ describe('SuggestionAsk — the optimizer type scale', () => {
     expect(
       screen.getByText("Read on request, from this portfolio's own figures").className,
     ).toContain('text-xs');
+    // No card per option: the section and its rows carry no border box of their own.
+    expect(section.className).not.toMatch(/rounded-xl|\bborder\b/);
+    for (const item of within(section).getAllByRole('listitem')) {
+      expect(item.className).not.toMatch(/rounded|\bborder\b|bg-card/);
+    }
     for (const button of within(section).getAllByRole('button')) {
       expect(button.className).toContain('h-8');
-      expect(button.className).toContain('w-full');
+      expect(button.className).not.toContain('w-full');
       expect(button.className).toContain('text-xs');
     }
   });
 });
 
 describe('DailyReadList — the optimizer type scale', () => {
-  it('uses no micro type anywhere and shows figures as stat chips', () => {
+  it('uses no micro type anywhere and shows figures as inline mono pairs', () => {
     render(
       <DailyReadList
         currency="MXN"
@@ -129,9 +135,11 @@ describe('DailyReadList — the optimizer type scale', () => {
     expect(within(section).getByRole('heading').className).toContain('text-base');
     expect(screen.getByText(askedRow.title).className).toContain('text-sm');
     expect(screen.getByText(askedRow.reason as string).className).toContain('text-xs');
+    expect(section.className).not.toMatch(/rounded-xl|bg-card/);
     const value = screen.getByText('1.25×');
     expect(value.className).toContain('text-xs');
-    expect(value.parentElement?.className).toContain('rounded-lg');
+    expect(value.className).toContain('font-mono');
+    expect(value.parentElement?.className).not.toMatch(/rounded|\bborder\b/);
     for (const button of within(section).getAllByRole('button')) {
       expect(button.className).toContain('h-8');
       expect(button.className).toContain('text-xs');

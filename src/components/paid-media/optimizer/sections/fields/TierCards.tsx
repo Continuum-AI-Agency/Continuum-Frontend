@@ -1,6 +1,6 @@
 'use client';
 
-// The autonomy tier as three cards, in plain language: what each one does and what it
+// The autonomy tier as three borderless options, in plain language: what each one does and what it
 // never does. Shared by the creation wizard and the Manage panel so the tier reads the
 // same on both. Autopilot is always choosable — picking it is what opens the guardrails,
 // never a greyed-out option behind two fields nobody explained.
@@ -44,7 +44,7 @@ export function TierCards({
   className,
 }: TierCardsProps) {
   return (
-    <fieldset className={cn('grid min-w-0 gap-2 sm:grid-cols-3', className)}>
+    <fieldset className={cn('grid min-w-0 gap-1 sm:grid-cols-3', className)}>
       <legend className="sr-only">Autonomy tier</legend>
       {APPLY_MODES.map((tier) => {
         const active = value === tier || (tier === 'autopilot' && arming && value !== 'autopilot');
@@ -53,10 +53,8 @@ export function TierCards({
           <button
             aria-pressed={active}
             className={cn(
-              'rounded-lg border px-3 py-2 text-left transition-colors',
-              active
-                ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40'
-                : 'border-border/70 bg-card hover:bg-muted/30',
+              'rounded-md px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+              active ? 'bg-primary/10' : 'hover:bg-muted/50',
               disabled && 'pointer-events-none opacity-60',
             )}
             disabled={disabled}
@@ -64,9 +62,14 @@ export function TierCards({
             onClick={() => onSelect(tier)}
             type="button"
           >
-            <span className="flex items-center gap-1.5 font-semibold text-xs">
+            <span
+              className={cn(
+                'flex items-center gap-1.5 font-semibold text-xs',
+                active && 'text-primary-ink',
+              )}
+            >
               {tier === 'autopilot' ? (
-                <SparklesIcon aria-hidden="true" className="size-3.5 text-primary" />
+                <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
               ) : null}
               {applyModePill(tier)?.label ?? copy.title}
             </span>

@@ -37,13 +37,13 @@ export function JainaEntryChips(props: JainaEntryChipsProps) {
   const entries = 'portfolio' in props ? jainaEntryPrompts(props.portfolio) : props.entries;
   const { layout = 'stack', frame = true, platform = null } = props;
   const title = (
-    <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary text-sm">
+    <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary-ink text-sm">
       <SparklesIcon aria-hidden className="size-3.5" /> {label}
     </span>
   );
   const questions = entries.map((entry) => (
     <a
-      className="rounded-full bg-primary/10 px-3 py-1 text-primary text-sm transition-colors hover:bg-primary/15"
+      className="rounded-full bg-primary/10 px-3 py-1 text-primary-ink text-sm transition-colors hover:bg-primary/15"
       href={jainaPromptHref(entry.prompt, platform, { newConversation: true })}
       key={entry.key}
     >

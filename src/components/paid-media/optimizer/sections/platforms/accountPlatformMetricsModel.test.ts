@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { headlineText } from '../account/overviewModel';
 import {
   buildMetrics,
   EASY_FIT_MP1,
@@ -8,10 +9,12 @@ import {
   TIKTOK_TOTALS,
 } from './__fixtures__/accountPlatformMetrics';
 import {
+  accountSpendDeltaPct,
+  allPlatformsHeadlineSegments,
   connectedFromMetrics,
   coverageNote,
-  headlineKindClauses,
   kindPlatformSplit,
+  kindPriorMove,
   kindTileLabel,
   kindTileSub,
   platformCountLabel,
@@ -78,15 +81,45 @@ describe('the All frame', () => {
     expect(kindTileSub(EASY_FIT_MP1, { ...purchases, spend: 0 })).toBe('no spend · no target');
   });
 
-  it('gives the headline the three largest kinds with their cheapest platform', () => {
-    const clauses = headlineKindClauses(EASY_FIT_MP1);
-    expect(clauses.map((clause) => clause.kind.kind)).toEqual([
-      'conversations',
-      'leads',
-      'purchases',
-    ]);
-    expect(clauses[0]?.only).toBe('meta');
-    expect(clauses[1]?.cheapest?.platform).toBe('google_ads');
+  it('gives the headline spend, window and decisions — one sentence, no per-kind costs', () => {
+    const segments = allPlatformsHeadlineSegments(EASY_FIT_MP1);
+    expect(headlineText(segments)).toBe(
+      'The account spent 38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
+    );
+    const figure = segments.find((segment) => segment.kind === 'figure');
+    expect(figure?.kind === 'figure' ? figure.figure['data-figure'] : null).toBe(
+      'overview.spend.MXN',
+    );
+    expect(segments.at(-1)).toMatchObject({ kind: 'decisions', count: 6, figure: '6' });
+  });
+
+  it('moves the account spend against the prior window only when every platform read has one', () => {
+    // Google carries no prior, so a sum without it would invent growth.
+    expect(accountSpendDeltaPct(EASY_FIT_MP1)).toBeNull();
+    // Meta alone: 23,911 against 22,000.
+    expect(accountSpendDeltaPct(META_ONLY)).toBe(9);
+    expect(accountSpendDeltaPct({ ...META_ONLY, prior_window: null })).toBeNull();
+  });
+
+  it("moves a kind's cost against the prior window from each platform's own prior", () => {
+    const kinds = rankedKinds(EASY_FIT_MP1);
+    const conversations = kinds.find((kind) => kind.kind === 'conversations');
+    const leads = kinds.find((kind) => kind.kind === 'leads');
+    if (!conversations || !leads) throw new Error('kind missing');
+    // Meta alone buys conversations: 39.95 against 41.34.
+    expect(kindPriorMove(EASY_FIT_MP1, conversations)).toEqual({
+      priorCostPerResult: 41.34,
+      pct: -3,
+    });
+    // Meta's leads carry no prior, so the account's prior for leads is unknown.
+    expect(kindPriorMove(EASY_FIT_MP1, leads)).toBeNull();
+    // Google and TikTok together: (33.10×100 + 44.20×20) / 120 = 34.95 prior; 33.95 now.
+    const frame = buildMetrics([GOOGLE_TOTALS, TIKTOK_TOTALS]);
+    const both = rankedKinds(frame).find((kind) => kind.kind === 'leads');
+    if (!both) throw new Error('leads missing');
+    const move = kindPriorMove(frame, both);
+    expect(move?.priorCostPerResult).toBeCloseTo(34.95, 2);
+    expect(move?.pct).toBe(Math.round(((both.cost_per_result ?? 0) / 34.95 - 1) * 100));
   });
 
   it('reads connection from the producer, TikTok included', () => {

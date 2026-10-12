@@ -45,7 +45,7 @@ export function ConversionVolumePanel({
           <ul className="mt-1 flex flex-wrap gap-1.5">
             {volume.underFloorIds.map((id) => (
               <li
-                className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-xs"
+                className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs"
                 key={id}
                 title={id}
               >
@@ -55,7 +55,7 @@ export function ConversionVolumePanel({
           </ul>
         </div>
       ) : (
-        <p className="text-emerald-600 dark:text-emerald-400">Every ad set clears the floor.</p>
+        <p className="text-success">Every ad set clears the floor.</p>
       )}
       {volume.actionables.length > 0 ? (
         <ul className="space-y-1 border-border/60 border-t pt-2">

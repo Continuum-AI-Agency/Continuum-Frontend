@@ -7,6 +7,7 @@ import {
 import {
   type AdAngleFact,
   angleIdByAd,
+  angleReadText,
   buildAccountAngleRows,
   buildNextAngleRows,
   composeAngleRead,
@@ -284,18 +285,70 @@ describe('neverTestedAngles', () => {
 });
 
 describe('composeAngleRead', () => {
-  it('names the most-winning angle and the spend leader with how often it loses', () => {
-    expect(composeAngleRead(accountRows())).toEqual([
-      "“Proof by someone like you” wins most often: 5 of 6 ads beat their ad set's median cost, across 2 ad sets.",
-      '“Discount offer” carries the most spend, 72%, and loses in 2 of the 2 ad sets where it competes.',
-    ]);
+  const lines = (read: ReturnType<typeof composeAngleRead>) => read.map(angleReadText);
+
+  it('names the most-winning angle, then the spend leader with how often it loses', () => {
+    const rows = accountRows();
+    const standing = buildNextAngleRows(scopeWinrateRows(WINRATE_ROWS, ACCOUNT));
+    const read = composeAngleRead(rows, standing);
+    expect(read[0]).toMatchObject({ kind: 'finding' });
+    expect(angleReadText(read[0])).toBe(
+      "Proof by someone like you wins most often: 5 of 6 ads beat their ad set's median cost, across 2 ad sets. Discount offer carries 72% of the spend and loses in 2 of the 2 ad sets where it competes.",
+    );
   });
 
-  it('folds the second sentence when the winner is also the spend leader', () => {
+  it('marks angles, figures and the comparison words as structured parts, never quoted', () => {
+    const [finding] = composeAngleRead(accountRows());
+    expect(finding.parts.filter((p) => p.kind === 'angle').map((p) => p.text)).toEqual([
+      'Proof by someone like you',
+      'Discount offer',
+    ]);
+    expect(finding.parts.filter((p) => p.kind === 'figure').map((p) => p.text)).toEqual([
+      '5',
+      '6',
+      '2',
+      '72%',
+      '2',
+      '2',
+    ]);
+    expect(finding.parts).toContainEqual({ kind: 'text', text: 'wins most often', tone: 'better' });
+    expect(finding.parts).toContainEqual({ kind: 'text', text: 'loses', tone: 'worse' });
+    expect(angleReadText(finding)).not.toMatch(/[“”"]/);
+  });
+
+  it('folds the spend into the winner when it also leads the spend', () => {
     const rows = accountRows().map((r) =>
       r.angleId === 'social_proof_peer' ? { ...r, spend: 5000, spendShare: 0.8 } : r,
     );
-    expect(composeAngleRead(rows)[1]).toBe('It also carries the most spend, 80%.');
+    expect(angleReadText(composeAngleRead(rows)[0])).toContain(
+      'across 2 ad sets. It also carries 80% of the spend.',
+    );
+  });
+
+  it('says only where the spend sits when nothing competed (the Easy Fit shape)', () => {
+    const rows = accountRows().map((r) =>
+      r.angleId === 'offer_discount'
+        ? { ...r, comparedAds: 0, adsetsCompared: 0, adsetsLosing: 0, winRate: null, ads: 22 }
+        : { ...r, comparedAds: 0, winRate: null },
+    );
+    const thin = [
+      { verdict: 'insufficient', recommendedAngle: null },
+      { verdict: 'insufficient', recommendedAngle: null },
+    ] as unknown as Parameters<typeof composeAngleRead>[1];
+    expect(lines(composeAngleRead(rows, thin))).toEqual([
+      'Discount offer carries 72% of the spend, across 22 ads.',
+      'Next: ship a second variant in 2 ad sets, so an angle can be called there.',
+    ]);
+  });
+
+  it('turns the strongest per-ad-set call into the next step, counted by its commonest angle', () => {
+    const standing = buildNextAngleRows(scopeWinrateRows(WINRATE_ROWS, ACCOUNT));
+    const [, next] = composeAngleRead(accountRows(), standing);
+    expect(next.kind).toBe('next');
+    expect(angleReadText(next)).toMatch(/^Next: /);
+    expect(angleReadText(next)).toBe(
+      'Next: build the next ads around Proof by someone like you in the 2 ad sets where its own ads prove it.',
+    );
   });
 
   it('says nothing when nothing is computable', () => {
@@ -306,7 +359,8 @@ describe('composeAngleRead', () => {
     const thin = accountRows().map((r) => ({ ...r, comparedAds: 2 }));
     const read = composeAngleRead(thin);
     expect(read).toHaveLength(1);
-    expect(read[0]).toContain('carries the most spend');
+    expect(angleReadText(read[0])).not.toContain('wins most often');
+    expect(angleReadText(read[0])).toContain('of the spend');
   });
 });
 

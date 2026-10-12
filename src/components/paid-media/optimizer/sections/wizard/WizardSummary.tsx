@@ -79,11 +79,16 @@ export function WizardSummary({
   const mode = MODE_COPY[draft.mode];
   const goalPending = !reached.has('goal');
   const planPending = !reached.has('plan');
+  const assetsPending = !reached.has('assets');
 
   return (
     <aside className="space-y-3.5 rounded-xl bg-muted/50 px-4 py-4">
       <p className="font-semibold text-sm tracking-tight">{draft.name.trim() || 'New portfolio'}</p>
-      {draft.proposedMembers.length > 0 ? (
+      {assetsPending ? (
+        <Row label="Manages" pending>
+          {null}
+        </Row>
+      ) : draft.proposedMembers.length > 0 ? (
         <div className="space-y-0.5">
           <p className={`${typeScale.label} font-medium text-muted-foreground`}>Manages</p>
           {selectionByPlatform(draft).length === 0 ? (
@@ -143,15 +148,17 @@ export function WizardSummary({
           ? ` · holds moves over ${draft.maxChangePct}%`
           : ''}
       </Row>
-      <SetupAdvisor
-        advice={advice}
-        brandId={brandId}
-        disabled={disabled}
-        onChangeSelection={onChangeSelection}
-        onUseBudget={onUseBudget}
-        onUseTarget={onUseTarget}
-        selectedIds={draft.adsetIds}
-      />
+      {assetsPending ? null : (
+        <SetupAdvisor
+          advice={advice}
+          brandId={brandId}
+          disabled={disabled}
+          onChangeSelection={onChangeSelection}
+          onUseBudget={onUseBudget}
+          onUseTarget={onUseTarget}
+          selectedIds={draft.adsetIds}
+        />
+      )}
     </aside>
   );
 }

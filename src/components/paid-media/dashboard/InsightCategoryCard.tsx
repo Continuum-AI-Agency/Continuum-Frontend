@@ -21,7 +21,7 @@ const severityClasses: Record<InsightSeverity, string> = {
 const severityTextClasses: Record<InsightSeverity, string> = {
   positive: 'text-emerald-500',
   negative: 'text-destructive',
-  neutral: 'text-primary',
+  neutral: 'text-primary-ink',
 };
 
 const METRIC_LABELS: Record<string, string> = {

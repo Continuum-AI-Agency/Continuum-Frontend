@@ -2,6 +2,7 @@
 
 import {
   BookIcon,
+  ChevronDownIcon,
   CodeIcon,
   EyeIcon,
   EyeOffIcon,
@@ -83,6 +84,12 @@ function runsByStratum(blocks: CheckpointReportV2['blocks']): StratumRun[] {
   return runs;
 }
 
+// A quiet disclosure row: the label and a chevron, no fill and no border, so the answer's own
+// modules stay the only shapes on the page.
+const DISCLOSURE_SUMMARY_CLASS =
+  'inline-flex cursor-pointer list-none items-center gap-1 rounded-sm py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden';
+const DISCLOSURE_CHEVRON_CLASS = 'size-3.5 shrink-0 transition-transform group-open:rotate-180';
+
 // Supplementary report context (reasoning, objectives, sources). These ride along
 // in every persisted report but were previously dropped at the schema; surfacing
 // them keeps a thin/degraded report from looking empty.
@@ -96,11 +103,12 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
   }
 
   return (
-    <div className={cn('flex flex-col', JAINA_MODULE_GAP)}>
+    <div className="flex flex-col gap-1">
       {objectives.length > 0 ? (
-        <details className="group rounded-xl bg-muted/40 px-3 py-2.5 sm:px-4">
-          <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground">
+        <details className="group">
+          <summary className={DISCLOSURE_SUMMARY_CLASS}>
             Execution objectives ({objectives.length})
+            <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />
           </summary>
           <ul className="mt-2 space-y-1.5">
             {objectives.map((objective) => (
@@ -123,9 +131,10 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
       ) : null}
 
       {reasoning.length > 0 ? (
-        <details className="group rounded-xl bg-muted/40 px-3 py-2.5 sm:px-4">
-          <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground">
+        <details className="group">
+          <summary className={DISCLOSURE_SUMMARY_CLASS}>
             Analysis
+            <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />
           </summary>
           <SafeMarkdown
             content={reasoning}

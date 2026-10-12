@@ -176,7 +176,7 @@ export function AccountReadFreshness({
         ) : null}
         {offersControl ? (
           <button
-            className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-default disabled:text-muted-foreground disabled:no-underline"
+            className="font-medium text-primary-ink underline-offset-2 hover:underline disabled:cursor-default disabled:text-muted-foreground disabled:no-underline"
             data-testid="account-read-refresh"
             disabled={!canAsk}
             onClick={onRequest}

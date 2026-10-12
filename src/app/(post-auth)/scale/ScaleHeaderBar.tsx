@@ -23,12 +23,17 @@ export function ScaleHeaderBar({ children }: { children: React.ReactNode }) {
     setLookup(slot ? { status: 'found', slot } : { status: 'none' });
   }, []);
 
+  // The bar is its own size container (`scale-bar`): it shares the header with the module pill
+  // and the bells, so what fits is its own width, not the viewport's. Its children collapse
+  // labels to icons against it (the account chip to its avatar, the tabs to their marks).
   const bar = (
-    <div
-      className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none]"
-      data-testid="scale-header-bar"
-    >
-      {children}
+    <div className="@container/scale-bar min-w-0 flex-1">
+      <div
+        className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] @[30rem]/scale-bar:gap-2"
+        data-testid="scale-header-bar"
+      >
+        {children}
+      </div>
     </div>
   );
 

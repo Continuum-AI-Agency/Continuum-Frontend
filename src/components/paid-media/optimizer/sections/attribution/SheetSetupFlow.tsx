@@ -79,7 +79,7 @@ function SourceStep({
   );
   return (
     <div className="grid gap-3 sm:grid-cols-2" data-testid="sheet-source-step">
-      <div className="space-y-2 rounded-md border border-border/60 p-3">
+      <div className="space-y-2">
         <p className="font-medium text-xs">Connect a Google Sheet</p>
         <Button
           disabled={busy || picker.opening}
@@ -120,7 +120,7 @@ function SourceStep({
           </p>
         ) : null}
       </div>
-      <div className="space-y-2 rounded-md border border-border/60 p-3">
+      <div className="space-y-2">
         <p className="font-medium text-xs">Upload a CSV</p>
         <p className="text-muted-foreground text-xs">
           One row per day and ad set or campaign, with a conversions column.
@@ -143,7 +143,7 @@ function SourceStep({
 
 function PreviewTable({ inspect }: { inspect: SheetInspectResponse }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border/60">
+    <div className="overflow-x-auto border-border/60 border-y">
       <table className="w-full text-xs" data-testid="sheet-preview">
         <thead>
           <tr className="bg-muted/40">

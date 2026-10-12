@@ -10,7 +10,10 @@ import {
   coveredDays,
   decisionsWaiting,
   type HeadlineSentence,
+  isComparison,
   relevantTiles,
+  segmentText,
+  sentenceFigures,
   statusSentence,
 } from './headlineModel';
 import { buildHeroHeader, type HeroPortfolio } from './heroHeaderModel';
@@ -20,11 +23,13 @@ import { type RealBodyName, readBody } from './news/realBodies.fixture';
 // figures the redesign page quotes (56 leads in 7 days at 38.59 MXN, target 35, the week
 // before 58.78). Every figure in a sentence has to be one the tiles below carry.
 
-const text = (sentence: HeadlineSentence): string =>
-  sentence.map((s) => (typeof s === 'string' ? s : s.text)).join('');
+const text = (sentence: HeadlineSentence): string => sentence.map(segmentText).join('');
 
-const figures = (sentence: HeadlineSentence) =>
-  sentence.filter((s): s is Exclude<typeof s, string> => typeof s !== 'string');
+const figures = sentenceFigures;
+
+/** The comparison clauses of a sentence as [tone, text]. */
+const comparisons = (sentence: HeadlineSentence) =>
+  sentence.filter(isComparison).map((c) => [c.tone, segmentText(c)]);
 
 function headlineOf(name: RealBodyName, now?: number, objective?: string) {
   const { report, view, dailyTotal } = readBody(name);
@@ -79,6 +84,52 @@ describe('the status sentence — how we are doing', () => {
       ['headline.target', 35, 'currency'],
       ['headline.vs-prior', 34, 'percent'],
     ]);
+  });
+
+  it('marks each comparison clause with the side of the bar it sits on', () => {
+    expect(comparisons(statusSentence(quoted, LEADS, 'MXN', 7))).toEqual([
+      ['bad', '10% over the target'],
+      ['good', '34% cheaper'],
+    ]);
+    const under = statusSentence(
+      { ...quoted, cost_per_result: 31.5, deltas: { ...quoted.deltas, cost_per_result: 0.12 } },
+      LEADS,
+      'MXN',
+      7,
+    );
+    expect(comparisons(under)).toEqual([
+      ['good', '10% under the target'],
+      ['bad', '12% dearer'],
+    ]);
+    // On the target, with no target, or with nothing bought there is nothing to colour.
+    expect(
+      comparisons(
+        statusSentence(
+          {
+            ...quoted,
+            cost_per_result: 35,
+            deltas: { spend: null, results: null, cost_per_result: null },
+          },
+          LEADS,
+          'MXN',
+          7,
+        ),
+      ),
+    ).toEqual([]);
+    expect(
+      comparisons(
+        statusSentence(
+          {
+            ...quoted,
+            target: null,
+            deltas: { spend: null, results: null, cost_per_result: null },
+          },
+          LEADS,
+          'MXN',
+          7,
+        ),
+      ),
+    ).toEqual([]);
   });
 
   it('says under the target and dearer than before when that is the direction', () => {
@@ -349,7 +400,7 @@ describe('the anchor — the cost per result, and the two windows by their dates
     before: { label: '', short: 'week of Sep 14–20', spend: 1763, results: 30, cost: 58.78 },
   };
 
-  it('over the target: amber, the unit in ISO words, the distance signed', () => {
+  it('just over the target: a warning, the unit in ISO words, the distance signed', () => {
     const anchor = anchorOf({
       growth: quoted,
       words: LEADS,
@@ -370,6 +421,26 @@ describe('the anchor — the cost per result, and the two windows by their dates
       'week of Sep 21–27: 38.59',
       'week of Sep 14–20: 58.78',
     ]);
+  });
+
+  it('plainly over the target (beyond ANCHOR_WARN_PCT): bad, not a warning', () => {
+    const anchor = anchorOf({
+      growth: { ...quoted, cost_per_result: 85.47, target: 70 },
+      words: LEADS,
+      currency: 'MXN',
+      days: 14,
+      beforeAfter: null,
+    });
+    expect(anchor).toMatchObject({ state: 'bad', vsTarget: '+22%' });
+    expect(
+      anchorOf({
+        growth: { ...quoted, cost_per_result: 77, target: 70 },
+        words: LEADS,
+        currency: 'MXN',
+        days: 14,
+        beforeAfter: null,
+      }).state,
+    ).toBe('warn');
   });
 
   it('under the target: green, the distance with a real minus sign', () => {
@@ -431,6 +502,48 @@ describe('the four tiles, by what the portfolio buys', () => {
     // The plan is the budget's own setting, one click from Manage.
     expect(tiles[0]?.sub).toEqual(['261/day · ', { setting: 'budget', text: 'plan 324' }]);
     expect(tiles[1]?.detail).toBe('104 at target for this spend');
+  });
+
+  it('colours only a comparison line, never the figure; decisions carry the one CTA', () => {
+    const { view, report, dailyTotal, headline } = moduleOf('formularios');
+    const tiles = relevantTiles({
+      headline,
+      brief: view.brief,
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(tiles.map((t) => [t.key, t.subTone, t.detailTone, t.cta])).toEqual([
+      // Spend has no better or worse side.
+      ['spend', null, null, null],
+      // 80 leads where the spend at target would have bought 104.
+      ['results', null, 'bad', null],
+      // The dearest ad set (100.48) sits over the 35 target.
+      ['adsets', null, 'bad', null],
+      ['decisions', null, null, 'Review →'],
+    ]);
+  });
+
+  it('a results delta is good up and bad down; nothing waiting means no CTA', () => {
+    const { view, report, dailyTotal, headline } = moduleOf('mensajes');
+    const growth = { ...view.brief.growth, deltas: { ...view.brief.growth.deltas, results: -0.2 } };
+    const tiles = relevantTiles({
+      headline,
+      brief: { ...view.brief, growth },
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(tiles[1]?.subTone).toBe('bad');
+    expect(tiles[3]?.cta).toBeNull();
+    const up = relevantTiles({
+      headline,
+      brief: { ...view.brief, growth: { ...growth, deltas: { ...growth.deltas, results: 0.11 } } },
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(up[1]?.subTone).toBe('good');
   });
 
   it('conversations: the results tile speaks the portfolio’s own word', () => {

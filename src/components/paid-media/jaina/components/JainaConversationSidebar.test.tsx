@@ -81,3 +81,73 @@ describe('JainaConversationSidebar activity time', () => {
     expect(screen.queryByText('No activity')).toBeNull();
   });
 });
+
+describe('JainaConversationSidebar list rows', () => {
+  const session = (sessionId: string, overrides: Record<string, unknown> = {}) => ({
+    sessionId,
+    brandId: null,
+    adAccountId: null,
+    title: `Chat ${sessionId}`,
+    lastMessageRole: 'user' as const,
+    lastMessagePreview: null,
+    lastMessageAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: new Date().toISOString(),
+    initiator: 'user' as const,
+    initiatorAgent: null,
+    callerRunId: null,
+    callerSessionId: null,
+    crossCallId: null,
+    tags: [],
+    preview: null,
+    ...overrides,
+  });
+
+  it('reads as titles and times: no role label, the current chat tinted, actions on hover', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        activeSessionId="current"
+        onUpdateConversationTags={async (_id, tags) => tags}
+        sessions={[session('current'), session('other', { lastMessageRole: 'assistant' })]}
+      />,
+    );
+
+    expect(screen.queryByText(/^(user|assistant|session)$/i)).toBeNull();
+
+    const current = screen.getByTestId('jaina-conversation-current');
+    expect(current.getAttribute('aria-current')).toBe('true');
+    expect(current.parentElement?.className).toContain('bg-primary/10');
+    expect(current.parentElement?.className).not.toMatch(/\bborder\b/);
+    expect(screen.getByText('Chat current').className).toContain('text-primary-ink');
+
+    const other = screen.getByTestId('jaina-conversation-other');
+    expect(other.getAttribute('aria-current')).toBeNull();
+    expect(screen.getByText('Chat other').className).toContain('text-foreground');
+
+    const remove = screen.getByLabelText('Delete conversation Chat other');
+    expect(remove.className).toContain('opacity-0');
+    expect(remove.className).toContain('group-hover/conversation:opacity-100');
+    expect(remove.className).toContain('group-focus-within/conversation:opacity-100');
+  });
+
+  it('marks a chat another agent started with a muted word, and none on a person’s chat', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[
+          session('from-organic', { initiator: 'agent', initiatorAgent: 'organic' }),
+          session('mine', { tags: ['q4'] }),
+        ]}
+      />,
+    );
+
+    const agentRow = screen.getByTestId('jaina-conversation-from-organic');
+    expect(agentRow.textContent).toContain('Organic');
+    const personRow = screen.getByTestId('jaina-conversation-mine');
+    expect(personRow.textContent).not.toContain('AI');
+    expect(personRow.textContent).toContain('#q4');
+  });
+});

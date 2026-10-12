@@ -21,7 +21,13 @@ import { AdsetAngleStanding } from '@/components/paid-media/optimizer/charts/Ads
 import type { AdsetAngleRow } from '@/components/paid-media/optimizer/charts/angleStanding';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import type { AccountAngleRow, AccountAngleVerdict, InsightsWindow } from './creativeInsightsModel';
+import type {
+  AccountAngleRow,
+  AccountAngleVerdict,
+  AngleReadLine,
+  AngleReadPart,
+  InsightsWindow,
+} from './creativeInsightsModel';
 
 const WINDOW_OPTIONS: Array<{ value: InsightsWindow; label: string }> = [
   { value: 'd7', label: '7 days' },
@@ -38,7 +44,7 @@ const FUNNEL_OPTIONS: Array<{ value: FunnelTab; label: string }> = [
 const VERDICT_META: Record<AccountAngleVerdict, { label: string; tone: string }> = {
   double_down: { label: 'Double down', tone: 'text-emerald-600 dark:text-emerald-400' },
   rebuild_craft: { label: 'Rebuild the craft', tone: 'text-amber-600 dark:text-amber-400' },
-  introduce: { label: 'Introduce', tone: 'text-primary' },
+  introduce: { label: 'Introduce', tone: 'text-primary-ink' },
   insufficient: { label: 'Not enough ads', tone: 'text-muted-foreground' },
   behind: { label: 'Losing in its ad sets', tone: 'text-muted-foreground' },
 };
@@ -75,7 +81,7 @@ export type CreativeInsightsViewProps = {
   angleRows: AccountAngleRow[];
   neverTested: Array<{ angleId: string; label: string }>;
   nextRows: AdsetAngleRow[];
-  read: string[];
+  read: AngleReadLine[];
   currency: string | null;
   ads: CreativeInsightsAdsState;
 };
@@ -122,7 +128,7 @@ function TheRead({
   lookback,
   eligibleAds,
 }: {
-  read: string[];
+  read: AngleReadLine[];
   lookback: InsightsWindow;
   eligibleAds: number;
 }) {
@@ -133,13 +139,33 @@ function TheRead({
         {lookback === 'd7' ? "This week's read" : "This month's read"} ·{' '}
         <span className="tabular-nums">{eligibleAds}</span> ads with enough delivery
       </p>
-      {read.map((sentence) => (
-        <p className="text-base text-foreground leading-snug" key={sentence}>
-          {sentence}
+      {read.map((line) => (
+        <p
+          className={cn(
+            'text-base leading-snug',
+            line.kind === 'next' ? 'text-muted-foreground' : 'text-foreground',
+          )}
+          data-kind={line.kind}
+          key={line.kind}
+        >
+          {line.parts.map((part, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a line's parts are a fixed sequence
+            <ReadPart key={index} part={part} />
+          ))}
         </p>
       ))}
     </section>
   );
+}
+
+const TONE_CLASS = { better: 'text-success', worse: 'text-destructive' } as const;
+
+function ReadPart({ part }: { part: AngleReadPart }) {
+  if (part.kind === 'angle') {
+    return <span className="font-semibold text-foreground">{part.text}</span>;
+  }
+  if (part.kind === 'figure') return <span className="font-mono tabular-nums">{part.text}</span>;
+  return part.tone ? <span className={TONE_CLASS[part.tone]}>{part.text}</span> : part.text;
 }
 
 const ANGLE_GRID =

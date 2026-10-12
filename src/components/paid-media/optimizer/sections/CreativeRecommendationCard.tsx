@@ -456,10 +456,7 @@ export function CreativeRecommendationCard({
     <div className="@container">
       <div className="grid gap-4 @2xl:grid-cols-2" data-testid="creative-recommendation-card">
         {/* Left — what is wearing out */}
-        <section
-          className="min-w-0 space-y-3 rounded-lg border border-border/60 bg-background p-4 text-xs"
-          data-testid="creative-card-problem"
-        >
+        <section className="min-w-0 space-y-3 text-xs" data-testid="creative-card-problem">
           <p className={`${typeScale.label} text-muted-foreground`}>
             {copy.because === 'winner' ? 'What’s working' : 'What’s wearing out'}
           </p>
@@ -541,7 +538,7 @@ export function CreativeRecommendationCard({
 
         {/* Right — what to make */}
         <section
-          className="min-w-0 space-y-3 rounded-lg border border-border/60 bg-background p-4 text-xs"
+          className="min-w-0 space-y-3 border-border/60 border-t pt-4 text-xs @2xl:border-t-0 @2xl:border-l @2xl:pt-0 @2xl:pl-4"
           data-testid="creative-card-prescription"
         >
           <p className={`${typeScale.label} text-muted-foreground`}>What to make</p>

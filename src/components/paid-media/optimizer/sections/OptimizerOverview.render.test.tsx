@@ -345,14 +345,12 @@ describe('OptimizerOverview — the order above the fold', () => {
 });
 
 describe('OptimizerOverview — the sentence, from typed fields', () => {
-  it('states the spend, one clause per result kind with its distance, and the decisions', () => {
+  it('states the spend, the window and the decisions in one sentence', () => {
     const { getByTestId } = mount();
-    const headline = getByTestId('overview-headline').textContent ?? '';
-    expect(headline).toContain('The account spent 23,911 MXN in 7 days: ');
-    expect(headline).toContain('conversations at 39.95 MXN (33% over target)');
-    expect(headline).toContain('leads at 37.06 MXN (15% over target)');
-    expect(headline).toContain('and 0 purchases in Septiembre - Tours Programados.');
-    expect(headline).toContain('4 decisions waiting.');
+    expect(getByTestId('overview-headline').textContent).toBe(
+      'The account spent 23,911 MXN in 7 days. 4 decisions waiting.',
+    );
+    expect(getByTestId('overview-decisions').className).toContain('text-primary-ink');
   });
 
   it('carries every figure with its provenance, on the node that prints it', () => {
@@ -361,12 +359,7 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
     const spend = headline.querySelector('[data-figure="overview.spend"]');
     expect(spend?.getAttribute('data-figure-raw')).toBe('23911');
     expect(spend?.getAttribute('data-figure-window')).toBe('d7');
-    expect(
-      headline.querySelector('[data-figure="overview.kind.conversations.cost"]'),
-    ).not.toBeNull();
-    expect(
-      headline.querySelector('[data-figure="overview.kind.purchases.results"]'),
-    ).not.toBeNull();
+    expect(spend?.className).toContain('font-mono');
   });
 
   it('says the window it covers and when the read was taken', () => {
@@ -491,7 +484,7 @@ describe('OptimizerOverview — the tiles', () => {
     const delta = getByTestId('tile-kind-conversations').querySelector(
       '[data-testid="cost-prior-delta"]',
     );
-    expect(delta?.textContent).toBe('−3% vs prev. week');
+    expect(delta?.textContent).toBe('▼ 3%');
     expect(delta?.getAttribute('data-direction')).toBe('down');
     expect(delta?.className).toContain('text-success');
     expect(delta?.getAttribute('title')).toBe('prev. week 41.37 MXN');
@@ -505,8 +498,12 @@ describe('OptimizerOverview — the tiles', () => {
     const { getByTestId } = mount();
     expect(getByTestId('tile-kind-conversations').textContent).toContain('516');
     expect(getByTestId('tile-kind-conversations').textContent).toContain(
-      '39.95 MXN each · target 30.00 MXN · −3% vs prev. week',
+      '39.95 MXN each · target 30.00 MXN · 33% over target · ▼ 3%',
     );
+    const distance = getByTestId('tile-kind-conversations').querySelector(
+      '[data-testid="cost-target-distance"]',
+    );
+    expect(distance?.className).toContain('text-destructive');
     expect(getByTestId('tile-kind-leads').textContent).toContain('target 25.00 MXN–35.00 MXN');
     expect(getByTestId('tile-kind-purchases').textContent).toContain('408 MXN no results');
   });
@@ -522,9 +519,7 @@ describe('OptimizerOverview — the tiles', () => {
     const tile = getByTestId('tile-kind-leads');
     expect(tile.getAttribute('data-state')).toBe('none');
     expect(tile.textContent).toContain('no target');
-    expect(getByTestId('overview-headline').textContent).toContain(
-      'leads at 33.18 MXN (no target)',
-    );
+    expect(tile.querySelector('[data-testid="cost-target-distance"]')).toBeNull();
   });
 
   it('reads the spend against the plan and names who only recommends', () => {

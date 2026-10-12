@@ -74,7 +74,7 @@ function NarrativeThreeBoxes({
               <h5
                 className={cn(
                   JAINA_TYPE.label,
-                  decision ? 'text-primary' : 'text-muted-foreground',
+                  decision ? 'text-primary-ink' : 'text-muted-foreground',
                 )}
               >
                 {box.label}

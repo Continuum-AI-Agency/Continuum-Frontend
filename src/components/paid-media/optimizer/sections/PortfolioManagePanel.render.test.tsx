@@ -264,6 +264,18 @@ describe('every field shows what the portfolio is running — no keep-current se
     expect(input(/Daily budget/).value).toBe('4200');
   });
 
+  it('names each closed select by its label, never the stored code', () => {
+    renderPanel({ objective: 'lead', mode: 'balanced' });
+    const trigger = (id: string) =>
+      document
+        .getElementById(`${id}-11111111-1111-4111-8111-111111111111`)
+        ?.querySelector('[data-slot="select-value"]')?.textContent;
+    expect(trigger('manage-objective')).toBe('Lead');
+    expect(trigger('manage-mode')).toBe('Balanced');
+    expect(trigger('manage-budget-source')).toMatch(/^(Match current spend|Fixed daily target)$/);
+    expect(trigger('manage-lookback')).not.toMatch(/^d\d+$/);
+  });
+
   it('shows the autopilot caps an operator is about to arm behind, in typed units', () => {
     renderPanel({
       apply_mode: 'autopilot',

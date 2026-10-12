@@ -139,7 +139,7 @@ function AudienceEvidence({
   const coverage = `${audience.coverage[0].toUpperCase()}${audience.coverage.slice(1)}`;
   return (
     <details className="mt-1 text-left text-xs">
-      <summary className="cursor-pointer font-medium text-primary">
+      <summary className="cursor-pointer font-medium text-primary-ink">
         Audience evidence: {coverage}
       </summary>
       <div className="mt-2 space-y-2 text-muted-foreground">

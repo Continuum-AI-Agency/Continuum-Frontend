@@ -109,7 +109,7 @@ export function CampaignPerformanceMatrix({
               className={cn(
                 'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
                 metric === candidate.key
-                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  ? 'border-primary/40 bg-primary/10 text-primary-ink'
                   : 'border-border/70 bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground',
               )}
             >
@@ -143,7 +143,7 @@ export function CampaignPerformanceMatrix({
                     type="button"
                     className={cn(
                       'inline-flex items-center justify-end gap-1 rounded px-1 py-0.5 text-2xs uppercase tracking-[0.08em] transition-colors hover:bg-muted',
-                      metric === candidate.key ? 'text-primary' : 'text-muted-foreground',
+                      metric === candidate.key ? 'text-primary-ink' : 'text-muted-foreground',
                     )}
                     onClick={() => onMetricChange(candidate.key)}
                   >

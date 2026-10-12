@@ -66,14 +66,14 @@ describe('ObjectivesQueue', () => {
     );
     expect(icons.size).toBe(8);
     for (const label of [
-      'Completado',
-      'En curso',
-      'Parcial',
-      'Para la próxima',
-      'Bloqueado',
-      'Falló',
-      'Cancelado',
-      'Pendiente',
+      'Done',
+      'In progress',
+      'Partial',
+      'Deferred',
+      'Blocked',
+      'Failed',
+      'Cancelled',
+      'Pending',
     ]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
@@ -95,8 +95,8 @@ describe('ObjectivesQueue', () => {
       />,
     );
     openQueue();
-    expect(screen.getByText('No se pudo leer el desglose por segmento')).toBeTruthy();
-    expect(screen.getByText('Quedó para la próxima')).toBeTruthy();
+    expect(screen.getByText('Could not read the breakdown by segment')).toBeTruthy();
+    expect(screen.getByText('Left for the next turn')).toBeTruthy();
     expect(screen.queryByText(/required_tool_not_run|core_deferred/)).toBeNull();
   });
 
@@ -112,7 +112,7 @@ describe('ObjectivesQueue', () => {
       />,
     );
     expect(screen.getByText('1/3')).toBeTruthy();
-    expect(screen.getByText(/1 parcial/)).toBeTruthy();
+    expect(screen.getByText('3 objectives · 1 partial')).toBeTruthy();
   });
 
   it('never spins once the turn is over, even if an objective was left in_progress', () => {
@@ -120,6 +120,6 @@ describe('ObjectivesQueue', () => {
     openQueue();
     const row = screen.getByTestId('objective-row');
     expect(row.getAttribute('data-status')).not.toBe('in_progress');
-    expect(screen.getByText('Se cortó antes de terminar')).toBeTruthy();
+    expect(screen.getByText('Stopped before it finished')).toBeTruthy();
   });
 });

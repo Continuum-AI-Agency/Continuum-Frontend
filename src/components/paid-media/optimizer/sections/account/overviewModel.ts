@@ -1,9 +1,9 @@
 // The Overview's figures, composed from typed fields and nothing else.
 //
 // Performance+ redesign, stage 1b (docs/performance-plus-redesign/overview.html, proposal O1).
-// The screen opens with one sentence — what the account spent over the window, what each
-// result kind cost against its target, how many decisions wait — and every number in it has
-// to be one a reader can check against a tile below. So the sentence and the tiles are built
+// The screen opens with one sentence — what the account spent over the window and how many
+// decisions wait — and every number in it has to be one a reader can check against a tile
+// below; what each result kind cost against its target is the tiles' own line. So the sentence and the tiles are built
 // here from the SAME rows: the portfolio list (objective, target, budget, mode) and the
 // optimizer's own efficiency series per portfolio (spend and results per trailing window,
 // aggregated across the portfolio's ad sets at each cycle). No free text, no model prose.
@@ -14,6 +14,7 @@
 
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
+import type { FigureProps } from '../../format';
 import { pendingWorkCount } from '../../reportModel';
 
 /** How a figure sits against its target. `none` is "cannot be judged", never "fine". */
@@ -277,6 +278,13 @@ export function accountSpend(
   return counted === 0 ? null : { spend, priorSpend, portfolios: counted };
 }
 
+/** The account's spend against the week before, in whole percent; null without a prior week. */
+export function spendVsPriorPct(
+  spend: { spend: number; priorSpend: number } | null,
+): number | null {
+  return spend ? pctOver(spend.spend, spend.priorSpend) : null;
+}
+
 /** The most recent cycle across the account — the one the window is dated from. */
 export function latestCycle(windows: ReadonlyMap<string, PortfolioWindow>): string | null {
   let latest: string | null = null;
@@ -328,63 +336,68 @@ export function vsTargetLabel(vsTargetPct: number | null): string {
   return `${Math.abs(vsTargetPct ?? 0)}% ${side} target`;
 }
 
-/** Whole-percent move against the window before: "+12% vs prev. week" */
-export function vsPriorLabel(vsPriorPct: number | null): string | null {
-  if (vsPriorPct == null) return null;
-  const sign = vsPriorPct > 0 ? '+' : vsPriorPct < 0 ? '−' : '';
-  return `${sign}${Math.abs(vsPriorPct)}% vs prev. week`;
-}
-
-/** Pluralised count of a result: "516 conversations", "1 lead", "0 purchases". */
-export function resultCount(count: number, words: { one: string; many: string }): string {
-  return `${count.toLocaleString('en-US')} ${count === 1 ? words.one : words.many}`;
-}
-
 /**
- * One clause of the sentence per result kind, in the tile's own terms.
- *
- * With a cost: "conversations at 39.95 MXN (33% over target)". Without one — zero results
- * — the clause states the count and who is spending: "0 purchases in Tours". `names` resolves
- * the portfolios so that second shape can say where.
+ * The Overview's sentence, as parts a renderer can style without re-reading the words: plain
+ * text, a figure (mono, with its provenance) and the decisions clause (the one part that asks
+ * for a person, so it takes the primary colour). One sentence, three facts — what was spent,
+ * over which window, and how many decisions wait. What each result kind cost is the tiles'
+ * job; repeating it here made the sentence two lines of figures.
  */
-export type HeadlineClause =
+export type HeadlineSegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'figure'; text: string; figure: FigureProps }
   | {
-      shape: 'cost';
-      kind: ResultKind;
-      /** The cost figure, already formatted with its currency. */
-      cost: string;
-      distance: string;
-    }
-  | { shape: 'count'; kind: ResultKind; count: string; where: string | null };
-
-export function headlineClauses(
-  kinds: readonly ResultKind[],
-  formatCost: (value: number) => string,
-  names: ReadonlyMap<string, string>,
-): HeadlineClause[] {
-  return kinds.map((kind) => {
-    if (kind.costPerResult != null) {
-      return {
-        shape: 'cost',
-        kind,
-        cost: formatCost(kind.costPerResult),
-        distance: vsTargetLabel(kind.vsTargetPct),
-      };
-    }
-    const owners = kind.portfolioIds.map((id) => names.get(id)).filter((name) => Boolean(name));
-    return {
-      shape: 'count',
-      kind,
-      count: resultCount(kind.results, kind.words),
-      where: owners.length > 0 && owners.length <= 2 ? owners.join(' and ') : null,
+      kind: 'decisions';
+      count: number;
+      /** The count as the sentence prints it, or null when there is none ("No decisions…"). */
+      figure: string | null;
+      /** The words after the count, or the whole clause when there is no count. */
+      words: string;
     };
+
+export type HeadlineSpend = { text: string; figure: FigureProps };
+
+export function accountHeadlineSegments({
+  spends,
+  span,
+  decisions,
+}: {
+  /** The account's spend, one figure per currency — never one sum across two. */
+  spends: readonly HeadlineSpend[];
+  /** What follows the spend: "in 7 days", "in 7 days across two platforms". */
+  span: string;
+  decisions: number;
+}): HeadlineSegment[] {
+  const segments: HeadlineSegment[] = [{ kind: 'text', text: 'The account spent ' }];
+  spends.forEach((spend, index) => {
+    if (index > 0)
+      segments.push({ kind: 'text', text: index === spends.length - 1 ? ' and ' : ', ' });
+    segments.push({ kind: 'figure', text: spend.text, figure: spend.figure });
   });
+  segments.push({ kind: 'text', text: ` ${span}. ` });
+  segments.push(decisionsSegment(decisions));
+  return segments;
 }
 
-/** "a, b and c" — the sentence's own list separator. */
-export function joinClauses(parts: readonly string[]): string {
-  if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+/** "16 decisions waiting." split into its count and its words; "No decisions waiting." whole. */
+export function decisionsSegment(count: number): HeadlineSegment {
+  if (count === 0)
+    return { kind: 'decisions', count, figure: null, words: 'No decisions waiting.' };
+  return {
+    kind: 'decisions',
+    count,
+    figure: count.toLocaleString('en-US'),
+    words: count === 1 ? ' decision waiting.' : ' decisions waiting.',
+  };
+}
+
+/** The sentence as one string — what a screen reader, a test or a log line reads. */
+export function headlineText(segments: readonly HeadlineSegment[]): string {
+  return segments
+    .map((segment) =>
+      segment.kind === 'decisions' ? `${segment.figure ?? ''}${segment.words}` : segment.text,
+    )
+    .join('');
 }
 
 /** "4 decisions waiting" / "1 decision waiting" / "no decisions waiting". */

@@ -53,7 +53,9 @@ export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
           >
             <FileText className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0">
-              <span className="block truncate text-xs font-medium text-primary">{goal.title}</span>
+              <span className="block truncate text-xs font-medium text-primary-ink">
+                {goal.title}
+              </span>
               <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">
                 {goal.outcome}
               </span>

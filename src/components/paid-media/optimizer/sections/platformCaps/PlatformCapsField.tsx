@@ -44,7 +44,7 @@ export function PlatformCapsField({ portfolioId }: { portfolioId: string }) {
     );
   }
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div>
       {caps.caps.map((cap) => (
         <PlatformCapRow
           // Remount when the stored cap changes, so the input re-seeds from what was saved.
@@ -90,46 +90,51 @@ function PlatformCapRow({
   }
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>
+    // Same label-left / control-right row as the rest of the Manage sheet.
+    <div className="grid gap-1.5 py-2.5 @lg/sheet:grid-cols-[11rem_minmax(0,1fr)] @lg/sheet:gap-6">
+      <Label className="self-start text-muted-foreground @lg/sheet:pt-2" htmlFor={id}>
         {platformCapLabel(cap.platform)}
         {currency ? ` (${currency})` : ''}
       </Label>
-      <div className="flex items-center gap-2">
-        <Input
-          aria-invalid={(dirty && !parsed.ok) || undefined}
-          disabled={!currency || saving}
-          id={id}
-          inputMode="decimal"
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="No limit"
-          value={value}
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={!dirty || !parsed.ok || saving}
-          onClick={() => void handleSave()}
-        >
-          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          Save
-        </Button>
+      <div className="min-w-0 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Input
+            className="max-w-[12rem] tabular-nums"
+            aria-invalid={(dirty && !parsed.ok) || undefined}
+            disabled={!currency || saving}
+            id={id}
+            inputMode="decimal"
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="No limit"
+            value={value}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!dirty || !parsed.ok || saving}
+            onClick={() => void handleSave()}
+          >
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+        {!currency ? (
+          <p className="text-xs text-muted-foreground">
+            The {PLATFORM_NAMES[cap.platform]} accounts here use more than one currency, so one
+            limit can&rsquo;t be set for them.
+          </p>
+        ) : cap.accounts > 1 ? (
+          <p className="text-xs text-muted-foreground">
+            Applies to each of the {cap.accounts} {PLATFORM_NAMES[cap.platform]} accounts on its
+            own.
+          </p>
+        ) : null}
+        {dirty && !parsed.ok && currency ? (
+          <p className="text-xs text-destructive">{parsed.message}</p>
+        ) : null}
+        {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
       </div>
-      {!currency ? (
-        <p className="text-xs text-muted-foreground">
-          The {PLATFORM_NAMES[cap.platform]} accounts here use more than one currency, so one limit
-          can&rsquo;t be set for them.
-        </p>
-      ) : cap.accounts > 1 ? (
-        <p className="text-xs text-muted-foreground">
-          Applies to each of the {cap.accounts} {PLATFORM_NAMES[cap.platform]} accounts on its own.
-        </p>
-      ) : null}
-      {dirty && !parsed.ok && currency ? (
-        <p className="text-xs text-destructive">{parsed.message}</p>
-      ) : null}
-      {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
     </div>
   );
 }

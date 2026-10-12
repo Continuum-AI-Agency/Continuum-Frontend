@@ -413,6 +413,31 @@ describe('PaidMediaClientPage brand context', () => {
       expect(triggers).toEqual([1, 1, 1, 0]);
     });
 
+    it('sizes the bar against its own width so a narrow bar shows the tabs as marks, never clipped', async () => {
+      searchParamsValue = '';
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-a"
+          brandName="Brand A"
+          initialAccounts={[{ id: 'act_1', name: 'Account One' }]}
+          initialAdAccountId="act_1"
+        />,
+      );
+
+      const bar = await screen.findByTestId('scale-header-bar');
+      expect(bar.parentElement?.className).toContain('@container/scale-bar');
+      for (const label of ['Optimizer', 'Campaigns', 'Jaina']) {
+        const tab = screen.getByRole('button', { name: label });
+        const name = [...tab.querySelectorAll('span')].find((span) => span.textContent === label);
+        // Narrow: the name is for assistive tech only and the mark stands in; wide: the name.
+        expect(name?.className).toContain('sr-only');
+        expect(name?.className).toContain('@[26rem]/scale-bar:not-sr-only');
+        expect(tab.querySelector('svg')?.getAttribute('class')).toContain(
+          '@[26rem]/scale-bar:hidden',
+        );
+      }
+    });
+
     it('dresses the account selector as the brand chip with its connected platforms', async () => {
       optimizerAdAccounts = {
         isSuccess: true,

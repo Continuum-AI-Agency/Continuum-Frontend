@@ -25,7 +25,6 @@ import type {
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { useSetupAdvice } from '../../advisor/SetupAdvisor';
 import { humanize } from '../../format';
 import { buildClaimMap, previewMoves } from '../../picker/campaignGroups';
@@ -281,21 +280,14 @@ export function PortfolioWizard({
     }
   }
 
-  const showSummary = step !== 'start';
   const reached = new Set<WizardStep>([...completed, step]);
 
-  // Three columns once the container is wide (steps · the step · summary); narrow, the step
-  // list lies down on top and the summary follows the step. The page scrolls as one.
+  // Three columns once the container is wide (steps · the step · summary) from the first step,
+  // the summary waiting row by row; narrow, the step list lies down on top and the summary
+  // follows the step. The page scrolls as one.
   return (
     <div className="@container">
-      <div
-        className={cn(
-          'grid gap-6 @4xl:gap-9',
-          showSummary
-            ? '@4xl:grid-cols-[12rem_minmax(0,1fr)_17.5rem]'
-            : '@4xl:grid-cols-[12rem_minmax(0,1fr)]',
-        )}
-      >
+      <div className="grid gap-6 @4xl:grid-cols-[12rem_minmax(0,1fr)_17.5rem] @4xl:gap-9">
         <div className="min-w-0 @4xl:sticky @4xl:top-0 @4xl:self-start">
           <Stepper
             completed={completed}
@@ -429,22 +421,20 @@ export function PortfolioWizard({
           ) : null}
         </div>
 
-        {showSummary ? (
-          <div className="min-w-0 @4xl:sticky @4xl:top-0 @4xl:self-start">
-            <WizardSummary
-              advice={advice}
-              brandId={brandId}
-              currency={currency}
-              disabled={busy}
-              draft={draft}
-              onChangeSelection={(adsetIds) => patch({ adsetIds, campaignIds: [] })}
-              onUseBudget={(value) => patch({ dailyTotal: value })}
-              onUseTarget={(value) => patch({ target: value })}
-              reached={reached}
-              selectedBudgetSum={selectedBudgetSum}
-            />
-          </div>
-        ) : null}
+        <div className="min-w-0 @4xl:sticky @4xl:top-0 @4xl:self-start">
+          <WizardSummary
+            advice={advice}
+            brandId={brandId}
+            currency={currency}
+            disabled={busy}
+            draft={draft}
+            onChangeSelection={(adsetIds) => patch({ adsetIds, campaignIds: [] })}
+            onUseBudget={(value) => patch({ dailyTotal: value })}
+            onUseTarget={(value) => patch({ target: value })}
+            reached={reached}
+            selectedBudgetSum={selectedBudgetSum}
+          />
+        </div>
       </div>
     </div>
   );

@@ -2,25 +2,26 @@
 
 import type { AdhocSuggestionFigure } from '@continuum/contracts';
 import type * as React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
 import { CalmRule } from '../account/candidateHeadline';
+import { KindTag, type KindTone } from '../kindTag';
 import type { DailyReadRow } from './dailyReadModel';
 import type { HeroCta } from './heroModel';
 
-const TIER_VARIANT: Record<DailyReadRow['tier'], 'destructive' | 'warning' | 'muted'> = {
-  high: 'destructive',
-  medium: 'warning',
-  low: 'muted',
+/** A high-impact row's tier reads at full strength; every other state stays quiet. */
+const TIER_TEXT: Record<DailyReadRow['tier'], string> = {
+  high: 'font-medium text-foreground',
+  medium: 'text-muted-foreground',
+  low: 'text-muted-foreground',
 };
 
-const MODULE_VARIANT: Record<DailyReadRow['module'], 'violet' | 'teal' | 'success' | 'warning'> = {
-  budget: 'violet',
-  pause: 'warning',
-  creative: 'teal',
-  audience: 'success',
+const MODULE_TONE: Record<DailyReadRow['module'], KindTone> = {
+  budget: 'budget',
+  pause: 'pause',
+  creative: 'creative',
+  audience: 'audience',
 };
 
 type DailyReadListProps = {
@@ -86,19 +87,16 @@ export function DailyReadList({
   if (rows.length === 0) return null;
   const asked = rows.filter((row) => row.origin === 'asked').length;
   return (
-    <section
-      className="mb-5 rounded-xl border border-border/60 bg-card/60"
-      data-testid="daily-read"
-    >
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
-        <h3 className="font-semibold text-foreground text-base tracking-tight">
+    <section className="mb-8" data-testid="daily-read">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="font-semibold text-base text-foreground tracking-tight">
           {asked > 0 ? "Today's read, and what you asked for" : "Today's read, by category"}
         </h3>
         <p className="text-muted-foreground text-xs">
           {source === 'brief' ? 'Jaina, from the latest cycle' : 'Draft read from the latest cycle'}
         </p>
       </header>
-      <ul className="divide-y divide-border/60">
+      <ul className="mt-3 divide-y divide-border/60 border-border/60 border-y">
         {rows.map((row) => {
           const waiting = isWaiting?.(row) ?? false;
           const busy = busyRowId === row.id;
@@ -106,8 +104,8 @@ export function DailyReadList({
           return (
             <li
               className={cn(
-                'grid gap-5 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start',
-                row.isHero && 'bg-primary/5',
+                'grid gap-x-6 gap-y-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start',
+                row.isHero && '-mx-3 bg-primary/5 px-3',
                 // A ~5s breath while the worker reads. No sheen, no sweep — the row is
                 // waiting, not loading a skeleton.
                 waiting && 'animate-[pulse_5s_ease-in-out_infinite]',
@@ -115,19 +113,13 @@ export function DailyReadList({
               data-row-key={`read:${row.id}`}
               key={row.id}
             >
-              <div className="min-w-0 space-y-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="px-2.5 py-0.5 text-xs" variant={MODULE_VARIANT[row.module]}>
-                    {row.category}
-                  </Badge>
-                  <Badge className="px-2.5 py-0.5 text-xs" variant={TIER_VARIANT[row.tier]}>
-                    {row.tierLabel}
-                  </Badge>
-                  {row.isHero ? (
-                    <span className="text-primary text-xs">On the overview</span>
-                  ) : null}
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                  <KindTag tone={MODULE_TONE[row.module]}>{row.category}</KindTag>
+                  <span className={TIER_TEXT[row.tier]}>{row.tierLabel}</span>
+                  {row.isHero ? <span className="text-primary-ink">· On the overview</span> : null}
                   {row.origin === 'asked' ? (
-                    <span className="text-muted-foreground text-xs">You asked for this</span>
+                    <span className="text-muted-foreground">· You asked for this</span>
                   ) : null}
                 </div>
                 <p className="truncate font-semibold text-foreground text-sm tracking-tight">
@@ -135,23 +127,23 @@ export function DailyReadList({
                 </p>
                 {row.reason ? (
                   <p
-                    className="line-clamp-2 text-xs text-muted-foreground leading-relaxed"
+                    className="line-clamp-2 text-muted-foreground text-xs leading-relaxed"
                     title={row.basis}
                   >
                     {row.reason}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground leading-relaxed">{row.basis}</p>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{row.basis}</p>
                 )}
                 {row.detail && row.detail.figures.length > 0 ? (
-                  <dl className="flex flex-wrap gap-2">
+                  <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
                     {row.detail.figures.map((figure) => (
                       <div
-                        className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5"
+                        className="flex items-baseline gap-1.5"
                         key={`${row.id}:${figure.label}`}
                       >
-                        <dt className="text-muted-foreground text-xs">{figure.label}</dt>
-                        <dd className="font-semibold text-foreground text-xs tabular-nums">
+                        <dt className="text-muted-foreground">{figure.label}</dt>
+                        <dd className="font-mono font-semibold text-foreground text-xs tabular-nums">
                           {formatFigure(figure, currency)}
                         </dd>
                       </div>
@@ -159,7 +151,7 @@ export function DailyReadList({
                   </dl>
                 ) : null}
                 {row.detail && row.detail.steps.length > 0 ? (
-                  <ol className="list-inside list-decimal space-y-1.5 text-muted-foreground text-xs">
+                  <ol className="list-inside list-decimal space-y-0.5 text-muted-foreground text-xs">
                     {row.detail.steps.map((step) => (
                       <li key={`${row.id}:${step}`}>{step}</li>
                     ))}
@@ -172,7 +164,7 @@ export function DailyReadList({
                 ) : null}
                 {row.nextNote ? (
                   <p
-                    className="text-secondary text-xs opacity-80"
+                    className="text-muted-foreground text-xs"
                     data-testid={`read-next-note:${row.id}`}
                   >
                     {row.nextNote}
@@ -183,10 +175,10 @@ export function DailyReadList({
                 {busy && row.cta.kind === 'build' ? (
                   <CalmRule play testId="read-build-rule" />
                 ) : null}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   {onDismiss && row.origin === 'asked' && !waiting ? (
                     <Button
-                      className="h-8 px-4 text-xs"
+                      className="h-8 px-3 text-xs"
                       disabled={busy}
                       onClick={() => onDismiss(row)}
                       size="sm"
@@ -211,7 +203,7 @@ export function DailyReadList({
               </div>
               {expanded && renderExpansion ? (
                 <div
-                  className="rounded-lg border border-border/60 bg-card px-4 py-4 sm:col-span-2"
+                  className="border-border/60 border-l pl-4 sm:col-span-2"
                   data-testid={`read-expansion:${row.id}`}
                 >
                   {renderExpansion(row)}

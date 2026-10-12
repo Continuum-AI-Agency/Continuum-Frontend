@@ -7,27 +7,28 @@
 // Nothing here adds two currencies or two result kinds together; the model hands over the
 // rows already split, and every figure node carries its provenance for the digit gate.
 
-import type { AccountPlatformMetrics } from '@continuum/contracts';
-import { cn } from '@/lib/utils';
-import { KpiRow, KpiTile } from '../../components/KpiTile';
+import type { AccountPlatformMetrics, KindAcrossPlatforms } from '@continuum/contracts';
+import { KpiDelta, KpiRow, KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
+import { HeadlineSentence } from '../account/HeadlineSentence';
 import {
+  accountSpendDeltaPct,
   accountsReadLabel,
+  allPlatformsHeadlineSegments,
   capitalise,
   connectedTotals,
   coverageNote,
   figureWindowOfMetrics,
   formatResults,
-  headlineKindClauses,
   kindPlatformSplit,
+  kindPriorMove,
   kindTileLabel,
   kindTileSub,
   kindWords,
   MAX_KIND_TILES,
   MIN_TILES,
   oneCurrency,
-  platformCountLabel,
   platformKindSub,
   platformKinds,
   platformSpendFigure,
@@ -43,102 +44,12 @@ import { PlatformChip } from './PlatformChip';
 import { PlatformReadingNote } from './PlatformReadingNote';
 import { type AdPlatform, PLATFORM_NAMES } from './platformTabsModel';
 
-function decisionsSentence(count: number): string {
-  if (count === 0) return 'No decisions waiting.';
-  return count === 1 ? '1 decision waiting.' : `${count} decisions waiting.`;
-}
-
 export function AllPlatformsHeadline({ metrics }: { metrics: AccountPlatformMetrics }) {
-  const window = figureWindowOfMetrics(metrics);
-  const clauses = headlineKindClauses(metrics);
   return (
-    <p
-      className={`${typeScale.headline} max-w-[62ch] text-foreground`}
-      data-source="account-platform-metrics"
-      data-testid="overview-headline"
-    >
-      The account spent{' '}
-      {metrics.spend_by_currency.map((row, index) => (
-        <span key={row.currency ?? 'none'}>
-          {index > 0 ? (index === metrics.spend_by_currency.length - 1 ? ' and ' : ', ') : ''}
-          <span
-            className="tabular-nums"
-            {...figureProps(
-              `overview.spend.${row.currency ?? 'none'}`,
-              row.spend,
-              row.currency,
-              window,
-            )}
-          >
-            {formatCurrency(row.spend, row.currency)}
-          </span>
-        </span>
-      ))}{' '}
-      in {windowDaysLabel(metrics)} {platformCountLabel(metrics)}
-      {clauses.length > 0 ? ': ' : '. '}
-      {clauses.map((clause, index) => (
-        <span key={`${clause.kind.kind}|${clause.kind.currency}`}>
-          {index > 0 ? (index === clauses.length - 1 ? ' and ' : ', ') : ''}
-          {clause.kind.cost_per_result == null ? (
-            <>
-              <span
-                className="tabular-nums"
-                {...figureProps(
-                  `overview.kind.${clause.kind.kind}.results`,
-                  clause.kind.results,
-                  null,
-                  window,
-                  'count',
-                )}
-              >
-                {formatResults(clause.kind.results)}
-              </span>{' '}
-              {clause.words.many}
-            </>
-          ) : (
-            <>
-              {clause.words.many} at{' '}
-              <span
-                className="tabular-nums"
-                {...figureProps(
-                  `overview.kind.${clause.kind.kind}.cost`,
-                  clause.kind.cost_per_result,
-                  clause.kind.currency,
-                  window,
-                )}
-              >
-                {formatCurrency(clause.kind.cost_per_result, clause.kind.currency)}
-              </span>
-              {clause.cheapest ? (
-                <>
-                  , cheapest on {PLATFORM_NAMES[clause.cheapest.platform]} at{' '}
-                  <span
-                    className="tabular-nums"
-                    {...figureProps(
-                      `overview.kind.${clause.kind.kind}.cheapest`,
-                      clause.cheapest.cost_per_result,
-                      clause.cheapest.currency,
-                      window,
-                    )}
-                  >
-                    {formatCurrency(clause.cheapest.cost_per_result, clause.cheapest.currency)}
-                  </span>
-                </>
-              ) : clause.only ? (
-                ` on ${PLATFORM_NAMES[clause.only]}`
-              ) : null}
-            </>
-          )}
-        </span>
-      ))}
-      {clauses.length > 0 ? '. ' : ''}
-      <span
-        className={cn('tabular-nums', metrics.decisions_waiting > 0 && 'text-primary')}
-        data-testid="overview-decisions"
-      >
-        {decisionsSentence(metrics.decisions_waiting)}
-      </span>
-    </p>
+    <HeadlineSentence
+      segments={allPlatformsHeadlineSegments(metrics)}
+      source="account-platform-metrics"
+    />
   );
 }
 
@@ -162,6 +73,55 @@ export function AllPlatformsSubline({ metrics }: { metrics: AccountPlatformMetri
   );
 }
 
+/** The spend tile's line: the move against the prior window, then how the platforms split it. */
+function SpendSub({ metrics }: { metrics: AccountPlatformMetrics }) {
+  const delta = accountSpendDeltaPct(metrics);
+  const prior = metrics.prior_window;
+  return (
+    <>
+      {delta != null && prior ? (
+        <>
+          <KpiDelta
+            better="neutral"
+            pct={delta}
+            testId="spend-prior-delta"
+            title={`vs ${windowRangeLabel(prior.since, prior.until)}`}
+          />{' '}
+          vs prior {windowDaysLabel(metrics)} ·{' '}
+        </>
+      ) : null}
+      {spendSplitLabel(metrics)}
+    </>
+  );
+}
+
+/** A kind tile's line: its cost and target, then its cost's move against the prior window. */
+function KindSub({
+  metrics,
+  kind,
+}: {
+  metrics: AccountPlatformMetrics;
+  kind: KindAcrossPlatforms;
+}) {
+  const move = kindPriorMove(metrics, kind);
+  return (
+    <>
+      {kindTileSub(metrics, kind)}
+      {move ? (
+        <>
+          {' · '}
+          <KpiDelta
+            better="down"
+            pct={move.pct}
+            testId="cost-prior-delta"
+            title={`prev. ${windowDaysLabel(metrics)} ${formatCurrency(move.priorCostPerResult, kind.currency)}`}
+          />
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export function AllPlatformsTiles({
   metrics,
   onOpenActions,
@@ -181,7 +141,7 @@ export function AllPlatformsTiles({
         emphasis="hero"
         figure={figureProps('tiles.spend', total, currency, window)}
         label={`Spend · ${windowDaysLabel(metrics)}`}
-        sub={spendSplitLabel(metrics)}
+        sub={<SpendSub metrics={metrics} />}
         testId="tile-spend"
         value={
           metrics.spend_by_currency.length > 1
@@ -198,7 +158,7 @@ export function AllPlatformsTiles({
           figure={figureProps(`tiles.kind.${kind.kind}`, kind.results, null, window, 'count')}
           key={`${kind.kind}|${kind.currency}`}
           label={kindTileLabel(metrics, kind)}
-          sub={kindTileSub(metrics, kind)}
+          sub={<KindSub kind={kind} metrics={metrics} />}
           testId={`tile-kind-${kind.kind}`}
           value={formatResults(kind.results)}
           variant="inline"
@@ -208,7 +168,7 @@ export function AllPlatformsTiles({
         action={
           metrics.decisions_waiting > 0 ? (
             <button
-              className="font-semibold text-primary text-xs hover:underline"
+              className="font-semibold text-primary-ink text-xs hover:underline"
               onClick={onOpenActions}
               type="button"
             >

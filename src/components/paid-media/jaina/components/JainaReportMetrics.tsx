@@ -49,7 +49,7 @@ function MetricCard({ item }: { item: FrontendCheckpointReport['performance_snap
           {String(metric.metric ?? metric.label ?? 'Metric')}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-xl font-semibold text-primary">{formatMetricValue(item)}</span>
+          <span className="text-xl font-semibold text-primary-ink">{formatMetricValue(item)}</span>
           {hasChange || hasStatus ? (
             <Pill variant={statusVariant} className="text-xs">
               {hasChange ? (

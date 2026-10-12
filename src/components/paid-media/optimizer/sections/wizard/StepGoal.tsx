@@ -8,7 +8,6 @@
 import type {
   AnalogObjective,
   OptimizationModeDto,
-  OptimizationObjective,
   SetupAdvice,
   TargetMetric,
 } from '@continuum/contracts';

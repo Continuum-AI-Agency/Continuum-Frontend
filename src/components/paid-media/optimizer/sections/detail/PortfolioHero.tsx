@@ -97,6 +97,8 @@ export type PortfolioHeroProps = {
   beforeAfter?: BeforeAfterStripProps;
   /** A chip or a blocker's fix opens its field in Manage. */
   onEditSetting?: (setting: HeroSetting) => void;
+  /** The decisions tile's "Review →" — where the decisions wait. Absent, no press is drawn. */
+  onReviewDecisions?: () => void;
 };
 
 export function PortfolioHero({
@@ -114,6 +116,7 @@ export function PortfolioHero({
   headline,
   beforeAfter,
   onEditSetting = () => undefined,
+  onReviewDecisions,
 }: PortfolioHeroProps) {
   const reduce = useReducedMotion();
   // Play the entrance once per portfolio, not on every refetch.
@@ -228,7 +231,13 @@ export function PortfolioHero({
           ) : (
             facts
           )}
-          {tiles.length > 0 ? <PortfolioTiles onEditSetting={onEditSetting} tiles={tiles} /> : null}
+          {tiles.length > 0 ? (
+            <PortfolioTiles
+              onEditSetting={onEditSetting}
+              onReviewDecisions={onReviewDecisions}
+              tiles={tiles}
+            />
+          ) : null}
           {beforeAfter ? (
             // The workspace hands the strip its words in the Overview's vocabulary; the
             // module speaks the headline's.

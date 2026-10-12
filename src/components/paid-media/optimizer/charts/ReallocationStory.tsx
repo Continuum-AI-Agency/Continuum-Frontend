@@ -18,7 +18,6 @@ import { ArrowRightIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { StatusChip, type StatusTone } from '../components/StatusChip';
 import { DeliveryPill } from '../DeliveryPill';
 import { formatCpa, formatCurrency } from '../format';
 import { HeldPill } from '../HeldPill';
@@ -30,10 +29,10 @@ import {
   type StoryRow,
 } from './reallocationStoryModel';
 
-const STANDING_TONE: Record<StoryRow['standing'], StatusTone> = {
-  below: 'success',
-  above: 'danger',
-  unknown: 'muted',
+const STANDING_TEXT: Record<StoryRow['standing'], string> = {
+  below: 'text-success',
+  above: 'text-destructive',
+  unknown: 'text-muted-foreground',
 };
 
 const STANDING_DOT: Record<StoryRow['standing'], string> = {
@@ -44,8 +43,9 @@ const STANDING_DOT: Record<StoryRow['standing'], string> = {
 
 const FIGURE_TOKEN = /^([(]*)(.*?\d.*?)([.,;:)]*)$/;
 
-/** The summary sentence with its figures in bold, so "how much, from how many, to how many"
- *  reads at a glance. Splits on whitespace only — the words and their order are the model's. */
+/** The summary sentence with its figures in mono, so "how much, from how many, to how many"
+ *  reads at a glance at the sentence's own weight. Splits on whitespace only — the words and
+ *  their order are the model's. */
 function SummaryWithFigures({ text }: { text: string }) {
   return (
     <>
@@ -57,7 +57,7 @@ function SummaryWithFigures({ text }: { text: string }) {
           // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one fixed sentence, never reordered
           <span key={index}>
             {lead}
-            <span className="font-semibold">{figure}</span>
+            <span className="font-mono tabular-nums">{figure}</span>
             {trail}
           </span>
         );
@@ -131,7 +131,7 @@ function CostCell({
       </div>
       <span
         className={cn(
-          'w-20 shrink-0 text-right font-semibold text-sm tabular-nums',
+          'w-20 shrink-0 text-right font-mono font-semibold text-sm tabular-nums',
           row.standing === 'above' && 'text-destructive',
           row.standing === 'below' && 'text-success',
         )}
@@ -189,7 +189,7 @@ function BudgetCell({
           style={{ left: `${to}%` }}
         />
       </div>
-      <span className="shrink-0 whitespace-nowrap font-semibold text-sm tabular-nums">
+      <span className="shrink-0 whitespace-nowrap font-mono font-semibold text-sm tabular-nums">
         <span className="text-muted-foreground">{formatCurrency(row.current, currency)}</span>
         <ArrowRightIcon aria-hidden className="mx-1 inline size-3 text-muted-foreground" />
         <span
@@ -201,7 +201,7 @@ function BudgetCell({
         >
           {formatCurrency(row.proposed, currency)}
         </span>
-        <span className="font-normal text-muted-foreground text-xs">{pctLabel}</span>
+        <span className="font-normal font-sans text-muted-foreground text-xs">{pctLabel}</span>
       </span>
     </div>
   );
@@ -266,10 +266,10 @@ export function ReallocationStory({
         <span>Daily budget · now → proposed</span>
       </div>
 
-      <ul className="space-y-2">
+      <ul className="divide-y divide-border/60 border-border/60 border-y">
         {rows.map((row) => (
           <li
-            className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-lg border border-border/60 bg-card px-4 py-3.5 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] sm:items-center"
+            className="grid grid-cols-1 gap-x-4 gap-y-2 px-1 py-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] sm:items-center"
             key={row.adsetId}
           >
             <div className="min-w-0">
@@ -278,9 +278,9 @@ export function ReallocationStory({
                   {row.name}
                 </span>
                 {row.standing !== 'unknown' && !row.held ? (
-                  <StatusChip tone={STANDING_TONE[row.standing]}>
+                  <span className={cn('shrink-0 text-xs', STANDING_TEXT[row.standing])}>
                     {row.standing === 'below' ? 'Below target' : 'Above target'}
-                  </StatusChip>
+                  </span>
                 ) : null}
                 <DeliveryPill state={row.deliveryState} />
               </div>

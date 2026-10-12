@@ -29,7 +29,7 @@ function RankedRow({
       <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2">
         <span
           className={cn(
-            'grid size-6 shrink-0 place-items-center rounded-full bg-muted text-primary',
+            'grid size-6 shrink-0 place-items-center rounded-full bg-muted text-primary-ink',
             JAINA_TYPE.label,
           )}
         >

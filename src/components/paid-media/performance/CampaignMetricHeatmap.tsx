@@ -165,7 +165,7 @@ export function CampaignMetricHeatmap({
                   className={cn(
                     'flex items-center justify-end gap-1 border-b border-border/60 px-2.5 text-right text-2xs font-medium uppercase tracking-[0.08em] transition-colors',
                     isActive
-                      ? 'bg-primary/[0.07] text-primary'
+                      ? 'bg-primary/[0.07] text-primary-ink'
                       : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                     rowHeight,
                   )}

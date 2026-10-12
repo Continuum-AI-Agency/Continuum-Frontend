@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useToastContext } from '@/components/ui/ToastProvider';
 import { useSession } from '@/hooks/useSession';
+import { cn } from '@/lib/utils';
 import type { ChangelogEntry } from '@/lib/changelog/schema';
 import {
   createDashboardWelcomeToastOptions,
@@ -20,6 +21,11 @@ import {
   APP_NAVIGATION,
   APP_NAVIGATION_FOOTER,
 } from './navigation/routes';
+
+// On a phone-width header that also carries a page's own bar (the Scale account chip and
+// module tabs), the module pill and its separator step aside: the page bar already says where
+// you are, and every pixel it gets keeps its tabs from clipping. Everywhere else they stay.
+const YIELDS_TO_PAGE_BAR = 'max-sm:group-has-[[data-testid=scale-header-bar]]/app-header:hidden';
 
 function DashboardHeaderInner({ changelogEntries }: { changelogEntries: ChangelogEntry[] }) {
   useDashboardWelcomeToast();
@@ -37,11 +43,20 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <header className="flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4">
-      <div className="flex items-center gap-2">
+    <header className="group/app-header flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4 max-sm:has-[[data-testid=scale-header-bar]]:px-3">
+      <div className="flex shrink-0 items-center gap-2">
         <SidebarTrigger className="-ml-1 md:hidden" />
-        <Separator orientation="vertical" className="mr-2 h-4 md:hidden" />
-        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_76%,transparent)] px-3 py-1">
+        <Separator
+          orientation="vertical"
+          className={cn('mr-2 h-4 md:hidden', YIELDS_TO_PAGE_BAR)}
+        />
+        <div
+          className={cn(
+            'inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_76%,transparent)] px-3 py-1',
+            YIELDS_TO_PAGE_BAR,
+          )}
+          data-testid="app-header-module-pill"
+        >
           <motion.span
             aria-hidden="true"
             className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--ring)]"
@@ -63,7 +78,7 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
        *  tabs). The page portals into it; everywhere else it stays empty. */}
       <div id={APP_HEADER_MODULE_SLOT_ID} className="flex min-w-0 flex-1 items-center gap-2" />
 
-      <div className="ml-auto flex shrink-0 items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:group-has-[[data-testid=scale-header-bar]]/app-header:gap-0.5">
         <ClientRenderInbox />
         <WhatsNewBell entries={changelogEntries} />
         <NotificationsBell />

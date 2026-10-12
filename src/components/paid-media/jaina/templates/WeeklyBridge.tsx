@@ -89,7 +89,7 @@ function barsOf(
 
 const BAR_TONE: Record<BarKind, string> = {
   start: 'text-muted-foreground/50',
-  end: 'text-primary',
+  end: 'text-primary-ink',
   up: JUDGEMENT_TEXT.positive,
   down: JUDGEMENT_TEXT.risk,
   flat: JUDGEMENT_TEXT.unjudged,

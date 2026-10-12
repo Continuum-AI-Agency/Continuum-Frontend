@@ -11,7 +11,7 @@
 //
 // The account-wide feed renders as a timeline grouped by day (feedTimeline): a clock time, a
 // dot for how it went, the change, its portfolio and why, and the undo on the right.
-// `ActionRow` is the denser bordered row the portfolio Actions group still lists.
+// `ActionRow` is the same change as a quiet row, for the portfolio queue's Recently applied.
 //
 // Revert is gated on the row's own `reversible` flag from the RPC — never on a client guess —
 // and a row that has already been undone renders as "reverted" instead of offering the button
@@ -19,12 +19,10 @@
 
 import { type OptimizerFeedWindowDays, PortfolioAdsetSchema } from '@continuum/contracts';
 import { skipToken, useQueries } from '@tanstack/react-query';
-import { ArrowRightIcon, ListChecksIcon, Undo2Icon } from 'lucide-react';
+import { ArrowRightIcon, ListChecksIcon } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
-import { formatCurrency } from '../format';
-import * as typeScale from '../typeScale';
 import {
   type OptimizerActionFeedRow,
   optimizerQueryKeys,
@@ -35,21 +33,13 @@ import {
   type ActionEntityNames,
   ActionRevertControl,
   actionEntity,
+  NO_ENTITY_NAMES,
   printChangeValue,
 } from './actionCardParts';
-import {
-  type ActionChange,
-  actionPlatform,
-  actorLabel,
-  minorToMajor,
-  readActionChange,
-  readReceiptTrace,
-  revertScopeOf,
-  revertState,
-} from './actionRows';
+import { actionPlatform, actorLabel, readActionChange, readReceiptTrace } from './actionRows';
 import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
 import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
-import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
+import { FeedFooter, FeedSkeleton, formatWhen, PortfolioFilter, ReceiptToken } from './feedChrome';
 import {
   FeedToolbar,
   groupByDay,
@@ -60,7 +50,6 @@ import {
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PlatformChip } from './platforms/PlatformChip';
-import { RevertApplyDialog } from './RevertApplyDialog';
 
 type OptimizerActionFeedProps = {
   brandId: string;
@@ -80,102 +69,68 @@ const FAMILY_LABEL: Record<string, string> = {
   decision: 'Decision',
 };
 
-function FamilyBadge({ family }: { family: string }) {
-  return (
-    <span
-      className={`${typeScale.label} shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
-    >
-      {FAMILY_LABEL[family] ?? family}
-    </span>
-  );
-}
-
-function ChangeLine({ change, currency }: { change: ActionChange; currency: string | null }) {
-  const print = (value: string | number | null): string => {
-    if (value == null) return '—';
-    if (change.unit === 'money' && typeof value === 'number') {
-      return formatCurrency(minorToMajor(value, currency), currency);
-    }
-    return String(value);
-  };
-  // The row header already names the field; repeating it here just doubled every line.
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-xs tabular-nums text-muted-foreground">
-        {print(change.before)}
-      </span>
-      <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-      <span className="font-mono text-xs font-semibold tabular-nums">{print(change.after)}</span>
-    </span>
-  );
-}
-
-function RevertedBadge() {
-  return (
-    <span
-      className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
-    >
-      <Undo2Icon aria-hidden="true" className="size-3" />
-      Reverted
-    </span>
-  );
-}
-
+/**
+ * One write as a quiet row — the shape the portfolio queue lists under "Recently applied":
+ * the change and what it touched (by name; the raw id on hover), before → after in mono with
+ * its delta, then when · who · what family · which platform, the why, the receipt, and the
+ * undo on the right.
+ */
 export function ActionRow({
   row,
   brandId,
   currency,
+  entityNames = NO_ENTITY_NAMES,
 }: {
   row: OptimizerActionFeedRow;
   brandId: string;
   currency: string | null;
+  /** Ad-set id → name from the rosters the host already holds. */
+  entityNames?: ActionEntityNames;
 }) {
   const change = readActionChange(row);
+  const entity = actionEntity(row, entityNames);
   const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
-  const revert = revertState(row);
 
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
-      <div className="flex shrink-0 flex-col items-start gap-1">
-        <FamilyBadge family={row.family} />
-        <PlatformChip platform={platform} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <RowHeader size="lg" title={change.label} ts={row.ts} />
-            <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-              {row.portfolio_name ? <span className="truncate">{row.portfolio_name}</span> : null}
-              {row.entity_id && row.op !== 'setting' ? (
-                <span className="truncate font-mono text-xs">{row.entity_id}</span>
-              ) : null}
-              <span>· {actorLabel(row)}</span>
-            </p>
-          </div>
-          {revert.kind === 'available' ? (
-            <RevertApplyDialog
-              auditId={revert.auditId}
-              portfolioId={revert.portfolioId}
-              brandId={brandId}
-              currency={currency}
-              scope={revertScopeOf(row)}
-              triggerTextSize="text-xs"
-            />
-          ) : revert.kind === 'reverted' ? (
-            <RevertedBadge />
-          ) : null}
-        </div>
-        <div className="mt-0.5">
-          <ChangeLine change={change} currency={currency} />
-        </div>
+    <li
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-3"
+      data-action-id={row.id}
+    >
+      <div className="min-w-0">
+        <p className="text-sm leading-snug">
+          <span className="font-semibold text-foreground">{change.label}</span>{' '}
+          {row.op !== 'setting' ? (
+            <span className="text-foreground" title={entity.id ?? undefined}>
+              {entity.name}
+            </span>
+          ) : null}{' '}
+          <span className="inline-flex items-center gap-1.5 text-xs" data-figure-role="change">
+            <span className="font-mono text-muted-foreground tabular-nums">
+              {printChangeValue(change, change.before, currency)}
+            </span>
+            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+            <span className="font-mono font-semibold text-foreground tabular-nums">
+              {printChangeValue(change, change.after, currency)}
+            </span>
+            <ActionDelta change={change} />
+          </span>
+        </p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
+          <time dateTime={row.ts}>{formatWhen(row.ts)}</time>
+          <span>· {actorLabel(row)}</span>
+          <span>· {FAMILY_LABEL[row.family] ?? row.family}</span>
+          {row.portfolio_name && row.op === 'setting' ? <span>· {row.portfolio_name}</span> : null}
+          <PlatformChip platform={platform} />
+        </p>
         {row.justification ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">Why:</span> {row.justification}
+          <p className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
+            Why: {row.justification}
           </p>
         ) : null}
-        {receipt ? <ReceiptToken value={receipt} platform={platform} className="text-xs" /> : null}
+        {receipt ? <ReceiptToken value={receipt} platform={platform} /> : null}
       </div>
+      <ActionRevertControl brandId={brandId} currency={currency} row={row} />
     </li>
   );
 }

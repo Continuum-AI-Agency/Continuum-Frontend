@@ -30,7 +30,7 @@ const STATE_BORDER: Record<KpiTileState, string> = {
 
 const EMPHASIS_FIGURE: Record<KpiTileEmphasis, string> = {
   hero: '',
-  decision: 'text-primary',
+  decision: 'text-primary-ink',
 };
 
 type KpiTileProps = {
@@ -141,4 +141,46 @@ export function KpiRow({ children, className, testId, source }: KpiRowProps) {
       {children}
     </div>
   );
+}
+
+/**
+ * A figure's move against the window before — "▼ 6%" — the one place the editorial row spends
+ * colour. `better` says which way is good: a cost is better down, so a cheaper week reads
+ * success and a dearer one destructive. `neutral` moves only in words (spend is neither good
+ * nor bad by going up). Nothing when there is no move to show.
+ */
+export function KpiDelta({
+  pct,
+  better,
+  title,
+  testId,
+}: {
+  pct: number | null;
+  better: 'down' | 'neutral';
+  /** The prior figure, said in full on hover: "prev. week 48.10 MXN". */
+  title?: string;
+  testId?: string;
+}) {
+  if (pct == null) return null;
+  const direction = pct < 0 ? 'down' : pct > 0 ? 'up' : 'flat';
+  return (
+    <span
+      className={cn(
+        'font-mono tabular-nums',
+        better === 'down' && direction === 'down' && 'text-success',
+        better === 'down' && direction === 'up' && 'text-destructive',
+      )}
+      data-direction={direction}
+      data-testid={testId}
+      title={title}
+    >
+      {kpiDeltaLabel(pct)}
+    </span>
+  );
+}
+
+/** "▲ 12%", "▼ 3%", "flat" — the window it is against travels in the title, not the words. */
+export function kpiDeltaLabel(pct: number): string {
+  if (pct === 0) return 'flat';
+  return `${pct > 0 ? '▲' : '▼'} ${Math.abs(pct)}%`;
 }

@@ -72,7 +72,7 @@ export const READ_JUDGEMENT: Record<MetricRead, Judgement> = {
 };
 
 /** Jaina's own sentence, as opposed to a figure something measured. */
-export const JAINA_VOICE_TEXT = 'text-primary';
+export const JAINA_VOICE_TEXT = 'text-primary-ink';
 
 /**
  * What a period-over-period change means — which is NOT the same as which way it moved.

@@ -35,7 +35,7 @@ export function MoveLegLine({
   const money = (minor: number | null) => (minor == null ? '—' : formatMinorExact(minor, currency));
   return (
     <li
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1 text-sm"
       data-direction={direction ?? undefined}
       data-platform={platform}
       data-testid={testId}
@@ -46,10 +46,13 @@ export function MoveLegLine({
           {direction === 'decrease' ? 'Decrease' : 'Increase'}
         </span>
       ) : null}
-      <span className="min-w-0 truncate font-medium">{entityName ?? entityId ?? 'Unnamed'}</span>
-      {entityName && entityId ? (
-        <span className="truncate font-mono text-muted-foreground text-xs">{entityId}</span>
-      ) : null}
+      {/* The entity by name, its raw id on hover; an entity nobody named prints its id. */}
+      <span
+        className={cn('min-w-0 truncate font-medium', !entityName && 'font-mono text-xs')}
+        title={entityName && entityId ? entityId : undefined}
+      >
+        {entityName ?? entityId ?? 'Unnamed'}
+      </span>
       <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums">
         <span className="text-muted-foreground">{money(beforeMinor)}</span>
         <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import type React from 'react';
 
-import { AdAccountSelector } from './AdAccountSelector';
+import { AdAccountSelector, brandShortName } from './AdAccountSelector';
 
 // The integration summary (/api/brand-integrations) is the request that held the label on
 // "Loading accounts..." on beta. These tests keep it pending, or failed, and assert the
@@ -85,7 +85,66 @@ describe('AdAccountSelector with known accounts', () => {
         mark.getAttribute('data-platform'),
       ),
     ).toEqual(['meta', 'google_ads']);
-    expect(marks.textContent).toContain('Meta, Google');
+    expect(marks.getAttribute('title')).toBe('Meta, Google');
+    expect(trigger.getAttribute('title')).toBe('Home Vivo47 · VIVO47 MKT · Meta, Google');
+  });
+
+  it('names the brand without its tagline and keeps the full name in the tooltip', () => {
+    const { getByRole, getByTestId } = render(
+      <AdAccountSelector
+        brandId="brand-easyfit"
+        selectedAccountId="act_1779847382038564"
+        onSelect={() => {}}
+        knownAccounts={VIVO_KNOWN}
+        assignedAccountIds={VIVO_ASSIGNED}
+        chip={{
+          brandName: 'Easy Fit – La manera de hacer ejercicio de manera divertida',
+          platforms: ['meta'],
+        }}
+      />,
+    );
+
+    expect(getByTestId('ad-account-chip-brand').textContent).toBe('Easy Fit');
+    expect(getByTestId('ad-account-chip-account').textContent).toBe('VIVO47 MKT');
+    expect(getByRole('combobox').getAttribute('title')).toBe(
+      'Easy Fit – La manera de hacer ejercicio de manera divertida · VIVO47 MKT · Meta',
+    );
+    expect(getByRole('combobox').textContent).toContain('EF');
+  });
+
+  it('collapses to the avatar and chevron in a narrow bar: every label waits on the bar width', () => {
+    const { getByTestId } = render(
+      <AdAccountSelector
+        brandId="brand-vivo"
+        selectedAccountId="act_1779847382038564"
+        onSelect={() => {}}
+        knownAccounts={VIVO_KNOWN}
+        assignedAccountIds={VIVO_ASSIGNED}
+        chip={{ brandName: 'Home Vivo47', platforms: ['meta'] }}
+      />,
+    );
+
+    for (const part of ['brand', 'account', 'platforms']) {
+      const { className } = getByTestId(`ad-account-chip-${part}`);
+      expect(className).toContain('hidden');
+      expect(className).toMatch(/@\[\d+rem\]\/scale-bar:inline/);
+    }
+  });
+
+  it('says how many accounts the chip offers while none is picked', () => {
+    const { getByTestId } = render(
+      <AdAccountSelector
+        brandId="brand-vivo"
+        selectedAccountId={null}
+        onSelect={() => {}}
+        onAutoSelect={() => {}}
+        knownAccounts={VIVO_KNOWN}
+        assignedAccountIds={VIVO_ASSIGNED}
+        chip={{ brandName: 'Home Vivo47', platforms: [] }}
+      />,
+    );
+
+    expect(getByTestId('ad-account-chip-account').textContent).toBe('2 accounts');
   });
 
   it('shows the selected known account while the integration summary is still loading', () => {
@@ -167,5 +226,20 @@ describe('AdAccountSelector with known accounts', () => {
     const trigger = getByRole('combobox');
     expect(trigger.textContent).toContain('Loading accounts');
     expect(trigger.hasAttribute('disabled')).toBe(true);
+  });
+});
+
+describe('brandShortName', () => {
+  it('cuts a tagline at the first dash or bar separator', () => {
+    expect(brandShortName('Easy Fit – La manera de hacer ejercicio')).toBe('Easy Fit');
+    expect(brandShortName('Easy Fit — Gym')).toBe('Easy Fit');
+    expect(brandShortName('Home Vivo47 - Bienes raíces')).toBe('Home Vivo47');
+    expect(brandShortName('Acme | Store')).toBe('Acme');
+  });
+
+  it('keeps names whose dash belongs to the name', () => {
+    expect(brandShortName('Coca-Cola')).toBe('Coca-Cola');
+    expect(brandShortName('  Home Vivo47 ')).toBe('Home Vivo47');
+    expect(brandShortName('| only')).toBe('| only');
   });
 });

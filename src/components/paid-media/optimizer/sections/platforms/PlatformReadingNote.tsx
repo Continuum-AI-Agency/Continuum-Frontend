@@ -30,7 +30,7 @@ export function PlatformReadingNote({
         <>
           {' '}
           <button
-            className="text-primary hover:underline"
+            className="text-primary-ink hover:underline"
             onClick={onCreatePortfolio}
             type="button"
           >

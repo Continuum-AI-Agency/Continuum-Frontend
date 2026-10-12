@@ -2,9 +2,9 @@
 
 // Overview — the optimizer's front page, as the Performance+ redesign orders it (proposal O1,
 // docs/performance-plus-redesign/overview.html). Above the fold, in this order and nothing
-// else: one sentence with figures (what the account spent over the window, what each result
-// kind cost against its target, how many decisions wait); a meta line with the window, the
-// book and when the read was taken; the band that asks Jaina; one editorial row of four to six
+// else: one sentence with figures (what the account spent over the window and how many
+// decisions wait; what each result kind cost against its target is on its tile); a meta
+// line with the window, the book and when the read was taken; the band that asks Jaina; one editorial row of four to six
 // figures with no boxes, spend as the hero; the recommendation cards in impact order with the lead marked; and the portfolios as
 // one-line rows, sortable by distance to target.
 //
@@ -27,14 +27,21 @@
 
 import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
-import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, FileTextIcon, PlusIcon } from 'lucide-react';
+import {
+  ArrowDownIcon,
+  ArrowRightIcon,
+  ArrowUpIcon,
+  FileTextIcon,
+  PlusIcon,
+  SparklesIcon,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
-import { KpiRow, KpiTile } from '../components/KpiTile';
+import { KpiDelta, KpiRow, KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import * as typeScale from '../typeScale';
@@ -48,12 +55,12 @@ import {
 import { useOptimizerUrlState } from '../useOptimizerUrlState';
 import { AccountRead } from './account/AccountRead';
 import { AccountReadFreshness } from './account/AccountReadFreshness';
+import { HeadlineSentence } from './account/HeadlineSentence';
 import {
+  accountHeadlineSegments,
   accountSpend,
   autopilotSummary,
   decisionsLabel,
-  headlineClauses,
-  joinClauses,
   latestCycle,
   type PortfolioWindow,
   portfolioWindow,
@@ -63,7 +70,9 @@ import {
   resultKinds,
   sortPortfolioRows,
   spendState,
-  vsPriorLabel,
+  spendVsPriorPct,
+  targetSide,
+  vsTargetLabel,
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
@@ -132,8 +141,8 @@ export function kindTileSub(kind: ResultKind, currency: string | null | undefine
   return parts.join(' · ');
 }
 
-/** A cost's move against last week, coloured by direction: cheaper is green, dearer is red.
- *  Nothing when the kind has no prior cost to compare with. */
+/** A cost's move against last week: cheaper is green, dearer is red. Nothing when the kind has
+ *  no prior cost to compare with. */
 export function KindPriorDelta({
   kind,
   currency,
@@ -141,20 +150,33 @@ export function KindPriorDelta({
   kind: ResultKind;
   currency: string | null | undefined;
 }) {
-  const label = vsPriorLabel(kind.vsPriorPct);
-  if (label == null || kind.vsPriorPct == null || kind.priorCostPerResult == null) return null;
+  if (kind.vsPriorPct == null || kind.priorCostPerResult == null) return null;
+  return (
+    <KpiDelta
+      better="down"
+      pct={kind.vsPriorPct}
+      testId="cost-prior-delta"
+      title={`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`}
+    />
+  );
+}
+
+/** A cost's distance to its target, coloured by side: under is green, over is red. Nothing
+ *  when the kind has no target or no cost to measure against one. */
+export function KindTargetDistance({ kind }: { kind: ResultKind }) {
+  const side = targetSide(kind.vsTargetPct);
+  if (side === 'none' || kind.costPerResult == null) return null;
   return (
     <span
       className={cn(
         'tabular-nums',
-        kind.vsPriorPct < 0 && 'text-success',
-        kind.vsPriorPct > 0 && 'text-destructive',
+        side === 'under' && 'text-success',
+        side === 'over' && 'text-destructive',
       )}
-      data-direction={kind.vsPriorPct < 0 ? 'down' : kind.vsPriorPct > 0 ? 'up' : 'flat'}
-      data-testid="cost-prior-delta"
-      title={`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`}
+      data-side={side}
+      data-testid="cost-target-distance"
     >
-      {label}
+      {vsTargetLabel(kind.vsTargetPct)}
     </span>
   );
 }
@@ -245,6 +267,7 @@ export function OptimizerOverview({
   );
 
   const spend = accountSpend(windows);
+  const spendDelta = spendVsPriorPct(spend);
   // A sum over the portfolios that answered is not the account's spend.
   const complete = efficiency.failed === 0;
   const kinds = useMemo(() => resultKinds(portfolios, windows), [portfolios, windows]);
@@ -255,7 +278,6 @@ export function OptimizerOverview({
     (portfolio) => pendingWorkCount(portfolio) > 0,
   ).length;
   const window = windowLabel(latestCycle(windows));
-  const clauses = headlineClauses(kinds, (value) => formatCpa(value, currency), names);
   const sorted = sortPortfolioRows(portfolios, windows, sortKey, sortDir);
 
   const read = accountRead.data?.read ?? null;
@@ -409,7 +431,7 @@ export function OptimizerOverview({
             {efficiency.failed === 1 ? 'portfolio' : 'portfolios'}, so the account figure is
             incomplete.{' '}
             <button
-              className="text-primary underline-offset-2 hover:underline"
+              className="text-primary-ink underline-offset-2 hover:underline"
               data-testid="overview-retry"
               onClick={efficiency.retryFailed}
               type="button"
@@ -418,65 +440,18 @@ export function OptimizerOverview({
             </button>
           </p>
         ) : spend ? (
-          <p
-            className={`${typeScale.headline} max-w-[62ch] text-foreground`}
-            data-testid="overview-headline"
-          >
-            The account spent{' '}
-            <span
-              className="tabular-nums"
-              {...figureProps('overview.spend', spend.spend, currency, 'd7')}
-            >
-              {formatCurrency(spend.spend, currency)}
-            </span>{' '}
-            in {WINDOW_DAYS} days
-            {clauses.length > 0 ? ': ' : '.'}
-            {clauses.map((clause, index) => (
-              <span key={clause.kind.kind}>
-                {index > 0 ? (index === clauses.length - 1 ? ' and ' : ', ') : ''}
-                {clause.shape === 'cost' ? (
-                  <>
-                    {clause.kind.words.many} at{' '}
-                    <span
-                      className="tabular-nums"
-                      {...figureProps(
-                        `overview.kind.${clause.kind.kind}.cost`,
-                        clause.kind.costPerResult,
-                        currency,
-                        'd7',
-                      )}
-                    >
-                      {clause.cost}
-                    </span>{' '}
-                    ({clause.distance})
-                  </>
-                ) : (
-                  <>
-                    <span
-                      className="tabular-nums"
-                      {...figureProps(
-                        `overview.kind.${clause.kind.kind}.results`,
-                        clause.kind.results,
-                        null,
-                        'd7',
-                        'count',
-                      )}
-                    >
-                      {clause.count}
-                    </span>
-                    {clause.where ? ` in ${clause.where}` : ''}
-                  </>
-                )}
-              </span>
-            ))}
-            {clauses.length > 0 ? '. ' : ' '}
-            <span
-              className={cn('tabular-nums', pendingCount > 0 && 'text-primary')}
-              data-testid="overview-decisions"
-            >
-              {capitalise(decisionsLabel(pendingCount))}.
-            </span>
-          </p>
+          <HeadlineSentence
+            segments={accountHeadlineSegments({
+              spends: [
+                {
+                  text: formatCurrency(spend.spend, currency),
+                  figure: figureProps('overview.spend', spend.spend, currency, 'd7'),
+                },
+              ],
+              span: `in ${WINDOW_DAYS} days`,
+              decisions: pendingCount,
+            })}
+          />
         ) : (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
@@ -537,11 +512,27 @@ export function OptimizerOverview({
             label={`Spend · ${WINDOW_DAYS} days`}
             state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
             sub={
-              !complete
-                ? `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
-                : spend
-                  ? `${formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan ${formatCurrency(dailyTotal, currency)}`
-                  : `plan ${formatCurrency(dailyTotal, currency)} per day`
+              !complete ? (
+                `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
+              ) : spend ? (
+                <>
+                  {spendDelta != null ? (
+                    <>
+                      <KpiDelta
+                        better="neutral"
+                        pct={spendDelta}
+                        testId="spend-prior-delta"
+                        title={`prev. week ${formatCurrency(spend.priorSpend, currency)}`}
+                      />{' '}
+                      vs prev. week ·{' '}
+                    </>
+                  ) : null}
+                  {formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan{' '}
+                  {formatCurrency(dailyTotal, currency)}
+                </>
+              ) : (
+                `plan ${formatCurrency(dailyTotal, currency)} per day`
+              )
             }
             testId="tile-spend"
             value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
@@ -556,6 +547,10 @@ export function OptimizerOverview({
               sub={
                 <>
                   {kindTileSub(kind, currency)}
+                  {targetSide(kind.vsTargetPct) !== 'none' && kind.costPerResult != null
+                    ? ' · '
+                    : null}
+                  <KindTargetDistance kind={kind} />
                   {kind.vsPriorPct != null && kind.priorCostPerResult != null ? ' · ' : null}
                   <KindPriorDelta currency={currency} kind={kind} />
                 </>
@@ -569,7 +564,7 @@ export function OptimizerOverview({
             action={
               pendingCount > 0 ? (
                 <button
-                  className="font-semibold text-primary text-xs hover:underline"
+                  className="font-semibold text-primary-ink text-xs hover:underline"
                   onClick={onOpenActions}
                   type="button"
                 >
@@ -612,9 +607,12 @@ export function OptimizerOverview({
       {/* 5 — the recommendation cards, in impact order, the lead marked. */}
       {shown ? (
         <section className="space-y-2" data-testid="overview-recommendations">
-          <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
-            Jaina&apos;s recommendations
-          </p>
+          <h2
+            className={`${typeScale.label} flex items-center gap-1.5 px-1 font-semibold text-muted-foreground`}
+          >
+            <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
+            What Jaina recommends
+          </h2>
           <AccountRead
             candidates={[...shown.candidates, ...shown.guards]}
             cardActions={cardActions}

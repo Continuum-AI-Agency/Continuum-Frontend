@@ -51,7 +51,7 @@ export function Steps({ block, SectionBody, narrated = false }: StepsProps) {
           <span
             aria-hidden="true"
             className={cn(
-              'grid size-6 place-items-center rounded-full bg-muted text-primary',
+              'grid size-6 place-items-center rounded-full bg-muted text-primary-ink',
               JAINA_TYPE.label,
             )}
           >

@@ -81,8 +81,8 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
           ? 'in_progress'
           : 'pending';
   const title = [
-    `${total} objetivo${total !== 1 ? 's' : ''}`,
-    partial > 0 ? `${partial} parcial${partial !== 1 ? 'es' : ''}` : null,
+    `${total} objective${total !== 1 ? 's' : ''}`,
+    partial > 0 ? `${partial} partial` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -92,7 +92,7 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
+      className="px-3 py-2"
     >
       <Task status={taskStatus} defaultOpen={false}>
         <TaskTrigger title={title} status={taskStatus} progress={{ current: completed, total }} />

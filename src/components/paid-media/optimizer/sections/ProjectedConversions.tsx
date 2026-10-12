@@ -122,7 +122,7 @@ function ProjectedConversionCard({
             className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
             aria-hidden="true"
           />
-          <SparklesIcon className="size-3.5 text-primary" aria-hidden="true" />
+          <SparklesIcon className="size-3.5 text-primary-ink" aria-hidden="true" />
           Project the first cycle
           <span className="font-normal text-muted-foreground">
             &mdash; what the optimizer would do

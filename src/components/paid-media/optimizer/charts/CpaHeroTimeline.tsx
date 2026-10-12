@@ -5,7 +5,9 @@
 // spend/results; a dashed ProjectionLine continues it toward the target (or
 // the recent trend) with a hollow terminal marker at the actual→projected hand-off;
 // a ReferenceArea goldilocks band (0 → cpa_target) marks the engine's meetsTarget
-// zone when the portfolio has an explicit target; pins on the axis mark cycles
+// zone when the portfolio has an explicit target — drawn quietly (P1, "Lectura continua"):
+// the target as a dashed line, the zone under it a 5% wash, so the cost line is the one
+// thing the eye follows; pins on the axis mark cycles
 // where the optimizer acted; and hovering any cycle opens a rich card with that
 // cycle's cost + spend + results AND the actions taken — metrics and pinned
 // events in one panel, the reference-screenshot pattern.
@@ -102,10 +104,7 @@ export function CpaHeroTimeline({
               </span>
             </span>
           </span>
-          <span
-            className={typeScale.label}
-            style={{ color: projectedEnd <= last ? 'var(--success)' : 'var(--warning)' }}
-          >
+          <span className={`${typeScale.label} text-muted-foreground`}>
             {band.label.toLowerCase()} confidence
           </span>
         </div>
@@ -121,11 +120,10 @@ export function CpaHeroTimeline({
           {metric.costLabel}
         </span>
         <ComposedChart
-          // aspect-ratio yields to max-height in CSS, so this stays wide on a narrow
-          // viewport but never grows into the ~640px monolith a full-bleed 5:2 produced on
-          // a desktop panel — the chart was taller than everything below it combined.
-          aspectRatio="5 / 2"
-          className="max-h-[300px]"
+          // aspect-ratio yields to max-height in CSS: about 130px on a 390px panel and capped
+          // at 190px on a desktop one, a line to read the trend off rather than a monolith.
+          aspectRatio="3 / 1"
+          className="max-h-[190px]"
           data={points}
           margin={{ top: 16, right: 18, bottom: 26, left: 56 }}
           xDataKey="date"
@@ -133,19 +131,15 @@ export function CpaHeroTimeline({
           <Grid horizontal />
           {zone ? (
             <ReferenceArea
-              axisLabelColor="var(--success)"
-              pattern="diagonal"
-              patternColor="color-mix(in oklch, var(--success) 22%, transparent)"
-              patternScale={0.75}
-              patternStrokeWidth={1.25}
-              showMarkers
-              stroke="color-mix(in oklch, var(--success) 55%, transparent)"
+              fill="var(--success)"
+              fillOpacity={0.05}
+              stroke="color-mix(in oklch, var(--muted-foreground) 70%, transparent)"
               strokeStyle="dashed"
               y1={zone.y1}
               y2={zone.y2}
             />
           ) : null}
-          <Line dataKey="cpa" stroke="var(--chart-2)" strokeWidth={2.5} />
+          <Line dataKey="cpa" stroke="var(--chart-1)" strokeWidth={2} />
           {hasProjection ? (
             <>
               <ProjectionLine
@@ -155,7 +149,7 @@ export function CpaHeroTimeline({
                 stroke="var(--chart-4)"
                 strokeDasharray="6,4"
               />
-              <LineSeriesTerminalMarker dataKey="cpa" radius={5} stroke="var(--chart-2)" />
+              <LineSeriesTerminalMarker dataKey="cpa" radius={4} stroke="var(--chart-1)" />
             </>
           ) : null}
           <CycleActionPins points={points} />
@@ -170,7 +164,7 @@ export function CpaHeroTimeline({
                 resultLabel={metric.resultLabel}
               />
             )}
-            indicatorColor="var(--chart-2)"
+            indicatorColor="var(--chart-1)"
             matchCrosshair
           />
         </ComposedChart>
@@ -356,7 +350,7 @@ function HeroLegend({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-2)' }} />
+        <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-1)' }} />
         {costLabel} (actual)
       </span>
       {hasProjection ? (
@@ -371,13 +365,10 @@ function HeroLegend({
       {hasZone ? (
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="size-2.5 rounded-[2px] border border-dashed"
-            style={{
-              borderColor: 'color-mix(in oklch, var(--success) 55%, transparent)',
-              background: 'color-mix(in oklch, var(--success) 18%, transparent)',
-            }}
+            className="h-0 w-4 border-t border-dashed"
+            style={{ borderColor: 'color-mix(in oklch, var(--muted-foreground) 70%, transparent)' }}
           />
-          On target (≤ target)
+          Target
         </span>
       ) : null}
       {(['cycle', 'applied', 'status', 'config'] as const).map((kind) => {

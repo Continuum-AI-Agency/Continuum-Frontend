@@ -24,11 +24,46 @@ function tile(container: HTMLElement, testId: string): string {
 }
 
 describe('AllPlatformsHeadline', () => {
-  it('says the account spend, each kind with its cheapest platform, and decisions', () => {
+  it('says the account spend, the window and the decisions in one sentence', () => {
     const { getByTestId } = render(<AllPlatformsHeadline metrics={EASY_FIT_MP1} />);
-    expect(getByTestId('overview-headline').textContent).toBe(
-      'The account spent 38,411 MXN in 7 days across three platforms: conversations at 39.95 MXN on Meta, leads at 36.83 MXN, cheapest on Google at 31.40 MXN and 0 purchases. 6 decisions waiting.',
+    const headline = getByTestId('overview-headline');
+    expect(headline.textContent).toBe(
+      'The account spent 38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
     );
+    // The figure sits in mono; the decisions clause takes the primary colour, its count mono.
+    expect(headline.querySelector('[data-figure="overview.spend.MXN"]')?.className).toContain(
+      'font-mono',
+    );
+    const decisions = getByTestId('overview-decisions');
+    expect(decisions.className).toContain('text-primary-ink');
+    expect(decisions.querySelector('.font-mono')?.textContent).toBe('6');
+  });
+
+  it('moves a cost against the prior window on its tile, cheaper in green', () => {
+    const { getByTestId } = render(
+      <AllPlatformsTiles metrics={EASY_FIT_MP1} onOpenActions={() => {}} />,
+    );
+    const delta = getByTestId('tile-kind-conversations').querySelector(
+      '[data-testid="cost-prior-delta"]',
+    );
+    expect(delta?.textContent).toBe('▼ 3%');
+    expect(delta?.className).toContain('text-success');
+    expect(delta?.getAttribute('title')).toBe('prev. 7 days 41.34 MXN');
+    // Leads have no account-wide prior: no move is invented.
+    expect(
+      getByTestId('tile-kind-leads').querySelector('[data-testid="cost-prior-delta"]'),
+    ).toBeNull();
+  });
+
+  it('moves the spend against the prior window, neutral in colour', () => {
+    const { getByTestId } = render(
+      <AllPlatformsTiles metrics={META_ONLY} onOpenActions={() => {}} />,
+    );
+    const delta = getByTestId('spend-prior-delta');
+    expect(delta.textContent).toBe('▲ 9%');
+    expect(delta.className).not.toContain('text-success');
+    expect(delta.className).not.toContain('text-destructive');
+    expect(getByTestId('tile-spend').textContent).toContain('▲ 9% vs prior 7 days · Meta 100%');
   });
 
   it('names each currency on its own and no cross-currency total', () => {

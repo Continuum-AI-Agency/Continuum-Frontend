@@ -87,7 +87,7 @@ export function CreativeInsightsPage({
       angleRows,
       nextRows,
       neverTested: neverTestedAngles(angleByAd, scopedRows),
-      read: composeAngleRead(angleRows),
+      read: composeAngleRead(angleRows, nextRows),
       verdicts,
       angleLabelByAd,
     };

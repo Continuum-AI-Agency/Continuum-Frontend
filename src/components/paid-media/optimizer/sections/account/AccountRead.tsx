@@ -15,8 +15,9 @@
 // it poisons says so, because a guard that cannot name what it invalidates is decoration.
 //
 // Four on screen is what a person carries away. The rest sits behind one control that says what
-// skipping it costs, so skipping is a decision and not an accident. The first card is the
-// principal one and the only one that breathes.
+// skipping it costs, so skipping is a decision and not an accident. No card has a frame: each
+// is a module on a soft neutral fill with its control on the right, and the first, the
+// principal one, takes a faint primary tint and the primary button.
 //
 // Nothing here is written by a model. Every figure came from a detector, and the RANK used a
 // discounted value while the card shows the real money.
@@ -32,12 +33,13 @@ import {
   actionLabel,
   DETECTOR_ACTION_FAMILY,
   impactTier,
+  type RecommendationTitle,
   rankAccountCandidates,
+  titleFigure,
   titleText,
 } from '@continuum/contracts';
 import { AlertTriangleIcon, ChevronDownIcon, SparklesIcon } from 'lucide-react';
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
@@ -59,17 +61,11 @@ import {
 } from '../platformCards/platformCardModel';
 import { PlatformChip } from '../platforms/PlatformChip';
 import type { AdPlatform } from '../platforms/platformTabsModel';
-import { CalmRule, HeadlineFigure, MoneyLine } from './candidateHeadline';
+import { HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy } from './guardScope';
 
 /** How many cards show before the fold. Four is what someone carries away from a screen. */
 const SHOWN_COUNT = 4;
-
-const TIER_VARIANT = {
-  high: 'destructive',
-  medium: 'warning',
-  low: 'muted',
-} as const;
 
 const TIER_LABEL = {
   high: 'High',
@@ -177,83 +173,117 @@ function RecommendationCard({
   return (
     <article
       className={cn(
-        'flex min-w-0 flex-col gap-2 rounded-lg border bg-card p-4',
-        lead ? 'border-primary/40' : 'border-border/60',
+        'flex min-w-0 flex-col gap-2 rounded-lg p-4',
+        lead ? 'bg-primary/5' : 'bg-muted/50',
       )}
       data-detector={candidate.detector}
       data-lead={lead ? 'true' : 'false'}
       data-variant={platformCard?.variant ?? 'generic'}
       data-testid="account-card"
     >
-      <CalmRule play={lead} testId="account-card-rule" />
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
         {chips.map((chip) => (
           <PlatformChip key={chip} platform={chip} />
         ))}
-        {lead ? (
-          <Badge className="text-xs" variant="violet">
-            Lead
-          </Badge>
-        ) : null}
-        <Badge className="text-xs" variant={TIER_VARIANT[tier]}>
+        {lead ? <span className="font-semibold text-primary-ink">Lead</span> : null}
+        <span className={cn(tier === 'high' && 'font-medium text-foreground')} data-tier={tier}>
           {TIER_LABEL[tier]}
-        </Badge>
-        <Badge className="text-xs" variant="muted">
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
           {platformCard ? PLATFORM_CARD_TYPE[platformCard.variant] : ACTION_VERB_LABEL[action.verb]}
-        </Badge>
-        {doubted ? <span className="text-warning text-xs">affected by the guard</span> : null}
+        </span>
+        {doubted ? <span className="text-warning">affected by the guard</span> : null}
       </div>
-      {platformCard ? (
-        <PlatformCardBody
-          action={cardAction}
-          card={platformCard}
-          onAddNegatives={target && onOpenPortfolio ? () => onOpenPortfolio(target) : undefined}
-        />
-      ) : (
-        <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>{titleLine}</h3>
-      )}
-      {title || platformCard ? null : (
-        <HeadlineFigure
-          candidate={candidate}
-          currency={currency}
-          figureKey={figureKey}
-          size="column"
-        />
-      )}
-      <MoneyLine candidate={candidate} currency={currency} figureKey={figureKey} />
-      <p className="text-muted-foreground text-sm">{candidate.impact_basis}</p>
-      <CapNote candidate={candidate} />
-      <StateNote candidate={candidate} />
-      <footer className="mt-auto flex flex-wrap items-center gap-2 pt-1">
-        {names.length > 0 ? (
-          <p className="w-full text-muted-foreground text-xs" data-testid="account-card-portfolios">
-            {names.join(' · ')}
-          </p>
-        ) : null}
-        {target &&
-        onOpenPortfolio &&
-        !cardHoldsAction &&
-        !(platformCard && (isReadOnly(platformCard) || ownsItsActions(platformCard))) ? (
-          <Button
-            data-testid="account-card-action"
-            onClick={() => onOpenPortfolio(target)}
-            size="sm"
-            type="button"
-            variant="secondary"
+      <div className="grid gap-x-6 gap-y-3 @2xl/recs:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 space-y-1.5">
+          {platformCard ? (
+            <PlatformCardBody
+              action={cardAction}
+              card={platformCard}
+              onAddNegatives={target && onOpenPortfolio ? () => onOpenPortfolio(target) : undefined}
+            />
+          ) : (
+            <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>
+              <TitleLine fallback={titleLine} title={title} />
+            </h3>
+          )}
+          {title || platformCard ? null : (
+            <HeadlineFigure
+              candidate={candidate}
+              currency={currency}
+              figureKey={figureKey}
+              size="column"
+            />
+          )}
+          <MoneyLine candidate={candidate} currency={currency} figureKey={figureKey} />
+          <p className="text-muted-foreground text-sm">{candidate.impact_basis}</p>
+          <CapNote candidate={candidate} />
+          <StateNote candidate={candidate} />
+          {names.length > 0 ? (
+            <p className="text-muted-foreground text-xs" data-testid="account-card-portfolios">
+              {names.join(' · ')}
+            </p>
+          ) : null}
+        </div>
+        <footer className="flex flex-wrap items-center gap-2 self-start @2xl/recs:flex-col @2xl/recs:items-end">
+          {target &&
+          onOpenPortfolio &&
+          !cardHoldsAction &&
+          !(platformCard && (isReadOnly(platformCard) || ownsItsActions(platformCard))) ? (
+            <Button
+              data-testid="account-card-action"
+              onClick={() => onOpenPortfolio(target)}
+              size="sm"
+              type="button"
+              variant={lead ? 'default' : 'secondary'}
+            >
+              {(platformCard && platformCardActionLabel(platformCard)) ?? actionLabel(action)}
+            </Button>
+          ) : null}
+          <a
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-primary-ink')}
+            data-testid="account-card-jaina"
+            href={jainaPromptHref(jainaPrompt(titleLine, names))}
           >
-            {(platformCard && platformCardActionLabel(platformCard)) ?? actionLabel(action)}
-          </Button>
-        ) : null}
-        <a
-          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-primary')}
-          data-testid="account-card-jaina"
-          href={jainaPromptHref(jainaPrompt(titleLine, names))}
-        >
-          <SparklesIcon aria-hidden className="size-3.5" />
-          Ask Jaina
-        </a>
-      </footer>
+            <SparklesIcon aria-hidden className="size-3.5" />
+            Ask Jaina
+          </a>
+        </footer>
+      </div>
     </article>
+  );
+}
+
+/** A figure in a title — "101 MXN", "35%", "2.9×", "38,751" — so it can sit in mono. */
+const TITLE_FIGURE = /(\d[\d,]*(?:\.\d+)?(?:%|×|\s[A-Z]{3}\b)?)/;
+
+/** Prose with each figure in mono, at the prose's own weight. */
+function WithMonoFigures({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(TITLE_FIGURE).map((part, index) =>
+        index % 2 === 1 ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one fixed string, in order
+          <span className="font-mono tabular-nums" key={index}>
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
+/** The claim: the entity as written (its name may hold digits that are not figures), then the
+ *  figure and the comparison with their figures in mono. The text is exactly `titleText`. */
+function TitleLine({ title, fallback }: { title: RecommendationTitle | null; fallback: string }) {
+  if (!title) return <>{fallback}</>;
+  return (
+    <>
+      {title.entity}: <WithMonoFigures text={`${titleFigure(title)}, ${title.comparator}`} />
+    </>
   );
 }
 
@@ -281,7 +311,7 @@ export function AccountRead({
     <section className="space-y-3" data-testid="account-cards">
       {guards.map((guard) => (
         <div
-          className="flex gap-3 rounded-lg border border-warning/40 bg-warning/5 p-4"
+          className="flex gap-3 rounded-lg bg-warning/10 p-4"
           data-guard={guard.detector}
           key={guard.id}
         >
@@ -300,7 +330,7 @@ export function AccountRead({
       ))}
 
       {ranked.length > 0 ? (
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="@container/recs space-y-2">
           {visible.map((candidate, index) => (
             <RecommendationCard
               candidate={candidate}

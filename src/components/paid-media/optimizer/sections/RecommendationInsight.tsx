@@ -37,7 +37,7 @@ export function RecommendationInsight({
 }: RecommendationInsightProps) {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
-  const { label, glyph } = recommendationLabel(kind);
+  const { label } = recommendationLabel(kind);
   const insight = useOptimizerInsight(
     { brandId, id, adsetId, kind, trigger, severity, reason },
     open,
@@ -60,7 +60,7 @@ export function RecommendationInsight({
               // biome-ignore lint/a11y/noNoninteractiveTabindex: an inline recommendation label is not a native control, so the wrapper must be focusable for keyboard users to open the card and read the insight.
               tabIndex={0}
             >
-              {glyph} {label}
+              {label}
             </span>
           }
         />

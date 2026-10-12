@@ -28,7 +28,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
 import { DataState } from '@/components/shared/state/DataState';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
@@ -57,7 +56,7 @@ import {
   sumFunnelWindow,
 } from '../charts/vizData';
 import { DateRangeControl } from '../components/DateRangeControl';
-import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
+import { costCiLegend, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   DEFAULT_CPA_SERIES_LIMIT,
@@ -82,16 +81,16 @@ import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { resultWords } from './account/overviewModel';
 import { carriedRecommendation, portfolioSpecsFrom } from './audienceCardModel';
 import { AskedProposalPanel } from './detail/AskedProposalPanel';
+import { adsetTableRows } from './detail/adsetTableRows';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
-import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { ByPlatform } from './detail/ByPlatform';
+import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
 import { buildPortfolioHeadline } from './detail/headlineModel';
 import { buildHeroHeader, type HeroSetting } from './detail/heroHeaderModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
-import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { PortfolioHeaderBar } from './detail/PortfolioHeaderLine';
 import { PortfolioHero } from './detail/PortfolioHero';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
@@ -543,13 +542,9 @@ export function PortfolioDetailWorkspace({
       />
     );
   };
-  const adsetRows = items.map((item) =>
-    itemToRow(item, {
-      metric,
-      snapshot: snapshotById.get(item.adset_id) ?? null,
-      nameById: adsetNameById,
-    }),
-  );
+  // Leads and cost both off the engine's interval: the snapshot read lists ACTIVE ad sets
+  // only, so a paused one would print "—" beside its measured cost (./detail/adsetTableRows).
+  const adsetRows = adsetTableRows(items, { metric, snapshotById, nameById: adsetNameById });
   // The table reads the distance to the target off a small bar per row, when there is one.
   const adsetColumns = [
     ...kpiColumns({ currency, maxCiCost: maxCiCpa, metric }),
@@ -647,7 +642,7 @@ export function PortfolioDetailWorkspace({
             aria-busy="true"
             className="flex items-center gap-2 rounded-lg bg-primary/5 px-4 py-3 text-foreground text-xs"
           >
-            <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
+            <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary-ink" aria-hidden />
             <span>
               Scoring your first cycle — this can take up to a couple of minutes. Results appear
               here automatically; you can keep working.
@@ -696,6 +691,7 @@ export function PortfolioDetailWorkspace({
           nextCycleAt={portfolio.next_realloc_at ?? null}
           onCta={onHeroCta}
           onEditSetting={onEditSetting}
+          onReviewDecisions={() => onSectionChange('activity')}
           stale={isStale(portfolio)}
           portfolioId={portfolio.id}
           view={heroView}
@@ -711,6 +707,8 @@ export function PortfolioDetailWorkspace({
           title={`${metric.costLabel} per ad set`}
         >
           <InsightDataTable
+            // The search sits in the section without a frame of its own: a muted fill, no border.
+            className="[&_[data-slot=input]]:border-0 [&_[data-slot=input]]:bg-muted/60 [&_[data-slot=input]]:shadow-none"
             columns={adsetColumns}
             defaultSort={{ columnId: 'cost', direction: 'desc' }}
             emptyState="No scored ad sets in the latest cycle."
@@ -730,7 +728,10 @@ export function PortfolioDetailWorkspace({
               <Button
                 aria-label={`Chart the creatives in ${row.name ?? row.adsetId}`}
                 aria-pressed={selectedAdsetId === row.adsetId}
-                className={cn('size-7', selectedAdsetId === row.adsetId && 'bg-muted text-primary')}
+                className={cn(
+                  'size-7',
+                  selectedAdsetId === row.adsetId && 'bg-muted text-primary-ink',
+                )}
                 onClick={() => onSelectAdset(selectedAdsetId === row.adsetId ? null : row.adsetId)}
                 size="icon"
                 type="button"
@@ -743,33 +744,24 @@ export function PortfolioDetailWorkspace({
           />
         </OptimizerPanel>
 
-        {/* The one period every panel below reports on, and the objective recap for it. */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold text-foreground">
-            {resolvedRange.label}
-            {resolvedRange.flightMissing ? (
-              <span className="ml-2 font-normal text-xs text-muted-foreground">
-                set a flight in Manage to report on it
+        {/* The one period every panel below reports on, as a quiet line. The figures above are
+            the brief's own window and are not repeated here: a second row of spend, results and
+            cost read off a different source (the account snapshots) disagreed with them. */}
+        <div className="flex flex-wrap items-center justify-between gap-2" data-testid="range-line">
+          <p className="text-muted-foreground text-xs">
+            <span className="font-semibold text-foreground">{resolvedRange.label}</span>
+            {' · the charts below'}
+            {headline.days !== resolvedRange.days ? (
+              <span data-testid="range-line-hero-window">
+                {` · the read above covers ${headline.days} ${headline.days === 1 ? 'day' : 'days'}`}
               </span>
+            ) : null}
+            {resolvedRange.flightMissing ? (
+              <span className="ml-2">set a flight in Manage to report on it</span>
             ) : null}
           </p>
           <DateRangeControl hasFlight={hasFlight} onChange={onRangeChange} value={range} />
         </div>
-        <DataState
-          error={
-            <ChartError message="The recap could not load." onRetry={snapshotsQuery.refetch} />
-          }
-          loading={<ChartSkeleton className="h-24" />}
-          status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
-        >
-          <ObjectiveCostRecap
-            currency={currency}
-            metric={metric}
-            range={resolvedRange}
-            recap={recap}
-            target={targetDisplay}
-          />
-        </DataState>
 
         {noRecommendations ? (
           <SignalReadinessCard
@@ -793,7 +785,7 @@ export function PortfolioDetailWorkspace({
                 onRetry={cpaSeriesQuery.refetch}
               />
             }
-            loading={<ChartSkeleton className="h-[300px]" />}
+            loading={<ChartSkeleton className="h-[180px]" />}
             status={chartStatus(cpaSeriesQuery)}
           >
             <CpaHeroTimeline
@@ -1088,14 +1080,12 @@ export function PortfolioDetailWorkspace({
             portfolio={portfolio}
           />
         ) : (
-          <Card className="border-dashed bg-muted/10">
-            <CardHeader>
-              <CardTitle className="text-sm">No pending actions for this portfolio yet.</CardTitle>
-              <CardDescription>
-                Budget moves and recommendations that need your decision appear here.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <div className="border-border/60 border-t pt-3">
+            <p className="font-medium text-sm">No pending actions for this portfolio yet.</p>
+            <p className="text-muted-foreground text-xs">
+              Budget moves and recommendations that need your decision appear here.
+            </p>
+          </div>
         )}
       </TabsContent>
     </Tabs>

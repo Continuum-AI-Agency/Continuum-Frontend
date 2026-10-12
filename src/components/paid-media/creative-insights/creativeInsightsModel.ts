@@ -251,16 +251,28 @@ export function neverTestedAngles(
 }
 
 const pct = (value: number): string => `${Math.round(value * 100)}%`;
-const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
+const adSetWord = (count: number): string => (count === 1 ? 'ad set' : 'ad sets');
 
-/**
- * The two-sentence read, composed from the table's own figures — nothing a model wrote.
- *
- * Sentence one names the angle that wins most often inside its ad sets, when one has a
- * trustworthy sample and wins at least half the time. Sentence two names the angle carrying
- * the most spend and how often it loses. Either can be absent; with neither, there is no read.
- */
-export function composeAngleRead(rows: readonly AccountAngleRow[]): string[] {
+/** One run of the read. An angle is set semibold, a figure in mono, and `tone` colours the
+ *  comparison word that a figure sits behind (better / worse than its own ad sets). */
+export type AngleReadPart =
+  | { kind: 'text'; text: string; tone?: 'better' | 'worse' }
+  | { kind: 'angle'; text: string }
+  | { kind: 'figure'; text: string };
+
+/** `finding`: what wins and where the spend sits, and how it does. `next`: what to do. */
+export type AngleReadLine = { kind: 'finding' | 'next'; parts: AngleReadPart[] };
+
+const text = (value: string, tone?: 'better' | 'worse'): AngleReadPart =>
+  tone ? { kind: 'text', text: value, tone } : { kind: 'text', text: value };
+const angle = (value: string): AngleReadPart => ({ kind: 'angle', text: value });
+const figure = (value: number | string): AngleReadPart => ({ kind: 'figure', text: String(value) });
+
+/** The plain sentence, for an aria label or a test. */
+export const angleReadText = (line: AngleReadLine): string =>
+  line.parts.map((part) => part.text).join('');
+
+function findingParts(rows: readonly AccountAngleRow[]): AngleReadPart[] {
   const best =
     rows
       .filter(
@@ -276,25 +288,139 @@ export function composeAngleRead(rows: readonly AccountAngleRow[]): string[] {
       .filter((row) => row.spendShare !== null && row.spend > 0)
       .sort((a, b) => b.spend - a.spend)[0] ?? null;
 
-  const sentences: string[] = [];
+  const parts: AngleReadPart[] = [];
   if (best) {
-    sentences.push(
-      `“${best.label}” wins most often: ${best.winners} of ${best.comparedAds} ads beat their ad set's median cost, across ${plural(best.adsetsCompared, 'ad set')}.`,
+    parts.push(
+      angle(best.label),
+      text(' '),
+      text('wins most often', 'better'),
+      text(': '),
+      figure(best.winners),
+      text(' of '),
+      figure(best.comparedAds),
+      text(" ads beat their ad set's median cost, across "),
+      figure(best.adsetsCompared),
+      text(` ${adSetWord(best.adsetsCompared)}.`),
     );
   }
   if (topSpend?.spendShare != null) {
-    const share = pct(topSpend.spendShare);
+    const share = figure(pct(topSpend.spendShare));
+    if (parts.length > 0) parts.push(text(' '));
     if (best && topSpend.angleId === best.angleId) {
-      sentences.push(`It also carries the most spend, ${share}.`);
+      parts.push(text('It also carries '), share, text(' of the spend.'));
     } else if (topSpend.adsetsCompared > 0) {
-      sentences.push(
-        `“${topSpend.label}” carries the most spend, ${share}, and loses in ${topSpend.adsetsLosing} of the ${plural(topSpend.adsetsCompared, 'ad set')} where it competes.`,
-      );
+      parts.push(angle(topSpend.label), text(' carries '), share, text(' of the spend and '));
+      if (topSpend.adsetsLosing === 0) {
+        parts.push(
+          text('wins', 'better'),
+          text(' in all '),
+          figure(topSpend.adsetsCompared),
+          text(` ${adSetWord(topSpend.adsetsCompared)} where it competes.`),
+        );
+      } else {
+        parts.push(
+          text('loses', 'worse'),
+          text(' in '),
+          figure(topSpend.adsetsLosing),
+          text(' of the '),
+          figure(topSpend.adsetsCompared),
+          text(` ${adSetWord(topSpend.adsetsCompared)} where it competes.`),
+        );
+      }
     } else {
-      sentences.push(`“${topSpend.label}” carries the most spend, ${share}.`);
+      parts.push(
+        angle(topSpend.label),
+        text(' carries '),
+        share,
+        text(' of the spend, across '),
+        figure(topSpend.ads),
+        text(topSpend.ads === 1 ? ' ad.' : ' ads.'),
+      );
     }
   }
-  return sentences;
+  return parts;
+}
+
+/** The angle most of these ad sets are told to run, and how many of them. */
+function commonRecommendation(rows: readonly AdsetAngleRow[]): { label: string; count: number } {
+  const byAngle = new Map<string, number>();
+  for (const row of rows) {
+    const label = angleLabel(row.recommendedAngle?.value);
+    if (label) byAngle.set(label, (byAngle.get(label) ?? 0) + 1);
+  }
+  const [label, count] = [...byAngle.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['', 0];
+  return { label, count };
+}
+
+/** What to do next, from angleStanding's own per-ad-set verdicts: the strongest call that some
+ *  ad set carries, said once for every ad set that carries it. */
+function nextParts(standing: readonly AdsetAngleRow[]): AngleReadPart[] {
+  const withVerdict = (verdict: AdsetAngleRow['verdict']) =>
+    standing.filter((row) => row.verdict === verdict);
+
+  const doubleDown = commonRecommendation(withVerdict('double_down'));
+  if (doubleDown.count > 0) {
+    return [
+      text('Next: build the next ads around '),
+      angle(doubleDown.label),
+      text(' in the '),
+      figure(doubleDown.count),
+      text(` ${adSetWord(doubleDown.count)} where its own ads prove it.`),
+    ];
+  }
+  const rebuild = commonRecommendation(withVerdict('rebuild_craft'));
+  if (rebuild.count > 0) {
+    return [
+      text('Next: keep '),
+      angle(rebuild.label),
+      text(' but rebuild its execution in '),
+      figure(rebuild.count),
+      text(` ${adSetWord(rebuild.count)}, where it carries the spend without beating the median.`),
+    ];
+  }
+  const introduce = commonRecommendation(withVerdict('introduce'));
+  if (introduce.count > 0) {
+    return [
+      text('Next: try '),
+      angle(introduce.label),
+      text(' in '),
+      figure(introduce.count),
+      text(` ${adSetWord(introduce.count)} that have never run it.`),
+    ];
+  }
+  const thin = withVerdict('insufficient').length;
+  if (thin > 0) {
+    return [
+      text('Next: ship a second variant in '),
+      figure(thin),
+      text(` ${adSetWord(thin)}, so an angle can be called there.`),
+    ];
+  }
+  return [];
+}
+
+/**
+ * The two-line read, composed from the table's own figures and angleStanding's per-ad-set
+ * verdicts — nothing a model wrote.
+ *
+ * The finding names the angle that wins most often inside its ad sets (a trustworthy sample
+ * that wins at least half the time), then the angle carrying the most spend and how it does
+ * where it competes. The next step is the strongest per-ad-set call, counted. Any part that
+ * cannot be computed is left out; with nothing computable there is no read.
+ */
+export function composeAngleRead(
+  rows: readonly AccountAngleRow[],
+  standing: readonly AdsetAngleRow[] = [],
+): AngleReadLine[] {
+  const finding = findingParts(rows);
+  if (finding.length === 0) return [];
+  const next = nextParts(standing);
+  return next.length > 0
+    ? [
+        { kind: 'finding', parts: finding },
+        { kind: 'next', parts: next },
+      ]
+    : [{ kind: 'finding', parts: finding }];
 }
 
 /** Verdicts restricted to the account's ad sets (the report is brand-wide). */

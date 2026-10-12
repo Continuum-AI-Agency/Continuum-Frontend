@@ -1,8 +1,8 @@
 'use client';
 
-// Scale › Campaigns: every campaign on the Meta account (active AND paused, so a scaffold's
-// paused build shows up), expandable to its ad sets and their ads, with Pause / Unpause on each
-// row. A row action never writes: it opens EntityStatusSheet, whose only path to Meta is a Jaina
+// Scale › Campaigns: every campaign on the Meta account, filtered to active and paused by
+// default (so a scaffold's paused build shows up and archived history stays out), expandable
+// to its ad sets and their ads, with Pause / Unpause on each row. A row action never writes: it opens EntityStatusSheet, whose only path to Meta is a Jaina
 // approval a person answers. After it settles, the row shows Meta's read-back and its level is
 // re-read past the edge cache.
 
@@ -23,7 +23,13 @@ import {
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import {
+  type BudgetDisplay,
+  budgetDisplay,
   buildEntityStatusAction,
+  CAMPAIGN_STATUS_BUCKETS,
+  type CampaignStatusBucket,
+  campaignStatusBucket,
+  countCampaignBuckets,
   type EntityLevel,
   ensureOperationsSession,
   levelNoun,
@@ -64,6 +70,19 @@ const ROW_TEST_ID: Record<EntityLevel, string> = {
 
 const INDENT = ['pl-1', 'pl-7', 'pl-[3.25rem]'];
 
+/** ABO campaigns keep their budget on the ad sets: this many ACTIVE ones read their ad sets to
+ *  sum it (the same read, and cache entry, as expanding the row). Past it — or paused — the
+ *  cell says the budget is on the ad sets, and expanding the row shows each one. */
+const ABO_BUDGET_READS = 25;
+
+const DEFAULT_FILTER: ReadonlySet<CampaignStatusBucket> = new Set(['active', 'paused']);
+
+const BUCKET_LABEL: Record<CampaignStatusBucket, string> = {
+  active: 'Active',
+  paused: 'Paused',
+  archived: 'Archived',
+};
+
 const HEAD = 'h-8 font-normal text-2xs text-muted-foreground uppercase tracking-wider';
 
 /** Quiet text action: shown on row hover or focus where a pointer can hover and the table is
@@ -89,19 +108,6 @@ function minorUnitDivisor(currency: string | null): number {
   }
 }
 
-function budgetLabel(row: ScaleEntityRow, currency: string | null): string | null {
-  const divisor = minorUnitDivisor(currency);
-  const daily = Number(row.dailyBudget);
-  if (row.dailyBudget && Number.isFinite(daily) && daily > 0) {
-    return `${formatCurrency(daily / divisor, currency)}/day`;
-  }
-  const lifetime = Number(row.lifetimeBudget);
-  if (row.lifetimeBudget && Number.isFinite(lifetime) && lifetime > 0) {
-    return `${formatCurrency(lifetime / divisor, currency)} lifetime`;
-  }
-  return null;
-}
-
 export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAccountId: string }) {
   const scope = React.useMemo(() => ({ brandId, adAccountId }), [adAccountId, brandId]);
   const queryClient = useQueryClient();
@@ -111,6 +117,7 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
   const [overrides, setOverrides] = React.useState<Record<string, StatusOverride>>({});
   const [target, setTarget] = React.useState<EntityStatusTarget | null>(null);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [filter, setFilter] = React.useState<ReadonlySet<CampaignStatusBucket>>(DEFAULT_FILTER);
 
   // One conversation per mounted tab records every action taken here.
   const [sessionId] = React.useState(() => crypto.randomUUID());
@@ -186,12 +193,19 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
   );
 
   const page = campaigns.data;
-  const rows = page?.rows ?? [];
-  const pausedCount = rows.filter(
-    (row) => context.present(row, page?.fetchedAt ?? null).status === 'PAUSED',
-  ).length;
+  const allRows = (page?.rows ?? []).map((row) => context.present(row, page?.fetchedAt ?? null));
+  const counts = countCampaignBuckets(allRows);
+  const rows = allRows.filter((row) => filter.has(campaignStatusBucket(row.status)));
+  const pausedCount = rows.filter((row) => campaignStatusBucket(row.status) === 'paused').length;
+  const aboReads = new Set(
+    rows
+      .filter((row) => row.status === 'ACTIVE')
+      .filter((row) => budgetDisplay(row, 'campaign')?.kind === 'adsets')
+      .slice(0, ABO_BUDGET_READS)
+      .map((row) => row.id),
+  );
   const state = page
-    ? rows.length > 0
+    ? allRows.length > 0
       ? 'ready'
       : 'empty'
     : campaigns.isError
@@ -204,7 +218,7 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
       data-state={state}
       aria-busy={state === 'loading' || isRefreshing}
       aria-labelledby="scale-campaigns-heading"
-      className="@container/campaigns grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+      className="@container/campaigns grid h-full min-h-0 w-full max-w-6xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-1 pb-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -222,17 +236,25 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
             <span className="text-destructive text-xs">Refresh failed, showing the last read</span>
           ) : null}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="text-muted-foreground"
-          onClick={() => void refreshAll()}
-          disabled={isRefreshing || state === 'loading'}
-        >
-          <RotateCw aria-hidden="true" className={cn(isRefreshing && 'motion-safe:animate-spin')} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {page && allRows.length > 0 ? (
+            <StatusFilter counts={counts} value={filter} onChange={setFilter} />
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground"
+            onClick={() => void refreshAll()}
+            disabled={isRefreshing || state === 'loading'}
+          >
+            <RotateCw
+              aria-hidden="true"
+              className={cn(isRefreshing && 'motion-safe:animate-spin')}
+            />
+            Refresh
+          </Button>
+        </div>
       </header>
 
       <div className="min-h-0 overflow-auto">
@@ -254,12 +276,17 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
             Campaigns on this Meta ad account appear here, including paused ones Jaina builds for
             you to review before they go live.
           </QuietState>
+        ) : page && rows.length === 0 ? (
+          <QuietState title="No campaigns under this filter">
+            {allRows.length} {allRows.length === 1 ? 'campaign is' : 'campaigns are'} on this
+            account; choose All to see every one.
+          </QuietState>
         ) : (
           <Table className="table-fixed">
             <colgroup>
               <col />
-              <col className="hidden w-36 @md/campaigns:table-column" />
-              <col className="w-28" />
+              <col className="hidden w-32 @md/campaigns:table-column" />
+              <col className="w-36" />
               <col className="w-24" />
             </colgroup>
             <TableHeader className="sticky top-0 z-10 bg-background [&_tr]:border-border/60">
@@ -279,6 +306,7 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
                 ? rows.map((row) => (
                     <EntityBranch
                       key={row.id}
+                      readsAdSetBudgets={aboReads.has(row.id)}
                       row={row}
                       level="campaign"
                       parentId={null}
@@ -358,19 +386,27 @@ function EntityBranch({
   parentId,
   fetchedAt,
   context,
+  readsAdSetBudgets = false,
 }: {
   row: ScaleEntityRow;
   level: EntityLevel;
   parentId: string | null;
   fetchedAt: string | null;
   context: TableContext;
+  /** An ACTIVE ABO campaign: read its ad sets now, to sum the budget they hold. */
+  readsAdSetBudgets?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const row = context.present(read, fetchedAt);
   const childLevel = CHILD_LEVEL[level];
   const depth = level === 'campaign' ? 0 : level === 'adset' ? 1 : 2;
   const action = buildEntityStatusAction(row, level);
-  const budget = budgetLabel(row, context.currency);
+  // Same key as the expanded rows, so expanding reuses this read and vice versa.
+  const adSets = useQuery({
+    ...scaleEntitiesQueryOptions('adset', context.scope, row.id),
+    enabled: level === 'campaign' && (readsAdSetBudgets || open),
+  });
+  const budget = budgetDisplay(row, level, level === 'campaign' ? adSets.data?.rows : null);
   const delivery =
     row.effectiveStatus && row.effectiveStatus !== row.status
       ? humanizeStatus(row.effectiveStatus)
@@ -442,7 +478,7 @@ function EntityBranch({
             (depth > 0 || row.status !== 'ACTIVE') && 'text-muted-foreground',
           )}
         >
-          {budget ?? <span className="text-muted-foreground">—</span>}
+          <BudgetCell budget={budget} currency={context.currency} />
         </TableCell>
         <TableCell className="py-2 pr-1 text-right">
           {action ? (
@@ -466,6 +502,86 @@ function EntityBranch({
         <ChildRows level={childLevel} parentId={row.id} depth={depth + 1} context={context} />
       ) : null}
     </>
+  );
+}
+
+/** The figure, then — muted — where it comes from when it is not a daily budget of the row's
+ *  own: "lifetime", or "ad sets" for an ABO campaign's sum (or its bare marker). */
+function BudgetCell({ budget, currency }: { budget: BudgetDisplay; currency: string | null }) {
+  if (!budget) return <span className="text-muted-foreground">—</span>;
+  if (budget.kind === 'adsets') {
+    return (
+      <span className="text-muted-foreground text-xs" title="Budget is set on each ad set">
+        ad sets
+      </span>
+    );
+  }
+  const note =
+    budget.basis === 'lifetime' ? 'lifetime' : budget.source === 'adsets' ? 'ad sets' : null;
+  return (
+    <span
+      title={
+        budget.source === 'adsets'
+          ? `Sum of the active ad sets' ${budget.basis} budgets`
+          : undefined
+      }
+    >
+      {formatCurrency(budget.minor / minorUnitDivisor(currency), currency)}
+      {note ? <span className="ml-1 text-2xs text-muted-foreground">{note}</span> : null}
+    </span>
+  );
+}
+
+/** Active · Paused · Archived toggle on and off together; All turns every one on. */
+function StatusFilter({
+  counts,
+  value,
+  onChange,
+}: {
+  counts: Record<CampaignStatusBucket, number>;
+  value: ReadonlySet<CampaignStatusBucket>;
+  onChange: (next: ReadonlySet<CampaignStatusBucket>) => void;
+}) {
+  const all = CAMPAIGN_STATUS_BUCKETS.every((bucket) => value.has(bucket));
+  const toggle = (bucket: CampaignStatusBucket) => {
+    const next = new Set(value);
+    if (next.has(bucket)) next.delete(bucket);
+    else next.add(bucket);
+    if (next.size > 0) onChange(next);
+  };
+  const item = (pressed: boolean) =>
+    cn(
+      'rounded-md px-2 py-0.5 text-xs transition-colors motion-reduce:transition-none',
+      pressed ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+    );
+  const total = counts.active + counts.paused + counts.archived;
+  return (
+    <fieldset
+      aria-label="Campaign status"
+      data-testid="scale-campaigns-filter"
+      className="flex items-center gap-0.5"
+    >
+      {CAMPAIGN_STATUS_BUCKETS.map((bucket) => (
+        <button
+          key={bucket}
+          type="button"
+          aria-pressed={value.has(bucket)}
+          onClick={() => toggle(bucket)}
+          className={item(value.has(bucket))}
+        >
+          {BUCKET_LABEL[bucket]}{' '}
+          <span className="font-mono text-muted-foreground tabular-nums">{counts[bucket]}</span>
+        </button>
+      ))}
+      <button
+        type="button"
+        aria-pressed={all}
+        onClick={() => onChange(new Set(CAMPAIGN_STATUS_BUCKETS))}
+        className={item(all)}
+      >
+        All <span className="font-mono text-muted-foreground tabular-nums">{total}</span>
+      </button>
+    </fieldset>
   );
 }
 

@@ -134,7 +134,7 @@ export function NewsCard({
             {card.chosenOver}
           </p>
         ) : null}
-        {/* `text-primary` is this app's foreground utility; Jaina speaks in the brand colour. */}
+        {/* `text-primary-ink` is this app's foreground utility; Jaina speaks in the brand colour. */}
         <p className="inline-flex flex-wrap items-center gap-x-1.5 text-(--primary) text-xs">
           <SparklesIcon aria-hidden className="size-3" />
           <span>Jaina{draft ? ' · draft read' : ''}</span>

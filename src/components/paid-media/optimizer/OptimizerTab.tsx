@@ -180,7 +180,7 @@ function OverviewToolbar({
     <div className="flex shrink-0 items-center gap-1.5" data-testid="overview-toolbar">
       {pendingCount > 0 ? (
         <Button
-          className="h-7 gap-1 bg-primary/10 px-2.5 text-xs text-primary tabular-nums hover:bg-primary/15"
+          className="h-7 gap-1 bg-primary/10 px-2.5 text-xs text-primary-ink tabular-nums hover:bg-primary/15"
           data-testid="overview-review-pending"
           onClick={onOpenActions}
           size="sm"

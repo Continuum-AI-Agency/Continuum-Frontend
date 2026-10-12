@@ -79,32 +79,59 @@ type AdAccountSelectorProps = {
   chip?: AdAccountChip;
 };
 
+/**
+ * The brand's name as the chip shows it. `brand_profiles.brand_name` is the only name a brand
+ * has, and some carry a tagline after it ("Easy Fit – La manera de hacer ejercicio…"); the
+ * chip keeps the part before the first dash or bar separator. The full name stays in the
+ * chip's tooltip.
+ */
+export function brandShortName(brandName: string): string {
+  const trimmed = brandName.trim();
+  const [head] = trimmed.split(/\s[–—-]\s|\s*\|\s*/);
+  const short = head?.trim();
+  return short ? short : trimmed;
+}
+
+// The chip answers to the bar's own width, never the viewport: the bar shares the app header
+// with the module pill and the bells. Narrow, it is the avatar and the chevron; it adds the
+// brand, then the account and the platform marks as room allows.
 function ChipTrigger({
   chip,
   accountLabel,
   ...buttonProps
 }: React.ComponentProps<typeof Button> & { chip: AdAccountChip; accountLabel: string }) {
   const platformNames = chip.platforms.map((platform) => PLATFORM_NAMES[platform]).join(', ');
+  const shortName = brandShortName(chip.brandName);
+  const fullLabel = [chip.brandName, accountLabel, platformNames].filter(Boolean).join(' · ');
   return (
     <Button
       variant="outline"
       size="sm"
-      className="h-8 min-w-0 max-w-[min(26rem,100%)] gap-2 rounded-full bg-background py-0 pr-2.5 pl-1 text-xs font-medium"
+      className="h-8 min-w-0 max-w-[min(22rem,100%)] gap-1 rounded-full bg-background py-0 pr-1.5 pl-1 text-xs font-medium @[30rem]/scale-bar:gap-2 @[30rem]/scale-bar:pr-2.5"
       data-testid="ad-account-chip"
+      title={fullLabel}
+      aria-label={fullLabel}
       {...buttonProps}
     >
-      <BrandAvatar name={chip.brandName} logoUrl={chip.brandLogoUrl} size="sm" />
-      <span className="truncate">{chip.brandName}</span>
-      <span className="hidden min-w-0 truncate font-normal text-muted-foreground sm:inline">
+      <BrandAvatar name={shortName} logoUrl={chip.brandLogoUrl} size="sm" />
+      <span
+        className="hidden max-w-[10rem] shrink-0 truncate @[30rem]/scale-bar:inline"
+        data-testid="ad-account-chip-brand"
+      >
+        {shortName}
+      </span>
+      <span
+        className="hidden min-w-0 truncate font-normal text-muted-foreground @[38rem]/scale-bar:inline"
+        data-testid="ad-account-chip-account"
+      >
         {accountLabel}
       </span>
       {chip.platforms.length > 0 ? (
         <span
-          className="inline-flex shrink-0 items-center -space-x-1"
+          className="hidden shrink-0 items-center -space-x-1 @[38rem]/scale-bar:inline-flex"
           data-testid="ad-account-chip-platforms"
           title={platformNames}
         >
-          <span className="sr-only">{platformNames}</span>
           {chip.platforms.map((platform) => (
             <span
               className="grid size-4 place-items-center rounded-full bg-background ring-2 ring-background"
@@ -367,6 +394,11 @@ export function AdAccountSelector({
       : selectedAccount
         ? selectedAccount.name
         : 'Select ad account';
+  // The chip names the account in use; with none picked yet it says how many it can offer.
+  const chipAccountLabel =
+    !selectedAccount && visibleAccounts.length > 1
+      ? `${visibleAccounts.length} accounts`
+      : triggerLabel;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -375,7 +407,7 @@ export function AdAccountSelector({
           chip ? (
             <ChipTrigger
               chip={chip}
-              accountLabel={triggerLabel}
+              accountLabel={chipAccountLabel}
               role="combobox"
               aria-expanded={open}
               disabled={visibleAccounts.length === 0}

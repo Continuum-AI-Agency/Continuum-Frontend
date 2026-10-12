@@ -1,6 +1,6 @@
 'use client';
 
-// "Ask for a suggestion" — three categories, inside one portfolio.
+// "Ask for a suggestion" — three categories, inside one portfolio, as one quiet row.
 //
 // Deliberately three plain controls and not a dropdown plus a button: the three categories
 // ARE the product's vocabulary, and hiding two of them behind a menu makes a person choose
@@ -35,25 +35,24 @@ type SuggestionAskProps = {
  *  Today's read (success / violet / teal), so an ask and the row it produces read as one. */
 const CATEGORY_ICON: Record<AdhocSuggestionCategory, { Icon: LucideIcon; tone: string }> = {
   audience: { Icon: UsersIcon, tone: 'bg-success/10 text-emerald-700 dark:text-emerald-300' },
-  budget: { Icon: ArrowLeftRightIcon, tone: 'bg-primary/10 text-primary' },
+  budget: { Icon: ArrowLeftRightIcon, tone: 'bg-primary/10 text-primary-ink' },
   creative: { Icon: ImagePlusIcon, tone: 'bg-secondary/10 text-sky-700 dark:text-sky-300' },
 };
 
 export function SuggestionAsk({ gates, onAsk, pending, error = null }: SuggestionAskProps) {
   return (
-    <section
-      className="mb-5 rounded-xl border border-border/60 bg-card/40"
-      data-testid="suggestion-ask"
-    >
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
-        <h3 className="font-semibold text-foreground text-base tracking-tight">
+    <section className="@container mb-8" data-testid="suggestion-ask">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="font-semibold text-base text-foreground tracking-tight">
           Ask for a suggestion
         </h3>
         <p className="text-muted-foreground text-xs">
           Read on request, from this portfolio's own figures
         </p>
       </header>
-      <ul className="grid gap-4 p-5 sm:grid-cols-3">
+      {/* One quiet row of three asks: icon, label, one line on what asking gets, and the ask
+          itself as a text button — no card per option. */}
+      <ul className="mt-3 grid gap-x-8 gap-y-4 border-border/60 border-t pt-4 @2xl:grid-cols-3">
         {ADHOC_SUGGESTION_CATEGORIES.map((category) => {
           const gate = adhocSuggestionGateFor(gates, category);
           const copy = ADHOC_SUGGESTION_CATEGORY_COPY[category];
@@ -62,48 +61,47 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
           const working = gate.state === 'queued' || gate.state === 'proposing';
           const { Icon, tone } = CATEGORY_ICON[category];
           return (
-            <li
-              className="flex min-h-56 flex-col gap-4 rounded-xl border border-border/60 bg-card p-5"
-              key={category}
-            >
+            <li className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-3" key={category}>
               <span
                 aria-hidden
-                className={cn('grid size-12 place-items-center rounded-full', tone)}
+                className={cn('grid size-8 place-items-center rounded-full', tone)}
                 data-testid={`suggestion-ask-icon:${category}`}
               >
-                <Icon className="size-6" />
+                <Icon className="size-4" />
               </span>
-              <p className="font-semibold text-foreground text-sm tracking-tight">{copy.label}</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">{copy.blurb}</p>
-              <div className="mt-auto flex flex-col gap-2">
-                <Button
-                  className={cn(
-                    'h-8 w-full text-xs',
-                    // A ~5s breath while the worker is reading. No sheen.
-                    working && 'animate-[pulse_5s_ease-in-out_infinite]',
-                  )}
-                  disabled={!gate.can_request || busy}
-                  onClick={() => onAsk(category)}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  {working ? 'Reading…' : busy ? 'Asking…' : 'Ask'}
-                </Button>
-                {note ? <span className="text-muted-foreground text-xs">{note}</span> : null}
-                {!note && gate.requests_left <= 1 ? (
-                  <span className="text-muted-foreground text-xs">
-                    {gate.requests_left === 1 ? 'One more today' : 'None left today'}
-                  </span>
-                ) : null}
+              <div className="min-w-0 space-y-0.5">
+                <p className="font-semibold text-foreground text-sm tracking-tight">{copy.label}</p>
+                <p className="line-clamp-2 text-muted-foreground text-xs leading-relaxed">
+                  {copy.blurb}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-2 pt-0.5">
+                  <Button
+                    className={cn(
+                      'h-8 px-0 font-medium text-xs',
+                      // A ~5s breath while the worker is reading. No sheen.
+                      working && 'animate-[pulse_5s_ease-in-out_infinite]',
+                    )}
+                    disabled={!gate.can_request || busy}
+                    onClick={() => onAsk(category)}
+                    size="sm"
+                    type="button"
+                    variant="link"
+                  >
+                    {working ? 'Reading…' : busy ? 'Asking…' : 'Ask'}
+                  </Button>
+                  {note ? <span className="text-muted-foreground text-xs">{note}</span> : null}
+                  {!note && gate.requests_left <= 1 ? (
+                    <span className="text-muted-foreground text-xs">
+                      {gate.requests_left === 1 ? 'One more today' : 'None left today'}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </li>
           );
         })}
       </ul>
-      {error ? (
-        <p className="border-border/60 border-t px-5 py-3 text-destructive text-xs">{error}</p>
-      ) : null}
+      {error ? <p className="mt-3 text-destructive text-xs">{error}</p> : null}
     </section>
   );
 }

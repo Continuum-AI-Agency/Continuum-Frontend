@@ -119,8 +119,27 @@ function props(over: Partial<CreativeInsightsViewProps> = {}): CreativeInsightsV
     ],
     nextRows: NEXT_ROWS,
     read: [
-      '“Proof by someone like you” wins most often.',
-      '“Discount offer” carries the most spend.',
+      {
+        kind: 'finding',
+        parts: [
+          { kind: 'angle', text: 'Proof by someone like you' },
+          { kind: 'text', text: ' ' },
+          { kind: 'text', text: 'wins most often', tone: 'better' },
+          { kind: 'text', text: '. ' },
+          { kind: 'angle', text: 'Discount offer' },
+          { kind: 'text', text: ' carries ' },
+          { kind: 'figure', text: '72%' },
+          { kind: 'text', text: ' of the spend.' },
+        ],
+      },
+      {
+        kind: 'next',
+        parts: [
+          { kind: 'text', text: 'Next: ship a second variant in ' },
+          { kind: 'figure', text: '3' },
+          { kind: 'text', text: ' ad sets, so an angle can be called there.' },
+        ],
+      },
     ],
     currency: 'MXN',
     ads: {
@@ -172,7 +191,16 @@ describe('CreativeInsightsView', () => {
     expect(read.textContent).toContain("This week's read");
     expect(read.textContent).toContain('15 ads with enough delivery');
     expect(read.textContent).not.toContain('Jaina');
-    expect(within(read).getByText('“Discount offer” carries the most spend.')).toBeTruthy();
+    const [finding, next] = read.querySelectorAll('p[data-kind]');
+    expect(finding.textContent).toBe(
+      'Proof by someone like you wins most often. Discount offer carries 72% of the spend.',
+    );
+    expect(read.textContent).not.toContain('“');
+    expect(within(read).getByText('Discount offer').className).toContain('font-semibold');
+    expect(within(read).getByText('72%').className).toContain('font-mono');
+    expect(within(read).getByText('wins most often').className).toContain('text-success');
+    expect(next.getAttribute('data-kind')).toBe('next');
+    expect(next.className).toContain('text-muted-foreground');
   });
 
   it('renders no read at all when nothing was computable', () => {

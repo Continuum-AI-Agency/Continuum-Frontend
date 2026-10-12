@@ -1,14 +1,18 @@
 'use client';
 
 // One approved-renewal task row (mark done / dismiss). Opened when a fatigue
-// recommendation is approved; the engine never auto-refreshes a creative.
+// recommendation is approved; the engine never auto-refreshes a creative. A hairline row in
+// the Actions tray: kind tag, what to do on which ad set (by name — the task read carries only
+// the id, so the name comes from the portfolio's enrolled roster), the why, and its two
+// buttons on the right.
 
 import type { RenewalTask } from '@continuum/contracts';
 
 import { Button } from '@/components/ui/button';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { creativeBriefForRec, recommendationLabel } from '../reportModel';
-import { useOptimizerMutations } from '../useOptimizerData';
+import { useOptimizerEnrolledAdsets, useOptimizerMutations } from '../useOptimizerData';
+import { KindTag, kindTone, kindWord } from './kindTag';
 import { audienceExpansionPrompt } from './recQueueModel';
 
 const TASK_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
@@ -20,18 +24,25 @@ type RenewalTaskRowProps = {
 
 export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
   const { renewal } = useOptimizerMutations(brandId, null);
-  const { label, glyph } = recommendationLabel(task.kind);
+  const { label } = recommendationLabel(task.kind);
+  const roster = useOptimizerEnrolledAdsets(task.portfolio_id);
+  const adsetName =
+    roster.data.find((adset) => adset.adset_id === task.adset_id)?.adset_name?.trim() || null;
   const isBusy = renewal.isPending && renewal.variables?.taskId === task.id;
   // On a creative request the seed renders the same brief the maker gets. Absent on the
   // ad-set-level renewals (creative_refresh / audience_expand), which just show their reason.
   const brief = creativeBriefForRec({ kind: task.kind, reason: task.reason, seed: task.seed });
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold tracking-tight">
-          {glyph} {label} ·{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">{task.adset_id}</code>
+    <li className="flex flex-wrap items-start justify-between gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+          <KindTag tone={kindTone(task.kind)}>{kindWord(task.kind)}</KindTag>
+          <span className="font-semibold tracking-tight">{label}</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="font-semibold tracking-tight" title={task.adset_id}>
+            {adsetName ?? 'an ad set in this portfolio'}
+          </span>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {task.portfolio_name}
@@ -51,7 +62,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           // diagnosis over so the person lands in the three-bucket answer.
           <p className="mt-1.5 text-xs">
             <a
-              className="font-medium text-primary underline-offset-2 hover:underline"
+              className="font-medium text-primary-ink underline-offset-2 hover:underline"
               href={jainaPromptHref(
                 audienceExpansionPrompt(
                   { adset_id: task.adset_id, reason: task.reason, trigger: task.kind },
@@ -68,7 +79,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           </p>
         ) : null}
         {brief ? (
-          <div className="mt-2 space-y-1 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          <div className="mt-2 space-y-1 border-border/60 border-l pl-3 text-xs text-muted-foreground">
             <p className="font-medium text-foreground">{brief.title}</p>
             <p className="leading-relaxed">{brief.brief}</p>
             {brief.groundedOn.length > 0 ? (
@@ -102,6 +113,6 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           Dismiss
         </Button>
       </div>
-    </div>
+    </li>
   );
 }

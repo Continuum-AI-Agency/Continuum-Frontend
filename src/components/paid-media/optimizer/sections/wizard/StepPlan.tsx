@@ -139,7 +139,7 @@ export function StepPlan({
             />
             {!hasFlight ? (
               <button
-                className="text-xs text-primary hover:underline"
+                className="text-xs text-primary-ink hover:underline"
                 disabled={disabled}
                 onClick={() => {
                   const range = nextDays(30);

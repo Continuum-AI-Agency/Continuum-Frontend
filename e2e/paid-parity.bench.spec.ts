@@ -924,7 +924,8 @@ async function resolvePortfolioBrand(): Promise<string> {
       .eq('brand_profile_id', brandId)
       .eq('user_id', benchUserId)
       .limit(1);
-    if (memberError) throw new Error(`[paid-parity] membership read failed: ${memberError.message}`);
+    if (memberError)
+      throw new Error(`[paid-parity] membership read failed: ${memberError.message}`);
     const { data, error } = await admin.rpc('optimizer_list_portfolios', { p_brand_id: brandId });
     if (error) throw new Error(`[paid-parity] optimizer_list_portfolios failed: ${error.message}`);
     const enrolled = rows(data).filter(
@@ -1127,12 +1128,20 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
   test.afterEach(async ({}, testInfo) => {
     const title = testInfo.title.split(' — ')[0] ?? testInfo.title;
     if (testInfo.status === 'skipped') {
-      record(`${title}.test`, 'SKIP', testInfo.annotations.find((a) => a.type === 'skip')?.description);
+      record(
+        `${title}.test`,
+        'SKIP',
+        testInfo.annotations.find((a) => a.type === 'skip')?.description,
+      );
       return;
     }
     const ok = testInfo.status === testInfo.expectedStatus;
     const reason = testInfo.errors[0]?.message?.split('\n')[0];
-    record(`${title}.test`, ok ? 'PASS' : 'FAIL', ok ? undefined : `${testInfo.status}: ${reason ?? 'no message'}`);
+    record(
+      `${title}.test`,
+      ok ? 'PASS' : 'FAIL',
+      ok ? undefined : `${testInfo.status}: ${reason ?? 'no message'}`,
+    );
   });
 
   test.afterAll(async () => {
@@ -1219,7 +1228,8 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     );
     await waitForCapture('optimizer_get_cpa_series', (b) => b.p_portfolio_id === portfolioId);
     await expect(page.getByTestId('portfolio-hero')).toBeVisible({ timeout: 120_000 });
-    await expect(page.locator('[data-figure="recap.spend"]')).toBeVisible({ timeout: 120_000 });
+    // The range recap row is gone (it disagreed with the hero); the spend tile is the anchor now.
+    await expect(page.locator('[data-figure="tiles.spend"]')).toBeVisible({ timeout: 120_000 });
     await page.waitForTimeout(2_000);
 
     if ((await page.locator('[data-figure="timeline.projected.last"]').count()) === 0) {

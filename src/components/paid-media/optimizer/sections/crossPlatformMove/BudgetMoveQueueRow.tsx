@@ -8,7 +8,7 @@
 import type { RecommendationRow } from '@continuum/contracts';
 import { ArrowRightIcon, Loader2Icon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import * as typeScale from '../../typeScale';
+import { KindTag } from '../kindTag';
 import { PlatformChip } from '../platforms/PlatformChip';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { MoveLegLine } from './MoveLegLine';
@@ -54,11 +54,7 @@ export function BudgetMoveQueueRow({
   const increases = move.legs.filter((leg) => leg.direction === 'increase');
   const disabled = busy || writesBlocked;
   return (
-    <li
-      className="space-y-3 rounded-lg border border-border/70 bg-card px-4 py-3"
-      data-testid="budget-move-row"
-      data-row-key={`rec:${rec.id}`}
-    >
+    <li className="space-y-2.5 py-3" data-testid="budget-move-row" data-row-key={`rec:${rec.id}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1">
           {move.from.map((platform) => (
@@ -69,22 +65,18 @@ export function BudgetMoveQueueRow({
             <PlatformChip key={`to-${platform}`} platform={platform} />
           ))}
         </span>
-        <span
-          className={`${typeScale.label} rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
-        >
-          Move budget between platforms
-        </span>
+        <KindTag tone="budget">Move budget between platforms</KindTag>
       </div>
       <div className="space-y-1">
-        <p className="font-semibold text-base leading-snug">{moveTitle(move)}</p>
-        {rec.reason ? <p className="text-muted-foreground text-sm">{rec.reason}</p> : null}
+        <p className="font-semibold text-sm leading-snug">{moveTitle(move)}</p>
+        {rec.reason ? <p className="text-muted-foreground text-xs">Why: {rec.reason}</p> : null}
         <p className="text-muted-foreground text-xs" data-testid="budget-move-sides">
           Every {platformList(move.from)} entity here goes down {formatSidePct(move.decreasePct)} (
           {decreases.length}); every {platformList(move.to)} entity goes up{' '}
           {formatSidePct(move.increasePct)} ({increases.length}). Decreases run first.
         </p>
       </div>
-      <ol className="space-y-1.5">
+      <ol className="divide-y divide-border/40">
         {move.legs.map((leg) => (
           <MoveLegLine
             afterMinor={leg.afterMinor}

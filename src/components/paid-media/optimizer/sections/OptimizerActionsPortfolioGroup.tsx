@@ -54,7 +54,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
-import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { attributeTransfers, type TransferAttribution } from '../charts/chartData';
 import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
@@ -67,7 +66,6 @@ import {
   notImplementedMessage,
   parseReport,
   recommendationLabel,
-  severityBadgeVariant,
   severityRank,
 } from '../reportModel';
 import * as typeScale from '../typeScale';
@@ -111,9 +109,10 @@ import {
   readQueuedMove,
 } from './crossPlatformMove/queuedMoveModel';
 import { type ImplementTarget, implementTargets, predecessorAdIn } from './flashCreativesModel';
+import { KindTag, type KindTone, kindTone, kindWord } from './kindTag';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
-import { isStale, rosterLine, staleLine } from './portfolioStaleness';
+import { isStale, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
@@ -122,6 +121,7 @@ import {
   formatSettingsValue,
   impactLabel,
   impactPerDay,
+  type QueueSummaryGroup,
   queueHeadlineLine,
   queueSummary,
   type SettingsPatch,
@@ -129,7 +129,6 @@ import {
   settingsPatchOf,
   triggerWords,
 } from './recQueueModel';
-import { StalenessChips } from './StalenessChips';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
  *  or a scored change not yet written (recommend mode). */
@@ -476,6 +475,9 @@ type OptimizerActionsPortfolioGroupProps = {
   /** After this long with a `focusRowKey` no row matches, the queue prints a note instead of
    *  staying silent. The default is the real wait; tests shorten it. */
   focusMissingDelayMs?: number;
+  /** What leads the header line before the portfolio's name — the Actions tab puts the
+   *  portfolio's platform chips there; the portfolio page, which already names them, nothing. */
+  headerLead?: React.ReactNode;
 };
 
 /**
@@ -582,6 +584,7 @@ export function OptimizerActionsPortfolioGroup({
   onFocusRowConsumed,
   askedRecommendationIds,
   focusMissingDelayMs = FOCUS_MISSING_DELAY_MS,
+  headerLead = null,
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
@@ -656,6 +659,15 @@ export function OptimizerActionsPortfolioGroup({
     setStatus.mutate(
       { recommendation_id: rec.id, status },
       { onSettled: () => setDecidingMove(null) },
+    );
+  };
+  // A recommendation row's own Dismiss: the same rejected decision a move row records.
+  const [dismissing, setDismissing] = React.useState<string | null>(null);
+  const dismissRec = (row: RecQueueRow) => {
+    setDismissing(row.key);
+    setStatus.mutate(
+      { recommendation_id: row.rec.id, status: 'rejected' },
+      { onSettled: () => setDismissing(null) },
     );
   };
   // A CTA's row, in two steps. First, the moment the key arrives: clear whatever narrows the
@@ -1085,69 +1097,62 @@ export function OptimizerActionsPortfolioGroup({
 
   const busyApprove = requestApplyItems.isPending || setStatuses.isPending || setStatus.isPending;
 
+  const waitingCount = (selectableVisible.length || rows.length) + moveRows.length;
+  const sentence = queueSentence(waitingCount, summary, currency);
+
   return (
-    <section className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2.5 text-base font-semibold tracking-tight">
-          {portfolio.name}
-          <Badge variant="secondary" className="text-xs">
-            {(selectableVisible.length || rows.length) + moveRows.length}
-          </Badge>
-        </h3>
+    <section className="@container space-y-3" data-testid="queue-tray">
+      {/* The tray's one header line: whose queue, how much is waiting, how current it is. */}
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {headerLead}
+            <h3 className="font-semibold text-base tracking-tight">{portfolio.name}</h3>
+            <span className="font-mono font-semibold text-primary-ink text-sm tabular-nums">
+              {waitingCount}
+              <span className="sr-only"> waiting</span>
+            </span>
+          </div>
+          {/* Is this queue current? One line, before anything in it is read. Every pending
+              row belongs to the latest cycle (older ones are superseded server-side), so the
+              cycle's time IS the queue's time. A queue whose portfolio missed a cycle, or
+              whose roster left Meta, says so on the same line — quietly, in words. */}
+          {asOf || unwell ? (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground text-xs">
+              {asOf ? <span>{asOf}</span> : null}
+              {unwell ? <QueueStaleness portfolio={portfolio} /> : null}
+            </p>
+          ) : null}
+        </div>
         <Input
           aria-label={`Search ${portfolio.name} actions`}
-          className="h-8 w-full max-w-72 text-sm sm:w-72"
+          className="h-8 w-full max-w-72 text-sm @lg:w-72"
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search name, id, kind, reason"
           value={search}
         />
-      </div>
+      </header>
 
-      {/* Is this queue current? One line, before anything in it is read. Every pending row
-          belongs to the latest cycle (older ones are superseded server-side), so the cycle's
-          time IS the queue's time. */}
-      {asOf ? <p className="text-xs text-muted-foreground">{asOf}</p> : null}
-
-      {/* A queue whose portfolio has missed a cycle, or whose roster left Meta, says so before
-          its rows — the rows below are from the last cycle that landed, however long ago. */}
-      {unwell ? (
-        <div className="flex flex-wrap items-center gap-1.5" data-testid="queue-staleness">
-          <StalenessChips portfolio={portfolio} />
-        </div>
-      ) : null}
-
-      {/* What is in the queue, by reason, biggest money first — the summary a reader wants
-          before ten rows that each say "Pause ad set · HIGH". */}
-      {summary.length > 1 ? (
-        <ul className="flex flex-wrap gap-2" aria-label="Queue summary">
-          {summary.map((group) => (
-            <li
-              className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-1.5 text-xs"
-              key={`${group.kind}:${group.trigger}`}
-            >
-              <span className="font-medium">
-                {group.count} × {group.label.toLowerCase()}
+      {/* What is in the queue, by reason, biggest money first — one sentence a reader takes
+          in before ten rows that each say "Pause ad set". */}
+      {sentence ? (
+        <p className="text-foreground text-sm leading-relaxed" data-testid="queue-summary">
+          {sentence.map((part, index) =>
+            part.figure ? (
+              <span
+                className="font-mono tabular-nums"
+                // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed sentence, never reordered
+                key={index}
+                {...(part.figureKey ? figureProps(part.figureKey, part.raw ?? null, currency) : {})}
+              >
+                {part.text}
               </span>
-              <span className="text-muted-foreground">· {triggerWords(group.trigger)}</span>
-              {group.impactPerDay > 0 ? (
-                <span className="text-muted-foreground tabular-nums">
-                  ·{' '}
-                  <span
-                    className="font-semibold text-foreground"
-                    {...figureProps(
-                      `queue.summary.${group.kind}:${group.trigger}.impact`,
-                      group.impactPerDay,
-                      currency,
-                    )}
-                  >
-                    {formatCurrency(group.impactPerDay, currency)}
-                  </span>
-                  /day
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+            ) : (
+              // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed sentence, never reordered
+              <React.Fragment key={index}>{part.text}</React.Fragment>
+            ),
+          )}
+        </p>
       ) : null}
 
       <QueueToolbar
@@ -1157,10 +1162,8 @@ export function OptimizerActionsPortfolioGroup({
         applyBudgetCount={approvedBudgetCount}
         approvedPauseCount={approvedPauseCount}
         busyApprove={busyApprove}
-        currency={currency}
         hasSelection={selected.size > 0}
         onApproveAll={() => runApprove(selectableVisible.map((row) => row.key))}
-        onApproveSelected={() => runApprove([...selected])}
         onExecuteBudgets={() => setConfirm('budget')}
         onExecutePauses={() => setConfirm('pause')}
         onToggleFilter={(route) =>
@@ -1174,18 +1177,15 @@ export function OptimizerActionsPortfolioGroup({
         onToggleSelectAll={toggleSelectAll}
         pausePending={applyAdsetStatus.isPending}
         selectableCount={selectableVisible.length}
-        selectionNetDelta={selectionNetDelta}
         writesBlocked={writesBlocked}
       />
 
       {writesBlocked ? (
-        <p className="rounded-md border border-warning/40 bg-warning/5 px-4 py-2.5 text-xs text-warning">
-          {applyModeExplainer(portfolio.apply_mode)}
-        </p>
+        <p className="text-warning text-xs">{applyModeExplainer(portfolio.apply_mode)}</p>
       ) : null}
 
       {executeNote ? (
-        <p className="rounded-md border border-border/60 bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs" role="status">
           {executeNote}
         </p>
       ) : null}
@@ -1193,25 +1193,20 @@ export function OptimizerActionsPortfolioGroup({
       {/* Why the money is moving, before the list of moves: every ad set's cost per result
           against the target beside its budget going from now to proposed. */}
       {hasBudgetRows && report ? (
-        <div className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <ReallocationStory
-            currency={currency}
-            defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
-            items={report.latest_items}
-            metric={metric}
-            nameById={transferNameById}
-            snapshotById={snapshotById}
-            target={targetDisplay}
-          />
-        </div>
+        <ReallocationStory
+          className="border-border/60 border-t pt-3"
+          currency={currency}
+          defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
+          items={report.latest_items}
+          metric={metric}
+          nameById={transferNameById}
+          snapshotById={snapshotById}
+          target={targetDisplay}
+        />
       ) : null}
 
       {focusMissing ? (
-        <p
-          className="mb-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-foreground text-sm"
-          data-testid="queue-focus-missing"
-          role="status"
-        >
+        <p className="text-foreground text-sm" data-testid="queue-focus-missing" role="status">
           The row that button points at isn't in the queue yet. If it was just created, it shows up
           with the cycle's next read.
         </p>
@@ -1219,7 +1214,10 @@ export function OptimizerActionsPortfolioGroup({
       {/* Cross-platform moves lead the queue: the biggest decision, and the one a person
           should take even when autopilot could (decision 18). */}
       {moveRows.length > 0 ? (
-        <ul className="space-y-2" data-testid="budget-move-queue">
+        <ul
+          className="divide-y divide-border/60 border-border/60 border-t"
+          data-testid="budget-move-queue"
+        >
           {moveRows.map(({ key, rec, move }) => (
             <BudgetMoveQueueRow
               busy={decidingMove === rec.id}
@@ -1233,7 +1231,7 @@ export function OptimizerActionsPortfolioGroup({
           ))}
         </ul>
       ) : null}
-      <ul className="space-y-2">
+      <ul className="divide-y divide-border/60 border-border/60 border-y" data-testid="queue-rows">
         {visibleRows.map((row, index) => (
           <React.Fragment key={row.key}>
             {/* The budget rows already sort into one contiguous block (queueRank gives them
@@ -1254,25 +1252,43 @@ export function OptimizerActionsPortfolioGroup({
               />
             ) : null}
             <QueueRowView
+              approving={approving.has(row.key)}
               brandId={brandId}
-              evidence={evidenceContext}
-              settingsActions={settingsActions}
+              busyDecision={busyApprove || dismissing === row.key}
               counterparty={
                 row.route === 'budget' ? (counterpartyById.get(row.adsetId) ?? null) : null
               }
               currency={currency}
+              evidence={evidenceContext}
               expanded={expanded === row.key}
               failed={failedAdsets.has(row.adsetId)}
-              approving={approving.has(row.key)}
+              onApprove={() => runApprove([row.key])}
+              onDismiss={row.route === 'budget' ? undefined : () => dismissRec(row)}
               onToggleExpand={() => setExpanded(expanded === row.key ? null : row.key)}
               onToggleSelect={() => toggleRow(row)}
               row={row}
               selected={selected.has(row.key)}
+              settingsActions={settingsActions}
               writesBlocked={writesBlocked}
             />
           </React.Fragment>
         ))}
       </ul>
+
+      {/* The selection's decision, pinned to the bottom of the panel while something is
+          selected — the one dark surface on the tray, because it is the one that writes. */}
+      {selected.size > 0 ? (
+        <SelectionBar
+          busy={busyApprove}
+          currency={currency}
+          onApproveAll={() => runApprove(selectableVisible.map((row) => row.key))}
+          onApproveSelected={() => runApprove([...selected])}
+          selectableCount={selectableVisible.length}
+          selectedCount={selected.size}
+          selectionNetDelta={selectionNetDelta}
+          writesBlocked={writesBlocked}
+        />
+      ) : null}
 
       <AlertDialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
         <AlertDialogContent>
@@ -1297,7 +1313,12 @@ export function OptimizerActionsPortfolioGroup({
         </AlertDialogContent>
       </AlertDialog>
 
-      <PortfolioRecentActions brandId={brandId} portfolioId={portfolio.id} currency={currency} />
+      <PortfolioRecentActions
+        brandId={brandId}
+        currency={currency}
+        entityNames={transferNameById}
+        portfolioId={portfolio.id}
+      />
 
       {/* Nothing above clears selection on refetch — a mutation's invalidate rebuilds the rows,
           and a stale key would silently point at nothing. */}
@@ -1332,10 +1353,13 @@ function PortfolioRecentActions({
   brandId,
   portfolioId,
   currency,
+  entityNames,
 }: {
   brandId: string;
   portfolioId: string;
   currency: string | null;
+  /** Ad-set id → name, so a recent write names what it touched instead of printing its id. */
+  entityNames: ReadonlyMap<string, string>;
 }) {
   const actionsQuery = useOptimizerActions(brandId);
   // A failed or empty action read must not push an error into the queue — the queue's own work
@@ -1348,19 +1372,26 @@ function PortfolioRecentActions({
   if (recent.length === 0) return null;
 
   return (
-    <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-4 py-3">
+    <div className="space-y-1 pt-2">
       <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Recently applied</p>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-border/60">
         {recent.map((item) =>
           item.kind === 'move' ? (
             <MoveDecisionCard
               brandId={brandId}
+              className="space-y-2 rounded-none border-0 bg-transparent px-0 py-3"
               currency={currency}
               key={item.key}
               move={item.move}
             />
           ) : (
-            <ActionRow key={item.row.id} row={item.row} brandId={brandId} currency={currency} />
+            <ActionRow
+              brandId={brandId}
+              currency={currency}
+              entityNames={entityNames}
+              key={item.row.id}
+              row={item.row}
+            />
           ),
         )}
       </ul>
@@ -1426,6 +1457,118 @@ function recordFailures(
   if (failed.length > 0) set(new Set(failed));
 }
 
+/** One run of the queue's summary sentence: words, or a figure printed in mono. A figure that
+ *  is money carries its provenance key so the figure oracle can trace it. */
+export type QueueSentencePart = {
+  text: string;
+  figure?: boolean;
+  figureKey?: string;
+  raw?: number;
+};
+
+/**
+ * The queue in one sentence, biggest money first:
+ *   "9 waiting on a decision: 3 refresh creative for creative fatigue, 224 MXN/day at stake;
+ *    4 not being delivered for off meta."
+ * Null when nothing waits. A queue with a single reason says only how many wait — the rows
+ * below already name that reason, and a sentence repeating it is the pill row it replaces.
+ */
+export function queueSentence(
+  waiting: number,
+  groups: readonly QueueSummaryGroup[],
+  currency: string | null,
+): QueueSentencePart[] | null {
+  if (waiting <= 0) return null;
+  const parts: QueueSentencePart[] = [
+    { text: String(waiting), figure: true },
+    { text: ' waiting on a decision' },
+  ];
+  if (groups.length <= 1) {
+    parts.push({ text: '.' });
+    return parts;
+  }
+  parts.push({ text: ': ' });
+  groups.forEach((group, index) => {
+    if (index > 0) parts.push({ text: '; ' });
+    parts.push({ text: String(group.count), figure: true });
+    parts.push({
+      text: ` ${group.label.toLowerCase()} for ${triggerWords(group.trigger)}`,
+    });
+    if (group.impactPerDay > 0) {
+      parts.push({ text: ', ' });
+      parts.push({
+        text: `${formatCurrency(group.impactPerDay, currency)}/day`,
+        figure: true,
+        figureKey: `queue.summary.${group.kind}:${group.trigger}.impact`,
+        raw: group.impactPerDay,
+      });
+      parts.push({ text: ' at stake' });
+    }
+  });
+  parts.push({ text: '.' });
+  return parts;
+}
+
+/**
+ * The structured line under a recommendation row's title, in words a person reads.
+ *
+ * The trigger's own headline leads when it declared one — the same figure, in the same words,
+ * that the account card prints. A delivery finding is said as what it is ("Not active since
+ * Oct 9 · 1 day"): its raw evidence is engine vocabulary — metric `days_absent`, a comparator
+ * carrying an ISO date — and printing it verbatim put "days_absent 1 not ACTIVE on Meta since
+ * 2026-10-09" in front of the user. Everything else falls back to the shared evidence line.
+ */
+export function recRowLine(rec: RecommendationRow, currency: string | null): string | null {
+  const headline = queueHeadlineLine(rec, currency);
+  if (headline) return headline;
+  const evidence = rec.evidence;
+  if (evidence?.metric === 'days_absent') {
+    const days = Math.round(evidence.value);
+    const span = `${days} day${days === 1 ? '' : 's'}`;
+    const since = /(\d{4}-\d{2}-\d{2})/.exec(evidence.comparator)?.[1] ?? null;
+    const sinceAt = since ? Date.parse(`${since}T12:00:00Z`) : Number.NaN;
+    return Number.isNaN(sinceAt)
+      ? `Not active for ${span}`
+      : `Not active since ${SINCE_DAY.format(new Date(sinceAt))} · ${span}`;
+  }
+  return evidenceLine(evidence, currency);
+}
+
+const SINCE_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+
+const STALE_HINT =
+  'The scheduler keeps claiming this portfolio, but no cycle has landed on it in at least two intervals.';
+const ROSTER_HINT = 'These enrolled ad sets are no longer on Meta, so no cycle can score them.';
+
+/** The staleness of the queue, said quietly on the as-of line: a coloured dot and the words. */
+function QueueStaleness({ portfolio }: { portfolio: PortfolioListItem }) {
+  const stale = staleLine(portfolio);
+  const roster = rosterLine(portfolio);
+  const tone = rosterTone(portfolio);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2" data-testid="queue-staleness">
+      {stale ? (
+        <span className="inline-flex items-center gap-1.5" title={STALE_HINT}>
+          <span aria-hidden className="size-1.5 rounded-full bg-warning" />
+          <span data-testid="stale-chip">{stale}</span>
+        </span>
+      ) : null}
+      {roster && tone ? (
+        <span className="inline-flex items-center gap-1.5" title={ROSTER_HINT}>
+          <span
+            aria-hidden
+            className={cn(
+              'size-1.5 rounded-full',
+              tone === 'danger' ? 'bg-destructive' : 'bg-warning',
+            )}
+          />
+          <span data-testid="roster-chip">{roster}</span>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = [
   { route: 'budget', label: 'Budget' },
   { route: 'pause', label: 'Pause' },
@@ -1435,6 +1578,9 @@ const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = [
   { route: 'hidden', label: 'Ad-level' },
 ];
 
+/** The filter line: select-all, the kinds as quiet segmented text, and — on the right — the
+ *  execute steps an approval leads to. "Approve all" sits here only while nothing is selected;
+ *  once something is, the selection bar carries both approvals. */
 function QueueToolbar({
   activeFilters,
   allSelected,
@@ -1442,17 +1588,14 @@ function QueueToolbar({
   applyBudgetCount,
   approvedPauseCount,
   busyApprove,
-  currency,
   hasSelection,
   onApproveAll,
-  onApproveSelected,
   onExecuteBudgets,
   onExecutePauses,
   onToggleFilter,
   onToggleSelectAll,
   pausePending,
   selectableCount,
-  selectionNetDelta,
   writesBlocked,
 }: {
   activeFilters: Set<QueueRow['route']>;
@@ -1461,23 +1604,19 @@ function QueueToolbar({
   applyBudgetCount: number;
   approvedPauseCount: number;
   busyApprove: boolean;
-  currency: string | null;
   hasSelection: boolean;
   onApproveAll: () => void;
-  onApproveSelected: () => void;
   onExecuteBudgets: () => void;
   onExecutePauses: () => void;
   onToggleFilter: (route: QueueRow['route']) => void;
   onToggleSelectAll: () => void;
   pausePending: boolean;
   selectableCount: number;
-  /** Net daily-spend change if the current selection is approved. null when none is. */
-  selectionNetDelta: number | null;
   writesBlocked: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5">
-      <span className="flex items-center gap-2 pl-1 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <span className="flex items-center gap-2 text-muted-foreground text-xs">
         <Checkbox
           aria-label="Select all actionable"
           checked={allSelected}
@@ -1487,16 +1626,16 @@ function QueueToolbar({
         All
       </span>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {ROUTE_FILTERS.map((option) => (
           <button
             key={option.route}
             aria-pressed={activeFilters.has(option.route)}
             className={cn(
-              'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+              'text-xs transition-colors',
               activeFilters.has(option.route)
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
+                ? 'font-semibold text-foreground underline decoration-2 underline-offset-[6px]'
+                : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => onToggleFilter(option.route)}
             type="button"
@@ -1507,40 +1646,18 @@ function QueueToolbar({
       </div>
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        {/* A cycle's budget moves are conserved as a set, so approving a strict subset moves
-            total spend. Sum the selection and say by how much rather than warning abstractly. */}
-        {selectionNetDelta == null ? null : Math.abs(selectionNetDelta) < 0.5 ? (
-          <span className="text-xs text-muted-foreground">Spend stays flat</span>
-        ) : (
-          <span className="text-xs text-warning tabular-nums">
-            Net {selectionNetDelta > 0 ? '+' : '−'}
-            <span {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}>
-              {formatCurrency(Math.abs(selectionNetDelta), currency)}
-            </span>
-            /day
-          </span>
+        {hasSelection ? null : (
+          <Button
+            className="h-8 px-3 text-xs"
+            disabled={writesBlocked || selectableCount === 0 || busyApprove}
+            onClick={onApproveAll}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Approve all
+          </Button>
         )}
-        <Button
-          className="h-8 px-4 text-sm"
-          disabled={writesBlocked || !hasSelection || busyApprove}
-          onClick={onApproveSelected}
-          size="sm"
-          type="button"
-          variant="secondary"
-        >
-          {busyApprove ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null}
-          Approve selected
-        </Button>
-        <Button
-          className="h-8 px-4 text-sm"
-          disabled={writesBlocked || selectableCount === 0 || busyApprove}
-          onClick={onApproveAll}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          Approve all
-        </Button>
         {applyBudgetCount > 0 ? (
           <Button
             className="h-8 px-4 text-sm"
@@ -1571,13 +1688,85 @@ function QueueToolbar({
   );
 }
 
+/** The dark bar that holds the selection's decision, pinned to the bottom of the scrolling
+ *  panel. A cycle's budget moves are conserved as a set, so approving a strict subset moves
+ *  total spend: the bar sums the selection and says by how much rather than warning
+ *  abstractly. */
+function SelectionBar({
+  busy,
+  currency,
+  onApproveAll,
+  onApproveSelected,
+  selectableCount,
+  selectedCount,
+  selectionNetDelta,
+  writesBlocked,
+}: {
+  busy: boolean;
+  currency: string | null;
+  onApproveAll: () => void;
+  onApproveSelected: () => void;
+  selectableCount: number;
+  selectedCount: number;
+  /** Net daily-spend change if the current selection is approved. null when none is. */
+  selectionNetDelta: number | null;
+  writesBlocked: boolean;
+}) {
+  return (
+    <div
+      className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-foreground px-4 py-2.5 text-background shadow-lg"
+      data-testid="queue-selection-bar"
+    >
+      <span className="font-medium text-sm">
+        <span className="font-mono tabular-nums">{selectedCount}</span> selected
+      </span>
+      {selectionNetDelta == null ? null : Math.abs(selectionNetDelta) < 0.5 ? (
+        <span className="text-background/70 text-xs">Spend stays flat</span>
+      ) : (
+        <span className="text-background/70 text-xs tabular-nums">
+          Net {selectionNetDelta > 0 ? '+' : '−'}
+          <span
+            className="font-mono"
+            {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}
+          >
+            {formatCurrency(Math.abs(selectionNetDelta), currency)}
+          </span>
+          /day
+        </span>
+      )}
+      <span className="ml-auto flex flex-wrap items-center gap-2">
+        <Button
+          className="h-8 px-3 text-background text-xs hover:bg-background/10 hover:text-background"
+          disabled={writesBlocked || selectableCount === 0 || busy}
+          onClick={onApproveAll}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          Approve all <span className="font-mono tabular-nums">{selectableCount}</span>
+        </Button>
+        <Button
+          className="h-8 px-4 text-sm"
+          disabled={writesBlocked || busy}
+          onClick={onApproveSelected}
+          size="sm"
+          type="button"
+        >
+          {busy ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null}
+          Approve selected
+        </Button>
+      </span>
+    </div>
+  );
+}
+
 /** The one decision the solver actually made, said once above the rows it produced.
  *
  *  Nothing pairwise is stored: the engine emits a complete allocation vector where every
  *  raise is already paid for by the cuts. Rendering that as N independent rows was the bug —
  *  an operator could not see that taking $15 off one ad set is what funds the other. The rows
  *  stay individually selectable, because approving a subset is legitimate; the header just
- *  makes the coupling visible, and the toolbar says what a partial approval costs. */
+ *  makes the coupling visible, and the selection bar says what a partial approval costs. */
 function BudgetTransferHeader({
   attribution,
   nameById,
@@ -1608,35 +1797,34 @@ function BudgetTransferHeader({
         : `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this is not a flat reallocation.`;
 
   return (
-    <li className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3.5">
-      <div className="flex items-start gap-2.5">
-        <Checkbox
-          aria-label="Select all budget moves in this cycle"
-          checked={allSelected}
-          className="mt-0.5"
-          disabled={writesBlocked}
-          onCheckedChange={onToggleGroup}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold tracking-tight">
-            {pair ? (
-              <>
-                Moving <span className="tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
-                from {name(donors[0].adsetId)} into {name(recipients[0].adsetId)}
-              </>
-            ) : (
-              <>
-                Reallocating{' '}
-                <span className="tabular-nums">{formatCurrency(moved, currency)}/day</span> —{' '}
-                {donors.length} ad set{donors.length === 1 ? '' : 's'} fund {recipients.length}
-              </>
-            )}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {conservation} These moves are one decision — approving only some of them changes the
-            total.
-          </p>
-        </div>
+    <li className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3 py-3">
+      <Checkbox
+        aria-label="Select all budget moves in this cycle"
+        checked={allSelected}
+        className="mt-0.5"
+        disabled={writesBlocked}
+        onCheckedChange={onToggleGroup}
+      />
+      <div className="min-w-0">
+        <p className="font-semibold text-sm tracking-tight">
+          {pair ? (
+            <>
+              Moving{' '}
+              <span className="font-mono tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
+              from {name(donors[0].adsetId)} into {name(recipients[0].adsetId)}
+            </>
+          ) : (
+            <>
+              Reallocating{' '}
+              <span className="font-mono tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
+              — {donors.length} ad set{donors.length === 1 ? '' : 's'} fund {recipients.length}
+            </>
+          )}
+        </p>
+        <p className="mt-0.5 text-muted-foreground text-xs">
+          {conservation} These moves are one decision — approving only some of them changes the
+          total.
+        </p>
       </div>
     </li>
   );
@@ -1656,7 +1844,7 @@ function CounterpartyLine({
   const rest = entry.parties.length - shown.length;
   if (shown.length === 0) return null;
   return (
-    <span className="text-xs text-muted-foreground">
+    <span className="text-muted-foreground text-xs">
       {entry.direction === 'funds' ? '→ funds ' : '← funded by '}
       {shown
         .map((party) => `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency)}`)
@@ -1666,6 +1854,17 @@ function CounterpartyLine({
   );
 }
 
+/** The kind tag a queue row leads with — the colour, not a glyph, says what kind it is. */
+function rowKindTag(row: QueueRow): { tone: KindTone; word: string } {
+  if (row.route === 'budget') return { tone: 'budget', word: 'Budget' };
+  return { tone: kindTone(row.rec.kind), word: kindWord(row.rec.kind) };
+}
+
+/**
+ * One queue row: ONE hairline line — checkbox · title (with before → after in mono) and its
+ * why · the impact on the right · Approve / Dismiss — and its detail under it when opened.
+ * The ad set's NAME is the subject; its raw id rides on hover, never as a line of its own.
+ */
 function QueueRowView({
   row,
   brandId,
@@ -1675,9 +1874,12 @@ function QueueRowView({
   failed,
   expanded,
   writesBlocked,
+  busyDecision,
   counterparty,
   onToggleSelect,
   onToggleExpand,
+  onApprove,
+  onDismiss,
   settingsActions,
   evidence,
 }: {
@@ -1689,27 +1891,41 @@ function QueueRowView({
   failed: boolean;
   expanded: boolean;
   writesBlocked: boolean;
+  /** A decision on this row (or a batch it is in) is in flight. */
+  busyDecision: boolean;
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
+  onApprove: () => void;
+  /** Absent on a budget move, which is decided as part of its cycle, never rejected alone. */
+  onDismiss?: () => void;
   settingsActions: SettingsActions;
   evidence: EvidenceContext;
 }) {
   const selectable = isSelectableRow(row);
   const hidden = row.route === 'hidden';
+  const tag = rowKindTag(row);
+  // Dismiss is a decision on a still-pending recommendation; a settings row decides in its
+  // detail, an ad-level row cannot be acted on, and an approved row is past deciding.
+  const dismissable =
+    onDismiss !== undefined &&
+    row.route !== 'budget' &&
+    row.route !== 'settings' &&
+    !hidden &&
+    row.rec.status === 'pending';
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the whole-row click is a pointer convenience; the accessible, keyboard-operable selection control is the Checkbox inside. Making the <li> a role=button would nest interactive controls (checkbox, expander, hover card).
     <li
       className={cn(
-        'scroll-mt-2 rounded-lg border bg-card px-4 py-3.5 transition-colors',
-        selected ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40' : 'border-border/70',
+        'scroll-mt-2 py-3 transition-colors',
+        selected && 'bg-primary/5',
         selectable && !writesBlocked && 'cursor-pointer hover:bg-muted/30',
       )}
       data-row-key={row.key}
       onClick={selectable ? onToggleSelect : undefined}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 @2xl:grid-cols-[1rem_minmax(0,1fr)_10rem_auto]">
         {hidden ? (
           <AdLevelDangerIcon />
         ) : (
@@ -1723,67 +1939,97 @@ function QueueRowView({
           />
         )}
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <RowHeadline row={row} brandId={brandId} currency={currency} />
-            {row.approved ? (
-              <Badge variant="secondary" className={typeScale.label}>
-                Approved
-              </Badge>
-            ) : null}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <KindTag tone={tag.tone}>{tag.word}</KindTag>
+            <RowHeadline brandId={brandId} currency={currency} row={row} />
+            {row.approved ? <span className="text-muted-foreground text-xs">Approved</span> : null}
             {approving ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
                 <Loader2Icon className="size-3 animate-spin" /> approving
               </span>
             ) : null}
-            {failed ? (
-              <Badge variant="destructive" className={typeScale.label}>
-                Failed
-              </Badge>
-            ) : null}
+            {failed ? <span className="font-medium text-destructive text-xs">Failed</span> : null}
           </div>
-          {row.route === 'budget' && row.item.reason ? (
-            <p
-              className="mt-0.5 line-clamp-2 text-xs text-muted-foreground"
-              title={row.item.reason}
-            >
-              <span className="font-medium text-foreground">Why:</span> {row.item.reason}
-            </p>
-          ) : null}
-          {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {row.route === 'settings' ? (
-              <span className={`${typeScale.label} text-muted-foreground`}>Portfolio setting</span>
-            ) : (
-              <AdSetIdLabel className="text-xs" id={row.adsetId} />
-            )}
-            {row.route !== 'budget' && row.rec.severity ? (
-              <Badge variant={severityBadgeVariant(row.rec.severity)} className={typeScale.label}>
-                {row.rec.severity}
-              </Badge>
-            ) : null}
-            {counterparty ? (
-              <CounterpartyLine currency={currency} entry={counterparty} limit={1} />
-            ) : null}
-          </div>
+          {row.route === 'budget' ? (
+            <>
+              {row.item.reason ? (
+                <p
+                  className="mt-0.5 line-clamp-2 text-muted-foreground text-xs"
+                  title={row.item.reason}
+                >
+                  Why: {row.item.reason}
+                </p>
+              ) : null}
+              {counterparty ? (
+                <p className="mt-0.5">
+                  <CounterpartyLine currency={currency} entry={counterparty} limit={1} />
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <RecWhy currency={currency} rec={row.rec} />
+          )}
         </div>
 
-        <button
-          aria-expanded={expanded}
-          aria-label={expanded ? 'Hide detail' : 'Show detail'}
-          className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted/50"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleExpand();
-          }}
-          type="button"
-        >
-          {expanded ? (
-            <ChevronDownIcon className="size-4" />
-          ) : (
-            <ChevronRightIcon className="size-4" />
-          )}
-        </button>
+        {/* Narrow: impact and actions share a second line under the title. Wide: the wrapper
+            dissolves and they take the row's two right-hand columns. */}
+        <div className="col-start-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 @2xl:contents">
+          <div className="@2xl:text-right">
+            <RowImpact currency={currency} row={row} />
+          </div>
+
+          <div className="flex items-center justify-end gap-1">
+            {dismissable ? (
+              <Button
+                aria-label={`Dismiss ${selectionLabel(row).replace(/^Select /, '')}`}
+                className="h-7 px-2.5 text-xs"
+                disabled={writesBlocked || busyDecision}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDismiss?.();
+                }}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Dismiss
+              </Button>
+            ) : null}
+            {selectable ? (
+              <Button
+                aria-label={`Approve ${selectionLabel(row).replace(/^Select /, '')}`}
+                className="h-7 px-3 text-xs"
+                disabled={writesBlocked || busyDecision}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onApprove();
+                }}
+                size="sm"
+                type="button"
+                variant="default"
+              >
+                Approve
+              </Button>
+            ) : null}
+            <button
+              aria-expanded={expanded}
+              aria-label={expanded ? 'Hide detail' : 'Show detail'}
+              className="rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleExpand();
+              }}
+              type="button"
+            >
+              {expanded ? (
+                <ChevronDownIcon className="size-4" />
+              ) : (
+                <ChevronRightIcon className="size-4" />
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {expanded ? (
@@ -1799,45 +2045,61 @@ function QueueRowView({
   );
 }
 
-/** The justification, in the row, always visible — never only behind a hover. The
- *  structured line first (metric · value · comparison · window, then the money per day),
- *  the prose reason under it. A trader should be able to act from this line alone.
- *
- *  The trigger's own headline leads when it declared one — the same figure, in the same words,
- *  that the account card prints for this finding. Without it the row falls back to the
- *  structured line, which is what every row shows until the engine emitting headlines ships. */
-function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: string | null }) {
-  const line = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
-  const money = impactLabel(rec, currency);
+/** What the row puts on the table, on the right in mono: a budget move's change per day
+ *  (green when it raises, red when it cuts), a recommendation's money at stake. The change is
+ *  the difference of the two figures in the title, which carry the provenance; it adds none. */
+function RowImpact({ row, currency }: { row: QueueRow; currency: string | null }) {
+  if (row.route === 'budget') {
+    const change = row.item.change_abs ?? 0;
+    if (Math.abs(change) < 0.005) return null;
+    return (
+      <p className="text-xs">
+        <span
+          className={cn(
+            'font-mono font-semibold text-sm tabular-nums',
+            change > 0 ? 'text-success' : 'text-destructive',
+          )}
+        >
+          {change > 0 ? '+' : '−'}
+          {formatCurrency(Math.abs(change), currency)}/day
+        </span>
+        <span className="block text-muted-foreground">daily budget</span>
+      </p>
+    );
+  }
+  const money = impactLabel(row.rec, currency);
+  if (!money) return null;
+  return (
+    <p className="text-xs">
+      <span
+        className="font-mono font-semibold text-foreground text-sm tabular-nums"
+        {...figureProps(
+          `queue.${row.rec.id}.at-stake`,
+          impactPerDay(row.rec),
+          currency,
+          'none',
+          'per-period',
+        )}
+      >
+        {money.replace(/ at stake$/, '')}
+      </span>
+      <span className="block text-muted-foreground">at stake</span>
+    </p>
+  );
+}
+
+/** The justification, in the row, always visible — never only behind a hover. The structured
+ *  line first (the trigger's headline, or metric · value · comparison · window), the prose
+ *  reason under it. A trader should be able to act from these two lines alone. */
+function RecWhy({ rec, currency }: { rec: RecommendationRow; currency: string | null }) {
+  const line = recRowLine(rec, currency);
   if (!line && !rec.reason) return null;
   return (
-    <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
-      {line ? (
-        <p className="tabular-nums">
-          <span className="font-semibold text-foreground">{line}</span>
-          {money ? (
-            <span>
-              {' · '}
-              <span
-                className="font-semibold text-foreground"
-                {...figureProps(
-                  `queue.${rec.id}.at-stake`,
-                  impactPerDay(rec),
-                  currency,
-                  'none',
-                  'per-period',
-                )}
-              >
-                {money.replace(/ at stake$/, '')}
-              </span>{' '}
-              at stake
-            </span>
-          ) : null}
-        </p>
-      ) : null}
+    <div className="mt-0.5 space-y-0.5 text-muted-foreground text-xs">
+      {line ? <p className="text-foreground/80 tabular-nums">{line}</p> : null}
       {rec.reason ? (
         <p className="line-clamp-2" title={rec.reason}>
-          <span className="font-medium text-foreground">Why:</span> {rec.reason}
+          Why: {rec.reason}
         </p>
       ) : null}
     </div>
@@ -1853,12 +2115,19 @@ function RowHeadline({
   brandId: string;
   currency: string | null;
 }) {
+  // The ad set by name, its raw id on hover — the id is never the line a person reads.
+  const subject =
+    row.route === 'settings' ? null : (
+      <span className="font-semibold text-sm tracking-tight" title={row.adsetId}>
+        {row.name ?? 'Unnamed ad set'}
+      </span>
+    );
   if (row.route === 'budget') {
     const changePct = row.item.change_pct != null ? row.item.change_pct * 100 : null;
     return (
-      <span className="text-base font-semibold tracking-tight">
-        {row.name ?? 'Budget move'}{' '}
-        <span className="font-normal tabular-nums text-muted-foreground">
+      <span className="min-w-0 font-semibold text-sm tracking-tight">
+        <span title={row.adsetId}>{row.name ?? 'Budget move'}</span>{' '}
+        <span className="font-mono font-normal text-muted-foreground tabular-nums">
           <span
             {...figureProps(
               `queue.${row.item.adset_id}.now`,
@@ -1902,15 +2171,17 @@ function RowHeadline({
     );
   }
   if (row.route === 'hidden') {
-    const { label, glyph } = recommendationLabel(row.rec.kind);
     return (
-      <span className="text-base font-semibold tracking-tight text-muted-foreground">
-        {glyph} {label}
+      <span className="min-w-0 text-sm">
+        <span className="font-semibold text-muted-foreground tracking-tight">
+          {recommendationLabel(row.rec.kind).label}
+        </span>
+        {subject ? <> · {subject}</> : null}
       </span>
     );
   }
   return (
-    <span className="text-base font-semibold tracking-tight">
+    <span className="min-w-0 text-sm">
       <RecommendationInsight
         adsetId={row.adsetId}
         brandId={brandId}
@@ -1920,6 +2191,7 @@ function RowHeadline({
         severity={row.rec.severity}
         trigger={row.rec.trigger}
       />
+      {subject ? <> · {subject}</> : null}
     </span>
   );
 }
@@ -1938,7 +2210,10 @@ function RowDetail({
   evidence: EvidenceContext;
 }) {
   return (
-    <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+    <div
+      className="mt-3 ml-7 space-y-1.5 border-border/60 border-l pl-4 text-muted-foreground text-xs"
+      data-testid="queue-row-detail"
+    >
       {row.route === 'budget' ? (
         <BudgetDetail item={row.item} currency={currency} counterparty={counterparty} />
       ) : row.route !== 'settings' && isAudienceRecommendation(row.rec) ? (
@@ -2295,9 +2570,7 @@ function RecDetail({ rec }: { rec: RecommendationRow }) {
         </p>
       ) : null}
       <p>
-        <Badge variant="outline" className="text-xs">
-          {rec.trigger}
-        </Badge>
+        Trigger: <span className="font-mono">{rec.trigger}</span>
       </p>
     </>
   );

@@ -205,7 +205,7 @@ export function LinkedInInsightsPanel({
               return (
                 <div key={card.title} className="rounded-lg border border-border/70 bg-card p-3">
                   <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-                    <span className="grid size-7 place-items-center rounded-md bg-primary/10 text-primary">
+                    <span className="grid size-7 place-items-center rounded-md bg-primary/10 text-primary-ink">
                       <Icon className="size-3.5" />
                     </span>
                     {card.title}

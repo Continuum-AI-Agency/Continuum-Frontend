@@ -53,15 +53,15 @@ describe('CpaHeroTimeline', () => {
     expect(container.textContent?.toLowerCase()).toContain('confidence');
   });
 
-  it('labels the goldilocks zone only when the portfolio has an explicit target', () => {
+  it('labels the target line only when the portfolio has an explicit target', () => {
     const withTarget = render(
       <CpaHeroTimeline currency="USD" series={cpaSeriesTrend} targetCpa={30} />,
     );
-    expect(withTarget.container.textContent).toContain('On target');
+    expect(withTarget.getByText('Target')).toBeTruthy();
     cleanup();
-    // No target → no zone legend (engine default $50 is not drawn as a brand target).
+    // No target → no target legend (engine default $50 is not drawn as a brand target).
     const without = render(<CpaHeroTimeline currency="USD" series={cpaSeriesTrend} />);
-    expect(without.queryByText(/On target/i)).toBeNull();
+    expect(without.queryByText('Target')).toBeNull();
   });
 
   it('labels the y-axis with the objective cost label (CPM for awareness)', () => {

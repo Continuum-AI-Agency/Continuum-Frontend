@@ -134,6 +134,19 @@ import {
 } from './portfolioFields';
 
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
+const BUDGET_SOURCE_LABEL: Record<BudgetSource, string> = {
+  observed: 'Match current spend',
+  fixed: 'Fixed daily target',
+};
+
+/** value→label for a Select trigger, built with the same labeller as its items, so the
+ *  closed trigger reads "Balanced", never the stored code "balanced". */
+function selectLabels<Value extends string>(
+  values: readonly Value[],
+  label: (value: Value) => string,
+): Record<string, string> {
+  return Object.fromEntries(values.map((value) => [value, label(value)]));
+}
 const GRANULARITY_LABEL: Record<BudgetGranularity, string> = {
   daily: 'Per day',
   monthly: 'Per month',
@@ -683,7 +696,11 @@ export function PortfolioManagePanel({
             title="Identity"
           >
             <FieldRow htmlFor={`manage-name-${portfolio.id}`} label="Name">
-              <Input id={`manage-name-${portfolio.id}`} {...form.register('name')} />
+              <Input
+                className="max-w-md"
+                id={`manage-name-${portfolio.id}`}
+                {...form.register('name')}
+              />
               {form.formState.errors.name ? (
                 <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
               ) : null}
@@ -696,7 +713,7 @@ export function PortfolioManagePanel({
                 }
               >
                 <SelectTrigger id={`manage-objective-${portfolio.id}`}>
-                  <SelectValue />
+                  <SelectValue items={selectLabels(selectableObjectives(objective), humanize)} />
                 </SelectTrigger>
                 <SelectContent>
                   {selectableObjectives(objective).map((value) => (
@@ -727,6 +744,7 @@ export function PortfolioManagePanel({
                 </FieldRow>
                 <FieldRow htmlFor={`manage-conv-event-${portfolio.id}`} label="Event id">
                   <Input
+                    className="max-w-md"
                     id={`manage-conv-event-${portfolio.id}`}
                     onChange={(event) => patchDescriptor({ event_id: event.target.value })}
                     placeholder="offsite_conversion.fb_pixel_custom"
@@ -738,6 +756,7 @@ export function PortfolioManagePanel({
                 </FieldRow>
                 <FieldRow htmlFor={`manage-conv-result-${portfolio.id}`} label="What you call one">
                   <Input
+                    className="max-w-md"
                     id={`manage-conv-result-${portfolio.id}`}
                     onChange={(event) => patchDescriptor({ result_label: event.target.value })}
                     placeholder="Demos booked"
@@ -749,6 +768,7 @@ export function PortfolioManagePanel({
                 </FieldRow>
                 <FieldRow htmlFor={`manage-conv-cost-${portfolio.id}`} label="What one costs">
                   <Input
+                    className="max-w-md"
                     id={`manage-conv-cost-${portfolio.id}`}
                     onChange={(event) => patchDescriptor({ cost_label: event.target.value })}
                     placeholder="Cost per demo booked"
@@ -757,7 +777,7 @@ export function PortfolioManagePanel({
                 </FieldRow>
                 <FieldRow htmlFor={`manage-conv-lag-${portfolio.id}`} label="Days to arrive">
                   <Input
-                    className="tabular-nums"
+                    className="max-w-[12rem] tabular-nums"
                     id={`manage-conv-lag-${portfolio.id}`}
                     inputMode="decimal"
                     onChange={(event) => patchDescriptor({ typical_lag_days: event.target.value })}
@@ -767,7 +787,7 @@ export function PortfolioManagePanel({
                 </FieldRow>
                 <FieldRow htmlFor={`manage-conv-volume-${portfolio.id}`} label="A week">
                   <Input
-                    className="tabular-nums"
+                    className="max-w-[12rem] tabular-nums"
                     id={`manage-conv-volume-${portfolio.id}`}
                     inputMode="decimal"
                     onChange={(event) => patchDescriptor({ events_per_week: event.target.value })}
@@ -801,7 +821,15 @@ export function PortfolioManagePanel({
                     value={descriptorDraft.analog ?? 'inferred'}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue
+                        items={{
+                          inferred: 'Work it out from the answers above',
+                          ...selectLabels(
+                            analogObjectiveSchema.options,
+                            (value) => `Like ${ANALOG_LABEL[value]}`,
+                          ),
+                        }}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="inferred">Work it out from the answers above</SelectItem>
@@ -837,7 +865,12 @@ export function PortfolioManagePanel({
                   value={effectiveTargetMetric}
                 >
                   <SelectTrigger id={`manage-target-metric-${portfolio.id}`}>
-                    <SelectValue />
+                    <SelectValue
+                      items={selectLabels(
+                        allowedMetrics,
+                        (value) => getOptimizationMetricDefinition(value).costLabel,
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {allowedMetrics.map((value) => (
@@ -887,7 +920,7 @@ export function PortfolioManagePanel({
                 }
               >
                 <SelectTrigger id={`manage-mode-${portfolio.id}`}>
-                  <SelectValue />
+                  <SelectValue items={selectLabels(MODES, humanize)} />
                 </SelectTrigger>
                 <SelectContent>
                   {MODES.map((value) => (
@@ -916,11 +949,14 @@ export function PortfolioManagePanel({
                 value={budgetSource}
               >
                 <SelectTrigger id={`manage-budget-source-${portfolio.id}`}>
-                  <SelectValue />
+                  <SelectValue items={BUDGET_SOURCE_LABEL} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="observed">Match current spend</SelectItem>
-                  <SelectItem value="fixed">Fixed daily target</SelectItem>
+                  {(Object.keys(BUDGET_SOURCE_LABEL) as BudgetSource[]).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {BUDGET_SOURCE_LABEL[value]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
@@ -1028,7 +1064,7 @@ export function PortfolioManagePanel({
                 value={lookbackWindow}
               >
                 <SelectTrigger id={`manage-lookback-${portfolio.id}`}>
-                  <SelectValue />
+                  <SelectValue items={LOOKBACK_LABEL} />
                 </SelectTrigger>
                 <SelectContent>
                   {LOOKBACK_WINDOWS.map((value) => (
@@ -1741,7 +1777,7 @@ function NumberField({
   const body = (
     <>
       <Input
-        className="tabular-nums"
+        className="max-w-[12rem] tabular-nums"
         aria-invalid={fieldState.invalid || undefined}
         disabled={disabled}
         id={id}

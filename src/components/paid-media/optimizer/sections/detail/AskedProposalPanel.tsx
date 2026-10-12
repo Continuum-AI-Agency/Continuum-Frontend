@@ -15,7 +15,6 @@ import type { AdSetSnapshot, ConvertCboResponse, RecommendationRow } from '@cont
 import { readProposalPlan, readProposalResult } from '@continuum/contracts';
 import { Loader2Icon, SparklesIcon } from 'lucide-react';
 import * as React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import * as typeScale from '../../typeScale';
 import {
@@ -138,9 +137,9 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
         <h4 className={`${typeScale.label} text-muted-foreground`}>Audience proposal</h4>
         {failure ? (
           <>
-            <Badge className={typeScale.label} variant="destructive">
+            <p className="font-medium text-destructive text-xs">
               {AUDIENCE_PROPOSAL_STATE_LABEL.failed}
-            </Badge>
+            </p>
             <ProposalFailureBlock
               failure={failure}
               notice={notice}
@@ -155,9 +154,7 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
           <>
             {/* A blocked face carries its own badge; every other state wears the row's. */}
             {proposal.state === 'blocked' || proposal.state === 'blocked_cbo' ? null : (
-              <Badge className={typeScale.label} variant="muted">
-                {proposalStateLabel(proposal)}
-              </Badge>
+              <p className="text-muted-foreground text-xs">{proposalStateLabel(proposal)}</p>
             )}
             <WhatAudience block={proposal.block} plan={null} state={proposal.state} />
           </>

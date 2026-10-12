@@ -274,7 +274,7 @@ export function DCOActionAlertsBox({
               className={cn(
                 'h-7 rounded-md px-2 text-left text-xs transition-colors',
                 quickView === view
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary/10 text-primary-ink'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >

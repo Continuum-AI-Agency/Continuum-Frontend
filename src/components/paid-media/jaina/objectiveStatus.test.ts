@@ -37,18 +37,18 @@ describe('objectiveReasonText', () => {
         'required_tool_not_run',
         'Required read never ran this turn: get_breakdown_insights_summary.',
       ),
-    ).toBe('No se pudo leer el desglose por segmento');
+    ).toBe('Could not read the breakdown by segment');
     expect(objectiveReasonText('required_tool_not_run', null)).toBe(
-      'No se pudo leer un dato que necesitaba',
+      'Could not read data it needed',
     );
   });
 
   it('turns each runtime code into a plain sentence and hides codes it does not know', () => {
     expect(objectiveReasonText('core_deferred', 'Deferred by Jaina core: x')).toBe(
-      'Quedó para la próxima',
+      'Left for the next turn',
     );
-    expect(objectiveReasonText('turn_ended_in_progress', null)).toBe('Se cortó antes de terminar');
-    expect(objectiveReasonText('worker_exception', 'boom')).toBe('Falló al consultar los datos');
+    expect(objectiveReasonText('turn_ended_in_progress', null)).toBe('Stopped before it finished');
+    expect(objectiveReasonText('worker_exception', 'boom')).toBe('The data read failed');
     expect(objectiveReasonText('some_new_code', 'internal')).toBeNull();
     expect(objectiveReasonText(null, null)).toBeNull();
   });

@@ -24,7 +24,7 @@ describe('JainaEntryChips', () => {
     const { container, getByText } = mount();
     const label = getByText(/Ask Jaina/);
     expect(label).toBeTruthy();
-    expect(label.className).toContain('text-primary');
+    expect(label.className).toContain('text-primary-ink');
     expect(container.textContent).not.toContain('Preguntale a Jaina');
   });
 
@@ -106,7 +106,7 @@ describe('JainaEntryChips (account variant)', () => {
     expect(band?.className).toContain('bg-primary/10');
     expect(band?.className).toContain('border-primary');
     const label = getByText(/Pregúntale a Jaina sobre esta cuenta/);
-    expect(label.className).toContain('text-primary');
+    expect(label.className).toContain('text-primary-ink');
     expect(container.textContent).not.toContain('Ask Jaina about this portfolio');
   });
 

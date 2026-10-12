@@ -477,7 +477,7 @@ export function PaidScaffoldCard({
                 ) : null}
                 {liveTree ? (
                   <span
-                    className="ml-1.5 font-normal text-primary text-xs"
+                    className="ml-1.5 font-normal text-primary-ink text-xs"
                     data-testid="scaffold-live-canvas"
                   >
                     Live on canvas

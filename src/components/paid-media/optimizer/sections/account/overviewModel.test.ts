@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
+import { figureProps } from '../../format';
 import {
+  accountHeadlineSegments,
   accountSpend,
   autopilotSummary,
   decisionsLabel,
-  headlineClauses,
-  joinClauses,
+  decisionsSegment,
+  headlineText,
   latestCycle,
   portfolioWindow,
-  resultCount,
   resultKinds,
   resultWords,
   sortPortfolioRows,
-  vsPriorLabel,
   vsTargetLabel,
   windowLabel,
   windowState,
@@ -267,54 +267,63 @@ describe('the sentence’s words', () => {
     expect(vsTargetLabel(null)).toBe('no target');
   });
 
-  it('signs the move against last week', () => {
-    expect(vsPriorLabel(12)).toBe('+12% vs prev. week');
-    expect(vsPriorLabel(-3)).toBe('−3% vs prev. week');
-    expect(vsPriorLabel(0)).toBe('0% vs prev. week');
-    expect(vsPriorLabel(null)).toBeNull();
-  });
-
-  it('pluralises a count', () => {
-    expect(resultCount(1, { one: 'lead', many: 'leads' })).toBe('1 lead');
-    expect(resultCount(0, { one: 'purchase', many: 'purchases' })).toBe('0 purchases');
-  });
-
   it('counts the decisions waiting', () => {
     expect(decisionsLabel(0)).toBe('no decisions waiting');
     expect(decisionsLabel(1)).toBe('1 decision waiting');
     expect(decisionsLabel(4)).toBe('4 decisions waiting');
   });
+});
 
-  it('joins clauses the way the sentence reads', () => {
-    expect(joinClauses([])).toBe('');
-    expect(joinClauses(['a'])).toBe('a');
-    expect(joinClauses(['a', 'b'])).toBe('a and b');
-    expect(joinClauses(['a', 'b', 'c'])).toBe('a, b and c');
-  });
+describe('accountHeadlineSegments — one sentence: spend, window, decisions', () => {
+  const figure = (key: string) => figureProps(key, 1, 'MXN', 'd7');
 
-  it('composes one clause per kind: a cost with its distance, or a count with its owner', () => {
-    const names = new Map([
-      ['tours', 'Tours'],
-      ['mensajes', 'MENSAJES'],
-    ]);
-    const kinds = resultKinds([MENSAJES, FORMULARIOS, PRUEBA, TOURS], EASY_FIT);
-    const clauses = headlineClauses(kinds, (value) => `${value.toFixed(2)} MXN`, names);
-    expect(clauses[0]).toMatchObject({
-      shape: 'cost',
-      cost: '39.95 MXN',
-      distance: '33% over target',
+  it('says the spend as a figure, the window as words, and the decisions as their own part', () => {
+    const segments = accountHeadlineSegments({
+      spends: [{ text: '27,600 MXN', figure: figure('overview.spend') }],
+      span: 'in 7 days across two platforms',
+      decisions: 16,
     });
-    expect(clauses[2]).toMatchObject({ shape: 'count', count: '0 purchases', where: 'Tours' });
+    expect(headlineText(segments)).toBe(
+      'The account spent 27,600 MXN in 7 days across two platforms. 16 decisions waiting.',
+    );
+    expect(segments.map((segment) => segment.kind)).toEqual([
+      'text',
+      'figure',
+      'text',
+      'decisions',
+    ]);
+    expect(segments[1]).toMatchObject({ kind: 'figure', text: '27,600 MXN' });
+    expect(segments[3]).toEqual({
+      kind: 'decisions',
+      count: 16,
+      figure: '16',
+      words: ' decisions waiting.',
+    });
   });
 
-  it('names no owner when three or more portfolios share the silent kind', () => {
-    const three = [1, 2, 3].map((n) =>
-      portfolio({ id: `t${n}`, name: `Tours ${n}`, objective: 'purchase' }),
+  it('keeps each currency its own figure, joined the way the sentence reads', () => {
+    const segments = accountHeadlineSegments({
+      spends: [
+        { text: '1 MXN', figure: figure('a') },
+        { text: '2 USD', figure: figure('b') },
+        { text: '3 EUR', figure: figure('c') },
+      ],
+      span: 'in 7 days',
+      decisions: 1,
+    });
+    expect(headlineText(segments)).toBe(
+      'The account spent 1 MXN, 2 USD and 3 EUR in 7 days. 1 decision waiting.',
     );
-    const windows = windowsOf(three.map((row) => [row, SERIES.tours]));
-    const names = new Map(three.map((row) => [row.id, row.name]));
-    const [clause] = headlineClauses(resultKinds(three, windows), String, names);
-    expect(clause).toMatchObject({ shape: 'count', where: null });
+    expect(segments.filter((segment) => segment.kind === 'figure')).toHaveLength(3);
+  });
+
+  it('says no decisions whole, with no count to colour', () => {
+    expect(decisionsSegment(0)).toEqual({
+      kind: 'decisions',
+      count: 0,
+      figure: null,
+      words: 'No decisions waiting.',
+    });
   });
 });
 

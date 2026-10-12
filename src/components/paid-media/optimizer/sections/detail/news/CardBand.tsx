@@ -41,7 +41,7 @@ const ANCHOR: Record<Anchor, string> = {
 const TEXT_TONE = {
   muted: 'text-muted-foreground',
   bad: 'text-destructive',
-  // `text-primary` is this app's foreground utility, not the brand colour.
+  // `text-primary-ink` is this app's foreground utility, not the brand colour.
   primary: 'text-(--primary)',
   warn: 'text-warning',
   good: 'text-success',

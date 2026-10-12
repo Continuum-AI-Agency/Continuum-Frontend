@@ -1,7 +1,16 @@
 'use client';
 
 import { ReactFlowProvider } from '@xyflow/react';
-import { Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Sparkles } from 'lucide-react';
+import {
+  Bot,
+  Gauge,
+  Maximize2,
+  Megaphone,
+  Minimize2,
+  PanelRightClose,
+  PanelRightOpen,
+  Sparkles,
+} from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -69,6 +78,13 @@ function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
   if (value === 'whats-working') return 'creative-insights';
   return PAID_MEDIA_TABS.some((tab) => tab === value) ? (value as PaidMediaTab) : null;
 }
+
+// The module tabs answer to the bar's width (`scale-bar`, see ScaleHeaderBar): narrow, each is
+// its mark with the name kept for assistive tech, so the segmented control never clips; with
+// room, the name replaces the mark. The marks match the sidebar's (Gauge, Bot).
+const SCALE_TAB_CLASS = 'px-1.5 text-xs @[26rem]/scale-bar:px-3';
+const SCALE_TAB_ICON_CLASS = 'size-3.5 @[26rem]/scale-bar:hidden';
+const SCALE_TAB_LABEL_CLASS = 'sr-only @[26rem]/scale-bar:not-sr-only';
 
 const OpenAiCampaignBar = dynamic(
   () =>
@@ -643,7 +659,10 @@ export default function PaidMediaClientPage({
               chip={accountChip}
             />
           </div>
-          <div className="ms-auto flex shrink-0 items-center gap-2">
+          <div className="ms-auto flex shrink-0 items-center gap-1 @[30rem]/scale-bar:gap-2">
+            {/* The canvas sits BESIDE the chat and full screen only drops the app chrome; in a
+             *  bar too narrow for the tabs' names neither has room to give, so both wait for
+             *  a wider bar rather than push the tabs out of it. */}
             {activeTab === 'jaina' ? (
               <>
                 <Button
@@ -651,7 +670,7 @@ export default function PaidMediaClientPage({
                   variant={isCanvasOpen ? 'outline' : 'ghost'}
                   size="sm"
                   onClick={handleToggleCanvas}
-                  className="h-7 gap-1.5 px-2 text-xs"
+                  className="hidden h-7 gap-1.5 px-2 text-xs @[30rem]/scale-bar:inline-flex"
                   aria-pressed={isCanvasOpen}
                 >
                   {isCanvasOpen ? (
@@ -666,7 +685,7 @@ export default function PaidMediaClientPage({
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsJainaFullscreen((v) => !v)}
-                  className="h-7 w-7 p-0"
+                  className="hidden h-7 w-7 p-0 @[30rem]/scale-bar:inline-flex"
                   aria-label={isJainaFullscreen ? 'Exit full screen' : 'Full screen'}
                   aria-pressed={isJainaFullscreen}
                 >
@@ -685,20 +704,19 @@ export default function PaidMediaClientPage({
                 aria-current={activeTab === 'creative-insights' ? 'page' : undefined}
                 data-testid="whats-working-link"
                 className={cn(
-                  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary transition-colors',
+                  'inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary-ink transition-colors',
                   'hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   activeTab === 'creative-insights' && 'bg-primary/10',
                 )}
               >
                 <Sparkles aria-hidden="true" className="size-3.5" />
-                <span className="hidden sm:inline">Creative Insights</span>
-                <span className="sr-only sm:hidden">Creative Insights</span>
+                <span className="sr-only @[44rem]/scale-bar:not-sr-only">Creative Insights</span>
               </button>
             ) : null}
-            <TabsList className="h-8">
+            <TabsList className="h-8 shrink-0">
               <TabsTrigger
                 value="performance"
-                className="px-3 text-xs"
+                className={SCALE_TAB_CLASS}
                 onMouseEnter={() => {
                   void import('@/components/paid-media/optimizer/OptimizerTab');
                   prefetchOptimizerOverview();
@@ -708,12 +726,13 @@ export default function PaidMediaClientPage({
                   prefetchOptimizerOverview();
                 }}
               >
-                Optimizer
+                <Gauge aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
+                <span className={SCALE_TAB_LABEL_CLASS}>Optimizer</span>
               </TabsTrigger>
               {platform === 'meta' ? (
                 <TabsTrigger
                   value="campaigns"
-                  className="px-3 text-xs"
+                  className={SCALE_TAB_CLASS}
                   onMouseEnter={() => {
                     void import('@/components/paid-media/campaigns/CampaignsTab');
                     prefetchScaleCampaigns();
@@ -723,13 +742,14 @@ export default function PaidMediaClientPage({
                     prefetchScaleCampaigns();
                   }}
                 >
-                  Campaigns
+                  <Megaphone aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
+                  <span className={SCALE_TAB_LABEL_CLASS}>Campaigns</span>
                 </TabsTrigger>
               ) : null}
               <TabsTrigger
                 value="jaina"
                 data-tour-id="paid-jaina-tab"
-                className="px-3 text-xs"
+                className={SCALE_TAB_CLASS}
                 onMouseEnter={() => {
                   void import('@/components/paid-media/jaina/JainaChatSurface');
                 }}
@@ -737,7 +757,8 @@ export default function PaidMediaClientPage({
                   void import('@/components/paid-media/jaina/JainaChatSurface');
                 }}
               >
-                Jaina
+                <Bot aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
+                <span className={SCALE_TAB_LABEL_CLASS}>Jaina</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -957,7 +978,7 @@ export default function PaidMediaClientPage({
           className="box-border min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-4"
         >
           {creativeInsightsAvailable ? (
-            <div className="mx-auto w-full max-w-5xl">
+            <div className="w-full">
               <CreativeInsightsPage adAccountId={selectedAdAccount} brandId={brandProfileId} />
             </div>
           ) : !selectedAdAccount ? (

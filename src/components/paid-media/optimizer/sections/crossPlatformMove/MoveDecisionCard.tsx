@@ -41,12 +41,12 @@ const STATE_LABEL: Record<MoveState, string> = {
 };
 
 const STATE_TONE: Record<MoveState, string> = {
-  applied: 'border-border/70 bg-muted/40 text-muted-foreground',
-  in_progress: 'border-border/70 bg-muted/40 text-muted-foreground',
-  compensated: 'border-warning/40 bg-warning/10 text-warning',
-  stranded: 'border-destructive/40 bg-destructive/10 text-destructive',
-  refused: 'border-warning/40 bg-warning/10 text-warning',
-  undone: 'border-border/70 bg-muted/40 text-muted-foreground',
+  applied: 'text-muted-foreground',
+  in_progress: 'text-muted-foreground',
+  compensated: 'text-warning',
+  stranded: 'text-destructive',
+  refused: 'text-warning',
+  undone: 'text-muted-foreground',
 };
 
 function platforms(list: MoveDecision['from']): string {
@@ -183,14 +183,14 @@ export function MoveDecisionCard({
   const explainer = stateExplainer(move, currency);
   return (
     <li
-      className={cn('space-y-3 rounded-lg border border-border/70 bg-card px-4 py-3', className)}
+      className={cn('space-y-2 py-3', className)}
       data-move-state={move.state}
       data-testid="move-decision"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
+            className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 font-semibold text-muted-foreground`}
           >
             <GavelIcon aria-hidden="true" className="size-3.5" />
             Decision
@@ -198,38 +198,33 @@ export function MoveDecisionCard({
           <ActionMeta row={{ ...move.actorRow, ts: move.ts }} />
         </div>
         <span
-          className={cn(
-            `${typeScale.label} rounded-md border px-1.5 py-0.5 font-semibold`,
-            STATE_TONE[move.state],
-          )}
+          className={cn(`${typeScale.label} font-semibold`, STATE_TONE[move.state])}
           data-testid="move-state"
         >
           {STATE_LABEL[move.state]}
         </span>
       </div>
       <div className="space-y-0.5">
-        <p className="font-semibold text-base leading-snug">
+        <p className="font-semibold text-sm leading-snug">
           Move {formatMinorExact(move.amountMinor, currency)}/day from {platforms(move.from)} to{' '}
           {platforms(move.to)}
         </p>
         {move.portfolioName ? (
-          <p className="text-muted-foreground text-sm">{move.portfolioName}</p>
+          <p className="text-muted-foreground text-xs">{move.portfolioName}</p>
         ) : null}
       </div>
       {explainer ? (
         <p
           className={cn(
-            'rounded-md border px-3 py-2 text-sm',
-            move.state === 'stranded'
-              ? 'border-destructive/40 bg-destructive/5'
-              : 'border-warning/40 bg-warning/5',
+            'border-l-2 pl-3 text-sm',
+            move.state === 'stranded' ? 'border-destructive/60' : 'border-warning/60',
           )}
           data-testid="move-explainer"
         >
           {explainer}
         </p>
       ) : null}
-      <ul className="space-y-1.5">
+      <ul className="divide-y divide-border/40">
         {move.legs.map((leg) => (
           <MoveLegLine
             afterMinor={leg.afterMinor}

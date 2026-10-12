@@ -45,8 +45,41 @@ export type HeadlineFigure = {
   unit: FigureUnit;
 };
 
-export type HeadlineSegment = string | HeadlineFigure;
+/** Which side of the bar a comparison sits on: under the target or cheaper is good. */
+export type HeadlineTone = 'good' | 'bad';
+
+/**
+ * A comparison clause inside a sentence — "22% over the target", "34% cheaper" — its figure and
+ * its words together, so the screen can colour the clause (subtly) without parsing prose.
+ */
+export type HeadlineComparison = { tone: HeadlineTone; parts: Array<string | HeadlineFigure> };
+
+export type HeadlineSegment = string | HeadlineFigure | HeadlineComparison;
 export type HeadlineSentence = HeadlineSegment[];
+
+export function isComparison(segment: HeadlineSegment): segment is HeadlineComparison {
+  return typeof segment !== 'string' && 'tone' in segment;
+}
+
+/** A segment as plain text, comparison clauses flattened. */
+export function segmentText(segment: HeadlineSegment): string {
+  if (typeof segment === 'string') return segment;
+  if (isComparison(segment)) {
+    return segment.parts.map((part) => (typeof part === 'string' ? part : part.text)).join('');
+  }
+  return segment.text;
+}
+
+/** Every figure in a sentence, in reading order, including those inside a comparison. */
+export function sentenceFigures(sentence: HeadlineSentence): HeadlineFigure[] {
+  return sentence.flatMap((segment) => {
+    if (typeof segment === 'string') return [];
+    if (isComparison(segment)) {
+      return segment.parts.filter((part): part is HeadlineFigure => typeof part !== 'string');
+    }
+    return [segment];
+  });
+}
 
 export type HeadlineBlockerCode = 'kpi_mismatch' | 'zero_delivery' | 'no_signal';
 
@@ -268,8 +301,14 @@ export function statusSentence(
   } else {
     out.push(
       ', ',
-      percent('headline.vs-target', pct, window),
-      pct > 0 ? ' over the target of ' : ' under the target of ',
+      {
+        tone: pct > 0 ? 'bad' : 'good',
+        parts: [
+          percent('headline.vs-target', pct, window),
+          pct > 0 ? ' over the target' : ' under the target',
+        ],
+      },
+      ' of ',
       money('headline.target', growth.target, currency, 'none'),
     );
   }
@@ -281,9 +320,14 @@ export function statusSentence(
     } else {
       out.push(
         ' and ',
-        percent('headline.vs-prior', deltaPct, window),
-        deltaPct < 0 ? ' cheaper than ' : ' dearer than ',
-        PRIOR_WORDS[window],
+        {
+          tone: deltaPct < 0 ? 'good' : 'bad',
+          parts: [
+            percent('headline.vs-prior', deltaPct, window),
+            deltaPct < 0 ? ' cheaper' : ' dearer',
+          ],
+        },
+        ` than ${PRIOR_WORDS[window]}`,
       );
     }
   }
@@ -430,6 +474,8 @@ export function agoWords(iso: string, now: number): string | null {
 
 const hasDigit = (text: string): boolean => /\d/.test(text);
 
+const sentenceText = (sentence: HeadlineSentence): string => sentence.map(segmentText).join('');
+
 /**
  * Jaina's latest read on this portfolio: the brief's hero sentence when a model wrote it,
  * else the deterministic headline, labelled as automatic. A headline with no figure (the calm
@@ -449,9 +495,7 @@ export function jainaRead(args: {
   const who = written ? 'Jaina' : 'Automatic read';
   const label = [who, `on ${args.name}`, ago].filter(Boolean).join(' · ');
   const headline = brief.hero.headline;
-  const sentence = hasDigit(headline)
-    ? headline
-    : args.status.map((segment) => (typeof segment === 'string' ? segment : segment.text)).join('');
+  const sentence = hasDigit(headline) ? headline : sentenceText(args.status);
   return {
     source: written ? 'jaina' : 'auto',
     label,
@@ -616,9 +660,6 @@ export function buildPortfolioHeadline(args: {
 // one line and Jaina's bar at the foot. The functions below only recompose what
 // buildPortfolioHeadline and buildBeforeAfter already decided; nothing new is measured.
 
-const sentenceText = (sentence: HeadlineSentence): string =>
-  sentence.map((segment) => (typeof segment === 'string' ? segment : segment.text)).join('');
-
 /** Jaina's read as the one attributed line under the status sentence. */
 export type AttributedRead = {
   ago: string | null;
@@ -650,8 +691,9 @@ export type PortfolioAnchor = {
   /** The cost per result, bare ("45.69"), or "—" with nothing bought. */
   value: string;
   figure: Omit<HeadlineFigure, 'text'>;
-  /** ok under the target, warn over it, none without one or without a cost. */
-  state: 'ok' | 'warn' | 'none';
+  /** ok at or under the target, warn just over it (see ANCHOR_WARN_PCT), bad plainly over it,
+   *  none without a target or without a cost. */
+  state: 'ok' | 'warn' | 'bad' | 'none';
   /** "MXN per lead" */
   unit: string;
   /** "target 35.00" / "no target" — the target, clickable into Manage. */
@@ -663,6 +705,19 @@ export type PortfolioAnchor = {
   /** The range the date picker selected and the one before it, newest first. */
   windows: AnchorWindow[];
 };
+
+/**
+ * How far over the target the anchor may sit and still read as a warning rather than a miss: a
+ * 14-day cost on a few dozen results moves by about this much from noise alone (the engine's
+ * interval on the FORMULARIOS body spans ±40% per ad set). Beyond it the cost is plainly over.
+ */
+export const ANCHOR_WARN_PCT = 10;
+
+function anchorState(pct: number | null): PortfolioAnchor['state'] {
+  if (pct == null) return 'none';
+  if (pct <= 0) return 'ok';
+  return pct <= ANCHOR_WARN_PCT ? 'warn' : 'bad';
+}
 
 /**
  * The module's anchor: the portfolio's cost per result over the brief's window, coloured by
@@ -696,7 +751,7 @@ export function anchorOf(args: {
   return {
     value: cost == null ? '—' : formatCurrency(cost, null),
     figure: { key: 'anchor.cost', raw: cost, currency, window: growth.window, unit: 'currency' },
-    state: pct == null ? 'none' : pct > 0 ? 'warn' : 'ok',
+    state: anchorState(pct),
     unit: code ? `${code} per ${words.one}` : `per ${words.one}`,
     target: target == null ? 'no target' : `target ${formatCurrency(target, null)}`,
     vsTarget:
@@ -717,6 +772,12 @@ export type ModuleTile = {
   sub: TileSegment[];
   /** The second line; null when the tile has nothing more to say. */
   detail: string | null;
+  /** The figure itself is never coloured: only a comparison line under it may be, and only
+   *  when it says which side of the bar it sits on. Null keeps the line muted. */
+  subTone: HeadlineTone | null;
+  detailTone: HeadlineTone | null;
+  /** The one call to action a tile carries ("Review →", the decisions tile only). */
+  cta: string | null;
   state: KpiTileState;
 };
 
@@ -760,7 +821,12 @@ export function adsetsOnTargetTile(args: {
   const worst = measured.length > 1 ? measured[measured.length - 1] : undefined;
   const bestLine = best ? `best ${best.name} ${formatCurrency(best.cost, null)}` : null;
   const worstLine = worst ? `worst ${worst.name} ${formatCurrency(worst.cost, null)}` : null;
-  const base = { key: 'adsets', label: 'Ad sets on target' } as const;
+  const base = {
+    key: 'adsets',
+    label: 'Ad sets on target',
+    subTone: null,
+    cta: null,
+  } as const;
   if (items.length === 0) {
     return {
       ...base,
@@ -774,6 +840,7 @@ export function adsetsOnTargetTile(args: {
       },
       sub: ['no ad sets scored yet'],
       detail: null,
+      detailTone: null,
       state: 'none',
     };
   }
@@ -790,6 +857,7 @@ export function adsetsOnTargetTile(args: {
       },
       sub: ['no target'],
       detail: bestLine,
+      detailTone: null,
       state: 'none',
     };
   }
@@ -806,6 +874,8 @@ export function adsetsOnTargetTile(args: {
     },
     sub: [bestLine ?? 'no measured cost'],
     detail: worstLine,
+    // The dearest ad set is the line worth a colour, and only when it is over the target.
+    detailTone: worst && worst.cost > target ? 'bad' : null,
     state:
       measured.length === 0 ? 'none' : on === 0 ? 'bad' : on * 2 >= items.length ? 'ok' : 'warn',
   };
@@ -856,6 +926,10 @@ export function relevantTiles(args: {
       detail: finite(growth.deltas.spend)
         ? `${signedPct(growth.deltas.spend)} vs ${PRIOR_SHORT[growth.window]}`
         : null,
+      // More or less spend is neither good nor bad on its own; the pace lives in Flight pacing.
+      subTone: null,
+      detailTone: null,
+      cta: null,
       state: spend.state,
     });
   }
@@ -863,6 +937,7 @@ export function relevantTiles(args: {
   if (results) {
     const n = Math.round(growth.results);
     const needed = target && n > 0 ? growth.spend / target : null;
+    const delta = growth.deltas.results;
     tiles.push({
       key: 'results',
       label: results.label,
@@ -876,6 +951,17 @@ export function relevantTiles(args: {
             : 'no prior period',
       ],
       detail: needed != null ? `${count(needed)} at target for this spend` : null,
+      subTone: finite(delta)
+        ? Math.round(delta * 100) === 0
+          ? null
+          : delta > 0
+            ? 'good'
+            : 'bad'
+        : n === 0 && growth.spend > 0
+          ? 'bad'
+          : null,
+      detailTone: needed == null ? null : n >= Math.round(needed) ? 'good' : 'bad',
+      cta: null,
       state: results.state,
     });
   }
@@ -896,6 +982,10 @@ export function relevantTiles(args: {
         headline.decisions.waiting > 0 && open > 0
           ? `${open} open ${open === 1 ? 'opportunity' : 'opportunities'}`
           : null,
+      subTone: null,
+      detailTone: null,
+      // Primary goes on the press that asks for the decision, never on the count.
+      cta: headline.decisions.waiting > 0 ? 'Review →' : null,
       state: decisions.state,
     });
   }

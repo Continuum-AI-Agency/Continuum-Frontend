@@ -34,7 +34,7 @@ export function Stepper({ current, completed, onSelect, values = {} }: StepperPr
               aria-current={active ? 'step' : undefined}
               className={cn(
                 'flex w-full items-baseline gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors @4xl:py-2',
-                active && 'bg-primary/10 font-semibold text-primary',
+                active && 'bg-primary/10 font-semibold text-primary-ink',
                 done && !active && 'text-success hover:bg-muted/40',
                 !reachable && 'text-muted-foreground',
               )}

@@ -404,7 +404,7 @@ function Rates({
               />
             ) : null}
             <polyline
-              className="text-primary"
+              className="text-primary-ink"
               fill="none"
               points={line((point) => point.a)}
               stroke="currentColor"

@@ -280,6 +280,8 @@ const {
   buildActionQueue,
   buildMoveQueue,
   isSelectableRow,
+  queueSentence,
+  recRowLine,
   selectionLabel,
 } = await import('./OptimizerActionsPortfolioGroup');
 const { moveRec, feedRow, MOVE_ID } = await import('./crossPlatformMove/moveFixtures');
@@ -734,7 +736,7 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
     expect(container.textContent).toContain('Before → after: $50.00 → $65.00');
     // The row's own detail carries no why; the story above may still explain the donor.
-    const detail = screen.getByText(/Before → after/).closest('.rounded-md');
+    const detail = screen.getByText(/Before → after/).closest('[data-testid="queue-row-detail"]');
     expect(detail?.textContent ?? '').not.toContain('Why:');
   });
 
@@ -1015,7 +1017,7 @@ describe('the portfolio Activity tab reads at the optimizer type scale', () => {
     expect(container.innerHTML).not.toMatch(MICRO);
   });
 
-  it('lifts the Recently applied row title and timestamp, and the lookback buttons', () => {
+  it('reads the Recently applied row at body size with its time as a caption, and the lookback buttons', () => {
     recentActions = [
       {
         id: RECENT_AUDIT_ID,
@@ -1032,16 +1034,21 @@ describe('the portfolio Activity tab reads at the optimizer type scale', () => {
     ];
     const { container } = renderGroup();
     const recent = screen.getByText('Recently applied').parentElement as HTMLElement;
-    const header = recent.querySelector('li span.truncate') as HTMLElement;
-    expect(header.className).toContain('text-base');
-    expect(header.className).toContain('font-semibold');
-    expect((header.nextElementSibling as HTMLElement).className).toContain('text-sm');
+    const row = recent.querySelector('li[data-action-id]') as HTMLElement;
+    const title = row.querySelector('span.font-semibold') as HTMLElement;
+    expect((title.parentElement as HTMLElement).className).toContain('text-sm');
+    expect((row.querySelector('time')?.parentElement as HTMLElement).className).toContain(
+      'text-xs',
+    );
     for (const days of ['3d', '7d', '14d']) {
       const toggle = screen.getByText(days, { selector: 'button' });
       expect(toggle.className).toContain('h-7');
       expect(toggle.className).toContain('text-xs');
     }
-    expect(container.querySelector('li[data-row-key]')?.className).toContain('py-3.5');
+    // One hairline row per action: no card padding, no border of its own.
+    const queueRow = container.querySelector('li[data-row-key]') as HTMLElement;
+    expect(queueRow.className).toContain('py-3');
+    expect(queueRow.className).not.toMatch(/\bborder\b|rounded-lg/);
   });
 });
 
@@ -1348,5 +1355,148 @@ describe('a cross-platform budget move in the queue', () => {
     // Undo both itself is covered by MoveDecisionCard.render.test (this suite mocks the dialog).
     expect(screen.getByTestId('move-state').textContent).toBe('applied');
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
+  });
+});
+
+// Round 2 (Ramiro's review of live beta, 2026-10-12): the queue is a tray — one hairline row
+// per action with its own Approve / Dismiss, a sentence instead of pill chips, a dark bar for
+// the selection, and never an emoji or a raw id where a person reads the subject.
+describe('the Actions tray', () => {
+  it('approves one row from its own button through the same batch path', () => {
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve pause ad set for Pause Set' }));
+    expect(setStatusesMutate).toHaveBeenCalledTimes(1);
+    const [payload] = setStatusesMutate.mock.calls[0] as [{ rec_ids: string[]; status: string }];
+    expect(payload).toEqual({ rec_ids: [PAUSE_ID], status: 'approved' });
+  });
+
+  it('dismisses one recommendation as a rejected decision, never a budget move', () => {
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss pause ad set for Pause Set' }));
+    expect(setStatusMutate).toHaveBeenCalledTimes(1);
+    const [payload] = setStatusMutate.mock.calls[0] as [
+      { recommendation_id: string; status: string },
+    ];
+    expect(payload).toEqual({ recommendation_id: PAUSE_ID, status: 'rejected' });
+    expect(screen.queryByRole('button', { name: /^Dismiss budget move/ })).toBeNull();
+    // The ad-level row cannot be acted on, so it offers neither button.
+    expect(screen.queryByRole('button', { name: /pause this ad/i })).toBeNull();
+  });
+
+  it('shows the dark selection bar only while something is selected', () => {
+    renderGroup();
+    expect(screen.queryByTestId('queue-selection-bar')).toBeNull();
+    expect(screen.getByRole('button', { name: /approve all/i })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Select pause ad set for Pause Set'));
+    const bar = screen.getByTestId('queue-selection-bar');
+    expect(bar.textContent).toContain('1 selected');
+    // One Approve all on screen at a time: the bar carries it once something is selected.
+    expect(screen.getAllByRole('button', { name: /approve all/i })).toHaveLength(1);
+    expect(bar.contains(screen.getByRole('button', { name: /approve selected/i }))).toBe(true);
+  });
+
+  it('names each row by its ad set with the id on hover, and prints no emoji glyph', () => {
+    const { container } = renderGroup();
+    const row = container.querySelector(`li[data-row-key="rec:${PAUSE_ID}"]`) as HTMLElement;
+    const name = Array.from(row.querySelectorAll('span[title="as-pause"]'));
+    expect(name.map((node) => node.textContent)).toContain('Pause Set');
+    expect(row.textContent).not.toContain('as-pause');
+    const hidden = container.querySelector(`li[data-row-key="rec:${HIDDEN_ID}"]`) as HTMLElement;
+    expect(hidden.textContent).not.toMatch(/[⏸🎨👥⚙✦⚗📡•]/u);
+    expect(hidden.querySelector('[data-kind-tone="pause"]')?.textContent).toBe('Pause');
+  });
+
+  it('puts the header lead before the portfolio name', () => {
+    render(
+      <OptimizerActionsPortfolioGroup
+        adAccountId="act_1"
+        brandId="b1"
+        headerLead={<span data-testid="lead">Meta</span>}
+        portfolio={portfolio()}
+      />,
+    );
+    const lead = screen.getByTestId('lead');
+    const heading = screen.getByRole('heading', { name: 'Prospecting' });
+    expect(lead.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+});
+
+describe('queueSentence', () => {
+  const group = (over: Record<string, unknown>) => ({
+    kind: 'creative_refresh',
+    trigger: 'F1_creative_fatigue',
+    label: 'Refresh creative',
+    count: 3,
+    impactPerDay: 224,
+    ...over,
+  });
+  const text = (parts: ReturnType<typeof queueSentence>) =>
+    (parts ?? []).map((part) => part.text).join('');
+
+  it('says nothing when nothing waits', () => {
+    expect(queueSentence(0, [], 'MXN')).toBeNull();
+  });
+
+  it('says only how many wait when the queue has one reason', () => {
+    expect(text(queueSentence(3, [group({})], 'MXN'))).toBe('3 waiting on a decision.');
+  });
+
+  it('names each reason with its count and its money, figures as mono parts', () => {
+    const parts = queueSentence(
+      9,
+      [
+        group({}),
+        group({
+          kind: 'restore_delivery',
+          trigger: 'D1_off_meta',
+          label: 'Not being delivered',
+          count: 4,
+          impactPerDay: 0,
+        }),
+      ],
+      'MXN',
+    );
+    expect(text(parts)).toBe(
+      '9 waiting on a decision: 3 refresh creative for creative fatigue, 224 MXN/day at stake; 4 not being delivered for off meta.',
+    );
+    const figures = (parts ?? []).filter((part) => part.figure).map((part) => part.text);
+    expect(figures).toEqual(['9', '3', '224 MXN/day', '4']);
+    expect((parts ?? []).find((part) => part.figureKey)?.figureKey).toBe(
+      'queue.summary.creative_refresh:F1_creative_fatigue.impact',
+    );
+  });
+});
+
+describe('recRowLine', () => {
+  const rec = (evidence: Record<string, unknown>) =>
+    ({ id: 'r1', kind: 'restore_delivery', evidence }) as unknown as RecommendationRow;
+
+  it('says a delivery finding in words, never its engine vocabulary', () => {
+    const line = recRowLine(
+      rec({
+        metric: 'days_absent',
+        value: 1,
+        comparator: 'not ACTIVE on Meta since 2026-10-09',
+        window: 'd7',
+      }),
+      'MXN',
+    );
+    expect(line).toBe('Not active since Oct 9 · 1 day');
+    expect(line).not.toMatch(/days_absent|ACTIVE|2026-10-09/);
+  });
+
+  it('keeps the span when the comparator carries no date', () => {
+    expect(
+      recRowLine(rec({ metric: 'days_absent', value: 3, comparator: 'off', window: 'd7' }), null),
+    ).toBe('Not active for 3 days');
+  });
+
+  it('falls back to the shared evidence line for every other metric', () => {
+    expect(
+      recRowLine(
+        rec({ metric: 'ctr', value: 0.0027, comparator: 'down 56% vs 14d', window: 'd3' }),
+        null,
+      ),
+    ).toBe('CTR 0.27% down 56% vs 14d · 3d');
   });
 });
