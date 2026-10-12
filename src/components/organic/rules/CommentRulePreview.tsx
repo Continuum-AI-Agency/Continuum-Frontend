@@ -15,9 +15,15 @@
 // - THE LABEL IS WHAT CREATES THE BUTTON. With no label the link travels in the
 //   message text instead, which is the form every client can render.
 // - What was actually OBSERVED about buttons: they render in the Instagram app on
-//   a phone, and did not on instagram.com in a desktop browser. Whether a phone
-//   browser also fails was never tested, so the note says "may not" rather than
-//   "does not" and must not be sharpened into a claim nobody has checked.
+//   a phone, and do not render on instagram.com from a desktop browser OR from a
+//   phone browser. Both were checked, which is why this now says "does not"
+//   where it once hedged with "may not". Meta documents structured templates as
+//   unsupported on desktop, so the limit is theirs; `ButtonReachNote` is where
+//   the person writing a rule is told about it.
+// - That caveat NAMES THE BUTTON. It sits under the message, and worded as
+//   "shows in the app, not in a browser" it was read as being about the whole
+//   message — as if the DM itself never arrived in a browser, which is false and
+//   alarming. A line floating under a block has to say what it is about.
 // - It says "in a browser", not "instagram.com". The domain is our word for it;
 //   a reader seeing it can take the warning to mean Instagram as a whole, which
 //   is both wider than the truth and the opposite of reassuring.
@@ -238,7 +244,7 @@ export function CommentRulePreview({ values }: { values: RuleFormValues }) {
         )}
         {hasLink ? null : <Absence>No link — the message goes out with nothing to tap.</Absence>}
         {hasLink && !sendsLinkAsText ? (
-          <Absence>Shows in the Instagram app; may not in a browser.</Absence>
+          <Absence>The button shows in the Instagram app, not in a browser.</Absence>
         ) : null}
       </section>
 

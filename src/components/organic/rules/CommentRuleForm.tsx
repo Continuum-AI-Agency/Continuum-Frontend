@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { ButtonReachNote } from './ButtonReachNote';
 import { CommentRulePreview } from './CommentRulePreview';
 import { PostPicker } from './PostPicker';
 import { type RuleFormValues, ruleFormSchema } from './ruleFormSchema';
@@ -407,7 +408,10 @@ export function CommentRuleForm({
                     name="linkButtonLabel"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Button text</FormLabel>
+                        <div className="flex items-center gap-1.5">
+                          <FormLabel className="text-xs">Button text</FormLabel>
+                          <ButtonReachNote />
+                        </div>
                         <FormControl>
                           <Input
                             {...field}

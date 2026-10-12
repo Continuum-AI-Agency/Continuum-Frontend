@@ -118,15 +118,26 @@ describe('the button', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 
-  // Only what was observed: the app rendered it, instagram.com on a desktop did
-  // not. Whether web fails everywhere was never tested, so the note stops there.
-  // Says what works first, and names the client the way a reader would. "Shows"
-  // before "may not" so the note reads as a caveat and not as a failure, and
+  // Only what was observed — and both halves now have been: the app renders it,
+  // and a browser does not, on a computer and on a phone alike. The note said
+  // "may not" while only the computer had been tried; keeping that hedge after
+  // the phone was checked would understate a thing a person needs to decide on.
+  // Says what works first, so it reads as a caveat and not as a failure, and
   // "a browser" rather than the domain, which a reader can take to mean
   // Instagram as a whole.
-  it('says where the button shows, then where it may not', () => {
+  it('says where the button shows, then where it does not', () => {
     render(<CommentRulePreview values={values({ linkButtonLabel: 'Get it' })} />);
-    expect(screen.getByText(/shows in the instagram app; may not in a browser/i)).toBeDefined();
+    expect(
+      screen.getByText(/the button shows in the instagram app, not in a browser/i),
+    ).toBeDefined();
+  });
+
+  // The line sits under the message, and without a subject it was read as being
+  // about the whole DM — that the message itself never arrives in a browser,
+  // which is false and frightening for someone deciding whether to use a button.
+  it('names the button, so the caveat is not read as being about the message', () => {
+    render(<CommentRulePreview values={values({ linkButtonLabel: 'Get it' })} />);
+    expect(screen.getByText(/^the button shows/i)).toBeDefined();
   });
 
   it('does not name the domain, which a reader would read as all of Instagram', () => {
