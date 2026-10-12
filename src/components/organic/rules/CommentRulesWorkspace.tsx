@@ -123,7 +123,7 @@ export function CommentRulesWorkspace({
             instagramAccountId={instagramAccountId}
           />
         ) : (
-          <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+          <p className="flex h-full items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
             Pick a rule to edit it, or create a new one.
           </p>
         )}

@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { ButtonReachNote } from './ButtonReachNote';
 import { CommentRulePreview } from './CommentRulePreview';
+import { PANEL_HEADER_FRAME, PANEL_TITLE } from './panelHeader';
 import { PostPicker } from './PostPicker';
 import { type RuleFormValues, ruleFormSchema } from './ruleFormSchema';
 import { usePublishedPosts } from './usePublishedPosts';
@@ -274,8 +275,8 @@ export function CommentRuleForm({
         className="flex h-full min-h-0 flex-col"
         aria-label={isEditing ? 'Edit rule' : 'New rule'}
       >
-        <div className="flex items-center justify-between gap-2 border-b px-4 py-2.5">
-          <h2 className="text-sm font-semibold">{isEditing ? 'Edit rule' : 'New rule'}</h2>
+        <div className={`flex items-center justify-between gap-2 ${PANEL_HEADER_FRAME}`}>
+          <h2 className={PANEL_TITLE}>{isEditing ? 'Edit rule' : 'New rule'}</h2>
           <FormField
             control={form.control}
             name="enabled"
