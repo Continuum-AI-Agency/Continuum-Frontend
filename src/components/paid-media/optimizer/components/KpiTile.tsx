@@ -38,6 +38,9 @@ type KpiTileProps = {
   value: React.ReactNode;
   /** Provenance for the headline figure (see `figureProps` in ../format). */
   figure?: FigureProps;
+  /** Drawn beside the figure at its size but OUTSIDE its node ("/4" after "3"), so the
+   *  figure's text stays exactly its raw value for the parity oracle. */
+  valueSuffix?: React.ReactNode;
   sub?: React.ReactNode;
   /** An optional third line under `sub`: how the figure splits, e.g. by platform. */
   breakdown?: React.ReactNode;
@@ -55,6 +58,7 @@ export function KpiTile({
   label,
   value,
   figure,
+  valueSuffix,
   sub,
   breakdown,
   chip,
@@ -90,14 +94,34 @@ export function KpiTile({
         {inline ? null : action}
       </div>
       <div className="min-w-0">
-        <HeroFigure
-          as="p"
-          className={cn('truncate text-foreground', emphasis && EMPHASIS_FIGURE[emphasis])}
-          kind={emphasis === 'hero' ? 'hero' : 'tile'}
-          {...figure}
-        >
-          {value}
-        </HeroFigure>
+        {valueSuffix ? (
+          <p className="flex min-w-0 items-baseline">
+            <HeroFigure
+              className={cn('truncate text-foreground', emphasis && EMPHASIS_FIGURE[emphasis])}
+              kind={emphasis === 'hero' ? 'hero' : 'tile'}
+              {...figure}
+            >
+              {value}
+            </HeroFigure>
+            <span
+              className={cn(
+                emphasis === 'hero' ? typeScale.figureHero : typeScale.figureTile,
+                'text-muted-foreground/60',
+              )}
+            >
+              {valueSuffix}
+            </span>
+          </p>
+        ) : (
+          <HeroFigure
+            as="p"
+            className={cn('truncate text-foreground', emphasis && EMPHASIS_FIGURE[emphasis])}
+            kind={emphasis === 'hero' ? 'hero' : 'tile'}
+            {...figure}
+          >
+            {value}
+          </HeroFigure>
+        )}
         {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
         {breakdown ? (
           <p className="mt-0.5 text-xs text-muted-foreground" data-testid="tile-breakdown">

@@ -205,12 +205,8 @@ export function AllPlatformsTiles({
               : `${metrics.autopilot.total - metrics.autopilot.on} recommend, do not apply`
         }
         testId="tile-autopilot"
-        value={
-          <>
-            {metrics.autopilot.on}
-            <span className="text-muted-foreground/60">/{metrics.autopilot.total}</span>
-          </>
-        }
+        value={String(metrics.autopilot.on)}
+        valueSuffix={`/${metrics.autopilot.total}`}
         variant="inline"
       />
       {showPlatforms ? (

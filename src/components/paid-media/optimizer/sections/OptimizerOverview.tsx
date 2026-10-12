@@ -590,12 +590,8 @@ export function OptimizerOverview({
             state={autopilot.paused > 0 ? 'warn' : 'none'}
             sub={autopilotTileSub(autopilot)}
             testId="tile-autopilot"
-            value={
-              <>
-                {autopilot.autopilot}
-                <span className="text-muted-foreground/60">/{autopilot.total}</span>
-              </>
-            }
+            value={String(autopilot.autopilot)}
+            valueSuffix={`/${autopilot.total}`}
             variant="inline"
           />
         </KpiRow>

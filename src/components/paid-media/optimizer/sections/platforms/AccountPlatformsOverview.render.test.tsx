@@ -109,6 +109,9 @@ describe('AllPlatformsTiles', () => {
     expect(tile(container, 'tile-kind-purchases')).toContain('75.60 MXN spent, no results');
     expect(tile(container, 'tile-decisions')).toContain('6');
     expect(tile(container, 'tile-autopilot')).toContain('4/5');
+    // The figure node carries the raw count alone; "/5" sits beside it, so the parity oracle
+    // reading the node's text gets exactly its data-figure-raw.
+    expect(container.querySelector('[data-figure="tiles.on-autopilot"]')?.textContent).toBe('4');
     expect(tile(container, 'tile-autopilot')).toContain('1 recommend, do not apply');
     expect(container.querySelector('[data-testid="tile-platforms"]')).toBeNull();
     fireEvent.click(within(getByTestId('tile-decisions')).getByText('Review →'));
