@@ -421,8 +421,10 @@ function resolveOptimizer(node: FigureNode, portfolioId: string | null): Expect 
         `account_platform_metrics.spend_by_currency[${spendCcy[1]}].spend`,
         num(rows(frame.spend_by_currency).find((r) => str(r.currency) === spendCcy[1])?.spend),
       );
-    if (key === 'tiles.decisions-waiting')
-      return value('account_platform_metrics.decisions_waiting', num(frame.decisions_waiting));
+    // tiles.decisions-waiting is graded below against the actions queue the Review button
+    // opens (Σ pending over optimizer_list_portfolios) — the one source the screen uses since
+    // PP-L3-decisions-waiting-two-sources; account_platform_metrics.decisions_waiting was the
+    // second source and is no longer an anchor.
     if (key === 'tiles.on-autopilot')
       return value('account_platform_metrics.autopilot.on', num(obj(frame.autopilot)?.on));
     const platforms = rows(frame.totals_by_platform);
@@ -481,12 +483,12 @@ function resolveOptimizer(node: FigureNode, portfolioId: string | null): Expect 
           `results_by_kind[${byCost?.kind}].platforms[${platform}].cost_per_result`,
           byCost?.cost ?? null,
         );
-      // The share node is stamped with the RATIO (0..1) while its text prints a percent; the
-      // formatter contract (format.ts `percent`: raw already in display units) wants ×100.
-      // Graded on the ratio so the format rule is what reports the stamp drift.
+      // The share node carries percent points (the formatter contract, format.ts `percent`:
+      // raw already in display units — PP-L3-share-figure-node-raw-is-a-fraction), so the
+      // payload figure is the ratio × 100.
       return value(
-        `results share of ${platform} (ratio)`,
-        allResults > 0 ? results / allResults : null,
+        `results share of ${platform} (percent points)`,
+        allResults > 0 ? (results / allResults) * 100 : null,
       );
     }
   }
