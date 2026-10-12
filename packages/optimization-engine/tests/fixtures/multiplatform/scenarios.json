@@ -1,0 +1,865 @@
+{
+  "_source": {
+    "kind": "INDEX",
+    "note": "generated from docs/optimizer-multiplatform/escenarios.html; scenario number → fixtures it is seeded from"
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "title": "Leads en tres plataformas: TikTok cuesta 1.5× Meta y el presupuesto se mueve de plataforma a plataforma",
+      "platforms": [
+        "meta",
+        "google",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-formularios-todos.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "tiktok-report-adgroup-7d.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "google-easyfit2026-campaigns30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-report-adgroup-14d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e01"
+    },
+    {
+      "id": 2,
+      "title": "Mensajes: Google no puede entrar y TikTok entra congelado hasta mapear su objetivo",
+      "platforms": [
+        "meta",
+        "google",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-mensajes-todos.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-conversionActions.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "tiktok-campaign-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e02"
+    },
+    {
+      "id": 3,
+      "title": "Performance Max: grupos de recursos opacos y sobreentrega del 2×",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-tangassi-campaigns30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-assetGroups30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-campaignDaily14d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-conversionActions.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-customer.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e03"
+    },
+    {
+      "id": 4,
+      "title": "Presupuesto compartido por tres campañas: se congela, nunca se escribe",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-campaigns30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e04"
+    },
+    {
+      "id": 5,
+      "title": "YouTube VIDEO: tarjeta de solo lectura",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-campaigns30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-campaignsAll.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e05"
+    },
+    {
+      "id": 6,
+      "title": "Campaña Smart de Google: fuera del MVP",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-campaigns30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-conversionActions.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e06"
+    },
+    {
+      "id": 7,
+      "title": "Search limitada por presupuesto: Vivo 47 pierde 28%, pero cada conversión cuesta 773 MXN",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-campaignDaily14d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-campaigns30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e07"
+    },
+    {
+      "id": 8,
+      "title": "Keyword con Quality Score 1: \"Entrenamiento funcional\" ya está pausada",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-keywords30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e08"
+    },
+    {
+      "id": 9,
+      "title": "Piso del 105% de TikTok: la baja se programa para mañana y la pata Google espera",
+      "platforms": [
+        "tiktok",
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-report-adgroup-today.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-report-adgroup-7d.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "synthetic-google-easyfit-search-leads-7d.json",
+          "kind": "SYNTHETIC"
+        },
+        {
+          "file": "google-easyfit2026-budgets.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e09"
+    },
+    {
+      "id": 10,
+      "title": "TikTok Smart+: solo presupuesto de campaña, y escribir pide allowlist",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-campaign-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-report-adgroup-7d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e10"
+    },
+    {
+      "id": 11,
+      "title": "Aprendizaje en Meta: los 9 conjuntos de Formularios cuentan como aprendiendo",
+      "platforms": [
+        "meta"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-formularios-todos.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e11"
+    },
+    {
+      "id": 12,
+      "title": "Aprendizaje en Google: GA 1 EASY en LEARNING_NEW",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-easyfit2026-campaigns30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e12"
+    },
+    {
+      "id": 13,
+      "title": "Aprendizaje en TikTok: un ad group de 3 días con 4 leads",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-report-adgroup-7d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e13"
+    },
+    {
+      "id": 14,
+      "title": "Moneda distinta: un anunciante TikTok en USD contra un portafolio en MXN",
+      "platforms": [
+        "meta",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "synthetic-currency-mismatch.json",
+          "kind": "SYNTHETIC"
+        },
+        {
+          "file": "meta-easyfit-portfolios.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e14"
+    },
+    {
+      "id": 15,
+      "title": "Portafolio sin moneda derivable: Vivo 47 en Meta más una campaña Google en MXN",
+      "platforms": [
+        "meta",
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-customer.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e15"
+    },
+    {
+      "id": 16,
+      "title": "Plataforma, GA4 y la hoja del cliente no coinciden",
+      "platforms": [
+        "meta",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "synthetic-attribution-formularios.json",
+          "kind": "SYNTHETIC"
+        },
+        {
+          "file": "meta-easyfit-portfolio-formularios-todos.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "tiktok-report-adgroup-7d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e16"
+    },
+    {
+      "id": 17,
+      "title": "La hoja cubre 3 de 10: el ciclo vuelve a la plataforma y lo dice",
+      "platforms": [
+        "meta",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "synthetic-attribution-formularios.json",
+          "kind": "SYNTHETIC"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e17"
+    },
+    {
+      "id": 18,
+      "title": "La pata 2 falla y la pata 1 se revierte",
+      "platforms": [
+        "tiktok",
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "synthetic-cross-move-faults.json",
+          "kind": "SYNTHETIC"
+        },
+        {
+          "file": "google-easyfit2026-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e18"
+    },
+    {
+      "id": 19,
+      "title": "Movimiento varado: falla la pata 2 y también la compensación",
+      "platforms": [
+        "tiktok",
+        "meta"
+      ],
+      "fixtures": [
+        {
+          "file": "synthetic-cross-move-faults.json",
+          "kind": "SYNTHETIC"
+        },
+        {
+          "file": "meta-easyfit-portfolio-formularios-todos.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e19"
+    },
+    {
+      "id": 20,
+      "title": "Cuenta Google sin gasto: Easy Fit 2026, siete campañas activas y cero impresiones",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-easyfit2026-campaigns30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-customer.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e20"
+    },
+    {
+      "id": 21,
+      "title": "Portafolio sin señal: Septiembre - Tours Programados",
+      "platforms": [
+        "meta"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-septiembre-tours-programados.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-conversionActions.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e21"
+    },
+    {
+      "id": 22,
+      "title": "Demand Gen: el mínimo diario se descubre en el preflight",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "synthetic-google-demand-gen.json",
+          "kind": "SYNTHETIC"
+        },
+        {
+          "file": "google-vivo47-campaigns30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e22"
+    },
+    {
+      "id": 23,
+      "title": "El presupuesto de Google cambió entre la tarjeta y la aprobación",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-campaignDaily14d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "synthetic-google-change-event-drift.json",
+          "kind": "SYNTHETIC"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e23"
+    },
+    {
+      "id": 24,
+      "title": "Un portafolio solo Meta se comporta exactamente como hoy",
+      "platforms": [
+        "meta"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-mensajes-todos.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "meta-easyfit-portfolios.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "meta-easyfit-portfolio-prueba.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e24"
+    },
+    {
+      "id": 25,
+      "title": "Un conjunto Meta oscuro no puede ser receptor de un movimiento",
+      "platforms": [
+        "meta",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-formularios-todos.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e25"
+    },
+    {
+      "id": 26,
+      "title": "Brecha dentro de Google: Search contra PMax en Tangassi",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-tangassi-campaigns30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-campaignDaily14d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e26"
+    },
+    {
+      "id": 27,
+      "title": "Ventana de atribución distinta en un ad group TikTok",
+      "platforms": [
+        "meta",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "meta-easyfit-portfolio-mensajes-todos.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e27"
+    },
+    {
+      "id": 28,
+      "title": "Portafolio abandonado: Citas Agosto, 57 días sin ciclo",
+      "platforms": [
+        "meta"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-citas-agosto-check-leads.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "meta-easyfit-portfolio-reporte-agosto-citas-y-mensajes.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e28"
+    },
+    {
+      "id": 29,
+      "title": "El tope diario cuenta el movimiento una vez, tenga las patas que tenga",
+      "platforms": [
+        "meta",
+        "tiktok",
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolio-formularios-todos.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "google-easyfit2026-budgets.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "synthetic-google-easyfit-search-leads-7d.json",
+          "kind": "SYNTHETIC"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e29"
+    },
+    {
+      "id": 30,
+      "title": "Google dentro de un portafolio en autopilot: recomienda, no escribe",
+      "platforms": [
+        "meta",
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "meta-easyfit-portfolios.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "synthetic-google-easyfit-search-leads-7d.json",
+          "kind": "SYNTHETIC"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e30"
+    },
+    {
+      "id": 31,
+      "title": "Términos que gastan sin convertir: \"vivo 47 center\" se excluye, \"vivo47\" todavía no",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-searchTerms14d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-keywordsQs14d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e31"
+    },
+    {
+      "id": 32,
+      "title": "Término que convierte: \"vivo 47 naciones unidas\" se queda a una conversión de ser keyword",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-searchTerms14d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e32"
+    },
+    {
+      "id": 33,
+      "title": "tCPA: EKATAR no tiene objetivo de CPA, así que G07 no tiene qué mover",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-bidding14d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-bidChanges30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e33"
+    },
+    {
+      "id": 34,
+      "title": "Quality Score bajo: nunca se pausa la última keyword activa del grupo",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-keywordsQs14d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e34"
+    },
+    {
+      "id": 35,
+      "title": "PMax: a TANGASSI le faltan recursos y Google lo dice",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-tangassi-assetCoverage.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e35"
+    },
+    {
+      "id": 36,
+      "title": "Gancho débil: \"Tour del gym\" retiene 18% a los 2 segundos",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-report-ad-daily-14d.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-ad-get.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e36"
+    },
+    {
+      "id": 37,
+      "title": "Fatiga en TikTok: \"Promo 333\" cumple las tres señales, \"Clase funcional\" solo dos",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-report-ad-daily-14d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e37"
+    },
+    {
+      "id": 38,
+      "title": "Post orgánico para Spark: 185,270 vistas del post de 12 MXN al mes",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-easyfit-organic-posts.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e38"
+    },
+    {
+      "id": 39,
+      "title": "Presupuesto que no alcanza para aprender: \"LAL 2% nuevos\" a 300 MXN",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-report-adgroup-7d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e39"
+    },
+    {
+      "id": 40,
+      "title": "Ventana de atribución distinta: \"Mensajes | Broad\" sale de la comparación entre plataformas",
+      "platforms": [
+        "meta",
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e40"
+    },
+    {
+      "id": 41,
+      "title": "Cuenta Google oscura: Easy Fit 2026, seis campañas con presupuesto y una sola tarjeta",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-easyfit2026-deliveryCampaigns.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-deliveryDaily30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-adPolicy.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-adApprovals.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e41"
+    },
+    {
+      "id": 42,
+      "title": "Anuncio desaprobado por Google: Vivo 47 sirve y no hay tarjeta hasta que Google rechace uno",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-deliveryCampaigns.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-deliveryDaily30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-adPolicy.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-adApprovals.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e42"
+    },
+    {
+      "id": 43,
+      "title": "Anuncio rechazado por la revisión de TikTok: la razón y la sugerencia, literales",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-delivery-ad-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-delivery-review-info.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e43"
+    },
+    {
+      "id": 44,
+      "title": "Ad group TikTok sin entrega: una tarjeta, y nunca dos con D2",
+      "platforms": [
+        "tiktok"
+      ],
+      "fixtures": [
+        {
+          "file": "tiktok-delivery-adgroup-get.json",
+          "kind": "DOC_SHAPED"
+        },
+        {
+          "file": "tiktok-delivery-report-ad-daily-14d.json",
+          "kind": "DOC_SHAPED"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e44"
+    }
+  ]
+}

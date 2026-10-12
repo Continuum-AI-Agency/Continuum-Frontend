@@ -1,0 +1,103 @@
+{
+  "_source": {
+    "kind": "SYNTHETIC",
+    "label": "synthetic, composed for the scenario — not a recording",
+    "anchoredTo": "meta-easyfit-portfolio-formularios-todos.json; tiktok-adgroup-get.json; google-easyfit2026-budgets.json",
+    "invented": [
+      "injected errors",
+      "TikTok receipts"
+    ],
+    "note": "fault injection for the two-leg move: compensated and stranded"
+  },
+  "data": {
+    "common": {
+      "portfolio": "FORMULARIOS // TODOS + TikTok EF | Leads | Manual (+ Google 24274603133)",
+      "order": "preflight both legs → leg 1 (decrease) → leg 2 (increase) → read-back"
+    },
+    "compensated": {
+      "move": "TikTok 7000000000000000202 → Google campaign 24274603133 (Easy Fit | Search | Leads formulario)",
+      "leg1": {
+        "platform": "tiktok",
+        "op": "set_budget",
+        "from": 1000,
+        "to": 900,
+        "path": "/adgroup/update/",
+        "result": "applied",
+        "receipt": {
+          "request_id": "invented-1"
+        }
+      },
+      "leg2": {
+        "platform": "google",
+        "op": "set_budget",
+        "budget": "customers/5251780631/campaignBudgets/15892914141",
+        "from": 700,
+        "to": 800,
+        "preflight": "validate_only OK",
+        "result": "failed",
+        "error": {
+          "errorCode": {
+            "budgetError": "BUDGET_BELOW_PER_DAY_MINIMUM"
+          },
+          "note": "injected: preflight passed, the live write was refused (e.g. account currency minimum changed between preflight and write)"
+        }
+      },
+      "compensation": {
+        "platform": "tiktok",
+        "op": "set_budget",
+        "from": 900,
+        "to": 1000,
+        "path": "/adgroup/update/ (raise ⇒ always ≥105% of spend, immediate)",
+        "result": "applied",
+        "reverts": "leg1"
+      },
+      "expected": {
+        "move_status": "compensated",
+        "card": "pending",
+        "reason": "leg2: BUDGET_BELOW_PER_DAY_MINIMUM",
+        "autopilot_paused": false
+      }
+    },
+    "stranded": {
+      "move": "TikTok 7000000000000000202 → Meta 120252366877000236 (CAÑADAS // AGOSTO - BROAD)",
+      "leg1": {
+        "platform": "tiktok",
+        "op": "set_budget",
+        "from": 1000,
+        "to": 989.32,
+        "result": "applied"
+      },
+      "leg2": {
+        "platform": "meta",
+        "op": "set_budget",
+        "from": 42.73,
+        "to": 53.41,
+        "result": "failed",
+        "error": {
+          "code": 190,
+          "type": "OAuthException",
+          "note": "injected: token expired between preflight and write"
+        }
+      },
+      "compensation": {
+        "platform": "tiktok",
+        "op": "set_budget",
+        "from": 989.32,
+        "to": 1000,
+        "result": "failed",
+        "error": {
+          "code": 40001,
+          "message": "No permission",
+          "note": "injected: advertiser revoked the app authorization"
+        }
+      },
+      "expected": {
+        "move_status": "stranded",
+        "autopilot_paused": true,
+        "autopilot_paused_reason": "stranded_move:<move_id>",
+        "retried": false,
+        "net_effect": "client spends 10.68 MXN/day less on TikTok until a human acts; nothing spends more"
+      }
+    }
+  }
+}

@@ -1,0 +1,1375 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /report/integrated/get/ (AUCTION_AD, ad_id × stat_time_day)",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4, §2.9, §2.12, §4 rules 10 and 12",
+    "invented": [
+      "every daily figure: spend, CPM, CTR, conversions, 2 s hold and frequency per ad, shaped per the table in build-tiktok-creative-days.mjs",
+      "video_watched_6s is 45% of video_watched_2s throughout (T2 is not in this wave)"
+    ]
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-17 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-18 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-19 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-20 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-21 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-22 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-23 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-24 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-25 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-26 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-27 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-28 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-29 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000301",
+            "stat_time_day": "2026-09-30 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "3000",
+            "clicks": "36",
+            "conversion": "5",
+            "video_watched_2s": "960",
+            "video_watched_6s": "432",
+            "frequency": "1.20",
+            "reach": "2500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-17 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-18 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-19 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-20 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-21 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-22 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-23 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-24 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-25 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-26 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-27 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-28 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-29 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000302",
+            "stat_time_day": "2026-09-30 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.00",
+            "impressions": "2000",
+            "clicks": "14",
+            "conversion": "2",
+            "video_watched_2s": "360",
+            "video_watched_6s": "162",
+            "frequency": "1.20",
+            "reach": "1667"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-17 00:00:00"
+          },
+          "metrics": {
+            "spend": "300.00",
+            "impressions": "4286",
+            "clicks": "60",
+            "conversion": "9",
+            "video_watched_2s": "1114",
+            "video_watched_6s": "501",
+            "frequency": "1.60",
+            "reach": "2679"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-18 00:00:00"
+          },
+          "metrics": {
+            "spend": "310.00",
+            "impressions": "4429",
+            "clicks": "60",
+            "conversion": "9",
+            "video_watched_2s": "1152",
+            "video_watched_6s": "518",
+            "frequency": "1.74",
+            "reach": "2548"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-19 00:00:00"
+          },
+          "metrics": {
+            "spend": "305.00",
+            "impressions": "4357",
+            "clicks": "57",
+            "conversion": "9",
+            "video_watched_2s": "1133",
+            "video_watched_6s": "510",
+            "frequency": "1.88",
+            "reach": "2321"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-20 00:00:00"
+          },
+          "metrics": {
+            "spend": "300.00",
+            "impressions": "4286",
+            "clicks": "54",
+            "conversion": "8",
+            "video_watched_2s": "1114",
+            "video_watched_6s": "501",
+            "frequency": "2.02",
+            "reach": "2127"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-21 00:00:00"
+          },
+          "metrics": {
+            "spend": "295.00",
+            "impressions": "4214",
+            "clicks": "51",
+            "conversion": "8",
+            "video_watched_2s": "1096",
+            "video_watched_6s": "493",
+            "frequency": "2.15",
+            "reach": "1957"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-22 00:00:00"
+          },
+          "metrics": {
+            "spend": "300.00",
+            "impressions": "4286",
+            "clicks": "50",
+            "conversion": "8",
+            "video_watched_2s": "1114",
+            "video_watched_6s": "501",
+            "frequency": "2.29",
+            "reach": "1870"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-23 00:00:00"
+          },
+          "metrics": {
+            "spend": "305.00",
+            "impressions": "4357",
+            "clicks": "49",
+            "conversion": "8",
+            "video_watched_2s": "1133",
+            "video_watched_6s": "510",
+            "frequency": "2.43",
+            "reach": "1792"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-24 00:00:00"
+          },
+          "metrics": {
+            "spend": "290.00",
+            "impressions": "4143",
+            "clicks": "45",
+            "conversion": "5",
+            "video_watched_2s": "1077",
+            "video_watched_6s": "485",
+            "frequency": "2.57",
+            "reach": "1613"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-25 00:00:00"
+          },
+          "metrics": {
+            "spend": "280.00",
+            "impressions": "4000",
+            "clicks": "41",
+            "conversion": "5",
+            "video_watched_2s": "1040",
+            "video_watched_6s": "468",
+            "frequency": "2.71",
+            "reach": "1477"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-26 00:00:00"
+          },
+          "metrics": {
+            "spend": "260.00",
+            "impressions": "3714",
+            "clicks": "37",
+            "conversion": "4",
+            "video_watched_2s": "966",
+            "video_watched_6s": "435",
+            "frequency": "2.85",
+            "reach": "1305"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-27 00:00:00"
+          },
+          "metrics": {
+            "spend": "240.00",
+            "impressions": "3429",
+            "clicks": "32",
+            "conversion": "4",
+            "video_watched_2s": "892",
+            "video_watched_6s": "401",
+            "frequency": "2.98",
+            "reach": "1149"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-28 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "25",
+            "conversion": "4",
+            "video_watched_2s": "743",
+            "video_watched_6s": "334",
+            "frequency": "3.12",
+            "reach": "915"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-29 00:00:00"
+          },
+          "metrics": {
+            "spend": "180.00",
+            "impressions": "2571",
+            "clicks": "22",
+            "conversion": "4",
+            "video_watched_2s": "668",
+            "video_watched_6s": "301",
+            "frequency": "3.26",
+            "reach": "788"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000303",
+            "stat_time_day": "2026-09-30 00:00:00"
+          },
+          "metrics": {
+            "spend": "160.00",
+            "impressions": "2286",
+            "clicks": "18",
+            "conversion": "4",
+            "video_watched_2s": "594",
+            "video_watched_6s": "267",
+            "frequency": "3.40",
+            "reach": "672"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-17 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-18 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-19 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-20 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-21 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-22 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-23 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-24 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-25 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-26 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-27 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-28 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-29 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000304",
+            "stat_time_day": "2026-09-30 00:00:00"
+          },
+          "metrics": {
+            "spend": "250.00",
+            "impressions": "3571",
+            "clicks": "46",
+            "conversion": "9",
+            "video_watched_2s": "1071",
+            "video_watched_6s": "482",
+            "frequency": "1.40",
+            "reach": "2551"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-17 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-18 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-19 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-20 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-21 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-22 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-23 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "5",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "2.00",
+            "reach": "1429"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-24 00:00:00"
+          },
+          "metrics": {
+            "spend": "210.00",
+            "impressions": "3000",
+            "clicks": "30",
+            "conversion": "4",
+            "video_watched_2s": "810",
+            "video_watched_6s": "365",
+            "frequency": "1.55",
+            "reach": "1935"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-25 00:00:00"
+          },
+          "metrics": {
+            "spend": "205.00",
+            "impressions": "2929",
+            "clicks": "29",
+            "conversion": "4",
+            "video_watched_2s": "791",
+            "video_watched_6s": "356",
+            "frequency": "1.50",
+            "reach": "1953"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-26 00:00:00"
+          },
+          "metrics": {
+            "spend": "200.00",
+            "impressions": "2857",
+            "clicks": "29",
+            "conversion": "4",
+            "video_watched_2s": "771",
+            "video_watched_6s": "347",
+            "frequency": "1.45",
+            "reach": "1970"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-27 00:00:00"
+          },
+          "metrics": {
+            "spend": "195.00",
+            "impressions": "2786",
+            "clicks": "28",
+            "conversion": "4",
+            "video_watched_2s": "752",
+            "video_watched_6s": "338",
+            "frequency": "1.40",
+            "reach": "1990"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-28 00:00:00"
+          },
+          "metrics": {
+            "spend": "150.00",
+            "impressions": "2143",
+            "clicks": "21",
+            "conversion": "3",
+            "video_watched_2s": "579",
+            "video_watched_6s": "261",
+            "frequency": "1.15",
+            "reach": "1863"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-29 00:00:00"
+          },
+          "metrics": {
+            "spend": "140.00",
+            "impressions": "2000",
+            "clicks": "20",
+            "conversion": "3",
+            "video_watched_2s": "540",
+            "video_watched_6s": "243",
+            "frequency": "1.10",
+            "reach": "1818"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000305",
+            "stat_time_day": "2026-09-30 00:00:00"
+          },
+          "metrics": {
+            "spend": "130.00",
+            "impressions": "1857",
+            "clicks": "19",
+            "conversion": "3",
+            "video_watched_2s": "501",
+            "video_watched_6s": "225",
+            "frequency": "1.05",
+            "reach": "1769"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-17 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-18 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-19 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-20 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-21 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-22 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-23 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-24 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-25 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-26 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-27 00:00:00"
+          },
+          "metrics": {
+            "spend": "0.00",
+            "impressions": "0",
+            "clicks": "0",
+            "conversion": "0",
+            "video_watched_2s": "0",
+            "video_watched_6s": "0",
+            "frequency": "0.00",
+            "reach": "0"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-28 00:00:00"
+          },
+          "metrics": {
+            "spend": "30.00",
+            "impressions": "500",
+            "clicks": "3",
+            "conversion": "0",
+            "video_watched_2s": "50",
+            "video_watched_6s": "23",
+            "frequency": "1.00",
+            "reach": "500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-29 00:00:00"
+          },
+          "metrics": {
+            "spend": "30.00",
+            "impressions": "500",
+            "clicks": "3",
+            "conversion": "1",
+            "video_watched_2s": "50",
+            "video_watched_6s": "23",
+            "frequency": "1.00",
+            "reach": "500"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "7000000000000000306",
+            "stat_time_day": "2026-09-30 00:00:00"
+          },
+          "metrics": {
+            "spend": "24.00",
+            "impressions": "400",
+            "clicks": "2",
+            "conversion": "0",
+            "video_watched_2s": "40",
+            "video_watched_6s": "18",
+            "frequency": "1.00",
+            "reach": "400"
+          }
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 84,
+        "total_page": 1
+      }
+    }
+  }
+}

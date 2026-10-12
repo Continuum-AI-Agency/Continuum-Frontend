@@ -52,6 +52,8 @@ export {
   THROTTLED_IMPRESSION_RATIO,
 } from './delivery';
 export { reallocate } from './engine';
+export type { EntityNounSource } from './entityNoun';
+export { entityNoun, entityNounFor, platformName } from './entityNoun';
 export type { BudgetMoveWhy, ExplainDiagnostics } from './explain';
 export {
   budgetMoveWhy,
@@ -86,6 +88,8 @@ export {
 // win-rate categories with lift rules (and fires the `confounded` flag).
 export type { AssociationRule, MinableItem, MiningResult } from './mining/apriori';
 export { mineCreativeCombos } from './mining/apriori';
+// Multi-platform: Google Ads and TikTok Ads entities through the same engine, and G27.
+export * from './multiplatform/index';
 export type { ObjectiveProfile } from './objectives';
 export { getObjectiveProfile, OBJECTIVE_PROFILES } from './objectives';
 export { computePacing } from './pacing';
@@ -99,13 +103,14 @@ export { evalCondition, evaluateRules, interpolateReason } from './rules/evaluat
 export { buildAdsetFacts, buildPortfolioFacts } from './rules/facts';
 export type { ResolvedValue } from './rules/operators';
 export { OPERATORS } from './rules/operators';
-export type { RuleTemplate } from './rules/templates';
+export type { RuleTemplate, TemplateTitleContext } from './rules/templates';
 export {
   ALL_TEMPLATES,
   BUILTIN_PARITY_TEMPLATES,
   DCO_ADAPTED_TEMPLATES,
   instantiateTemplate,
   seedParityRules,
+  templateEvidence,
 } from './rules/templates';
 export type {
   AlreadyFlagged,
@@ -135,9 +140,27 @@ export {
   FLOOR_RELAXED_SHARE,
   UNDERSPEND_SHARE,
 } from './settings';
-export { adSetCpaInterval, costInterval, cpaInterval, shrinkScores } from './significance';
+export {
+  adSetCpaInterval,
+  costInterval,
+  cpaInterval,
+  shrinkScores,
+  upperBoundMissingBecause,
+} from './significance';
 export type { SolverAllocation, SolverItem, SolverOutput } from './solver';
 export { solve } from './solver';
+// The title vocabulary every trigger composes from: Spanish result nouns, ISO money, the
+// entity, and the action beside the sentence.
+export {
+  action as titleAction,
+  currencyCode,
+  entityOf,
+  moneyPerResultUnit,
+  resultNoun,
+  resultNounPlural,
+  title,
+  titleMoney,
+} from './title';
 export type { TriggerOutput } from './triggers';
 export { evaluateTriggers } from './triggers';
 export type {
@@ -160,20 +183,28 @@ export type {
   OptimizationObjective,
   PacingResult,
   PacingState,
+  PlatformHold,
+  PlatformSignalPayload,
+  ReallocationRefusal,
   ReallocationResult,
   Recommendation,
   RecommendationKind,
   RecommendationTrigger,
   RetentionMetrics,
   RetentionRates,
+  RuleFamily,
+  RuleSkip,
   ScaleStep,
   SettingsPatch,
   TrajectoryState,
   WindowMetrics,
 } from './types';
 export { PORTFOLIO_SCOPE } from './types';
+export type { WindowKey } from './windows';
+export { perDayOver, windowSpanDays } from './windows';
 
 // NOTE: zod-backed IO schemas are intentionally NOT re-exported here — the root
-// entry stays pure/dependency-free. Import them from the BE-safe subpath
-// `@continuum/optimization-engine/schemas` (physical root shim), or via the
-// canonical FE<->BE re-export in @continuum/contracts/optimization.
+// entry carries no zod schema of its own (the money formatter it takes from
+// `@continuum/contracts` is the one runtime dependency). Import the schemas from
+// the BE-safe subpath `@continuum/optimization-engine/schemas` (physical root
+// shim), or via the canonical FE<->BE re-export in @continuum/contracts/optimization.

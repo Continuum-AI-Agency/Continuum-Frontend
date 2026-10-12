@@ -1,0 +1,1359 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-06T01:03:57.650Z",
+    "query": "SELECT campaign.id, campaign.status, ad_group.id, ad_group.status, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status FROM ad_group_ad",
+    "rows": 56
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18585815224",
+        "status": "PAUSED",
+        "id": "18585815224"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/143765042873",
+        "status": "ENABLED",
+        "id": "143765042873"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/143765042873~627810518877",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/627810518877",
+          "id": "627810518877"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18585815224",
+        "status": "PAUSED",
+        "id": "18585815224"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/143765042873",
+        "status": "ENABLED",
+        "id": "143765042873"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/143765042873~633859720272",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/633859720272",
+          "id": "633859720272"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18572377820",
+        "status": "PAUSED",
+        "id": "18572377820"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/145081877249",
+        "status": "ENABLED",
+        "id": "145081877249"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/145081877249~627564351005",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/627564351005",
+          "id": "627564351005"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18572377820",
+        "status": "PAUSED",
+        "id": "18572377820"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/145081877249",
+        "status": "ENABLED",
+        "id": "145081877249"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/145081877249~627741873328",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/627741873328",
+          "id": "627741873328"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEW_IN_PROGRESS",
+          "approvalStatus": "UNKNOWN"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18572377820",
+        "status": "PAUSED",
+        "id": "18572377820"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/145081877249",
+        "status": "ENABLED",
+        "id": "145081877249"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/145081877249~627843482560",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/627843482560",
+          "id": "627843482560"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEW_IN_PROGRESS",
+          "approvalStatus": "UNKNOWN"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18572377820",
+        "status": "PAUSED",
+        "id": "18572377820"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/145081877249",
+        "status": "ENABLED",
+        "id": "145081877249"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/145081877249~627844369876",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/627844369876",
+          "id": "627844369876"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEW_IN_PROGRESS",
+          "approvalStatus": "UNKNOWN"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19321380656",
+        "status": "PAUSED",
+        "id": "19321380656"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/145386852235",
+        "status": "ENABLED",
+        "id": "145386852235"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/145386852235~642031283223",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/642031283223",
+          "id": "642031283223"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19323095414",
+        "status": "PAUSED",
+        "id": "19323095414"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/148291381607",
+        "status": "ENABLED",
+        "id": "148291381607"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/148291381607~642171328952",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/642171328952",
+          "id": "642171328952"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19962426667",
+        "status": "PAUSED",
+        "id": "19962426667"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/148331181295",
+        "status": "ENABLED",
+        "id": "148331181295"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/148331181295~654531555336",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/654531555336",
+          "id": "654531555336"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19589586173",
+        "status": "PAUSED",
+        "id": "19589586173"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/151078260371",
+        "status": "ENABLED",
+        "id": "151078260371"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/151078260371~645431458215",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/645431458215",
+          "id": "645431458215"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19589586173",
+        "status": "PAUSED",
+        "id": "19589586173"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/151078260371",
+        "status": "ENABLED",
+        "id": "151078260371"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/151078260371~645547506653",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/645547506653",
+          "id": "645547506653"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19954538151",
+        "status": "PAUSED",
+        "id": "19954538151"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/151548716361",
+        "status": "ENABLED",
+        "id": "151548716361"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/151548716361~654564749188",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/654564749188",
+          "id": "654564749188"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19962346777",
+        "status": "PAUSED",
+        "id": "19962346777"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/153605775088",
+        "status": "ENABLED",
+        "id": "153605775088"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/153605775088~654563040427",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/654563040427",
+          "id": "654563040427"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "status": "ENABLED",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "status": "ENABLED",
+        "id": "155765678139"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/155765678139~680665389502",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680665389502",
+          "id": "680665389502"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "status": "ENABLED",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/156451805980",
+        "status": "PAUSED",
+        "id": "156451805980"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/156451805980~680706855496",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680706855496",
+          "id": "680706855496"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "status": "ENABLED",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/156639249738",
+        "status": "PAUSED",
+        "id": "156639249738"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/156639249738~680743711337",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680743711337",
+          "id": "680743711337"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "status": "ENABLED",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/159194048041",
+        "status": "PAUSED",
+        "id": "159194048041"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/159194048041~680706127090",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680706127090",
+          "id": "680706127090"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/162157352814",
+        "status": "PAUSED",
+        "id": "162157352814"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/162157352814~702152247595",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/702152247595",
+          "id": "702152247595"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/162862450952",
+        "status": "ENABLED",
+        "id": "162862450952"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/162862450952~699344330139",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/699344330139",
+          "id": "699344330139"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/164218495396",
+        "status": "PAUSED",
+        "id": "164218495396"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/164218495396~704560823197",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/704560823197",
+          "id": "704560823197"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/164669553574",
+        "status": "PAUSED",
+        "id": "164669553574"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/164669553574~708707550885",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/708707550885",
+          "id": "708707550885"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/164669553574",
+        "status": "PAUSED",
+        "id": "164669553574"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/164669553574~710253294398",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/710253294398",
+          "id": "710253294398"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/164669553574",
+        "status": "PAUSED",
+        "id": "164669553574"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/164669553574~720369342868",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/720369342868",
+          "id": "720369342868"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/164669553574",
+        "status": "PAUSED",
+        "id": "164669553574"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/164669553574~721283210573",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/721283210573",
+          "id": "721283210573"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/165185041083",
+        "status": "PAUSED",
+        "id": "165185041083"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/165185041083~707824697230",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/707824697230",
+          "id": "707824697230"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/165574605596",
+        "status": "ENABLED",
+        "id": "165574605596"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/165574605596~707908397747",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/707908397747",
+          "id": "707908397747"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/166356220506",
+        "status": "PAUSED",
+        "id": "166356220506"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/166356220506~711960848324",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/711960848324",
+          "id": "711960848324"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/168973724595",
+        "status": "PAUSED",
+        "id": "168973724595"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/168973724595~715483355896",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/715483355896",
+          "id": "715483355896"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/169912334533",
+        "status": "PAUSED",
+        "id": "169912334533"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/169912334533~720097654023",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/720097654023",
+          "id": "720097654023"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21734669008",
+        "status": "PAUSED",
+        "id": "21734669008"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170495991009",
+        "status": "ENABLED",
+        "id": "170495991009"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170495991009~714340184559",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/714340184559",
+          "id": "714340184559"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170833539978",
+        "status": "PAUSED",
+        "id": "170833539978"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170833539978~719628497896",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/719628497896",
+          "id": "719628497896"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170833539978",
+        "status": "PAUSED",
+        "id": "170833539978"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170833539978~724261614867",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/724261614867",
+          "id": "724261614867"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170833539978",
+        "status": "PAUSED",
+        "id": "170833539978"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170833539978~725217566852",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/725217566852",
+          "id": "725217566852"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170833539978",
+        "status": "PAUSED",
+        "id": "170833539978"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170833539978~726318140120",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/726318140120",
+          "id": "726318140120"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170833539978",
+        "status": "PAUSED",
+        "id": "170833539978"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170833539978~727568965670",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/727568965670",
+          "id": "727568965670"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170833539978",
+        "status": "PAUSED",
+        "id": "170833539978"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170833539978~728717637499",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/728717637499",
+          "id": "728717637499"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/170889205667",
+        "status": "PAUSED",
+        "id": "170889205667"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/170889205667~714543053484",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/714543053484",
+          "id": "714543053484"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21985307202",
+        "status": "PAUSED",
+        "id": "21985307202"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/172532191180",
+        "status": "ENABLED",
+        "id": "172532191180"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/172532191180~724412261443",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/724412261443",
+          "id": "724412261443"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21905436458",
+        "status": "PAUSED",
+        "id": "21905436458"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/172830549760",
+        "status": "ENABLED",
+        "id": "172830549760"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/172830549760~721187643255",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/721187643255",
+          "id": "721187643255"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/174048146628",
+        "status": "ENABLED",
+        "id": "174048146628"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/174048146628~707907860762",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/707907860762",
+          "id": "707907860762"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/174827074499",
+        "status": "PAUSED",
+        "id": "174827074499"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/174827074499~732132183091",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/732132183091",
+          "id": "732132183091"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "id": "22357506361"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/176154886786",
+        "status": "ENABLED",
+        "id": "176154886786"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/176154886786~739712457303",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/739712457303",
+          "id": "739712457303"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "id": "22357506361"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/176154886786",
+        "status": "ENABLED",
+        "id": "176154886786"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/176154886786~739744098673",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/739744098673",
+          "id": "739744098673"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "id": "22357506361"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/176154886786",
+        "status": "ENABLED",
+        "id": "176154886786"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/176154886786~739744191556",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/739744191556",
+          "id": "739744191556"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "id": "22357506361"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/176154886786",
+        "status": "ENABLED",
+        "id": "176154886786"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/176154886786~758943998338",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/758943998338",
+          "id": "758943998338"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "id": "22357506361"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/176154886786",
+        "status": "ENABLED",
+        "id": "176154886786"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/176154886786~758944208833",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/758944208833",
+          "id": "758944208833"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/177048134581",
+        "status": "PAUSED",
+        "id": "177048134581"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/177048134581~754825625906",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/754825625906",
+          "id": "754825625906"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/178520706668",
+        "status": "PAUSED",
+        "id": "178520706668"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/178520706668~720210245723",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/720210245723",
+          "id": "720210245723"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22404522468",
+        "status": "PAUSED",
+        "id": "22404522468"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/180285507089",
+        "status": "ENABLED",
+        "id": "180285507089"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/180285507089~744047541078",
+        "status": "REMOVED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/744047541078",
+          "id": "744047541078"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEW_IN_PROGRESS",
+          "approvalStatus": "UNKNOWN"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22404522468",
+        "status": "PAUSED",
+        "id": "22404522468"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/180285507089",
+        "status": "ENABLED",
+        "id": "180285507089"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/180285507089~744158189480",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/744158189480",
+          "id": "744158189480"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/180429398871",
+        "status": "PAUSED",
+        "id": "180429398871"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/180429398871~744070024054",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/744070024054",
+          "id": "744070024054"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22706302206",
+        "status": "PAUSED",
+        "id": "22706302206"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/180713328639",
+        "status": "ENABLED",
+        "id": "180713328639"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/180713328639~760272549074",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/760272549074",
+          "id": "760272549074"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/180818209185",
+        "status": "PAUSED",
+        "id": "180818209185"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/180818209185~760183566442",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/760183566442",
+          "id": "760183566442"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "id": "21287529107"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/180818335625",
+        "status": "PAUSED",
+        "id": "180818335625"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/180818335625~760183970794",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/760183970794",
+          "id": "760183970794"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22364972636",
+        "status": "PAUSED",
+        "id": "22364972636"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/183636341744",
+        "status": "ENABLED",
+        "id": "183636341744"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/183636341744~740547083693",
+        "status": "PAUSED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/740547083693",
+          "id": "740547083693"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22364972636",
+        "status": "PAUSED",
+        "id": "22364972636"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/183636341744",
+        "status": "ENABLED",
+        "id": "183636341744"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/183636341744~744047391072",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/744047391072",
+          "id": "744047391072"
+        },
+        "policySummary": {
+          "reviewStatus": "REVIEWED",
+          "approvalStatus": "APPROVED"
+        }
+      }
+    }
+  ]
+}

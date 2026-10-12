@@ -1,0 +1,79 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /adgroup/get/",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "window": {
+      "since": "2026-09-21",
+      "until": "2026-10-04"
+    },
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4, §2.10, §4 rules 07 and 20",
+    "invented": [
+      "ad groups 206–208: ids, names, budgets, operation_status and secondary_status"
+    ]
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000206",
+          "adgroup_name": "EF | Leads | Retargeting",
+          "operation_status": "ENABLE",
+          "secondary_status": "ADGROUP_STATUS_DELIVERY_OK",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "budget": 250,
+          "optimization_goal": "LEAD_GENERATION",
+          "bid_type": "BID_TYPE_NO_BID",
+          "click_attribution_window": "SEVEN_DAYS",
+          "view_attribution_window": "ONE_DAY",
+          "create_time": "2026-09-15 12:00:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000207",
+          "adgroup_name": "EF | Leads | Clases nuevas",
+          "operation_status": "ENABLE",
+          "secondary_status": "ADGROUP_STATUS_BALANCE_EXCEED",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "budget": 300,
+          "optimization_goal": "LEAD_GENERATION",
+          "bid_type": "BID_TYPE_NO_BID",
+          "click_attribution_window": "SEVEN_DAYS",
+          "view_attribution_window": "ONE_DAY",
+          "create_time": "2026-09-15 12:00:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000208",
+          "adgroup_name": "EF | Leads | Pausado",
+          "operation_status": "DISABLE",
+          "secondary_status": "ADGROUP_STATUS_DISABLE",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "budget": 200,
+          "optimization_goal": "LEAD_GENERATION",
+          "bid_type": "BID_TYPE_NO_BID",
+          "click_attribution_window": "SEVEN_DAYS",
+          "view_attribution_window": "ONE_DAY",
+          "create_time": "2026-09-15 12:00:00"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 3,
+        "total_page": 1
+      }
+    }
+  }
+}

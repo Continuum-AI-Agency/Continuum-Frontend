@@ -129,10 +129,12 @@ test('a CBO ad set frozen at ingest keeps unsupported_budget — it is not relab
 
 // --- The regression guard -------------------------------------------------------------
 
-test('an ad set with a real budget and no spend yet is still optimizable', () => {
-  // The case the zero-budget hold must not swallow. A launched-but-not-yet-spending ad set
-  // has a real budget, zero spend and zero events — it has money to move, so it is a pool
-  // member. Zero SPEND is not zero BUDGET, and only the latter is grounds to hold.
+test('an ad set with a real budget and no spend is held for THAT, never for having no budget', () => {
+  // The case the zero-budget hold must not swallow. A funded ad set that spent nothing has
+  // a real budget: zero SPEND is not zero BUDGET, so `no_own_budget` is the wrong reason and
+  // the floor must not be handed to it. It used to stay a pool member on that logic, and the
+  // solver — with nothing to rank it on — moved it anyway (property (d), perfplus-properties).
+  // Now it is held `no_spend`, budget intact, and the delivery stage says why beside it.
   const result = runCycle(
     [
       earner('earner-a', 200),
@@ -146,9 +148,9 @@ test('an ad set with a real budget and no spend yet is still optimizable', () =>
   );
 
   const fresh = itemFor(result, 'budgeted-not-yet-spending');
-  expect(fresh.freezeReason).toBeUndefined();
-  expect(fresh.status).not.toBe('frozen');
-  expect(fresh.finalBudget).toBeGreaterThan(0);
+  expect(fresh.freezeReason).toBe('no_spend');
+  expect(fresh.finalBudget).toBe(100);
+  expect(itemFor(result, 'earner-a').freezeReason).toBeUndefined();
 });
 
 test('a brand-new ad set keeps the pre-existing new-item LOCK, not a freeze reason', () => {

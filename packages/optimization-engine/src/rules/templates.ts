@@ -23,7 +23,18 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';
-import type { FactValue, RuleAction, RuleCondition, RuleDefinition } from './types';
+import {
+  action,
+  currencyCode,
+  moneyPerResultUnit,
+  multiple,
+  resultNoun,
+  resultNounPlural,
+  title,
+  titleMoney,
+} from '../title';
+import type { RecommendationEvidence } from '../types';
+import type { FactMap, FactValue, RuleAction, RuleCondition, RuleDefinition } from './types';
 
 export type RuleTemplate = {
   templateId: string;
@@ -96,7 +107,7 @@ export const BUILTIN_PARITY_TEMPLATES: RuleTemplate[] = [
       kind: 'pause',
       severity: 'medium',
       reasonTemplate:
-        'CPP 14d ${{cpp_d14}} > {{sustained_poor_multiplier}}× the robust reference (${{robust_best_cpp_d14}}), with no recent improvement.',
+        'CPP 14d {{cpp_d14}} > {{sustained_poor_multiplier}}× the robust reference ({{robust_best_cpp_d14}}), with no recent improvement.',
     },
     conditions: {
       all: [
@@ -129,7 +140,7 @@ export const BUILTIN_PARITY_TEMPLATES: RuleTemplate[] = [
       kind: 'pause',
       severity: 'low',
       reasonTemplate:
-        'Spent ${{spend_d14}} over 14d (> 1 target CPA) with 0 conversions: dead weight.',
+        'Spent {{spend_d14}} over 14d (> 1 target CPA) with 0 conversions: dead weight.',
     },
     conditions: {
       all: [
@@ -151,7 +162,7 @@ export const BUILTIN_PARITY_TEMPLATES: RuleTemplate[] = [
       kind: 'audience_expand',
       severity: 'medium',
       reasonTemplate:
-        'Frequency {{frequency_7d}} ≥ {{fatigue_freq_cap}} with CPA up (3d ${{cpp_d3}} vs 14d ${{cpp_d14}}): audience saturated — expand or rotate.',
+        'Frequency {{frequency_7d}} ≥ {{fatigue_freq_cap}} with CPA up (3d {{cpp_d3}} vs 14d {{cpp_d14}}): audience saturated — expand or rotate.',
     },
     conditions: {
       all: [
@@ -187,7 +198,7 @@ export const BUILTIN_PARITY_TEMPLATES: RuleTemplate[] = [
       kind: 'creative_refresh',
       severity: 'medium',
       reasonTemplate:
-        'CTR down (3d {{ctr_d3}} vs 14d {{ctr_d14}}) with CPA up (3d ${{cpp_d3}} vs 14d ${{cpp_d14}}): creative worn out — refresh.',
+        'CTR down (3d {{ctr_d3}} vs 14d {{ctr_d14}}) with CPA up (3d {{cpp_d3}} vs 14d {{cpp_d14}}): creative worn out — refresh.',
     },
     conditions: {
       all: [
@@ -239,7 +250,7 @@ export const DCO_ADAPTED_TEMPLATES: RuleTemplate[] = [
       kind: 'pause',
       severity: 'medium',
       reasonTemplate:
-        'CPP 7d ${{cpp_d7}} is over {{cpp_ratio_threshold}}× the portfolio average (${{portfolio_avg_cpp_d7}}) with ${{spend_d7}} spent.',
+        'CPP 7d {{cpp_d7}} is over {{cpp_ratio_threshold}}× the portfolio average ({{portfolio_avg_cpp_d7}}) with {{spend_d7}} spent.',
     },
     conditions: {
       all: [
@@ -271,7 +282,7 @@ export const DCO_ADAPTED_TEMPLATES: RuleTemplate[] = [
     action: {
       kind: 'pause',
       severity: 'medium',
-      reasonTemplate: 'CPC 7d ${{cpc_d7}} above ${{cpc_threshold}} with {{clicks_d7}} clicks.',
+      reasonTemplate: 'CPC 7d {{cpc_d7}} above {{cpc_threshold}} with {{clicks_d7}} clicks.',
     },
     conditions: {
       all: [
@@ -321,7 +332,7 @@ export const DCO_ADAPTED_TEMPLATES: RuleTemplate[] = [
       kind: 'starve',
       severity: 'low',
       reasonTemplate:
-        'Spent ${{spend_d7}} over 7d (> {{dead_spend_multiple}}× target CPA) with 0 conversions: starving to floor.',
+        'Spent {{spend_d7}} over 7d (> {{dead_spend_multiple}}× target CPA) with 0 conversions: starving to floor.',
     },
     conditions: {
       all: [
@@ -349,7 +360,7 @@ export const DCO_ADAPTED_TEMPLATES: RuleTemplate[] = [
       kind: 'audience_expand',
       severity: 'low',
       reasonTemplate:
-        'Frequency {{frequency_7d}} at/over {{fatigue_freq_cap}} and CPP 7d ${{cpp_d7}} over {{cpp_pressure_ratio}}× portfolio average (${{portfolio_avg_cpp_d7}}).',
+        'Frequency {{frequency_7d}} at/over {{fatigue_freq_cap}} and CPP 7d {{cpp_d7}} over {{cpp_pressure_ratio}}× portfolio average ({{portfolio_avg_cpp_d7}}).',
     },
     conditions: {
       all: [
@@ -386,7 +397,7 @@ export const DCO_ADAPTED_TEMPLATES: RuleTemplate[] = [
       kind: 'freeze',
       severity: 'low',
       reasonTemplate:
-        'Spent ${{spend_d14}} over 14d with 0 conversions and only {{impressions_d14}} impressions: holding budget.',
+        'Spent {{spend_d14}} over 14d with 0 conversions and only {{impressions_d14}} impressions: holding budget.',
     },
     conditions: {
       all: [
@@ -437,4 +448,260 @@ export function instantiateTemplate(
  *  The adapted DCO tier is opt-in (enable per portfolio after review). */
 export function seedParityRules(cfg: EngineConfig): RuleDefinition[] {
   return BUILTIN_PARITY_TEMPLATES.map((t) => instantiateTemplate(t, cfg));
+}
+
+// --- The title behind a rule finding --------------------------------------
+// `reasonTemplate` interpolates prose; the title is composed from the SAME fact map as
+// figures, one builder per template, so a rule finding carries the structured evidence a
+// built-in trigger does. A builder returns null when a fact it needs is missing or not a
+// number — a title with a "?" in it is worse than none.
+
+export type TemplateTitleContext = {
+  cfg: EngineConfig;
+  /** The ad set the rule matched, by name — the title's entity. */
+  entity: string;
+};
+
+type EvidenceBuilder = (facts: FactMap, ctx: TemplateTitleContext) => RecommendationEvidence | null;
+
+const num = (facts: FactMap, key: string): number | null => {
+  const v = facts[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+};
+
+const pctUp = (recent: number, base: number): string =>
+  `+${Math.round((recent / base - 1) * 100)}%`;
+
+const TEMPLATE_EVIDENCE: Record<string, EvidenceBuilder> = {
+  P1_zero_upper_funnel: (facts, { cfg, entity }) => {
+    const spend = num(facts, 'spend_d3');
+    const floor = num(facts, 'budget_floor');
+    if (spend === null) return null;
+    return {
+      metric: 'spend',
+      value: spend,
+      comparator: 'with 0 conversions and a dead or over-priced upper funnel',
+      threshold: floor,
+      window: 'd3',
+      estImpactPerDay: spend / 3,
+      title: title({
+        entity,
+        figure: spend,
+        unit: currencyCode(cfg),
+        comparator: `en 3 días con 0 ${resultNounPlural(cfg)} y el embudo superior muerto o por encima del promedio`,
+        window: 'd3',
+      }),
+      action: action('pause', cfg, { perDay: spend / 3 }),
+      source: 'engine',
+    };
+  },
+  P2_sustained_poor: (facts, { cfg, entity }) => {
+    const cpp = num(facts, 'cpp_d14');
+    const reference = num(facts, 'robust_best_cpp_d14');
+    const mult = num(facts, 'sustained_poor_multiplier');
+    const spend = num(facts, 'spend_d14');
+    if (cpp === null || reference === null || mult === null || reference <= 0) return null;
+    return {
+      metric: 'cpp',
+      value: cpp,
+      comparator: `vs ${mult}× the robust reference (${reference})`,
+      threshold: mult * reference,
+      window: 'd14',
+      estImpactPerDay: spend === null ? null : spend / 14,
+      title: title({
+        entity,
+        figure: cpp,
+        unit: moneyPerResultUnit(cfg),
+        comparator: `${multiple(cpp, reference)} la referencia de ${titleMoney(reference, cfg)}`,
+        window: 'd14',
+      }),
+      action: action('pause', cfg, spend === null ? null : { perDay: spend / 14 }),
+      source: 'engine',
+    };
+  },
+  P3_low_significance: (facts, { cfg, entity }) => {
+    const spend = num(facts, 'spend_d14');
+    const target = num(facts, 'cpa_target');
+    if (spend === null) return null;
+    return {
+      metric: 'spend',
+      value: spend,
+      comparator: 'with 0 conversions in 7d and 14d',
+      threshold: target,
+      window: 'd14',
+      estImpactPerDay: spend / 14,
+      title: title({
+        entity,
+        figure: spend,
+        unit: currencyCode(cfg),
+        comparator:
+          target === null
+            ? `en 14 días y 0 ${resultNounPlural(cfg)}`
+            : `en 14 días y 0 ${resultNounPlural(cfg)}, más que el objetivo de ${titleMoney(target, cfg)}`,
+        window: 'd14',
+      }),
+      action: action('pause', cfg, { perDay: spend / 14 }),
+      source: 'engine',
+    };
+  },
+  F2_audience_saturation: (facts, { cfg, entity }) => {
+    const freq = num(facts, 'frequency_7d');
+    const cap = num(facts, 'fatigue_freq_cap');
+    const recent = num(facts, 'cpp_d3');
+    const base = num(facts, 'cpp_d14');
+    if (freq === null || cap === null || recent === null || base === null || base <= 0) return null;
+    return {
+      metric: 'frequency',
+      value: freq,
+      comparator: `at or over the ${cap} cap, CPA ${pctUp(recent, base)}`,
+      threshold: cap,
+      window: 'd7',
+      estImpactPerDay: null,
+      title: title({
+        entity,
+        figure: Math.round(freq * 10) / 10,
+        unit: 'veces por persona en 7 días',
+        comparator: `sobre el tope de ${cap} y CPA ${pctUp(recent, base)} (${titleMoney(recent, cfg)} frente a ${titleMoney(base, cfg)} por ${resultNoun(cfg)})`,
+        window: 'd7',
+      }),
+      action: action('audience_expand', cfg),
+      source: 'engine',
+    };
+  },
+  F1_creative_fatigue: (facts, { cfg, entity }) => {
+    const ctrRecent = num(facts, 'ctr_d3');
+    const ctrBase = num(facts, 'ctr_d14');
+    const recent = num(facts, 'cpp_d3');
+    const base = num(facts, 'cpp_d14');
+    if (ctrRecent === null || ctrBase === null || recent === null || base === null) return null;
+    if (ctrBase <= 0 || base <= 0) return null;
+    const ctrDown = Math.round((1 - ctrRecent / ctrBase) * 100);
+    return {
+      metric: 'ctr',
+      value: ctrRecent,
+      comparator: `down ${ctrDown}% vs 14d, CPA ${pctUp(recent, base)}`,
+      threshold: ctrBase,
+      window: 'd3',
+      estImpactPerDay: null,
+      title: title({
+        entity,
+        figure: Math.round(ctrRecent * 10000) / 100,
+        unit: '% de CTR en 3 días',
+        comparator: `${ctrDown}% menos que los 14 días (${(ctrBase * 100).toFixed(2)}%) y CPA ${pctUp(recent, base)} (${titleMoney(recent, cfg)} frente a ${titleMoney(base, cfg)} por ${resultNoun(cfg)})`,
+        window: 'd3',
+      }),
+      action: action('creative_refresh', cfg),
+      source: 'engine',
+    };
+  },
+  dco_pause_cpp_vs_portfolio: (facts, { cfg, entity }) => {
+    const cpp = num(facts, 'cpp_d7');
+    const avg = num(facts, 'portfolio_avg_cpp_d7');
+    const ratio = num(facts, 'cpp_ratio_threshold');
+    const spend = num(facts, 'spend_d7');
+    if (cpp === null || avg === null || ratio === null || avg <= 0) return null;
+    return {
+      metric: 'cpp',
+      value: cpp,
+      comparator: `over ${ratio}× the portfolio average (${avg})`,
+      threshold: ratio * avg,
+      window: 'd7',
+      estImpactPerDay: spend === null ? null : spend / 7,
+      title: title({
+        entity,
+        figure: cpp,
+        unit: moneyPerResultUnit(cfg),
+        comparator: `${multiple(cpp, avg)} el promedio del portafolio de ${titleMoney(avg, cfg)}`,
+        window: 'd7',
+      }),
+      action: action('pause', cfg, spend === null ? null : { perDay: spend / 7 }),
+      source: 'engine',
+    };
+  },
+  dco_pause_high_cpc: (facts, { cfg, entity }) => {
+    const cpc = num(facts, 'cpc_d7');
+    const threshold = num(facts, 'cpc_threshold');
+    const clicks = num(facts, 'clicks_d7');
+    const spend = num(facts, 'spend_d7');
+    if (cpc === null || threshold === null) return null;
+    return {
+      metric: 'cpc',
+      value: cpc,
+      comparator: `above the ${threshold} threshold on ${clicks ?? '?'} clicks`,
+      threshold,
+      window: 'd7',
+      estImpactPerDay: spend === null ? null : spend / 7,
+      title: title({
+        entity,
+        figure: cpc,
+        unit: `${currencyCode(cfg)} por clic`.trim(),
+        comparator: `sobre el umbral de ${titleMoney(threshold, cfg)}${clicks === null ? '' : ` en ${clicks} clics`}`,
+        window: 'd7',
+      }),
+      action: action('pause', cfg, spend === null ? null : { perDay: spend / 7 }),
+      source: 'engine',
+    };
+  },
+  dco_creative_low_ctr: (facts, { cfg, entity }) => {
+    const ctr = num(facts, 'ctr_d7');
+    const threshold = num(facts, 'ctr_threshold');
+    const impressions = num(facts, 'impressions_d7');
+    if (ctr === null || threshold === null) return null;
+    return {
+      metric: 'ctr',
+      value: ctr,
+      comparator: `below the ${threshold} floor on ${impressions ?? '?'} impressions`,
+      threshold,
+      window: 'd7',
+      estImpactPerDay: null,
+      title: title({
+        entity,
+        figure: Math.round(ctr * 10000) / 100,
+        unit: '% de CTR en 7 días',
+        comparator: `bajo el piso de ${(threshold * 100).toFixed(2)}%${impressions === null ? '' : ` en ${impressions} impresiones`}`,
+        window: 'd7',
+      }),
+      action: action('creative_refresh', cfg),
+      source: 'engine',
+    };
+  },
+  dco_audience_freq_pressure: (facts, { cfg, entity }) => {
+    const freq = num(facts, 'frequency_7d');
+    const cap = num(facts, 'fatigue_freq_cap');
+    const cpp = num(facts, 'cpp_d7');
+    const avg = num(facts, 'portfolio_avg_cpp_d7');
+    if (freq === null || cap === null || cpp === null || avg === null || avg <= 0) return null;
+    return {
+      metric: 'frequency',
+      value: freq,
+      comparator: `at or over the ${cap} cap, CPP ${multiple(cpp, avg)} the portfolio average (${avg})`,
+      threshold: cap,
+      window: 'd7',
+      estImpactPerDay: null,
+      title: title({
+        entity,
+        figure: Math.round(freq * 10) / 10,
+        unit: 'veces por persona en 7 días',
+        comparator: `sobre el tope de ${cap} y ${titleMoney(cpp, cfg)} ${moneyPerResultUnit(cfg)}, ${multiple(cpp, avg)} el promedio de ${titleMoney(avg, cfg)}`,
+        window: 'd7',
+      }),
+      action: action('audience_expand', cfg),
+      source: 'engine',
+    };
+  },
+};
+
+/**
+ * The structured evidence — figure, title, action — for a finding of `templateId`, built
+ * from the evaluated fact map. Null for a template with no builder (the budget-shaping
+ * starve/freeze kinds raise no finding) and for a user-authored rule with no template.
+ */
+export function templateEvidence(
+  templateId: string | undefined,
+  facts: FactMap,
+  ctx: TemplateTitleContext,
+): RecommendationEvidence | null {
+  if (!templateId) return null;
+  const build = TEMPLATE_EVIDENCE[templateId];
+  return build ? build(facts, ctx) : null;
 }

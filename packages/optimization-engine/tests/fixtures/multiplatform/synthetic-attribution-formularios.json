@@ -1,0 +1,228 @@
+{
+  "_source": {
+    "kind": "SYNTHETIC",
+    "label": "synthetic, composed for the scenario — not a recording",
+    "anchoredTo": "meta-easyfit-portfolio-formularios-todos.json (real ad set names, real d7 48 leads); tiktok-report-adgroup-7d.json",
+    "invented": [
+      "GA4 counts",
+      "sheet counts",
+      "coverage split"
+    ],
+    "note": "platform vs GA4 vs client sheet, sheet in two coverage variants"
+  },
+  "data": {
+    "portfolio": "FORMULARIOS // TODOS (lead) + TikTok EF | Leads | Manual",
+    "window": {
+      "since": "2026-09-24",
+      "until": "2026-09-30",
+      "label": "d7"
+    },
+    "spendingEntities": {
+      "count": 10,
+      "meta": [
+        {
+          "id": "120252366613350236",
+          "name": "ITESO // AGOSTO - BROAD"
+        },
+        {
+          "id": "120252366843240236",
+          "name": "CAÑADAS // AGOSTO - LKL"
+        },
+        {
+          "id": "120252656853770236",
+          "name": "ITESO // AGOSTO - RTG"
+        },
+        {
+          "id": "120252366877000236",
+          "name": "CAÑADAS // AGOSTO - BROAD"
+        },
+        {
+          "id": "120252387251370236",
+          "name": "ALEIRA // AGOSTO - BROAD"
+        },
+        {
+          "id": "120252387239370236",
+          "name": "ALEIRA // AGOSTO - BAU"
+        },
+        {
+          "id": "120252366837080236",
+          "name": "CAÑADAS // AGOSTO - BAU"
+        },
+        {
+          "id": "120252387260150236",
+          "name": "ALEIRA // AGOSTO - LKL"
+        }
+      ],
+      "tiktok": [
+        {
+          "id": "7000000000000000201",
+          "name": "EF | Leads | Broad MX"
+        },
+        {
+          "id": "7000000000000000202",
+          "name": "EF | Leads | Intereses fitness"
+        }
+      ],
+      "excluded": [
+        {
+          "id": "120252366548920236",
+          "name": "ITESO // AGOSTO - LKL",
+          "why": "no spend in d7 (dark 8 days, real D2 rec)"
+        }
+      ]
+    },
+    "platformReported": {
+      "meta": 48,
+      "tiktok": 21,
+      "total": 69,
+      "windows": {
+        "meta": "7d click / 1d view",
+        "tiktok": "7d click / 1d view (per ad group)"
+      }
+    },
+    "ga4": {
+      "property": "invented",
+      "key_event": "generate_lead",
+      "ends_yesterday": true,
+      "matched_via": "utm_content={{adset.id}} / __AID__",
+      "rows": {
+        "meta": 41,
+        "tiktok": 15,
+        "unmatched": 2,
+        "total": 58
+      }
+    },
+    "sheetVariantA": {
+      "rows": [
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "ITESO // AGOSTO - BROAD",
+          "results": 6,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "CAÑADAS // AGOSTO - LKL",
+          "results": 5,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "ITESO // AGOSTO - RTG",
+          "results": 4,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "CAÑADAS // AGOSTO - BROAD",
+          "results": 7,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "ALEIRA // AGOSTO - BROAD",
+          "results": 5,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "ALEIRA // AGOSTO - BAU",
+          "results": 4,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "CAÑADAS // AGOSTO - BAU",
+          "results": 5,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "tiktok",
+          "campaign": "EF | Leads | Manual",
+          "adset": "EF | Leads | Broad MX",
+          "results": 9,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "tiktok",
+          "campaign": "EF | Leads | Manual",
+          "adset": "EF | Leads | Intereses fitness",
+          "results": 7,
+          "value": null,
+          "currency": "MXN"
+        }
+      ],
+      "total": 52,
+      "coverage": 0.9
+    },
+    "sheetVariantB": {
+      "rows": [
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "CAÑADAS // AGOSTO - LKL",
+          "results": 5,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "CAÑADAS // AGOSTO - BROAD",
+          "results": 7,
+          "value": null,
+          "currency": "MXN"
+        },
+        {
+          "date_from": "2026-09-24",
+          "date_to": "2026-09-30",
+          "platform": "meta",
+          "campaign": "FORMULARIOS",
+          "adset": "CAÑADAS // AGOSTO - BAU",
+          "results": 5,
+          "value": null,
+          "currency": "MXN"
+        }
+      ],
+      "total": 17,
+      "coverage": 0.3
+    }
+  }
+}

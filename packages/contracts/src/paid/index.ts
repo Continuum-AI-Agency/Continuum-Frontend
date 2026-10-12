@@ -1,5 +1,7 @@
 export * from './adNaming';
 export * from './audience-groups';
+// Google Ads API v25 wire shapes: the pinned version and the GoogleAdsFailure decoder.
+export * from './google-ads';
 export * from './hierarchy';
 export * from './insight-model';
 export * from './jaina-export';
@@ -12,6 +14,9 @@ export * from './multi-account';
 // OpenAI Ads (ChatGPT Ads) — Advertiser API request/response shapes shared by the
 // Backend client and the campaign canvas that drives it.
 export * from './openai-ads';
+// The multi-platform vocabulary: PlatformId (+ legacy aliases), EntityRef with native level,
+// automation type, BudgetRef and the ISO-minor <-> platform budget unit conversions.
+export * from './platform';
 export * from './ranking';
 // The typed plan behind a paid scaffold version (evidence, expected results, optimizer
 // enrollment) and the Campaign Canvas save request/response.
@@ -19,7 +24,5 @@ export * from './scaffold-plan';
 // Meta ad-set targeting -> the audience axis (cold/warm, and the normalized columns
 // paid_media.adset_targeting_snapshots indexes on).
 export * from './targeting';
-// Multi-platform vocabulary, Google Ads v25 and TikTok v1.3 wire shapes (vendored from the monorepo, Optimizer multiplatform).
-export * from './platform';
-export * from './google-ads';
+// TikTok Marketing API v1.3 response envelope ({code, message, request_id, data}).
 export * from './tiktok-ads';

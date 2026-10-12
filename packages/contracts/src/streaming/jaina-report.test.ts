@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  actionRowSchema,
   blockCategorySchema,
   cellsOfBlocks,
   chartBlockSchema,
@@ -25,6 +26,9 @@ import {
   sectionOfBlockCategory,
   stripProseMarks,
   validateReport,
+  WHAT_TO_WATCH_BLOCK_ID,
+  watchItemSchema,
+  whatToWatchSchema,
   withJ2BlockOrder,
 } from './jaina-report';
 
@@ -1307,5 +1311,68 @@ describe('withJ2BlockOrder', () => {
     const blocks = J2_BLOCK_ORDER.map((category, i) => block(category, String(i)));
     expect(withJ2BlockOrder(blocks)).toBe(blocks);
     expect(new Set(J2_BLOCK_ORDER)).toEqual(new Set(blockCategorySchema.options));
+  });
+});
+
+describe('recommendation basis and what-to-watch slots (PP-L4 ending/justification)', () => {
+  const row = {
+    priority: 'P1',
+    entity: { id: '1', name: 'ITESO // MENSAJES', kind: 'campaign', level: 'campaign' },
+    action: 'Pause campaign',
+    sizing: 'pause',
+    evidence: { metric: 'cost per conversation', value: 52.93, unit: 'MXN', window: 'L7D' },
+  };
+
+  it('an action row carries expected_impact, confidence and execute, null until code fills them', () => {
+    const parsed = actionRowSchema.parse(row);
+    expect(parsed.expected_impact).toBeNull();
+    expect(parsed.confidence).toBeNull();
+    expect(parsed.execute).toBeNull();
+    const filled = actionRowSchema.parse({
+      ...row,
+      expected_impact: {
+        metric: 'conversations',
+        direction: 'down',
+        figure: '−95 conversations',
+        basis: 'x',
+      },
+      confidence: {
+        level: 'high',
+        sample: '95 conversations on 4,655 MXN',
+        window: 'L7D',
+        basis: 'y',
+      },
+      execute: { tool: 'pause_meta_entity', input: { entity_id: '1', level: 'campaign' } },
+    });
+    expect(filled.execute?.tool).toBe('pause_meta_entity');
+    expect(filled.confidence?.level).toBe('high');
+  });
+
+  it('an insight item carries the same basis slots', () => {
+    const item = insightListItemSchema.parse({
+      item_type: 'recommendation',
+      title: 'Scale CAÑADAS',
+      summary: 'x',
+      rationale: 'y',
+      impact: 'z',
+    });
+    expect(item.expected_impact).toBeNull();
+    expect(item.confidence).toBeNull();
+  });
+
+  it('a watch item names the signal, its figure and why', () => {
+    expect(
+      watchItemSchema.parse({
+        label: 'CTR',
+        figure: '1.04%',
+        direction: 'down',
+        why: 'fell 29% vs prior',
+        source: 'metric_grid',
+      }),
+    ).toMatchObject({ severity: 'watch', entity: null });
+    expect(whatToWatchSchema.safeParse([{ label: '', why: 'x', source: 'actions' }]).success).toBe(
+      false,
+    );
+    expect(WHAT_TO_WATCH_BLOCK_ID).toBe('what_to_watch');
   });
 });

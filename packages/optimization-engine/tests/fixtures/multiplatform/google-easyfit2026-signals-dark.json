@@ -1,0 +1,2142 @@
+{
+ "_source": {
+  "kind": "REAL",
+  "recordedAt": "2026-10-06",
+  "customer": "5251780631",
+  "from": "scripts/optimizer-multiplatform/fixtures/google-signals-recorded.json (google_signals scope, live GAQL v25, read-only)",
+  "note": "asset_groups as read live on 2026-10-06 by optimizer:multiplatform:signals:bench: GA1 EASY went AVERAGE with missing items while every campaign that should serve was SUSPENDED"
+ },
+ "data": {
+  "account_id": "5251780631",
+  "currency": "MXN",
+  "window": {
+   "since": "2026-09-05",
+   "until": "2026-10-04"
+  },
+  "google": {
+   "search_terms": [],
+   "keywords": [
+    {
+     "criterion_id": "12104763",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasio",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "12568160",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gyms",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "24243201",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "137291697",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "fitness gym",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "346815143",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gim",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "296464045650",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasios cerca de mi",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "297552606431",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym guadalajara",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "298590253177",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasio con guarderia",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "299102722202",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasio easy fit",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "300234446606",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym cerca de mi",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "355168454374",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasios zapopan",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "371207083109",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "easi fit",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "815585810768",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gymnacio",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1250952667574",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1430950739440",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasios cerca de mi ubicación y precios",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748340",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gymnasio\"",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748380",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "Easy fit Aleira",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748540",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "Easy fit avila camacho",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748580",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "Easy fit oblatos",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748620",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "Easy fit tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748780",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "easy fit cañadas",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748860",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "easy fit lopez mateos",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749020",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "easyfit la estancia",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749060",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "easyfit las villas",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749100",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnacio por iteso",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749260",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasio Tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749300",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gimnasio plaza oblatos",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749340",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym cañadas",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749500",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym en oblatos",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749540",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por cañadas",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749580",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por cucea",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749740",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por iteso",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749780",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por la cima",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749820",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por la estancia",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749980",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por lopez mateos",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505750020",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por plaza galerias",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2276329893030",
+     "ad_group_id": "148351817885",
+     "campaign_id": "20249528111",
+     "text": "gym por avila camacho",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "24243201",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "346815143",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gim",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "297552606431",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym guadalajara",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "299102722202",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gimnasio easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "300234446606",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym cerca de mi",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "357865611726",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "Easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "815585810768",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gymnacio",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1250952667574",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2041282895230",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym por avila camacho",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748340",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gymnasio\"",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749100",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gimnacio por iteso",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749540",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym por cañadas",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749580",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym por cucea",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749740",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym por iteso",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749780",
+     "ad_group_id": "154542700240",
+     "campaign_id": "20249528111",
+     "text": "gym por la cima",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "299102722202",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "gimnasio easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "327134031322",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "Easyfit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "357865611726",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "Easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "371207083109",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easi fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748380",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "Easy fit Aleira",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748540",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "Easy fit avila camacho",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748580",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "Easy fit oblatos",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748620",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "Easy fit tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748780",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easy fit cañadas",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748860",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easy fit lopez mateos",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749020",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easyfit la estancia",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749060",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easyfit las villas",
+     "match_type": "PHRASE",
+     "status": "PAUSED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2229679987807",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "\"easy fit avila camacho precios",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2229679987847",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easy fit cañadas precios",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2229679987887",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easy fit plaza aleira",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2229679988047",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "easy fit ávila camacho",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2229679988087",
+     "ad_group_id": "155758013881",
+     "campaign_id": "20249528111",
+     "text": "gym easy fit avila camacho",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "45327670",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "any time",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "45331150",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "anytime",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "138452878",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "smart fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "491555664",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "smartfit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "298247032245",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "u fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "298247032285",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "ufit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "392565123083",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "be wellness",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "430186606510",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "Dexfit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2175602199335",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "Move Wellness",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2175602199495",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "Stacion 24",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2175602199535",
+     "ad_group_id": "155881486287",
+     "campaign_id": "20249528111",
+     "text": "World Group Gym",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "24243201",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "346815143",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gim",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "297552606431",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym guadalajara",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "299102722202",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gimnasio easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "300234446606",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym cerca de mi",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "357865611726",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "Easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "815585810768",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gymnacio",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1250952667574",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2041282895230",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym por avila camacho",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505748340",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gymnasio\"",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749100",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gimnacio por iteso",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749540",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym por cañadas",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749580",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym por cucea",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749740",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym por iteso",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2079505749780",
+     "ad_group_id": "157171736047",
+     "campaign_id": "20553834868",
+     "text": "gym por la cima",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "10716296",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "body fitness",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "10743783030",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "gimnasio 24 horas",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "296465175066",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "smart fit precios",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "296561026304",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "entrenamiento funcional",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "297527547073",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "box gym",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "358271990343",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "academia de baile cerca de mi",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "361780807357",
+     "ad_group_id": "201617297178",
+     "campaign_id": "24298030946",
+     "text": "gym 24 horas",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "143784695",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit",
+     "match_type": "EXACT",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "159358722",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "299329665969",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio en tlaquepaque",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "302416579436",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit iteso",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "306807225722",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "precio de gimnasio",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "315115458929",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio con clases",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "338895529819",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "membresía de gimnasio",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "355848183081",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio en zapopan",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "356446932396",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio en guadalajara",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "368367698295",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit precios",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "428806950617",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio cerca de mí",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "428806951657",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio cerca de mí",
+     "match_type": "EXACT",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "632141720280",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit promociones",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1083510287272",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit cerca de mi",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1407663767980",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio económico",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "1966097561891",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit costos",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2500534856546",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "precios easy fit",
+     "match_type": "BROAD",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2500534856586",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "easy fit cerca de mí",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2500534856626",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "precios easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2500534856786",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "promociones easy fit",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    },
+    {
+     "criterion_id": "2500534856826",
+     "ad_group_id": "203289223671",
+     "campaign_id": "24274603133",
+     "text": "gimnasio con peso libre",
+     "match_type": "PHRASE",
+     "status": "ENABLED",
+     "negative": false,
+     "quality_score": null,
+     "totals": {
+      "spend": 0,
+      "impressions": 0,
+      "clicks": 0,
+      "conversions": 0
+     }
+    }
+   ],
+   "bid_targets": [
+    {
+     "campaign_id": "20249528111",
+     "strategy": "maximize_conversions",
+     "target_cpa": 20,
+     "target_roas": null,
+     "system_status": "PAUSED",
+     "last_changed_at": null
+    },
+    {
+     "campaign_id": "20459399173",
+     "strategy": "maximize_conversions",
+     "target_cpa": null,
+     "target_roas": null,
+     "system_status": "PAUSED",
+     "last_changed_at": null
+    },
+    {
+     "campaign_id": "20553834868",
+     "strategy": "maximize_conversions",
+     "target_cpa": 20,
+     "target_roas": null,
+     "system_status": "PAUSED",
+     "last_changed_at": null
+    },
+    {
+     "campaign_id": "20653378244",
+     "strategy": "other",
+     "target_cpa": null,
+     "target_roas": null,
+     "system_status": "UNAVAILABLE",
+     "last_changed_at": null
+    },
+    {
+     "campaign_id": "24274603133",
+     "strategy": "maximize_conversions",
+     "target_cpa": null,
+     "target_roas": null,
+     "system_status": "PAUSED",
+     "last_changed_at": null
+    },
+    {
+     "campaign_id": "24298030946",
+     "strategy": "maximize_conversions",
+     "target_cpa": null,
+     "target_roas": null,
+     "system_status": "PAUSED",
+     "last_changed_at": null
+    },
+    {
+     "campaign_id": "24298408295",
+     "strategy": "maximize_conversions",
+     "target_cpa": 25,
+     "target_roas": null,
+     "system_status": "PAUSED",
+     "last_changed_at": "2026-09-28T15:57:27-06:00"
+    }
+   ],
+   "asset_groups": [
+    {
+     "asset_group_id": "6752884565",
+     "campaign_id": "24298408295",
+     "name": "GA1 EASY",
+     "ad_strength": "AVERAGE",
+     "primary_status": "ELIGIBLE",
+     "missing": [
+      "3 marketing images",
+      "2 portrait marketing images",
+      "2 square marketing images",
+      "1 youtube video (vertical)",
+      "1 youtube video (square)",
+      "5 sitelinks"
+     ]
+    }
+   ],
+   "delivery": [
+    {
+     "campaign_id": "20249528111",
+     "campaign_name": "Campaña búsqueda",
+     "primary_status": "ELIGIBLE",
+     "primary_status_reasons": [],
+     "serving_status": "SUSPENDED",
+     "budget_per_day": 800,
+     "dark_days": 30,
+     "disapproved_ads": []
+    },
+    {
+     "campaign_id": "20459399173",
+     "campaign_name": "Campaña Display",
+     "primary_status": "ELIGIBLE",
+     "primary_status_reasons": [],
+     "serving_status": "SUSPENDED",
+     "budget_per_day": 55,
+     "dark_days": 30,
+     "disapproved_ads": []
+    },
+    {
+     "campaign_id": "20553834868",
+     "campaign_name": "Campaña Pasarela de pago",
+     "primary_status": "ELIGIBLE",
+     "primary_status_reasons": [],
+     "serving_status": "SUSPENDED",
+     "budget_per_day": 200,
+     "dark_days": 30,
+     "disapproved_ads": []
+    },
+    {
+     "campaign_id": "20653378244",
+     "campaign_name": "Easyfit video Youtube",
+     "primary_status": "ENDED",
+     "primary_status_reasons": [
+      "CAMPAIGN_ENDED"
+     ],
+     "serving_status": "ENDED",
+     "budget_per_day": null,
+     "dark_days": 0,
+     "disapproved_ads": []
+    },
+    {
+     "campaign_id": "24274603133",
+     "campaign_name": "Easy Fit | Search | Leads formulario",
+     "primary_status": "LIMITED",
+     "primary_status_reasons": [
+      "MISSING_LEAD_FORM_EXTENSION"
+     ],
+     "serving_status": "SUSPENDED",
+     "budget_per_day": 700,
+     "dark_days": 14,
+     "disapproved_ads": []
+    },
+    {
+     "campaign_id": "24298030946",
+     "campaign_name": "GA 1 EASY",
+     "primary_status": "ELIGIBLE",
+     "primary_status_reasons": [],
+     "serving_status": "SUSPENDED",
+     "budget_per_day": 700,
+     "dark_days": 7,
+     "disapproved_ads": []
+    },
+    {
+     "campaign_id": "24298408295",
+     "campaign_name": "Easy Fit",
+     "primary_status": "ELIGIBLE",
+     "primary_status_reasons": [],
+     "serving_status": "SUSPENDED",
+     "budget_per_day": 500,
+     "dark_days": 7,
+     "disapproved_ads": []
+    }
+   ]
+  },
+  "tiktok": null
+ }
+}

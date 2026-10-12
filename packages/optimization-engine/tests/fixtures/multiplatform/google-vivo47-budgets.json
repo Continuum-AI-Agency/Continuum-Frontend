@@ -1,0 +1,351 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT campaign_budget.id, campaign_budget.name, campaign_budget.amount_micros, campaign_budget.total_amount_micros, campaign_budget.explicitly_shared, campaign_budget.reference_count, campaign_budget.delivery_method, campaign_budget.period, campaign_budget.status, campaign_budget.type FROM campaign_budget WHERE campaign_budget.status != 'REMOVED'",
+    "rows": 24
+  },
+  "data": [
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/11728771322",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "SMART_CAMPAIGN",
+        "id": "11728771322",
+        "name": "Gimnasio Familiar Premium",
+        "amountMicros": "48400000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/11753273977",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "11753273977",
+        "name": "Trafico-Cortesias",
+        "amountMicros": "200000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12161652417",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12161652417",
+        "name": "VALLE REAL",
+        "amountMicros": "300000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12168103327",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12168103327",
+        "name": "VIVO47-GOURMETERIA",
+        "amountMicros": "300000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12280387431",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12280387431",
+        "name": "Fecha de creación de Maximizar conversiones de la cartera_1083205630-300-1673527063364-: 01/12/2023 04:37 AM",
+        "amountMicros": "300000000",
+        "explicitlyShared": true,
+        "referenceCount": "3"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12296409354",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12296409354",
+        "name": "pase de 7 dias GMT",
+        "amountMicros": "370000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12304782361",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12304782361",
+        "name": "pase de 7 dias GMT",
+        "amountMicros": "210400000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12503613503",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12503613503",
+        "name": "Valle Real",
+        "amountMicros": "150000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12508176957",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12508176957",
+        "name": "Naciones Unidas",
+        "amountMicros": "150000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/12508213632",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12508213632",
+        "name": "Gourmetería",
+        "amountMicros": "611000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/13134103565",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "13134103565",
+        "name": "VIVO 47-EKATAR",
+        "amountMicros": "1179000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/13586879236",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "13586879236",
+        "name": "Display Hotsale",
+        "amountMicros": "833000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/13586883088",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "13586883088",
+        "name": "Display",
+        "amountMicros": "371000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/13940322639",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "13940322639",
+        "name": "Gourmeteria",
+        "amountMicros": "68000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/13947284122",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "13947284122",
+        "name": "Gourmeteria",
+        "amountMicros": "200000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14064761225",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14064761225",
+        "name": "Display-Buen fit",
+        "amountMicros": "277000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14071382604",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14071382604",
+        "name": "Display-Buen fit",
+        "amountMicros": "277000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14133456671",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14133456671",
+        "name": "Valle Real-Search",
+        "amountMicros": "115000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14133456707",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14133456707",
+        "name": "Valle Real-Search",
+        "amountMicros": "409000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14414681205",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "CUSTOM_PERIOD",
+        "type": "STANDARD",
+        "id": "14414681205",
+        "name": "Video | Vivo 47 | 2025",
+        "totalAmountMicros": "93000000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14429940928",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14429940928",
+        "name": "Remarketing Gourmetería | Vivo 47 | 2025",
+        "amountMicros": "207000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14453885756",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14453885756",
+        "name": "Remarketing Valle Real | Vivo 47 | 2025",
+        "amountMicros": "125000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14680229249",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14680229249",
+        "name": "DP | VIVO 47 | Socios",
+        "amountMicros": "122000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/3710693645/campaignBudgets/14692825153",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14692825153",
+        "name": "DP | VIVO 47 | Ex Socios",
+        "amountMicros": "428570000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    }
+  ]
+}

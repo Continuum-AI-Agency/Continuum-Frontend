@@ -1,0 +1,165 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-06T00:13:44.428Z",
+    "query": "SELECT change_event.change_date_time, change_event.change_resource_type, change_event.changed_fields, change_event.campaign, change_event.resource_change_operation FROM change_event WHERE change_event.change_date_time >= '2026-09-07' AND change_event.change_date_time <= '2026-10-05 23:59:59' AND change_event.change_resource_type = 'CAMPAIGN' ORDER BY change_event.change_date_time DESC LIMIT 500",
+    "rows": 15
+  },
+  "data": [
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684629032079~0~0",
+        "changeDateTime": "2026-09-17 16:37:09.032079",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/21985307202"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684629032079~1~0",
+        "changeDateTime": "2026-09-17 16:37:09.032079",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/19954538151"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684491518207~0~0",
+        "changeDateTime": "2026-09-17 16:34:51.518207",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/21287529107"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684491518207~1~0",
+        "changeDateTime": "2026-09-17 16:34:51.518207",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22364972636"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684491518207~2~0",
+        "changeDateTime": "2026-09-17 16:34:51.518207",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22706302206"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684491518207~3~0",
+        "changeDateTime": "2026-09-17 16:34:51.518207",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22404522468"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1789684423208255~0~0",
+        "changeDateTime": "2026-09-17 16:33:43.208255",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "",
+        "campaign": "customers/3710693645/campaigns/20775796216"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~0~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/21287529107"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~1~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22706302206"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~2~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/19954538151"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~3~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22364972636"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~4~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22404522468"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~5~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/21985307202"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788973954062319~6~0",
+        "changeDateTime": "2026-09-09 11:12:34.062319",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/20775796216"
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/3710693645/changeEvents/1788972975890223~0~0",
+        "changeDateTime": "2026-09-09 10:56:15.890223",
+        "changeResourceType": "CAMPAIGN",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status",
+        "campaign": "customers/3710693645/campaigns/22357506361"
+      }
+    }
+  ]
+}

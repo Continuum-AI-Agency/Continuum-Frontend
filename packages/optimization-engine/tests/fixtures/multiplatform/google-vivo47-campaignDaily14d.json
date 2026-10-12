@@ -1,0 +1,367 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT segments.date, campaign.id, campaign.name, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.search_impression_share, metrics.search_budget_lost_impression_share FROM campaign WHERE segments.date BETWEEN '2026-09-17' AND '2026-09-30' AND campaign.status != 'REMOVED'",
+    "rows": 20
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19954538151",
+        "name": "Gourmetería",
+        "id": "19954538151"
+      },
+      "metrics": {
+        "clicks": "49",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.3469387755102041,
+        "conversions": 1,
+        "costMicros": "476218785",
+        "impressions": "1339"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "170",
+        "searchBudgetLostImpressionShare": 0.06330416881111683,
+        "searchImpressionShare": 0.14908217533024531,
+        "conversions": 1,
+        "costMicros": "871435000",
+        "impressions": "6788"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "69",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.7272727272727273,
+        "conversions": 1,
+        "costMicros": "752292993",
+        "impressions": "341"
+      },
+      "segments": {
+        "date": "2026-09-18"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "77",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.888135593220339,
+        "conversions": 2,
+        "costMicros": "1247550000",
+        "impressions": "490"
+      },
+      "segments": {
+        "date": "2026-09-19"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "70",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.908745247148289,
+        "conversions": 0,
+        "costMicros": "997860000",
+        "impressions": "453"
+      },
+      "segments": {
+        "date": "2026-09-20"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "109",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.9356060606060606,
+        "conversions": 4,
+        "costMicros": "1551208954",
+        "impressions": "480"
+      },
+      "segments": {
+        "date": "2026-09-21"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "89",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.9812734082397003,
+        "conversions": 1,
+        "costMicros": "2276878396",
+        "impressions": "511"
+      },
+      "segments": {
+        "date": "2026-09-22"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "82",
+        "searchBudgetLostImpressionShare": 0.07171314741035857,
+        "searchImpressionShare": 0.9282868525896414,
+        "conversions": 1,
+        "costMicros": "1690220000",
+        "impressions": "266"
+      },
+      "segments": {
+        "date": "2026-09-23"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "27",
+        "searchBudgetLostImpressionShare": 0.48936170212765956,
+        "searchImpressionShare": 0.5106382978723404,
+        "conversions": 1,
+        "costMicros": "733730000",
+        "impressions": "123"
+      },
+      "segments": {
+        "date": "2026-09-24"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "43",
+        "searchBudgetLostImpressionShare": 0.26108374384236455,
+        "searchImpressionShare": 0.7389162561576355,
+        "conversions": 0,
+        "costMicros": "769470000",
+        "impressions": "264"
+      },
+      "segments": {
+        "date": "2026-09-25"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "51",
+        "searchBudgetLostImpressionShare": 0.2326388888888889,
+        "searchImpressionShare": 0.7604166666666666,
+        "conversions": 3,
+        "costMicros": "960030000",
+        "impressions": "319"
+      },
+      "segments": {
+        "date": "2026-09-26"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "58",
+        "searchBudgetLostImpressionShare": 0.24324324324324326,
+        "searchImpressionShare": 0.7567567567567568,
+        "conversions": 0,
+        "costMicros": "979450000",
+        "impressions": "173"
+      },
+      "segments": {
+        "date": "2026-09-27"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "80",
+        "searchBudgetLostImpressionShare": 0.29073482428115016,
+        "searchImpressionShare": 0.7092651757188498,
+        "conversions": 3.008771,
+        "costMicros": "965555000",
+        "impressions": "339"
+      },
+      "segments": {
+        "date": "2026-09-28"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "73",
+        "searchBudgetLostImpressionShare": 0.37344398340248963,
+        "searchImpressionShare": 0.6265560165975104,
+        "conversions": 0,
+        "costMicros": "905553460",
+        "impressions": "150"
+      },
+      "segments": {
+        "date": "2026-09-29"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "clicks": "78",
+        "searchBudgetLostImpressionShare": 0.07142857142857142,
+        "searchImpressionShare": 0.9285714285714286,
+        "conversions": 1,
+        "costMicros": "876796567",
+        "impressions": "214"
+      },
+      "segments": {
+        "date": "2026-09-30"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "name": "Display",
+        "id": "21287529107"
+      },
+      "metrics": {
+        "clicks": "182",
+        "conversions": 1,
+        "costMicros": "399979914",
+        "impressions": "3676"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21985307202",
+        "name": "Valle Real-Search",
+        "id": "21985307202"
+      },
+      "metrics": {
+        "clicks": "116",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.0999,
+        "conversions": 0,
+        "costMicros": "210286004",
+        "impressions": "3079"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22364972636",
+        "name": "Remarketing Gourmetería | Vivo 47 | 2025",
+        "id": "22364972636"
+      },
+      "metrics": {
+        "clicks": "81",
+        "conversions": 0,
+        "costMicros": "242392759",
+        "impressions": "2880"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22404522468",
+        "name": "Remarketing Valle Real | Vivo 47 | 2025",
+        "id": "22404522468"
+      },
+      "metrics": {
+        "clicks": "136",
+        "conversions": 0,
+        "costMicros": "129363232",
+        "impressions": "3922"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22706302206",
+        "name": "DP | VIVO 47 | Socios",
+        "id": "22706302206"
+      },
+      "metrics": {
+        "clicks": "74",
+        "conversions": 10.999709,
+        "costMicros": "119458232",
+        "impressions": "800"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    }
+  ]
+}

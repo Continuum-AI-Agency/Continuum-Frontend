@@ -24,6 +24,7 @@ describe('FreezeReasonSchema', () => {
       'no_conversions',
       'no_declared_objective',
       'no_own_budget',
+      'no_spend',
       'unsupported_budget',
     ]);
   });

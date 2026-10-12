@@ -1,0 +1,28 @@
+{
+  "_source": {
+    "kind": "SYNTHETIC",
+    "label": "synthetic, composed for the scenario — not a recording",
+    "anchoredTo": "meta-easyfit-portfolios.json (portfolio currency MXN)",
+    "invented": [
+      "the USD advertiser"
+    ],
+    "note": "enroll of a USD TikTok advertiser into an MXN portfolio"
+  },
+  "data": {
+    "advertiserInfo": {
+      "advertiser_id": "7000000000000000999 (invented)",
+      "name": "Easy Fit US test",
+      "currency": "USD",
+      "timezone": "America/Mexico_City"
+    },
+    "enrollInto": {
+      "portfolio": "FORMULARIOS // TODOS",
+      "currency": "MXN",
+      "from": "meta-easyfit-portfolios.json (currency MXN via optimizer_load_portfolio)"
+    },
+    "expected": {
+      "sqlstate": "23514",
+      "message": "entity currency USD differs from portfolio currency MXN"
+    }
+  }
+}

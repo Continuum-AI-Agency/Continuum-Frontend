@@ -7,6 +7,7 @@ import {
   billingOverageRequestSchema,
   billingOverageResponseSchema,
   billingOverviewSchema,
+  billingPaymentRequiredOf,
   billingPaymentRequiredSchema,
   billingPlanChangeRequestSchema,
   brandEntitlementsSchema,
@@ -71,7 +72,12 @@ describe('billing contracts', () => {
         currentPeriodEnd: '2026-10-21T19:40:02.000Z',
       },
       invoices: [],
-      canvas: { studioBucket: entitlements.buckets[0], rolloverUsd: 0, purchasedBalanceUsd: 10, overageUsd: 0 },
+      canvas: {
+        studioBucket: entitlements.buckets[0],
+        rolloverUsd: 0,
+        purchasedBalanceUsd: 10,
+        overageUsd: 0,
+      },
       catalog: {
         plans: [
           {
@@ -90,7 +96,9 @@ describe('billing contracts', () => {
     expect(billingOverviewSchema.parse({ ...overview, livemode: true }).livemode).toBe(true);
     const { overageEnabled: _dropped, ...withoutOptIn } = overview;
     expect(billingOverviewSchema.safeParse(withoutOptIn).success).toBe(false);
-    expect(billingOverviewSchema.parse({ ...overview, overageCapUsd: null }).overageCapUsd).toBeNull();
+    expect(
+      billingOverviewSchema.parse({ ...overview, overageCapUsd: null }).overageCapUsd,
+    ).toBeNull();
   });
 
   it('takes only a boolean overage opt-in and echoes the subscription state', () => {
@@ -109,10 +117,15 @@ describe('billing contracts', () => {
 
   it('accepts only unique self-serve plans at checkout', () => {
     const urls = { successUrl: 'http://localhost:3000/ok', cancelUrl: 'http://localhost:3000/no' };
-    expect(billingCheckoutRequestSchema.safeParse({ plans: ['organic_studio'], ...urls }).success).toBe(true);
-    expect(billingCheckoutRequestSchema.safeParse({ plans: ['trends'], ...urls }).success).toBe(false);
     expect(
-      billingCheckoutRequestSchema.safeParse({ plans: ['paid_media', 'paid_media'], ...urls }).success,
+      billingCheckoutRequestSchema.safeParse({ plans: ['organic_studio'], ...urls }).success,
+    ).toBe(true);
+    expect(billingCheckoutRequestSchema.safeParse({ plans: ['trends'], ...urls }).success).toBe(
+      false,
+    );
+    expect(
+      billingCheckoutRequestSchema.safeParse({ plans: ['paid_media', 'paid_media'], ...urls })
+        .success,
     ).toBe(false);
   });
 
@@ -120,14 +133,50 @@ describe('billing contracts', () => {
     expect(billingPlanChangeRequestSchema.safeParse({ add: 'paid_media' }).success).toBe(true);
     expect(billingPlanChangeRequestSchema.safeParse({}).success).toBe(false);
     expect(
-      billingPlanChangeRequestSchema.safeParse({ add: 'paid_media', remove: 'organic_studio' }).success,
+      billingPlanChangeRequestSchema.safeParse({ add: 'paid_media', remove: 'organic_studio' })
+        .success,
     ).toBe(false);
   });
 
-  it('parses the 402 body', () => {
+  it('parses the 402 body, and composes one that names the brand, the product and the move', () => {
+    const exhausted = billingPaymentRequiredOf({
+      error: 'credits_exhausted',
+      product: 'studio',
+      planCode: null,
+      brandId: 'brand_1',
+    });
+    expect(billingPaymentRequiredSchema.parse(exhausted)).toEqual(exhausted);
+    expect(exhausted).toMatchObject({
+      brandId: 'brand_1',
+      productName: 'AI Canvas (Organic Plus)',
+      action: { kind: 'buy_credits', planCode: null },
+    });
+    const required = billingPaymentRequiredOf({
+      error: 'product_required',
+      product: 'paid_media',
+      planCode: 'paid_media',
+    });
+    expect(billingPaymentRequiredSchema.parse(required)).toEqual(required);
+    expect(required.brandId).toBeNull();
+    expect(required.message).toBe(
+      "This brand's plan does not include Performance Plus. Add the Performance Plus plan to use it.",
+    );
+    expect(required.action).toEqual({ kind: 'upgrade_plan', planCode: 'paid_media' });
+    const unsold = billingPaymentRequiredOf({
+      error: 'product_required',
+      product: 'trends',
+      planCode: null,
+    });
+    expect(unsold.action).toEqual({ kind: 'contact_us', planCode: null });
+    expect(unsold.message).toContain('Contact us');
+    // A bare body — what two customers got as a silent empty chat — no longer parses.
     expect(
-      billingPaymentRequiredSchema.parse({ error: 'credits_exhausted', product: 'studio', planCode: null }).error,
-    ).toBe('credits_exhausted');
+      billingPaymentRequiredSchema.safeParse({
+        error: 'credits_exhausted',
+        product: 'studio',
+        planCode: null,
+      }).success,
+    ).toBe(false);
   });
 
   it('converts USD to whole credits without float drift', () => {

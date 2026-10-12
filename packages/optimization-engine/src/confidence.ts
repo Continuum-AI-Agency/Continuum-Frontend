@@ -21,8 +21,9 @@
 // conversions at all — each with what would move the score. Those are the actions.
 // ---------------------------------------------------------------------------
 import type { EngineConfig } from './config';
+import { collectionNoun, collectionPlural, conversionTracking } from './entityNoun';
 import { kpiEvents, scoreAdSet } from './scoring';
-import type { AdSetSnapshot, Confidence, ConfidenceActionable } from './types';
+import type { AdSetSnapshot, Confidence, ConfidenceActionable, WindowMetrics } from './types';
 
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 
@@ -72,6 +73,60 @@ export function confidenceOf(s: AdSetSnapshot, cfg: EngineConfig): Confidence {
 
 const CONSISTENCY_WEAK = 0.6;
 
+/** What one event of each currency is called in prose, for the mismatch sentence. */
+const RESULT_NOUN: Partial<Record<keyof WindowMetrics, string>> = {
+  purchases: 'purchases',
+  leads: 'leads',
+  conversations: 'messaging conversations',
+  linkClicks: 'link clicks',
+  landingPageViews: 'landing-page views',
+  thruplays: 'thruplays',
+  postEngagement: 'post engagements',
+  clicks: 'clicks',
+  appInstalls: 'app installs',
+  signups: 'sign-ups',
+  impressions: 'impressions',
+};
+const nounOf = (field: keyof WindowMetrics): string => RESULT_NOUN[field] ?? field;
+
+/**
+ * The ad sets held because they buy a different currency than the portfolio prices — the
+ * one condition that means the portfolio cannot optimize them AT ALL, however long it waits.
+ *
+ * Said first and apart from the sample terms, because the live case was a portfolio whose
+ * twelve of twelve ad sets bid for PURCHASE (Sales → WhatsApp) under a `conversations`
+ * objective: pool 0, every peso frozen, and the only actionable told the account to give
+ * them budget "until they clear 20 conversions" — a currency they never bid for.
+ */
+function kpiMismatchActionable(
+  mismatched: AdSetSnapshot[],
+  snapshots: AdSetSnapshot[],
+  totalSpend: number,
+  cfg: EngineConfig,
+): ConfidenceActionable | null {
+  const total = snapshots.length;
+  if (mismatched.length === 0 || !cfg.kpiField) return null;
+  const spend = mismatched.reduce((sum, s) => sum + Math.max(s.windows.d14.spend, 0), 0);
+  const spendShare = totalSpend > 0 ? spend / totalSpend : mismatched.length / total;
+  const bought = [
+    ...new Set(mismatched.map((s) => (s.kpiField ? nounOf(s.kpiField) : 'another result'))),
+  ];
+  const priced = nounOf(cfg.kpiField);
+  const all = mismatched.length === total;
+  const entities = collectionPlural(snapshots);
+  return {
+    code: 'kpi_mismatch',
+    adsetIds: mismatched.map((s) => s.id),
+    spendShare,
+    projectedScore: null,
+    message:
+      `${mismatched.length} of ${total} ${entities} (${Math.round(spendShare * 100)}% of spend) bid ` +
+      `for ${bought.join(' / ')}, not the ${priced} this portfolio prices, so the optimizer ` +
+      `holds their budgets and moves ${all ? 'nothing' : 'none of theirs'}. Set the portfolio's ` +
+      `objective to what they buy, or move them to a portfolio that prices it.`,
+  };
+}
+
 /** Spend-weighted confidence over a set of ad sets — the reliability of the
  *  portfolio's reallocation as a whole — plus what would raise it. */
 export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfig): Confidence {
@@ -88,15 +143,24 @@ export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfi
     actionables: [],
   };
 
+  // An ad set held for buying another currency has no reading in this one: its zero is not
+  // a thin sample, and no amount of budget will lift it over this portfolio's event floor.
+  const mismatched = snapshots.filter((s) => s.freezeReason === 'kpi_mismatch');
+  const measured = snapshots.filter((s) => s.freezeReason !== 'kpi_mismatch');
+  const totalSpend = snapshots.reduce((sum, s) => sum + Math.max(s.windows.d14.spend, 0), 0);
+  const mismatch = kpiMismatchActionable(mismatched, snapshots, totalSpend, cfg);
+  // Ad sets on Meta, campaigns / ad groups elsewhere: the sentence names what the account has.
+  const nounFor = (count: number): string => collectionNoun(snapshots, count);
+
   type Weighed = { id: string; w: number; c: Confidence; spend: number };
   const weighed: Weighed[] = [];
-  for (const s of snapshots) {
+  for (const s of measured) {
     const w = Math.max(s.windows.d14.spend, 0);
     if (w <= 0) continue;
     weighed.push({ id: s.id, w, c: confidenceOf(s, cfg), spend: w });
   }
   const wsum = weighed.reduce((sum, x) => sum + x.w, 0);
-  if (wsum <= 0) return empty;
+  if (wsum <= 0) return mismatch ? { ...empty, actionables: [mismatch] } : empty;
 
   const mean = (pick: (c: Confidence) => number, rows: Weighed[]): number => {
     const total = rows.reduce((sum, x) => sum + x.w, 0);
@@ -109,7 +173,7 @@ export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfi
   const disagreeing = weighed.filter((x) => x.c.consistency < CONSISTENCY_WEAK && x.c.events >= k);
   const untracked = weighed.filter((x) => x.c.events === 0 && x.spend > cfg.cpaTarget);
 
-  const actionables: ConfidenceActionable[] = [];
+  const actionables: ConfidenceActionable[] = mismatch ? [mismatch] : [];
   if (underFloor.length > 0) {
     const rest = weighed.filter((x) => x.c.events >= k);
     const projected = rest.length > 0 ? mean((c) => c.score, rest) : null;
@@ -120,7 +184,7 @@ export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfi
       spendShare,
       projectedScore: projected,
       message:
-        `${underFloor.length} of ${weighed.length} ad sets are under the ${k}-event floor ` +
+        `${underFloor.length} of ${weighed.length} ${collectionPlural(snapshots)} are under the ${k}-event floor ` +
         `(${Math.round(spendShare * 100)}% of spend). Consolidating them, or giving them ` +
         `budget until they clear ${k} conversions in 14 days, ` +
         (projected != null && projected > score
@@ -138,7 +202,7 @@ export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfi
       spendShare,
       projectedScore: projected,
       message:
-        `${disagreeing.length} ad set${disagreeing.length === 1 ? '' : 's'} score differently ` +
+        `${disagreeing.length} ${nounFor(disagreeing.length)} score differently ` +
         `over 3, 7 and 14 days (${Math.round(spendShare * 100)}% of spend) — a recent change ` +
         'or noisy delivery. Reading them on the 14-day window, or waiting a cycle, settles it.',
     });
@@ -151,9 +215,9 @@ export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfi
       spendShare,
       projectedScore: null,
       message:
-        `${untracked.length} ad set${untracked.length === 1 ? '' : 's'} spent more than a ` +
+        `${untracked.length} ${nounFor(untracked.length)} spent more than a ` +
         'target CPA over 14 days with no tracked conversions at all. The engine reads that as ' +
-        'failure and will defund them; if they do convert, the pixel / CAPI is not reporting it.',
+        `failure and will defund them; if they do convert, ${conversionTracking(snapshots[0])} is not reporting it.`,
     });
   }
 

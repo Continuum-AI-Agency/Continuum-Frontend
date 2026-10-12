@@ -1,0 +1,109 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /ad/get/",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4, §2.9, §2.12, §4 rules 10 and 12",
+    "invented": [
+      "every ad id, name and create_time (no live advertiser)",
+      "identity_type CUSTOMIZED_USER is gone since 2026-01-15; these are dark posts (TT_USER, dark_post_status ON)"
+    ]
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000201",
+          "ad_id": "7000000000000000301",
+          "ad_name": "Rutina 30s",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK",
+          "create_time": "2026-08-20 17:10:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000201",
+          "ad_id": "7000000000000000302",
+          "ad_name": "Tour del gym",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK",
+          "create_time": "2026-08-20 17:12:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000202",
+          "ad_id": "7000000000000000303",
+          "ad_name": "Promo 333",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK",
+          "create_time": "2026-08-21 09:35:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000202",
+          "ad_id": "7000000000000000304",
+          "ad_name": "Testimonio socia",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK",
+          "create_time": "2026-08-21 09:40:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000202",
+          "ad_id": "7000000000000000305",
+          "ad_name": "Clase funcional",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK",
+          "create_time": "2026-08-21 09:45:00"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "campaign_id": "7000000000000000101",
+          "adgroup_id": "7000000000000000203",
+          "ad_id": "7000000000000000306",
+          "ad_name": "Antes y después",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK",
+          "create_time": "2026-09-28 13:05:00"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 6,
+        "total_page": 1
+      }
+    }
+  }
+}

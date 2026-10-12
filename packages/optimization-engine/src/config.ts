@@ -109,6 +109,12 @@ export type EngineConfig = {
   /** The objective's upper-funnel event (see ObjectiveProfile.upperFunnelField). */
   upperFunnelField?: keyof WindowMetrics | null;
   upperFunnelLabel?: string;
+  /** The ad account's ISO currency, for the money a reason prints: "29.10 MXN", "$29.10",
+   *  or the bare "29.10" when it is null. It IS null on every live account today, and null
+   *  prints BARE — the engine never assumes dollars. Formatting is `formatMoney` in contracts,
+   *  the rule the Frontend prints its own figures with, so a sentence and the figure printed
+   *  beside it cannot disagree about what money they are in. */
+  currency?: string | null;
   velocityUpPct?: number; // asymmetric raise cap (defaults to velocityCapPct)
   velocityDownPct?: number; // asymmetric cut cap (defaults to velocityCapPct)
   ewmaAlpha?: number; // composite smoothing across cycles (0 = off)

@@ -1,0 +1,96 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.primary_status, campaign.primary_status_reasons, campaign.advertising_channel_type, campaign.advertising_channel_sub_type, campaign.bidding_strategy_type, campaign.bidding_strategy_system_status, campaign.campaign_budget, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value, metrics.all_conversions, metrics.search_impression_share, metrics.search_budget_lost_impression_share, metrics.search_rank_lost_impression_share FROM campaign WHERE segments.date BETWEEN '2026-09-01' AND '2026-09-30' AND campaign.status != 'REMOVED'",
+    "rows": 3
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "status": "ENABLED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SUSPENDED",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Landing-Goto",
+        "id": "22574767866",
+        "campaignBudget": "customers/9343596627/campaignBudgets/14577120227",
+        "biddingStrategySystemStatus": "ENABLED",
+        "primaryStatus": "LIMITED",
+        "primaryStatusReasons": [
+          "BUDGET_CONSTRAINED"
+        ]
+      },
+      "metrics": {
+        "clicks": "226",
+        "searchBudgetLostImpressionShare": 0.18657937806873978,
+        "searchImpressionShare": 0.502454991816694,
+        "searchRankLostImpressionShare": 0.3109656301145663,
+        "conversionsValue": 8.000793,
+        "conversions": 8.000793,
+        "costMicros": "1187889258",
+        "allConversions": 382.072221,
+        "impressions": "1649"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "status": "ENABLED",
+        "advertisingChannelType": "PERFORMANCE_MAX",
+        "servingStatus": "SUSPENDED",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Necesidades SLP",
+        "id": "22980224558",
+        "campaignBudget": "customers/9343596627/campaignBudgets/14913346531",
+        "biddingStrategySystemStatus": "ENABLED",
+        "primaryStatus": "LIMITED",
+        "primaryStatusReasons": [
+          "HAS_ASSET_GROUPS_LIMITED_BY_POLICY"
+        ]
+      },
+      "metrics": {
+        "clicks": "1121",
+        "searchBudgetLostImpressionShare": 0.3587360594795539,
+        "searchImpressionShare": 0.33271375464684017,
+        "searchRankLostImpressionShare": 0.30855018587360594,
+        "conversionsValue": 13.999207,
+        "conversions": 13.999207,
+        "costMicros": "3220595872",
+        "allConversions": 650.427779,
+        "impressions": "18998"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/23858592372",
+        "status": "PAUSED",
+        "advertisingChannelType": "PERFORMANCE_MAX",
+        "servingStatus": "SUSPENDED",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "LEADS GOOGLE TEQUIS-GOTO",
+        "id": "23858592372",
+        "campaignBudget": "customers/9343596627/campaignBudgets/15592297816",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    }
+  ]
+}

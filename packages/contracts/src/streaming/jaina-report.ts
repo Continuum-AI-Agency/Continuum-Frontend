@@ -570,6 +570,91 @@ export function parseProseMarks(text: string): ProseSegment[] {
 export const stripProseMarks = (text: string): string => text.replace(proseMarkPattern(), '$2');
 
 // ---------------------------------------------------------------------------
+// Recommendation basis — what a recommendation is expected to do and how sure the turn is.
+//
+// Ramiro's criterion makes `impact` and `confidence` mandatory on every recommendation
+// (jaina-criteria.json, justification_required), and the judge found impact missing in 7 of
+// 12 answers and confidence in 9 of 12 (PP-L4-impact-and-confidence-missing-in-most-
+// recommendations): prose was the only carrier, and prose says what the model felt like
+// saying. These slots are filled BY CODE from the figures the turn read
+// (`recommendationBasis.ts` on the Backend) — never typed by a model.
+// ---------------------------------------------------------------------------
+
+export const moveDirectionSchema = z.enum(['up', 'down', 'flat']);
+export type MoveDirection = z.infer<typeof moveDirectionSchema>;
+
+/** What the move is expected to do: a figure when the turn can compute one, else a direction. */
+export const expectedImpactSchema = z.object({
+  /** The result or cost the move acts on, in the answer's words ("conversations", "spend"). */
+  metric: z.string().min(1),
+  direction: moveDirectionSchema.nullable().default(null),
+  /** "≈ +42 conversations (+1,200 MXN at 28.57 MXN per conversation)"; null when only a direction is known. */
+  figure: z.string().nullable().default(null),
+  /** How the figure was derived, in words — the reader can check it. */
+  basis: z.string().min(1),
+});
+export type ExpectedImpact = z.infer<typeof expectedImpactSchema>;
+
+export const confidenceLevelSchema = z.enum(['low', 'medium', 'high']);
+export type ConfidenceLevel = z.infer<typeof confidenceLevelSchema>;
+
+/** How sure the turn is: the sample the figure rests on and the window it was read over. */
+export const recommendationConfidenceSchema = z.object({
+  level: confidenceLevelSchema,
+  /** "31 conversations on 1,120 MXN" — the sample behind the figure. */
+  sample: z.string().min(1),
+  /** The window the sample covers, as the report labels it. */
+  window: z.string().min(1),
+  /** Why this level, in words. */
+  basis: z.string().min(1),
+});
+export type RecommendationConfidence = z.infer<typeof recommendationConfidenceSchema>;
+
+/**
+ * The gated tool that performs the recommended move, with the input the approval gate shows.
+ * Set only when a registered gated tool backs the move on the entity the row resolved to; the
+ * Frontend renders it as the action button, which submits through the approval gate — never
+ * an ungated write (PP-L4-no-action-button-or-what-to-watch-in-12-of-12).
+ */
+export const actionExecuteSchema = z.object({
+  tool: z.string().min(1),
+  input: z.record(z.string(), z.unknown()),
+});
+export type ActionExecute = z.infer<typeof actionExecuteSchema>;
+
+// ---------------------------------------------------------------------------
+// What to watch — the closing slot Ramiro's criterion asks for (format.ending). Filled by
+// code from the signals the turn already has: a tile read `peor` or marked risk/watch, an
+// insight marked risk/watch, the evidence metric behind a P1 move, a risk/watch mark in the
+// executive sentence (`whatToWatch.ts` on the Backend).
+// ---------------------------------------------------------------------------
+
+export const WATCH_SOURCES = ['metric_grid', 'insight_list', 'actions', 'prose_mark'] as const;
+export const watchSourceSchema = z.enum(WATCH_SOURCES);
+
+export const watchItemSchema = z.object({
+  /** The metric or signal to watch, as the report labels it. */
+  label: z.string().min(1),
+  /** Its figure as the report shows it; null when the signal carries none. */
+  figure: z.string().nullable().default(null),
+  direction: moveDirectionSchema.nullable().default(null),
+  severity: z.enum(['watch', 'risk', 'neutral']).default('watch'),
+  entity: z
+    .object({ id: z.string().nullable(), name: z.string().min(1), level: z.string().nullable() })
+    .nullable()
+    .default(null),
+  /** Why it is on the list, in the answer's language. */
+  why: z.string().min(1),
+  source: watchSourceSchema,
+});
+export type WatchItem = z.infer<typeof watchItemSchema>;
+export const whatToWatchSchema = z.array(watchItemSchema);
+export type WhatToWatch = z.infer<typeof whatToWatchSchema>;
+
+/** The block id the Backend renders the slot under (an `insight_list`, the card's last block). */
+export const WHAT_TO_WATCH_BLOCK_ID = 'what_to_watch';
+
+// ---------------------------------------------------------------------------
 // Insight list block
 // ---------------------------------------------------------------------------
 
@@ -587,6 +672,9 @@ export const insightListItemSchema = z.object({
   priority: z.string().default('now'),
   cite_ids: z.array(z.string()).default([]),
   evidence_refs: z.array(z.string().min(1)).optional(),
+  /** Filled by code for a `recommendation` / `action` item (`recommendationBasis.ts`); null otherwise. */
+  expected_impact: expectedImpactSchema.nullable().default(null),
+  confidence: recommendationConfidenceSchema.nullable().default(null),
 });
 export type InsightListItem = z.infer<typeof insightListItemSchema>;
 
@@ -701,6 +789,11 @@ export const actionRowSchema = z.object({
   sizing: z.string().nullable().default(null),
   evidence: actionEvidenceSchema,
   cite_ids: z.array(z.string()).default([]),
+  /** Filled by code from the entity's own figures (`recommendationBasis.ts`); null when it could not be. */
+  expected_impact: expectedImpactSchema.nullable().default(null),
+  confidence: recommendationConfidenceSchema.nullable().default(null),
+  /** The gated tool behind the move, when one backs it; the Frontend's action button. */
+  execute: actionExecuteSchema.nullable().default(null),
 });
 export type ActionRow = z.infer<typeof actionRowSchema>;
 

@@ -1,5 +1,6 @@
 // Fatigue (creative / audience) recommendation tests (bun test).
 import { expect, test } from 'bun:test';
+import { PlatformCardSchema } from '@continuum/contracts';
 import type { AdSetSnapshot, WindowMetrics } from '../src/index';
 import { DEFAULT_CONFIG, evaluateFatigue, runCycle } from '../src/index';
 
@@ -245,4 +246,111 @@ test('an ad set that did not deliver at all in d3 is not called fatigued', () =>
   expect(
     evaluateFatigue([undelivered], DEFAULT_CONFIG).some((r) => r.trigger === 'F1_creative_fatigue'),
   ).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// Feature 18 — F1 carries the same fatigue card TikTok's T3 does (meta_creative_fatigue),
+// built from the figures F1 already read plus the ad set's own per-creative series.
+// ---------------------------------------------------------------------------
+
+const series = (
+  adId: string,
+  adName: string | undefined,
+  d3: WindowMetrics,
+  d14: WindowMetrics,
+) => ({
+  adId,
+  ...(adName ? { adName } : {}),
+  windows: { d3, d7: d14, d14 },
+});
+
+// F1 at the ad-set level (3d CTR 1.0% vs 14d 2.5%), with the ads that delivered it.
+const fatiguedCreatives = (over: Partial<AdSetSnapshot> = {}): AdSetSnapshot =>
+  decaying({
+    name: 'EF | Leads | Intereses fitness',
+    audienceType: 'prospecting',
+    frequency7d: 1.84,
+    windows: {
+      d3: w(600, 10, 80, 8000),
+      d7: w(1800, 35, 400, 18000),
+      d14: w(4000, 100, 1000, 40000),
+    },
+    creativeSeries: [
+      // Most of the last three days' impressions: the creative the same people keep seeing.
+      series('a', 'Reel antes y después', w(450, 7, 60, 6000), w(2800, 70, 700, 28000)),
+      series('b', 'Carrusel testimonios', w(100, 2, 15, 1000), w(800, 20, 200, 8000)),
+      series('c', 'Story precio', w(50, 1, 5, 1000), w(400, 10, 100, 4000)),
+    ],
+    ...over,
+  });
+
+const f1Of = (s: AdSetSnapshot) =>
+  evaluateFatigue([s], DEFAULT_CONFIG).find((r) => r.trigger === 'F1_creative_fatigue');
+
+test('F1 carries a meta_creative_fatigue card: the creative the audience keeps seeing, its own CTR', () => {
+  const rec = f1Of(fatiguedCreatives());
+  const card = rec?.evidence?.platformCard;
+  expect(PlatformCardSchema.safeParse(card).success).toBe(true);
+  expect(card).toEqual({
+    variant: 'meta_creative_fatigue',
+    ad_set_name: 'EF | Leads | Intereses fitness',
+    creative_name: 'Reel antes y después',
+    ctr_now: 0.01,
+    ctr_before: 0.025,
+    days: 14,
+    frequency: 1.84,
+    replacement: { name: 'Carrusel testimonios', ctr: 0.015 },
+  });
+  // The row it rides on is the F1 it always was.
+  expect(rec).toMatchObject({
+    kind: 'creative_refresh',
+    evidence: { metric: 'ctr', window: 'd3' },
+  });
+  expect(rec?.seed).toBeUndefined();
+});
+
+test('the F1 card names no replacement no sibling beats, and no frequency Meta did not report', () => {
+  const card = f1Of(
+    fatiguedCreatives({
+      frequency7d: undefined,
+      creativeSeries: [
+        series('a', 'Reel antes y después', w(450, 7, 60, 6000), w(2800, 70, 700, 28000)),
+        series('c', 'Story precio', w(50, 1, 5, 1000), w(400, 10, 100, 4000)),
+      ],
+    }),
+  )?.evidence?.platformCard;
+  expect(card).toMatchObject({ frequency: null, replacement: null });
+});
+
+test('an ad with no name is named by its id, as every other creative trigger names it', () => {
+  const card = f1Of(
+    fatiguedCreatives({
+      creativeSeries: [
+        series('120252387195440236', undefined, w(450, 7, 60, 6000), w(2800, 70, 700, 28000)),
+      ],
+    }),
+  )?.evidence?.platformCard;
+  expect(card).toMatchObject({ creative_name: '120252387195440236', replacement: null });
+});
+
+test('no card when F1 cannot say which creative wore out, or that one did not', () => {
+  // No per-creative series: the ad set fell, but nothing names a creative.
+  const bare = f1Of(fatiguedCreatives({ creativeSeries: undefined }));
+  expect(bare?.kind).toBe('creative_refresh');
+  expect(bare?.evidence?.platformCard).toBeUndefined();
+  // The most-seen creative held its own CTR: the fall is somewhere else, so no card claims it.
+  const held = f1Of(
+    fatiguedCreatives({
+      creativeSeries: [
+        series('a', 'Reel antes y después', w(450, 7, 150, 6000), w(2800, 70, 700, 28000)),
+      ],
+    }),
+  );
+  expect(held?.evidence?.platformCard).toBeUndefined();
+});
+
+test('F2 and F3 are audience calls and carry no creative card', () => {
+  const recs = evaluateFatigue([fatiguedCreatives({ frequency7d: 4.0 })], DEFAULT_CONFIG);
+  expect(recs.map((r) => r.trigger)).toEqual(['F2_audience_saturation']);
+  expect(recs[0].evidence?.platformCard).toBeUndefined();
 });

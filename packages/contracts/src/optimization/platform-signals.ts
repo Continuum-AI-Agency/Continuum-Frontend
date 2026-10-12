@@ -118,6 +118,9 @@ export const GoogleDeliverySignalSchema = z.object({
   /** campaign.primary_status: ELIGIBLE, LIMITED, NOT_ELIGIBLE, PAUSED, LEARNING, … */
   primary_status: z.string().min(1),
   primary_status_reasons: z.array(z.string().min(1)),
+  /** campaign.serving_status: SERVING, SUSPENDED, ENDED, PENDING, NONE. Easy Fit 2026 reads
+   *  primary_status ELIGIBLE with no reason while serving_status says SUSPENDED (billing). */
+  serving_status: z.string().min(1).nullable().optional(),
   budget_per_day: amount.nullable(),
   /** Days in the window with zero impressions while ENABLED with budget. */
   dark_days: count,

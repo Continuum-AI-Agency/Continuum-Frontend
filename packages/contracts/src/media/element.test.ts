@@ -40,15 +40,18 @@ describe('buildElementReferencePrompt', () => {
       const built = buildElementReferencePrompt(category, 3);
       expect(built.prompt.length).toBeGreaterThan(200);
       expect(built.aspectRatio).toMatch(/^\d+:\d+$/);
-      expect(built.aspectRatio).toBe(elementReferenceAspectRatio(category));
+      if (!isElementPersonCategory(category)) {
+        expect(built.aspectRatio).toBe(elementReferenceAspectRatio(category));
+      }
       expect(built.prompt).toContain('multi-panel sheet');
       expect(built.prompt).toContain('authoritative names and facts');
     }
   });
 
   it('uses the researched aspect ratio per category', () => {
-    expect(elementReferenceAspectRatio('model')).toBe('16:9');
-    expect(elementReferenceAspectRatio('character')).toBe('16:9');
+    // A person's reference is the portrait continuity sheet, not the one-call board.
+    expect(elementReferenceAspectRatio('model')).toBe('3:4');
+    expect(elementReferenceAspectRatio('character')).toBe('3:4');
     expect(elementReferenceAspectRatio('setting')).toBe('16:9');
     expect(elementReferenceAspectRatio('product')).toBe('16:9');
     expect(elementReferenceAspectRatio('moodboard')).toBe('16:9');

@@ -14,6 +14,8 @@
 // what we hold. No caller may read a null as a zero.
 // ---------------------------------------------------------------------------
 
+import { formatMoney } from '@continuum/contracts';
+import { action, currencyCode, entityOf, resultNounPlural, title } from './title';
 import type { AdSetSnapshot, DeliveryRead, DeliveryState, Recommendation } from './types';
 
 /** Consecutive zero-impression days at which an ACTIVE, funded ad set is called `dark`.
@@ -206,14 +208,27 @@ function blockerClause(blockers: string[]): string {
   return `Meta reports: ${blockers.join('; ')}`;
 }
 
+/** The results the ad set bought in the last week, in the currency it declares — the
+ *  portfolio's when it declares none, purchases when neither says. */
+function weeklyEvents(s: AdSetSnapshot, kpiField: AdSetSnapshot['kpiField']): number {
+  const field = s.kpiField ?? kpiField ?? 'purchases';
+  return s.windows.d7[field] ?? 0;
+}
+
+/** `currency` is the ad account's, for the budget a D2 reason prints; null prints bare.
+ *  `kpiField` is the portfolio's, for the results a D3 title counts; an ad set's own
+ *  declaration wins over it, and purchases stand in when neither says. */
 export function evaluateDelivery(
   snapshots: AdSetSnapshot[],
   absent: AbsentAdset[],
   asOf?: string,
+  currency: string | null = null,
+  kpiField?: AdSetSnapshot['kpiField'],
 ): DeliveryEvaluation {
   const recommendations: Recommendation[] = [];
   const reads = new Map<string, DeliveryRead>();
   const suppressIds = new Set<string>();
+  const cfg = { currency, kpiField };
 
   // D1 — enrolled, and no longer in the account's ACTIVE fleet.
   for (const entry of absent) {
@@ -227,6 +242,30 @@ export function evaluateDelivery(
       trigger: 'D1_off_meta',
       severity: 'medium',
       reason: `${name ? `"${name}"` : 'This ad set'} is enrolled but is no longer ACTIVE on Meta${since} — paused, deleted, or moved to campaign budget in Ads Manager. It is spending nothing and can learn nothing. Resume it or drop it from the portfolio; a new creative would change neither.`,
+      // The one figure an absence holds is how long it has lasted. Known only when the
+      // cycle knows when it started; otherwise there is no title, because a title with
+      // no figure is a label.
+      ...(age !== null
+        ? {
+            evidence: {
+              metric: 'days_absent',
+              value: age,
+              comparator: `not ACTIVE on Meta${since}`,
+              threshold: OFF_META_FRESH_DAYS,
+              window: 'd7',
+              estImpactPerDay: null,
+              title: title({
+                entity: name || entry.adsetId,
+                figure: age,
+                unit: age === 1 ? 'día fuera de ACTIVE en Meta' : 'días fuera de ACTIVE en Meta',
+                comparator: `desde ${(entry.missingSince as string).slice(0, 10)}, con 0 de gasto`,
+                window: 'd7',
+              }),
+              action: action('restore_delivery', cfg),
+              source: 'engine',
+            },
+          }
+        : {}),
       needsApproval: true,
     });
   }
@@ -246,7 +285,29 @@ export function evaluateDelivery(
         kind: 'restore_delivery',
         trigger: 'D2_dark_with_budget',
         severity: 'high',
-        reason: `ACTIVE on Meta with $${s.currentBudget.toFixed(0)}/day of budget, and zero impressions for ${read.darkDays} days. ${blockerClause(read.blockers)}. Delivery is the problem here, not the creative — refreshing an ad that is not being shown changes nothing.`,
+        reason: `ACTIVE on Meta with ${formatMoney(s.currentBudget, currency)}/day of budget, and zero impressions for ${read.darkDays} days. ${blockerClause(read.blockers)}. Delivery is the problem here, not the creative — refreshing an ad that is not being shown changes nothing.`,
+        // The budget is the figure — it is what sits idle — and the dark days against the
+        // threshold that called it dark are the comparison. Meta's own blockers ride in the
+        // comparator verbatim when it names any.
+        evidence: {
+          metric: 'dark_days',
+          value: read.darkDays,
+          comparator: `ACTIVE with ${formatMoney(s.currentBudget, currency)}/day, ${blockerClause(read.blockers)}`,
+          threshold: DARK_DAYS_THRESHOLD,
+          window: 'd14',
+          estImpactPerDay: s.currentBudget,
+          title: title({
+            entity: entityOf(s),
+            figure: s.currentBudget,
+            unit: `${currencyCode(cfg)} por día de presupuesto`.trim(),
+            comparator: `y 0 impresiones en ${read.darkDays} días${
+              read.blockers.length > 0 ? ` (Meta reporta: ${read.blockers.join('; ')})` : ''
+            }`,
+            window: 'd14',
+          }),
+          action: action('restore_delivery', cfg, { perDay: s.currentBudget }),
+          source: 'engine',
+        },
         needsApproval: true,
       });
       continue;
@@ -262,6 +323,25 @@ export function evaluateDelivery(
         severity: 'medium',
         reason:
           'Meta reports LEARNING_LIMITED: too few weekly conversions to finish learning, so delivery stays unstable and every number on it is noisy. Consolidate audiences or raise the budget — adding more creatives splits the same scarce signal further.',
+        // The weekly result count is the figure Meta's verdict is about; the verdict itself
+        // is the comparison, quoted rather than paraphrased.
+        evidence: {
+          metric: 'kpi_events',
+          value: weeklyEvents(s, kpiField),
+          comparator: 'Meta reports LEARNING_LIMITED',
+          threshold: null,
+          window: 'd7',
+          estImpactPerDay: null,
+          title: title({
+            entity: entityOf(s),
+            figure: weeklyEvents(s, kpiField),
+            unit: `${resultNounPlural(cfg, s)} en 7 días`,
+            comparator: 'aprendizaje limitado según Meta',
+            window: 'd7',
+          }),
+          action: action('restore_delivery', cfg),
+          source: 'engine',
+        },
         needsApproval: true,
       });
     }

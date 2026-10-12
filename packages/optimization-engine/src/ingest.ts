@@ -75,28 +75,40 @@ export function mapMetaRowToWindowMetrics(row: MetaMetricRow): WindowMetrics {
 // conversion its own creatives do not.
 // ---------------------------------------------------------------------------
 
+/** Meta reports one event under several overlapping counters (an omni_ aggregate beside the
+ *  web/pixel counters it includes), so these buckets are ORDERED and read by the first counter
+ *  the day carries — never summed. Summing doubled every landing page view on
+ *  act_2623704741128744 (167 + 167 for the same visits). */
 const ADD_TO_CART_ACTIONS = [
-  'add_to_cart',
   'omni_add_to_cart',
+  'add_to_cart',
   'offsite_conversion.fb_pixel_add_to_cart',
 ];
-const LEAD_ACTIONS = [
-  'lead',
-  'leadgen_grouped',
+/** `lead` is Meta's aggregate of the pixel lead and the on-Facebook (form) lead and arrives
+ *  BESIDE its parts on the same row, so it is authoritative when present and the disjoint
+ *  parts are added only without it — the edge's extractLeadCount, and the backend's
+ *  core/resultActions.ts. Summing all of them counted every Easy Fit lead twice. */
+const LEAD_AGGREGATE = 'lead';
+const LEAD_COMPONENT_ACTIONS = [
   'offsite_conversion.fb_pixel_lead',
   'onsite_conversion.lead_grouped',
 ];
-const APP_INSTALL_ACTIONS = ['app_install', 'omni_app_install', 'mobile_app_install'];
+const APP_INSTALL_ACTIONS = ['omni_app_install', 'mobile_app_install', 'app_install'];
 const SIGNUP_ACTIONS = [
-  'complete_registration',
   'omni_complete_registration',
+  'complete_registration',
   'offsite_conversion.fb_pixel_complete_registration',
 ];
-const LANDING_PAGE_VIEW_ACTIONS = ['landing_page_view', 'omni_landing_page_view'];
+const LANDING_PAGE_VIEW_ACTIONS = ['omni_landing_page_view', 'landing_page_view'];
 const LINK_CLICK_ACTIONS = ['link_click'];
-/** Only the canonical "conversation started". Summing replied/first_reply alongside it
- *  would multiply one messaging thread into several. */
-const CONVERSATION_ACTIONS = ['onsite_conversion.messaging_conversation_started_7d'];
+/** The canonical "conversation started", else — on a day without it — the newer
+ *  `total_messaging_connection` (the backend's core/resultActions.ts order). Never summed: one
+ *  thread would count twice. Reading only the first dropped 35 of Easy Fit's 1,905 last-30-day
+ *  conversations. */
+const CONVERSATION_ACTIONS = [
+  'onsite_conversion.messaging_conversation_started_7d',
+  'onsite_conversion.total_messaging_connection',
+];
 /** `page_engagement` is a near-duplicate superset of `post_engagement`; counting both
  *  double-counts. */
 const POST_ENGAGEMENT_ACTIONS = ['post_engagement'];
@@ -133,22 +145,32 @@ export type AdDailyRow = {
 const sumActions = (actions: Record<string, number>, keys: readonly string[]): number =>
   keys.reduce((total, key) => total + (actions[key] ?? 0), 0);
 
+/** The first counter in `ordered` the row carries with a positive value; 0 when none does. */
+const firstCounted = (actions: Record<string, number>, ordered: readonly string[]): number => {
+  for (const key of ordered) {
+    const value = actions[key] ?? 0;
+    if (value > 0) return value;
+  }
+  return 0;
+};
+
 /** Map one ad-day to WindowMetrics. Absent buckets stay 0 — an action Meta did not report
  *  is an action that did not happen, unlike an absent SERIES, which is unknown. */
 export function mapAdDailyRowToWindowMetrics(row: AdDailyRow): WindowMetrics {
   const actions = row.actions ?? {};
   const omni = actions[PURCHASE_OMNI];
+  const lead = actions[LEAD_AGGREGATE];
   return {
     spend: row.spend ?? 0,
     purchases: omni != null ? omni : sumActions(actions, PURCHASE_COMPONENT_ACTIONS),
-    addToCarts: sumActions(actions, ADD_TO_CART_ACTIONS),
+    addToCarts: firstCounted(actions, ADD_TO_CART_ACTIONS),
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
-    leads: sumActions(actions, LEAD_ACTIONS),
-    appInstalls: sumActions(actions, APP_INSTALL_ACTIONS),
-    signups: sumActions(actions, SIGNUP_ACTIONS),
-    landingPageViews: sumActions(actions, LANDING_PAGE_VIEW_ACTIONS),
-    conversations: sumActions(actions, CONVERSATION_ACTIONS),
+    leads: lead != null ? lead : sumActions(actions, LEAD_COMPONENT_ACTIONS),
+    appInstalls: firstCounted(actions, APP_INSTALL_ACTIONS),
+    signups: firstCounted(actions, SIGNUP_ACTIONS),
+    landingPageViews: firstCounted(actions, LANDING_PAGE_VIEW_ACTIONS),
+    conversations: firstCounted(actions, CONVERSATION_ACTIONS),
     // The row's own column is authoritative; `link_click` in actions[] is the fallback.
     linkClicks: row.link_clicks ?? sumActions(actions, LINK_CLICK_ACTIONS),
     // THRUPLAY is never inside actions[] — Meta returns it in its own top-level field.

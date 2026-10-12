@@ -7,6 +7,7 @@
 // tuned until it passes proves only that it was tuned.
 
 import { expect, test } from 'bun:test';
+import { candidateHeadlineSchema, recommendationWinnerOf } from '@continuum/contracts';
 import type { AdSetSnapshot, CreativeStanding, WindowMetrics } from '../src/index';
 import {
   DRAG_SPEND_SHARE,
@@ -143,7 +144,10 @@ test('a measured winner earns a variate_creative naming the AD and carrying its 
 
   // Meta rates this winner AVERAGE, so the craft is NOT the problem: clone it.
   expect(rec?.seed?.rebuildCraft).toBe(false);
-  expect(rec?.reason).toContain('$24.94');
+  // No currency on the config, so the figure is bare: never "$24.94" on an account whose
+  // currency is unknown (every live one is Mexican).
+  expect(rec?.reason).toContain('at 24.94 per conversation');
+  expect(rec?.reason).not.toContain('$');
   expect(rec?.reason).toContain('conversation'); // priced in the DECLARED currency
   expect(rec?.reason).not.toContain('CPA');
 });
@@ -152,7 +156,7 @@ test('the citations are deterministic and name the constant-audience claim', () 
   const { recommendations } = evaluateCreative([adSet('vr', VR_DIC25)], cfg);
   const grounded = recommendations.find((r) => r.kind === 'variate_creative')?.seed?.groundedOn;
 
-  expect(grounded?.some((g) => g.includes('$24.94') && g.includes('conversation'))).toBe(true);
+  expect(grounded?.some((g) => g.includes('at 24.94 per conversation'))).toBe(true);
   expect(grounded?.some((g) => g.includes('2.22x'))).toBe(true);
   // The reason the comparison is worth anything at all. It must travel with it.
   expect(
@@ -354,7 +358,7 @@ test('and its reason states the zero plainly, instead of inventing a multiple', 
   const { recommendations } = evaluateCreative([adSet('bonfire', ZERO_CONVERSION)], cfg);
   const reason = recommendations.find((r) => r.kind === 'pause_ad')?.reason ?? '';
 
-  expect(reason).toContain('$612.00');
+  expect(reason).toContain('has spent 612 and produced');
   expect(reason).toContain('produced NO conversations at all');
   // You cannot divide by zero results. "0.00x" would be a fabricated figure about the single
   // most important ad in the set.
@@ -487,4 +491,164 @@ test('eventLabel covers every declared kpiField grounding noun', () => {
     const s: AdSetSnapshot = { ...adSet('lbl', GENERAL_ENE26), kpiField };
     expect(() => evaluateCreative([s], cfg)).not.toThrow();
   }
+});
+
+// --- C2 compares against a creative that BOUGHT something --------------------------------
+// Live, on a lead portfolio: '"AV CAMACHO // $249 // AGOSTO - Copy" is the cheapest creative in
+// this ad set at $25.96 per lead (vs $0.00, 0.00x, on the same audience and budget)'. The
+// runner-up had no cost because it had no result. A comparison against nothing is not a
+// reason to make variants; the sibling card, "$29.10 vs $163.68, 5.63x", is what C2 is for.
+
+const cfgLeads = resolveConfig({ objective: 'lead' });
+const leadAdSet = (id: string, creative: CreativeStanding): AdSetSnapshot => ({
+  ...adSet(id, creative),
+  kpiField: 'leads',
+});
+
+const ONLY_ZERO_COMPARATOR: CreativeStanding = {
+  winner: {
+    adId: 'ad_camacho_winner',
+    adName: 'AV CAMACHO // $249 // AGOSTO - Copy',
+    qualityRanking: 'AVERAGE',
+    spend: 674.97,
+    events: 26,
+    costPerEvent: 25.96,
+    labels: { hook: 'Entrena desde $249 en Ávila Camacho' },
+  },
+  laggards: [
+    {
+      adId: 'ad_camacho_dark',
+      adName: 'AV CAMACHO // AGOSTO',
+      spend: 41.2,
+      events: 0,
+      costPerEvent: null,
+      vsWinner: null,
+    },
+  ],
+  eligibleAds: 2,
+  totalAds: 2,
+  killSpendShare: 0,
+  belowAvgSpendShare: 0,
+  medianCostPerEvent: 25.96,
+  flags: ['low_evidence', 'spend_concentrated'],
+};
+
+test('C2 does not fire when the only comparator has no cost: nothing to compare the winner against', () => {
+  const { recommendations } = evaluateCreative(
+    [leadAdSet('camacho', ONLY_ZERO_COMPARATOR)],
+    cfgLeads,
+  );
+  expect(recommendations.some((r) => r.trigger === 'C2_creative_winner')).toBe(false);
+  for (const rec of recommendations) {
+    expect(rec.reason).not.toContain('0.00x');
+    expect(rec.reason).not.toContain('vs 0.00');
+  }
+});
+
+test('C2 measures the winner against the priced sibling, never the zero-conversion ad C1 is pausing', () => {
+  const { recommendations } = evaluateCreative([adSet('bonfire', ZERO_CONVERSION)], cfg);
+  const c2 = recommendations.find((r) => r.trigger === 'C2_creative_winner');
+  expect(c2).toBeDefined();
+  // "Pricey but working": 40.00 per conversation at 2.67x — a comparison that exists.
+  expect(c2?.reason).toContain('(vs 40.00, 2.67x, on the same audience and budget)');
+  expect(c2?.reason).not.toContain('0.00x');
+  // ...while C1 still names the bonfire as the ad to pause.
+  expect(recommendations.find((r) => r.trigger === 'C1_creative_drag')?.adId).toBe('ad_bonfire');
+});
+
+test('C2 prints the account currency when the config carries one, in the Frontend spelling', () => {
+  const mxn = evaluateCreative([adSet('vr', VR_DIC25)], { ...cfg, currency: 'MXN' });
+  const reason = mxn.recommendations.find((r) => r.trigger === 'C2_creative_winner')?.reason ?? '';
+  expect(reason).toContain('at 24.94 MXN per conversation (vs 55.37 MXN, 2.22x');
+  const usd = evaluateCreative([adSet('vr', VR_DIC25)], { ...cfg, currency: 'USD' });
+  expect(usd.recommendations.find((r) => r.trigger === 'C2_creative_winner')?.reason).toContain(
+    'at $24.94 per conversation',
+  );
+});
+
+// --- C2 carries its winner as a structured figure ------------------------------------------
+// The "make variations of the winner" card draws the ad set's cost-per-result range; the
+// winning ad's OWN cost per result lived only in the reason sentence. Prueba's LKL ad set
+// (25 Sep cycle) as the card quoted it: the winner at 29.10 per lead, its priced sibling at
+// 163.68 (5.63x). Figures from that card, spends derived from them.
+
+const PRUEBA_LKL: CreativeStanding = {
+  winner: {
+    adId: 'ad_lkl_winner',
+    adName: 'AV CAMACHO // AGOSTO - LKL - Copy',
+    qualityRanking: 'AVERAGE',
+    spend: 756.6,
+    events: 26,
+    costPerEvent: 29.1,
+  },
+  laggards: [
+    {
+      adId: 'ad_lkl_sibling',
+      adName: 'AV CAMACHO // AGOSTO - LKL',
+      spend: 327.36,
+      events: 2,
+      costPerEvent: 163.68,
+      vsWinner: 5.63,
+    },
+  ],
+  eligibleAds: 2,
+  totalAds: 2,
+  killSpendShare: 0,
+  belowAvgSpendShare: 0,
+  medianCostPerEvent: 96.39,
+  flags: ['low_evidence'],
+};
+
+const c2Of = (standing: CreativeStanding) =>
+  evaluateCreative([leadAdSet('lkl', standing)], cfgLeads).recommendations.find(
+    (r) => r.trigger === 'C2_creative_winner',
+  );
+
+test('C2 carries the winning ad in its evidence: id, name, own cost per result, results, spend', () => {
+  const rec = c2Of(PRUEBA_LKL);
+  // The wire, as optimizer_record_cycle copies it into the jsonb column.
+  const wire = JSON.parse(JSON.stringify(rec?.evidence));
+  expect(wire.winner).toEqual({
+    ad_id: 'ad_lkl_winner',
+    ad_name: 'AV CAMACHO // AGOSTO - LKL - Copy',
+    cost_per_result: 29.1,
+    results: 26,
+    spend: 756.6,
+  });
+  expect(recommendationWinnerOf(wire)).toEqual(wire.winner);
+});
+
+test('C2 evidence follows the queue convention: the winner priced against its sibling, 14d, no money claimed', () => {
+  const evidence = c2Of(PRUEBA_LKL)?.evidence;
+  expect(evidence).toMatchObject({
+    metric: 'cpp',
+    value: 29.1,
+    threshold: null,
+    window: 'd14',
+    estImpactPerDay: null,
+    source: 'engine',
+  });
+  // formatMoney prints three figures whole — the same "164" the reason sentence says.
+  expect(evidence?.comparator).toContain('vs 164 (5.63x)');
+  expect(evidence?.comparator).not.toContain('$');
+  const headline = candidateHeadlineSchema.safeParse(
+    JSON.parse(JSON.stringify(evidence)).headline,
+  );
+  expect(headline.success).toBe(true);
+  expect(headline.data).toEqual({
+    kind: 'efficiency',
+    value: 82,
+    unit: 'percent',
+    label: 'cheaper per result than a peer',
+    from: 29.1,
+    to: 163.68,
+  });
+});
+
+test('a winner that bought nothing is omitted from the evidence, never written as a zero', () => {
+  // Inconsistent upstream row: priced, yet no results. The card must draw no marker at all.
+  const rec = c2Of({ ...PRUEBA_LKL, winner: { ...PRUEBA_LKL.winner!, events: 0 } });
+  const wire = JSON.parse(JSON.stringify(rec?.evidence ?? {}));
+  expect(wire.winner).toBeUndefined();
+  expect(JSON.stringify(wire)).not.toContain('"cost_per_result":0');
 });

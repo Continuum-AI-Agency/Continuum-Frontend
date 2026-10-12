@@ -1,0 +1,519 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT segments.date, campaign.id, campaign.name, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.search_impression_share, metrics.search_budget_lost_impression_share FROM campaign WHERE segments.date BETWEEN '2026-09-17' AND '2026-09-30' AND campaign.status != 'REMOVED'",
+    "rows": 28
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "15",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.5609756097560976,
+        "conversions": 0,
+        "costMicros": "55004266",
+        "impressions": "173"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "20",
+        "searchBudgetLostImpressionShare": 0.34579439252336447,
+        "searchImpressionShare": 0.4485981308411215,
+        "conversions": 0,
+        "costMicros": "104779071",
+        "impressions": "107"
+      },
+      "segments": {
+        "date": "2026-09-18"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "22",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.5616438356164384,
+        "conversions": 0,
+        "costMicros": "99462751",
+        "impressions": "134"
+      },
+      "segments": {
+        "date": "2026-09-19"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "12",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.46153846153846156,
+        "conversions": 1,
+        "costMicros": "51655688",
+        "impressions": "97"
+      },
+      "segments": {
+        "date": "2026-09-20"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "12",
+        "searchBudgetLostImpressionShare": 0.010416666666666666,
+        "searchImpressionShare": 0.6145833333333334,
+        "conversions": 1.000793,
+        "costMicros": "84406466",
+        "impressions": "155"
+      },
+      "segments": {
+        "date": "2026-09-21"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "15",
+        "searchBudgetLostImpressionShare": 0.056451612903225805,
+        "searchImpressionShare": 0.6048387096774194,
+        "conversions": 0,
+        "costMicros": "72113106",
+        "impressions": "204"
+      },
+      "segments": {
+        "date": "2026-09-22"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "15",
+        "searchBudgetLostImpressionShare": 0.05084745762711865,
+        "searchImpressionShare": 0.4745762711864407,
+        "conversions": 0,
+        "costMicros": "91093317",
+        "impressions": "68"
+      },
+      "segments": {
+        "date": "2026-09-23"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "16",
+        "searchBudgetLostImpressionShare": 0.4881889763779528,
+        "searchImpressionShare": 0.4409448818897638,
+        "conversions": 0,
+        "costMicros": "99849947",
+        "impressions": "123"
+      },
+      "segments": {
+        "date": "2026-09-24"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "28",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.5168539325842697,
+        "conversions": 2,
+        "costMicros": "61289075",
+        "impressions": "142"
+      },
+      "segments": {
+        "date": "2026-09-25"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "19",
+        "searchBudgetLostImpressionShare": 0.43617021276595747,
+        "searchImpressionShare": 0.5212765957446809,
+        "conversions": 0,
+        "costMicros": "100130364",
+        "impressions": "120"
+      },
+      "segments": {
+        "date": "2026-09-26"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "10",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.574468085106383,
+        "conversions": 1,
+        "costMicros": "78792506",
+        "impressions": "63"
+      },
+      "segments": {
+        "date": "2026-09-27"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "7",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.5370370370370371,
+        "conversions": 1,
+        "costMicros": "99982722",
+        "impressions": "80"
+      },
+      "segments": {
+        "date": "2026-09-28"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "12",
+        "searchBudgetLostImpressionShare": 0.5882352941176471,
+        "searchImpressionShare": 0.4117647058823529,
+        "conversions": 0,
+        "costMicros": "116166914",
+        "impressions": "45"
+      },
+      "segments": {
+        "date": "2026-09-29"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22574767866",
+        "name": "Landing-Goto",
+        "id": "22574767866"
+      },
+      "metrics": {
+        "clicks": "6",
+        "searchBudgetLostImpressionShare": 0.47619047619047616,
+        "searchImpressionShare": 0.42857142857142855,
+        "conversions": 0,
+        "costMicros": "39583114",
+        "impressions": "19"
+      },
+      "segments": {
+        "date": "2026-09-30"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "53",
+        "searchBudgetLostImpressionShare": 0.5013404825737265,
+        "searchImpressionShare": 0.4101876675603217,
+        "conversions": 0,
+        "costMicros": "240396767",
+        "impressions": "1062"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "129",
+        "searchBudgetLostImpressionShare": 0.019230769230769232,
+        "searchImpressionShare": 0.39903846153846156,
+        "conversions": 1,
+        "costMicros": "239997398",
+        "impressions": "2465"
+      },
+      "segments": {
+        "date": "2026-09-18"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "128",
+        "searchBudgetLostImpressionShare": 0.3031026252983294,
+        "searchImpressionShare": 0.3436754176610978,
+        "conversions": 0,
+        "costMicros": "232129921",
+        "impressions": "2006"
+      },
+      "segments": {
+        "date": "2026-09-19"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "93",
+        "searchBudgetLostImpressionShare": 0.23546511627906977,
+        "searchImpressionShare": 0.26453488372093026,
+        "conversions": 1,
+        "costMicros": "199340319",
+        "impressions": "1269"
+      },
+      "segments": {
+        "date": "2026-09-20"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "62",
+        "searchBudgetLostImpressionShare": 0.19708029197080293,
+        "searchImpressionShare": 0.33211678832116787,
+        "conversions": 2,
+        "costMicros": "176256094",
+        "impressions": "1057"
+      },
+      "segments": {
+        "date": "2026-09-21"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "64",
+        "searchBudgetLostImpressionShare": 0.6581196581196581,
+        "searchImpressionShare": 0.3034188034188034,
+        "conversions": 1,
+        "costMicros": "192070367",
+        "impressions": "715"
+      },
+      "segments": {
+        "date": "2026-09-22"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "50",
+        "searchBudgetLostImpressionShare": 0.59765625,
+        "searchImpressionShare": 0.31640625,
+        "conversions": 2,
+        "costMicros": "240064457",
+        "impressions": "671"
+      },
+      "segments": {
+        "date": "2026-09-23"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "38",
+        "searchBudgetLostImpressionShare": 0.5643564356435643,
+        "searchImpressionShare": 0.3465346534653465,
+        "conversions": 1,
+        "costMicros": "207602630",
+        "impressions": "491"
+      },
+      "segments": {
+        "date": "2026-09-24"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "50",
+        "searchBudgetLostImpressionShare": 0.06374501992031872,
+        "searchImpressionShare": 0.3187250996015936,
+        "conversions": 1.999207,
+        "costMicros": "116824215",
+        "impressions": "646"
+      },
+      "segments": {
+        "date": "2026-09-25"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "29",
+        "searchBudgetLostImpressionShare": 0.5,
+        "searchImpressionShare": 0.23841059602649006,
+        "conversions": 1,
+        "costMicros": "304617357",
+        "impressions": "410"
+      },
+      "segments": {
+        "date": "2026-09-26"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "79",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.3776223776223776,
+        "conversions": 0,
+        "costMicros": "124397288",
+        "impressions": "1538"
+      },
+      "segments": {
+        "date": "2026-09-27"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "41",
+        "searchBudgetLostImpressionShare": 0.5659574468085107,
+        "searchImpressionShare": 0.37872340425531914,
+        "conversions": 0,
+        "costMicros": "240100210",
+        "impressions": "451"
+      },
+      "segments": {
+        "date": "2026-09-28"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "41",
+        "searchBudgetLostImpressionShare": 0.49707602339181284,
+        "searchImpressionShare": 0.4619883040935672,
+        "conversions": 3,
+        "costMicros": "222996464",
+        "impressions": "353"
+      },
+      "segments": {
+        "date": "2026-09-29"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "2",
+        "searchBudgetLostImpressionShare": 0.46511627906976744,
+        "searchImpressionShare": 0.20930232558139536,
+        "conversions": 0,
+        "costMicros": "1326785",
+        "impressions": "52"
+      },
+      "segments": {
+        "date": "2026-09-30"
+      }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /report/integrated/get/ report_type=BASIC data_level=AUCTION_ADGROUP dimensions=[\"adgroup_id\",\"stat_time_day\"] 2026-10-01",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4–§2.7, §2.12",
+    "note": "intraday spend read at 21:40 America/Mexico_City"
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000201",
+            "stat_time_day": "2026-10-01 00:00:00"
+          },
+          "metrics": {
+            "spend": "302.40",
+            "currency": "MXN"
+          }
+        },
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000202",
+            "stat_time_day": "2026-10-01 00:00:00"
+          },
+          "metrics": {
+            "spend": "986.00",
+            "currency": "MXN"
+          }
+        },
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000203",
+            "stat_time_day": "2026-10-01 00:00:00"
+          },
+          "metrics": {
+            "spend": "120.15",
+            "currency": "MXN"
+          }
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 3,
+        "total_page": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.status, conversion_action.primary_for_goal, conversion_action.origin FROM conversion_action WHERE conversion_action.status != 'REMOVED'",
+    "rows": 9
+  },
+  "data": [
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6526617584",
+        "status": "ENABLED",
+        "type": "WEBPAGE",
+        "category": "SUBMIT_LEAD_FORM",
+        "id": "6526617584",
+        "name": "Enviar formulario de clientes potenciales",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6531631138",
+        "status": "ENABLED",
+        "type": "GOOGLE_ANALYTICS_4_PURCHASE",
+        "category": "PURCHASE",
+        "id": "6531631138",
+        "name": "easy fit (web) purchase",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6531631141",
+        "status": "ENABLED",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "DEFAULT",
+        "id": "6531631141",
+        "name": "easy fit (web) form_start",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6609694072",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "ENGAGEMENT",
+        "id": "6609694072",
+        "name": "Local actions - Other engagements",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6609707455",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "PAGE_VIEW",
+        "id": "6609707455",
+        "name": "Local actions - Website visits",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6609825575",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "CONTACT",
+        "id": "6609825575",
+        "name": "Clicks to call",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/6609826079",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "GET_DIRECTIONS",
+        "id": "6609826079",
+        "name": "Local actions - Directions",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/7627583036",
+        "status": "ENABLED",
+        "type": "LEAD_FORM_SUBMIT",
+        "category": "SUBMIT_LEAD_FORM",
+        "id": "7627583036",
+        "name": "Lead form - Submit",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/5251780631/conversionActions/7783367449",
+        "status": "ENABLED",
+        "type": "WEBPAGE",
+        "category": "SUBMIT_LEAD_FORM",
+        "id": "7783367449",
+        "name": "Lead formulario web Easy Fit",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    }
+  ]
+}

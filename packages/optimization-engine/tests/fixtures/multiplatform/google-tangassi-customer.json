@@ -1,0 +1,26 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.auto_tagging_enabled, customer.test_account FROM customer",
+    "rows": 1
+  },
+  "data": [
+    {
+      "customer": {
+        "resourceName": "customers/9343596627",
+        "id": "9343596627",
+        "descriptiveName": "Grupo Tangassi.",
+        "currencyCode": "MXN",
+        "timeZone": "America/Mexico_City",
+        "autoTaggingEnabled": true,
+        "testAccount": false
+      }
+    }
+  ]
+}

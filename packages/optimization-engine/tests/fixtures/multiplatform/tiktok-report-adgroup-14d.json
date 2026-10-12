@@ -1,0 +1,98 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /report/integrated/get/ report_type=BASIC data_level=AUCTION_ADGROUP dimensions=[\"adgroup_id\"] 2026-09-17..2026-09-30",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4–§2.7, §2.12",
+    "note": "metric values are strings, as the API returns them"
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000201"
+          },
+          "metrics": {
+            "spend": "1361.05",
+            "impressions": "58210",
+            "clicks": "731",
+            "conversion": "21",
+            "cost_per_conversion": "64.81",
+            "result": "21",
+            "currency": "MXN"
+          }
+        },
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000202"
+          },
+          "metrics": {
+            "spend": "1361.05",
+            "impressions": "61120",
+            "clicks": "688",
+            "conversion": "21",
+            "cost_per_conversion": "64.81",
+            "result": "21",
+            "currency": "MXN"
+          }
+        },
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000203"
+          },
+          "metrics": {
+            "spend": "512.40",
+            "impressions": "20480",
+            "clicks": "233",
+            "conversion": "4",
+            "cost_per_conversion": "128.10",
+            "result": "4",
+            "currency": "MXN"
+          }
+        },
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000204"
+          },
+          "metrics": {
+            "spend": "9310.00",
+            "impressions": "401230",
+            "clicks": "4911",
+            "conversion": "151",
+            "cost_per_conversion": "61.66",
+            "result": "151",
+            "currency": "MXN"
+          }
+        },
+        {
+          "dimensions": {
+            "adgroup_id": "7000000000000000205"
+          },
+          "metrics": {
+            "spend": "3990.00",
+            "impressions": "210400",
+            "clicks": "2050",
+            "conversion": "61",
+            "cost_per_conversion": "65.41",
+            "result": "61",
+            "currency": "MXN"
+          }
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 5,
+        "total_page": 1
+      }
+    }
+  }
+}

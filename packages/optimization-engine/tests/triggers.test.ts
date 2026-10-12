@@ -54,7 +54,9 @@ test('P1 arm (a): addToCarts===0 fires just over the spend floor, not under it',
   expect(rec?.kind).toBe('pause');
   expect(rec?.needsApproval).toBe(true);
   expect(over.starveIds.has('dead')).toBe(true);
-  expect(rec?.reason).toBe('Spent 8 over 3d with 0 conversions and 0 add-to-carts.');
+  // Money follows the Frontend's digit rule — two decimals under 100 — and, with no currency
+  // on the config, prints BARE: a peso account must never read as dollars.
+  expect(rec?.reason).toBe('Spent 8.00 over 3d with 0 conversions and 0 add-to-carts.');
   forbidGrounded(rec?.reason);
 
   // Just UNDER the floor (spend 7 ≤ 7.14): the d3.spend > floor gate fails => no P1.
@@ -97,9 +99,12 @@ test('P1 arm (b): ATC cost over 4x the portfolio average fires; just under does 
   expect(rec?.severity).toBe('high');
   expect(rec?.kind).toBe('pause');
   expect(over.starveIds.has('pricey')).toBe(true);
-  // avgAtcCost = 4.2 → "4"; atcCost3d = 17.
-  expect(rec?.reason).toContain('add-to-cart cost of 17');
-  expect(rec?.reason).toContain('over 4× the portfolio average of 4');
+  // avgAtcCost = 4.2; atcCost3d = 17. No article precedes the label — "an landing-page view
+  // cost" is the sentence this shape once shipped — and no currency means no symbol.
+  expect(rec?.reason).toContain('paying 17.00 per add-to-cart');
+  expect(rec?.reason).toContain('over 4× the portfolio average of 4.20');
+  expect(rec?.reason).not.toMatch(/\ban? add-to-cart cost/);
+  expect(rec?.reason).not.toContain('$');
   forbidGrounded(rec?.reason);
 
   const under = evaluateTriggers([...peers, pricey(15)], DEFAULT_CONFIG);
@@ -140,9 +145,10 @@ test('P2 fires when 14d CPP exceeds 2.5x the robust reference, and not just unde
   expect(rec?.kind).toBe('pause');
   expect(rec?.needsApproval).toBe(true);
   expect(out.starveIds.has('dog')).toBe(true);
-  expect(rec?.reason).toContain('$51');
+  expect(rec?.reason).toContain('CPP 14d 51.00');
   expect(rec?.reason).toContain('2.5×');
-  expect(rec?.reason).toContain('$20');
+  expect(rec?.reason).toContain('robust reference (20.00)');
+  expect(rec?.reason).not.toContain('$');
   forbidGrounded(rec?.reason);
 
   // Flat CPP 49 (< 50): same robust reference, below threshold => no P2.
@@ -173,7 +179,8 @@ test('P3 fires with 0 KPI events in d14 AND d7 and 14d spend over one target CPA
   expect(rec?.kind).toBe('pause');
   expect(rec?.needsApproval).toBe(true);
   expect(out.starveIds.has('dw')).toBe(true);
-  expect(rec?.reason).toContain('$51');
+  expect(rec?.reason).toContain('Spent 51.00 over 14d');
+  expect(rec?.reason).not.toContain('$');
   forbidGrounded(rec?.reason);
 
   // 14d spend exactly at the target CPA (50) is not strictly greater => no P3.

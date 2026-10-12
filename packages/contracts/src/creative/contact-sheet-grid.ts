@@ -23,7 +23,7 @@ export interface SheetLayout {
   columns: number;
   rows: number;
   /** The aspect ratio the composite must be generated at for cells to come out square-true. */
-  compositeAspect: '9:16' | '21:9';
+  compositeAspect: '9:16' | '21:9' | '3:2' | '1:1' | '4:3';
   cellCount: number;
   /**
    * Fraction of each sliced cell's width to keep when correcting it back to 9:16.

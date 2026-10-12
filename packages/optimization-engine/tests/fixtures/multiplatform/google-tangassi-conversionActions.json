@@ -1,0 +1,135 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.status, conversion_action.primary_for_goal, conversion_action.origin FROM conversion_action WHERE conversion_action.status != 'REMOVED'",
+    "rows": 10
+  },
+  "data": [
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7038680865",
+        "status": "ENABLED",
+        "type": "WEBPAGE",
+        "category": "GET_DIRECTIONS",
+        "id": "7038680865",
+        "name": "Get directions",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7038681249",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "GET_DIRECTIONS",
+        "id": "7038681249",
+        "name": "Acciones locales: clic en Cómo llegar",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7365440332",
+        "status": "ENABLED",
+        "type": "ANDROID_INSTALLS_ALL_OTHER_APPS",
+        "category": "DOWNLOAD",
+        "id": "7365440332",
+        "name": "Android installs (all other apps)",
+        "origin": "APP",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7582090775",
+        "status": "ENABLED",
+        "type": "AD_CALL",
+        "category": "PHONE_CALL_LEAD",
+        "id": "7582090775",
+        "name": "Llamadas desde anuncios",
+        "origin": "CALL_FROM_ADS",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7609934287",
+        "status": "ENABLED",
+        "type": "AD_CALL",
+        "category": "PHONE_CALL_LEAD",
+        "id": "7609934287",
+        "name": "Calls from ads",
+        "origin": "CALL_FROM_ADS",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7619536719",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "CONTACT",
+        "id": "7619536719",
+        "name": "Clicks to call",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7619568643",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "ENGAGEMENT",
+        "id": "7619568643",
+        "name": "Local actions - Other engagements",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7622490419",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "PAGE_VIEW",
+        "id": "7622490419",
+        "name": "Local actions - Menu views",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7622852344",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "PAGE_VIEW",
+        "id": "7622852344",
+        "name": "Local actions - Website visits",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/9343596627/conversionActions/7639599729",
+        "status": "ENABLED",
+        "type": "STORE_VISITS",
+        "category": "STORE_VISIT",
+        "id": "7639599729",
+        "name": "Store visits",
+        "origin": "STORE",
+        "primaryForGoal": true
+      }
+    }
+  ]
+}

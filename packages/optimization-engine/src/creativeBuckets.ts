@@ -34,7 +34,7 @@
 // every cluster it makes can be replayed and checked by hand.
 // ---------------------------------------------------------------------------
 
-import { costInterval } from './significance';
+import { costInterval, upperBoundMissingBecause } from './significance';
 import type { CpaInterval } from './types';
 
 /** Words that carry no discriminating meaning in a marketing label. Kept small and
@@ -262,7 +262,11 @@ export function rankCreativeBuckets(
   const best = buckets.find((b) => b.evidenced);
   if (best) {
     for (const b of buckets) {
-      b.separatedFromBest = b !== best && b.evidenced && b.interval.lo > best.interval.hi;
+      // A best bucket with no upper bound separates from nothing: "we cannot tell these
+      // apart yet" is exactly what a missing bound says, so the claim is withheld rather
+      // than decided by whatever stood in for it.
+      b.separatedFromBest =
+        b !== best && b.evidenced && best.interval.hi != null && b.interval.lo > best.interval.hi;
     }
   }
   return buckets;
@@ -278,6 +282,6 @@ export function bucketCitations(buckets: readonly CreativeBucket[], limit = 4): 
       (b) =>
         `${b.label}: ${b.interval.cpa.toFixed(2)} per event on ${b.spend.toFixed(0)} spend ` +
         `across ${b.adCount} ad${b.adCount === 1 ? '' : 's'} ` +
-        `(95% CI ${b.interval.lo.toFixed(2)}-${b.interval.hi.toFixed(2)})`,
+        `(95% CI ${b.interval.lo.toFixed(2)}-${b.interval.hi != null ? b.interval.hi.toFixed(2) : `no upper bound: ${upperBoundMissingBecause(b.interval)}`})`,
     );
 }

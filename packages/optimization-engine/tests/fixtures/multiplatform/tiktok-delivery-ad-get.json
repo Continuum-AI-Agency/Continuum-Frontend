@@ -1,0 +1,82 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /ad/get/",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "window": {
+      "since": "2026-09-21",
+      "until": "2026-10-04"
+    },
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4, §2.10, §4 rules 07 and 20",
+    "invented": [
+      "ads 307–310: ids, names and secondary_status"
+    ]
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "7000000000000000001",
+          "ad_id": "7000000000000000307",
+          "ad_name": "EF | Antes y después 30 días",
+          "adgroup_id": "7000000000000000206",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "create_time": "2026-09-15 12:30:00",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_AUDIT_DENY"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "ad_id": "7000000000000000308",
+          "ad_name": "EF | Clase muestra",
+          "adgroup_id": "7000000000000000206",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "create_time": "2026-09-15 12:30:00",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "ad_id": "7000000000000000309",
+          "ad_name": "EF | Primera clase gratis",
+          "adgroup_id": "7000000000000000207",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "create_time": "2026-09-15 12:30:00",
+          "operation_status": "ENABLE",
+          "secondary_status": "AD_STATUS_DELIVERY_OK"
+        },
+        {
+          "advertiser_id": "7000000000000000001",
+          "ad_id": "7000000000000000310",
+          "ad_name": "EF | Pausado",
+          "adgroup_id": "7000000000000000208",
+          "identity_type": "TT_USER",
+          "tiktok_item_id": null,
+          "dark_post_status": "ON",
+          "create_time": "2026-09-15 12:30:00",
+          "operation_status": "DISABLE",
+          "secondary_status": "AD_STATUS_DISABLE"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 4,
+        "total_page": 1
+      }
+    }
+  }
+}

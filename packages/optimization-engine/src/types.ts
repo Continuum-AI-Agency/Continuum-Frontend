@@ -4,9 +4,22 @@
 // ---------------------------------------------------------------------------
 
 // The ONE canonical descriptor for "the figure a card leads with", imported rather than
-// restated. Type-only, so the root entry stays runtime-pure: the import erases, and nothing
-// in `@continuum/contracts` (zod included) is loaded by an engine consumer.
-import type { CandidateHeadline } from '@continuum/contracts';
+// restated. Type-only here; the engine's one RUNTIME import from `@continuum/contracts` is
+// `formatMoney`, the money rule every reason prints under (see config.ts `currency`), and
+// every consumer of this engine — the optimizer service and the Backend — loads contracts
+// already, so nothing new reaches a bundle.
+import type {
+  CandidateHeadline,
+  EntityAutomation,
+  EntityLevel,
+  OptimizerAction,
+  PlatformCard,
+  PlatformEntityRef,
+  PlatformId,
+  RecommendationAction,
+  RecommendationTitle,
+  RecommendationWinner,
+} from '@continuum/contracts';
 import type { RuleEvaluation } from './rules/types';
 
 export type AdSetStatus =
@@ -51,14 +64,21 @@ export type AudienceType = 'prospecting' | 'retargeting' | 'remarketing' | 'unkn
  *                         set declaring the WRONG currency; this catches one declaring none.
  *                         An undeclared ad set that DOES produce the portfolio's events is
  *                         still scored: observation establishes the currency that the missing
- *                         declaration did not. */
+ *                         declaration did not.
+ *   - no_spend:           ZERO spend in the decision window. The solver ranks on events per
+ *                         unit of spend; with no spend there is no ratio at all, and a
+ *                         composite of 0 is a null read as a zero — left in the pool, the ad
+ *                         set was spread even with its neighbours and moved on no evidence.
+ *                         Held instead; the delivery stage (D2) says why beside it when Meta
+ *                         has it funded and dark. */
 export type FreezeReason =
   | 'no_conversions'
   | 'unsupported_budget'
   | 'lifetime_budget'
   | 'kpi_mismatch'
   | 'no_own_budget'
-  | 'no_declared_objective';
+  | 'no_declared_objective'
+  | 'no_spend';
 
 /** Raw counts for one analysis window. Cost-per-event is DERIVED, never stored.
  * The KPI event used for scoring is chosen by the portfolio's objective profile
@@ -258,6 +278,9 @@ export type AdSetSnapshot = {
    *  or 'lifetime' (whole-flight lifetime_budget, lifetime CBO). Metadata for the
    *  picker/suggest + the applier's write-field choice; not used in scoring. Absent ⇒ daily. */
   budgetType?: 'daily' | 'lifetime';
+  /** The campaign's budget beside a CBO ad set's zero `currentBudget` (see engine-contracts). */
+  campaignBudget?: number;
+  campaignBudgetType?: 'daily' | 'lifetime';
   /** SCORING windows — the engine scores exclusively on these. Rolled up from the
    *  daily series (so d3 ⊆ d7 ⊆ d14 is guaranteed by construction). */
   windows: {
@@ -286,7 +309,41 @@ export type AdSetSnapshot = {
    *  (d3 ⊆ d7 ⊆ d14) is derived from this one series, so 30 days covers all of them.
    *  Optional so hand-built fixtures (tests) can still supply just `windows`. */
   daily?: DailyMetrics[];
+  // --- Multi-platform identity (src/multiplatform/) ---------------------------
+  // All absent on the Meta path, which is how every Meta snapshot keeps producing the
+  // numbers it produced before these fields existed: absent `platform` means 'meta'.
+  /** Which ad platform this entity lives on. Absent ⇒ Meta. */
+  platform?: PlatformId;
+  /** The neutral level (campaign / group / ad); the platform's own name stays in Jaina. */
+  level?: EntityLevel;
+  /** The entity on its platform ({platform, level, nativeLevel, id, accountId, name?}), so the
+   *  cycle's rows can say which entity they are about (cycle_items / recommendations.entity_ref). */
+  entityRef?: PlatformEntityRef;
+  /** A campaign whose sub-units the platform controls (PMax, Smart+): never descended into. */
+  automation?: EntityAutomation;
+  /** The platform's bidding read. Google's systemStatus (LEARNING_*) is its learning state. */
+  bidding?: {
+    strategyType: string;
+    targetCpaMicros?: number;
+    targetRoas?: number;
+    systemStatus?: string;
+  };
+  /** Google primary_status / TikTok primary_status, verbatim. */
+  primaryStatus?: string;
+  /** Google primary_status_reasons / TikTok secondary_status, verbatim. */
+  primaryStatusReasons?: string[];
+  /** The platform-specific cause behind a freeze whose `freezeReason` can only say
+   *  'unsupported_budget' (the contracts enum is closed this wave): a Google budget shared
+   *  with other campaigns, a Video campaign the API cannot change, or a campaign type the
+   *  Optimizer does not admit. */
+  platformHold?: PlatformHold;
+  /** The ingest did not know this entity's age, so `ageDays` is 0: locked as brand new,
+   *  never "old enough" on a number nobody read. */
+  ageUnknown?: true;
 };
+
+/** Why a non-Meta entity's budget is held regardless of its numbers. */
+export type PlatformHold = 'shared_budget' | 'platform_readonly' | 'unsupported_channel';
 
 // --- Creative standing INSIDE one ad set ------------------------------------
 // Audience, budget and optimization goal are constant within an ad set, so this is the
@@ -424,8 +481,14 @@ export type CreativeStanding = {
 
 export type TrajectoryState = 'positive' | 'neutral' | 'negative';
 
-/** CPA point estimate + confidence interval, with the event count it rests on. */
-export type CpaInterval = { cpa: number; lo: number; hi: number; events: number };
+/**
+ * CPA point estimate + confidence interval, with the event count it rests on.
+ *
+ * `hi` is NULLABLE, and that is the whole contract: a count too small to bound the cost from
+ * above has no upper bound to report, and a reader that wants to draw one has to admit it is
+ * missing rather than be handed a number standing in for its absence. See `costInterval`.
+ */
+export type CpaInterval = { cpa: number; lo: number; hi: number | null; events: number };
 
 /** Per-item diagnostics — mirrors the Excel "Cycle Simulation" columns. */
 export type ItemDiagnostics = {
@@ -463,6 +526,12 @@ export type ItemDiagnostics = {
    *  Absent ⇒ the delivery read was unavailable this cycle (an edge that predates the
    *  provider fields). Not "it was delivering". */
   delivery?: DeliveryRead;
+  /** Carried from a non-Meta snapshot so optimizer_record_cycle writes cycle_items.platform /
+   *  entity_ref and the held-item sentence names a campaign, not an ad set. Absent on Meta:
+   *  every Meta item is byte-for-byte what it was before multi-platform. */
+  platform?: PlatformId;
+  level?: EntityLevel;
+  entityRef?: PlatformEntityRef;
 };
 
 export type ReallocationResult = {
@@ -482,6 +551,16 @@ export type ReallocationResult = {
     underflow: boolean; // pool < sum(lo)
   };
   notes: string[];
+  /** Present when the engine REFUSED to allocate: frozen ad sets alone hold more than the
+   *  total, so no allocation can respect it without moving budgets the engine may not
+   *  judge. Every budget holds and `conserved` is false — the total is not met, and says so. */
+  refusal?: ReallocationRefusal;
+};
+
+export type ReallocationRefusal = {
+  reason: 'frozen_above_total';
+  frozenBudget: number;
+  totalBudget: number;
 };
 
 // --- Full-cycle layer (classify -> triggers -> pacing -> reallocate) --------
@@ -512,7 +591,12 @@ export type RecommendationKind =
   /** Change a portfolio setting. The engine's own guardrails got in the way of what it
    *  scored, or the plan exceeds what the inventory can absorb; the fix is a knob, not an
    *  ad set. Portfolio-level: `adSetId` is the PORTFOLIO_SCOPE sentinel. */
-  | 'settings';
+  | 'settings'
+  /** A Google or TikTok finding from the platform signals (evaluatePlatformSignals): a
+   *  negative term, a keyword to promote or pause, a bid target, an asset group's coverage, a
+   *  weak hook, a Spark candidate. Recommend-only; `platformSignal` carries the card and the
+   *  proposed action, and `trigger` is `signal:<rule>`. */
+  | 'platform_signal';
 
 /** `adSetId` of a portfolio-level recommendation (the settings family). */
 export const PORTFOLIO_SCOPE = 'portfolio';
@@ -602,6 +686,36 @@ export type RecommendationEvidence = {
    * falls back to leading with the money — exactly as a candidate with no headline does.
    */
   headline?: CandidateHeadline;
+  /**
+   * The winning ad behind a C2 "make variations of the winner" — its OWN cost per result,
+   * results and spend over the standing's window. The cycle's interval bounds the AD SET's
+   * cost; this is the one ad inside it, which the card places on that range.
+   *
+   * Rides inside `evidence` for the same reason `headline` does (loose schema, whole-jsonb
+   * copy). Present only when the winner is priced: a winner with no results has no cost per
+   * result, and a zero here would be drawn as one.
+   */
+  winner?: RecommendationWinner;
+  /**
+   * The platform card a Meta trigger renders as (frontend.html §7 feature 18): F1's
+   * meta_creative_fatigue, the same card TikTok's T3 writes. Rides inside `evidence` for the
+   * reason `winner` does, and not in `seed`, which every reader of a row takes for a
+   * generation seed. Absent when the trigger cannot name the creative that wore out.
+   */
+  platformCard?: PlatformCard;
+  /**
+   * The title: entity + figure with its unit + the comparison the trigger fired on, in
+   * Spanish with ISO currency codes and no verb — "ITESO // AGOSTO - RTG: 101 MXN por lead,
+   * 2.9× la referencia de 35 MXN". Composed from `value`, `threshold` and the reference the
+   * trigger held, never from `reason`, which stays for one release as the legacy line.
+   *
+   * Rides inside `evidence` for the same reason `headline` does (loose schema, whole-jsonb
+   * copy through `optimizer_record_cycle`). Null when the trigger holds no figure to lead
+   * with — an ad set absent from Meta has nothing to measure.
+   */
+  title?: RecommendationTitle | null;
+  /** The verb the button says and what it moves — the saving that used to live in the title. */
+  action?: RecommendationAction | null;
   source: 'engine';
 };
 
@@ -637,7 +751,27 @@ export type Recommendation = {
    *  what it would become. Absent when the advice has no single knob (consolidate ad
    *  sets, fix tracking). Applied only by a human, through optimizer_update_portfolio. */
   patch?: SettingsPatch;
+  /** A platform_signal recommendation's card, proposed action and the account's write gate.
+   *  `adSetId` is the entity it is about (campaign, ad group, asset group) and `adId` the
+   *  subject inside it (a term, a keyword, an ad, a post). */
+  platformSignal?: PlatformSignalPayload;
+  /** The platform the recommendation is about, stamped by runCycle from the cycle's roster —
+   *  absent on Meta (recommendations.platform defaults to 'meta'). */
+  platform?: PlatformId;
+  /** The entity it is about, when the recommendation names one the roster knows. */
+  entityRef?: PlatformEntityRef;
   needsApproval: true; // recommendations ALWAYS need user approval (engine never auto-acts)
+};
+
+export type PlatformSignalPayload = {
+  rule: string;
+  platform: Extract<PlatformId, 'google_ads' | 'tiktok_ads'>;
+  entity: PlatformEntityRef;
+  platform_card: PlatformCard;
+  /** What approving would do on the platform; null for a card that only informs. */
+  action: OptimizerAction | null;
+  /** The account's portfolio_platforms.apply_enabled at proposal time (false by default). */
+  apply_enabled: boolean;
 };
 
 /** The seed handed to generation. Deterministic — assembled from measured figures and the
@@ -675,11 +809,14 @@ export type PacingResult = {
   dailyTotal: number; // budget total to feed the reallocation this cycle
   idealCumulative: number;
   pacingRatio: number; // actual / ideal (>1 over, <1 under)
-  status: 'on_track' | 'underpacing' | 'overpacing';
+  /** A verdict only when a real flight window drove the total AND the plan expected some
+   *  spend by now (`source === 'pacing'` and `idealCumulative > 0`). With no flight, and on
+   *  day 1 of one, there is nothing to be on or off: `unknown`, with the note saying why. */
+  status: 'on_track' | 'underpacing' | 'overpacing' | 'unknown';
   note: string;
   /** Where the daily total came from. 'pacing' = a real flight window drove it; the
-   *  other two are flat totals whose `status` is a placeholder, not a verdict. The
-   *  scheduler stamps 'fixed' when a human pinned daily_total. */
+   *  other two are flat totals, which carry `status: 'unknown'`. The scheduler stamps
+   *  'fixed' when a human pinned daily_total. */
   source?: 'pacing' | 'observed' | 'fixed';
   /** The flight state the verdict was computed from — present only on 'pacing'. */
   periodBudget?: number;
@@ -706,7 +843,7 @@ export type ScaleStep = {
 /** One thing the account could do to raise its data confidence, with the ad sets it
  *  names and, where it can be computed, the score it would move to. */
 export type ConfidenceActionable = {
-  code: 'under_event_floor' | 'windows_disagree' | 'tracking_gap';
+  code: 'kpi_mismatch' | 'under_event_floor' | 'windows_disagree' | 'tracking_gap';
   adsetIds: string[];
   /** Share of 14-day spend the named ad sets carry. */
   spendShare: number;
@@ -743,4 +880,18 @@ export type CycleResult = {
   /** Per rule × ad-set evaluation rows from the data-driven rules layer — the
    *  learning loop's shadow-validation feed. Empty when the cycle ran without rules. */
   ruleEvaluations: RuleEvaluation[];
+  /** Rule families a non-Meta entity was NOT judged by because they read signals only Meta
+   *  reports. Present only when something was skipped — a Meta-only cycle never carries it,
+   *  and nothing here is ever skipped silently. */
+  ruleSkips?: RuleSkip[];
 };
+
+/** A rule family that does not apply to one entity's platform, and why. */
+export type RuleSkip = {
+  adSetId: string;
+  family: RuleFamily;
+  reason: `not_applicable:${PlatformId}`;
+};
+
+/** The rule families whose inputs are Meta-only today (see multiplatform/capabilities). */
+export type RuleFamily = 'delivery' | 'fatigue' | 'creative';

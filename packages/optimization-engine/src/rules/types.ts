@@ -12,6 +12,8 @@
 // `priority` number wins dedup (the DCO used lowest-number-wins).
 // ---------------------------------------------------------------------------
 
+import type { RecommendationEvidence } from '../types';
+
 /** Reference to another fact's value — the DCO's `value: { fact: 'x' }` indirection.
  *  Rule `params` are merged into the fact map, so thresholds are referenced the
  *  same way as measured facts. */
@@ -112,6 +114,10 @@ export type RuleFinding = {
   needsApproval: true;
   ruleId: string;
   templateId?: string;
+  /** The structured figure, title and action behind `reason`, when the template that
+   *  produced the rule declares how to build them from the fact map (templates.ts
+   *  `templateEvidence`). Absent for user-authored rules with no template. */
+  evidence?: RecommendationEvidence;
 };
 
 /** One rule x ad-set evaluation — the future `optimizer.rule_evaluations` row.

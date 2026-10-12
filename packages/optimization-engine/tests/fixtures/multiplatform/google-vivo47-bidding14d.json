@@ -1,0 +1,281 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-06T00:13:44.428Z",
+    "query": "SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.bidding_strategy_system_status, campaign.maximize_conversions.target_cpa_micros, campaign.target_cpa.target_cpa_micros, campaign.maximize_conversion_value.target_roas, campaign.target_roas.target_roas, metrics.cost_micros, metrics.conversions, metrics.search_rank_lost_impression_share, metrics.search_budget_lost_impression_share FROM campaign WHERE segments.date BETWEEN '2026-09-22' AND '2026-10-05' AND campaign.status != 'REMOVED'",
+    "rows": 17
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18572377820",
+        "status": "PAUSED",
+        "advertisingChannelType": "SMART",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Gimnasio Familiar Premium",
+        "id": "18572377820",
+        "biddingStrategySystemStatus": "ENABLED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18585815224",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Trafico-Cortesias",
+        "id": "18585815224",
+        "biddingStrategySystemStatus": "ENABLED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19321380656",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "VIVO47-GOURMETERIA",
+        "id": "19321380656",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19323095414",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "VALLE REAL",
+        "id": "19323095414",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19589586173",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "maximizeConversions": {
+          "targetCpaMicros": "511380000"
+        },
+        "name": "pase de 7 dias GMT",
+        "id": "19589586173",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19954538151",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Gourmetería",
+        "id": "19954538151",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19962346777",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Naciones Unidas",
+        "id": "19962346777",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19962426667",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Valle Real",
+        "id": "19962426667",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "status": "ENABLED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216",
+        "biddingStrategySystemStatus": "ENABLED"
+      },
+      "metrics": {
+        "searchBudgetLostImpressionShare": 0.18492523649679585,
+        "searchRankLostImpressionShare": 0.03112602990540128,
+        "conversions": 15,
+        "costMicros": "16202494707"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Display",
+        "id": "21287529107",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21734669008",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Gourmeteria",
+        "id": "21734669008",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21905436458",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Display-Buen fit",
+        "id": "21905436458",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21985307202",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Valle Real-Search",
+        "id": "21985307202",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "advertisingChannelType": "VIDEO",
+        "biddingStrategyType": "TARGET_CPV",
+        "name": "Video | Vivo 47 | 2025",
+        "id": "22357506361",
+        "biddingStrategySystemStatus": "UNAVAILABLE"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22364972636",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "biddingStrategyType": "TARGET_CPA",
+        "targetCpa": {
+          "targetCpaMicros": "972530000"
+        },
+        "name": "Remarketing Gourmetería | Vivo 47 | 2025",
+        "id": "22364972636",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22404522468",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Remarketing Valle Real | Vivo 47 | 2025",
+        "id": "22404522468",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22706302206",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "biddingStrategyType": "TARGET_CPA",
+        "targetCpa": {
+          "targetCpaMicros": "41620000"
+        },
+        "name": "DP | VIVO 47 | Socios",
+        "id": "22706302206",
+        "biddingStrategySystemStatus": "PAUSED"
+      },
+      "metrics": {
+        "conversions": 0,
+        "costMicros": "0"
+      }
+    }
+  ]
+}

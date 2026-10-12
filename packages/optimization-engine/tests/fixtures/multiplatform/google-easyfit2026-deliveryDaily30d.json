@@ -1,0 +1,14 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-06T01:03:57.650Z",
+    "query": "SELECT campaign.id, segments.date, metrics.impressions FROM campaign WHERE segments.date BETWEEN '2026-09-06' AND '2026-10-05' AND campaign.status = 'ENABLED'",
+    "rows": 0
+  },
+  "data": []
+}

@@ -589,8 +589,8 @@ test('triggers: P1 reason names the condition that fired and invents no figure',
     DEFAULT_CONFIG,
   ).recommendations.find((r) => r.adSetId === 'pricey' && r.trigger === 'P1_zero_upper_funnel');
 
-  expect(expensiveFunnel?.reason).toContain('add-to-cart cost of 300');
-  expect(expensiveFunnel?.reason).toMatch(/portfolio average of \d+\.$/);
+  expect(expensiveFunnel?.reason).toContain('paying 300 per add-to-cart');
+  expect(expensiveFunnel?.reason).toMatch(/portfolio average of \d+\.\d\d\.$/);
 
   for (const reason of [deadFunnel?.reason, expensiveFunnel?.reason]) {
     expect(reason).toBeDefined();

@@ -1,0 +1,68 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /campaign/get/",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4–§2.7, §2.12",
+    "note": "three campaigns: manual lead gen, upgraded Smart+ lead gen, manual engagement/messages"
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "list": [
+        {
+          "campaign_id": "7000000000000000101",
+          "campaign_name": "EF | Leads | Manual",
+          "objective_type": "LEAD_GENERATION",
+          "campaign_automation_type": "MANUAL",
+          "is_smart_performance_campaign": false,
+          "budget_mode": "BUDGET_MODE_INFINITE",
+          "budget": 0,
+          "operation_status": "ENABLE",
+          "secondary_status": "CAMPAIGN_STATUS_ENABLE",
+          "create_time": "2026-08-20 17:02:11",
+          "modify_time": "2026-09-28 16:40:03"
+        },
+        {
+          "campaign_id": "7000000000000000102",
+          "campaign_name": "EF | Smart+ | Leads",
+          "objective_type": "LEAD_GENERATION",
+          "campaign_automation_type": "UPGRADED_SMART_PLUS",
+          "is_smart_performance_campaign": false,
+          "budget_mode": "BUDGET_MODE_DAY",
+          "budget": 800,
+          "budget_auto_adjust_strategy": "AUTO_BUDGET_INCREASE",
+          "operation_status": "ENABLE",
+          "secondary_status": "CAMPAIGN_STATUS_ENABLE",
+          "create_time": "2026-09-02 15:10:00",
+          "modify_time": "2026-09-30 18:22:41"
+        },
+        {
+          "campaign_id": "7000000000000000103",
+          "campaign_name": "EF | Mensajes | Manual",
+          "objective_type": "ENGAGEMENT",
+          "campaign_automation_type": "MANUAL",
+          "is_smart_performance_campaign": false,
+          "budget_mode": "BUDGET_MODE_INFINITE",
+          "budget": 0,
+          "operation_status": "ENABLE",
+          "secondary_status": "CAMPAIGN_STATUS_ENABLE",
+          "create_time": "2026-09-10 12:00:00",
+          "modify_time": "2026-09-10 12:00:00"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_number": 3,
+        "total_page": 1
+      }
+    }
+  }
+}

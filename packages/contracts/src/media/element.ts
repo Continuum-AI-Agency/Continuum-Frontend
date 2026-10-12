@@ -701,7 +701,12 @@ Repeat the same subject across panels when the profile calls for multiple views.
   };
 };
 
-/** Exposed so the panel can preview the framing without building the whole prompt. */
-export const elementReferenceAspectRatio = (_category: ElementCategory): string => '16:9';
+/**
+ * The framing of the reference the Element route generates. A person Element's reference
+ * is the portrait continuity sheet (./continuity-sheet); every other category is the
+ * one-call board `buildElementReferencePrompt` describes.
+ */
+export const elementReferenceAspectRatio = (category: ElementCategory): string =>
+  isElementPersonCategory(category) ? '3:4' : '16:9';
 
 export { libraryImageRefSchema as elementImageRefSchema };

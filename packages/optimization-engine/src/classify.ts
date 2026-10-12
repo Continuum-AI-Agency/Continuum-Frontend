@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from './config';
-import { kpiEvents } from './scoring';
+import { isPlatformLearning, protectDaysFor, tiktokCampaignResults7d } from './multiplatform/learning';
 import type { AdSetSnapshot, AdSetStatus, FreezeReason } from './types';
 
 /** Days a brand-new ad set has its budget fully locked (no movement at all). */
@@ -50,7 +50,15 @@ export function isCreativeEvaluable(s: AdSetSnapshot): boolean {
   return s.freezeReason != null && BUDGET_AUTHORITY_FREEZES.has(s.freezeReason);
 }
 
-export function classifyStatus(s: AdSetSnapshot, cfg: EngineConfig): AdSetStatus {
+/**
+ * `campaignResults7d` is TikTok's learning input (its campaign's d7 results); every other
+ * platform ignores it. Absent on the Meta path, which classifies exactly as it always has.
+ */
+export function classifyStatus(
+  s: AdSetSnapshot,
+  cfg: EngineConfig,
+  campaignResults7d?: number,
+): AdSetStatus {
   // Respect states that come from manual action or upstream triggers.
   if (s.freeze) return 'frozen';
   if (s.status === 'frozen' || s.status === 'flagged' || s.status === 'starved') {
@@ -60,23 +68,23 @@ export function classifyStatus(s: AdSetSnapshot, cfg: EngineConfig): AdSetStatus
   // First few days: lock the budget entirely (treated as frozen for the cycle).
   if (s.ageDays < NEW_ITEM_LOCK_DAYS) return 'frozen';
 
-  // New item still in its protection window: grace (Tier-3 average score).
-  if (s.ageDays < cfg.newItemProtectDays) return 'grace';
+  // New item still in its protection window: grace (Tier-3 average score). PMax gets 14.
+  if (s.ageDays < protectDaysFor(s, cfg)) return 'grace';
 
-  // Platform learning phase: few conversions in 7d OR still young.
-  // Conversions are counted on the objective's KPI (purchases by default).
-  const conv7d = kpiEvents(s.windows.d7, cfg);
-  if (conv7d < cfg.learningConvThreshold || s.ageDays < cfg.learningMinDays) {
-    return 'learning';
-  }
+  // Platform learning phase, by each platform's own definition. On Meta: few conversions
+  // in 7d (counted on the objective's KPI) OR still young — the engine's original proxy.
+  if (isPlatformLearning(s, cfg, campaignResults7d)) return 'learning';
 
   return 'active';
 }
 
 /** Apply classification to a whole portfolio (returns new snapshots). */
 export function classifyPortfolio(snapshots: AdSetSnapshot[], cfg: EngineConfig): AdSetSnapshot[] {
+  const tiktokCampaigns = tiktokCampaignResults7d(snapshots, cfg);
   return snapshots.map((s) => {
-    const status = classifyStatus(s, cfg);
+    const campaignResults =
+      s.platform === 'tiktok_ads' && s.campaignId ? tiktokCampaigns.get(s.campaignId) : undefined;
+    const status = classifyStatus(s, cfg, campaignResults);
     return {
       ...s,
       status,

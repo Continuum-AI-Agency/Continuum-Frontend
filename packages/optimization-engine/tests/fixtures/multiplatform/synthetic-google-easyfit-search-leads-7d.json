@@ -1,0 +1,36 @@
+{
+  "_source": {
+    "kind": "SYNTHETIC",
+    "label": "synthetic, composed for the scenario — not a recording",
+    "anchoredTo": "google-easyfit2026-campaigns30d.json + google-easyfit2026-budgets.json (real id, name, budget 700, status LIMITED)",
+    "invented": [
+      "cost",
+      "conversions",
+      "lost IS"
+    ],
+    "note": "the real campaign spent 0; metrics follow the prototype figure 31.4 MXN per lead"
+  },
+  "data": {
+    "campaign": {
+      "id": "24274603133",
+      "name": "Easy Fit | Search | Leads formulario",
+      "budget": "customers/5251780631/campaignBudgets/15892914141",
+      "budget_mxn_day": 700,
+      "primary_status": "LIMITED",
+      "primary_status_reasons": [
+        "MISSING_LEAD_FORM_EXTENSION"
+      ]
+    },
+    "window": {
+      "since": "2026-09-24",
+      "until": "2026-09-30"
+    },
+    "metrics": {
+      "cost": 2198,
+      "conversions": 70,
+      "cost_per_conversion": 31.4,
+      "search_budget_lost_impression_share": 0.29
+    },
+    "conversionAction": "Lead formulario web Easy Fit (SUBMIT_LEAD_FORM, real, ENABLED)"
+  }
+}

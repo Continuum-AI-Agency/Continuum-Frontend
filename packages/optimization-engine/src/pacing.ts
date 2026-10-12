@@ -13,9 +13,11 @@
 // on the same row. Carrying the inputs is what makes the persisted row self-describing.
 // ---------------------------------------------------------------------------
 
+import { formatMoney } from '@continuum/contracts';
 import type { PacingResult, PacingState } from './types';
 
-export function computePacing(p: PacingState): PacingResult {
+/** `currency` is the ad account's, for the daily total the note prints; null prints bare. */
+export function computePacing(p: PacingState, currency: string | null = null): PacingResult {
   const idealDaily = p.periodBudget / Math.max(1, p.periodDays);
   // spend that "should" have happened before today
   const idealCumulative = idealDaily * Math.max(0, p.dayIndex - 1);
@@ -24,17 +26,24 @@ export function computePacing(p: PacingState): PacingResult {
   const remainingDays = Math.max(1, p.periodDays - (p.dayIndex - 1));
   const dailyTotal = remainingBudget / remainingDays;
 
-  const pacingRatio = idealCumulative > 0 ? p.actualSpendToDate / idealCumulative : 1;
-  let status: PacingResult['status'] = 'on_track';
-  if (pacingRatio > 1.05) status = 'overpacing';
-  else if (pacingRatio < 0.95) status = 'underpacing';
+  // A verdict compares spend to date against what the plan expected by now. On day 1 the
+  // plan expected nothing, so the ratio is 1 by construction and says nothing about
+  // delivery: that is `unknown`, not `on_track`.
+  const measurable = idealCumulative > 0;
+  const pacingRatio = measurable ? p.actualSpendToDate / idealCumulative : 1;
+  let status: PacingResult['status'] = 'unknown';
+  if (measurable) {
+    status = pacingRatio > 1.05 ? 'overpacing' : pacingRatio < 0.95 ? 'underpacing' : 'on_track';
+  }
 
   const note =
-    status === 'on_track'
-      ? `On track (${(pacingRatio * 100).toFixed(0)}% of ideal cumulative).`
-      : status === 'underpacing'
-        ? `Underpacing (${(pacingRatio * 100).toFixed(0)}%): daily raised to $${dailyTotal.toFixed(0)} to catch up.`
-        : `Overpacing (${(pacingRatio * 100).toFixed(0)}%): daily lowered to $${dailyTotal.toFixed(0)} to stay on plan.`;
+    status === 'unknown'
+      ? `Day ${p.dayIndex} of ${p.periodDays}: nothing was due before today, so there is no pacing verdict yet; daily set to ${formatMoney(dailyTotal, currency)} to spend the plan.`
+      : status === 'on_track'
+        ? `On track (${(pacingRatio * 100).toFixed(0)}% of ideal cumulative).`
+        : status === 'underpacing'
+          ? `Underpacing (${(pacingRatio * 100).toFixed(0)}%): daily raised to ${formatMoney(dailyTotal, currency)} to catch up.`
+          : `Overpacing (${(pacingRatio * 100).toFixed(0)}%): daily lowered to ${formatMoney(dailyTotal, currency)} to stay on plan.`;
 
   return {
     dailyTotal,

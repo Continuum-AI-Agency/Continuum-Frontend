@@ -1,0 +1,1641 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "meta",
+    "api": "prod Supabase public optimizer_* read RPCs (service role, read-only)",
+    "adAccountId": "act_521903353286118",
+    "recordedAt": "2026-10-01T23:31:33.686Z",
+    "portfolioId": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+    "portfolioName": "Prueba",
+    "rpc": [
+      "optimizer_load_portfolio",
+      "optimizer_list_portfolio_adsets",
+      "optimizer_get_portfolio_performance(p_limit 30)",
+      "optimizer_get_cpa_series(p_limit 30)"
+    ]
+  },
+  "data": {
+    "portfolio": {
+      "id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+      "brand_id": "6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64",
+      "ad_account_id": "act_521903353286118",
+      "objective": "lead",
+      "mode": "balanced",
+      "apply_mode": "recommend",
+      "daily_total": 110,
+      "cpa_target": 25,
+      "config": {},
+      "level": "adset",
+      "budget_source": "observed",
+      "lookback_window": "d14",
+      "period_budget": null,
+      "period_start": null,
+      "period_end": null,
+      "autopilot_paused": false,
+      "max_daily_apply_minor": null,
+      "max_change_pct_per_cycle": null,
+      "apply_mode_changed_by": null,
+      "autopilot_scopes": {
+        "budget": true,
+        "new_audience": false,
+        "creative_swap": false,
+        "new_creatives": false,
+        "audience_change": false
+      },
+      "autopilot_scopes_changed_by": null,
+      "creative_analysis": "off",
+      "target_metric": null,
+      "scale_growth_pct": null,
+      "scale_cadence_days": null,
+      "scale_max_daily": null,
+      "last_scaled_at": null,
+      "conversion_descriptor": null,
+      "currency": "MXN"
+    },
+    "adsets": [
+      {
+        "adset_id": "120252366985420236",
+        "adset_name": "AV CAMACHO // AGOSTO - BAU",
+        "active": true,
+        "last_seen_at": "2026-10-01T15:26:32.653+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366965180236",
+        "adset_name": "AV CAMACHO // AGOSTO - BROAD",
+        "active": true,
+        "last_seen_at": "2026-10-01T15:26:32.653+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366978920236",
+        "adset_name": "AV CAMACHO // AGOSTO - LKL",
+        "active": true,
+        "last_seen_at": "2026-10-01T15:26:32.653+00:00",
+        "missing_since": null
+      }
+    ],
+    "performance": {
+      "history": [
+        {
+          "id": "1683bb38-ff01-405d-bec7-550afc98457e",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-10-01",
+          "cycle_ts": "2026-10-01T15:26:32.653+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.4931907753891448,
+            "events": 44,
+            "sampleSize": 0.40313103287570345,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 59%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6612373605754196,
+                "projectedScore": 0.5908491556618232
+              }
+            ],
+            "consistency": 0.610134780715422,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-10-01T15:26:53.502396+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "76c4dbf9-0387-4b38-b0f3-4735ebda5df5",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-30",
+          "cycle_ts": "2026-09-30T15:25:52.465+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5034923640767517,
+            "events": 40,
+            "sampleSize": 0.3818234321924017,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 57%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6624603659837056,
+                "projectedScore": 0.5722306270954997
+              }
+            ],
+            "consistency": 0.6811579038358009,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-30T15:26:15.647541+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "c0ccb9db-3411-4f2c-9985-15146319a2a6",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-29",
+          "cycle_ts": "2026-09-29T15:24:59.011+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5119231746578421,
+            "events": 44,
+            "sampleSize": 0.41773174855778783,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 53%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6581460115376964,
+                "projectedScore": 0.5325811755135581
+              },
+              {
+                "code": "windows_disagree",
+                "message": "1 ad set score differently over 3, 7 and 14 days (34% of spend) — a recent change or noisy delivery. Reading them on the 14-day window, or waiting a cycle, settles it.",
+                "adsetIds": [
+                  "120252366978920236"
+                ],
+                "spendShare": 0.3418539884623035,
+                "projectedScore": 0.5011930025343578
+              }
+            ],
+            "consistency": 0.6422318906345459,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-29T15:25:22.959653+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "1a337681-b909-4fda-8d4e-27ead5ce5f83",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-28",
+          "cycle_ts": "2026-09-28T15:24:32.786+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5503215096583417,
+            "events": 46,
+            "sampleSize": 0.42486360191230343,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 69%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.664916595149321,
+                "projectedScore": 0.6918656120228159
+              }
+            ],
+            "consistency": 0.7166793973117264,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-28T15:24:54.279619+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "0ef22e54-7f77-4991-9a63-daf6c1fa4b19",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-27",
+          "cycle_ts": "2026-09-27T15:23:52.252+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5481973267590218,
+            "events": 52,
+            "sampleSize": 0.4552899469131273,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 70%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6646877794914048,
+                "projectedScore": 0.6990562806911399
+              }
+            ],
+            "consistency": 0.6619270237517364,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-27T15:24:18.761696+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "b2c4b730-77e9-4ac2-83bb-de6318fe5eb8",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-26",
+          "cycle_ts": "2026-09-26T15:23:44.085+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5474969935406225,
+            "events": 52,
+            "sampleSize": 0.45510104659309863,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (67% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 71%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6670881502890175,
+                "projectedScore": 0.7149450376427567
+              }
+            ],
+            "consistency": 0.6646381291830998,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-26T15:24:03.079263+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "8b37edd9-1a85-431c-b450-ea1d3ba506f8",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-25",
+          "cycle_ts": "2026-09-25T15:22:45.924+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5748313413511241,
+            "events": 52,
+            "sampleSize": 0.4551690995470396,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (67% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 64%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.670406515481289,
+                "projectedScore": 0.6395144072633508
+              }
+            ],
+            "consistency": 0.7308488780300211,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-25T15:23:04.841437+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "36832ef9-93d4-429c-9dc7-c1b0de108718",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-24",
+          "cycle_ts": "2026-09-24T15:22:36.318+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5868977717818127,
+            "events": 50,
+            "sampleSize": 0.4394694708879446,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 70%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6610747816176623,
+                "projectedScore": 0.6980991629210695
+              }
+            ],
+            "consistency": 0.7885978773438118,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-24T15:22:59.056863+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "3f9538a1-fdf3-4952-a6d2-849103e8cda9",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-23",
+          "cycle_ts": "2026-09-23T15:21:45.56+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5835620427564986,
+            "events": 48,
+            "sampleSize": 0.4171612834229571,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 74%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6646881996415045,
+                "projectedScore": 0.7377803064087379
+              }
+            ],
+            "consistency": 0.8293946634345758,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-23T15:22:09.420257+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "435d33bf-938f-428b-bbe0-6629ff1156a0",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-22",
+          "cycle_ts": "2026-09-22T15:21:36.847+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5760269383150476,
+            "events": 46,
+            "sampleSize": 0.4108501128071962,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (67% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 72%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6657088885189661,
+                "projectedScore": 0.7247754199528262
+              }
+            ],
+            "consistency": 0.8129022238122056,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-22T15:21:58.239711+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "f17173af-4a1a-4ca1-8739-157a80ff529e",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-21",
+          "cycle_ts": "2026-09-21T15:21:28.286+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5255065652554867,
+            "events": 46,
+            "sampleSize": 0.4129783204565689,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (67% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 67%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6731655495517529,
+                "projectedScore": 0.6712702650474744
+              }
+            ],
+            "consistency": 0.6742719321365361,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-21T15:21:48.623285+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "e5a6528e-e9b1-4250-940a-7de2502037c3",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-20",
+          "cycle_ts": "2026-09-20T15:21:25.123+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5943034337428416,
+            "events": 44,
+            "sampleSize": 0.4076974667098283,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 67%.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366965180236"
+                ],
+                "spendShare": 0.6623864704040088,
+                "projectedScore": 0.6741539989728306
+              }
+            ],
+            "consistency": 0.8803409402034951,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-20T15:21:41.730962+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "0c7dbdc6-4c85-48c9-bf45-5145e373a954",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-19",
+          "cycle_ts": "2026-09-19T15:20:48.403+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "medium",
+            "score": 0.5663747940481502,
+            "events": 40,
+            "sampleSize": 0.39000153348743827,
+            "underFloor": {
+              "adsetIds": [
+                "120252366985420236",
+                "120252366978920236",
+                "120252366965180236"
+              ],
+              "floorEvents": 20
+            },
+            "actionables": [
+              {
+                "code": "under_event_floor",
+                "message": "3 of 3 ad sets are under the 20-event floor (100% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, is what raises the sample term.",
+                "adsetIds": [
+                  "120252366985420236",
+                  "120252366978920236",
+                  "120252366965180236"
+                ],
+                "spendShare": 1,
+                "projectedScore": null
+              }
+            ],
+            "consistency": 0.8360017654137664,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-19T15:21:10.92176+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "e7cbfcac-1c58-48a8-be18-7c9565ee887d",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-18",
+          "cycle_ts": "2026-09-18T15:20:46.12+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.10800987968239764,
+            "events": 36,
+            "sampleSize": 0.37091772856340877,
+            "consistency": 0.6612612137467844,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-18T15:21:02.254541+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "bba09afe-d4f6-43f9-b2ff-46034a2e889a",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-17",
+          "cycle_ts": "2026-09-17T15:20:20.292+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.102458178549869,
+            "events": 30,
+            "sampleSize": 0.3312941414843117,
+            "consistency": 0.6893240894103693,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-17T15:20:48.535439+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "ed06e90d-bae5-4ffe-b47a-07bdeef0eb8d",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-16",
+          "cycle_ts": "2026-09-16T15:20:05.346+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.12932420082151852,
+            "events": 34,
+            "sampleSize": 0.36485956290741633,
+            "consistency": 0.7879030481747331,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-16T15:20:28.507918+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        },
+        {
+          "id": "b091f46d-16cf-4ce5-be5e-afb18bbae21b",
+          "mode": "balanced",
+          "pool": 101.25,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 101.25,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-15",
+          "cycle_ts": "2026-09-15T15:19:24.266+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.12422931033609426,
+            "events": 32,
+            "sampleSize": 0.34863036087918053,
+            "consistency": 0.8014531489297866,
+            "predictiveness": 0.45000000000000007
+          },
+          "created_at": "2026-09-15T15:19:41.551803+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 93.15,
+            "sumUpperBounds": 126.5625
+          },
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+          "total_budget": 101.25,
+          "triggered_by": "frontend",
+          "frozen_budget": 0,
+          "allocated_total": 101.25
+        }
+      ],
+      "portfolio": {
+        "id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+        "mode": "balanced",
+        "name": "Prueba",
+        "level": "adset",
+        "config": {},
+        "status": "active",
+        "autogen": {},
+        "brand_id": "6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64",
+        "currency": "MXN",
+        "platform": "meta",
+        "objective": "lead",
+        "apply_mode": "recommend",
+        "cpa_target": 25,
+        "created_at": "2026-09-15T15:19:18.891019+00:00",
+        "created_by": "e6d86770-4928-4fd5-ba40-dbc47f565823",
+        "period_end": null,
+        "updated_at": "2026-10-01T15:26:32.462691+00:00",
+        "daily_total": 110,
+        "period_start": null,
+        "ad_account_id": "act_521903353286118",
+        "budget_source": "observed",
+        "period_budget": null,
+        "target_metric": null,
+        "cycle_interval": "24:00:00",
+        "last_scaled_at": null,
+        "last_claimed_at": "2026-10-01T15:26:32.462691+00:00",
+        "lookback_window": "d14",
+        "next_realloc_at": "2026-10-02T15:26:32.462691+00:00",
+        "scale_max_daily": null,
+        "autopilot_paused": false,
+        "autopilot_scopes": {
+          "budget": true,
+          "new_audience": false,
+          "creative_swap": false,
+          "new_creatives": false,
+          "audience_change": false
+        },
+        "scale_growth_pct": null,
+        "velocity_cap_pct": 0.3,
+        "creative_analysis": "off",
+        "budget_granularity": "daily",
+        "scale_cadence_days": null,
+        "autopilot_paused_at": null,
+        "autopilot_paused_by": null,
+        "apply_mode_changed_at": null,
+        "apply_mode_changed_by": null,
+        "conversion_descriptor": null,
+        "max_daily_apply_minor": null,
+        "autopilot_paused_reason": null,
+        "max_change_pct_per_cycle": null,
+        "autopilot_scopes_changed_at": "2026-09-20T06:05:40.593982+00:00",
+        "autopilot_scopes_changed_by": null
+      },
+      "hero_brief": {
+        "id": "6455d676-be08-4dc7-8cb1-3db6b564c31b",
+        "brief": {
+          "hero": {
+            "cta": null,
+            "why": "Confidence is low: too little data to say the gap will hold. No single change clears the impact floor today (largest: 4.98 MXN/day vs a 5 MXN/day floor).",
+            "module": "none",
+            "headline": "Cost per lead is 34.88 MXN against a 25 MXN target",
+            "impact_unit": "currency",
+            "candidate_id": null,
+            "impact_basis": null,
+            "justification": null,
+            "impact_per_day": null,
+            "confidence_note": null
+          },
+          "model": "deterministic",
+          "growth": {
+            "as_of": "2026-10-01T15:26:32.653+00:00",
+            "scale": null,
+            "spend": 1534.88,
+            "deltas": {
+              "spend": null,
+              "results": null,
+              "cost_per_result": null
+            },
+            "pacing": {
+              "note": "No pacing state: using the provided total.",
+              "ratio": null,
+              "status": null
+            },
+            "target": 25,
+            "window": "d14",
+            "results": 44,
+            "currency": "MXN",
+            "result_label": "leads",
+            "cost_per_result": 34.88
+          },
+          "version": 1,
+          "secondary": [
+            "rec:e4093df7-dd85-4df7-aaf3-c6a50fb1a660"
+          ],
+          "candidates": [
+            {
+              "id": "budget:portfolio",
+              "cta": {
+                "kind": "queue_row",
+                "target_id": "budget:120252366978920236"
+              },
+              "kind": "budget_move",
+              "module": "budget",
+              "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 21.67 on 24 events. Truncated by the per-cycle velocity cap.",
+              "trigger": null,
+              "adset_id": "120252366978920236",
+              "adset_name": "AV CAMACHO // AGOSTO - LKL",
+              "impact_unit": "currency",
+              "impact_basis": "3 budget moves, 11 MXN/day moved; 0.14 more leads/day at each ad set's own cost, valued at 35 per result",
+              "impact_per_day": 4.98,
+              "results_per_day": 0.14
+            },
+            {
+              "id": "rec:e4093df7-dd85-4df7-aaf3-c6a50fb1a660",
+              "cta": {
+                "kind": "queue_row",
+                "target_id": "rec:e4093df7-dd85-4df7-aaf3-c6a50fb1a660"
+              },
+              "kind": "variate_creative",
+              "module": "creative",
+              "reason": "\"AV CAMACHO // $12 PRIMER MES (V3) // AGOSTO 2026 - Copy\" is the cheapest creative in this ad set at 29.10 MXN per lead (vs 164 MXN, 5.63x, on the same audience and budget). Make variants of it and let them compete.",
+              "trigger": "C2_creative_winner",
+              "adset_id": "120252366978920236",
+              "adset_name": "AV CAMACHO // AGOSTO - LKL",
+              "impact_unit": "currency",
+              "impact_basis": "spend/day × the cost gap to the portfolio's cost per result (22 vs 35)",
+              "impact_per_day": 0,
+              "results_per_day": null
+            }
+          ],
+          "generated_at": "2026-10-01T15:27:17.634Z",
+          "prompt_version": "v2",
+          "growth_sentence": "40% over target"
+        },
+        "error": null,
+        "model": "deterministic",
+        "status": "ready",
+        "utc_day": "2026-10-01",
+        "attempts": 1,
+        "brand_id": "6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64",
+        "ready_at": "2026-10-01T15:27:17.702066+00:00",
+        "locked_by": null,
+        "created_at": "2026-10-01T15:27:17.376134+00:00",
+        "updated_at": "2026-10-01T15:27:17.702066+00:00",
+        "cycle_run_id": "1683bb38-ff01-405d-bec7-550afc98457e",
+        "heartbeat_at": "2026-10-01T15:27:17.424284+00:00",
+        "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+        "prompt_version": "v2",
+        "lease_expires_at": null
+      },
+      "latest_run": {
+        "id": "1683bb38-ff01-405d-bec7-550afc98457e",
+        "mode": "balanced",
+        "pool": 101.25,
+        "notes": [],
+        "pacing": {
+          "note": "No pacing state: using the provided total.",
+          "source": "observed",
+          "status": "on_track",
+          "dailyTotal": 101.25,
+          "pacingRatio": 1,
+          "idealCumulative": 0
+        },
+        "utc_day": "2026-10-01",
+        "cycle_ts": "2026-10-01T15:26:32.653+00:00",
+        "residual": 0,
+        "conserved": true,
+        "confidence": {
+          "band": "low",
+          "score": 0.4931907753891448,
+          "events": 44,
+          "sampleSize": 0.40313103287570345,
+          "underFloor": {
+            "adsetIds": [
+              "120252366985420236",
+              "120252366965180236"
+            ],
+            "floorEvents": 20
+          },
+          "actionables": [
+            {
+              "code": "under_event_floor",
+              "message": "2 of 3 ad sets are under the 20-event floor (66% of spend). Consolidating them, or giving them budget until they clear 20 conversions in 14 days, would put data confidence near 59%.",
+              "adsetIds": [
+                "120252366985420236",
+                "120252366965180236"
+              ],
+              "spendShare": 0.6612373605754196,
+              "projectedScore": 0.5908491556618232
+            }
+          ],
+          "consistency": 0.610134780715422,
+          "predictiveness": 0.45
+        },
+        "created_at": "2026-10-01T15:26:53.502396+00:00",
+        "feasibility": {
+          "overflow": false,
+          "underflow": false,
+          "sumLowerBounds": 93.15,
+          "sumUpperBounds": 126.5625
+        },
+        "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b",
+        "total_budget": 101.25,
+        "triggered_by": "scheduler",
+        "frozen_budget": 0,
+        "allocated_total": 101.25
+      },
+      "latest_items": [
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 21.67 on 24 events. Truncated by the per-cycle velocity cap.",
+          "run_id": "1683bb38-ff01-405d-bec7-550afc98457e",
+          "adset_id": "120252366978920236",
+          "adset_name": "AV CAMACHO // AGOSTO - LKL",
+          "applied_at": null,
+          "change_abs": 5.399999999999999,
+          "change_pct": 0.15999999999999995,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 33.813869050077535,
+              "lo": 14.560494576259234,
+              "cpa": 21.665000000000003,
+              "events": 24
+            },
+            "id": "120252366978920236",
+            "floor": 5.0625,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 21.67 on 24 events. Truncated by the per-cycle velocity cap.",
+            "status": "learning",
+            "score3d": 0.03449465332873405,
+            "score7d": 0.017480225494908887,
+            "weights": {
+              "d3": 0.2,
+              "d7": 0.45,
+              "d14": 0.35
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.7839075881298546,
+              "reachExpansion": 2.072007481296758
+            },
+            "score14d": 0.04615739672282483,
+            "changeAbs": 5.399999999999999,
+            "changePct": 0.15999999999999995,
+            "rawBudget": 48.14481624924662,
+            "lowerBound": 31.05,
+            "upperBound": 42.1875,
+            "capBreached": false,
+            "finalBudget": 39.15,
+            "floorRelaxed": false,
+            "currentBudget": 33.75,
+            "compositeScore": 0.04403304490654285,
+            "effectiveScore": 0.04403304490654285,
+            "portfolioShare": 0.47550435801725055,
+            "velocityCapped": 42.1875,
+            "trajectoryRatio": 1.9733528803035527,
+            "trajectoryState": "positive"
+          },
+          "lower_bound": 31.05,
+          "upper_bound": 42.1875,
+          "apply_status": null,
+          "cap_breached": false,
+          "final_budget": 39.15,
+          "floor_relaxed": false,
+          "current_budget": 33.75,
+          "composite_score": 0.04403304490654285,
+          "portfolio_share": 0.47550435801725055,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a smaller share of the pool than its current budget. Cost per result 63.63 on 8 events. Truncated by the per-cycle velocity cap.",
+          "run_id": "1683bb38-ff01-405d-bec7-550afc98457e",
+          "adset_id": "120252366965180236",
+          "adset_name": "AV CAMACHO // AGOSTO - BROAD",
+          "applied_at": null,
+          "change_abs": -2.6999999999999993,
+          "change_pct": -0.07999999999999997,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 147.39234783780233,
+              "lo": 32.29390645552572,
+              "cpa": 63.63250000000001,
+              "events": 8
+            },
+            "id": "120252366965180236",
+            "floor": 5.0625,
+            "reason": "Earned a smaller share of the pool than its current budget. Cost per result 63.63 on 8 events. Truncated by the per-cycle velocity cap.",
+            "status": "learning",
+            "score3d": 0,
+            "score7d": 0,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.6116485288190245,
+              "reachExpansion": 2.4169939307390216
+            },
+            "score14d": 0.01571523985384827,
+            "changeAbs": -2.6999999999999993,
+            "changePct": -0.07999999999999997,
+            "rawBudget": 20.296293859455044,
+            "lowerBound": 31.05,
+            "upperBound": 42.1875,
+            "capBreached": false,
+            "finalBudget": 31.05,
+            "floorRelaxed": false,
+            "currentBudget": 33.75,
+            "compositeScore": 0.018562904349307983,
+            "effectiveScore": 0.018562904349307983,
+            "portfolioShare": 0.20045722330325969,
+            "velocityCapped": 31.05,
+            "trajectoryRatio": 1,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 31.05,
+          "upper_bound": 42.1875,
+          "apply_status": null,
+          "cap_breached": false,
+          "final_budget": 31.05,
+          "floor_relaxed": false,
+          "current_budget": 33.75,
+          "composite_score": 0.018562904349307983,
+          "portfolio_share": 0.20045722330325969,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 42.16 on 12 events.",
+          "run_id": "1683bb38-ff01-405d-bec7-550afc98457e",
+          "adset_id": "120252366985420236",
+          "adset_name": "AV CAMACHO // AGOSTO - BAU",
+          "applied_at": null,
+          "change_abs": -2.6999999999999993,
+          "change_pct": -0.07999999999999997,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 81.58380138018191,
+              "lo": 24.132512285593645,
+              "cpa": 42.155,
+              "events": 12
+            },
+            "id": "120252366985420236",
+            "floor": 5.0625,
+            "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 42.16 on 12 events.",
+            "status": "learning",
+            "score3d": 0.017675651789659744,
+            "score7d": 0.03706792697618386,
+            "weights": {
+              "d3": 0.05,
+              "d7": 0.35,
+              "d14": 0.6
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.9450390512004628,
+              "reachExpansion": 1.7691462074019788
+            },
+            "score14d": 0.023721978412999643,
+            "changeAbs": -2.6999999999999993,
+            "changePct": -0.07999999999999997,
+            "rawBudget": 32.80888989129833,
+            "lowerBound": 31.05,
+            "upperBound": 42.1875,
+            "capBreached": false,
+            "finalBudget": 31.05,
+            "floorRelaxed": false,
+            "currentBudget": 33.75,
+            "compositeScore": 0.030006871652355008,
+            "effectiveScore": 0.030006871652355008,
+            "portfolioShare": 0.3240384186794897,
+            "velocityCapped": 32.80888989129833,
+            "trajectoryRatio": 0.47684489615554576,
+            "trajectoryState": "negative"
+          },
+          "lower_bound": 31.05,
+          "upper_bound": 42.1875,
+          "apply_status": null,
+          "cap_breached": false,
+          "final_budget": 31.05,
+          "floor_relaxed": false,
+          "current_budget": 33.75,
+          "composite_score": 0.030006871652355008,
+          "portfolio_share": 0.3240384186794897,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        }
+      ],
+      "recommendations": [
+        {
+          "id": "e4093df7-dd85-4df7-aaf3-c6a50fb1a660",
+          "kind": "variate_creative",
+          "seed": {
+            "labels": {
+              "hook": "Tu primer mes por solo $12",
+              "angle": "Low-friction barrier to entry for gym membership",
+              "format": "Talking head video",
+              "themes": [
+                "fitness",
+                "habit-building",
+                "affordability",
+                "convenience"
+              ],
+              "copyTone": [
+                "accessible",
+                "direct",
+                "encouraging"
+              ],
+              "assetType": "video",
+              "sentiment": "aspirational",
+              "valueProps": [
+                "$12 for the first month",
+                "easy to start",
+                "multiple locations"
+              ],
+              "funnelStage": "bof",
+              "visualStyle": "User-generated content style with gym backdrop",
+              "primaryTheme": "Affordability and ease of starting",
+              "hookArchetype": "value_stack",
+              "hookTranscript": null,
+              "sentimentScore": 0.8,
+              "analyzedFromImage": true,
+              "funnelStageRationale": "The ad leads with a direct financial incentive (price drop/offer) specifically designed to drive an immediate signup lead, which is a classic bottom-of-funnel conversion tactic.",
+              "targetAudienceSignal": "People looking to start a fitness habit on a budget",
+              "funnelStageConfidence": 0.9
+            },
+            "adSetId": "120252366978920236",
+            "posterUrl": "https://scontent.ffsd3-1.fna.fbcdn.net/v/t15.5256-10/769536013_1497633562051130_117287549783857219_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=e3495b&_nc_ohc=XAH2E1BXJWUQ7kNvwHq7C5d&_nc_oc=AdpWIvtwfCof8jLm4KKnq_rtweI8CjT35EReVpIUah5MuRx4IxEQSasN2SNeVvoyM5M&_nc_zt=23&_nc_ht=scontent.ffsd3-1.fna&edm=AF0wKlEEAAAA&_nc_gid=LkR6XHnZ93BugOVrvL8wFQ&_nc_tpa=Q5bMBQLPt_ebDHi-mn57dZeNELZ0HLJVoXelw55tBlYyOXJ3VPRVp7n4YU_DC7BI6obW5Efu5vB1ief0WQ&oh=00_AQIpTkSTWro9eSJJAV4yu6yaARc7OO2DbTpsZxFEZNJ7nw&oe=6A9E254B",
+            "groundedOn": [
+              "winner: \"AV CAMACHO // $12 PRIMER MES (V3) // AGOSTO 2026 - Copy\" at 29.10 MXN per lead on 87.29 MXN of spend (3 leads)",
+              "same ad set: \"AV CAMACHO // $249 // AGOSTO - Copy\" at 164 MXN per lead (5.63x the winner)",
+              "ad-set median: 96.39 MXN per lead",
+              "audience, budget and optimization goal held constant (same ad set)",
+              "trust: low_evidence",
+              "trust: spend_concentrated"
+            ],
+            "winnerAdId": "120252366978980236",
+            "rebuildCraft": false,
+            "winnerAssetId": "be95ac24-3547-4893-98ce-f2237ab42a82",
+            "winnerCreativeRowId": "a68ddae7-6d19-41fe-a281-c94ed67ea9ef"
+          },
+          "ad_id": "120252366978980236",
+          "reason": "\"AV CAMACHO // $12 PRIMER MES (V3) // AGOSTO 2026 - Copy\" is the cheapest creative in this ad set at 29.10 MXN per lead (vs 164 MXN, 5.63x, on the same audience and budget). Make variants of it and let them compete.",
+          "run_id": "1683bb38-ff01-405d-bec7-550afc98457e",
+          "status": "pending",
+          "rule_id": null,
+          "trigger": "C2_creative_winner",
+          "adset_id": "120252366978920236",
+          "evidence": null,
+          "severity": "high",
+          "adset_name": "AV CAMACHO // AGOSTO - LKL",
+          "created_at": "2026-10-01T15:26:53.502396+00:00",
+          "decided_at": null,
+          "decided_by": null,
+          "decided_via": "human",
+          "portfolio_id": "d3af2439-1a87-496c-8ae2-3d78e62aec9b"
+        }
+      ]
+    },
+    "cpaSeries": [
+      {
+        "adsets": 3,
+        "conv_d3": 12,
+        "conv_d7": 20,
+        "conv_d14": 32,
+        "cycle_ts": "2026-09-15T15:19:24.266+00:00",
+        "spend_d3": 316.61000000000007,
+        "spend_d7": 653.93,
+        "spend_d14": 854.29
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 12,
+        "conv_d7": 20,
+        "conv_d14": 32,
+        "cycle_ts": "2026-09-15T15:19:55.15+00:00",
+        "spend_d3": 316.61000000000007,
+        "spend_d7": 653.93,
+        "spend_d14": 854.29
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 14,
+        "conv_d7": 22,
+        "conv_d14": 34,
+        "cycle_ts": "2026-09-16T15:20:05.346+00:00",
+        "spend_d3": 309.01,
+        "spend_d7": 643.56,
+        "spend_d14": 907.44
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 8,
+        "conv_d7": 18,
+        "conv_d14": 30,
+        "cycle_ts": "2026-09-17T15:20:20.292+00:00",
+        "spend_d3": 176.79,
+        "spend_d7": 574.41,
+        "spend_d14": 863.7
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 12,
+        "conv_d7": 22,
+        "conv_d14": 36,
+        "cycle_ts": "2026-09-18T15:20:46.12+00:00",
+        "spend_d3": 161.72,
+        "spend_d7": 571.86,
+        "spend_d14": 887.5100000000001
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 12,
+        "conv_d7": 26,
+        "conv_d14": 40,
+        "cycle_ts": "2026-09-19T15:20:48.403+00:00",
+        "spend_d3": 256.26,
+        "spend_d7": 626.02,
+        "spend_d14": 1033.25
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 16,
+        "conv_d7": 30,
+        "conv_d14": 44,
+        "cycle_ts": "2026-09-20T15:21:25.123+00:00",
+        "spend_d3": 372.49,
+        "spend_d7": 681.5,
+        "spend_d14": 1149.48
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 14,
+        "conv_d7": 26,
+        "conv_d14": 46,
+        "cycle_ts": "2026-09-21T15:21:28.286+00:00",
+        "spend_d3": 462.40000000000003,
+        "spend_d7": 708.23,
+        "spend_d14": 1308.43
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 12,
+        "conv_d7": 30,
+        "conv_d14": 46,
+        "cycle_ts": "2026-09-22T15:21:36.847+00:00",
+        "spend_d3": 455.63,
+        "spend_d7": 754.49,
+        "spend_d14": 1381.6699999999998
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 10,
+        "conv_d7": 26,
+        "conv_d14": 48,
+        "cycle_ts": "2026-09-23T15:21:45.56+00:00",
+        "spend_d3": 408.92,
+        "spend_d7": 790.21,
+        "spend_d14": 1433.77
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 16,
+        "conv_d7": 32,
+        "conv_d14": 50,
+        "cycle_ts": "2026-09-24T15:22:36.318+00:00",
+        "spend_d3": 363.15,
+        "spend_d7": 864.58,
+        "spend_d14": 1438.99
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 12,
+        "conv_d7": 32,
+        "conv_d14": 52,
+        "cycle_ts": "2026-09-25T15:22:45.924+00:00",
+        "spend_d3": 307.57,
+        "spend_d7": 865.22,
+        "spend_d14": 1424.3
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 14,
+        "conv_d7": 26,
+        "conv_d14": 52,
+        "cycle_ts": "2026-09-26T15:23:44.085+00:00",
+        "spend_d3": 259.24,
+        "spend_d7": 795.28,
+        "spend_d14": 1383.9999999999998
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 6,
+        "conv_d7": 22,
+        "conv_d14": 52,
+        "cycle_ts": "2026-09-27T15:23:52.252+00:00",
+        "spend_d3": 246.39999999999998,
+        "spend_d7": 729.69,
+        "spend_d14": 1419.99
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 2,
+        "conv_d7": 22,
+        "conv_d14": 46,
+        "cycle_ts": "2026-09-28T15:24:32.786+00:00",
+        "spend_d3": 275.56,
+        "spend_d7": 708.39,
+        "spend_d14": 1386.61
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 0,
+        "conv_d7": 14,
+        "conv_d14": 44,
+        "cycle_ts": "2026-09-29T15:24:59.011+00:00",
+        "spend_d3": 313.31,
+        "spend_d7": 700.97,
+        "spend_d14": 1407.56
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 2,
+        "conv_d7": 16,
+        "conv_d14": 40,
+        "cycle_ts": "2026-09-30T15:25:52.465+00:00",
+        "spend_d3": 319.87,
+        "spend_d7": 651.62,
+        "spend_d14": 1406.6200000000001
+      },
+      {
+        "adsets": 3,
+        "conv_d3": 6,
+        "conv_d7": 12,
+        "conv_d14": 44,
+        "cycle_ts": "2026-10-01T15:26:32.653+00:00",
+        "spend_d3": 338.73,
+        "spend_d7": 670.3,
+        "spend_d14": 1534.88
+      }
+    ]
+  }
+}

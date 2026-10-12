@@ -1,0 +1,3631 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-06T00:13:44.428Z",
+    "query": "SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, search_term_view.search_term, search_term_view.status, segments.keyword.info.text, segments.keyword.info.match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM search_term_view WHERE segments.date BETWEEN '2026-09-22' AND '2026-10-05'",
+    "rows": 113
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~MTUgbWluIHdvcmtvdXQ",
+        "status": "NONE",
+        "searchTerm": "15 min workout"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~MjEgZGlhcyBhdmFuemFkb3MgZmF1c3RvIG11cmlsbG8",
+        "status": "NONE",
+        "searchTerm": "21 dias avanzados fausto murillo"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~NCBlamVyY2ljaW9z",
+        "status": "NONE",
+        "searchTerm": "4 ejercicios"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~YWJkb21lbiB5IGNpbnR1cmE",
+        "status": "NONE",
+        "searchTerm": "abdomen y cintura"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y2FtaW5hdGEgMzAgbWludXRvcyBkaWFyaW9z",
+        "status": "NONE",
+        "searchTerm": "caminata 30 minutos diarios"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "7"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y2FycmVyYSB2aXZvIDQ3",
+        "status": "NONE",
+        "searchTerm": "carrera vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y2h1eSBhbG1hZGEgY2FyZGlv",
+        "status": "NONE",
+        "searchTerm": "chuy almada cardio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y29zdG8gbWVtYnJlc2lhIHZpdm8gNDc",
+        "status": "NONE",
+        "searchTerm": "costo membresia vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y29zdG8gdml2byA0Nw",
+        "status": "NONE",
+        "searchTerm": "costo vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y3VhbnRvIGN1ZXN0YSBsYSBtZW1icmVzaWEgZGUgdml2byA0Nw",
+        "status": "NONE",
+        "searchTerm": "cuanto cuesta la membresia de vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y3VhbnRvIGN1ZXN0YSB2aXZvIDQ3",
+        "status": "NONE",
+        "searchTerm": "cuanto cuesta vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "6840000",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Y3XDoW50byBjdWVzdGEgbGEgbWVuc3VhbGlkYWQgZW4gdml2byA0Nw",
+        "status": "NONE",
+        "searchTerm": "cuánto cuesta la mensualidad en vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvIGNvbiBmYXVzdG8gbXVyaWxsbw",
+        "status": "NONE",
+        "searchTerm": "ejercicio con fausto murillo"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvIGRlIHBpZSBwYXJhIGFiZG9tZW4gYmFqbw",
+        "status": "NONE",
+        "searchTerm": "ejercicio de pie para abdomen bajo"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvIHBhcmEgbG9zIHJvbGxpdG9zIGRlbGEgY2ludHVyYQ",
+        "status": "NONE",
+        "searchTerm": "ejercicio para los rollitos dela cintura"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvcyBkZSBjYWxlbnRhbWllbnRvIGFudGVzIGRlIGhhY2VyIGVqZXJjaWNpbw",
+        "status": "NONE",
+        "searchTerm": "ejercicios de calentamiento antes de hacer ejercicio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvcyBkZSBlc3RpcmFtaWVudG8",
+        "status": "NONE",
+        "searchTerm": "ejercicios de estiramiento"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvcyBoaWl0",
+        "status": "NONE",
+        "searchTerm": "ejercicios hiit"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZWplcmNpY2lvcyBwYXJhIGJhamFyIGRlIHBlc28",
+        "status": "NONE",
+        "searchTerm": "ejercicios para bajar de peso"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "9350000",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~ZW50cmVuYW1pZW50byBlbiBjYXNh",
+        "status": "NONE",
+        "searchTerm": "entrenamiento en casa"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Zm90b3MgZGUgdml2byA0NyB2YWxsZSByZWFs",
+        "status": "NONE",
+        "searchTerm": "fotos de vivo 47 valle real"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Z2VyYXJkbyB2aWxsYXJyZWFsIHZpdm8gNDc",
+        "status": "NONE",
+        "searchTerm": "gerardo villarreal vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "6",
+        "conversions": 0,
+        "costMicros": "77670000",
+        "impressions": "23"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Z2ltbmFzaW8gdml2byA0Nw",
+        "status": "NONE",
+        "searchTerm": "gimnasio vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "21580000",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Z2ltbmFzaW8gdml2byA0NyBuYWNpb25lcyB1bmlkYXM",
+        "status": "NONE",
+        "searchTerm": "gimnasio vivo 47 naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "6",
+        "conversions": 0,
+        "costMicros": "62230000",
+        "impressions": "24"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Z3ltIHZpdm8gNDc",
+        "status": "NONE",
+        "searchTerm": "gym vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "60270000",
+        "impressions": "7"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~Z3ltIHZpdm8gNDcgbmFjaW9uZXMgdW5pZGFz",
+        "status": "NONE",
+        "searchTerm": "gym vivo 47 naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "49130000",
+        "impressions": "17"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~aG9yYXJpbyB2aXZvIDQ3",
+        "status": "NONE",
+        "searchTerm": "horario vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "14880000",
+        "impressions": "13"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~aG9yYXJpbyB2aXZvIDQ3IGdvdXJtZXRlcmlh",
+        "status": "NONE",
+        "searchTerm": "horario vivo 47 gourmeteria"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~aG9yYXJpbyB2aXZvIDQ3IG5hY2lvbmVzIHVuaWRhcw",
+        "status": "NONE",
+        "searchTerm": "horario vivo 47 naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "5730000",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~aG9yYXJpbyB2aXZvIDQ3IHZhbGxlIHJlYWw",
+        "status": "NONE",
+        "searchTerm": "horario vivo 47 valle real"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "6",
+        "conversions": 0,
+        "costMicros": "41490000",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~bWVtYnJlc2lhIHZpdm8gNDc",
+        "status": "NONE",
+        "searchTerm": "membresia vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "9940000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~bWVtYnJlc8OtYSB2aXZvIDQ3IHByZWNpbw",
+        "status": "NONE",
+        "searchTerm": "membresía vivo 47 precio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "7",
+        "conversions": 0,
+        "costMicros": "47310000",
+        "impressions": "7"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~bWVuc3VhbGlkYWQgdml2byA0Nw",
+        "status": "NONE",
+        "searchTerm": "mensualidad vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~bmFjaW9uZXMgdW5pZGFzIHZpdm8gNDc",
+        "status": "NONE",
+        "searchTerm": "naciones unidas vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~b3BpbmlvbmVzIGRlIHZpdm8gNDcgdmFsbGUgcmVhbA",
+        "status": "NONE",
+        "searchTerm": "opiniones de vivo 47 valle real"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cGF1IGZpdA",
+        "status": "NONE",
+        "searchTerm": "pau fit"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cGlsYXRlcw",
+        "status": "NONE",
+        "searchTerm": "pilates"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cGlsYXRlcyBjYW1hIHJlZm9ybWVy",
+        "status": "NONE",
+        "searchTerm": "pilates cama reformer"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cHJlY2lvIG1lbWJyZXNpYSB2aXZvIDQ3",
+        "status": "NONE",
+        "searchTerm": "precio membresia vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cHJlY2lvIG1lbWJyZXPDrWEgdml2byA0Nw",
+        "status": "NONE",
+        "searchTerm": "precio membresía vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "28550000",
+        "impressions": "13"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cHJlY2lvIHZpdm8gNDc",
+        "status": "NONE",
+        "searchTerm": "precio vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "5",
+        "conversions": 0,
+        "costMicros": "47590000",
+        "impressions": "15"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~cHJlY2lvcyB2aXZvIDQ3",
+        "status": "NONE",
+        "searchTerm": "precios vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~c3RlcCBwYXJhIHByaW5jaXBpYW50ZXM",
+        "status": "NONE",
+        "searchTerm": "step para principiantes"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dGFiYXRh",
+        "status": "NONE",
+        "searchTerm": "tabata"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dGVsZWZvbm8gdml2byA0NyBuYWNpb25lcyB1bmlkYXM",
+        "status": "NONE",
+        "searchTerm": "telefono vivo 47 naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "11540000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dGVsZWZvbm8gdml2byA0NyB2YWxsZSByZWFs",
+        "status": "NONE",
+        "searchTerm": "telefono vivo 47 valle real"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dHJhc3Bhc28gbWVtYnJlc8OtYSB2aXZvIDQ3",
+        "status": "NONE",
+        "searchTerm": "traspaso membresía vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dHVyYm9zdGVwcw",
+        "status": "NONE",
+        "searchTerm": "turbosteps"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "51340000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2YSBh",
+        "status": "NONE",
+        "searchTerm": "viva a"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "6600000",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2ZSA0Nw",
+        "status": "NONE",
+        "searchTerm": "vive 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "25000000",
+        "impressions": "10"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2ZSA0NyBneW0",
+        "status": "NONE",
+        "searchTerm": "vive 47 gym"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "225",
+        "conversions": 7,
+        "costMicros": "3403710000",
+        "impressions": "973"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0Nw",
+        "status": "ADDED",
+        "searchTerm": "vivo 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "30470000",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBhdmlhY2lvbg",
+        "status": "NONE",
+        "searchTerm": "vivo 47 aviacion"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "24740000",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBhdmlsYSBjYW1hY2hv",
+        "status": "NONE",
+        "searchTerm": "vivo 47 avila camacho"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "143930000",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjYXJyZXJh",
+        "status": "NONE",
+        "searchTerm": "vivo 47 carrera"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "27",
+        "conversions": 0,
+        "costMicros": "998410000",
+        "impressions": "221"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjZW50ZXI",
+        "status": "NONE",
+        "searchTerm": "vivo 47 center"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "10",
+        "conversions": 0,
+        "costMicros": "294670000",
+        "impressions": "75"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjZW50ZXIgbGEgZXN0YW5jaWE",
+        "status": "NONE",
+        "searchTerm": "vivo 47 center la estancia"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "93005227",
+        "impressions": "36"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjZW50ZXIgbGEgZXN0YW5jaWEgYXJjb3MgZGUgZ3VhZGFsdXBl",
+        "status": "NONE",
+        "searchTerm": "vivo 47 center la estancia arcos de guadalupe"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "21150000",
+        "impressions": "10"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjZW50ZXIgbGEgZXN0YW5jaWEgYXZlbmlkYSByYWZhZWwgc2FuemlvIGFyY29zIGRlIGd1YWRhbHVwZSB6YXBvcGFuIGphbGlzY28",
+        "status": "NONE",
+        "searchTerm": "vivo 47 center la estancia avenida rafael sanzio arcos de guadalupe zapopan jalisco"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "7"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjZW50ZXIgbGEgZXN0YW5jaWEgZm90b3M",
+        "status": "NONE",
+        "searchTerm": "vivo 47 center la estancia fotos"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "78890000",
+        "impressions": "13"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjZXJjYSBkZSBtaQ",
+        "status": "NONE",
+        "searchTerm": "vivo 47 cerca de mi"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjaGFsbGVuZ2U",
+        "status": "NONE",
+        "searchTerm": "vivo 47 challenge"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "17680000",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjaXVkYWRlbGE",
+        "status": "NONE",
+        "searchTerm": "vivo 47 ciudadela"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "26520000",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBjb3N0bw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 costo"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBlbXBsZW8",
+        "status": "NONE",
+        "searchTerm": "vivo 47 empleo"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "26060000",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBmYW1pbHkgZml0bmVzcyBjbHVi",
+        "status": "NONE",
+        "searchTerm": "vivo 47 family fitness club"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "16030000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBmb3Rvcw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 fotos"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "43050000",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBnZGw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 gdl"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "26910000",
+        "impressions": "5"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBnaW1uYXNpbw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 gimnasio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "28",
+        "conversions": 0,
+        "costMicros": "390220000",
+        "impressions": "78"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBnb3VybWV0ZXJpYQ",
+        "status": "NONE",
+        "searchTerm": "vivo 47 gourmeteria"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBnb3VybWV0ZXJpYSB0ZWxlZm9ubw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 gourmeteria telefono"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBnb3VybWV0ZXLDrWE",
+        "status": "NONE",
+        "searchTerm": "vivo 47 gourmetería"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "111570000",
+        "impressions": "15"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBndWFkYWxhamFyYQ",
+        "status": "NONE",
+        "searchTerm": "vivo 47 guadalajara"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "5",
+        "conversions": 0,
+        "costMicros": "60710000",
+        "impressions": "19"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBneW0",
+        "status": "NONE",
+        "searchTerm": "vivo 47 gym"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "19260000",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBob3Jhcmlv",
+        "status": "NONE",
+        "searchTerm": "vivo 47 horario"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "23",
+        "conversions": 0,
+        "costMicros": "726220000",
+        "impressions": "116"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBsYSBlc3RhbmNpYQ",
+        "status": "NONE",
+        "searchTerm": "vivo 47 la estancia"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "5",
+        "conversions": 0,
+        "costMicros": "56710000",
+        "impressions": "22"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBsYSBnb3VybWV0ZXJpYQ",
+        "status": "NONE",
+        "searchTerm": "vivo 47 la gourmeteria"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBsb2dv",
+        "status": "NONE",
+        "searchTerm": "vivo 47 logo"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "16940000",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBtZW1icmVzaWE",
+        "status": "NONE",
+        "searchTerm": "vivo 47 membresia"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "31830000",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBtZW1icmVzaWEgcHJlY2lv",
+        "status": "NONE",
+        "searchTerm": "vivo 47 membresia precio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "71970000",
+        "impressions": "5"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBtZW5zdWFsaWRhZA",
+        "status": "NONE",
+        "searchTerm": "vivo 47 mensualidad"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "17750000",
+        "impressions": "6"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBuYWNpb25lcw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 naciones"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "84",
+        "conversions": 2,
+        "costMicros": "1041430000",
+        "impressions": "364"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBuYWNpb25lcyB1bmlkYXM",
+        "status": "NONE",
+        "searchTerm": "vivo 47 naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "72500000",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBuYWNpb25lcyB1bmlkYXMgYXYgbmFjaW9uZXMgdW5pZGFzIDY3MDAgbG9tYSByZWFsIDQ1MTI5IHphcG9wYW4gamFs",
+        "status": "NONE",
+        "searchTerm": "vivo 47 naciones unidas av naciones unidas 6700 loma real 45129 zapopan jal"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "99893020",
+        "impressions": "9"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBuYWNpb25lcyB1bmlkYXMgYXZlbmlkYSBuYWNpb25lcyB1bmlkYXMgbG9tYSByZWFsIHphcG9wYW4gamFsaXNjbw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 naciones unidas avenida naciones unidas loma real zapopan jalisco"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "67930000",
+        "impressions": "10"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBuYWNpb25lcyB1bmlkYXMgcHJlY2lvcw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 naciones unidas precios"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "5"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBuYWNpb25lcyB1bmlkYXMgdGVsZWZvbm8",
+        "status": "NONE",
+        "searchTerm": "vivo 47 naciones unidas telefono"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "223750000",
+        "impressions": "19"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBwaHlzaW8",
+        "status": "NONE",
+        "searchTerm": "vivo 47 physio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "7",
+        "conversions": 0,
+        "costMicros": "69370000",
+        "impressions": "14"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBwcmVjaW8",
+        "status": "NONE",
+        "searchTerm": "vivo 47 precio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "11970000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBwcmVjaW8gbWVtYnJlc2lh",
+        "status": "NONE",
+        "searchTerm": "vivo 47 precio membresia"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "10",
+        "conversions": 0,
+        "costMicros": "195700000",
+        "impressions": "35"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBwcmVjaW8gbWVuc3VhbGlkYWQ",
+        "status": "NONE",
+        "searchTerm": "vivo 47 precio mensualidad"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "24",
+        "conversions": 0,
+        "costMicros": "243075213",
+        "impressions": "71"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBwcmVjaW9z",
+        "status": "NONE",
+        "searchTerm": "vivo 47 precios"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "5",
+        "conversions": 0,
+        "costMicros": "165980000",
+        "impressions": "29"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyByYWZhZWwgc2Fuemlv",
+        "status": "NONE",
+        "searchTerm": "vivo 47 rafael sanzio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "68970000",
+        "impressions": "8"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyBzdWN1cnNhbGVz",
+        "status": "NONE",
+        "searchTerm": "vivo 47 sucursales"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "7930000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB0ZWxlZm9ubw",
+        "status": "NONE",
+        "searchTerm": "vivo 47 telefono"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "61",
+        "conversions": 2,
+        "costMicros": "799479963",
+        "impressions": "232"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB2YWxsZSByZWFs",
+        "status": "NONE",
+        "searchTerm": "vivo 47 valle real"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "12830000",
+        "impressions": "2"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB2YWxsZSByZWFsIGF2ZW5pZGEgZ2VuZXJhbCByYW3Ds24gY29yb25hIHNhbiBqdWFuIGRlIG9jb3TDoW4gemFwb3BhbiBqYWxpc2Nv",
+        "status": "NONE",
+        "searchTerm": "vivo 47 valle real avenida general ramón corona san juan de ocotán zapopan jalisco"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB2YWxsZSByZWFsIGZvdG9z",
+        "status": "NONE",
+        "searchTerm": "vivo 47 valle real fotos"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB2YWxsZSByZWFsIGhvcmFyaW8",
+        "status": "NONE",
+        "searchTerm": "vivo 47 valle real horario"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB2YWxsZSByZWFsIHByZWNpb3M",
+        "status": "NONE",
+        "searchTerm": "vivo 47 valle real precios"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "7100000",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB2YWxsZSByZWFsIHphcG9wYW4gamFs",
+        "status": "NONE",
+        "searchTerm": "vivo 47 valle real zapopan jal"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "23360000",
+        "impressions": "9"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB3ZWxsbmVzcyBjb21wYW55",
+        "status": "NONE",
+        "searchTerm": "vivo 47 wellness company"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA0NyB6YXBvcGFu",
+        "status": "NONE",
+        "searchTerm": "vivo 47 zapopan"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "6520000",
+        "impressions": "3"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byA3IGd5bQ",
+        "status": "NONE",
+        "searchTerm": "vivo 7 gym"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "17670000",
+        "impressions": "10"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byBjZW50ZXIgNDc",
+        "status": "NONE",
+        "searchTerm": "vivo center 47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "6",
+        "conversions": 0,
+        "costMicros": "78780000",
+        "impressions": "13"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2byBuYWNpb25lcyB1bmlkYXM",
+        "status": "NONE",
+        "searchTerm": "vivo naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "48",
+        "conversions": 0,
+        "costMicros": "780316956",
+        "impressions": "168"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2bzQ3",
+        "status": "NONE",
+        "searchTerm": "vivo47"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "5",
+        "conversions": 0,
+        "costMicros": "190790000",
+        "impressions": "38"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2bzQ3IGNlbnRlcg",
+        "status": "NONE",
+        "searchTerm": "vivo47 center"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "13980000",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2bzQ3IGd5bQ",
+        "status": "NONE",
+        "searchTerm": "vivo47 gym"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "7",
+        "conversions": 0,
+        "costMicros": "126940000",
+        "impressions": "38"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2bzQ3IG5hY2lvbmVzIHVuaWRhcw",
+        "status": "NONE",
+        "searchTerm": "vivo47 naciones unidas"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "39960000",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2bzQ3IHByZWNpbw",
+        "status": "NONE",
+        "searchTerm": "vivo47 precio"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "16200000",
+        "impressions": "4"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~dml2bzQ3IHZhbGxlIHJlYWw",
+        "status": "NONE",
+        "searchTerm": "vivo47 valle real"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "searchTermView": {
+        "resourceName": "customers/3710693645/searchTermViews/20775796216~155765678139~enVtYmEgcGFyYSBwcmluY2lwaWFudGVzIDI",
+        "status": "NONE",
+        "searchTerm": "zumba para principiantes 2"
+      },
+      "segments": {
+        "keyword": {
+          "info": {
+            "matchType": "BROAD",
+            "text": "Vivo 47"
+          },
+          "adGroupCriterion": "customers/3710693645/adGroupCriteria/155765678139~1166699330130"
+        }
+      }
+    }
+  ]
+}

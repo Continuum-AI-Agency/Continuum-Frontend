@@ -1,0 +1,279 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.status, conversion_action.primary_for_goal, conversion_action.origin FROM conversion_action WHERE conversion_action.status != 'REMOVED'",
+    "rows": 22
+  },
+  "data": [
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1016561744",
+        "status": "ENABLED",
+        "type": "SMART_CAMPAIGN_AD_CLICKS_TO_CALL",
+        "category": "CONTACT",
+        "id": "1016561744",
+        "name": "Smart campaign ad clicks to call",
+        "origin": "CALL_FROM_ADS",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1016562131",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "GET_DIRECTIONS",
+        "id": "1016562131",
+        "name": "Local actions - Directions",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1017117974",
+        "status": "ENABLED",
+        "type": "UNIVERSAL_ANALYTICS_GOAL",
+        "category": "PAGE_VIEW",
+        "id": "1017117974",
+        "name": "consulta membresias",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1017421903",
+        "status": "ENABLED",
+        "type": "GOOGLE_HOSTED",
+        "category": "CONTACT",
+        "id": "1017421903",
+        "name": "Clicks to call",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1017422101",
+        "status": "ENABLED",
+        "type": "SMART_CAMPAIGN_MAP_CLICKS_TO_CALL",
+        "category": "CONTACT",
+        "id": "1017422101",
+        "name": "Smart campaign map clicks to call",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1017422293",
+        "status": "ENABLED",
+        "type": "SMART_CAMPAIGN_MAP_DIRECTIONS",
+        "category": "GET_DIRECTIONS",
+        "id": "1017422293",
+        "name": "Smart campaign map directions",
+        "origin": "GOOGLE_HOSTED",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1017980371",
+        "status": "ENABLED",
+        "type": "UNIVERSAL_ANALYTICS_GOAL",
+        "category": "CONTACT",
+        "id": "1017980371",
+        "name": "Contacto",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1018045563",
+        "status": "ENABLED",
+        "type": "UNIVERSAL_ANALYTICS_GOAL",
+        "category": "SUBMIT_LEAD_FORM",
+        "id": "1018045563",
+        "name": "Pase de cortesia",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1018078713",
+        "status": "ENABLED",
+        "type": "SMART_CAMPAIGN_TRACKED_CALLS",
+        "category": "PHONE_CALL_LEAD",
+        "id": "1018078713",
+        "name": "Calls from Smart Campaign Ads",
+        "origin": "CALL_FROM_ADS",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1018131500",
+        "status": "HIDDEN",
+        "type": "UNIVERSAL_ANALYTICS_GOAL",
+        "category": "PAGE_VIEW",
+        "id": "1018131500",
+        "name": "Tank you page contacto (Default Google Ads Profile)",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1019012143",
+        "status": "HIDDEN",
+        "type": "UNIVERSAL_ANALYTICS_GOAL",
+        "category": "PAGE_VIEW",
+        "id": "1019012143",
+        "name": "Tank you page membresias (Default Google Ads Profile)",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/1019075913",
+        "status": "HIDDEN",
+        "type": "UNIVERSAL_ANALYTICS_GOAL",
+        "category": "PAGE_VIEW",
+        "id": "1019075913",
+        "name": "Tank you page pases (Default Google Ads Profile)",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501623",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_PURCHASE",
+        "category": "PURCHASE",
+        "id": "6580501623",
+        "name": "www.vivo47.com.mx - GA4 (web) purchase",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501626",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "PAGE_VIEW",
+        "id": "6580501626",
+        "name": "www.vivo47.com.mx - GA4 (web) consulta_membresias",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501629",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "PAGE_VIEW",
+        "id": "6580501629",
+        "name": "www.vivo47.com.mx - GA4 (web) contacto",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501632",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "PAGE_VIEW",
+        "id": "6580501632",
+        "name": "www.vivo47.com.mx - GA4 (web) pase_de_cortesia",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501635",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "PAGE_VIEW",
+        "id": "6580501635",
+        "name": "www.vivo47.com.mx - GA4 (web) tank_you_page_pases",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501638",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "PAGE_VIEW",
+        "id": "6580501638",
+        "name": "www.vivo47.com.mx - GA4 (web) tank_you_page_membresias",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6580501641",
+        "status": "HIDDEN",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "PAGE_VIEW",
+        "id": "6580501641",
+        "name": "www.vivo47.com.mx - GA4 (web) tank_you_page_contacto",
+        "origin": "WEBSITE",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6829700821",
+        "status": "ENABLED",
+        "type": "ANDROID_INSTALLS_ALL_OTHER_APPS",
+        "category": "DOWNLOAD",
+        "id": "6829700821",
+        "name": "Android installs (all other apps)",
+        "origin": "APP",
+        "primaryForGoal": false
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/6933012396",
+        "status": "ENABLED",
+        "type": "GOOGLE_ANALYTICS_4_CUSTOM",
+        "category": "SIGNUP",
+        "id": "6933012396",
+        "name": "(Evento de Google Analytics file_download)",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    },
+    {
+      "conversionAction": {
+        "resourceName": "customers/3710693645/conversionActions/7760709582",
+        "status": "ENABLED",
+        "type": "WEBPAGE",
+        "category": "SUBMIT_LEAD_FORM",
+        "id": "7760709582",
+        "name": "Lead formulario web",
+        "origin": "WEBSITE",
+        "primaryForGoal": true
+      }
+    }
+  ]
+}

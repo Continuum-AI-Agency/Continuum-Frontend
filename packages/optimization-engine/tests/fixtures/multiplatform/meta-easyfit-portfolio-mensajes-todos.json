@@ -1,0 +1,2320 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "meta",
+    "api": "prod Supabase public optimizer_* read RPCs (service role, read-only)",
+    "adAccountId": "act_521903353286118",
+    "recordedAt": "2026-10-01T23:31:33.686Z",
+    "portfolioId": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+    "portfolioName": "MENSAJES // TODOS",
+    "rpc": [
+      "optimizer_load_portfolio",
+      "optimizer_list_portfolio_adsets",
+      "optimizer_get_portfolio_performance(p_limit 30)",
+      "optimizer_get_cpa_series(p_limit 30)"
+    ]
+  },
+  "data": {
+    "portfolio": {
+      "id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+      "brand_id": "6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64",
+      "ad_account_id": "act_521903353286118",
+      "objective": "conversations",
+      "mode": "balanced",
+      "apply_mode": "autopilot",
+      "daily_total": 3000,
+      "cpa_target": 30,
+      "config": {},
+      "level": "adset",
+      "budget_source": "observed",
+      "lookback_window": "d14",
+      "period_budget": null,
+      "period_start": null,
+      "period_end": null,
+      "autopilot_paused": false,
+      "max_daily_apply_minor": 450000,
+      "max_change_pct_per_cycle": 0.2,
+      "apply_mode_changed_by": "0c824afe-de33-44fb-90bd-48a5e8a81589",
+      "autopilot_scopes": {
+        "budget": true,
+        "new_audience": false,
+        "creative_swap": false,
+        "new_creatives": false,
+        "audience_change": false
+      },
+      "autopilot_scopes_changed_by": null,
+      "creative_analysis": "off",
+      "target_metric": null,
+      "scale_growth_pct": null,
+      "scale_cadence_days": null,
+      "scale_max_daily": null,
+      "last_scaled_at": null,
+      "conversion_descriptor": null,
+      "currency": "MXN"
+    },
+    "adsets": [
+      {
+        "adset_id": "120252387298200236",
+        "adset_name": "ALEIRA // AGOSTO - BAU - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252387315140236",
+        "adset_name": "ALEIRA // AGOSTO - BROAD - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252387327740236",
+        "adset_name": "ALEIRA // AGOSTO - LKL - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252387201880236",
+        "adset_name": "AV CAMACHO // AGOSTO - BAU - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252387183480236",
+        "adset_name": "AV CAMACHO // AGOSTO - Broad - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252387195420236",
+        "adset_name": "AV CAMACHO // AGOSTO - LKL - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366892450236",
+        "adset_name": "CAÑADAS // AGOSTO - BAU - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366934240236",
+        "adset_name": "CAÑADAS // AGOSTO - BROAD - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366915460236",
+        "adset_name": "CAÑADAS // AGOSTO - LKL - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366808240236",
+        "adset_name": "ITESO // AGOSTO - BAU - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366741610236",
+        "adset_name": "ITESO // AGOSTO - BROAD - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      },
+      {
+        "adset_id": "120252366801240236",
+        "adset_name": "ITESO // AGOSTO - LKL - Mensajes",
+        "active": true,
+        "last_seen_at": "2026-10-01T19:02:36.838+00:00",
+        "missing_since": null
+      }
+    ],
+    "performance": {
+      "history": [
+        {
+          "id": "09564566-9191-4778-b3bd-c6784481890c",
+          "mode": "balanced",
+          "pool": 2727.619999999999,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.619999999999,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-10-01",
+          "cycle_ts": "2026-10-01T19:02:36.838+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8404421623433205,
+            "events": 910,
+            "sampleSize": 0.7866060525065879,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8996605695252801,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-10-01T19:07:41.399135+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2352.7293999999997,
+            "sumUpperBounds": 3409.5249999999996
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.619999999999,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.6199999999985
+        },
+        {
+          "id": "0f9389fa-68ff-4c6f-a98e-c61b4eef4873",
+          "mode": "balanced",
+          "pool": 2727.62,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.62,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-30",
+          "cycle_ts": "2026-09-30T19:02:02.92+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8242065068070634,
+            "events": 844,
+            "sampleSize": 0.773899305745751,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8807766796585277,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-30T19:03:57.973301+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2354.2009,
+            "sumUpperBounds": 3409.5249999999996
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.62,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.6200000000003
+        },
+        {
+          "id": "acfe6eca-56be-45c1-aa3d-68fae4a2a381",
+          "mode": "balanced",
+          "pool": 2727.6300000000006,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.6300000000006,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-29",
+          "cycle_ts": "2026-09-29T19:01:11.258+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8362802137487453,
+            "events": 856,
+            "sampleSize": 0.776583260517416,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.9022053034469983,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-29T19:06:15.461463+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2209.3659,
+            "sumUpperBounds": 3409.5375000000004
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.6300000000006,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.63
+        },
+        {
+          "id": "b73dd2df-892a-418c-ae7f-1f6525890a37",
+          "mode": "balanced",
+          "pool": 2727.63,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.63,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-28",
+          "cycle_ts": "2026-09-28T19:00:35.475+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8357587080138236,
+            "events": 869,
+            "sampleSize": 0.7778016265322851,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.899672716352749,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-28T19:02:28.886509+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2279.0799,
+            "sumUpperBounds": 3409.5374999999995
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.63,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.63
+        },
+        {
+          "id": "66019174-7977-46b4-9474-d20d2ed87ad9",
+          "mode": "balanced",
+          "pool": 2727.63,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.63,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-27",
+          "cycle_ts": "2026-09-27T19:00:07.03+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8494229939437561,
+            "events": 879,
+            "sampleSize": 0.7795908486144905,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.9270506098729963,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-27T19:02:03.666409+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2279.0961,
+            "sumUpperBounds": 3409.5375000000004
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.63,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.6300000000006
+        },
+        {
+          "id": "d016c6aa-a615-4f92-bd7a-8a6748804638",
+          "mode": "balanced",
+          "pool": 2727.65,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.65,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-26",
+          "cycle_ts": "2026-09-26T18:59:41.984+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8400561875236463,
+            "events": 867,
+            "sampleSize": 0.7760318357652056,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.9108368433204834,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-26T19:03:12.913851+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2279.6464,
+            "sumUpperBounds": 3409.5625
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.65,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.65
+        },
+        {
+          "id": "8df5b1fd-5843-4812-96ea-d89f783e3902",
+          "mode": "balanced",
+          "pool": 2727.65,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.65,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-25",
+          "cycle_ts": "2026-09-25T18:58:45.704+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8285237065992107,
+            "events": 899,
+            "sampleSize": 0.7823492378011521,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8783931145951922,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-25T19:00:25.74275+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2277.6943,
+            "sumUpperBounds": 3409.5625
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.65,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.65
+        },
+        {
+          "id": "e159d0e2-846b-4320-8c8b-a6f65b4784d3",
+          "mode": "balanced",
+          "pool": 2727.6400000000003,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.6400000000003,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-24",
+          "cycle_ts": "2026-09-24T00:21:09.073+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8403428266062163,
+            "events": 919,
+            "sampleSize": 0.7855620641478575,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.9004711789199745,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-24T00:22:39.51174+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2275.5386000000003,
+            "sumUpperBounds": 3409.55
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.6400000000003,
+          "triggered_by": "frontend",
+          "frozen_budget": 0,
+          "allocated_total": 2727.6400000000003
+        },
+        {
+          "id": "570ae4dd-1b0f-4006-a672-0adbed81de3b",
+          "mode": "balanced",
+          "pool": 2727.6499999999996,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.6499999999996,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-23",
+          "cycle_ts": "2026-09-23T02:44:43.256+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8439779088549678,
+            "events": 951,
+            "sampleSize": 0.7909133588094689,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.9018510136560147,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-23T02:48:14.465565+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2349.058,
+            "sumUpperBounds": 3409.5624999999995
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.6499999999996,
+          "triggered_by": "frontend",
+          "frozen_budget": 0,
+          "allocated_total": 2727.6499999999996
+        },
+        {
+          "id": "b73bd506-f9b6-49f4-a4b4-3171c534ffd3",
+          "mode": "balanced",
+          "pool": 2727.64,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2727.64,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-22",
+          "cycle_ts": "2026-09-22T18:56:39.737+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8332350727729121,
+            "events": 999,
+            "sampleSize": 0.79726209704562,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8728619584061593,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-22T19:00:04.692555+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2265.8699,
+            "sumUpperBounds": 3409.5499999999997
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2727.64,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2727.64
+        },
+        {
+          "id": "86ae3f67-88c3-4d80-a65e-253c7e4acc02",
+          "mode": "balanced",
+          "pool": 2741.45,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2741.45,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-21",
+          "cycle_ts": "2026-09-21T18:56:30.819+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8234313101092101,
+            "events": 988,
+            "sampleSize": 0.7929952992515534,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8563055244715017,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-21T18:58:23.320229+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2271.0718000000006,
+            "sumUpperBounds": 3426.8125
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2741.45,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2741.45
+        },
+        {
+          "id": "079fc651-b78f-4613-bdf2-b2f8289999da",
+          "mode": "balanced",
+          "pool": 2741.45,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2741.45,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-20",
+          "cycle_ts": "2026-09-20T18:55:34.137+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8152115868240007,
+            "events": 900,
+            "sampleSize": 0.7766917925311709,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8572679424601768,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-20T18:57:18.853446+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2430.9253,
+            "sumUpperBounds": 3426.8125000000005
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2741.45,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2741.45
+        },
+        {
+          "id": "90e81bb9-8ace-42f9-84bd-14e6ec5f5df2",
+          "mode": "balanced",
+          "pool": 2741.44,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2741.44,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-19",
+          "cycle_ts": "2026-09-19T07:21:53.002+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "high",
+            "score": 0.8008923715412728,
+            "events": 795,
+            "sampleSize": 0.7503127742853255,
+            "underFloor": {
+              "adsetIds": [],
+              "floorEvents": 20
+            },
+            "actionables": [],
+            "consistency": 0.8609628345774146,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-19T07:26:56.037969+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2435.6465,
+            "sumUpperBounds": 3426.7999999999997
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2741.44,
+          "triggered_by": "frontend",
+          "frozen_budget": 0,
+          "allocated_total": 2741.44
+        },
+        {
+          "id": "30e2dc08-16c8-4e66-8baf-a5d77738e0be",
+          "mode": "balanced",
+          "pool": 2810.08,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2810.08,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-18",
+          "cycle_ts": "2026-09-18T18:54:46.988+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.27059829123961027,
+            "events": 786,
+            "sampleSize": 0.7470448220978774,
+            "consistency": 0.8034597613305674,
+            "predictiveness": 0.44999999999999996
+          },
+          "created_at": "2026-09-18T18:58:09.919181+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2502.9667999999997,
+            "sumUpperBounds": 3512.6000000000004
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2810.08,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2810.0800000000004
+        },
+        {
+          "id": "6d5124fa-0d21-4d15-bd0d-f6eaa4768385",
+          "mode": "balanced",
+          "pool": 2878.7299999999996,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 2878.7299999999996,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-17",
+          "cycle_ts": "2026-09-17T18:54:33.198+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.2832529098660174,
+            "events": 786,
+            "sampleSize": 0.7469549716576911,
+            "consistency": 0.8426999857028167,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-17T18:56:17.573949+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2422.9735,
+            "sumUpperBounds": 3598.4125
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 2878.7299999999996,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2878.7299999999996
+        },
+        {
+          "id": "8311d909-0e2d-428c-bbfc-40a62e3b9518",
+          "mode": "balanced",
+          "pool": 3087.49,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 3087.49,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-16",
+          "cycle_ts": "2026-09-16T18:54:15.89+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.29625862597626207,
+            "events": 808,
+            "sampleSize": 0.75210582697072,
+            "consistency": 0.8763037511015912,
+            "predictiveness": 0.44999999999999984
+          },
+          "created_at": "2026-09-16T18:56:10.123529+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2537.6237,
+            "sumUpperBounds": 3859.3624999999997
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3087.49,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 3087.4899999999993
+        },
+        {
+          "id": "8c6021c4-e9a0-48d5-bee8-71ca701c2dfb",
+          "mode": "balanced",
+          "pool": 3000,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 3000,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-15",
+          "cycle_ts": "2026-09-15T18:53:59.474+00:00",
+          "residual": 2.842170943040401e-14,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.29172023538155534,
+            "events": 768,
+            "sampleSize": 0.7419638616503681,
+            "consistency": 0.8776460273266165,
+            "predictiveness": 0.45000000000000007
+          },
+          "created_at": "2026-09-15T18:55:46.165273+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2287.5,
+            "sumUpperBounds": 3750
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3000,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 3000
+        },
+        {
+          "id": "00fd82d1-6df1-477a-8669-a43e804f41d5",
+          "mode": "balanced",
+          "pool": 3000,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "source": "observed",
+            "status": "on_track",
+            "dailyTotal": 3000,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-14",
+          "cycle_ts": "2026-09-14T18:53:22.682+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.2964817493048876,
+            "events": 738,
+            "sampleSize": 0.735097978438313,
+            "consistency": 0.8975089838037841,
+            "predictiveness": 0.44999999999999984
+          },
+          "created_at": "2026-09-14T18:55:00.438134+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2355,
+            "sumUpperBounds": 3750
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3000,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 3000
+        },
+        {
+          "id": "5e59d7a2-c986-4bec-8f5c-88a40f813c87",
+          "mode": "balanced",
+          "pool": 3000,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "status": "on_track",
+            "dailyTotal": 3000,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-13",
+          "cycle_ts": "2026-09-13T18:52:41.877+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.2986882570040613,
+            "events": 696,
+            "sampleSize": 0.7221095752488589,
+            "consistency": 0.9173625729882471,
+            "predictiveness": 0.44999999999999996
+          },
+          "created_at": "2026-09-13T18:54:21.388235+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2355,
+            "sumUpperBounds": 3750
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3000,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 3000.0000000000005
+        },
+        {
+          "id": "98c4b3d1-f115-4f2d-a980-c0784bb7b380",
+          "mode": "balanced",
+          "pool": 3000,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "status": "on_track",
+            "dailyTotal": 3000,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-12",
+          "cycle_ts": "2026-09-12T18:52:07.91+00:00",
+          "residual": 5.684341886080802e-14,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.2935778733338768,
+            "events": 668,
+            "sampleSize": 0.7150882723486609,
+            "consistency": 0.910152447861571,
+            "predictiveness": 0.45
+          },
+          "created_at": "2026-09-12T18:53:48.807147+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2422.5,
+            "sumUpperBounds": 3750
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3000,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 2999.9999999999995
+        },
+        {
+          "id": "a02c972d-d6c3-4e56-85b5-ffff8b5a4567",
+          "mode": "balanced",
+          "pool": 3000,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "status": "on_track",
+            "dailyTotal": 3000,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-11",
+          "cycle_ts": "2026-09-11T18:51:42.146+00:00",
+          "residual": -5.684341886080802e-14,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.2869848873087582,
+            "events": 620,
+            "sampleSize": 0.6983361136160737,
+            "consistency": 0.9109452838264873,
+            "predictiveness": 0.45000000000000007
+          },
+          "created_at": "2026-09-11T18:53:30.204306+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2557.5,
+            "sumUpperBounds": 3750
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3000,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 3000
+        },
+        {
+          "id": "00e8d220-74d8-4f15-8643-592a6c546be3",
+          "mode": "balanced",
+          "pool": 3000,
+          "notes": [],
+          "pacing": {
+            "note": "No pacing state: using the provided total.",
+            "status": "on_track",
+            "dailyTotal": 3000,
+            "pacingRatio": 1,
+            "idealCumulative": 0
+          },
+          "utc_day": "2026-09-10",
+          "cycle_ts": "2026-09-10T18:51:32.656+00:00",
+          "residual": 0,
+          "conserved": true,
+          "confidence": {
+            "band": "low",
+            "score": 0.25920920960922805,
+            "events": 529,
+            "sampleSize": 0.6621797976225419,
+            "consistency": 0.8574457667156091,
+            "predictiveness": 0.44999999999999996
+          },
+          "created_at": "2026-09-10T18:52:49.36266+00:00",
+          "feasibility": {
+            "overflow": false,
+            "underflow": false,
+            "sumLowerBounds": 2692.5,
+            "sumUpperBounds": 3750
+          },
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+          "total_budget": 3000,
+          "triggered_by": "scheduler",
+          "frozen_budget": 0,
+          "allocated_total": 3000
+        }
+      ],
+      "portfolio": {
+        "id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+        "mode": "balanced",
+        "name": "MENSAJES // TODOS",
+        "level": "adset",
+        "config": {},
+        "status": "active",
+        "autogen": {},
+        "brand_id": "6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64",
+        "currency": "MXN",
+        "platform": "meta",
+        "objective": "conversations",
+        "apply_mode": "autopilot",
+        "cpa_target": 30,
+        "created_at": "2026-09-10T18:51:23.636744+00:00",
+        "created_by": "e6d86770-4928-4fd5-ba40-dbc47f565823",
+        "period_end": null,
+        "updated_at": "2026-10-01T19:02:36.711383+00:00",
+        "daily_total": 3000,
+        "period_start": null,
+        "ad_account_id": "act_521903353286118",
+        "budget_source": "observed",
+        "period_budget": null,
+        "target_metric": null,
+        "cycle_interval": "24:00:00",
+        "last_scaled_at": null,
+        "last_claimed_at": "2026-10-01T19:02:36.711383+00:00",
+        "lookback_window": "d14",
+        "next_realloc_at": "2026-10-02T19:02:36.711383+00:00",
+        "scale_max_daily": null,
+        "autopilot_paused": false,
+        "autopilot_scopes": {
+          "budget": true,
+          "new_audience": false,
+          "creative_swap": false,
+          "new_creatives": false,
+          "audience_change": false
+        },
+        "scale_growth_pct": null,
+        "velocity_cap_pct": 0.3,
+        "creative_analysis": "off",
+        "budget_granularity": "daily",
+        "scale_cadence_days": null,
+        "autopilot_paused_at": null,
+        "autopilot_paused_by": null,
+        "apply_mode_changed_at": "2026-09-14T23:56:54.290522+00:00",
+        "apply_mode_changed_by": "0c824afe-de33-44fb-90bd-48a5e8a81589",
+        "conversion_descriptor": null,
+        "max_daily_apply_minor": 450000,
+        "autopilot_paused_reason": null,
+        "max_change_pct_per_cycle": 0.2,
+        "autopilot_scopes_changed_at": "2026-09-20T02:38:24.420562+00:00",
+        "autopilot_scopes_changed_by": null
+      },
+      "hero_brief": {
+        "id": "b77ed116-6c38-4feb-917c-9d4764dd5296",
+        "brief": {
+          "hero": {
+            "cta": {
+              "kind": "queue_row",
+              "target_id": "rec:7759b6d6-1239-4d2a-9d3c-e415c9ed7900"
+            },
+            "why": "CTR is down 29% (3d 0.32% vs 14d 0.45%) with CPA up 31% on AV CAMACHO, indicating creative fatigue. Refreshing it is sized to save 68.28 MXN/day based on the engine's impact sizing.",
+            "module": "creative",
+            "headline": "Refresh creative on AV CAMACHO to save 68 MXN/day",
+            "impact_unit": "currency",
+            "candidate_id": "rec:7759b6d6-1239-4d2a-9d3c-e415c9ed7900",
+            "impact_basis": "impact/day the engine sized on this ad set (F1_creative_fatigue)",
+            "justification": null,
+            "impact_per_day": 68.28,
+            "confidence_note": null
+          },
+          "model": "gemini-2.5-flash",
+          "growth": {
+            "as_of": "2026-10-01T19:02:36.838+00:00",
+            "scale": null,
+            "spend": 38918.05,
+            "deltas": {
+              "spend": null,
+              "results": null,
+              "cost_per_result": null
+            },
+            "pacing": {
+              "note": "No pacing state: using the provided total.",
+              "ratio": null,
+              "status": null
+            },
+            "target": 30,
+            "window": "d14",
+            "results": 910,
+            "currency": "MXN",
+            "result_label": "conversations",
+            "cost_per_result": 42.77
+          },
+          "version": 1,
+          "secondary": [
+            "budget:portfolio"
+          ],
+          "candidates": [
+            {
+              "id": "rec:7759b6d6-1239-4d2a-9d3c-e415c9ed7900",
+              "cta": {
+                "kind": "queue_row",
+                "target_id": "rec:7759b6d6-1239-4d2a-9d3c-e415c9ed7900"
+              },
+              "kind": "creative_refresh",
+              "module": "creative",
+              "reason": "CTR down 29% (3d 0.32% vs 14d 0.45%) with CPA up 31%: creative worn out — refresh.",
+              "trigger": "F1_creative_fatigue",
+              "adset_id": "120252387195420236",
+              "adset_name": "AV CAMACHO // AGOSTO - LKL - Mensajes",
+              "impact_unit": "currency",
+              "impact_basis": "impact/day the engine sized on this ad set (F1_creative_fatigue)",
+              "impact_per_day": 68.28,
+              "results_per_day": null
+            },
+            {
+              "id": "budget:portfolio",
+              "cta": {
+                "kind": "queue_row",
+                "target_id": "budget:120252366801240236"
+              },
+              "kind": "budget_move",
+              "module": "budget",
+              "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 48.76 on 48 events.",
+              "trigger": null,
+              "adset_id": "120252366801240236",
+              "adset_name": "ITESO // AGOSTO - LKL - Mensajes",
+              "impact_unit": "currency",
+              "impact_basis": "12 budget moves, 32 MXN/day moved; -0.03 more conversations/day at each ad set's own cost, valued at 43 per result",
+              "impact_per_day": 0,
+              "results_per_day": -0.03
+            }
+          ],
+          "generated_at": "2026-10-01T19:07:58.803Z",
+          "prompt_version": "v2",
+          "growth_sentence": "The portfolio has generated 910 conversations at a cost of 42.77 MXN per conversation, which is above the 30 MXN target."
+        },
+        "error": null,
+        "model": "gemini-2.5-flash",
+        "status": "ready",
+        "utc_day": "2026-10-01",
+        "attempts": 1,
+        "brand_id": "6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64",
+        "ready_at": "2026-10-01T19:08:04.900793+00:00",
+        "locked_by": null,
+        "created_at": "2026-10-01T19:07:58.436162+00:00",
+        "updated_at": "2026-10-01T19:08:04.900793+00:00",
+        "cycle_run_id": "09564566-9191-4778-b3bd-c6784481890c",
+        "heartbeat_at": "2026-10-01T19:07:58.501328+00:00",
+        "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+        "prompt_version": "v2",
+        "lease_expires_at": null
+      },
+      "latest_run": {
+        "id": "09564566-9191-4778-b3bd-c6784481890c",
+        "mode": "balanced",
+        "pool": 2727.619999999999,
+        "notes": [],
+        "pacing": {
+          "note": "No pacing state: using the provided total.",
+          "source": "observed",
+          "status": "on_track",
+          "dailyTotal": 2727.619999999999,
+          "pacingRatio": 1,
+          "idealCumulative": 0
+        },
+        "utc_day": "2026-10-01",
+        "cycle_ts": "2026-10-01T19:02:36.838+00:00",
+        "residual": 0,
+        "conserved": true,
+        "confidence": {
+          "band": "high",
+          "score": 0.8404421623433205,
+          "events": 910,
+          "sampleSize": 0.7866060525065879,
+          "underFloor": {
+            "adsetIds": [],
+            "floorEvents": 20
+          },
+          "actionables": [],
+          "consistency": 0.8996605695252801,
+          "predictiveness": 0.45
+        },
+        "created_at": "2026-10-01T19:07:41.399135+00:00",
+        "feasibility": {
+          "overflow": false,
+          "underflow": false,
+          "sumLowerBounds": 2352.7293999999997,
+          "sumUpperBounds": 3409.5249999999996
+        },
+        "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a",
+        "total_budget": 2727.619999999999,
+        "triggered_by": "scheduler",
+        "frozen_budget": 0,
+        "allocated_total": 2727.6199999999985
+      },
+      "latest_items": [
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 36.5 on 117 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252366934240236",
+          "adset_name": "CAÑADAS // AGOSTO - BROAD - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 1.6083985516453936,
+          "change_pct": 0.005460713491021231,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 44.13971240737202,
+              "lo": 30.459157797791768,
+              "cpa": 36.504615384615384,
+              "events": 117
+            },
+            "id": "120252366934240236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 36.5 on 117 events.",
+            "status": "active",
+            "score3d": 0.027050472450492972,
+            "score7d": 0.030878720150570523,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.7037680384820951,
+              "reachExpansion": 2.0422067901234566
+            },
+            "score14d": 0.0273937963587323,
+            "changeAbs": 1.6083985516453936,
+            "changePct": 0.005460713491021231,
+            "rawBudget": 296.1483985516454,
+            "lowerBound": 191.45100000000002,
+            "upperBound": 368.175,
+            "capBreached": false,
+            "finalBudget": 296.1483985516454,
+            "floorRelaxed": false,
+            "currentBudget": 294.54,
+            "compositeScore": 0.02921807379046306,
+            "effectiveScore": 0.02921807379046306,
+            "portfolioShare": 0.10857392105632219,
+            "velocityCapped": 296.1483985516454,
+            "trajectoryRatio": 0.8760231097205361,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 191.45100000000002,
+          "upper_bound": 368.175,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 296.1483985516454,
+          "floor_relaxed": false,
+          "current_budget": 294.54,
+          "composite_score": 0.02921807379046306,
+          "portfolio_share": 0.10857392105632219,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 33.66 on 127 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252366915460236",
+          "adset_name": "CAÑADAS // AGOSTO - LKL - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 0.3261055281842573,
+          "change_pct": 0.0011411867587634984,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 40.38023806881598,
+              "lo": 28.292720449926957,
+              "cpa": 33.66307086614174,
+              "events": 127
+            },
+            "id": "120252366915460236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 33.66 on 127 events.",
+            "status": "active",
+            "score3d": 0.024800562146075313,
+            "score7d": 0.02579917729290188,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.734027488546439,
+              "reachExpansion": 2.2032726434662364
+            },
+            "score14d": 0.029706143090047033,
+            "changeAbs": 0.3261055281842573,
+            "changePct": 0.0011411867587634984,
+            "rawBudget": 286.08610552818425,
+            "lowerBound": 185.744,
+            "upperBound": 357.2,
+            "capBreached": false,
+            "finalBudget": 286.08610552818425,
+            "floorRelaxed": false,
+            "currentBudget": 285.76,
+            "compositeScore": 0.0282253254875899,
+            "effectiveScore": 0.0282253254875899,
+            "portfolioShare": 0.10488488335185413,
+            "velocityCapped": 286.08610552818425,
+            "trajectoryRatio": 0.9612927522653478,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 185.744,
+          "upper_bound": 357.2,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 286.08610552818425,
+          "floor_relaxed": false,
+          "current_budget": 285.76,
+          "composite_score": 0.0282253254875899,
+          "portfolio_share": 0.10488488335185413,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 37.06 on 111 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252387183480236",
+          "adset_name": "AV CAMACHO // AGOSTO - Broad - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": -1.9545963019350552,
+          "change_pct": -0.0073942509719870445,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 45.05349977642383,
+              "lo": 30.776358150800494,
+              "cpa": 37.0627927927928,
+              "events": 111
+            },
+            "id": "120252387183480236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 37.06 on 111 events.",
+            "status": "learning",
+            "score3d": 0.020421763150540638,
+            "score7d": 0.024004440821551985,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.8044781850943786,
+              "reachExpansion": 2.096928426543031
+            },
+            "score14d": 0.02698123710187483,
+            "changeAbs": -1.9545963019350552,
+            "changePct": -0.0073942509719870445,
+            "rawBudget": 262.3854036980649,
+            "lowerBound": 243.19279999999998,
+            "upperBound": 330.42499999999995,
+            "capBreached": false,
+            "finalBudget": 262.3854036980649,
+            "floorRelaxed": false,
+            "currentBudget": 264.34,
+            "compositeScore": 0.02588700841971143,
+            "effectiveScore": 0.02588700841971143,
+            "portfolioShare": 0.09619573243269408,
+            "velocityCapped": 262.3854036980649,
+            "trajectoryRatio": 0.8507493801815746,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 243.19279999999998,
+          "upper_bound": 330.42499999999995,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 262.3854036980649,
+          "floor_relaxed": false,
+          "current_budget": 264.34,
+          "composite_score": 0.02588700841971143,
+          "portfolio_share": 0.09619573243269408,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 41.65 on 77 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252387195420236",
+          "adset_name": "AV CAMACHO // AGOSTO - LKL - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": -7.8854456413506,
+          "change_pct": -0.03005811405561714,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 52.77081129010372,
+              "lo": 33.321018585260774,
+              "cpa": 41.64571428571429,
+              "events": 77
+            },
+            "id": "120252387195420236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 41.65 on 77 events.",
+            "status": "learning",
+            "score3d": 0.018366105352571827,
+            "score7d": 0.024131274131274135,
+            "weights": {
+              "d3": 0.05,
+              "d7": 0.35,
+              "d14": 0.6
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 1.1423502304147466,
+              "reachExpansion": 1.742495497298379
+            },
+            "score14d": 0.024012074643249174,
+            "changeAbs": -7.8854456413506,
+            "changePct": -0.03005811405561714,
+            "rawBudget": 254.45455435864937,
+            "lowerBound": 241.35279999999997,
+            "upperBound": 327.92499999999995,
+            "capBreached": false,
+            "finalBudget": 254.45455435864937,
+            "floorRelaxed": false,
+            "currentBudget": 262.34,
+            "compositeScore": 0.025104548874586866,
+            "effectiveScore": 0.025104548874586866,
+            "portfolioShare": 0.09328812457697534,
+            "velocityCapped": 254.45455435864937,
+            "trajectoryRatio": 0.7610914058105763,
+            "trajectoryState": "negative"
+          },
+          "lower_bound": 241.35279999999997,
+          "upper_bound": 327.92499999999995,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 254.45455435864937,
+          "floor_relaxed": false,
+          "current_budget": 262.34,
+          "composite_score": 0.025104548874586866,
+          "portfolio_share": 0.09328812457697534,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 44.68 on 72 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252366741610236",
+          "adset_name": "ITESO // AGOSTO - BROAD - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 0.7126083974869459,
+          "change_pct": 0.0032170484289059,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 57.10024845377303,
+              "lo": 35.476711836935486,
+              "cpa": 44.67722222222222,
+              "events": 72
+            },
+            "id": "120252366741610236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 44.68 on 72 events.",
+            "status": "learning",
+            "score3d": 0.018987822476518392,
+            "score7d": 0.02108941913714148,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.9720083974807557,
+              "reachExpansion": 1.6875945995035417
+            },
+            "score14d": 0.022382770240863478,
+            "changeAbs": 0.7126083974869459,
+            "changePct": 0.0032170484289059,
+            "rawBudget": 222.22260839748694,
+            "lowerBound": 203.7892,
+            "upperBound": 276.8875,
+            "capBreached": false,
+            "finalBudget": 222.22260839748694,
+            "floorRelaxed": false,
+            "currentBudget": 221.51,
+            "compositeScore": 0.021924537163872753,
+            "effectiveScore": 0.021924537163872753,
+            "portfolioShare": 0.08147124907336323,
+            "velocityCapped": 222.22260839748694,
+            "trajectoryRatio": 0.9003482909151407,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 203.7892,
+          "upper_bound": 276.8875,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 222.22260839748694,
+          "floor_relaxed": false,
+          "current_budget": 221.51,
+          "composite_score": 0.021924537163872753,
+          "portfolio_share": 0.08147124907336323,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 45.68 on 65 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252387298200236",
+          "adset_name": "ALEIRA // AGOSTO - BAU - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 2.8153762523213004,
+          "change_pct": 0.01309903806970316,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 59.18403840611083,
+              "lo": 35.83651620533539,
+              "cpa": 45.676769230769224,
+              "events": 65
+            },
+            "id": "120252387298200236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 45.68 on 65 events.",
+            "status": "learning",
+            "score3d": 0.016726711271230054,
+            "score7d": 0.02095424355180778,
+            "weights": {
+              "d3": 0.05,
+              "d7": 0.35,
+              "d14": 0.6
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.87591059602649,
+              "reachExpansion": 1.9636071052794455
+            },
+            "score14d": 0.021892966968565068,
+            "changeAbs": 2.8153762523213004,
+            "changePct": 0.01309903806970316,
+            "rawBudget": 217.7453762523213,
+            "lowerBound": 197.7356,
+            "upperBound": 268.6625,
+            "capBreached": false,
+            "finalBudget": 217.7453762523213,
+            "floorRelaxed": false,
+            "currentBudget": 214.93,
+            "compositeScore": 0.021482812339986296,
+            "effectiveScore": 0.021482812339986296,
+            "portfolioShare": 0.07982980629718267,
+            "velocityCapped": 217.7453762523213,
+            "trajectoryRatio": 0.7982493488669503,
+            "trajectoryState": "negative"
+          },
+          "lower_bound": 197.7356,
+          "upper_bound": 268.6625,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 217.7453762523213,
+          "floor_relaxed": false,
+          "current_budget": 214.93,
+          "composite_score": 0.021482812339986296,
+          "portfolio_share": 0.07982980629718267,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 45.64 on 65 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252366808240236",
+          "adset_name": "ITESO // AGOSTO - BAU - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 0.24683866989929015,
+          "change_pct": 0.0011657630579923026,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 59.13400390400765,
+              "lo": 35.806219823173315,
+              "cpa": 45.63815384615385,
+              "events": 65
+            },
+            "id": "120252366808240236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 45.64 on 65 events.",
+            "status": "learning",
+            "score3d": 0.013076339670999295,
+            "score7d": 0.019113949001594816,
+            "weights": {
+              "d3": 0.05,
+              "d7": 0.35,
+              "d14": 0.6
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 1.2239033478236323,
+              "reachExpansion": 1.65896582183869
+            },
+            "score14d": 0.021911491060111647,
+            "changeAbs": 0.24683866989929015,
+            "changePct": 0.0011657630579923026,
+            "rawBudget": 211.9868386698993,
+            "lowerBound": 194.8008,
+            "upperBound": 264.675,
+            "capBreached": false,
+            "finalBudget": 211.9868386698993,
+            "floorRelaxed": false,
+            "currentBudget": 211.74,
+            "compositeScore": 0.0209146736067322,
+            "effectiveScore": 0.0209146736067322,
+            "portfolioShare": 0.07771861134245217,
+            "velocityCapped": 211.9868386698993,
+            "trajectoryRatio": 0.684125487093653,
+            "trajectoryState": "negative"
+          },
+          "lower_bound": 194.8008,
+          "upper_bound": 264.675,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 211.9868386698993,
+          "floor_relaxed": false,
+          "current_budget": 211.74,
+          "composite_score": 0.0209146736067322,
+          "portfolio_share": 0.07771861134245217,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 46.76 on 65 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252387201880236",
+          "adset_name": "AV CAMACHO // AGOSTO - BAU - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": -2.099172855113892,
+          "change_pct": -0.009946329566993092,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 60.59018732179161,
+              "lo": 36.68795317653583,
+              "cpa": 46.762,
+              "events": 65
+            },
+            "id": "120252387201880236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 46.76 on 65 events.",
+            "status": "learning",
+            "score3d": 0.01697992450464336,
+            "score7d": 0.018926608919479896,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.9583821478382147,
+              "reachExpansion": 1.7907185835811605
+            },
+            "score14d": 0.021384885163166674,
+            "changeAbs": -2.099172855113892,
+            "changePct": -0.009946329566993092,
+            "rawBudget": 208.95082714488612,
+            "lowerBound": 194.16600000000003,
+            "upperBound": 263.8125,
+            "capBreached": false,
+            "finalBudget": 208.95082714488612,
+            "floorRelaxed": false,
+            "currentBudget": 211.05,
+            "compositeScore": 0.02061513996346294,
+            "effectiveScore": 0.02061513996346294,
+            "portfolioShare": 0.07660554884657181,
+            "velocityCapped": 208.95082714488612,
+            "trajectoryRatio": 0.8971456311525017,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 194.16600000000003,
+          "upper_bound": 263.8125,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 208.95082714488612,
+          "floor_relaxed": false,
+          "current_budget": 211.05,
+          "composite_score": 0.02061513996346294,
+          "portfolio_share": 0.07660554884657181,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 46.49 on 62 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252366892450236",
+          "adset_name": "CAÑADAS // AGOSTO - BAU - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": -3.8423202264415295,
+          "change_pct": -0.018210048466547533,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 60.643350927319304,
+              "lo": 36.26842372141163,
+              "cpa": 46.494677419354836,
+              "events": 62
+            },
+            "id": "120252366892450236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores disagree. Cost per result 46.49 on 62 events.",
+            "status": "learning",
+            "score3d": 0.013791547035444275,
+            "score7d": 0.017193842148247762,
+            "weights": {
+              "d3": 0.05,
+              "d7": 0.35,
+              "d14": 0.6
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.9832009239491828,
+              "reachExpansion": 1.8699092390039562
+            },
+            "score14d": 0.021507838219428515,
+            "changeAbs": -3.8423202264415295,
+            "changePct": -0.018210048466547533,
+            "rawBudget": 207.15767977355847,
+            "lowerBound": 194.12,
+            "upperBound": 263.75,
+            "capBreached": false,
+            "finalBudget": 207.15767977355847,
+            "floorRelaxed": false,
+            "currentBudget": 211,
+            "compositeScore": 0.020438227603075856,
+            "effectiveScore": 0.020438227603075856,
+            "portfolioShare": 0.07594814518648439,
+            "velocityCapped": 207.15767977355847,
+            "trajectoryRatio": 0.8021213011339517,
+            "trajectoryState": "negative"
+          },
+          "lower_bound": 194.12,
+          "upper_bound": 263.75,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 207.15767977355847,
+          "floor_relaxed": false,
+          "current_budget": 211,
+          "composite_score": 0.020438227603075856,
+          "portfolio_share": 0.07594814518648439,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 48.76 on 48 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252366801240236",
+          "adset_name": "ITESO // AGOSTO - LKL - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 9.214484482468265,
+          "change_pct": 0.047079932978072066,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 66.12970168162929,
+              "lo": 36.77499799433463,
+              "cpa": 48.758541666666666,
+              "events": 48
+            },
+            "id": "120252366801240236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 48.76 on 48 events.",
+            "status": "learning",
+            "score3d": 0.02221023574578799,
+            "score7d": 0.0205940594059406,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 1.0742534301856337,
+              "reachExpansion": 1.7225359955453028
+            },
+            "score14d": 0.02050922701577929,
+            "changeAbs": 9.214484482468265,
+            "changePct": 0.047079932978072066,
+            "rawBudget": 204.93448448246826,
+            "lowerBound": 180.0624,
+            "upperBound": 244.65,
+            "capBreached": false,
+            "finalBudget": 204.93448448246826,
+            "floorRelaxed": false,
+            "currentBudget": 195.72,
+            "compositeScore": 0.02021888660922491,
+            "effectiveScore": 0.02021888660922491,
+            "portfolioShare": 0.07513307736505391,
+            "velocityCapped": 204.93448448246826,
+            "trajectoryRatio": 1.0784777934252818,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 180.0624,
+          "upper_bound": 244.65,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 204.93448448246826,
+          "floor_relaxed": false,
+          "current_budget": 195.72,
+          "composite_score": 0.02021888660922491,
+          "portfolio_share": 0.07513307736505391,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 51.37 on 61 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252387315140236",
+          "adset_name": "ALEIRA // AGOSTO - BROAD - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 0.20805424196194622,
+          "change_pct": 0.001084293527006182,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 67.16297878240147,
+              "lo": 39.99393391856856,
+              "cpa": 51.37409836065572,
+              "events": 61
+            },
+            "id": "120252387315140236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 51.37 on 61 events.",
+            "status": "learning",
+            "score3d": 0.016059097478721696,
+            "score7d": 0.018067572721980205,
+            "weights": {
+              "d3": 0.1,
+              "d7": 0.4,
+              "d14": 0.5
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.7469616101858402,
+              "reachExpansion": 2.050588100947813
+            },
+            "score14d": 0.019465061809548736,
+            "changeAbs": 0.20805424196194622,
+            "changePct": 0.001084293527006182,
+            "rawBudget": 192.08805424196194,
+            "lowerBound": 176.52960000000002,
+            "upperBound": 239.85,
+            "capBreached": false,
+            "finalBudget": 192.08805424196194,
+            "floorRelaxed": false,
+            "currentBudget": 191.88,
+            "compositeScore": 0.018951454644213987,
+            "effectiveScore": 0.018951454644213987,
+            "portfolioShare": 0.07042331931939273,
+            "velocityCapped": 192.08805424196194,
+            "trajectoryRatio": 0.8888353585639598,
+            "trajectoryState": "neutral"
+          },
+          "lower_bound": 176.52960000000002,
+          "upper_bound": 239.85,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 192.08805424196194,
+          "floor_relaxed": false,
+          "current_budget": 191.88,
+          "composite_score": 0.018951454644213987,
+          "portfolio_share": 0.07042331931939273,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        },
+        {
+          "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 62.56 on 40 events.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "adset_id": "120252387327740236",
+          "adset_name": "ALEIRA // AGOSTO - LKL - Mensajes",
+          "applied_at": "2026-10-01T19:08:20.879445+00:00",
+          "change_abs": 0.6496689008722853,
+          "change_pct": 0.003990350106702815,
+          "apply_error": null,
+          "diagnostics": {
+            "ci": {
+              "hi": 87.57049783615979,
+              "lo": 45.942709346198875,
+              "cpa": 62.56125000000001,
+              "events": 40
+            },
+            "id": "120252387327740236",
+            "floor": 34.095249999999986,
+            "reason": "Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result 62.56 on 40 events.",
+            "status": "learning",
+            "score3d": 0.01747885059078515,
+            "score7d": 0.015014421747204553,
+            "weights": {
+              "d3": 0.2,
+              "d7": 0.45,
+              "d14": 0.35
+            },
+            "delivery": {
+              "state": "serving",
+              "blockers": [],
+              "darkDays": 0,
+              "learningStage": null,
+              "impressionsWow": 0.9087480176589088,
+              "reachExpansion": 2.074444681002058
+            },
+            "score14d": 0.01598433535135567,
+            "changeAbs": 0.6496689008722853,
+            "changePct": 0.003990350106702815,
+            "rawBudget": 163.4596689008723,
+            "lowerBound": 149.7852,
+            "upperBound": 203.5125,
+            "capBreached": false,
+            "finalBudget": 163.4596689008723,
+            "floorRelaxed": false,
+            "currentBudget": 162.81,
+            "compositeScore": 0.016126971109983776,
+            "effectiveScore": 0.016126971109983776,
+            "portfolioShare": 0.05992758115165322,
+            "velocityCapped": 163.4596689008723,
+            "trajectoryRatio": 1.1641374463215297,
+            "trajectoryState": "positive"
+          },
+          "lower_bound": 149.7852,
+          "upper_bound": 203.5125,
+          "apply_status": "applied",
+          "cap_breached": false,
+          "final_budget": 163.4596689008723,
+          "floor_relaxed": false,
+          "current_budget": 162.81,
+          "composite_score": 0.016126971109983776,
+          "portfolio_share": 0.05992758115165322,
+          "apply_requested_at": null,
+          "apply_requested_by": null
+        }
+      ],
+      "recommendations": [
+        {
+          "id": "7759b6d6-1239-4d2a-9d3c-e415c9ed7900",
+          "kind": "creative_refresh",
+          "seed": null,
+          "ad_id": null,
+          "reason": "CTR down 29% (3d 0.32% vs 14d 0.45%) with CPA up 31%: creative worn out — refresh.",
+          "run_id": "09564566-9191-4778-b3bd-c6784481890c",
+          "status": "pending",
+          "rule_id": null,
+          "trigger": "F1_creative_fatigue",
+          "adset_id": "120252387195420236",
+          "evidence": {
+            "value": 0.0032381513099793936,
+            "metric": "ctr",
+            "source": "engine",
+            "window": "d3",
+            "headline": {
+              "to": null,
+              "from": null,
+              "kind": "drift",
+              "unit": "percent",
+              "label": "less click-through than 14d",
+              "value": 29
+            },
+            "threshold": 0.004537624469560102,
+            "comparator": "down 29% vs 14d, CPA up 31%",
+            "estImpactPerDay": 68.27952380952381
+          },
+          "severity": "medium",
+          "adset_name": "AV CAMACHO // AGOSTO - LKL - Mensajes",
+          "created_at": "2026-10-01T19:07:41.399135+00:00",
+          "decided_at": null,
+          "decided_by": null,
+          "decided_via": "human",
+          "portfolio_id": "3c1d992e-e0f8-453c-b743-7eb8ad686a7a"
+        }
+      ]
+    },
+    "cpaSeries": [
+      {
+        "adsets": 12,
+        "conv_d3": 274,
+        "conv_d7": 341,
+        "conv_d14": 529,
+        "cycle_ts": "2026-09-10T18:51:31.942+00:00",
+        "spend_d3": 9891.45,
+        "spend_d7": 11364.73,
+        "spend_d14": 15275.79
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 274,
+        "conv_d7": 341,
+        "conv_d14": 529,
+        "cycle_ts": "2026-09-10T18:51:32.656+00:00",
+        "spend_d3": 9891.45,
+        "spend_d7": 11364.73,
+        "spend_d14": 15275.79
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 335,
+        "conv_d7": 417,
+        "conv_d14": 620,
+        "cycle_ts": "2026-09-11T18:51:42.146+00:00",
+        "spend_d3": 11229.24,
+        "spend_d7": 14113.43,
+        "spend_d14": 18317.91
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 326,
+        "conv_d7": 475,
+        "conv_d14": 668,
+        "cycle_ts": "2026-09-12T18:52:07.91+00:00",
+        "spend_d3": 10089.17,
+        "spend_d7": 16154.26,
+        "spend_d14": 20348.02
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 285,
+        "conv_d7": 531,
+        "conv_d14": 696,
+        "cycle_ts": "2026-09-13T18:52:41.877+00:00",
+        "spend_d3": 9326.35,
+        "spend_d7": 18463.83,
+        "spend_d14": 22116.4
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 258,
+        "conv_d7": 618,
+        "conv_d14": 738,
+        "cycle_ts": "2026-09-14T18:53:22.682+00:00",
+        "spend_d3": 9838.61,
+        "spend_d7": 22184.550000000003,
+        "spend_d14": 24953.4
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 220,
+        "conv_d7": 619,
+        "conv_d14": 768,
+        "cycle_ts": "2026-09-15T18:53:59.474+00:00",
+        "spend_d3": 9699.53,
+        "spend_d7": 22930.78,
+        "spend_d14": 27223.17
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 207,
+        "conv_d7": 570,
+        "conv_d14": 808,
+        "cycle_ts": "2026-09-16T18:54:15.89+00:00",
+        "spend_d3": 9143.4,
+        "spend_d7": 21080.13,
+        "spend_d14": 29193.329999999998
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 131,
+        "conv_d7": 473,
+        "conv_d14": 786,
+        "cycle_ts": "2026-09-17T18:54:33.198+00:00",
+        "spend_d3": 6255.67,
+        "spend_d7": 18007.74,
+        "spend_d14": 28618.5
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 92,
+        "conv_d7": 401,
+        "conv_d14": 786,
+        "cycle_ts": "2026-09-18T18:54:46.988+00:00",
+        "spend_d3": 3801.63,
+        "spend_d7": 16214.67,
+        "spend_d14": 29200.52
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 76,
+        "conv_d7": 339,
+        "conv_d14": 795,
+        "cycle_ts": "2026-09-19T07:21:53.002+00:00",
+        "spend_d3": 2641.2400000000002,
+        "spend_d7": 14310.93,
+        "spend_d14": 29786.46
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 121,
+        "conv_d7": 384,
+        "conv_d14": 840,
+        "cycle_ts": "2026-09-19T18:54:49.329+00:00",
+        "spend_d3": 4128.44,
+        "spend_d7": 15798.13,
+        "spend_d14": 31273.66
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 181,
+        "conv_d7": 388,
+        "conv_d14": 900,
+        "cycle_ts": "2026-09-20T18:55:34.137+00:00",
+        "spend_d3": 6895.87,
+        "spend_d7": 16039.27,
+        "spend_d14": 34041.090000000004
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 232,
+        "conv_d7": 400,
+        "conv_d14": 988,
+        "cycle_ts": "2026-09-21T18:56:30.819+00:00",
+        "spend_d3": 8666.91,
+        "spend_d7": 16222.39,
+        "spend_d14": 37111.94
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 232,
+        "conv_d7": 400,
+        "conv_d14": 988,
+        "cycle_ts": "2026-09-21T19:10:52.124+00:00",
+        "spend_d3": 8666.91,
+        "spend_d7": 16222.39,
+        "spend_d14": 37111.94
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 237,
+        "conv_d7": 387,
+        "conv_d14": 999,
+        "cycle_ts": "2026-09-22T18:56:39.737+00:00",
+        "spend_d3": 9394.47,
+        "spend_d7": 15339.39,
+        "spend_d14": 37854.09
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 225,
+        "conv_d7": 381,
+        "conv_d14": 951,
+        "cycle_ts": "2026-09-23T02:44:43.256+00:00",
+        "spend_d3": 8855.47,
+        "spend_d7": 14856.87,
+        "spend_d14": 35937
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 266,
+        "conv_d7": 422,
+        "conv_d14": 992,
+        "cycle_ts": "2026-09-23T18:56:53.718+00:00",
+        "spend_d3": 10384.28,
+        "spend_d7": 16385.68,
+        "spend_d14": 37465.81
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 196,
+        "conv_d7": 446,
+        "conv_d14": 919,
+        "cycle_ts": "2026-09-24T00:21:09.073+00:00",
+        "spend_d3": 8684.34,
+        "spend_d7": 17925.3,
+        "spend_d14": 35933.04
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 223,
+        "conv_d7": 473,
+        "conv_d14": 946,
+        "cycle_ts": "2026-09-24T18:57:46.267+00:00",
+        "spend_d3": 9647.539999999999,
+        "spend_d7": 18888.5,
+        "spend_d14": 36896.24
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 213,
+        "conv_d7": 503,
+        "conv_d14": 899,
+        "cycle_ts": "2026-09-25T18:58:45.704+00:00",
+        "spend_d3": 9198.04,
+        "spend_d7": 20337.06,
+        "spend_d14": 36436.15
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 202,
+        "conv_d7": 504,
+        "conv_d14": 867,
+        "cycle_ts": "2026-09-26T18:59:41.984+00:00",
+        "spend_d3": 8287.72,
+        "spend_d7": 20352.01,
+        "spend_d14": 35580.380000000005
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 199,
+        "conv_d7": 516,
+        "conv_d14": 879,
+        "cycle_ts": "2026-09-27T19:00:07.03+00:00",
+        "spend_d3": 7713.49,
+        "spend_d7": 20612.17,
+        "spend_d14": 35756.97
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 198,
+        "conv_d7": 488,
+        "conv_d14": 869,
+        "cycle_ts": "2026-09-28T19:00:35.475+00:00",
+        "spend_d3": 8276.24,
+        "spend_d7": 20680.59,
+        "spend_d14": 36177.22
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 202,
+        "conv_d7": 479,
+        "conv_d14": 856,
+        "cycle_ts": "2026-09-29T19:01:11.258+00:00",
+        "spend_d3": 9019.42,
+        "spend_d7": 20499.73,
+        "spend_d14": 35324.8
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 187,
+        "conv_d7": 442,
+        "conv_d14": 844,
+        "cycle_ts": "2026-09-30T19:02:02.92+00:00",
+        "spend_d3": 9660.69,
+        "spend_d7": 20075.94,
+        "spend_d14": 35698.909999999996
+      },
+      {
+        "adsets": 12,
+        "conv_d3": 185,
+        "conv_d7": 437,
+        "conv_d14": 910,
+        "cycle_ts": "2026-10-01T19:02:36.838+00:00",
+        "spend_d3": 9623.89,
+        "spend_d7": 20017.97,
+        "spend_d14": 38918.05
+      }
+    ]
+  }
+}

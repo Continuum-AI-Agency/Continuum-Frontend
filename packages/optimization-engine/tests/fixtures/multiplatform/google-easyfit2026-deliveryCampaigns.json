@@ -1,0 +1,125 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-06T01:03:57.650Z",
+    "query": "SELECT campaign.id, campaign.name, campaign.status, campaign.primary_status, campaign.primary_status_reasons, campaign.serving_status, campaign.start_date_time, campaign_budget.amount_micros FROM campaign WHERE campaign.status = 'ENABLED'",
+    "rows": 7
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/20249528111",
+        "status": "ENABLED",
+        "servingStatus": "SUSPENDED",
+        "name": "Campaña búsqueda",
+        "id": "20249528111",
+        "primaryStatus": "ELIGIBLE",
+        "startDateTime": "2023-06-05 10:34:26"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12677560956",
+        "amountMicros": "800000000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/20459399173",
+        "status": "ENABLED",
+        "servingStatus": "SUSPENDED",
+        "name": "Campaña Display",
+        "id": "20459399173",
+        "primaryStatus": "ELIGIBLE",
+        "startDateTime": "2023-08-15 16:05:30"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12858403851",
+        "amountMicros": "55000000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/20553834868",
+        "status": "ENABLED",
+        "servingStatus": "SUSPENDED",
+        "name": "Campaña Pasarela de pago",
+        "id": "20553834868",
+        "primaryStatus": "ELIGIBLE",
+        "startDateTime": "2023-09-13 10:39:36"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12941881673",
+        "amountMicros": "200000000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/20653378244",
+        "status": "ENABLED",
+        "servingStatus": "ENDED",
+        "name": "Easyfit video Youtube",
+        "id": "20653378244",
+        "primaryStatus": "ENDED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_ENDED"
+        ],
+        "startDateTime": "2023-10-12 12:36:13"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/13036329087"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24274603133",
+        "status": "ENABLED",
+        "servingStatus": "SUSPENDED",
+        "name": "Easy Fit | Search | Leads formulario",
+        "id": "24274603133",
+        "primaryStatus": "LIMITED",
+        "primaryStatusReasons": [
+          "MISSING_LEAD_FORM_EXTENSION"
+        ],
+        "startDateTime": "2026-09-21 13:14:41"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15892914141",
+        "amountMicros": "700000000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24298030946",
+        "status": "ENABLED",
+        "servingStatus": "SUSPENDED",
+        "name": "GA 1 EASY",
+        "id": "24298030946",
+        "primaryStatus": "ELIGIBLE",
+        "startDateTime": "2026-09-28 11:20:27"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15908135985",
+        "amountMicros": "700000000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24298408295",
+        "status": "ENABLED",
+        "servingStatus": "SUSPENDED",
+        "name": "Easy Fit",
+        "id": "24298408295",
+        "primaryStatus": "ELIGIBLE",
+        "startDateTime": "2026-09-28 13:49:21"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15913240795",
+        "amountMicros": "500000000"
+      }
+    }
+  ]
+}

@@ -370,14 +370,20 @@ function finalize(
   underflow: boolean,
   notes: string[],
 ): SolverOutput {
-  const allocations: SolverAllocation[] = items.map((it) => ({
-    id: it.id,
-    amount: amount.get(it.id) ?? 0,
-    lowerBound: lo.get(it.id)!,
-    upperBound: hi.get(it.id)!,
-    capBreached: capBreached.get(it.id)!,
-    floorRelaxed: floorRelaxed.get(it.id)!,
-  }));
+  const allocations: SolverAllocation[] = items.map((it) => {
+    const allocated = amount.get(it.id) ?? 0;
+    return {
+      id: it.id,
+      amount: allocated,
+      lowerBound: lo.get(it.id)!,
+      upperBound: hi.get(it.id)!,
+      // A cut below the velocity/learning down-limit is a breach whichever path made it —
+      // the underflow relaxation drops that limit for every item, and the flag is what the
+      // applier and the Frontend read; a note in prose alone is a guardrail bent silently.
+      capBreached: capBreached.get(it.id)! || allocated < it.velocityDown - EPS,
+      floorRelaxed: floorRelaxed.get(it.id)!,
+    };
+  });
   const allocatedTotal = sum(allocations.map((a) => a.amount));
   return {
     allocations,

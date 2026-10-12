@@ -1,0 +1,169 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT campaign_budget.id, campaign_budget.name, campaign_budget.amount_micros, campaign_budget.total_amount_micros, campaign_budget.explicitly_shared, campaign_budget.reference_count, campaign_budget.delivery_method, campaign_budget.period, campaign_budget.status, campaign_budget.type FROM campaign_budget WHERE campaign_budget.status != 'REMOVED'",
+    "rows": 11
+  },
+  "data": [
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12672461027",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "SMART_CAMPAIGN",
+        "id": "12672461027",
+        "name": "La campaña n.º 1 se creó el 5/6/2023 10:32",
+        "amountMicros": "10000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12677560956",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12677560956",
+        "name": "Campaña búsqueda",
+        "amountMicros": "800000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12858367818",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12858367818",
+        "name": "Campaña de pasarela de pago Display",
+        "amountMicros": "100000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12858403851",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12858403851",
+        "name": "Campaña Display",
+        "amountMicros": "55000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/12941881673",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "12941881673",
+        "name": "Campaña Pasarela de pago",
+        "amountMicros": "200000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/13036329087",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "CUSTOM_PERIOD",
+        "type": "STANDARD",
+        "id": "13036329087",
+        "name": "Easyfit video Youtube",
+        "totalAmountMicros": "6000000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15607138251",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "15607138251",
+        "name": "PRUEBA //  FORMULARIOS BUSQUEDA",
+        "amountMicros": "283880000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15612390868",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "15612390868",
+        "name": "PRUEBA // FORMULARIO DEMAND GEN",
+        "amountMicros": "100000000",
+        "explicitlyShared": false,
+        "referenceCount": "0"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15892914141",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "15892914141",
+        "name": "Easy Fit | Search | Leads formulario",
+        "amountMicros": "700000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15908135985",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "15908135985",
+        "name": "GA 1 EASY",
+        "amountMicros": "700000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15913240795",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "15913240795",
+        "name": "Easy Fit",
+        "amountMicros": "500000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    }
+  ]
+}

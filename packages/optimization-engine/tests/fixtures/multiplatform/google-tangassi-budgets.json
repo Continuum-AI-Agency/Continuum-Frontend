@@ -1,0 +1,57 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT campaign_budget.id, campaign_budget.name, campaign_budget.amount_micros, campaign_budget.total_amount_micros, campaign_budget.explicitly_shared, campaign_budget.reference_count, campaign_budget.delivery_method, campaign_budget.period, campaign_budget.status, campaign_budget.type FROM campaign_budget WHERE campaign_budget.status != 'REMOVED'",
+    "rows": 3
+  },
+  "data": [
+    {
+      "campaignBudget": {
+        "resourceName": "customers/9343596627/campaignBudgets/14577120227",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14577120227",
+        "name": "Landing-Goto",
+        "amountMicros": "50000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/9343596627/campaignBudgets/14913346531",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "14913346531",
+        "name": "Necesidades SLP",
+        "amountMicros": "120000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    },
+    {
+      "campaignBudget": {
+        "resourceName": "customers/9343596627/campaignBudgets/15592297816",
+        "status": "ENABLED",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "type": "STANDARD",
+        "id": "15592297816",
+        "name": "LEADS GOOGLE TEQUIS-GOTO",
+        "amountMicros": "160000000",
+        "explicitlyShared": false,
+        "referenceCount": "1"
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 //   scale      — may grow up to maxBudget while the portfolio meets target
 // ---------------------------------------------------------------------------
 
+import type { PlatformId } from '@continuum/contracts';
 import { classifyPortfolio } from './classify';
 import { portfolioConfidence } from './confidence';
 import type { DeepPartial, EngineConfig } from './config';
@@ -16,6 +17,7 @@ import { type AbsentAdset, evaluateDelivery } from './delivery';
 import { reallocate } from './engine';
 import { evaluateFatigue } from './fatigue';
 import { sum } from './internal/math';
+import { ruleSkipsFor, skippedIds } from './multiplatform/capabilities';
 import { computePacing } from './pacing';
 import { evaluateRules } from './rules/evaluate';
 import type { AlreadyFlagged, RuleActionKind, RuleDefinition, RuleEvaluation } from './rules/types';
@@ -26,6 +28,7 @@ import type {
   AdSetSnapshot,
   CycleResult,
   DeliveryRead,
+  ItemDiagnostics,
   OptimizationMode,
   OptimizationObjective,
   PacingResult,
@@ -71,7 +74,76 @@ export type CycleOptions = {
   applyCapPct?: number | null;
 };
 
+/**
+ * One portfolio cycle. The reallocation solver runs PER PLATFORM (google-acciones.html §5):
+ * each platform conserves its own pool, and only crossPlatformMove — a recommendation —
+ * spans platforms. A roster with no non-Meta entity takes the single-platform path exactly
+ * as it always has. In a mixed roster the caller's total / pacing (daily_total) is Meta's,
+ * which is what it means today; every other platform runs on its own observed budgets.
+ */
 export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
+  const byPlatform = new Map<PlatformId, AdSetSnapshot[]>();
+  for (const s of snapshots) {
+    const platform = s.platform ?? 'meta';
+    byPlatform.set(platform, [...(byPlatform.get(platform) ?? []), s]);
+  }
+  const platforms = [...byPlatform.keys()];
+  if (platforms.length <= 1) {
+    return runPlatformCycle(snapshots, opts);
+  }
+  const cycles = platforms.map((platform) => {
+    const roster = byPlatform.get(platform)!;
+    if (platform === 'meta') return runPlatformCycle(roster, opts);
+    // Not Meta: its own observed total, no pacing state, no Meta roster or scale plan.
+    const {
+      pacing: _pacing,
+      total: _total,
+      maxBudget: _max,
+      weeklyGrowthPct: _growth,
+      absent: _absent,
+      ...rest
+    } = opts;
+    return runPlatformCycle(roster, {
+      ...rest,
+      mode: opts.mode === 'scale' ? 'balanced' : opts.mode,
+    });
+  });
+  return mergePlatformCycles(cycles, platforms);
+}
+
+function mergePlatformCycles(cycles: CycleResult[], platforms: PlatformId[]): CycleResult {
+  const lead = cycles[platforms.indexOf('meta')] ?? cycles[0]!;
+  const parts = cycles.map((c) => c.reallocation);
+  const ruleSkips = cycles.flatMap((c) => c.ruleSkips ?? []);
+  return {
+    mode: lead.mode,
+    pacing: lead.pacing,
+    ...(lead.scale ? { scale: lead.scale } : {}),
+    reallocation: {
+      totalBudget: sum(parts.map((r) => r.totalBudget)),
+      pool: sum(parts.map((r) => r.pool)),
+      frozenBudget: sum(parts.map((r) => r.frozenBudget)),
+      items: parts.flatMap((r) => r.items),
+      allocatedTotal: sum(parts.map((r) => r.allocatedTotal)),
+      conserved: parts.every((r) => r.conserved),
+      residual: sum(parts.map((r) => r.residual)),
+      feasibility: {
+        sumLowerBounds: sum(parts.map((r) => r.feasibility.sumLowerBounds)),
+        sumUpperBounds: sum(parts.map((r) => r.feasibility.sumUpperBounds)),
+        overflow: parts.some((r) => r.feasibility.overflow),
+        underflow: parts.some((r) => r.feasibility.underflow),
+      },
+      notes: parts.flatMap((r, i) => r.notes.map((n) => `[${platforms[i]}] ${n}`)),
+    },
+    recommendations: cycles.flatMap((c) => c.recommendations),
+    // Confidence speaks for the money the caller's total governs: Meta's when present.
+    confidence: lead.confidence,
+    ruleEvaluations: cycles.flatMap((c) => c.ruleEvaluations),
+    ...(ruleSkips.length > 0 ? { ruleSkips } : {}),
+  };
+}
+
+function runPlatformCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
   const mode: OptimizationMode = opts.mode ?? 'balanced';
   const configOverride: DeepPartial<EngineConfig> = { objective: opts.objective, ...opts.config };
   const baseCfg = resolveConfig(configOverride);
@@ -80,15 +152,17 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   let pacing: PacingResult;
   let plannedTotal: number;
   if (opts.pacing) {
-    pacing = computePacing(opts.pacing);
+    pacing = computePacing(opts.pacing, baseCfg.currency ?? null);
     plannedTotal = pacing.dailyTotal;
   } else {
     plannedTotal = opts.total ?? sum(snapshots.map((s) => s.currentBudget));
+    // No flight window means there is no plan to be on or off: the status is `unknown`,
+    // never a verdict's word. This row used to say `on_track`, and a brief read it out loud.
     pacing = {
       dailyTotal: plannedTotal,
       idealCumulative: 0,
       pacingRatio: 1,
-      status: 'on_track',
+      status: 'unknown',
       note: 'No pacing state: using the provided total.',
       source: 'observed',
     };
@@ -166,7 +240,18 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   // rules layer, and the rules layer expresses performance conditions over window
   // metrics. It cannot express "absent from the ACTIVE roster", because there is no
   // snapshot for it to read.
-  const delivery = evaluateDelivery(classified, opts.absent ?? [], opts.asOf);
+  // Rule families that read Meta-only signals skip a Google/TikTok entity BY NAME (the
+  // skip rides on the result) instead of judging it on inputs it never had. A Meta-only
+  // roster yields no skips, so every stage below sees exactly what it always saw.
+  const ruleSkips = ruleSkipsFor(classified);
+  const deliverySkips = skippedIds(ruleSkips, 'delivery');
+  const delivery = evaluateDelivery(
+    deliverySkips.size > 0 ? classified.filter((s) => !deliverySkips.has(s.id)) : classified,
+    opts.absent ?? [],
+    opts.asOf,
+    baseCfg.currency ?? null,
+    baseCfg.kpiField,
+  );
   const deliveryReads = delivery.reads;
   recommendations = [...delivery.recommendations];
 
@@ -180,7 +265,12 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     const undelivered = new Set([...starveIds, ...delivery.suppressIds]);
     // Fatigue is independent of pauses: it never starves, and skips ad sets a pause
     // trigger already flagged (avoid double-noise on the same ad set).
-    const fatigueRecs = evaluateFatigue(classified, baseCfg, undelivered, deliveryReads);
+    const fatigueRecs = evaluateFatigue(
+      classified,
+      baseCfg,
+      new Set([...undelivered, ...skippedIds(ruleSkips, 'fatigue')]),
+      deliveryReads,
+    );
 
     // Stage C — the creative triggers. An ad set is a budget and an audience; the thing that
     // works or doesn't is the creative inside it. Two creatives in the SAME ad set (same
@@ -188,7 +278,11 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     // decision can close, because the money was already in the right ad set and on the wrong
     // ad. Skips ad sets a pause trigger already condemned: no point proposing a creative
     // experiment inside a set we are about to shut off.
-    const creative = evaluateCreative(classified, baseCfg, undelivered);
+    const creative = evaluateCreative(
+      classified,
+      baseCfg,
+      new Set([...undelivered, ...skippedIds(ruleSkips, 'creative')]),
+    );
     noRaiseIds = creative.noRaiseIds;
     recommendations = [
       ...recommendations,
@@ -236,6 +330,7 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
           reason: f.reason,
           needsApproval: true,
           ruleId: f.ruleId,
+          ...(f.evidence ? { evidence: f.evidence } : {}),
         }),
       ),
     ];
@@ -270,9 +365,23 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   // measurement of zero. Mismatched currencies are now frozen as `kpi_mismatch` above,
   // which leaves this abstain to mean only what it was meant to: we counted the right
   // event, and there were none.
+  //
+  // The same abstain covers the ad set that spent NOTHING in the window, held `no_spend`.
+  // The solver ranks on events per unit of spend; with no spend there is no ratio, not a
+  // bad one, and a composite of 0 is a null read as a zero. Left in the pool, such an ad set
+  // was spread even with its neighbours inside the velocity boxes — a roster that spent
+  // nothing got ±0.08 moves on ~96, and each would have been a Meta write. Its reason lives
+  // beside it: a funded ad set that served nothing for days carries a D2 delivery finding.
+  // Unlike `no_conversions` this is not limited to 'active': a learning or grace ad set
+  // with no spend has just as little to be scored on.
   const prepared = starved.map((s) => {
-    if (s.status !== 'active' || s.freeze) return s;
-    if (s.windows.d14.spend <= 0 || kpiEvents(s.windows.d14, baseCfg) > 0) return s;
+    if (s.freeze || s.status === 'frozen' || s.status === 'flagged' || s.status === 'starved') {
+      return s;
+    }
+    if (s.windows.d14.spend <= 0) {
+      return { ...s, freeze: true as const, freezeReason: 'no_spend' as const };
+    }
+    if (s.status !== 'active' || kpiEvents(s.windows.d14, baseCfg) > 0) return s;
     return { ...s, freeze: true as const, freezeReason: 'no_conversions' as const };
   });
 
@@ -339,20 +448,32 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     }
   }
 
+  // With a plan, every ad set follows the plan's step, the frozen ones included; without
+  // one, the live sum is only redistributed and a frozen ad set keeps its budget.
+  const liveTotal = sum(prepared.map((s) => s.currentBudget));
+  const frozenScale = opts.pacing && liveTotal > 0 ? total / liveTotal : 1;
   const reallocation = reallocate(
     prepared,
     total,
     { ...configOverride, overflowMode },
     opts.priorComposites,
+    frozenScale,
   );
 
   // Carry the delivery read onto each item. `optimizer.cycle_items.diagnostics` stores the
   // whole item verbatim, so this makes delivery state queryable per ad set per cycle with
   // no schema change and no second write — and, more to the point, without a second copy
   // of the classifier living in SQL or in the Frontend to drift away from this one.
+  //
+  // A Google / TikTok item also carries which platform and entity it is: record_cycle writes
+  // them into cycle_items.platform / entity_ref (the column otherwise defaults to 'meta'), and
+  // the held-item sentence calls it a campaign. A Meta item carries neither.
+  const identity = platformIdentity(snapshots);
   const items = reallocation.items.map((item) => {
     const read = deliveryReads.get(item.id);
-    return read ? { ...item, delivery: read } : item;
+    const withRead = read ? { ...item, delivery: read } : item;
+    const entity = identity.byId.get(item.id);
+    return entity ? { ...withRead, ...identityFields(entity) } : withRead;
   });
 
   const confidence = portfolioConfidence(prepared, baseCfg);
@@ -371,8 +492,46 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     pacing,
     ...(scale ? { scale } : {}),
     reallocation: { ...reallocation, items },
-    recommendations: [...recommendations, ...settings],
+    recommendations: [...recommendations, ...settings].map((rec) => stampPlatform(rec, identity)),
     confidence,
     ruleEvaluations,
+    ...(ruleSkips.length > 0 ? { ruleSkips } : {}),
+  };
+}
+
+type PlatformIdentity = {
+  /** The roster's platform when it is not Meta. One platform cycle is one platform. */
+  platform: PlatformId | null;
+  byId: Map<string, AdSetSnapshot>;
+};
+
+function platformIdentity(snapshots: readonly AdSetSnapshot[]): PlatformIdentity {
+  const offMeta = snapshots.filter((s) => s.platform !== undefined && s.platform !== 'meta');
+  return {
+    platform: offMeta[0]?.platform ?? null,
+    byId: new Map(offMeta.map((s) => [s.id, s])),
+  };
+}
+
+function identityFields(
+  s: AdSetSnapshot,
+): Pick<ItemDiagnostics, 'platform' | 'level' | 'entityRef'> {
+  return {
+    ...(s.platform ? { platform: s.platform } : {}),
+    ...(s.level ? { level: s.level } : {}),
+    ...(s.entityRef ? { entityRef: s.entityRef } : {}),
+  };
+}
+
+/** A recommendation from a Google / TikTok roster says so; the portfolio-level ones (the S
+ *  family) take the roster's platform and name no entity. Meta recommendations are untouched. */
+function stampPlatform(rec: Recommendation, identity: PlatformIdentity): Recommendation {
+  const entity = identity.byId.get(rec.adSetId);
+  const platform = entity?.platform ?? identity.platform;
+  if (!platform) return rec;
+  return {
+    ...rec,
+    platform,
+    ...(entity?.entityRef ? { entityRef: entity.entityRef } : {}),
   };
 }

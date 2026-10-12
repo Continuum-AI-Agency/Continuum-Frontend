@@ -15,9 +15,11 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';
+import { entityOf } from '../title';
 import type { AdSetSnapshot } from '../types';
 import { buildAdsetFacts, buildPortfolioFacts } from './facts';
 import { OPERATORS, type ResolvedValue } from './operators';
+import { templateEvidence } from './templates';
 import type {
   AlreadyFlagged,
   ConditionValue,
@@ -101,6 +103,8 @@ const isFindingKind = (k: RuleActionKind): k is RuleFinding['kind'] =>
 type Match = {
   rule: RuleDefinition;
   adSetId: string;
+  /** The ad set by name, for the finding's title; its id when it has none. */
+  entity: string;
   facts: FactMap;
   deduped: boolean;
 };
@@ -136,7 +140,7 @@ export function evaluateRules(
       try {
         if (evalCondition(rule.conditions, facts)) {
           const list = matchesByAdset.get(s.id) ?? [];
-          list.push({ rule, adSetId: s.id, facts, deduped: false });
+          list.push({ rule, adSetId: s.id, entity: entityOf(s), facts, deduped: false });
           matchesByAdset.set(s.id, list);
         } else {
           evaluations.push({
@@ -215,6 +219,13 @@ export function evaluateRules(
           needsApproval: true,
           ruleId: rule.id,
           templateId: rule.templateId,
+          ...(() => {
+            const evidence = templateEvidence(rule.templateId, facts, {
+              cfg,
+              entity: winner.entity,
+            });
+            return evidence ? { evidence } : {};
+          })(),
         });
         // A pause finding starves the ad set, exactly like the built-in triggers.
         if (kind === 'pause') starveIds.add(adSetId);

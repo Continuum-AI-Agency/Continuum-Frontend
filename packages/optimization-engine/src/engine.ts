@@ -11,9 +11,14 @@ import { resolveConfig } from './config';
 import { clamp, sum } from './internal/math';
 import { kpiEvents, scoreAdSet } from './scoring';
 import { adSetCpaInterval, shrinkScores } from './significance';
-import type { SolverItem } from './solver';
+import type { SolverItem, SolverOutput } from './solver';
 import { solve } from './solver';
-import type { AdSetSnapshot, ItemDiagnostics, ReallocationResult } from './types';
+import type {
+  AdSetSnapshot,
+  ItemDiagnostics,
+  ReallocationRefusal,
+  ReallocationResult,
+} from './types';
 
 function isLearning(s: AdSetSnapshot): boolean {
   return s.learningPhase ?? s.status === 'learning';
@@ -24,11 +29,16 @@ function isFrozen(s: AdSetSnapshot): boolean {
 const isFlagged = (s: AdSetSnapshot): boolean => s.status === 'flagged';
 const isEligible = (s: AdSetSnapshot): boolean => !isFrozen(s) && !isFlagged(s);
 
+/** `frozenScale` is the factor a frozen ad set's budget moves by. A frozen ad set is one the
+ *  engine will not judge, not one the plan stops applying to: on a pacing cycle the caller
+ *  passes the plan's portfolio-wide step (planned total ÷ live total), so a new or
+ *  signal-less ad set moves with the month like every other. Default 1: held as it is. */
 export function reallocate(
   snapshots: AdSetSnapshot[],
   totalBudget: number,
   override?: DeepPartial<EngineConfig>,
   priorComposites?: Record<string, number>,
+  frozenScale = 1,
 ): ReallocationResult {
   const cfg = resolveConfig(override);
   const notes: string[] = [];
@@ -78,7 +88,8 @@ export function reallocate(
         : 0;
 
   // --- 3. Pool & floor --------------------------------------------------
-  const frozenBudget = sum(snapshots.filter(isFrozen).map((s) => s.currentBudget));
+  const frozenTarget = (s: AdSetSnapshot): number => s.currentBudget * frozenScale;
+  const frozenBudget = sum(snapshots.filter(isFrozen).map(frozenTarget));
   const pool = totalBudget - frozenBudget;
 
   // The floor is the guaranteed minimum for an ad set we are ALLOCATING, so it averages over
@@ -123,7 +134,18 @@ export function reallocate(
     velocityUp: x.s.noRaise ? x.s.currentBudget : x.s.currentBudget * (1 + upPct),
   }));
 
-  const solved = solve(solverItems, pool, cfg);
+  // A negative pool is not a smaller allocation, it is no allocation: frozen ad sets alone
+  // hold more than the total, and nothing the solver may move can bring the sum back under
+  // it. Solving anyway scaled floors by pool/0 and reported the result as conserved. Refuse
+  // by name instead — every budget holds, and the result says the total is not met.
+  const refusal: ReallocationRefusal | undefined =
+    pool < -POOL_EPS ? { reason: 'frozen_above_total', frozenBudget, totalBudget } : undefined;
+  const solved = refusal ? holdEverything(solverItems) : solve(solverItems, pool, cfg);
+  if (refusal) {
+    notes.push(
+      `refused: frozen ad sets hold ${frozenBudget.toFixed(2)}, above the ${totalBudget.toFixed(2)} total — no budget moved; lower them by hand or raise the total`,
+    );
+  }
   const allocById = new Map(solved.allocations.map((a) => [a.id, a]));
   notes.push(...solved.notes);
 
@@ -147,8 +169,8 @@ export function reallocate(
     let capBreached = false;
     let floorRelaxed = false;
     if (isFrozen(s)) {
-      finalBudget = s.currentBudget;
-      lowerBound = upperBound = s.currentBudget;
+      finalBudget = frozenTarget(s);
+      lowerBound = upperBound = finalBudget;
     } else if (isFlagged(s)) {
       finalBudget = 0;
     } else {
@@ -191,7 +213,6 @@ export function reallocate(
   });
 
   const allocatedTotal = sum(items.map((i) => i.finalBudget));
-  const conserved = Math.abs(allocatedTotal - totalBudget) < 1e-3 + solved.residual;
 
   return {
     totalBudget,
@@ -199,7 +220,7 @@ export function reallocate(
     frozenBudget,
     items,
     allocatedTotal,
-    conserved: Math.abs(allocatedTotal + solved.residual - totalBudget) < 1e-3,
+    conserved: !refusal && Math.abs(allocatedTotal + solved.residual - totalBudget) < 1e-3,
     residual: solved.residual,
     feasibility: {
       sumLowerBounds: solved.sumLowerBounds,
@@ -208,5 +229,31 @@ export function reallocate(
       underflow: solved.underflow,
     },
     notes,
+    ...(refusal ? { refusal } : {}),
+  };
+}
+
+const POOL_EPS = 1e-6;
+
+/** The refusal's allocation: every eligible ad set keeps exactly what it has. */
+function holdEverything(items: SolverItem[]): SolverOutput {
+  const allocations = items.map((it) => ({
+    id: it.id,
+    amount: it.current,
+    lowerBound: it.current,
+    upperBound: it.current,
+    capBreached: false,
+    floorRelaxed: false,
+  }));
+  const held = sum(allocations.map((a) => a.amount));
+  return {
+    allocations,
+    allocatedTotal: held,
+    residual: 0,
+    sumLowerBounds: held,
+    sumUpperBounds: held,
+    overflow: false,
+    underflow: false,
+    notes: [],
   };
 }

@@ -1,0 +1,88 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT campaign.id, campaign.name, asset_group.id, asset_group.name, asset_group.status, asset_group.primary_status, asset_group.primary_status_reasons, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value FROM asset_group WHERE segments.date BETWEEN '2026-09-01' AND '2026-09-30' AND asset_group.status != 'REMOVED'",
+    "rows": 3
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22222910545",
+        "name": "Mejor Funeraria de San Luis",
+        "id": "22222910545"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "0"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6552423102",
+        "name": "Asset Group 1",
+        "status": "ENABLED",
+        "id": "6552423102",
+        "primaryStatus": "NOT_ELIGIBLE",
+        "primaryStatusReasons": [
+          "CAMPAIGN_REMOVED",
+          "ASSET_GROUP_DISAPPROVED"
+        ]
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "1121",
+        "conversionsValue": 13.999207,
+        "conversions": 13.999207,
+        "costMicros": "3220595872",
+        "impressions": "18998"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "status": "ENABLED",
+        "id": "6607382367",
+        "primaryStatus": "LIMITED",
+        "primaryStatusReasons": [
+          "ASSET_GROUP_LIMITED"
+        ]
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/23858592372",
+        "name": "LEADS GOOGLE TEQUIS-GOTO",
+        "id": "23858592372"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "0"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6714512232",
+        "name": "Grupo de recursos 1",
+        "status": "ENABLED",
+        "id": "6714512232",
+        "primaryStatus": "NOT_ELIGIBLE",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      }
+    }
+  ]
+}

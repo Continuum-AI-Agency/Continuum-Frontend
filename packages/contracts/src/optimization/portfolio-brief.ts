@@ -433,6 +433,10 @@ const HELD_COPY: Record<string, { why: (resultLabel: string) => string; lever: s
     why: () => 'declare no optimization goal',
     lever: 'Set a goal on each ad set in Meta.',
   },
+  no_spend: {
+    why: () => 'spent nothing in the last 14 days, so there is nothing to score them on',
+    lever: 'Check in Meta whether they are being served; the delivery findings name the dark ones.',
+  },
   missing_window: {
     why: () => 'lack the trailing history to score',
     lever: 'They are scored again once the history fills in.',

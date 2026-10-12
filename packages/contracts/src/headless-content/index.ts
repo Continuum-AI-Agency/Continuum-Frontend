@@ -320,6 +320,13 @@ export const preparedCharacterSchema = z
       .object({ verdict: z.enum(['pass', 'fail']), issues: z.array(detail).max(8) })
       .strict()
       .optional(),
+    /**
+     * The character continuity sheet made from the master: what the Element shows when it is
+     * inspected, and its default reference once approved. The composite stays the identity
+     * reference video models are given. Absent on packs made before sheets, or when the sheet
+     * failed — the pack never depends on it.
+     */
+    sheet: headlessAssetRefSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -371,7 +378,9 @@ export const headlessShotSchema = z
         audioPerspective: detail,
       })
       .strict(),
-    visualStyle: detail.optional(),
+    // Wider than `detail`: the authored style carries the agent's `/slug` shortcut
+    // fragments and the brand-book direction line (agentReel.ts), ~150–200 chars each.
+    visualStyle: z.string().trim().min(1).max(1600).optional(),
     performance: z
       .object({
         action: detail,

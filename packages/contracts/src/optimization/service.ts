@@ -1038,7 +1038,13 @@ export type RunConfidence = z.infer<typeof RunConfidenceSchema>;
  *  budget and the spend on the same row. `source` says whether the number came from a real
  *  flight window ('pacing') or is the flat fallback ('observed' / 'fixed'), because the
  *  fallback also reports `status: 'on_track'` and must not render as a green gauge. Rows
- *  from before the fields existed carry none of them. Loose: the engine may grow it. */
+ *  from before the fields existed carry none of them. Loose: the engine may grow it.
+ *
+ *  `periodStart` / `periodEnd` / `planVersion` (the scheduler's stamp, on 'pacing' only) name
+ *  the FLIGHT the verdict was computed against. The portfolio row keeps moving after the run
+ *  (a rebase, a new budget) and the verdict does not: `pacingPlanFreshness` (pacing-plan.ts)
+ *  compares the stamp with the row the block is read beside, so a verdict about a plan the
+ *  flight no longer has is labelled stale instead of badged as current. */
 export const CycleRunPacingSchema = z
   .object({
     dailyTotal: z.number(),
@@ -1051,6 +1057,9 @@ export const CycleRunPacingSchema = z
     periodDays: z.number().optional(),
     dayIndex: z.number().optional(),
     actualSpendToDate: z.number().optional(),
+    periodStart: z.string().optional(),
+    periodEnd: z.string().optional(),
+    planVersion: z.string().optional(),
   })
   .loose();
 export type CycleRunPacing = z.infer<typeof CycleRunPacingSchema>;
@@ -1618,12 +1627,16 @@ export type EntityStatusRefusal = z.infer<typeof EntityStatusRefusalSchema>;
  *  applier reserves for an unpause autopilot declined. `held` cannot occur on this route (the
  *  only representable target is PAUSED and the only authorization is human); it is in the
  *  union because the applier's type says it can be, and narrowing it here by re-labelling it
- *  would make the envelope lie about which write actually happened. */
+ *  would make the envelope lie about which write actually happened. `indeterminate` is a
+ *  write Meta never answered whose read-back failed too: it may or may not have landed, so
+ *  it is neither applied nor failed, and its ledger reservation is left in flight. */
 export const EntityStatusResultSchema = z.object({
   level: z.enum(['adset', 'ad']),
   id: z.string(),
   ok: z.boolean(),
-  status: z.enum(['applied', 'failed', 'skipped', 'deduped', 'held', 'refused']).optional(),
+  status: z
+    .enum(['applied', 'failed', 'skipped', 'deduped', 'held', 'refused', 'indeterminate'])
+    .optional(),
   reason: EntityStatusRefusalSchema.optional(),
   /** What Meta said the status was when the write was attempted. */
   prior_status: z.enum(['ACTIVE', 'PAUSED']).nullable().optional(),

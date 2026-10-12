@@ -1,0 +1,58 @@
+{
+  "_source": {
+    "kind": "SYNTHETIC",
+    "label": "synthetic, composed for the scenario — not a recording",
+    "anchoredTo": "google-vivo47-campaigns30d.json (Display CPA 239.33 MXN)",
+    "invented": [
+      "the campaign",
+      "the per-day minimum"
+    ],
+    "note": "no pilot account runs Demand Gen"
+  },
+  "data": {
+    "customer": "3710693645 (Vivo 47, MXN, real)",
+    "campaign": {
+      "id": "invented",
+      "name": "DG | Vivo 47 | Leads",
+      "advertising_channel_type": "DEMAND_GEN",
+      "bidding_strategy_type": "TARGET_CPA",
+      "target_cpa_mxn": 239.33,
+      "budget_mxn_day": 600,
+      "explicitly_shared": false
+    },
+    "anchor": "target CPA = REAL Vivo 47 \"Display\" campaign 30d cost per conversion (5,257.93 / 21.97 = 239.33 MXN, google-vivo47-campaigns30d.json)",
+    "guidance": {
+      "rule": "Google: Demand Gen budget ≈ 15× expected tCPA (orientative)",
+      "recommended_mxn_day": 3589.95
+    },
+    "validateOnly": {
+      "request": {
+        "amount_micros": "300000000",
+        "validate_only": true
+      },
+      "response": {
+        "error": {
+          "code": 400,
+          "details": [
+            {
+              "errors": [
+                {
+                  "errorCode": {
+                    "budgetError": "BUDGET_BELOW_PER_DAY_MINIMUM"
+                  },
+                  "details": {
+                    "budgetPerDayMinimumErrorDetails": {
+                      "minimumBudgetAmountMicros": "400000000",
+                      "currencyCode": "MXN"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "note": "shape from the v25 error docs; the 400 MXN minimum is invented"
+    }
+  }
+}

@@ -16,15 +16,60 @@
 // at frequency 1.6 if it is a small audience.
 // ---------------------------------------------------------------------------
 
+import { formatMoney, type PlatformCard, PlatformCardSchema } from '@continuum/contracts';
 import { isCreativeEvaluable } from './classify';
 import type { EngineConfig } from './config';
-import { readDecay } from './decay';
+import { ctr, readDecay } from './decay';
 import { REACH_EXHAUSTED_EXPANSION } from './delivery';
 import { scoreAdSet } from './scoring';
+import { action, entityOf, resultNoun, title, titleMoney } from './title';
 import type { AdSetSnapshot, DeliveryRead, Recommendation } from './types';
+import { perDayOver } from './windows';
 
 const isRemarketing = (a: AdSetSnapshot['audienceType']): boolean =>
   a === 'remarketing' || a === 'retargeting';
+
+/** The days F1's comparison spans: the 14-day baseline the last three days fell from. */
+const F1_CARD_DAYS = 14;
+
+/**
+ * F1's card (frontend.html §7 feature 18): the creative that took most of the last three
+ * days' impressions — the one the same people keep seeing — with its OWN 14-day and 3-day
+ * CTR, the ad set's 7-day frequency, and the sibling running at the best recent CTR above it.
+ *
+ * Null when nothing names a creative (no per-creative series) or the most-seen creative did
+ * not fall itself: F1 measured the ad set, and a card that pins the ad set's drop on one ad
+ * must not claim a fall that ad did not have.
+ */
+function metaCreativeFatigueCard(s: AdSetSnapshot): PlatformCard | null {
+  const delivered = (s.creativeSeries ?? []).filter((e) => e.windows.d3.impressions > 0);
+  const subject = delivered.reduce<(typeof delivered)[number] | null>(
+    (best, e) =>
+      best === null || e.windows.d3.impressions > best.windows.d3.impressions ? e : best,
+    null,
+  );
+  if (!subject) return null;
+  // d3 delivered, and d14 contains d3, so both CTRs stand on real impressions.
+  const ctrNow = ctr(subject.windows.d3);
+  const ctrBefore = ctr(subject.windows.d14);
+  if (!(ctrNow < ctrBefore)) return null;
+  const replacement = delivered
+    .filter((e) => e.adId !== subject.adId)
+    .map((e) => ({ name: e.adName?.trim() || e.adId, ctr: ctr(e.windows.d3) }))
+    .filter((e) => e.ctr > ctrNow)
+    .sort((a, b) => b.ctr - a.ctr)[0];
+  const parsed = PlatformCardSchema.safeParse({
+    variant: 'meta_creative_fatigue',
+    ad_set_name: entityOf(s),
+    creative_name: subject.adName?.trim() || subject.adId,
+    ctr_now: ctrNow,
+    ctr_before: ctrBefore,
+    days: F1_CARD_DAYS,
+    frequency: s.frequency7d && s.frequency7d > 0 ? s.frequency7d : null,
+    replacement: replacement ?? null,
+  });
+  return parsed.success ? parsed.data : null;
+}
 
 export function evaluateFatigue(
   snapshots: AdSetSnapshot[],
@@ -33,6 +78,7 @@ export function evaluateFatigue(
   deliveryReads: ReadonlyMap<string, DeliveryRead> = new Map(),
 ): Recommendation[] {
   const recs: Recommendation[] = [];
+  const money = (v: number): string => formatMoney(v, cfg.currency);
 
   for (const s of snapshots) {
     // A budget-authority freeze (CBO / lifetime) does NOT silence fatigue: refreshing a
@@ -64,7 +110,7 @@ export function evaluateFatigue(
       : cfg.fatigueFreqProspecting;
     // The money a fatigue call puts on the table: the share of today's spend that is the
     // CPA rise itself. Spending $90/day at a CPA up 50% means $30/day is the decay.
-    const dailySpend = s.windows.d3.spend / 3;
+    const dailySpend = perDayOver(s.windows.d3.spend, 'd3');
     const excessPerDay = dailySpend * (decay.cpaUpPct / (100 + decay.cpaUpPct));
 
     // F2 — audience saturation (frequency over cap takes precedence: expanding the
@@ -75,7 +121,7 @@ export function evaluateFatigue(
         kind: 'audience_expand',
         trigger: 'F2_audience_saturation',
         severity: 'medium',
-        reason: `Frequency ${freq.toFixed(1)} ≥ ${freqCap} with CPA up ${cpaUpPct}% (3d $${cppRecent.toFixed(0)} vs 14d $${cppBase.toFixed(0)}): audience saturated — expand or rotate.`,
+        reason: `Frequency ${freq.toFixed(1)} ≥ ${freqCap} with CPA up ${cpaUpPct}% (3d ${money(cppRecent)} vs 14d ${money(cppBase)}): audience saturated — expand or rotate.`,
         evidence: {
           metric: 'frequency',
           value: freq,
@@ -94,6 +140,15 @@ export function evaluateFatigue(
             from: Math.round(freq * 10) / 10,
             to: freqCap,
           },
+          // The frequency against its cap is the comparison; the CPA rise is what it costs.
+          title: title({
+            entity: entityOf(s),
+            figure: Math.round(freq * 10) / 10,
+            unit: 'veces por persona en 7 días',
+            comparator: `sobre el tope de ${freqCap} y CPA +${cpaUpPct}% (${titleMoney(cppRecent, cfg)} frente a ${titleMoney(cppBase, cfg)} por ${resultNoun(cfg, s)})`,
+            window: 'd7',
+          }),
+          action: action('audience_expand', cfg, { perDay: excessPerDay }),
           source: 'engine',
         },
         needsApproval: true,
@@ -117,7 +172,7 @@ export function evaluateFatigue(
         kind: 'audience_expand',
         trigger: 'F3_audience_exhausted',
         severity: 'medium',
-        reason: `Doubling the window to 14 days reached only ${newPeoplePct}% more people than the last 7 did, with CPA up ${cpaUpPct}% (3d $${cppRecent.toFixed(0)} vs 14d $${cppBase.toFixed(0)}) at frequency ${freq.toFixed(1)}. The audience is used up, not the creative — a new ad here is shown to the same people. Widen or rotate the audience.`,
+        reason: `Doubling the window to 14 days reached only ${newPeoplePct}% more people than the last 7 did, with CPA up ${cpaUpPct}% (3d ${money(cppRecent)} vs 14d ${money(cppBase)}) at frequency ${freq.toFixed(1)}. The audience is used up, not the creative — a new ad here is shown to the same people. Widen or rotate the audience.`,
         evidence: {
           metric: 'reach_expansion',
           value: reachExpansion,
@@ -137,6 +192,16 @@ export function evaluateFatigue(
             from: null,
             to: null,
           },
+          // The share of new people is the figure; the ceiling it fell under is the
+          // comparison, in the same percentage so the two are readable side by side.
+          title: title({
+            entity: entityOf(s),
+            figure: Math.round((reachExpansion - 1) * 100),
+            unit: '% de personas nuevas al pasar de 7 a 14 días',
+            comparator: `bajo el piso de ${Math.round((REACH_EXHAUSTED_EXPANSION - 1) * 100)}% y CPA +${cpaUpPct}% (${titleMoney(cppRecent, cfg)} frente a ${titleMoney(cppBase, cfg)} por ${resultNoun(cfg, s)})`,
+            window: 'd14',
+          }),
+          action: action('audience_expand', cfg, { perDay: excessPerDay }),
           source: 'engine',
         },
         needsApproval: true,
@@ -149,6 +214,7 @@ export function evaluateFatigue(
     if (decay.ctrDropped) {
       const { ctrRecent, ctrBase } = decay;
       const ctrDownPct = decay.ctrDownPct.toFixed(0);
+      const platformCard = metaCreativeFatigueCard(s);
       recs.push({
         adSetId: s.id,
         kind: 'creative_refresh',
@@ -173,6 +239,17 @@ export function evaluateFatigue(
             from: null,
             to: null,
           },
+          // The recent CTR is the figure and its own 14-day baseline is the comparison;
+          // the CPA rise rides beside it because it is what prices the call.
+          title: title({
+            entity: entityOf(s),
+            figure: Math.round(ctrRecent * 10000) / 100,
+            unit: '% de CTR en 3 días',
+            comparator: `${ctrDownPct}% menos que los 14 días (${(ctrBase * 100).toFixed(2)}%) y CPA +${cpaUpPct}% (${titleMoney(cppRecent, cfg)} frente a ${titleMoney(cppBase, cfg)} por ${resultNoun(cfg, s)})`,
+            window: 'd3',
+          }),
+          action: action('creative_refresh', cfg, { perDay: excessPerDay }),
+          ...(platformCard ? { platformCard } : {}),
           source: 'engine',
         },
         needsApproval: true,

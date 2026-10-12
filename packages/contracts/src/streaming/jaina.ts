@@ -4,6 +4,7 @@ import {
   paidCanvasCreativeTargetSchema,
   paidScaffoldCreativeTargetSchema,
 } from '../paid-creative/ad-intent';
+import type { AnalysisDataset } from './dataset';
 
 /**
  * Jaina stream frame definitions — cross-side type contract.
@@ -262,6 +263,36 @@ export type JainaToolCallEventData = JainaToolFrameParentage & {
   agent_name?: string | null;
 };
 
+/**
+ * The bounded record of what a tool READ, kept on the durable run event so a figure in the
+ * answer can be traced to the read that produced it after the fact. The live stream never
+ * carries it (the sanitizer strips it); the run-event row does, as `output` with
+ * `output_durable: true`. It is the materialized datasets the result registered — the cells
+ * and rows the answer's blocks rest on — rows and points capped; when the result materialized
+ * none, the result itself with arrays and strings capped. Never a raw multi-MB body: the whole
+ * record is held under `JAINA_DURABLE_TOOL_OUTPUT_MAX_BYTES`, dropping the raw result first and
+ * then rows, and `truncated` says what was dropped.
+ */
+export type JainaDurableToolOutput = {
+  record: 'durable_tool_output';
+  tool: string;
+  datasets: AnalysisDataset[];
+  /** The tool's own result, bounded; absent when datasets carry the read or the cap dropped it. */
+  result?: unknown;
+  truncated: {
+    rows_dropped: number;
+    points_dropped: number;
+    items_dropped: number;
+    chars_dropped: number;
+    /** True when the record had to shrink below its row/point caps to fit the byte cap. */
+    over_byte_cap: boolean;
+  };
+  approx_bytes: number;
+};
+
+/** The record's byte cap, applied to its JSON serialization. */
+export const JAINA_DURABLE_TOOL_OUTPUT_MAX_BYTES = 48_000;
+
 /** data shape for type: "tool.result" (mirrors FE toolResultSchema). */
 export type JainaToolResultEventData = JainaToolFrameParentage & {
   id: string;
@@ -271,6 +302,10 @@ export type JainaToolResultEventData = JainaToolFrameParentage & {
   shared?: boolean;
   duration_ms?: number;
   output?: unknown;
+  /** Emit-side only: the bounded read, moved to the durable row's `output` and never streamed. */
+  durable_output?: JainaDurableToolOutput;
+  /** Durable-row marker: `output` is a `JainaDurableToolOutput`, not a tool's streamed output. */
+  output_durable?: true;
   error?: string;
   output_omitted?: true;
   output_summary?: {

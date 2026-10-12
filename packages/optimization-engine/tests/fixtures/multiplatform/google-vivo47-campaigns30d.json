@@ -1,0 +1,449 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-01T23:30:49.313Z",
+    "query": "SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.primary_status, campaign.primary_status_reasons, campaign.advertising_channel_type, campaign.advertising_channel_sub_type, campaign.bidding_strategy_type, campaign.bidding_strategy_system_status, campaign.campaign_budget, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value, metrics.all_conversions, metrics.search_impression_share, metrics.search_budget_lost_impression_share, metrics.search_rank_lost_impression_share FROM campaign WHERE segments.date BETWEEN '2026-09-01' AND '2026-09-30' AND campaign.status != 'REMOVED'",
+    "rows": 17
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18572377820",
+        "status": "PAUSED",
+        "advertisingChannelType": "SMART",
+        "advertisingChannelSubType": "SMART_CAMPAIGN",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Gimnasio Familiar Premium",
+        "id": "18572377820",
+        "campaignBudget": "customers/3710693645/campaignBudgets/11728771322",
+        "biddingStrategySystemStatus": "ENABLED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/18585815224",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "ENDED",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Trafico-Cortesias",
+        "id": "18585815224",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12280387431",
+        "biddingStrategySystemStatus": "ENABLED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED",
+          "CAMPAIGN_ENDED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19321380656",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "VIVO47-GOURMETERIA",
+        "id": "19321380656",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12280387431",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19323095414",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "VALLE REAL",
+        "id": "19323095414",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12280387431",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19589586173",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "pase de 7 dias GMT",
+        "id": "19589586173",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12296409354",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19954538151",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Gourmetería",
+        "id": "19954538151",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12508213632",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "1199",
+        "searchBudgetLostImpressionShare": 0,
+        "searchImpressionShare": 0.33996683250414594,
+        "searchRankLostImpressionShare": 0.6600331674958541,
+        "conversionsValue": 5.5,
+        "conversions": 5.5,
+        "costMicros": "4399820980",
+        "allConversions": 5.5,
+        "impressions": "28426"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19962346777",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Naciones Unidas",
+        "id": "19962346777",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12508176957",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/19962426667",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Valle Real",
+        "id": "19962426667",
+        "campaignBudget": "customers/3710693645/campaignBudgets/12503613503",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "status": "ENABLED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "VIVO 47-EKATAR",
+        "id": "20775796216",
+        "campaignBudget": "customers/3710693645/campaignBudgets/13134103565",
+        "biddingStrategySystemStatus": "ENABLED",
+        "primaryStatus": "ELIGIBLE"
+      },
+      "metrics": {
+        "clicks": "4816",
+        "searchBudgetLostImpressionShare": 0.20660556044104714,
+        "searchImpressionShare": 0.19782013123182032,
+        "searchRankLostImpressionShare": 0.5955743083271325,
+        "conversionsValue": 26.008771,
+        "conversions": 26.008771,
+        "costMicros": "36997064541",
+        "allConversions": 26.008771,
+        "impressions": "161350"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21287529107",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Display",
+        "id": "21287529107",
+        "campaignBudget": "customers/3710693645/campaignBudgets/13586883088",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "3084",
+        "conversionsValue": 21.967476,
+        "conversions": 21.967476,
+        "costMicros": "5257928966",
+        "allConversions": 21.967476,
+        "impressions": "62194"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21734669008",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "TARGET_SPEND",
+        "name": "Gourmeteria",
+        "id": "21734669008",
+        "campaignBudget": "customers/3710693645/campaignBudgets/13940322639",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21905436458",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Display-Buen fit",
+        "id": "21905436458",
+        "campaignBudget": "customers/3710693645/campaignBudgets/14064761225",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/21985307202",
+        "status": "PAUSED",
+        "advertisingChannelType": "SEARCH",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Valle Real-Search",
+        "id": "21985307202",
+        "campaignBudget": "customers/3710693645/campaignBudgets/14133456707",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "1433",
+        "searchBudgetLostImpressionShare": 0.04627450980392157,
+        "searchImpressionShare": 0.323921568627451,
+        "searchRankLostImpressionShare": 0.6298039215686274,
+        "conversionsValue": 2.5,
+        "conversions": 2.5,
+        "costMicros": "3316064330",
+        "allConversions": 2.5,
+        "impressions": "33861"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22357506361",
+        "status": "PAUSED",
+        "advertisingChannelType": "VIDEO",
+        "servingStatus": "ENDED",
+        "biddingStrategyType": "TARGET_CPV",
+        "name": "Video | Vivo 47 | 2025",
+        "id": "22357506361",
+        "campaignBudget": "customers/3710693645/campaignBudgets/14414681205",
+        "biddingStrategySystemStatus": "UNAVAILABLE",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED",
+          "CAMPAIGN_ENDED"
+        ]
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "0",
+        "allConversions": 0,
+        "impressions": "0"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22364972636",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "TARGET_CPA",
+        "name": "Remarketing Gourmetería | Vivo 47 | 2025",
+        "id": "22364972636",
+        "campaignBudget": "customers/3710693645/campaignBudgets/14429940928",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "625",
+        "conversionsValue": 0,
+        "conversions": 0,
+        "costMicros": "2390522749",
+        "allConversions": 0,
+        "impressions": "24194"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22404522468",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Remarketing Valle Real | Vivo 47 | 2025",
+        "id": "22404522468",
+        "campaignBudget": "customers/3710693645/campaignBudgets/14453885756",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "805",
+        "conversionsValue": 18,
+        "conversions": 18,
+        "costMicros": "1407712887",
+        "allConversions": 18,
+        "impressions": "19746"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/22706302206",
+        "status": "PAUSED",
+        "advertisingChannelType": "DISPLAY",
+        "servingStatus": "SERVING",
+        "biddingStrategyType": "TARGET_CPA",
+        "name": "DP | VIVO 47 | Socios",
+        "id": "22706302206",
+        "campaignBudget": "customers/3710693645/campaignBudgets/14680229249",
+        "biddingStrategySystemStatus": "PAUSED",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "CAMPAIGN_PAUSED"
+        ]
+      },
+      "metrics": {
+        "clicks": "751",
+        "conversionsValue": 47.999709,
+        "conversions": 47.999709,
+        "costMicros": "1436149120",
+        "allConversions": 47.999709,
+        "impressions": "9305"
+      }
+    }
+  ]
+}

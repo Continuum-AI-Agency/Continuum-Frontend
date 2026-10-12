@@ -4,9 +4,11 @@
 export * from './account-card-html';
 // The portfolio brief: the growth read and the one highest-impact thing to do today.
 export * from './account-chart';
+// Account-level metrics across platforms for the Optimizer Overview (MP1).
 export * from './account-platform-metrics';
 export * from './account-strategy';
-// Optimizer multiplatform (vendored from the monorepo): actions, neutral snapshot, metrics, sheet attribution.
+// The platform-neutral optimizer action (set_status, set_budget, set_bid_target,
+// add_negatives, budget_move) and the applier's preflight refusal.
 export * from './action';
 export * from './action-revert';
 // One normalized row of public.continuum_action_stream, and the fold that makes a change
@@ -18,6 +20,9 @@ export * from './adhoc-suggestions';
 // Setup advisor — what a selection will actually DO under an objective/budget/target, said
 // before the portfolio is created. Shared so an agent gets the same warnings a human does.
 export * from './advisor';
+// GA4 as an attribution source (runReport rows, config, sync report; window ends yesterday).
+export * from './attribution-ga4';
+// The spreadsheet attribution source (column mapping, sync result, match report).
 export * from './attribution-sheet';
 // Audience proposals: the daily audience analysis for F2/F3 ad sets, its approval, and
 // what the worker read back from Meta after creating the new ad set.
@@ -40,13 +45,18 @@ export * from './mcp';
 // Money in a sentence: the one symbol/code/digit rule for prose the Backend, the engine and a
 // prompted model compose, mirroring the Frontend's formatCurrency exactly.
 export * from './money';
+// The neutral per-entity snapshot every platform's ingest produces.
 export * from './multiplatform-snapshot';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
+// Which flight a persisted pacing verdict was computed against, and whether it is the flight
+// the portfolio row holds now — one derivation for the Optimizer's stamp and the FE's label.
+export * from './pacing-plan';
 export * from './platform-card';
 // Platform-only signals the Google and TikTok rules read (search terms, keywords, bids, assets, creatives).
 export * from './platform-signals';
 export * from './portfolio-brief';
+// The one normalized cross-platform metrics slice of a portfolio (ratios null, never 0).
 export * from './portfolio-metrics';
 // The one reporting range: presets, custom windows, and how a spec resolves to dates.
 export * from './range';

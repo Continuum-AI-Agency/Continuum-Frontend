@@ -1,0 +1,41 @@
+{
+  "_source": {
+    "kind": "DOC_SHAPED",
+    "label": "doc-shaped, not live",
+    "platform": "tiktok",
+    "api": "TikTok Marketing API v1.3 GET /ad/review_info/",
+    "advertiserId": "7000000000000000001 (invented)",
+    "currency": "MXN",
+    "timezone": "America/Mexico_City",
+    "window": {
+      "since": "2026-09-21",
+      "until": "2026-10-04"
+    },
+    "docs": "docs/optimizer-multiplatform/tiktok.html §2.4, §2.10, §4 rules 07 and 20",
+    "invented": [
+      "the review result, reason and suggestion of ad 307"
+    ]
+  },
+  "data": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "doc-shaped-not-live",
+    "data": {
+      "ad_review_map": {
+        "7000000000000000307": {
+          "ad_id": "7000000000000000307",
+          "is_approved": false,
+          "review_status": "UNAVAILABLE",
+          "reject_info": [
+            {
+              "reasons": [
+                "Exaggerated or misleading claims about results"
+              ],
+              "suggestion": "Remove the 30-day before/after promise and show the class itself."
+            }
+          ]
+        }
+      }
+    }
+  }
+}

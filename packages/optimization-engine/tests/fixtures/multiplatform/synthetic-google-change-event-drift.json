@@ -1,0 +1,42 @@
+{
+  "_source": {
+    "kind": "SYNTHETIC",
+    "label": "synthetic, composed for the scenario — not a recording",
+    "anchoredTo": "google-vivo47-budgets.json (budget 13134103565 at 1,179 MXN)",
+    "invented": [
+      "the human change to 1,300",
+      "timestamps"
+    ],
+    "note": "manual edit in the Google Ads UI between card and approval"
+  },
+  "data": {
+    "customer": "3710693645",
+    "budget": "customers/3710693645/campaignBudgets/13134103565 (VIVO 47-EKATAR, real, 1,179 MXN/day at recording)",
+    "cardShownAt": "2026-10-02T15:00:00-06:00",
+    "approvedAt": "2026-10-02T18:20:00-06:00",
+    "change_event": {
+      "change_date_time": "2026-10-02 16:41:07",
+      "change_resource_type": "CAMPAIGN_BUDGET",
+      "client_type": "GOOGLE_ADS_WEB_CLIENT",
+      "user_email": "v***@example.com",
+      "old_resource": {
+        "campaign_budget": {
+          "amount_micros": "1179000000"
+        }
+      },
+      "new_resource": {
+        "campaign_budget": {
+          "amount_micros": "1300000000"
+        }
+      }
+    },
+    "freshReadBeforeWrite": {
+      "amount_micros": "1300000000"
+    },
+    "expected": {
+      "leg": "refused",
+      "refusal": "drifted",
+      "writes": 0
+    }
+  }
+}

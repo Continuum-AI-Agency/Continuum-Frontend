@@ -7,9 +7,23 @@
 //   P3 — low significance / dead weight (spent enough, ~zero results), 14d
 // ---------------------------------------------------------------------------
 
+import { formatMoney } from '@continuum/contracts';
 import type { EngineConfig } from './config';
 import { costPerEvent, kpiEvents, scoreAdSet, upperFunnelEvents } from './scoring';
+import {
+  action,
+  currencyCode,
+  entityOf,
+  moneyPerResultUnit,
+  multiple,
+  resultNoun,
+  resultNounPlural,
+  title,
+  titleMoney,
+  upperFunnelNoun,
+} from './title';
 import type { AdSetSnapshot, Recommendation } from './types';
+import { perDayOver } from './windows';
 
 const isEvaluable = (s: AdSetSnapshot): boolean => s.status !== 'frozen' && s.status !== 'flagged';
 
@@ -49,6 +63,7 @@ export type TriggerOutput = {
 export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig): TriggerOutput {
   const recs: Recommendation[] = [];
   const starve = new Set<string>();
+  const money = (v: number): string => formatMoney(v, cfg.currency);
 
   // Robust reference cost-per-event: P25 of cost/KPI over the 14d window for
   // evaluable items with data. KPI defaults to purchases (objective-aware).
@@ -91,10 +106,13 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
       // real — a placeholder like "null" reads as a number that was never measured.
       // Purchases keep the established word; every other objective names its own KPI.
       const kpiLabel = !cfg.kpiField || cfg.kpiField === 'purchases' ? 'conversions' : cfg.kpiField;
+      // No article before the substituted label: "an landing-page view cost" shipped once,
+      // because the article was fixed while the label was not. "paying X per <label>" needs
+      // none, whatever the objective names its upper-funnel event.
       const reason =
         upper3d === 0
-          ? `Spent ${d3.spend.toFixed(0)} over 3d with 0 ${kpiLabel} and 0 ${upperLabel}s.`
-          : `Spent ${d3.spend.toFixed(0)} over 3d with 0 ${kpiLabel} and an ${upperLabel} cost of ${atcCost3d.toFixed(0)} — over ${cfg.upperFunnelOverrideMult}× the portfolio average of ${avgAtcCost.toFixed(0)}.`;
+          ? `Spent ${money(d3.spend)} over 3d with 0 ${kpiLabel} and 0 ${upperLabel}s.`
+          : `Spent ${money(d3.spend)} over 3d with 0 ${kpiLabel}, paying ${money(atcCost3d)} per ${upperLabel} — over ${cfg.upperFunnelOverrideMult}× the portfolio average of ${money(avgAtcCost)}.`;
       recs.push({
         adSetId: s.id,
         kind: 'pause',
@@ -107,11 +125,24 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           comparator:
             upper3d === 0
               ? `with 0 ${kpiLabel} and 0 ${upperLabel}s`
-              : `with 0 ${kpiLabel}, ${upperLabel} cost ${atcCost3d.toFixed(0)} vs ${avgAtcCost.toFixed(0)} avg`,
+              : `with 0 ${kpiLabel}, ${upperLabel} cost ${money(atcCost3d)} vs ${money(avgAtcCost)} avg`,
           threshold: floor,
           window: 'd3',
-          estImpactPerDay: d3.spend / 3,
-          headline: avoidedHeadline(d3.spend / 3),
+          estImpactPerDay: perDayOver(d3.spend, 'd3'),
+          headline: avoidedHeadline(perDayOver(d3.spend, 'd3')),
+          // The spend is the figure; the comparison is what it bought — nothing — and, on
+          // the second branch, the upper-funnel price against the portfolio's own average.
+          title: title({
+            entity: entityOf(s),
+            figure: d3.spend,
+            unit: currencyCode(cfg),
+            comparator:
+              upper3d === 0
+                ? `en 3 días con 0 ${resultNounPlural(cfg, s)} y 0 ${upperFunnelNoun(upperLabel, 0)}`
+                : `en 3 días con 0 ${resultNounPlural(cfg, s)}, ${titleMoney(atcCost3d, cfg)} por ${upperFunnelNoun(upperLabel, 1)} frente a ${titleMoney(avgAtcCost, cfg)} de promedio (${multiple(atcCost3d, avgAtcCost)})`,
+            window: 'd3',
+          }),
+          action: action('pause', cfg, { perDay: perDayOver(d3.spend, 'd3') }),
           source: 'engine',
         },
         needsApproval: true,
@@ -129,14 +160,14 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           kind: 'pause',
           trigger: 'P2_sustained_poor',
           severity: 'medium',
-          reason: `CPP 14d $${cpp14.toFixed(0)} > ${cfg.sustainedPoorMultiplier}× the robust reference ($${robustBestCpp.toFixed(0)}), with no recent improvement.`,
+          reason: `CPP 14d ${money(cpp14)} > ${cfg.sustainedPoorMultiplier}× the robust reference (${money(robustBestCpp)}), with no recent improvement.`,
           evidence: {
             metric: 'cpp',
             value: cpp14,
-            comparator: `vs ${cfg.sustainedPoorMultiplier}× the robust reference ($${robustBestCpp.toFixed(0)})`,
+            comparator: `vs ${cfg.sustainedPoorMultiplier}× the robust reference (${money(robustBestCpp)})`,
             threshold: cfg.sustainedPoorMultiplier * robustBestCpp,
             window: 'd14',
-            estImpactPerDay: d14.spend / 14,
+            estImpactPerDay: perDayOver(d14.spend, 'd14'),
             // The price gap IS the finding; the money is what acting on it is worth. Both
             // sides are priced and held, so the headline reaches for nothing it was not
             // given. Direction lives in the label, never in a minus sign, and `from → to`
@@ -149,6 +180,17 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
               from: round2(cpp14),
               to: round2(robustBestCpp),
             },
+            // "101 MXN por lead, 2.9× la referencia de 35 MXN": the cost per result is the
+            // figure, and the reference it crossed is the comparison. No verb — the pause
+            // and what it saves are the button's.
+            title: title({
+              entity: entityOf(s),
+              figure: cpp14,
+              unit: moneyPerResultUnit(cfg, s),
+              comparator: `${multiple(cpp14, robustBestCpp)} la referencia de ${titleMoney(robustBestCpp, cfg)}`,
+              window: 'd14',
+            }),
+            action: action('pause', cfg, { perDay: perDayOver(d14.spend, 'd14') }),
             source: 'engine',
           },
           needsApproval: true,
@@ -169,15 +211,25 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
         kind: 'pause',
         trigger: 'P3_low_significance',
         severity: 'low',
-        reason: `Spent $${d14.spend.toFixed(0)} over 14d (> 1 target CPA) with 0 conversions: dead weight.`,
+        reason: `Spent ${money(d14.spend)} over 14d (> 1 target CPA) with 0 conversions: dead weight.`,
         evidence: {
           metric: 'spend',
           value: d14.spend,
           comparator: 'with 0 conversions in 7d and 14d',
           threshold: cfg.cpaTarget,
           window: 'd14',
-          estImpactPerDay: d14.spend / 14,
-          headline: avoidedHeadline(d14.spend / 14),
+          estImpactPerDay: perDayOver(d14.spend, 'd14'),
+          headline: avoidedHeadline(perDayOver(d14.spend, 'd14')),
+          // "298 MXN en 14 días y 0 leads": the spend, the window, and the nothing it bought,
+          // with the target it exceeded so the reader knows why 14 days was enough.
+          title: title({
+            entity: entityOf(s),
+            figure: d14.spend,
+            unit: currencyCode(cfg),
+            comparator: `en 14 días y 0 ${resultNounPlural(cfg, s)}, más que el objetivo de ${titleMoney(cfg.cpaTarget, cfg)} por ${resultNoun(cfg, s)}`,
+            window: 'd14',
+          }),
+          action: action('pause', cfg, { perDay: perDayOver(d14.spend, 'd14') }),
           source: 'engine',
         },
         needsApproval: true,

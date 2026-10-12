@@ -1,0 +1,339 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-06T01:03:57.650Z",
+    "query": "SELECT campaign.id, segments.date, metrics.impressions FROM campaign WHERE segments.date BETWEEN '2026-09-06' AND '2026-10-05' AND campaign.status = 'ENABLED'",
+    "rows": 27
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "5191"
+      },
+      "segments": {
+        "date": "2026-09-09"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "6993"
+      },
+      "segments": {
+        "date": "2026-09-10"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "12429"
+      },
+      "segments": {
+        "date": "2026-09-11"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "11062"
+      },
+      "segments": {
+        "date": "2026-09-12"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "12765"
+      },
+      "segments": {
+        "date": "2026-09-13"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "18061"
+      },
+      "segments": {
+        "date": "2026-09-14"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "15716"
+      },
+      "segments": {
+        "date": "2026-09-15"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "12959"
+      },
+      "segments": {
+        "date": "2026-09-16"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "6788"
+      },
+      "segments": {
+        "date": "2026-09-17"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "341"
+      },
+      "segments": {
+        "date": "2026-09-18"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "490"
+      },
+      "segments": {
+        "date": "2026-09-19"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "453"
+      },
+      "segments": {
+        "date": "2026-09-20"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "480"
+      },
+      "segments": {
+        "date": "2026-09-21"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "511"
+      },
+      "segments": {
+        "date": "2026-09-22"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "266"
+      },
+      "segments": {
+        "date": "2026-09-23"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "123"
+      },
+      "segments": {
+        "date": "2026-09-24"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "264"
+      },
+      "segments": {
+        "date": "2026-09-25"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "319"
+      },
+      "segments": {
+        "date": "2026-09-26"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "173"
+      },
+      "segments": {
+        "date": "2026-09-27"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "339"
+      },
+      "segments": {
+        "date": "2026-09-28"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "150"
+      },
+      "segments": {
+        "date": "2026-09-29"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "214"
+      },
+      "segments": {
+        "date": "2026-09-30"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "337"
+      },
+      "segments": {
+        "date": "2026-10-01"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "352"
+      },
+      "segments": {
+        "date": "2026-10-02"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "454"
+      },
+      "segments": {
+        "date": "2026-10-03"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "326"
+      },
+      "segments": {
+        "date": "2026-10-04"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "metrics": {
+        "impressions": "188"
+      },
+      "segments": {
+        "date": "2026-10-05"
+      }
+    }
+  ]
+}

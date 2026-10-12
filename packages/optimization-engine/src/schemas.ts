@@ -103,6 +103,8 @@ export const FreezeReasonSchema = z.enum([
   'no_own_budget',
   // Declares no objective at all AND bought none of the portfolio's events — see runCycle.
   'no_declared_objective',
+  // Zero spend in the decision window: nothing to rank on, so nothing moves — see runCycle.
+  'no_spend',
 ]);
 
 /** How far a creative standing can be trusted. Mirrors CreativeStandingFlag in ./types. */
@@ -202,6 +204,12 @@ export const AdSetSnapshotSchema = z.object({
    *  applier's write-field choice — not used in scoring (the engine reallocates
    *  currentBudget the same way regardless). Absent ⇒ daily. */
   budgetType: z.enum(['daily', 'lifetime']).optional(),
+  /** A CBO ad set has no budget of its own: `currentBudget` stays 0 and the campaign's budget
+   *  sits BESIDE it so the picker and the hold reason can name where the money lives
+   *  (`unsupported_budget`), without the engine ever summing it into the pool. Written by the
+   *  edge (adset-snapshots.ts resolveAdsetBudget); absent ⇒ the ad set owns its budget. */
+  campaignBudget: z.number().nonnegative().optional(),
+  campaignBudgetType: z.enum(['daily', 'lifetime']).optional(),
   windows: z.object({
     d3: WindowMetricsSchema,
     d7: WindowMetricsSchema,
@@ -260,6 +268,8 @@ export const EngineConfigSchema = z
     velocityUpPct: z.number().min(0).max(5).optional(),
     velocityDownPct: z.number().min(0).max(1).optional(),
     ewmaAlpha: z.number().min(0).max(1).optional(),
+    /** The ad account's ISO currency the reasons print money in; null prints bare figures. */
+    currency: z.string().nullable().optional(),
   })
   // Sanity: weights for each trajectory state must sum to ~1.
   .refine(

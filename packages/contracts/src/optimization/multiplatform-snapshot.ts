@@ -23,6 +23,14 @@ export const ConversionActionCountSchema = z.object({
   value: z.number().nonnegative().optional(),
   /** Google conversion_action.category / Meta action_type family, verbatim. */
   category: z.string().optional(),
+  /** Google window rollups: the action's name and the verdict of the ONE counting rule
+   *  (supabase/functions/paid-media-metrics/google/conversion-rule.ts) — whether it is in
+   *  the campaign's goals, whether it counted toward its KPI bucket, and if not, why.
+   *  Absent on platforms and reads that do not judge actions. */
+  name: z.string().optional(),
+  inGoals: z.boolean().optional(),
+  counted: z.boolean().optional(),
+  excludedReason: z.enum(['no_bucket', 'not_in_goals', 'ga4_engagement_event']).optional(),
 });
 
 /** Provider-reported delivery: impression share on Google Search (fractions 0..1, as the

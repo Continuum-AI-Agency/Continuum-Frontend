@@ -424,15 +424,99 @@ export const billingApiErrorSchema = z
   .passthrough();
 export type BillingApiError = z.infer<typeof billingApiErrorSchema>;
 
-/** HTTP 402 body for a server-gated product or an exhausted Canvas balance. */
+/** Each product as the UI names it — what a 402 calls the thing the brand lacks. */
+export const PRODUCT_DISPLAY_NAMES: Record<ProductCode, string> = {
+  studio: 'AI Canvas (Organic Plus)',
+  organic_agent: 'Organic Agent (Organic Plus)',
+  paid_media: 'Performance Plus',
+  trends: 'Trends',
+  mcp: 'MCP connector',
+  listening: 'Brand listening (Trends+)',
+};
+
+/** What unblocks a 402: a plan to add, credits to buy, or someone to talk to. */
+export const BILLING_PAYMENT_REQUIRED_ACTIONS = [
+  'upgrade_plan',
+  'buy_credits',
+  'contact_us',
+] as const;
+export const billingPaymentRequiredActionSchema = z.enum(BILLING_PAYMENT_REQUIRED_ACTIONS);
+export type BillingPaymentRequiredAction = z.infer<typeof billingPaymentRequiredActionSchema>;
+
+/**
+ * HTTP 402 body for a server-gated product or an exhausted Canvas balance. Every field a client
+ * needs to show the refusal is on it — the brand it is about, the product in the UI's words, a
+ * sentence a person can read and the move that unblocks it — because a bare
+ * `{ error, product, planCode }` reached two real customers as a silent empty chat
+ * (PP-L4-jaina-402-for-two-customer-accounts). `billingPaymentRequiredOf` composes it, so the
+ * Backend's gates and any client reading the body agree on the words.
+ */
 export const billingPaymentRequiredSchema = z
   .object({
     error: z.enum(['product_required', 'credits_exhausted']),
     product: productCodeSchema,
     planCode: planCodeSchema.nullable(),
+    /** The brand the gate refused; null when the refusal was not about one brand. */
+    brandId: z.string().nullable(),
+    /** The product as the UI names it (`PRODUCT_DISPLAY_NAMES`). */
+    productName: z.string().min(1),
+    /** What is missing and what unblocks it, as a person reads it. */
+    message: z.string().min(1),
+    /** The move that unblocks it; `planCode` is the plan to add when the kind is `upgrade_plan`. */
+    action: z
+      .object({
+        kind: billingPaymentRequiredActionSchema,
+        planCode: planCodeSchema.nullable(),
+      })
+      .strict(),
   })
   .strict();
 export type BillingPaymentRequired = z.infer<typeof billingPaymentRequiredSchema>;
+
+/** The facts a 402 is made from; `billingPaymentRequiredOf` fills the words and the action. */
+export type BillingPaymentRequiredInput = Pick<
+  BillingPaymentRequired,
+  'error' | 'product' | 'planCode'
+> & { brandId?: string | null };
+
+const PLAN_DISPLAY_NAMES: Record<PlanCode, string> = {
+  organic_studio: 'Organic Plus',
+  paid_media: 'Performance Plus',
+  trends_plus: 'Trends+',
+};
+
+/** The one composition of a 402 body: the same words on every gate. */
+export const billingPaymentRequiredOf = (
+  input: BillingPaymentRequiredInput,
+): BillingPaymentRequired => {
+  const productName = PRODUCT_DISPLAY_NAMES[input.product];
+  const planName = input.planCode ? PLAN_DISPLAY_NAMES[input.planCode] : null;
+  if (input.error === 'credits_exhausted') {
+    return {
+      error: 'credits_exhausted',
+      product: input.product,
+      planCode: input.planCode,
+      brandId: input.brandId ?? null,
+      productName,
+      message:
+        'This brand is out of Canvas credits. Buy a credit pack or add a card to keep generating.',
+      action: { kind: 'buy_credits', planCode: input.planCode },
+    };
+  }
+  return {
+    error: 'product_required',
+    product: input.product,
+    planCode: input.planCode,
+    brandId: input.brandId ?? null,
+    productName,
+    message: planName
+      ? `This brand's plan does not include ${productName}. Add the ${planName} plan to use it.`
+      : `This brand's plan does not include ${productName}. Contact us to add it.`,
+    action: planName
+      ? { kind: 'upgrade_plan', planCode: input.planCode }
+      : { kind: 'contact_us', planCode: null },
+  };
+};
 
 /* -- Admin access grid: admin-list-users, admin-workflow-library, admin-update-access -- */
 

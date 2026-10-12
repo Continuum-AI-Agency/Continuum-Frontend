@@ -1,0 +1,235 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-06T00:13:44.428Z",
+    "query": "SELECT campaign.id, campaign.name, campaign.status, asset_group.id, asset_group.name, asset_group.status, asset_group.ad_strength, asset_group.primary_status, asset_group.asset_coverage.ad_strength_action_items FROM asset_group WHERE asset_group.status != 'REMOVED'",
+    "rows": 3
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22222910545",
+        "status": "REMOVED",
+        "name": "Mejor Funeraria de San Luis",
+        "id": "22222910545"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6552423102",
+        "name": "Asset Group 1",
+        "status": "ENABLED",
+        "id": "6552423102",
+        "adStrength": "POOR",
+        "primaryStatus": "NOT_ELIGIBLE",
+        "assetCoverage": {
+          "adStrengthActionItems": [
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "MARKETING_IMAGE",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "PORTRAIT_MARKETING_IMAGE",
+                "assetCount": 2
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "SQUARE_MARKETING_IMAGE",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "LANDSCAPE_LOGO",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1,
+                "videoAspectRatioRequirement": "SQUARE"
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1,
+                "videoAspectRatioRequirement": "HORIZONTAL"
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1,
+                "videoAspectRatioRequirement": "VERTICAL"
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "HEADLINE",
+                "assetCount": 8
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "LONG_HEADLINE",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "DESCRIPTION",
+                "assetCount": 2
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "SITELINK",
+                "assetCount": 4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "status": "ENABLED",
+        "name": "Necesidades SLP",
+        "id": "22980224558"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "status": "ENABLED",
+        "id": "6607382367",
+        "adStrength": "AVERAGE",
+        "primaryStatus": "LIMITED",
+        "assetCoverage": {
+          "adStrengthActionItems": [
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "SQUARE_MARKETING_IMAGE",
+                "assetCount": 3
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "HEADLINE",
+                "assetCount": 3
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "DESCRIPTION",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "SITELINK",
+                "assetCount": 6
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/23858592372",
+        "status": "PAUSED",
+        "name": "LEADS GOOGLE TEQUIS-GOTO",
+        "id": "23858592372"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6714512232",
+        "name": "Grupo de recursos 1",
+        "status": "ENABLED",
+        "id": "6714512232",
+        "adStrength": "POOR",
+        "primaryStatus": "NOT_ELIGIBLE",
+        "assetCoverage": {
+          "adStrengthActionItems": [
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "PORTRAIT_MARKETING_IMAGE",
+                "assetCount": 1
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "SQUARE_MARKETING_IMAGE",
+                "assetCount": 2
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1,
+                "videoAspectRatioRequirement": "HORIZONTAL"
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1,
+                "videoAspectRatioRequirement": "VERTICAL"
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "YOUTUBE_VIDEO",
+                "assetCount": 1,
+                "videoAspectRatioRequirement": "SQUARE"
+              }
+            },
+            {
+              "actionItemType": "ADD_ASSET",
+              "addAssetDetails": {
+                "assetFieldType": "SITELINK",
+                "assetCount": 6
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

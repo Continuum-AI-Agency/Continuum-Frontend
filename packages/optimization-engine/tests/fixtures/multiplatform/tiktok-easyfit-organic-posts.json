@@ -1,0 +1,234 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "tiktok",
+    "api": "prod Supabase organic.tiktok_videos (PostgREST SELECT, read-only)",
+    "brandId": "148583e0-5538-462b-8d3a-acd25b80344e",
+    "integrationAccountId": "3ca1e12a-5102-4a99-99d5-8fe38ce18391",
+    "recordedAt": "2026-10-06T00:20:05.369Z",
+    "note": "view_count is lifetime as of updated_at, not views in the first 72 hours",
+    "rows": 20
+  },
+  "data": [
+    {
+      "video_id": "7669981164978834709",
+      "title": "Todo lo que buscas para mantenerte activo, en un mismo lugar.",
+      "create_time": "2026-08-28T00:00:00+00:00",
+      "view_count": 374,
+      "like_count": 12,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669980873990720788",
+      "title": "Muchas veces solo hace falta un espacio donde aprender, entrenar y volver se sienta más Easy. 🙌",
+      "create_time": "2026-08-26T00:00:00+00:00",
+      "view_count": 268,
+      "like_count": 3,
+      "comment_count": 0,
+      "share_count": 2,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669980622596689173",
+      "title": "Hazlo Easy: primero domina el peso, después súbele.",
+      "create_time": "2026-08-25T00:00:00+00:00",
+      "view_count": 685,
+      "like_count": 15,
+      "comment_count": 1,
+      "share_count": 3,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669980379121601812",
+      "title": "¿Y si este es el empujón que te hacía falta? Empieza a entrenar hoy y deja el pago para el siguiente mes. 😉",
+      "create_time": "2026-08-23T20:00:00+00:00",
+      "view_count": 419,
+      "like_count": 6,
+      "comment_count": 1,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669979780577955093",
+      "title": "Prueba este cambio en la manera de sentarte haciendo abductores  y comenta si notaste alguna diferencia 😄",
+      "create_time": "2026-08-18T00:00:00+00:00",
+      "view_count": 723,
+      "like_count": 11,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669978784757452053",
+      "title": "No necesitas otro aparato para cambiar tu entrenamiento. Solo necesitas aprender a usar mejor el que ya tienes enfrente. Descubre formas más Easy de entrenar. 🚶‍➡️🧡",
+      "create_time": "2026-08-16T20:00:00+00:00",
+      "view_count": 700,
+      "like_count": 11,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669978307479276820",
+      "title": "Que hacer ejercicio sea Easy no significa que no cueste, significa que sí cabe en tu vida. 😄🧡",
+      "create_time": "2026-08-15T18:00:00+00:00",
+      "view_count": 565,
+      "like_count": 12,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7672706715590167825",
+      "title": "Entrena en Easy Fit desde $333 al mes (hasta 12 MSI) y alcanza tu mejor versión",
+      "create_time": "2026-08-11T09:40:50+00:00",
+      "view_count": 28063,
+      "like_count": 60,
+      "comment_count": 2,
+      "share_count": 11,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7672684072287603988",
+      "title": "Entrena en Easy Fit desde $12 al mes, las mejores instalaciones y el mejor acompañamiento.",
+      "create_time": "2026-08-11T08:12:54+00:00",
+      "view_count": 185270,
+      "like_count": 504,
+      "comment_count": 13,
+      "share_count": 58,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669977966926974229",
+      "title": "La máquina de extensión de quads es muy útil, es por eso que hoy te enseñamos de manera easy cómo utilizarla de manera correcta.",
+      "create_time": "2026-08-11T00:00:00+00:00",
+      "view_count": 710,
+      "like_count": 16,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669979290607521044",
+      "title": "Si nunca has escuchado un \"salen 3 más\", te falta venir al gym. Aprovecha nuestro Day Pass GRATIS para que conozcas una manera más Easy de entrenar.",
+      "create_time": "2026-08-10T00:00:00+00:00",
+      "view_count": 755,
+      "like_count": 12,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669977583160724757",
+      "title": "No necesitas cambiar tu vida en un solo día. Lo que construiste poco a poco, también puedes recuperarlo poco a poco de manera muy Easy💪",
+      "create_time": "2026-08-08T00:00:00+00:00",
+      "view_count": 411,
+      "like_count": 10,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7669950473033796884",
+      "title": "Hoy te enseñamos cómo usar la prensa de pierna de una manera más Easy y segura. Dinos en comentarios qué otra máquina te gustaría saber usar ☺️",
+      "create_time": "2026-08-03T23:25:18+00:00",
+      "view_count": 384,
+      "like_count": 11,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7663931142244093201",
+      "title": "¿Cuál es tu predicción para la gran final? 🔥⚽️",
+      "create_time": "2026-07-18T18:07:30+00:00",
+      "view_count": 519,
+      "like_count": 15,
+      "comment_count": 0,
+      "share_count": 4,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7663262168133029121",
+      "title": "Entrena en Easy Fit desde $333 al mes (hasta 12 MSI) y alcanza tu mejor versión",
+      "create_time": "2026-07-16T22:51:18+00:00",
+      "view_count": 413004,
+      "like_count": 730,
+      "comment_count": 16,
+      "share_count": 73,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7663261874280058128",
+      "title": "Entrena en Easy Fit desde $333 al mes (hasta 12 MSI) y alcanza tu mejor versión",
+      "create_time": "2026-07-16T22:50:10+00:00",
+      "view_count": 166130,
+      "like_count": 303,
+      "comment_count": 2,
+      "share_count": 37,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7650183739263225109",
+      "title": "Entrena fuerza, control y técnica… para que en la cancha no te pase eso",
+      "create_time": "2026-06-11T17:00:09+00:00",
+      "view_count": 598,
+      "like_count": 11,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7647219550869671169",
+      "title": "Etiqueta a tu amig@ que no deja de hablar mientras entrena",
+      "create_time": "2026-06-08T22:00:00+00:00",
+      "view_count": 704,
+      "like_count": 11,
+      "comment_count": 0,
+      "share_count": 5,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7647218983917079809",
+      "title": "Sí, cargar pesado te hace fuerte… pero estirar y disfrutar el movimiento también le hace bien a tu mente ❤️✨",
+      "create_time": "2026-06-06T18:00:00+00:00",
+      "view_count": 512,
+      "like_count": 13,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    },
+    {
+      "video_id": "7647216967966838017",
+      "title": "Creo que no era plancha para el cabello… era plancha para el abdomen",
+      "create_time": "2026-06-03T17:07:44+00:00",
+      "view_count": 690,
+      "like_count": 14,
+      "comment_count": 0,
+      "share_count": 0,
+      "fetched_at": "2026-09-02T15:46:08.798+00:00",
+      "updated_at": "2026-09-02T15:46:08.798+00:00"
+    }
+  ]
+}
