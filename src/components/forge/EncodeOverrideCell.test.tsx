@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
 import type { ApiRenderTemplateContract } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import {
   chooseOption,
@@ -54,12 +54,13 @@ test('the closed cell reads the row summary; 25 fps and MXF land on the row', as
   openSelect('Frame rate');
   chooseOption('25 fps');
   await waitFor(() => expect(cell().textContent).toBe('25 fps'));
-  fireEvent.click(screen.getByText('MXF (DNxHR)'));
-  await waitFor(() => expect(cell().textContent).toBe('25 fps · MP4 + MXF'));
+  fireEvent.click(screen.getByText('MXF'));
+  await waitFor(() => expect(cell().getAttribute('aria-label')).toContain('25 fps · MP4 + MXF'));
+  expect(within(cell()).getByText('4 mono tracks (L/R/L/R) · 48 kHz · 24-bit PCM')).toBeTruthy();
   expect(seen[0]?.encode).toEqual({ default: { fps: 25, files: { mxf: true } } });
 
   // Unticking MXF again is the template's own state: the key goes, nothing is left behind.
-  fireEvent.click(screen.getByText('MXF (DNxHR)'));
+  fireEvent.click(screen.getByText('MXF'));
   await waitFor(() => expect(cell().textContent).toBe('25 fps'));
   expect(seen[0]?.encode).toEqual({ default: { fps: 25 } });
 });
@@ -78,6 +79,23 @@ test('a style swaps the whole file set on the row in one change', async () => {
   chooseOption(/^Edit master/);
   await waitFor(() => expect(cell().textContent).toBe('MP4 + MOV'));
   expect(seen[0]?.encode).toEqual({ default: { files: { mov: true } } });
+});
+
+test('different output audio layouts are labelled as mixed instead of claiming four mono everywhere', async () => {
+  const outputs = OUTPUTS.map((output) => ({
+    ...output,
+    encode: { files: { mxf: true }, audio: { layout: 'broadcast-4x-aes3' as const } },
+  }));
+  render(<Harness outputs={outputs} seen={[]} />);
+  expect(cell().textContent).toContain('4 mono tracks');
+  fireEvent.click(cell());
+  openSelect('Output settings scope');
+  chooseOption('Story · 9:16');
+  openSelect('MXF audio layout');
+  chooseOption('Stereo');
+  await waitFor(() =>
+    expect(cell().getAttribute('aria-label')).toBe('Output settings: MXF audio varies by output'),
+  );
 });
 
 test('the scope is a Select of the formats; settings without a summary still read as custom', async () => {

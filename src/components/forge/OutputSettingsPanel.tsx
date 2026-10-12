@@ -3,6 +3,8 @@
 import {
   type ApiRenderTemplateContract,
   compactEncodeBlock,
+  describeMxfAudio,
+  describeMxfVideo,
   ENCODE_FILE_CONTAINERS,
   ENCODE_STYLES,
   type EncodeBlock,
@@ -57,7 +59,7 @@ export const STILLS_NOTE =
 const FILE_LABEL: Record<EncodeFileContainer, string> = {
   mp4: 'MP4',
   mov: 'MOV (ProRes)',
-  mxf: 'MXF (DNxHR)',
+  mxf: 'MXF',
   webm: 'WebM (VP9)',
   gif: 'GIF (loop)',
 };
@@ -97,6 +99,13 @@ const FIELDS: Array<{
     label: 'Audio',
     values: () => [true, false],
     text: (value) => (value ? 'On' : 'Off'),
+  },
+  {
+    key: 'video.mxfProfile',
+    label: 'MXF video profile',
+    values: (files) => (files.includes('mxf') ? ['dnxhr-hq', 'xdcam-hd422-1080i5994'] : []),
+    text: (value) =>
+      value === 'xdcam-hd422-1080i5994' ? 'XDCAM HD422 · 1080i59.94' : 'DNxHR HQ · Progressive',
   },
   {
     key: 'audio.layout',
@@ -232,6 +241,24 @@ export function EncodeSettingsFields({
     encodeFilesOf(mergeEncodeSettings(base, settings), container),
   );
   const filesOn = ENCODE_FILE_CONTAINERS.filter((file) => filesPer.some((f) => f.includes(file)));
+  const mxfAudio = [
+    ...new Set(
+      inherited.flatMap(({ settings: base }, index) =>
+        filesPer[index]?.includes('mxf')
+          ? [describeMxfAudio(mergeEncodeSettings(base, settings))]
+          : [],
+      ),
+    ),
+  ];
+  const mxfVideo = [
+    ...new Set(
+      inherited.flatMap(({ settings: base }, index) =>
+        filesPer[index]?.includes('mxf')
+          ? [describeMxfVideo(mergeEncodeSettings(base, settings))]
+          : [],
+      ),
+    ),
+  ];
   const fileState = (file: EncodeFileContainer) => {
     const on = filesPer.filter((files) => files.includes(file)).length;
     return on === filesPer.length ? true : on ? ('indeterminate' as const) : false;
@@ -312,13 +339,26 @@ export function EncodeSettingsFields({
         ) : null}
       </fieldset>
       {filesOn.includes('mxf') ? (
-        <p className="text-xs text-muted-foreground sm:col-span-2">
-          {inherited.every(
-            ({ settings: base }) => mergeEncodeSettings(base, settings)?.audio?.enabled === false,
-          )
-            ? 'MXF audio is off. The file will have no audio tracks.'
-            : 'MXF uses 24-bit PCM at 48 kHz. Broadcast carries the full mix on CH1–2 and CH3–4 as four mono AES3 tracks (L, R, L, R) and requires source audio. Channel count applies to other files.'}
-        </p>
+        <div className="flex flex-col gap-1 text-xs sm:col-span-2" aria-live="polite">
+          <p className="m-0">
+            <span className="font-medium">MXF video: </span>
+            {mxfVideo.join(' / ')}
+          </p>
+          <p className="m-0">
+            <span className="font-medium">MXF audio: </span>
+            {mxfAudio.join(' / ')}
+          </p>
+          <p className="m-0 text-muted-foreground">
+            {mxfAudio.every((audio) => audio === 'No audio')
+              ? 'MXF audio is off. The file will have no audio tracks.'
+              : 'Broadcast repeats the full stereo mix on CH1–2 and CH3–4 and requires source audio. Codec, bitrate, sample-rate and channel-count controls apply to other files.'}
+          </p>
+          {mxfVideo.some((video) => video.includes('1080i59.94')) ? (
+            <p className="m-0 text-muted-foreground">
+              1080i59.94 uses 29.97 frames per second and requires a 29.97 fps composition.
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {FIELDS.map((field) => {
         const values = field.values(filesOn);
@@ -335,6 +375,8 @@ export function EncodeSettingsFields({
         ];
         if (field.key === 'audio.layout' && fallback.length === 0)
           fallback.push('Broadcast 4× AES3');
+        if (field.key === 'video.mxfProfile' && fallback.length === 0)
+          fallback.push('DNxHR HQ · Progressive');
         const isCleared = cleared.includes(field.key);
         const placeholder = isCleared
           ? 'Cleared (template)'
@@ -358,6 +400,9 @@ export function EncodeSettingsFields({
                 value={current === undefined ? INHERIT : String(current)}
                 onValueChange={(next) =>
                   onSet({
+                    ...(field.key === 'video.mxfProfile' && next === 'xdcam-hd422-1080i5994'
+                      ? { fps: 'comp' }
+                      : {}),
                     [field.key]:
                       next === INHERIT ? undefined : values.find((value) => String(value) === next),
                   })

@@ -66,17 +66,28 @@ export function RenderFileSpecs({
           </Button>
         </span>
       ) : (
-        <span>
-          {' · '}
-          {video?.codec ?? 'Unknown video codec'}
-          {video?.profile ? ` ${video.profile}` : ''}
-          {' · '}
-          {video?.frameRate ? `${Number(video.frameRate.toFixed(3))} fps` : 'Unknown fps'}
-          {' · '}
-          {video?.bitDepth ? `${video.bitDepth}-bit video` : 'Unknown video bit depth'}
-          {' · '}
-          {query.data?.audioStreams ? audioText(query.data.audioStreams) : 'Unknown audio'}
-        </span>
+        <div className="mt-1 flex flex-col gap-1">
+          <p className="m-0">
+            <span className="font-medium">Video: </span>
+            {video?.codec ?? 'Unknown video codec'}
+            {video?.profile ? ` ${video.profile}` : ''}
+            {' · '}
+            {video?.frameRate ? `${Number(video.frameRate.toFixed(3))} fps` : 'Unknown fps'}
+            {' · '}
+            {video?.fieldOrder === 'progressive'
+              ? 'Progressive'
+              : video?.fieldOrder && video.fieldOrder !== 'unknown'
+                ? 'Interlaced'
+                : 'Unknown scan type'}
+            {' · '}
+            {video?.bitDepth ? `${video.bitDepth}-bit video` : 'Unknown video bit depth'}
+          </p>
+          <p className="m-0">
+            <span className="font-medium">Audio: </span>
+            {query.data?.audioStreams ? audioText(query.data.audioStreams) : 'Unknown audio'}
+          </p>
+          <p className="m-0 text-muted-foreground">Measured from the delivered file.</p>
+        </div>
       )}
     </div>
   );

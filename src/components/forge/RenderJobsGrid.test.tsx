@@ -1091,6 +1091,7 @@ describe('RenderJobsGrid', () => {
         frameRate: 25,
         frameRateRational: '25/1',
         bitDepth: null,
+        fieldOrder: 'tt',
       },
       audioStreams: [{ index: 1, codec: 'aac', channels: 2, sampleRate: 44100, bitDepth: null }],
       probedAt: '2026-10-09T00:00:00Z',
@@ -1107,6 +1108,8 @@ describe('RenderJobsGrid', () => {
     fireEvent.click(retry);
     expect(await screen.findByText(/unknown bit depth/)).toBeTruthy();
     expect(screen.getByText(/44.1 kHz/)).toBeTruthy();
+    expect(screen.getByText(/Interlaced/)).toBeTruthy();
+    expect(screen.getByText('Measured from the delivered file.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Retry specs for Unknown.mp4' })).toBeNull();
     expect(getFileSpecs).toHaveBeenCalledTimes(2);
   });

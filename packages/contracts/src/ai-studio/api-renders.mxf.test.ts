@@ -2,6 +2,32 @@ import { describe, expect, test } from 'bun:test';
 import * as contract from './api-renders';
 
 describe('MXF request and inspection contracts', () => {
+  test('profiles survive merge/clear and summaries describe the effective MXF audio', () => {
+    const settings: contract.EncodeSettings = {
+      video: { mxfProfile: 'xdcam-hd422-1080i5994' },
+      audio: { layout: 'stereo', channels: 4 },
+      files: { mxf: true },
+    };
+    expect(contract.encodeSettingsSchema.parse(settings)).toEqual(settings);
+    expect(contract.flattenEncodeSettings(settings)['video.mxfProfile']).toBe(
+      'xdcam-hd422-1080i5994',
+    );
+    expect(
+      contract.mergeEncodeSettings(settings, { video: { mxfProfile: 'dnxhr-hq' } }).video
+        ?.mxfProfile,
+    ).toBe('dnxhr-hq');
+    expect(contract.describeMxfAudio(settings)).toBe('1 stereo track · 48 kHz · 24-bit PCM');
+    expect(contract.describeMxfAudio({ audio: { channels: 2 } })).toBe(
+      '4 mono tracks (L/R/L/R) · 48 kHz · 24-bit PCM',
+    );
+    expect(contract.describeMxfAudio({ audio: { enabled: false } })).toBe('No audio');
+    expect(contract.describeMxfVideo(settings)).toBe('XDCAM HD422 · 1080i59.94 · 50 Mb/s');
+    expect(
+      contract.encodeSettingsSchema.safeParse({ video: { mxfProfile: 'unsupported' } }).success,
+    ).toBe(false);
+    expect(contract.apiRenderFieldOrderSchema.safeParse('tt').success).toBe(true);
+    expect(contract.apiRenderFieldOrderSchema.safeParse('guessed').success).toBe(false);
+  });
   test('accepts the two MXF layouts and preserves them through merge and clear helpers', () => {
     for (const api of [contract]) {
       const settings = { audio: { layout: 'stereo', channels: 4 } };
@@ -51,6 +77,7 @@ describe('MXF request and inspection contracts', () => {
         frameRate: 30000 / 1001,
         frameRateRational: '30000/1001',
         bitDepth: 8,
+        fieldOrder: 'progressive',
       },
       audioStreams: [
         { index: 1, codec: 'pcm_s24le', channels: 1, sampleRate: 48000, bitDepth: 24 },
