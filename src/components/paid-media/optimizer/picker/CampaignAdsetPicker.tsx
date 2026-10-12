@@ -632,9 +632,12 @@ export function CampaignAdsetPicker({
         // which is what makes shadcn's ScrollArea usable here. (Radix wraps a Viewport's children
         // in a `display: table` div, and sticky does not survive that. Lifting the header out is
         // the fix; the overlay scrollbar takes no layout width, so the two tables stay aligned on
-        // the shared GRID_COLS template.)
+        // the shared GRID_COLS template.) The scroller's ROOT reserves the scrollbar's lane
+        // (`pr-2.5`, the scrollbar's width): Base UI positions the scrollbar absolutely at the
+        // root's right edge, so root padding puts it beside the viewport instead of over the last
+        // column's controls; the header table pads the same lane to stay aligned.
         <div className="min-h-0 overflow-hidden border-border/60 border-y">
-          <Table containerClassName="overflow-visible" className="grid">
+          <Table containerClassName="overflow-visible pr-2.5" className="grid">
             <TableHeader className="grid">
               <TableRow
                 className={cn(
@@ -661,7 +664,7 @@ export function CampaignAdsetPicker({
           <ScrollArea
             viewportRef={scrollRef}
             viewportClassName="overscroll-contain"
-            className={heightClassName}
+            className={cn(heightClassName, 'pr-2.5')}
           >
             {/* display:grid on the table (and on its rows) is what lets rows be absolutely
                 positioned without table layout fighting back. aria-rowcount is the REAL total,

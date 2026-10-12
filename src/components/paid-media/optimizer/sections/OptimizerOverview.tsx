@@ -628,6 +628,7 @@ export function OptimizerOverview({
           <div className="flex items-center gap-1.5">
             <ToggleGroup
               aria-label="Sort portfolios by"
+              className="flex-wrap"
               onValueChange={(value) => {
                 if (value) setSortKey(value as RowSortKey);
               }}

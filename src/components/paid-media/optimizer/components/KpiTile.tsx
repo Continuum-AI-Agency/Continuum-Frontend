@@ -191,8 +191,8 @@ export function KpiDelta({
     <span
       className={cn(
         'font-mono tabular-nums',
-        better === 'down' && direction === 'down' && 'text-success',
-        better === 'down' && direction === 'up' && 'text-destructive',
+        better === 'down' && direction === 'down' && 'text-success-ink',
+        better === 'down' && direction === 'up' && 'text-destructive-ink',
       )}
       data-direction={direction}
       data-testid={testId}

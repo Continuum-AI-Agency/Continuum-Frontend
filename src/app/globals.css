@@ -40,6 +40,11 @@
 
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
+  /* Ink steps: the same verdicts as TEXT on the tinted light surfaces. #ef4444 measures 3.45:1
+     on --card (#f5f4ff) and #16a34a 3.02:1, both under the 4.5:1 floor at caption sizes; the
+     fills keep the brighter base tokens, only the text reads from these. red-700 / green-700. */
+  --destructive-ink: #b91c1c;
+  --success-ink: #15803d;
 
   --success: #16a34a; /* green-600 — positive / confirmation states */
   --success-foreground: #ffffff;
@@ -345,6 +350,9 @@ html {
   --accent-foreground: #e5e7eb;
   --destructive: #ef4444;
   --destructive-foreground: #0b1220;
+  /* Dark surfaces are the other way round: the bright base tokens already clear 4.5:1 as text. */
+  --destructive-ink: var(--destructive);
+  --success-ink: var(--success);
   --success: #34d399; /* emerald-400 */
   --success-foreground: #052e16;
   --warning: #fbbf24; /* amber-400 */
@@ -441,6 +449,8 @@ html {
     --accent-foreground: #e5e7eb;
     --destructive: #ef4444;
     --destructive-foreground: #0b1220;
+    --destructive-ink: var(--destructive);
+    --success-ink: var(--success);
     --success: #34d399;
     --success-foreground: #052e16;
     --warning: #fbbf24;
@@ -1160,8 +1170,10 @@ body {
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-ink: var(--destructive-ink);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-ink: var(--success-ink);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-platform-meta: var(--platform-meta);
@@ -1272,11 +1284,14 @@ body {
    writes into --btn-x/--btn-y. Unset (keyboard focus) it blooms from the centre.
 
    `isolation: isolate` plus `z-index: -1` lands the circle above the button's own
-   background and below its label without adding a wrapper element. */
+   background and below its label without adding a wrapper element.
+
+   The circle is a clip-path over a layer the size of the button, not an oversized box under
+   `overflow: hidden`. The oversized box inflated scrollWidth/scrollHeight on every PRESSED
+   toggle (a 300%-wide circle at scale(1)), which read as clipped text to any overflow probe. */
 @utility btn-fill {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
 
   /* The label flips to its on-fill colour at the fill's midpoint. Flipping it at t=0 puts
      light text on the still-unfilled tint for ~130ms, which measures under 2:1. */
@@ -1290,16 +1305,13 @@ body {
   &::before {
     content: "";
     position: absolute;
-    left: var(--btn-x, 50%);
-    top: var(--btn-y, 50%);
-    /* ponytail: 1.5x the width covers the diagonal of any button at least as wide as it
-       is tall, which is every size we ship. A taller-than-wide button would under-fill. */
-    width: 300%;
-    aspect-ratio: 1;
-    border-radius: 50%;
+    inset: 0;
+    border-radius: inherit;
     background: var(--btn-fill, transparent);
-    transform: translate(-50%, -50%) scale(0);
-    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    /* A circle's percentage radius is relative to the box's diagonal / sqrt(2): 150% reaches
+       every corner from any origin inside the box. */
+    clip-path: circle(0 at var(--btn-x, 50%) var(--btn-y, 50%));
+    transition: clip-path 260ms cubic-bezier(0.22, 1, 0.36, 1);
     z-index: -1;
     pointer-events: none;
   }
@@ -1307,7 +1319,7 @@ body {
   &:hover::before,
   &:focus-visible::before,
   &[data-pressed]::before {
-    transform: translate(-50%, -50%) scale(1);
+    clip-path: circle(150% at var(--btn-x, 50%) var(--btn-y, 50%));
   }
 }
 
@@ -1323,7 +1335,7 @@ body {
     transition-delay: 0s;
   }
   .btn-fill::before {
-    transform: translate(-50%, -50%) scale(1);
+    clip-path: none;
     opacity: 0;
     transition: opacity 150ms ease;
   }

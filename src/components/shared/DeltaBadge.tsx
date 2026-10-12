@@ -46,8 +46,8 @@ export function DeltaBadge({
       aria-label={ariaLabel}
       className={cn(
         'inline-flex items-center justify-end gap-0.5 font-mono text-xs tabular-nums',
-        judgement === 'positive' && 'text-success',
-        judgement === 'risk' && 'text-destructive',
+        judgement === 'positive' && 'text-success-ink',
+        judgement === 'risk' && 'text-destructive-ink',
         judgement === 'watch' && 'text-warning',
         (judgement === 'neutral' || judgement === 'unjudged') && 'text-muted-foreground',
         className,

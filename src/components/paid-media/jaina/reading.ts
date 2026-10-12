@@ -22,8 +22,8 @@
 //
 // The palette is not new. It is the design system's own tokens, used by meaning:
 //
-//   success            #16a34a  green      — this is good
-//   destructive        #ef4444  red        — this is a problem
+//   success-ink        #15803d  green      — this is good (the ink step of --success)
+//   destructive-ink    #b91c1c  red        — this is a problem (the ink step of --destructive)
 //   warning            #b45309  amber      — watch this
 //   foreground         ink                 — judged, and unremarkable
 //   muted-foreground   #5c5b7a  slate-violet — nobody judged this
@@ -40,8 +40,8 @@ export type Judgement = Severity | 'unjudged';
 
 /** Text colour per judgement. The only place a severity becomes a class. */
 export const JUDGEMENT_TEXT: Record<Judgement, string> = {
-  positive: 'text-success',
-  risk: 'text-destructive',
+  positive: 'text-success-ink',
+  risk: 'text-destructive-ink',
   watch: 'text-warning',
   // Judged, and fine. The ink itself — deliberately NOT muted, because "we looked and it is
   // normal" is a stronger statement than "we did not look".

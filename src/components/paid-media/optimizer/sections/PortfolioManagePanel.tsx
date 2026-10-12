@@ -1117,6 +1117,7 @@ export function PortfolioManagePanel({
             >
               <ToggleGroup
                 aria-label="Budget granularity"
+                className="flex-wrap"
                 onValueChange={(next) => {
                   if (next) handleGranularityChange(next as BudgetGranularity);
                 }}
