@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { PostPicker } from './PostPicker';
@@ -259,5 +260,96 @@ describe('refreshing past the cache', () => {
   it('shows nothing to press when no refresh is wired', () => {
     renderPicker({ posts: [post()] });
     expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull();
+  });
+});
+
+describe('showing only the chosen posts', () => {
+  const MANY = [
+    post({ id: 'a', caption: 'Alpha post' }),
+    post({ id: 'b', caption: 'Bravo post' }),
+    post({ id: 'c', caption: 'Charlie post' }),
+    post({ id: 'd', caption: 'Delta post' }),
+  ];
+
+  /** The picker is controlled; this holds the selection the way the form does. */
+  function Harness({
+    initial,
+    posts = MANY,
+    hasMore = false,
+  }: {
+    initial: string[];
+    posts?: OrganicPost[];
+    hasMore?: boolean;
+  }) {
+    const [selected, setSelected] = React.useState(initial);
+    return (
+      <PostPicker
+        posts={posts}
+        selectedIds={selected}
+        isLoading={false}
+        error={false}
+        hasMore={hasMore}
+        onLoadMore={() => {}}
+        onChange={setSelected}
+      />
+    );
+  }
+
+  // A chosen post can sit far down the list, or past a "Load older posts" a
+  // person has already clicked through. Finding it again meant scrolling the lot.
+  it('offers the view only once something is chosen, with how many', () => {
+    render(<Harness initial={[]} />);
+    expect(screen.queryByRole('button', { name: /show chosen/i })).toBeNull();
+    cleanup();
+    render(<Harness initial={['a', 'c']} />);
+    expect(screen.getByRole('button', { name: /show chosen \(2\)/i })).toBeDefined();
+  });
+
+  it('shows the chosen posts and nothing else', () => {
+    render(<Harness initial={['a', 'c']} />);
+    fireEvent.click(screen.getByRole('button', { name: /show chosen/i }));
+    expect(screen.getByText('Alpha post')).toBeDefined();
+    expect(screen.getByText('Charlie post')).toBeDefined();
+    expect(screen.queryByText('Bravo post')).toBeNull();
+    expect(screen.queryByText('Delta post')).toBeNull();
+  });
+
+  // If an unchosen tile vanished on the spot, one stray click would send the
+  // person back to searching the whole list for it — the problem this view is
+  // here to solve. It stays, unticked, until they leave the view.
+  it('keeps a post it just unchose, so a slip can be undone in place', () => {
+    render(<Harness initial={['a', 'c']} />);
+    fireEvent.click(screen.getByRole('button', { name: /show chosen/i }));
+    const alpha = screen.getByText('Alpha post').closest('button') as HTMLElement;
+    fireEvent.click(alpha);
+    expect(screen.getByText('Alpha post')).toBeDefined();
+    expect(alpha.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(alpha);
+    expect(alpha.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('brings the whole list back', () => {
+    render(<Harness initial={['a']} />);
+    fireEvent.click(screen.getByRole('button', { name: /show chosen/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show all/i }));
+    expect(screen.getByText('Bravo post')).toBeDefined();
+    expect(screen.getByText('Delta post')).toBeDefined();
+  });
+
+  // Loading older posts is a way of browsing everything; offering it inside a
+  // view of four chosen posts would add tiles the view then hides.
+  it('does not offer to load older posts while showing the chosen ones', () => {
+    render(<Harness initial={['a']} hasMore />);
+    expect(screen.getByRole('button', { name: /load older posts/i })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /show chosen/i }));
+    expect(screen.queryByRole('button', { name: /load older posts/i })).toBeNull();
+  });
+
+  // A chosen post that is not loaded has an id and nothing to draw. It is not
+  // dropped from the view silently: the notice that already counts them stays.
+  it('still counts chosen posts it cannot draw', () => {
+    render(<Harness initial={['a', 'not-loaded']} />);
+    fireEvent.click(screen.getByRole('button', { name: /show chosen/i }));
+    expect(screen.getByText(/1 chosen post outside this list/i)).toBeDefined();
   });
 });

@@ -24,6 +24,7 @@
 //   exactly what a recent-but-not-this-week post produced.
 
 import { Check, ImageOff, RefreshCw } from 'lucide-react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
@@ -160,8 +161,17 @@ export function PostPicker({
   onLoadMore?: () => void;
   onChange: (next: string[]) => void;
 }) {
+  // Null shows every loaded post. An array narrows the grid to the posts that were
+  // chosen at the moment the view was opened — a snapshot, not the live
+  // selection, so a post unchosen by a stray click stays on screen, unticked, and
+  // can be ticked again in place. Tracking the live selection would make it
+  // vanish, and send the person back to searching the whole list for it.
+  const [chosenView, setChosenView] = React.useState<string[] | null>(null);
+
   const shown = new Set(posts.map((post) => post.id));
   const missing = selectedIds.filter((id) => !shown.has(id));
+  const visible =
+    chosenView === null ? posts : posts.filter((post) => chosenView.includes(post.id));
 
   const toggle = (id: string) => {
     onChange(
@@ -240,6 +250,17 @@ export function PostPicker({
           {onRefresh === undefined ? null : (
             <RefreshButton isRefreshing={isRefreshing} onRefresh={onRefresh} />
           )}
+          {selectedIds.length === 0 && chosenView === null ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-2xs"
+              onClick={() => setChosenView(chosenView === null ? [...selectedIds] : null)}
+            >
+              {chosenView === null ? `Show chosen (${selectedIds.length})` : 'Show all'}
+            </Button>
+          )}
           {selectedIds.length === 0 ? null : (
             <Button
               type="button"
@@ -264,7 +285,7 @@ export function PostPicker({
           resizable. The form body (`min-h-0 flex-1 overflow-y-auto`) is already a
           scroll container, so this grows and that one scrolls. */}
       <div className="grid grid-cols-3 gap-2">
-        {posts.map((post) => (
+        {visible.map((post) => (
           <PostTile
             key={post.id}
             post={post}
@@ -274,7 +295,7 @@ export function PostPicker({
         ))}
       </div>
 
-      {hasMore && onLoadMore !== undefined ? (
+      {hasMore && onLoadMore !== undefined && chosenView === null ? (
         <Button
           type="button"
           variant="outline"
