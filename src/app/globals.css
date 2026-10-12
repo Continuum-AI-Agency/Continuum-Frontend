@@ -1288,7 +1288,8 @@ body {
 
    The circle is a clip-path over a layer the size of the button, not an oversized box under
    `overflow: hidden`. The oversized box inflated scrollWidth/scrollHeight on every PRESSED
-   toggle (a 300%-wide circle at scale(1)), which read as clipped text to any overflow probe. */
+   toggle (a 300%-wide circle at scale(1)), which read as clipped text to any overflow probe,
+   and the overflow clip also swallowed a control's hit-area extension (see `hit-area`). */
 @utility btn-fill {
   position: relative;
   isolation: isolate;
@@ -1320,6 +1321,37 @@ body {
   &:focus-visible::before,
   &[data-pressed]::before {
     clip-path: circle(150% at var(--btn-x, 50%) var(--btn-y, 50%));
+  }
+}
+
+/* WCAG 2.2 AA 2.5.8: a control's HIT box is at least 24 x 24 CSS px on a fine pointer and
+   44 x 44 on a coarse one, without growing the painted box. The transparent pseudo-element is
+   centred on the control and only ever extends it (`max(100%, ...)`), the same move the
+   Checkbox and Switch primitives make with `after:-inset-*`. The root font size is 14.5px on
+   most of the ladder, so every `h-6` / `size-6` control paints at 21.75px and needs this.
+   Uses `::after`; a control whose `::after` is spoken for (TabsTrigger's underline) writes the
+   same box on `::before`. `opacity: 0` paints nothing it would not paint anyway and keeps the
+   box out of any computed-style read of what makes a control LOOK different from its siblings
+   (an active tab's indicator); hit testing ignores opacity. */
+@utility hit-area {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 24px);
+    height: max(100%, 24px);
+    transform: translate(-50%, -50%);
+    opacity: 0;
+  }
+
+  @media (pointer: coarse) {
+    &::after {
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+    }
   }
 }
 

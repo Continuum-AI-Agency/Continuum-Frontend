@@ -155,7 +155,7 @@ export function RevertApplyDialog({
             type="button"
             size="sm"
             variant="ghost"
-            className={`h-6 shrink-0 gap-1 px-1.5 ${triggerTextSize} text-muted-foreground hover:text-foreground`}
+            className={`hit-area h-6 shrink-0 gap-1 px-1.5 ${triggerTextSize} text-muted-foreground hover:text-foreground`}
           >
             <Undo2Icon aria-hidden="true" className="size-3" />
             {isStatus ? 'Unpause' : 'Revert'}

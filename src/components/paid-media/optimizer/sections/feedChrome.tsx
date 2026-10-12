@@ -110,7 +110,7 @@ export function ReceiptToken({
       aria-label={`Copy ${label} ${value}`}
       data-testid="receipt-token"
       className={cn(
-        'mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
+        'hit-area mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
         className,
       )}
     >

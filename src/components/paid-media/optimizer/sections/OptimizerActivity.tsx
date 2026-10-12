@@ -45,7 +45,7 @@ function Segmented<TValue extends string | number>({
         <button
           aria-pressed={value === option.value}
           className={cn(
-            'rounded-md px-2.5 py-1 font-medium text-xs tabular-nums transition-colors',
+            'hit-area rounded-md px-2.5 py-1 font-medium text-xs tabular-nums transition-colors',
             value === option.value
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',

@@ -1632,7 +1632,7 @@ function QueueToolbar({
             key={option.route}
             aria-pressed={activeFilters.has(option.route)}
             className={cn(
-              'text-xs transition-colors',
+              'hit-area text-xs transition-colors',
               activeFilters.has(option.route)
                 ? 'font-semibold text-foreground underline decoration-2 underline-offset-[6px]'
                 : 'text-muted-foreground hover:text-foreground',
@@ -2015,7 +2015,7 @@ function QueueRowView({
             <button
               aria-expanded={expanded}
               aria-label={expanded ? 'Hide detail' : 'Show detail'}
-              className="rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              className="hit-area rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleExpand();

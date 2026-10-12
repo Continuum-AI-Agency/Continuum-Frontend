@@ -180,7 +180,7 @@ export function AllPlatformsTiles({
         action={
           pendingCount > 0 ? (
             <button
-              className="font-semibold text-primary-ink text-xs hover:underline"
+              className="hit-area font-semibold text-primary-ink text-xs hover:underline"
               onClick={onOpenActions}
               type="button"
             >

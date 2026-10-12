@@ -298,7 +298,7 @@ const AdsetRow = memo(function AdsetRow({
                 <button
                   type="button"
                   aria-label={`Show ads in ${row.name}`}
-                  className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  className="hit-area rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <ImageIcon className="size-3.5" aria-hidden="true" />
                 </button>
@@ -362,7 +362,7 @@ function CampaignHeaderRow({
           type="button"
           onClick={() => onToggleCollapse(section.campaignId)}
           aria-expanded={!collapsed}
-          className="flex min-w-0 items-center gap-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-area flex min-w-0 items-center gap-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {collapsed ? (
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />

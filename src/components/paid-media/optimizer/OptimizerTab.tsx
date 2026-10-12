@@ -138,7 +138,7 @@ function PlatformSwitch({
           <button
             aria-selected={active}
             className={cn(
-              'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors',
+              'hit-area inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               active
                 ? 'bg-background text-foreground shadow-sm'

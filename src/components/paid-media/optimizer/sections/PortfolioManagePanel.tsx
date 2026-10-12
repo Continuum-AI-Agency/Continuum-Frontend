@@ -1386,7 +1386,7 @@ export function PortfolioManagePanel({
               render={
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between text-sm font-semibold tracking-tight"
+                  className="hit-area flex w-full items-center justify-between text-sm font-semibold tracking-tight"
                 >
                   Advanced
                   <ChevronDown
@@ -1943,7 +1943,7 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+      className="hit-area inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
     >
       {label}
       <span aria-hidden="true" className="rounded border border-border/70 bg-background px-1">

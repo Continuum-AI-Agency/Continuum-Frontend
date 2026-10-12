@@ -189,7 +189,7 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
   const toggleButton = (
     <button
       aria-expanded={!hidden}
-      className="text-primary-ink text-xs hover:underline"
+      className="hit-area text-primary-ink text-xs hover:underline"
       data-testid="comparison-toggle"
       onClick={toggle}
       type="button"

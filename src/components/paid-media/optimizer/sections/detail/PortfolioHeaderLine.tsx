@@ -59,7 +59,7 @@ const LINE_SETTINGS: readonly HeroSetting[] = ['objective', 'strategy', 'window'
 
 /** A setting as grey text that opens Manage — a link's affordance without a chip's frame. */
 export const SETTING_TEXT =
-  'rounded-sm underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2';
+  'hit-area rounded-sm underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2';
 
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
 

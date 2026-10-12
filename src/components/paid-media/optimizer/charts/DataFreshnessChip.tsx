@@ -63,7 +63,7 @@ export function DataFreshnessChip({
       onClick={canRefresh ? onRefresh : undefined}
       aria-disabled={!canRefresh}
       className={cn(
-        'inline-flex items-center gap-1 rounded font-medium text-primary-ink underline-offset-2 transition hover:underline',
+        'hit-area inline-flex items-center gap-1 rounded font-medium text-primary-ink underline-offset-2 transition hover:underline',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:no-underline aria-disabled:opacity-70 aria-disabled:hover:no-underline',
       )}

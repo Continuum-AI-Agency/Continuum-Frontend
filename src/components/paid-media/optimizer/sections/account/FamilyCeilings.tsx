@@ -98,7 +98,7 @@ export function FamilyCeilings({ current, defaults, onSetFamily, error }: Family
                   <button
                     aria-pressed={state === active}
                     className={cn(
-                      'rounded-md px-2.5 py-1 font-medium text-xs transition-colors',
+                      'hit-area rounded-md px-2.5 py-1 font-medium text-xs transition-colors',
                       state === active
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
