@@ -160,8 +160,6 @@ export function formToRule(
     destinationUrl: values.destinationUrl === '' ? null : values.destinationUrl,
     linkButtonLabel:
       values.destinationUrl === '' || values.linkButtonLabel === '' ? null : values.linkButtonLabel,
-    followUpMessage: context.existing?.followUpMessage ?? null,
-    followUpDelayMinutes: context.existing?.followUpDelayMinutes ?? 0,
     enabled: values.enabled,
     priority: context.existing?.priority ?? 0,
     activeFrom: fromLocalInput(values.activeFrom),
