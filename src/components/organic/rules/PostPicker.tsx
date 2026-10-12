@@ -254,7 +254,16 @@ export function PostPicker({
         </div>
       </div>
 
-      <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+      {/* No inner scroll, on purpose. This grid had `max-h-72` and its own
+          scrollbar, and 288px is SHORTER than one row: a tile is a 4:5 thumbnail
+          over a date and two lines of caption, which comes to about 300px at this
+          panel's width. So the first row was always cut across the caption — the
+          one part of a tile a person picks a post BY — and the scrollbar only moved
+          the cut somewhere else. Any fixed height has that failure mode here,
+          because the row height follows the column width and the panel is
+          resizable. The form body (`min-h-0 flex-1 overflow-y-auto`) is already a
+          scroll container, so this grows and that one scrolls. */}
+      <div className="grid grid-cols-3 gap-2">
         {posts.map((post) => (
           <PostTile
             key={post.id}
