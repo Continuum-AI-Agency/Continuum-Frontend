@@ -61,7 +61,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className={`${styles.wave} ${styles.waveSecond}`} />
       <div className={`${styles.wave} ${styles.waveThird}`} />
 
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-4 py-8 text-primary sm:px-6 lg:px-8">
+      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-4 py-8 text-foreground sm:px-6 lg:px-8">
         <div className="w-full max-w-[28rem]">
           <div className="mb-5 flex justify-center sm:mb-7">
             <Image

@@ -111,7 +111,7 @@ function PipelinePortBindingEditor({
 
   return (
     <div className="mt-2 grid gap-2 border-t border-border/70 pt-2">
-      <p className="font-medium text-primary">
+      <p className="font-medium text-foreground">
         {direction === 'input' ? 'Input meaning' : 'Output meaning'}
       </p>
       {configurable.map((port) => {
@@ -593,7 +593,7 @@ export function SaveWorkflowDialog({
     <form onSubmit={onSubmit} className="grid gap-3 p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-primary">
+          <p className="text-sm font-semibold text-foreground">
             {kind === 'pipeline'
               ? 'Publish pipeline'
               : isSelectionScoped
@@ -642,12 +642,12 @@ export function SaveWorkflowDialog({
             {ports && ports.inputPorts.length + ports.outputPorts.length > 0 ? (
               <>
                 <p className="text-secondary">
-                  <span className="font-medium text-primary">
+                  <span className="font-medium text-foreground">
                     {ports.inputPorts.length} input
                     {ports.inputPorts.length === 1 ? '' : 's'}
                   </span>{' '}
                   and{' '}
-                  <span className="font-medium text-primary">
+                  <span className="font-medium text-foreground">
                     {ports.outputPorts.length} output
                     {ports.outputPorts.length === 1 ? '' : 's'}
                   </span>{' '}
@@ -730,7 +730,7 @@ export function SaveWorkflowDialog({
         <div className="grid gap-2 rounded-md border border-subtle bg-surface p-2 text-xs">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="font-medium text-primary">Agent guide</p>
+              <p className="font-medium text-foreground">Agent guide</p>
               <p className="text-muted-foreground">
                 Review what another agent will use to select and invoke this pipeline.
               </p>

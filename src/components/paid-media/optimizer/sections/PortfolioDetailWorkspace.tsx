@@ -317,7 +317,8 @@ export function PortfolioDetailWorkspace({
     currency: currency ?? null,
   });
   // The news in sentences and tiles, and the window before beside the window after — every
-  // figure from the same growth read, the same recap and the same cycle rows the cards use.
+  // figure from the same growth read, the same engine series and the same cycle rows the
+  // cards use.
   const headline = buildPortfolioHeadline({
     view: heroView,
     report,
@@ -326,13 +327,13 @@ export function PortfolioDetailWorkspace({
     currency: currency ?? null,
     mismatch: heroHeader.mismatch,
   });
+  // The windows read the engine's cycle series, the read the cost timeline draws: the
+  // account snapshots list ACTIVE ad sets only and can hold none of the portfolio's.
   const beforeAfter = buildBeforeAfter({
     report,
-    recap,
+    series: cpaSeriesQuery.data,
     range: resolvedRange,
     events: timelineEventsQuery.data,
-    snapshots: snapshotsQuery.data,
-    enrolledIds,
     metric,
     target: targetDisplay ?? null,
   });

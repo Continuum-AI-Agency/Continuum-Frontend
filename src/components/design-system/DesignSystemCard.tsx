@@ -104,7 +104,7 @@ export function DesignSystemCard({
     >
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-primary">Design system</h3>
+          <h3 className="text-base font-semibold text-foreground">Design system</h3>
           <p className="mt-1 max-w-prose text-sm text-secondary">
             {variant === 'onboarding'
               ? 'Add your approved visual system. Continuum extracts its tokens and rules for review, then applies the sections you enable alongside your Brand DNA.'
@@ -130,7 +130,7 @@ export function DesignSystemCard({
       {state.phase === 'error' || uploadError ? (
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
-          <p className="text-primary">{uploadError ?? state.errorMessage}</p>
+          <p className="text-foreground">{uploadError ?? state.errorMessage}</p>
         </div>
       ) : null}
 
@@ -190,7 +190,7 @@ function RigorBadge({ snapshot }: { snapshot: DesignSystemSnapshot }) {
 function ProgressRow({ label, percent }: { label: string; percent: number }) {
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2 text-sm text-primary">
+      <div className="flex items-center gap-2 text-sm text-foreground">
         <Loader2 className="size-4 animate-spin" aria-hidden />
         <span>{label}…</span>
       </div>
@@ -226,7 +226,7 @@ function SystemSummary({
 
   return (
     <div className="mt-4 space-y-3">
-      <div className="flex items-center gap-2 text-sm text-primary">
+      <div className="flex items-center gap-2 text-sm text-foreground">
         <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
         <span>
           Version {version ?? '—'} · {snapshot.tokens.length} tokens · {snapshot.sections.length}{' '}
@@ -260,7 +260,7 @@ function SystemSummary({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
           <div>
-            <p className="font-medium text-primary">
+            <p className="font-medium text-foreground">
               {unresolved.length === 1
                 ? 'One thing disagrees with what we had'
                 : `${unresolved.length} things disagree with what we had`}

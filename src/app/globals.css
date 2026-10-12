@@ -84,8 +84,6 @@
   --color-input: var(--input);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-brand-primary: var(--primary);
-  --color-brand-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-accent: var(--accent);
@@ -305,9 +303,9 @@ html {
 .bg-surface {
   background-color: var(--surface-accent);
 }
-.text-primary {
-  color: var(--text-primary);
-}
+/* `text-primary` is deliberately NOT redefined here: it is Tailwind's violet (--primary), the
+   shadcn meaning. Body ink is `text-foreground`. `.text-secondary` stays a legacy override
+   (muted grey, not --secondary) because the styleguide screens still rely on it. */
 .text-secondary {
   color: var(--text-secondary);
 }
@@ -1124,10 +1122,11 @@ body {
 }
 
 @theme inline {
-  /* Violet text. The bare `text-primary` class is taken by the legacy styleguide utility above
-     (`.text-primary` = foreground), and `--color-brand-primary` lives on :root, outside @theme,
-     so it never became a utility — `text-primary-ink` is the one that paints --primary. */
+  /* `primary-ink` predates the removal of the legacy `.text-primary` override; it now paints the
+     same violet as `text-primary`. `brand-primary` is an alias of primary kept for StudioCanvas. */
   --color-primary-ink: var(--primary);
+  --color-brand-primary: var(--primary);
+  --color-brand-primary-foreground: var(--primary-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

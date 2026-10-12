@@ -90,7 +90,7 @@ function AssetsList({
   return (
     <div className="border-subtle rounded-lg border bg-surface">
       <div className="px-3 py-2">
-        <span className="text-sm font-medium text-primary">{title}</span>
+        <span className="text-sm font-medium text-foreground">{title}</span>
       </div>
       <div>
         {assets.map((asset) => (
@@ -142,7 +142,7 @@ export function MetaSelectableAssetsTree({
                     className="border-subtle overflow-hidden rounded-lg border bg-surface"
                   >
                     <Accordion.Header>
-                      <Accordion.Trigger className="text-primary group flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
+                      <Accordion.Trigger className="text-foreground group flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
                         <span className="flex min-w-0 flex-col gap-1">
                           <span className="truncate text-sm font-medium">{businessLabel}</span>
                           {business.business_id ? (
@@ -162,7 +162,7 @@ export function MetaSelectableAssetsTree({
                       <div className="flex flex-col gap-3">
                         {(business.ad_accounts ?? []).length > 0 ? (
                           <div className="flex flex-col gap-2">
-                            <span className="text-sm font-medium text-primary">Ad accounts</span>
+                            <span className="text-sm font-medium text-foreground">Ad accounts</span>
                             <Accordion.Root multiple className="flex flex-col gap-2">
                               {(business.ad_accounts ?? []).map((adAccount) => {
                                 const adAccountKey = `${businessKey}:ad:${adAccount.ad_account_id}`;
@@ -199,7 +199,7 @@ export function MetaSelectableAssetsTree({
                                             );
                                           }}
                                         />
-                                        <Accordion.Trigger className="text-primary group flex w-full flex-1 items-center justify-between gap-2 text-left">
+                                        <Accordion.Trigger className="text-foreground group flex w-full flex-1 items-center justify-between gap-2 text-left">
                                           <span className="flex min-w-0 flex-col gap-1">
                                             <span className="flex items-center gap-2">
                                               <span className="truncate text-sm font-medium">

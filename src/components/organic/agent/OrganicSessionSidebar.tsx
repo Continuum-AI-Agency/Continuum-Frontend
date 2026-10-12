@@ -189,7 +189,7 @@ export function OrganicSessionSidebar({
                         : 'cursor-pointer',
                   )}
                 >
-                  <span className="line-clamp-2 w-full text-xs font-medium text-primary">
+                  <span className="line-clamp-2 w-full text-xs font-medium text-foreground">
                     {sessionTitles.get(session.sessionId) ?? 'New conversation'}
                   </span>
                   <div className="flex w-full flex-wrap items-center gap-1">

@@ -13,7 +13,8 @@ export type BeforeAfterStripProps = {
   model: BeforeAfter;
   currency: string | null;
   words: { one: string; many: string };
-  /** The range's window in the provenance vocabulary. */
+  /** The range's window in the provenance vocabulary — the window the anchor's two
+   *  figures cover (the projection names its own). */
   window: FigureWindow;
   /** Target in the metric's display unit. */
   target: number | null;
@@ -25,13 +26,7 @@ const count = (n: number): string =>
 const ifThePausesLand = (pauses: number): string =>
   pauses === 1 ? 'If the pause lands' : `If the ${pauses} pauses land`;
 
-export function BeforeAfterStrip({
-  model,
-  currency,
-  words,
-  window,
-  target,
-}: BeforeAfterStripProps) {
+export function BeforeAfterStrip({ model, currency, words, target }: BeforeAfterStripProps) {
   const { lastCycle, projection } = model;
   return (
     <section
@@ -68,7 +63,7 @@ export function BeforeAfterStrip({
                       'before-after.projection.cost',
                       projection.cost,
                       currency,
-                      window,
+                      projection.window,
                     )}
                   >
                     {formatCurrency(projection.cost, currency)}

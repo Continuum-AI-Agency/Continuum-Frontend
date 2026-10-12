@@ -103,7 +103,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
         className="glass-panel rounded-[1.75rem] border-subtle p-5 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.55)] sm:rounded-[2rem] sm:p-8"
       >
         <div className="mb-5 sm:mb-8">
-          <h1 className="mb-1 text-balance text-2xl font-bold tracking-tight text-primary sm:mb-2 sm:text-3xl">
+          <h1 className="mb-1 text-balance text-2xl font-bold tracking-tight text-foreground sm:mb-2 sm:text-3xl">
             Welcome to Continuum
           </h1>
           <p className="text-pretty text-sm leading-6 text-secondary sm:text-base">

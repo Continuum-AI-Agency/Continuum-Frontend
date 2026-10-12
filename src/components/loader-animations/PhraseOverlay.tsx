@@ -63,7 +63,7 @@ const PhraseOverlay: React.FC<PhraseOverlayProps> = ({
             'text-5xl md:text-7xl font-bold text-center tracking-tight drop-shadow-2xl',
             theme === 'dark'
               ? 'text-white drop-shadow-[0_0_30px_rgba(139,92,246,0.5)]'
-              : 'text-primary drop-shadow-lg',
+              : 'text-foreground drop-shadow-lg',
           )}
         >
           {phrases[currentIndex]}

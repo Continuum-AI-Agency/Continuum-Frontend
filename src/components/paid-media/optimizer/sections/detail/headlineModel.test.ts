@@ -395,7 +395,7 @@ describe('the anchor — the cost per result, and the two windows by their dates
   const beforeAfter = {
     lastCycle: null,
     projection: null,
-    source: 'daily' as const,
+    source: 'engine' as const,
     after: { label: '', short: 'week of Sep 21–27', spend: 2161, results: 56, cost: 38.59 },
     before: { label: '', short: 'week of Sep 14–20', spend: 1763, results: 30, cost: 58.78 },
   };

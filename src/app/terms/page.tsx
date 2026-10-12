@@ -11,7 +11,7 @@ const LAST_UPDATED = 'September 30, 2026';
 export default function TermsPage() {
   return (
     <div
-      className="min-h-screen bg-default text-primary"
+      className="min-h-screen bg-default text-foreground"
       style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}
     >
       {/* Header */}
@@ -41,7 +41,9 @@ export default function TermsPage() {
 
         {/* Card */}
         <div className="glass-panel rounded-3xl p-12 shadow-2xl border-subtle">
-          <h1 className="text-4xl font-bold text-primary mb-2 tracking-tight">Terms of Service</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-2 tracking-tight">
+            Terms of Service
+          </h1>
           <p className="text-secondary text-sm mb-8">Last updated: {LAST_UPDATED}</p>
           <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-8" />
 
@@ -61,7 +63,7 @@ export default function TermsPage() {
               Terms.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">1. Accounts</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">1. Accounts</h2>
             <p className="leading-relaxed mb-6">
               When you create an account with us, you must provide us information that is accurate,
               complete, and current at all times. Failure to do so constitutes a breach of the
@@ -70,7 +72,9 @@ export default function TermsPage() {
               for any activities or actions under your password.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">2. Intellectual Property</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
+              2. Intellectual Property
+            </h2>
             <p className="leading-relaxed mb-6">
               The Service and its original content, features and functionality are and will remain
               the exclusive property of Continuum AI and its licensors. The Service is protected by
@@ -79,7 +83,7 @@ export default function TermsPage() {
               service without the prior written consent of Continuum AI.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               3. User Conduct and Acceptable Use
             </h2>
             <p className="leading-relaxed mb-4">You agree not to use the Service to:</p>
@@ -103,7 +107,7 @@ export default function TermsPage() {
               </li>
             </ul>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               4. Third-Party Integrations
             </h2>
             <p className="leading-relaxed mb-6">
@@ -116,14 +120,14 @@ export default function TermsPage() {
               services available on or through any such web sites or services.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">5. Termination</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">5. Termination</h2>
             <p className="leading-relaxed mb-6">
               We may terminate or suspend your account immediately, without prior notice or
               liability, for any reason whatsoever, including without limitation if you breach the
               Terms. Upon termination, your right to use the Service will immediately cease.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               6. Limitation of Liability
             </h2>
             <p className="leading-relaxed mb-6">
@@ -134,7 +138,7 @@ export default function TermsPage() {
               of or inability to access or use the Service.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">7. Disclaimer</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">7. Disclaimer</h2>
             <p className="leading-relaxed mb-6">
               Your use of the Service is at your sole risk. The Service is provided on an &quot;AS
               IS&quot; and &quot;AS AVAILABLE&quot; basis. The Service is provided without
@@ -143,13 +147,13 @@ export default function TermsPage() {
               non-infringement or course of performance.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">8. Governing Law</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">8. Governing Law</h2>
             <p className="leading-relaxed mb-6">
               These Terms shall be governed and construed in accordance with the laws of the State
               of Delaware, United States, without regard to its conflict of law provisions.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">9. Changes</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">9. Changes</h2>
             <p className="leading-relaxed mb-6">
               We reserve the right, at our sole discretion, to modify or replace these Terms at any
               time. If a revision is material we will try to provide at least 30 days&apos; notice
@@ -157,7 +161,7 @@ export default function TermsPage() {
               determined at our sole discretion.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">10. Contact Us</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">10. Contact Us</h2>
             <p className="leading-relaxed">
               If you have any questions about these Terms, please contact us at:{' '}
               <a

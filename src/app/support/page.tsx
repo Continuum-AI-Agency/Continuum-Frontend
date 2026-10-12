@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function SupportPage() {
   return (
-    <main className="min-h-screen bg-default text-primary px-6 py-16">
+    <main className="min-h-screen bg-default text-foreground px-6 py-16">
       <div className="max-w-2xl mx-auto space-y-6">
         <Link href="/" className="text-secondary underline">
           Continuum

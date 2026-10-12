@@ -669,7 +669,9 @@ export function AdminUserList({
       }
       const failed = results.filter((result) => !result.ok).length;
       show({
-        title: failed ? `Full access failed on ${failed} of ${results.length} brands` : 'Full access granted',
+        title: failed
+          ? `Full access failed on ${failed} of ${results.length} brands`
+          : 'Full access granted',
         description: `${results.length - failed} of ${results.length} brands updated.`,
         variant: failed ? 'error' : 'success',
       });
@@ -1125,19 +1127,20 @@ export function AdminUserList({
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
             <span className="block text-xs uppercase tracking-[0.16em]">Users</span>
-            <strong className="text-base text-primary">{users.length}</strong> / {totalCountLabel}
+            <strong className="text-base text-foreground">{users.length}</strong> /{' '}
+            {totalCountLabel}
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
             <span className="block text-xs uppercase tracking-[0.16em]">Admins</span>
-            <strong className="text-base text-primary">{adminCount}</strong> page
+            <strong className="text-base text-foreground">{adminCount}</strong> page
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
             <span className="block text-xs uppercase tracking-[0.16em]">Brands</span>
-            <strong className="text-base text-primary">{uniqueBrandCount}</strong> in view
+            <strong className="text-base text-foreground">{uniqueBrandCount}</strong> in view
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
             <span className="block text-xs uppercase tracking-[0.16em]">Owners</span>
-            <strong className="text-base text-primary">{ownerMemberships}</strong> locked
+            <strong className="text-base text-foreground">{ownerMemberships}</strong> locked
           </div>
         </div>
       </div>
@@ -1154,7 +1157,7 @@ export function AdminUserList({
           <div className="flex min-w-0 flex-col gap-4 xl:min-h-0">
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-base font-semibold text-primary">User Directory</h2>
+                <h2 className="text-base font-semibold text-foreground">User Directory</h2>
                 <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
                   Showing {users.length} on this page · {totalCountLabel} {totalLabelSuffix}
                   {isDirectoryUpdating ? ' · Updating...' : null}
@@ -1265,11 +1268,11 @@ export function AdminUserList({
                             >
                               <TableCell>
                                 <div className="flex items-center gap-3">
-                                  <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-sm font-semibold text-primary">
+                                  <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-sm font-semibold text-foreground">
                                     {getUserInitials(user)}
                                   </div>
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-primary">
+                                    <div className="truncate text-sm font-semibold text-foreground">
                                       {user.name ?? user.email}
                                     </div>
                                     <p className="truncate text-xs text-muted-foreground">
@@ -1279,7 +1282,7 @@ export function AdminUserList({
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="text-sm text-primary">
+                                <div className="text-sm text-foreground">
                                   {membershipLabel(memberships.length)}
                                 </div>
                                 <p
@@ -1402,7 +1405,7 @@ export function AdminUserList({
                 <div className="border-b border-subtle p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-semibold text-primary">
+                      <h3 className="truncate text-base font-semibold text-foreground">
                         {selectedUser.name ?? selectedUser.email}
                       </h3>
                       <p className="truncate text-xs text-muted-foreground">{selectedUser.email}</p>
@@ -1492,7 +1495,7 @@ export function AdminUserList({
                             <XCircle className="mt-px size-3.5 shrink-0 text-destructive" />
                           )}
                           <span className="min-w-0">
-                            <span className="text-primary">{result.brandName}</span>{' '}
+                            <span className="text-foreground">{result.brandName}</span>{' '}
                             <span className="text-muted-foreground">
                               {result.ok ? 'ok' : `failed — ${result.message}`}
                             </span>
@@ -1525,7 +1528,7 @@ export function AdminUserList({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-primary">
+                              <p className="truncate text-sm font-medium text-foreground">
                                 {membership.brand_name ?? membership.brand_profile_id}
                               </p>
                               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -1654,7 +1657,7 @@ export function AdminUserList({
           <div className="min-w-0 space-y-3">
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-primary">Workflow Library</h2>
+                <h2 className="text-base font-semibold text-foreground">Workflow Library</h2>
                 <p className="truncate text-xs text-muted-foreground">
                   Viewing{' '}
                   {formatBrandDisambiguationLabel(
@@ -1745,7 +1748,7 @@ export function AdminUserList({
                           </TableCell>
                           <TableCell>
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-primary">
+                              <div className="truncate text-sm font-semibold text-foreground">
                                 {workflow.name}
                               </div>
                               <p className="line-clamp-1 text-xs text-muted-foreground">
@@ -1789,7 +1792,7 @@ export function AdminUserList({
                       ) : (
                         <Library className="size-4 text-brand-primary" />
                       )}
-                      <h3 className="min-w-0 truncate text-base font-semibold text-primary">
+                      <h3 className="min-w-0 truncate text-base font-semibold text-foreground">
                         {focusedWorkflow.name}
                       </h3>
                     </div>
@@ -1800,11 +1803,11 @@ export function AdminUserList({
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-md border border-subtle bg-default/40 p-2">
                       <span className="block text-muted-foreground">Scope</span>
-                      <strong className="text-primary">{focusedWorkflow.visibility}</strong>
+                      <strong className="text-foreground">{focusedWorkflow.visibility}</strong>
                     </div>
                     <div className="rounded-md border border-subtle bg-default/40 p-2">
                       <span className="block text-muted-foreground">Nodes</span>
-                      <strong className="text-primary">{focusedWorkflow.node_count ?? 0}</strong>
+                      <strong className="text-foreground">{focusedWorkflow.node_count ?? 0}</strong>
                     </div>
                   </div>
                   <Alert className="border-subtle">
@@ -1839,7 +1842,7 @@ export function AdminUserList({
                         <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                       )}
                       <div className="min-w-0">
-                        <p className="truncate text-primary">{result.workflowName}</p>
+                        <p className="truncate text-foreground">{result.workflowName}</p>
                         {result.message ? (
                           <p className="text-muted-foreground">{result.message}</p>
                         ) : null}
@@ -1858,7 +1861,7 @@ export function AdminUserList({
         {checkedWorkflowIds.size > 0 ? (
           <div className="sticky bottom-2 z-20 rounded-lg border border-subtle bg-surface p-3 shadow-lg">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="text-sm text-primary">
+              <div className="text-sm text-foreground">
                 <strong>{checkedWorkflowIds.size}</strong>{' '}
                 {checkedWorkflowIds.size === 1 ? 'workflow' : 'workflows'} selected
                 {!bulkEligibility.allowed ? (
@@ -1976,7 +1979,7 @@ export function AdminUserList({
       >
         <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-primary">Admin Audit Log</h2>
+            <h2 className="text-base font-semibold text-foreground">Admin Audit Log</h2>
             <p className="text-xs text-muted-foreground">
               Immutable trail of service-role admin actions. Expand a row for the before/after
               change.
@@ -2103,7 +2106,7 @@ export function AdminUserList({
                           </Button>
                         </TableCell>
                         <TableCell className="align-top">
-                          <div className="text-sm font-medium text-primary">
+                          <div className="text-sm font-medium text-foreground">
                             {formatAuditActionLabel(entry.action)}
                           </div>
                           <p className="max-w-[220px] truncate text-xs text-muted-foreground">
@@ -2111,7 +2114,7 @@ export function AdminUserList({
                           </p>
                         </TableCell>
                         <TableCell className="align-top">
-                          <div className="text-sm text-primary">{entry.target_type}</div>
+                          <div className="text-sm text-foreground">{entry.target_type}</div>
                           <p className="max-w-[320px] truncate font-mono text-xs text-muted-foreground">
                             {entry.target_id ?? 'none'}
                           </p>
@@ -2142,7 +2145,7 @@ export function AdminUserList({
                             <dl className="grid gap-2 text-xs sm:grid-cols-2">
                               <div>
                                 <dt className="text-muted-foreground">Actor</dt>
-                                <dd className="break-all text-primary">{actorLabel}</dd>
+                                <dd className="break-all text-foreground">{actorLabel}</dd>
                                 {actorEmailSecondary ? (
                                   <dd className="break-all text-xs text-muted-foreground">
                                     {actorEmailSecondary}
@@ -2151,20 +2154,20 @@ export function AdminUserList({
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">Request ID</dt>
-                                <dd className="font-mono break-all text-primary">
+                                <dd className="font-mono break-all text-foreground">
                                   {entry.request_id ?? 'none'}
                                 </dd>
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">Target</dt>
-                                <dd className="font-mono break-all text-primary">
+                                <dd className="font-mono break-all text-foreground">
                                   {entry.target_type}
                                   {entry.target_id ? ` · ${entry.target_id}` : ''}
                                 </dd>
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">Brand profile</dt>
-                                <dd className="font-mono break-all text-primary">
+                                <dd className="font-mono break-all text-foreground">
                                   {entry.brand_profile_id ?? 'none'}
                                 </dd>
                               </div>
@@ -2240,7 +2243,7 @@ export function AdminUserList({
           <Card className="border-subtle bg-surface shadow-sm">
             <CardContent className="space-y-4 p-4">
               <div>
-                <h2 className="text-base font-semibold text-primary">
+                <h2 className="text-base font-semibold text-foreground">
                   First Value Report Smoke Test
                 </h2>
                 <p className="text-xs text-muted-foreground">
@@ -2322,7 +2325,7 @@ export function AdminUserList({
           <Card className="border-subtle bg-surface shadow-sm">
             <CardContent className="space-y-4 p-4">
               <div>
-                <h2 className="text-base font-semibold text-primary">Smoke Result</h2>
+                <h2 className="text-base font-semibold text-foreground">Smoke Result</h2>
                 <p className="text-xs text-muted-foreground">
                   The report can send with any section that has renderable email content. The
                   snapshot shows ready sections, rendered insight counts, and chart points.

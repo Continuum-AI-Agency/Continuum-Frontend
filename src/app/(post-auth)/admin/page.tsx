@@ -139,7 +139,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   return (
     <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
       <div className="shrink-0 space-y-1 pb-[var(--page-section-gap)]">
-        <h1 className="text-xl font-semibold text-primary">Admin</h1>
+        <h1 className="text-xl font-semibold text-foreground">Admin</h1>
         <p className="text-sm text-muted-foreground">
           Manage users, brand access, global workflow library promotion, and brand canvas workflow
           transfers.

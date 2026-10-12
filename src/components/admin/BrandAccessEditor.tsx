@@ -184,7 +184,7 @@ export function BrandAccessEditor({
       <div className="flex flex-col gap-2 pt-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-xs font-medium text-muted-foreground">Canvas credits</span>
-          <span className="text-xs tabular-nums text-primary" data-testid="brand-canvas-credits">
+          <span className="text-xs tabular-nums text-foreground" data-testid="brand-canvas-credits">
             {credits.format(access?.canvasCredits ?? 0)} credits
           </span>
         </div>

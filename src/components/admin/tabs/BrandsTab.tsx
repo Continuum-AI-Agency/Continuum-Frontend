@@ -48,7 +48,7 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
     <div className="space-y-3" data-testid="admin-brands-panel">
       <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-primary">Brands</h2>
+          <h2 className="text-base font-semibold text-foreground">Brands</h2>
           <p className="text-xs text-muted-foreground">
             {query
               ? `${visibleBrands.length} of ${brands.length} brands`
@@ -108,7 +108,7 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                     <TableCell>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-semibold text-primary">
+                          <span className="truncate text-sm font-semibold text-foreground">
                             {brand.brand_name}
                           </span>
                           {brand.active ? null : <Badge variant="outline">Inactive</Badge>}
@@ -142,10 +142,10 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                         <Badge variant="secondary">T{brand.tier ?? 0}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm tabular-nums text-primary">
+                    <TableCell className="text-sm tabular-nums text-foreground">
                       {brand.memberCount ?? 0}
                     </TableCell>
-                    <TableCell className="text-sm tabular-nums text-primary">
+                    <TableCell className="text-sm tabular-nums text-foreground">
                       {brand.workflowCount ?? 0}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

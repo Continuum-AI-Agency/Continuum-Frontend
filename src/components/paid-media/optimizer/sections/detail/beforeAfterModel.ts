@@ -2,25 +2,27 @@
 // Optimizer did in its last cycle and what the window after it looks like against the window
 // before. It renders accounts instead of describing.
 //
-// Three facts, each from a read the workspace already holds:
+// Three facts, each from a read the workspace already holds, and all of them the ENGINE's:
 //   * the last cycle — `latest_run.cycle_ts`, the moves it proposed (pending recommendations
 //     by kind, the cycle rows with a budget change) and what landed (the rows' apply status,
 //     and the observed timeline events since the cycle: applied budgets, status writes);
-//   * the two windows — the recap's current totals and its prior window of the same length,
-//     summed from the same daily series, so "before" cannot come from a different read than
-//     "after";
-//   * the projection — the current window with the ad sets a pending pause would remove taken
-//     out, spend and results alike, priced against the target. Every figure is a sum of rows
-//     the screen already shows; nothing is modelled.
+//   * the two windows — the cost timeline's own series (optimizer_get_cpa_series): the last
+//     cycle's window, and the same window as the cycle that ran one window earlier scored it.
+//     The account snapshot read used to feed these, and it lists ACTIVE ad sets only — on
+//     FORMULARIOS // TODOS it returned none of the portfolio's ad sets and the strip stayed
+//     blank while the timeline and the table beside it read the engine fine;
+//   * the projection — the last cycle's 14-day window with the ad sets a pending pause would
+//     remove taken out, spend and results alike, at the engine's own interval for each (the
+//     window `cpaInterval` scores), priced against the target. Nothing is modelled.
 
 import type {
+  CpaSeriesPoint,
   OptimizationMetricDefinition,
   ParsedCycleRunReport,
   ResolvedRange,
   TimelineEvent,
 } from '@continuum/contracts';
 import { deriveEfficiency } from '../../format';
-import type { RecapModel, RecapSnapshot } from './recapModel';
 
 export type WindowTotals = {
   /** "week of September 14 to 20" */
@@ -51,17 +53,21 @@ export type Projection = {
    *  rest bought nothing. */
   cost: number | null;
   vsTarget: 'under' | 'over' | 'on' | null;
+  /** The window the projection prices: the one the engine's interval is computed on. */
+  window: EngineWindow;
 };
+
+type EngineWindow = 'd3' | 'd7' | 'd14';
 
 export type BeforeAfter = {
   lastCycle: LastCycle | null;
   before: WindowTotals | null;
-  /** Null while the range has no data yet (the snapshots still loading, or a range before
-   *  any series) — zeros would read as a window that bought nothing. */
+  /** Null while the engine has no cycle series yet (still loading, or before the first
+   *  cycle) — zeros would read as a window that bought nothing. */
   after: WindowTotals | null;
   projection: Projection | null;
-  /** Where the windows came from: the daily series, an engine window, or nothing yet. */
-  source: RecapModel['source'];
+  /** Where the windows came from: the engine's cycle series, or nothing yet. */
+  source: 'engine' | 'none';
 };
 
 const DAY_MS = 86_400_000;
@@ -201,58 +207,124 @@ function lastCycleOf(
 
 type AdsetTotals = { spend: number; results: number };
 
-const num = (value: unknown): number =>
-  typeof value === 'number' && Number.isFinite(value) ? value : 0;
+const WINDOW_DAYS: Record<EngineWindow, number> = { d3: 3, d7: 7, d14: 14 };
+
+/** The ISO date `days` after (or before, negative) a cycle's UTC date. */
+function shiftDate(iso: string, days: number): string {
+  return new Date(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) + days * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+}
+
+const SERIES_FIELDS = {
+  d3: { spend: 'spend_d3', results: 'conv_d3' },
+  d7: { spend: 'spend_d7', results: 'conv_d7' },
+  d14: { spend: 'spend_d14', results: 'conv_d14' },
+} as const satisfies Record<
+  EngineWindow,
+  { spend: keyof CpaSeriesPoint; results: keyof CpaSeriesPoint }
+>;
+
+function spendOf(point: CpaSeriesPoint, window: EngineWindow): number {
+  return point[SERIES_FIELDS[window].spend];
+}
+
+function resultsOf(point: CpaSeriesPoint, window: EngineWindow): number {
+  return point[SERIES_FIELDS[window].results];
+}
 
 /**
- * Each enrolled ad set's spend and results over the range, from the same snapshots and the
- * same rule the recap uses: the daily series between the range's dates, else the engine
- * window nearest the range. A projection has to subtract from the totals it is read against.
+ * A cycle's window as the engine scored it. The window is the N complete days BEFORE the
+ * cycle's date: the d14 the 2026-10-11 cycle wrote on FORMULARIOS // TODOS sums
+ * September 27 to October 10 (1,807.63 MXN, 27 leads), not the 14 days ending on the 11th.
  */
-export function adsetTotalsOver(
-  snapshots: readonly RecapSnapshot[],
-  range: ResolvedRange,
-  kpiField: string,
-): Map<string, AdsetTotals> {
-  const out = new Map<string, AdsetTotals>();
-  for (const snapshot of snapshots) {
-    const totals: AdsetTotals = { spend: 0, results: 0 };
-    const daily = snapshot.daily;
-    if (daily && daily.length > 0) {
-      for (const day of daily) {
-        if (day.date < range.from || day.date > range.to) continue;
-        totals.spend += num(day.spend);
-        totals.results += num(day[kpiField]);
-      }
-    } else {
-      const window = snapshot.windows?.[range.window];
-      if (!window) continue;
-      totals.spend += num(window.spend);
-      totals.results += num(window[kpiField]);
-    }
-    out.set(snapshot.id, totals);
-  }
-  return out;
+function windowTotals(
+  point: CpaSeriesPoint,
+  window: EngineWindow,
+  metric: OptimizationMetricDefinition,
+): WindowTotals {
+  const days = WINDOW_DAYS[window];
+  const from = shiftDate(point.cycle_ts, -days);
+  const to = shiftDate(point.cycle_ts, -1);
+  const spend = spendOf(point, window);
+  const results = resultsOf(point, window);
+  return {
+    label: windowLabel(from, to, days),
+    short: shortRangeLabel(from, to, days),
+    spend,
+    results,
+    cost: deriveEfficiency(spend, results, metric.denominatorMultiplier),
+  };
 }
+
+const latestFirst = (a: CpaSeriesPoint, b: CpaSeriesPoint): number =>
+  Date.parse(b.cycle_ts) - Date.parse(a.cycle_ts);
+
+/** The cycle that scored the window just before `latest`'s: the one run `days` earlier,
+ *  a day either side (the cron drifts by minutes and a manual run can land on another day). */
+function cycleOneWindowBefore(
+  ordered: readonly CpaSeriesPoint[],
+  latest: CpaSeriesPoint,
+  days: number,
+): CpaSeriesPoint | null {
+  const wanted = Date.parse(shiftDate(latest.cycle_ts, -days));
+  let best: { point: CpaSeriesPoint; distance: number } | null = null;
+  for (const point of ordered) {
+    const distance = Math.abs(Date.parse(point.cycle_ts.slice(0, 10)) - wanted);
+    if (distance > DAY_MS) continue;
+    if (!best || distance < best.distance) best = { point, distance };
+  }
+  return best?.point ?? null;
+}
+
+/**
+ * What a pending pause takes out of the engine's window: the ad set's own interval (cost ×
+ * events, events) when it bought something; when it bought nothing the interval carries no
+ * spend, and the zero-conversion pause states it as its evidence (metric `spend` over the same
+ * window). Null when neither says — a projection that silently kept that spend would be wrong.
+ */
+function pausedTotals(
+  adsetId: string,
+  report: ParsedCycleRunReport,
+  window: EngineWindow,
+): AdsetTotals | null {
+  const ci = report.latest_items.find((item) => item.adset_id === adsetId)?.diagnostics?.ci;
+  const events = ci?.events;
+  const cpa = ci?.cpa;
+  if (typeof events === 'number' && events > 0 && typeof cpa === 'number' && cpa > 0) {
+    return { spend: cpa * events, results: events };
+  }
+  const evidence = report.recommendations.find(
+    (rec) => rec.adset_id === adsetId && rec.status === 'pending' && rec.kind === 'pause',
+  )?.evidence;
+  if (evidence?.metric === 'spend' && evidence.window === window) {
+    return { spend: evidence.value, results: 0 };
+  }
+  return null;
+}
+
+/** The engine computes every ad set's interval on its 14-day window (cpaInterval). */
+const INTERVAL_WINDOW: EngineWindow = 'd14';
 
 function projectionOf(args: {
   report: ParsedCycleRunReport | null;
-  recap: RecapModel;
-  adsetTotals: ReadonlyMap<string, AdsetTotals>;
-  enrolledCount: number;
+  latest: CpaSeriesPoint;
   metric: OptimizationMetricDefinition;
   target: number | null;
 }): Projection | null {
-  const pauses = (args.report?.recommendations ?? []).filter(
-    (rec) => rec.status === 'pending' && rec.kind === 'pause',
+  const report = args.report;
+  if (!report) return null;
+  const paused = new Set(
+    report.recommendations
+      .filter((rec) => rec.status === 'pending' && rec.kind === 'pause')
+      .map((rec) => rec.adset_id),
   );
-  if (pauses.length === 0) return null;
-  const paused = new Set(pauses.map((rec) => rec.adset_id));
-  let spend = args.recap.current.spend;
-  let results = args.recap.current.results;
+  if (paused.size === 0) return null;
+  let spend = spendOf(args.latest, INTERVAL_WINDOW);
+  let results = resultsOf(args.latest, INTERVAL_WINDOW);
   for (const id of paused) {
-    const totals = args.adsetTotals.get(id);
-    if (!totals) continue;
+    const totals = pausedTotals(id, report, INTERVAL_WINDOW);
+    if (!totals) return null;
     spend -= totals.spend;
     results -= totals.results;
   }
@@ -263,7 +335,7 @@ function projectionOf(args: {
   const target = args.target != null && args.target > 0 ? args.target : null;
   return {
     pauses: paused.size,
-    remaining: Math.max(0, args.enrolledCount - paused.size),
+    remaining: Math.max(0, args.latest.adsets - paused.size),
     cost,
     vsTarget:
       cost == null || target == null
@@ -273,58 +345,37 @@ function projectionOf(args: {
           : cost < target
             ? 'under'
             : 'over',
+    window: INTERVAL_WINDOW,
   };
 }
 
 export function buildBeforeAfter(args: {
   report: ParsedCycleRunReport | null;
-  recap: RecapModel;
+  /** The engine's per-cycle series — the read the cost timeline draws. */
+  series: readonly CpaSeriesPoint[];
   range: ResolvedRange;
   events: readonly TimelineEvent[];
-  snapshots: readonly RecapSnapshot[];
-  enrolledIds: Iterable<string>;
   metric: OptimizationMetricDefinition;
   /** Target in the metric's display unit. */
   target: number | null;
   timeZone?: string;
 }): BeforeAfter {
-  const { recap, range, metric } = args;
-  const enrolled = new Set(args.enrolledIds);
-  const scoped = args.snapshots.filter((snapshot) => enrolled.has(snapshot.id));
-  const after: WindowTotals | null =
-    recap.source === 'none'
-      ? null
-      : {
-          label: windowLabel(range.from, range.to, range.days),
-          short: shortRangeLabel(range.from, range.to, range.days),
-          spend: recap.current.spend,
-          results: recap.current.results,
-          cost: recap.current.costPerResult,
-        };
-  const before: WindowTotals | null =
-    recap.previous && range.previous
-      ? {
-          label: windowLabel(range.previous.from, range.previous.to, range.days),
-          short: shortRangeLabel(range.previous.from, range.previous.to, range.days),
-          spend: recap.previous.spend,
-          results: recap.previous.results,
-          cost: recap.previous.costPerResult,
-        }
-      : null;
+  const { range, metric } = args;
+  const ordered = [...args.series]
+    .filter((point) => !Number.isNaN(Date.parse(point.cycle_ts)))
+    .sort(latestFirst);
+  const latest = ordered[0] ?? null;
+  const lastCycle = lastCycleOf(args.report, args.events, args.timeZone);
+  if (!latest) {
+    return { lastCycle, before: null, after: null, projection: null, source: 'none' };
+  }
+  const window = range.window;
+  const prior = cycleOneWindowBefore(ordered, latest, WINDOW_DAYS[window]);
   return {
-    lastCycle: lastCycleOf(args.report, args.events, args.timeZone),
-    before,
-    after,
-    projection: after
-      ? projectionOf({
-          report: args.report,
-          recap,
-          adsetTotals: adsetTotalsOver(scoped, range, metric.kpiField),
-          enrolledCount: enrolled.size,
-          metric,
-          target: args.target,
-        })
-      : null,
-    source: recap.source,
+    lastCycle,
+    before: prior ? windowTotals(prior, window, metric) : null,
+    after: windowTotals(latest, window, metric),
+    projection: projectionOf({ report: args.report, latest, metric, target: args.target }),
+    source: 'engine',
   };
 }

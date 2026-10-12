@@ -11,10 +11,8 @@
 // violet chroma, and in oklch that rotates hue — it turned the destructive fill pink and the
 // success fill teal. Dark mode's `--foreground` is near-neutral, so it is safe there only.
 //
-// Two label colours here look wrong and are not. `text-primary` and `text-secondary` are
-// CUSTOM utilities in globals.css (near-black and grey); the Tailwind token utilities of the
-// same name lose to them. A variant that wants the actual brand hue must spell it
-// `text-[var(--primary)]` or the label silently renders as body text.
+// `text-secondary` is a CUSTOM utility in globals.css (muted grey, not `--secondary`); the
+// Tailwind token utility of the same name loses to it. `text-primary` is plain Tailwind violet.
 //
 // `--primary-foreground` is #0b1020 in dark, not white: white on dark `--primary` (#7c6fff)
 // measures 3.77:1 against a 4.5:1 floor. That is fixed at the token in globals.css, so every

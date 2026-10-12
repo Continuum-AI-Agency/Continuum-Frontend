@@ -11,7 +11,7 @@ const LAST_UPDATED = 'September 30, 2026';
 export default function PrivacyPage() {
   return (
     <div
-      className="min-h-screen bg-default text-primary"
+      className="min-h-screen bg-default text-foreground"
       style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}
     >
       {/* Header */}
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
 
         {/* Card */}
         <div className="glass-panel rounded-3xl p-12 shadow-2xl border-subtle">
-          <h1 className="text-4xl font-bold text-primary mb-2 tracking-tight">Privacy Policy</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-2 tracking-tight">Privacy Policy</h1>
           <p className="text-secondary text-sm mb-8">Last updated: {LAST_UPDATED}</p>
           <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-8" />
 
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
               and use of information in accordance with this policy.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               1. Information Collection and Use
             </h2>
             <p className="text-secondary leading-relaxed mb-6">
@@ -63,32 +63,33 @@ export default function PrivacyPage() {
               improve our Service to you.
             </p>
 
-            <h3 className="text-xl font-semibold text-primary mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-foreground mt-6 mb-3">
               Types of Data Collected
             </h3>
             <p className="text-secondary leading-relaxed mb-4">
-              <strong className="text-primary">Personal Data:</strong> While using our Service, we
-              may ask you to provide us with certain personally identifiable information that can be
-              used to contact or identify you (&quot;Personal Data&quot;). This may include, but is
-              not limited to: email address, first name and last name, company name, and usage data.
+              <strong className="text-foreground">Personal Data:</strong> While using our Service,
+              we may ask you to provide us with certain personally identifiable information that can
+              be used to contact or identify you (&quot;Personal Data&quot;). This may include, but
+              is not limited to: email address, first name and last name, company name, and usage
+              data.
             </p>
             <p className="text-secondary leading-relaxed mb-4">
-              <strong className="text-primary">Usage Data:</strong> We may also collect information
-              on how the Service is accessed and used (&quot;Usage Data&quot;). This Usage Data may
-              include information such as your computer&apos;s Internet Protocol address (e.g. IP
-              address), browser type, browser version, the pages of our Service that you visit, the
-              time and date of your visit, the time spent on those pages, unique device identifiers
-              and other diagnostic data.
+              <strong className="text-foreground">Usage Data:</strong> We may also collect
+              information on how the Service is accessed and used (&quot;Usage Data&quot;). This
+              Usage Data may include information such as your computer&apos;s Internet Protocol
+              address (e.g. IP address), browser type, browser version, the pages of our Service
+              that you visit, the time and date of your visit, the time spent on those pages, unique
+              device identifiers and other diagnostic data.
             </p>
             <p className="text-secondary leading-relaxed mb-6">
-              <strong className="text-primary">Tracking &amp; Cookies Data:</strong> We use cookies
-              and similar tracking technologies to track the activity on our Service and hold
-              certain information. You can instruct your browser to refuse all cookies or to
+              <strong className="text-foreground">Tracking &amp; Cookies Data:</strong> We use
+              cookies and similar tracking technologies to track the activity on our Service and
+              hold certain information. You can instruct your browser to refuse all cookies or to
               indicate when a cookie is being sent. However, if you do not accept cookies, you may
               not be able to use some portions of our Service.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">2. Use of Data</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">2. Use of Data</h2>
             <p className="text-secondary leading-relaxed mb-4">
               Continuum AI uses the collected data for various purposes:
             </p>
@@ -107,7 +108,7 @@ export default function PrivacyPage() {
               <li>To detect, prevent and address technical issues</li>
             </ul>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               3. Data Transfer and Storage
             </h2>
             <p className="text-secondary leading-relaxed mb-6">
@@ -120,7 +121,7 @@ export default function PrivacyPage() {
               in accordance with this Privacy Policy.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">4. Disclosure of Data</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">4. Disclosure of Data</h2>
             <p className="text-secondary leading-relaxed mb-4">
               We may disclose your Personal Data in the good faith belief that such action is
               necessary to:
@@ -133,7 +134,7 @@ export default function PrivacyPage() {
               <li>To protect against legal liability</li>
             </ul>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">5. Data Security</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">5. Data Security</h2>
             <p className="text-secondary leading-relaxed mb-6">
               The security of your data is important to us, but remember that no method of
               transmission over the Internet, or method of electronic storage is 100% secure. While
@@ -141,7 +142,7 @@ export default function PrivacyPage() {
               cannot guarantee its absolute security.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">6. Service Providers</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">6. Service Providers</h2>
             <p className="text-secondary leading-relaxed mb-6">
               We may employ third-party companies and individuals to facilitate our Service
               (&quot;Service Providers&quot;), to provide the Service on our behalf, to perform
@@ -149,7 +150,7 @@ export default function PrivacyPage() {
               third parties have access to your Personal Data only to perform these tasks on our
               behalf and are obligated not to disclose or use it for any other purpose.
             </p>
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               7. Your Data Protection Rights
             </h2>
             <p className="text-secondary leading-relaxed mb-6">
@@ -160,7 +161,7 @@ export default function PrivacyPage() {
               contacting us.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               8. Children&apos;s Privacy
             </h2>
             <p className="text-secondary leading-relaxed mb-6">
@@ -170,7 +171,7 @@ export default function PrivacyPage() {
               believe a child under 13 has provided personal data, contact privacy@continuum.ai.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">
               9. Changes to This Privacy Policy
             </h2>
             <p className="text-secondary leading-relaxed mb-6">
@@ -179,7 +180,7 @@ export default function PrivacyPage() {
               Policy periodically for any changes.
             </p>
 
-            <h2 className="text-2xl font-bold text-primary mt-8 mb-4">10. Contact Us</h2>
+            <h2 className="text-2xl font-bold text-foreground mt-8 mb-4">10. Contact Us</h2>
             <p className="text-secondary leading-relaxed">
               If you have any questions about this Privacy Policy, please contact us at:{' '}
               <a

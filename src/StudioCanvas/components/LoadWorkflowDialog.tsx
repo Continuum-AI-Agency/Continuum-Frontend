@@ -230,7 +230,7 @@ function WorkflowRow({
           onAttachWorkflow ? onAttachWorkflow(workflow) : void onApplyWorkflow(workflow)
         }
       >
-        <p className="truncate text-sm font-medium text-primary">{workflow.name}</p>
+        <p className="truncate text-sm font-medium text-foreground">{workflow.name}</p>
         {workflow.description && (
           <p className="truncate text-xs text-secondary">{workflow.description}</p>
         )}
@@ -322,7 +322,7 @@ function WorkflowPanel({
     <div className="grid gap-3 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-primary">My Workflows</p>
+          <p className="text-sm font-semibold text-foreground">My Workflows</p>
           <p className="text-xs text-muted-foreground">
             {activeTab === 'premade'
               ? 'Templates that ship with Continuum — load one and make it yours.'

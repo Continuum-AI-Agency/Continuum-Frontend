@@ -94,7 +94,9 @@ export function PendingRow({
           {formatBytes(entry.file.size)}
         </span>
         <span className="min-w-0 flex-1 truncate">
-          <span className="block truncate text-sm font-medium text-primary">{entry.file.name}</span>
+          <span className="block truncate text-sm font-medium text-foreground">
+            {entry.file.name}
+          </span>
           <span className="block truncate text-xs text-muted-foreground">
             {isError ? (entry.error ?? 'Failed') : 'Uploading…'}
           </span>
@@ -176,8 +178,7 @@ export function DocumentRow({
       aria-busy={label.tone === 'progress' ? true : undefined}
       className={cn(
         'group flex min-h-12 items-center justify-between gap-3 border-b border-border/70 py-2.5 last:border-0',
-        // Opacity on the wrapper, never `text-primary/60` — text-primary is a custom
-        // utility and an opacity modifier resolves to an unrelated Tailwind colour.
+        // Opacity on the wrapper so the name, meta and preview fade together.
         isArchived(doc) && 'opacity-60',
       )}
     >
@@ -202,7 +203,7 @@ export function DocumentRow({
           </span>
           <span className="min-w-0 flex-1 truncate">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium text-primary">{doc.name}</span>
+              <span className="truncate text-sm font-medium text-foreground">{doc.name}</span>
               <RetentionPill doc={doc} now={now} />
             </span>
             <span

@@ -23,7 +23,7 @@ mock.module('motion/react', () => {
   };
 });
 
-import type { CycleItemRow, ResolvedRange } from '@continuum/contracts';
+import type { CpaSeriesPoint, CycleItemRow, ResolvedRange } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { resultWords } from '../account/overviewModel';
 import { buildBeforeAfter } from './beforeAfterModel';
@@ -33,7 +33,6 @@ import type { HeroView } from './heroModel';
 import { type RealBodyName, readBody } from './news/realBodies.fixture';
 import { PortfolioHeaderBar } from './PortfolioHeaderLine';
 import { PortfolioHero, type PortfolioHeroProps } from './PortfolioHero';
-import type { RecapModel } from './recapModel';
 
 afterEach(cleanup);
 
@@ -381,29 +380,30 @@ const range: ResolvedRange = {
   flightMissing: false,
 };
 
-const recap: RecapModel = {
-  source: 'daily',
-  windowUsed: null,
-  current: {
-    spend: 2161,
-    results: 56,
-    impressions: 0,
-    clicks: 0,
-    costPerResult: 38.59,
-    daysCovered: 7,
+/** The engine's cycle series, as the cost timeline reads it: the body's cycle and the one a
+ *  week before it. */
+const series: CpaSeriesPoint[] = [
+  {
+    cycle_ts: '2026-09-18T19:01:00Z',
+    spend_d3: 700,
+    conv_d3: 12,
+    spend_d7: 1763.4,
+    conv_d7: 30,
+    spend_d14: 3500,
+    conv_d14: 70,
+    adsets: 9,
   },
-  previous: {
-    spend: 1763,
-    results: 30,
-    impressions: 0,
-    clicks: 0,
-    costPerResult: 58.78,
-    daysCovered: 7,
+  {
+    cycle_ts: '2026-09-25T19:03:03.393+00:00',
+    spend_d3: 900,
+    conv_d3: 24,
+    spend_d7: 2161,
+    conv_d7: 56,
+    spend_d14: 3924,
+    conv_d14: 86,
+    adsets: 9,
   },
-  series: [],
-  delta: { spend: 0.23, results: 0.87, costPerResult: -0.34 },
-  vsTarget: 0.1,
-};
+];
 
 function wholeHero(
   name: RealBodyName,
@@ -440,11 +440,9 @@ function wholeHero(
   });
   const beforeAfter = buildBeforeAfter({
     report,
-    recap,
+    series,
     range,
     events: [],
-    snapshots: [],
-    enrolledIds: report.latest_items.map((item) => item.adset_id),
     metric,
     target: portfolio.cpa_target ?? null,
     timeZone: MEXICO,
@@ -626,7 +624,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       'per lead·target 35.00·+31%',
     );
     expect(anchor?.querySelector('[data-testid="anchor-prior"]')?.textContent).toBe(
-      'week of Sep 21–27: 38.59· week of Sep 14–20: 58.78',
+      'week of Sep 18–24: 38.59· week of Sep 11–17: 58.78',
     );
     // The before/after figures keep the keys the parity bench already reads.
     const prior = [

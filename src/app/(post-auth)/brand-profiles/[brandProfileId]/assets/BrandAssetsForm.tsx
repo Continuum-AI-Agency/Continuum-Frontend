@@ -84,7 +84,7 @@ function ProviderPlatformList({
         const platformAssets = grouped[key] ?? [];
         return (
           <section key={key} className="space-y-3">
-            <p className="text-base font-medium text-primary">{label}</p>
+            <p className="text-base font-medium text-foreground">{label}</p>
             <div className="border-subtle overflow-hidden rounded-lg border bg-surface">
               {platformAssets.map((asset) => {
                 const integrationAccountId = asset.integration_account_id;
@@ -133,7 +133,7 @@ function ProviderPlatformList({
 
       {unmappedAssets.length > 0 ? (
         <section className="space-y-3">
-          <p className="text-base font-medium text-primary">Other</p>
+          <p className="text-base font-medium text-foreground">Other</p>
           <div className="border-subtle overflow-hidden rounded-lg border bg-surface">
             {unmappedAssets.map((asset) => {
               const integrationAccountId = asset.integration_account_id;

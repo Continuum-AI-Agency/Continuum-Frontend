@@ -49,7 +49,7 @@ export function LegacyTierRedirect({
             <ShieldAlert className="size-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-base font-semibold text-primary">{title}</p>
+            <p className="text-base font-semibold text-foreground">{title}</p>
             <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           <Button variant="secondary" onClick={() => router.replace(redirectTo)}>

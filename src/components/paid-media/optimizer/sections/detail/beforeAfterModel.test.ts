@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import type { ResolvedRange, TimelineEvent } from '@continuum/contracts';
+import type { CpaSeriesPoint, ResolvedRange, TimelineEvent } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { buildBeforeAfter, cycleWhen, dayRangeLabel, shortRangeLabel } from './beforeAfterModel';
 import { readBody } from './news/realBodies.fixture';
-import type { RecapModel } from './recapModel';
 
-// Before and after the last cycle, from the FORMULARIOS // TODOS body and the figures the
-// redesign page quotes for its two windows (30 leads at 58.78 MXN · 1,763 MXN, then 56 leads
-// at 38.59 MXN · 2,161 MXN).
+// Before and after the last cycle, from the FORMULARIOS // TODOS body and the engine's cycle
+// series the cost timeline draws (the redesign page's two windows: 30 leads at 58.78 MXN ·
+// 1,763 MXN, then 56 leads at 38.59 MXN · 2,161 MXN).
 
 const MEXICO = 'America/Mexico_City';
 const metric = getOptimizationMetricDefinition('lead');
@@ -24,41 +23,34 @@ const range: ResolvedRange = {
   flightMissing: false,
 };
 
-const recap: RecapModel = {
-  source: 'daily',
-  windowUsed: null,
-  current: {
-    spend: 2161,
-    results: 56,
-    impressions: 0,
-    clicks: 0,
-    costPerResult: 38.59,
-    daysCovered: 7,
-  },
-  previous: {
-    spend: 1763,
-    results: 30,
-    impressions: 0,
-    clicks: 0,
-    costPerResult: 58.78,
-    daysCovered: 7,
-  },
-  series: [],
-  delta: { spend: 0.23, results: 0.87, costPerResult: -0.34 },
-  vsTarget: 0.1,
-};
+function point(cycle_ts: string, over: Partial<CpaSeriesPoint> = {}): CpaSeriesPoint {
+  return {
+    cycle_ts,
+    spend_d3: 0,
+    conv_d3: 0,
+    spend_d7: 0,
+    conv_d7: 0,
+    spend_d14: 0,
+    conv_d14: 0,
+    adsets: 9,
+    ...over,
+  };
+}
 
-/** The two ad sets the body's pending pauses name, with what they bought this week. */
-const PAUSED_A = '900000000000000001';
-const PAUSED_B = '900000000000000002';
-const snapshots = [
-  { id: PAUSED_A, daily: [{ date: '2026-09-22', spend: 405, leads: 4 }] },
-  { id: PAUSED_B, daily: [{ date: '2026-09-23', spend: 125, leads: 0 }] },
-  { id: '900000000000000003', daily: [{ date: '2026-09-23', spend: 1631, leads: 52 }] },
-  // Outside the range: must not count.
-  { id: '900000000000000004', daily: [{ date: '2026-09-10', spend: 999, leads: 9 }] },
+/** The body's cycle (2026-09-25), the cycle a week before it, and one in between. Shuffled:
+ *  the read orders it, the model must not trust the order. */
+const series: CpaSeriesPoint[] = [
+  point('2026-09-25T19:03:03.393+00:00', {
+    spend_d3: 900,
+    conv_d3: 24,
+    spend_d7: 2161,
+    conv_d7: 56,
+    spend_d14: 3924,
+    conv_d14: 86,
+  }),
+  point('2026-09-18T19:01:00Z', { spend_d7: 1763.4, conv_d7: 30, spend_d14: 3500, conv_d14: 70 }),
+  point('2026-09-22T19:02:00Z', { spend_d7: 1900, conv_d7: 40 }),
 ];
-const enrolledIds = [PAUSED_A, PAUSED_B, '900000000000000003', '900000000000000004'];
 
 const events: TimelineEvent[] = [
   { ts: '2026-09-25T19:10:00Z', kind: 'applied', label: 'Budgets applied', count: 4 },
@@ -71,11 +63,9 @@ function build(over: Partial<Parameters<typeof buildBeforeAfter>[0]> = {}) {
   const { report } = readBody('formularios');
   return buildBeforeAfter({
     report,
-    recap,
+    series,
     range,
     events,
-    snapshots,
-    enrolledIds,
     metric,
     target: 35,
     timeZone: MEXICO,
@@ -84,21 +74,23 @@ function build(over: Partial<Parameters<typeof buildBeforeAfter>[0]> = {}) {
 }
 
 describe('the two windows', () => {
-  it('labels each by its days and carries results, cost and spend', () => {
+  it('reads the last cycle and the cycle one window earlier off the engine series', () => {
     const model = build();
-    expect(model.before).toEqual({
-      label: 'week of September 14 to 20',
-      short: 'week of Sep 14–20',
-      spend: 1763,
-      results: 30,
-      cost: 58.78,
-    });
+    expect(model.source).toBe('engine');
+    // The engine's d7 at the 2026-09-25 cycle is the 7 complete days before it.
     expect(model.after).toEqual({
-      label: 'week of September 21 to 27',
-      short: 'week of Sep 21–27',
+      label: 'week of September 18 to 24',
+      short: 'week of Sep 18–24',
       spend: 2161,
       results: 56,
-      cost: 38.59,
+      cost: 2161 / 56,
+    });
+    expect(model.before).toEqual({
+      label: 'week of September 11 to 17',
+      short: 'week of Sep 11–17',
+      spend: 1763.4,
+      results: 30,
+      cost: 1763.4 / 30,
     });
   });
 
@@ -108,29 +100,33 @@ describe('the two windows', () => {
     expect(shortRangeLabel('2026-09-28', '2026-10-04', 7)).toBe('week of Sep 28–Oct 4');
   });
 
-  it('says nothing when the range has no data yet, instead of printing zeros', () => {
-    const empty: RecapModel = {
-      ...recap,
-      source: 'none',
-      current: { ...recap.current, spend: 0, results: 0, costPerResult: null },
-      previous: null,
-    };
-    const model = build({ recap: empty });
+  it('follows the range to the engine window nearest it', () => {
+    const model = build({ range: { ...range, days: 14, window: 'd14', from: '2026-09-14' } });
+    expect(model.after).toMatchObject({ label: 'September 11 to 24', spend: 3924, results: 86 });
+    // No cycle ran 14 days before the last one.
+    expect(model.before).toBeNull();
+  });
+
+  it('takes the earlier cycle a day either side, never further', () => {
+    const drifted = [series[0], point('2026-09-17T23:59:00Z', { spend_d7: 1500, conv_d7: 25 })];
+    expect(build({ series: drifted }).before).toMatchObject({ spend: 1500, results: 25 });
+    const far = [series[0], point('2026-09-16T19:00:00Z', { spend_d7: 1500, conv_d7: 25 })];
+    expect(build({ series: far }).before).toBeNull();
+  });
+
+  it('prices a window that bought nothing as no cost, not zero', () => {
+    const quiet = [point('2026-09-25T19:03:03Z', { spend_d7: 120, conv_d7: 0 })];
+    expect(build({ series: quiet }).after).toMatchObject({ spend: 120, results: 0, cost: null });
+  });
+
+  it('says nothing before the engine has a series, instead of printing zeros', () => {
+    const model = build({ series: [] });
     expect(model.source).toBe('none');
     expect(model.after).toBeNull();
     expect(model.before).toBeNull();
     expect(model.projection).toBeNull();
-    expect(build().source).toBe('daily');
-  });
-
-  it('has no "before" when the recap has no prior window', () => {
-    expect(build({ recap: { ...recap, previous: null } }).before).toBeNull();
-    expect(build({ range: { ...range, previous: null } }).before).toBeNull();
-  });
-
-  it('a range that is not a week is named by its dates alone', () => {
-    const model = build({ range: { ...range, days: 14, from: '2026-09-14', previous: null } });
-    expect(model.after.label).toBe('September 14 to 27');
+    // The cycle line does not depend on the series.
+    expect(model.lastCycle?.when).toBe('Friday 13:03');
   });
 });
 
@@ -156,40 +152,41 @@ describe('the last cycle', () => {
 });
 
 describe('the projection', () => {
-  it('prices the window without the ad sets the pending pauses would remove', () => {
-    const { projection } = build();
-    // 2161 − 405 − 125 = 1631 over 56 − 4 − 0 = 52 leads.
-    expect(projection).toEqual({
+  // The body's pauses: Ad set A at its interval (75.65 × 8 events = 605.23 over 8 leads) and
+  // Ad set B, which bought nothing, at the 340.44 its zero-conversion evidence states.
+  const projected = (3924 - 75.65374999999999 * 8 - 340.44) / (86 - 8);
+
+  it('prices the engine window without the ad sets the pending pauses would remove', () => {
+    expect(build().projection).toEqual({
       pauses: 2,
-      remaining: 2,
-      cost: 31.365384615384617,
-      vsTarget: 'under',
+      remaining: 7,
+      cost: projected,
+      vsTarget: 'over',
+      window: 'd14',
     });
   });
 
-  it('reads "over" against a lower target and "on" when they meet', () => {
-    expect(build({ target: 30 }).projection?.vsTarget).toBe('over');
-    expect(build({ target: 31.37 }).projection?.vsTarget).toBe('on');
+  it('reads "under" against a higher target and "on" when they meet', () => {
+    expect(build({ target: 40 }).projection?.vsTarget).toBe('under');
+    expect(build({ target: Math.round(projected * 100) / 100 }).projection?.vsTarget).toBe('on');
     expect(build({ target: null }).projection?.vsTarget).toBeNull();
   });
 
   it('is absent with no pending pause, and null-priced when the rest bought nothing', () => {
     const { report } = readBody('tours');
     expect(build({ report }).projection).toBeNull();
-    const dead = build({
-      recap: { ...recap, current: { ...recap.current, results: 4 } },
-    });
+    const dead = build({ series: [{ ...series[0], conv_d14: 8 }] });
     expect(dead.projection).toMatchObject({ pauses: 2, cost: null, vsTarget: null });
   });
 
-  it('falls back to the engine window when a snapshot has no daily series', () => {
-    const { projection } = build({
-      snapshots: [
-        { id: PAUSED_A, windows: { d7: { spend: 405, leads: 4 } } },
-        { id: PAUSED_B, windows: { d7: { spend: 125, leads: 0 } } },
-      ],
-    });
-    expect(projection?.cost).toBeCloseTo(31.37, 2);
+  it('refuses to price a pause whose spend neither the interval nor its evidence states', () => {
+    const { report } = readBody('formularios');
+    const recommendations = report.recommendations.map((rec) =>
+      rec.kind === 'pause' && rec.evidence?.metric === 'spend'
+        ? { ...rec, evidence: { ...rec.evidence, metric: 'cpp' } }
+        : rec,
+    );
+    expect(build({ report: { ...report, recommendations } }).projection).toBeNull();
   });
 });
 

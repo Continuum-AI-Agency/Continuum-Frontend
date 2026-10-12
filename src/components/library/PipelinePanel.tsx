@@ -56,7 +56,9 @@ function PipelineCard({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-primary">{manifest.name}</p>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {manifest.name}
+        </p>
         <CopyIdButton pipelineId={manifest.pipeline_id} />
       </div>
       <PipelineContract manifest={manifest} />

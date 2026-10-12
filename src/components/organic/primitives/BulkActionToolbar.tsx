@@ -57,7 +57,7 @@ export function BulkActionToolbar({
           <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold">
             {selectedCount}
           </span>
-          <span className="text-sm font-medium text-primary">Selected</span>
+          <span className="text-sm font-medium text-foreground">Selected</span>
           <button
             type="button"
             onClick={onClear}

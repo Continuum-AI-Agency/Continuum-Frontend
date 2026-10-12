@@ -101,7 +101,7 @@ function ConflictBar({
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
             <div className="text-sm">
-              <p className="font-medium text-primary">
+              <p className="font-medium text-foreground">
                 {DESIGN_SECTION_LABELS[conflict.section]} · {conflict.field}
               </p>
               <p className="mt-0.5 text-secondary">{conflict.detail}</p>
@@ -151,7 +151,7 @@ function RigorControl({
     <div className="rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-primary">How should Continuum apply this?</p>
+          <p className="text-sm font-medium text-foreground">How should Continuum apply this?</p>
           <p className="mt-0.5 text-xs text-secondary">
             We recommend <span className="font-medium">{TIER_LABELS[snapshot.rigor.tier]}</span>{' '}
             from {evidence.tokenCount} tokens
@@ -237,7 +237,7 @@ function SectionCard({
     <div className="rounded-lg border border-border p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h4 className="text-sm font-semibold text-primary">{section.title}</h4>
+          <h4 className="text-sm font-semibold text-foreground">{section.title}</h4>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Badge variant={section.provenance === 'declared' ? 'default' : 'secondary'}>
               {section.provenance === 'declared'
@@ -304,7 +304,7 @@ function SectionCard({
               <span
                 className={
                   rule.strength === 'hard'
-                    ? 'shrink-0 font-medium text-primary'
+                    ? 'shrink-0 font-medium text-foreground'
                     : 'shrink-0 text-secondary'
                 }
               >
@@ -329,7 +329,7 @@ function ExportRow({ snapshot }: { snapshot: DesignSystemSnapshot }) {
   return (
     <div className="flex items-center justify-between rounded-lg border border-border p-4">
       <div>
-        <p className="text-sm font-medium text-primary">Export</p>
+        <p className="text-sm font-medium text-foreground">Export</p>
         <p className="mt-0.5 text-xs text-secondary">
           A portable bundle — DTCG tokens, the adherence config, and every section as markdown.
           Re-importable here, and readable by Figma or Style Dictionary.

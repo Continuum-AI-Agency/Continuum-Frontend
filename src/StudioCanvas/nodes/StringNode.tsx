@@ -221,7 +221,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                     event.stopPropagation();
                     slash.onKeyDown(event);
                   }}
-                  className="nodrag text-xs text-primary placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]"
+                  className="nodrag text-xs text-foreground placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]"
                   placeholder="Enter prompt or instructions — type / for shortcuts"
                 />
 

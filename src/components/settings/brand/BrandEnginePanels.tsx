@@ -73,7 +73,7 @@ function Panel({
 }) {
   return (
     <section className="rounded-lg border border-border p-4" data-testid={testId}>
-      <h4 className="text-sm font-semibold text-primary">{title}</h4>
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
       <p className="mt-0.5 text-xs text-secondary">{note}</p>
       <div className="mt-3">{children}</div>
     </section>
@@ -106,11 +106,11 @@ function Row({ row, testId, valueTestId }: { row: SpecRow; testId: string; value
       data-label={row.label}
     >
       <div className="min-w-0">
-        <p className="text-sm text-primary">{row.label}</p>
+        <p className="text-sm text-foreground">{row.label}</p>
         {row.note ? <p className="mt-0.5 text-xs text-secondary">{row.note}</p> : null}
       </div>
       <p
-        className="shrink-0 text-right font-mono text-sm tabular-nums text-primary"
+        className="shrink-0 text-right font-mono text-sm tabular-nums text-foreground"
         data-testid={valueTestId}
       >
         {row.value}
@@ -196,7 +196,7 @@ function TypeInventoryPanel({ inventory }: { inventory: TypeInventory }) {
                 data-present={row.present ? 'true' : 'false'}
               >
                 <div className="min-w-0">
-                  <p className="text-sm text-primary">
+                  <p className="text-sm text-foreground">
                     {row.family} <span className="tabular-nums text-secondary">{row.weight}</span>
                   </p>
                   <p className="mt-0.5 text-xs text-secondary">{row.usedFor}</p>
@@ -259,7 +259,7 @@ function ColourUsagePanel({ rows }: { rows: ColourRow[] }) {
                     className="size-3.5 shrink-0 rounded-sm border border-black/15 dark:border-white/20"
                     style={{ backgroundColor: row.hex }}
                   />
-                  <span className="text-sm text-primary">{row.name}</span>
+                  <span className="text-sm text-foreground">{row.name}</span>
                   <span className="font-mono text-xs tabular-nums text-secondary">{row.hex}</span>
                 </div>
                 <p
@@ -304,7 +304,7 @@ function BrandFactsPanel({ facts }: { facts: BrandFacts }) {
               className="flex items-baseline justify-between gap-6 border-b border-border/50 py-2 last:border-b-0"
               data-testid="fact-row"
             >
-              <p className="min-w-0 text-sm text-primary">{row.fact}</p>
+              <p className="min-w-0 text-sm text-foreground">{row.fact}</p>
               <Provenance source={row.provenance} testId="fact-provenance" />
             </div>
           ))}
@@ -341,7 +341,7 @@ function RuleMeasurementPanel({ ledger }: { ledger: RuleLedger }) {
               data-enforced={rule.enforcedBy === null ? 'false' : 'true'}
             >
               <div className="flex items-baseline justify-between gap-4">
-                <p className="min-w-0 text-sm text-primary" data-testid="rule-measurement">
+                <p className="min-w-0 text-sm text-foreground" data-testid="rule-measurement">
                   {rule.measurement}
                 </p>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -376,7 +376,7 @@ function RuleMeasurementPanel({ ledger }: { ledger: RuleLedger }) {
 
       {ledger.pending.length > 0 ? (
         <div className="mt-4 border-t border-border pt-3">
-          <p className="text-xs font-medium text-primary">
+          <p className="text-xs font-medium text-foreground">
             Pending — real, and not yet machine-checkable ({ledger.pending.length})
           </p>
           <div className="mt-1">
