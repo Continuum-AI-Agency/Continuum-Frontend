@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import { type Judgement, JUDGEMENT_LABEL, JUDGEMENT_TEXT } from '@/components/paid-media/jaina/reading';
+import type { FigureProps } from '@/components/paid-media/optimizer/format';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +20,8 @@ export type MetricStripItem = {
   // Overrides the value's text color (e.g. a hook-rate health gradient) while
   // keeping the shared label/value/delta layout.
   valueColor?: string;
+  /** Provenance for the value node (figureProps): raw figure, currency, window, unit. */
+  figure?: FigureProps;
 };
 
 // A quiet one-line KPI strip — headline metrics rendered as a dense inline row
@@ -56,6 +59,7 @@ export function MetricStrip({ items, live = false }: { items: MetricStripItem[];
               )}
               style={item.valueColor ? { color: item.valueColor } : undefined}
               title={item.judgement ? `${item.label}: ${JUDGEMENT_LABEL[item.judgement]}` : undefined}
+              {...item.figure}
             >
               {item.value}
             </span>

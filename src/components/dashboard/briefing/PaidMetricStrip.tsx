@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { figureProps } from '@/components/paid-media/optimizer/format';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -21,9 +22,12 @@ type State =
 export function PaidMetricStrip({
   brandId,
   adAccountId,
+  accountCurrency = null,
 }: {
   brandId: string;
   adAccountId: string | null;
+  /** The account record's currency (what the Optimizer knows); the payload's own wins. */
+  accountCurrency?: string | null;
 }) {
   const [state, setState] = useState<State>({ status: 'idle' });
 
@@ -48,14 +52,22 @@ export function PaidMetricStrip({
     };
   }, [brandId, adAccountId]);
 
+  // Money carries provenance (raw, currency, the 7-day window) on the node that prints it, the
+  // way the Optimizer's figures do, so the L3 bench can grade the strip against its payload.
+  // ROAS and CTR print to the decimals a reader needs and are not stamped: the figure contract
+  // formats a percent to whole points.
   const items = useMemo<MetricStripItem[]>(() => {
     if (state.status !== 'success') return [];
-    return buildPaidStatCards(state.overview).map((card) => ({
+    return buildPaidStatCards(state.overview, accountCurrency).map((card) => ({
       label: card.label,
       value: card.value,
       deltaPct: card.deltaPct,
+      figure:
+        card.unit === 'currency'
+          ? figureProps(`home.strip.${card.id}`, card.raw, card.currency, 'd7', 'currency')
+          : undefined,
     }));
-  }, [state]);
+  }, [state, accountCurrency]);
 
   if (state.status === 'idle' || state.status === 'error') return null;
   if (state.status === 'loading') return <Skeleton className="h-4 w-72" />;

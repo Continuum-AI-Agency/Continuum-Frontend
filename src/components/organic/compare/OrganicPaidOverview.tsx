@@ -291,7 +291,11 @@ function PaidPanel({
                 </span>
                 <span className="flex shrink-0 items-baseline gap-2">
                   <span className="font-mono text-sm font-semibold tabular-nums">
-                    {formatKpiValue(result.overview.metrics.spend, 'currency')}
+                    {formatKpiValue(
+                      result.overview.metrics.spend,
+                      'currency',
+                      result.overview.currency ?? null,
+                    )}
                   </span>
                   {typeof result.overview.comparison?.spend?.percentageChange === 'number' ? (
                     <span className="font-mono text-2xs tabular-nums text-muted-foreground">
