@@ -510,15 +510,20 @@ test('(e) with a null currency no sentence prints a currency symbol — UX-backe
   );
 });
 
-test('(e′) with MXN no sentence prints a dollar sign', () => {
+// M1 (2026-10-13): a peso figure prints "$306 MXN". The "$" is allowed only with the code
+// right after its figure — a bare "$306" on a peso account still reads as dollars, and a
+// foreign code ("USD") on a peso account is a different currency.
+const DOLLAR_WITHOUT_MXN = /\$\s?\d[\d,]*(?:\.\d+)?(?![\d.,]| MXN\b)/;
+
+test('(e′) with MXN every dollar sign carries the MXN code, and no other code appears', () => {
   const result = forAll(
     inputGen({ currency: 'MXN' }),
     (input) => {
       const { snapshots, opts } = build(input);
       const r = runCycle(snapshots, opts);
-      const offending = allProse(r).filter((t) => /\$\s?\d/.test(t));
+      const offending = allProse(r).filter((t) => DOLLAR_WITHOUT_MXN.test(t) || /\bUSD\b/.test(t));
       if (offending.length > 0)
-        return `$ on a peso account in: ${offending
+        return `$ without MXN, or a foreign code, on a peso account in: ${offending
           .slice(0, 3)
           .map((t) => JSON.stringify(t.slice(0, 120)))
           .join(' ; ')}`;
@@ -526,7 +531,7 @@ test('(e′) with MXN no sentence prints a dollar sign', () => {
     },
     { runs: 60 },
   );
-  report('(e′) MXN never prints $', result, 'same producers');
+  report('(e′) MXN never prints $ without its code', result, 'same producers');
 });
 
 // ---------------------------------------------------------------------------

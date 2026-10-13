@@ -140,7 +140,7 @@ describe('portfolio brief', () => {
       candidate_id: 'rec:1',
       cta: { kind: 'queue_row' },
     });
-    expect(brief.hero.headline).toContain('USD 120/day');
+    expect(brief.hero.headline).toContain('$120 USD/day');
     expect(brief.growth_sentence).toBe(
       'leads +30% · cost per result -14% · 12% over target · on track',
     );
@@ -225,9 +225,9 @@ describe('the calm hero', () => {
     const brief = portfolioBriefSchema.parse(briefOf(mensajes));
     expect(brief.hero.module).toBe('none');
     expect(brief.hero.headline).not.toContain('on its plan');
-    expect(brief.hero.headline).toBe('Cost per conversation is 40.53, 35% over the 30 target');
+    expect(brief.hero.headline).toBe('Cost per conversation is 40.53, 35% over the 30.00 target');
     expect(brief.hero.why).toContain('No single change clears the impact floor today');
-    expect(brief.hero.why).toContain('largest: 0.49/day vs a 60/day floor');
+    expect(brief.hero.why).toContain('largest: 0.49/day vs a 60.00/day floor');
     // The lever, named: creatives, budget, target.
     expect(brief.hero.why).toMatch(/creative/);
     expect(brief.hero.why).toMatch(/budget/);
@@ -236,20 +236,20 @@ describe('the calm hero', () => {
 
   it('keeps saying it on the Frontend fallback, which has no standing (results clear the event floor)', () => {
     const brief = briefOf(mensajes, false);
-    expect(brief.hero.headline).toBe('Cost per conversation is 40.53, 35% over the 30 target');
+    expect(brief.hero.headline).toBe('Cost per conversation is 40.53, 35% over the 30.00 target');
   });
 
   it('says there were no results and every ad set is held, with the reason and the lever (Tours)', () => {
     const brief = portfolioBriefSchema.parse(briefOf(tours));
     expect(brief.hero.module).toBe('none');
     expect(brief.hero.headline).toBe('No conversations in 14 days — all 12 ad sets are held');
-    expect(brief.hero.why).toContain('154.75');
+    expect(brief.hero.why).toContain('155');
     expect(brief.hero.why).toContain('different result');
     expect(brief.hero.why).toMatch(/Move them to a portfolio that measures what they buy/);
   });
 
   it('says there were no results even without a standing', () => {
-    expect(briefOf(tours, false).hero.headline).toBe('No conversations in 14 days on 154.75 spent');
+    expect(briefOf(tours, false).hero.headline).toBe('No conversations in 14 days on 155 spent');
   });
 
   it('never claims the plan when cost is materially over target', () => {
@@ -262,7 +262,7 @@ describe('the calm hero', () => {
       promptVersion: 'v1',
       generatedAt: 'x',
     });
-    expect(brief.hero.headline).toBe('Cost per lead is 81 USD, 16% over the 70 USD target');
+    expect(brief.hero.headline).toBe('Cost per lead is $81.00 USD, 16% over the $70.00 USD target');
     expect(brief.hero.why).not.toContain('floor today (');
   });
 
@@ -276,7 +276,7 @@ describe('the calm hero', () => {
       generatedAt: 'x',
     });
     expect(brief.hero.headline).not.toContain('on its plan');
-    expect(brief.hero.headline).toBe('Cost per lead is 90 USD against a 70 USD target');
+    expect(brief.hero.headline).toBe('Cost per lead is $90.00 USD against a $70.00 USD target');
     expect(brief.hero.why).toContain('too little data');
   });
 

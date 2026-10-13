@@ -180,7 +180,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
               from: round2(cpp14),
               to: round2(robustBestCpp),
             },
-            // "101 MXN por lead, 2.9× la referencia de 35 MXN": the cost per result is the
+            // "$101 MXN por lead, 2.9× la referencia de $35 MXN": the cost per result is the
             // figure, and the reference it crossed is the comparison. No verb — the pause
             // and what it saves are the button's.
             title: title({
@@ -220,7 +220,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           window: 'd14',
           estImpactPerDay: perDayOver(d14.spend, 'd14'),
           headline: avoidedHeadline(perDayOver(d14.spend, 'd14')),
-          // "298 MXN en 14 días y 0 leads": the spend, the window, and the nothing it bought,
+          // "$298 MXN en 14 días y 0 leads": the spend, the window, and the nothing it bought,
           // with the target it exceeded so the reader knows why 14 days was enough.
           title: title({
             entity: entityOf(s),

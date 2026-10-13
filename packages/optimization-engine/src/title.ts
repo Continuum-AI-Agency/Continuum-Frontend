@@ -7,14 +7,14 @@
 // CPA" is the failure this engine exists to prevent, and a title that said "por resultado"
 // for every objective would be its quieter cousin.
 //
-// Money is `formatMoneyCode` from contracts: the figure, then the ISO code, bare when the
-// account records none. Never a symbol — the prose `reason` keeps `formatMoney`'s "$" for
-// USD accounts for one release; the title does not.
+// Money is `formatMoney` from contracts (M1): the currency's symbol before the figure and its
+// ISO code after it — "$35 MXN" — and the bare figure when the account records none. The
+// title and the prose `reason` beside it spell money by the same rule.
 // ---------------------------------------------------------------------------
 
 import {
   type ActionSizing,
-  formatMoneyCode,
+  formatMoney,
   normalizeCurrencyCode,
   type RecommendationAction,
   type RecommendationTitle,
@@ -86,9 +86,9 @@ export function moneyPerResultUnit(cfg: EngineConfig, s?: Pick<AdSetSnapshot, 'k
   return `${currencyCode(cfg)} por ${resultNoun(cfg, s)}`.trim();
 }
 
-/** Money for a comparator: "35 MXN", "25.54", never a symbol. */
+/** Money for a comparator: "$35 MXN", or the bare "25.54" when the currency is unknown. */
 export const titleMoney = (value: number, cfg: Pick<EngineConfig, 'currency'>): string =>
-  formatMoneyCode(value, cfg.currency);
+  formatMoney(value, cfg.currency);
 
 /** "2.9×" — the multiple of one figure over another, one decimal, for a comparison. */
 export const multiple = (value: number, reference: number): string =>

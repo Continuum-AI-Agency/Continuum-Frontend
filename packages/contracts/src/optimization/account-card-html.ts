@@ -40,6 +40,7 @@ import type {
   ImpactClass,
 } from './account-strategy';
 import { perPeriod } from './account-strategy';
+import { formatMoney } from './money';
 
 /** Colour is the KIND OF MONEY, never decoration and never tone of voice. */
 const CLASS_INK: Record<
@@ -186,13 +187,6 @@ function pct(part: number, whole: number): number {
   return Math.min(100, Math.round((part / whole) * 1000) / 10);
 }
 
-function money(value: number, currency: string | null): string {
-  const digits = Math.abs(value) >= 100 ? 0 : 2;
-  const body = value.toFixed(digits);
-  if (!currency) return body;
-  return currency === 'USD' ? `$${body}` : `${body} ${currency}`;
-}
-
 /**
  * Money's support line: the same figure per day and per month.
  *
@@ -202,7 +196,7 @@ function money(value: number, currency: string | null): string {
  */
 function moneyLine(perDay: number, currency: string | null): string {
   const { day, month } = perPeriod(perDay);
-  return `${money(day, currency)}/day · ${money(month, currency)}/mo`;
+  return `${formatMoney(day, currency)}/day · ${formatMoney(month, currency)}/mo`;
 }
 
 /**
@@ -218,7 +212,7 @@ function headlineFigure(headline: CandidateHeadline, currency: string | null): s
     case 'percent':
       return `${headline.value}%`;
     case 'currency_per_day':
-      return money(headline.value, currency);
+      return formatMoney(headline.value, currency);
     case 'count':
       return String(headline.value);
   }
@@ -289,10 +283,10 @@ function drawChart(chart: AccountChart, currency: string | null, narrow = false)
   switch (chart.shape) {
     case 'transfer': {
       const max = Math.max(chart.from.cost_per_result, chart.to.cost_per_result);
-      return `<div class="lg2"><span>${esc(chart.from.label)}</span><span class="n">${esc(money(chart.from.cost_per_result, currency))}</span></div>
+      return `<div class="lg2"><span>${esc(chart.from.label)}</span><span class="n">${esc(formatMoney(chart.from.cost_per_result, currency))}</span></div>
 <div class="bar"><i style="width:${pct(chart.from.cost_per_result, max)}%"></i></div>
 <div class="flow"><span class="a-flow"></span></div>
-<div class="lg2"><span>${esc(chart.to.label)}</span><span class="n">${esc(money(chart.to.cost_per_result, currency))}</span></div>
+<div class="lg2"><span>${esc(chart.to.label)}</span><span class="n">${esc(formatMoney(chart.to.cost_per_result, currency))}</span></div>
 <div class="bar"><i style="width:${pct(chart.to.cost_per_result, max)}%"></i></div>`;
     }
     case 'threshold': {
@@ -353,7 +347,7 @@ function drawChart(chart: AccountChart, currency: string | null, narrow = false)
       if (!gauge) return '';
       const at = pct(gauge.value, gauge.ceiling);
       return `<div class="gauge"><i style="width:${at}%"></i><span class="mk a-nudge" style="left:${at}%"></span></div>
-<div class="lg2"><span class="n">${esc(money(gauge.value, currency))}</span><span class="n">ceiling ${esc(money(gauge.ceiling, currency))}</span></div>`;
+<div class="lg2"><span class="n">${esc(formatMoney(gauge.value, currency))}</span><span class="n">ceiling ${esc(formatMoney(gauge.ceiling, currency))}</span></div>`;
     }
     case 'quadrant': {
       const xs = chart.points.map((p) => p.x);
@@ -540,9 +534,9 @@ function figureRow(candidate: AccountCandidate, currency: string | null): string
       (support ? `<span class="money">${esc(support)}</span>` : '')
     );
   }
-  const month = money(perPeriod(candidate.impact_per_day).month, currency);
+  const month = formatMoney(perPeriod(candidate.impact_per_day).month, currency);
   return (
-    `<span class="fig">${esc(money(candidate.impact_per_day, currency))}</span>` +
+    `<span class="fig">${esc(formatMoney(candidate.impact_per_day, currency))}</span>` +
     `<span class="unit">/day</span>` +
     `<span class="money">${esc(`· ${month}/mo`)}</span>`
   );

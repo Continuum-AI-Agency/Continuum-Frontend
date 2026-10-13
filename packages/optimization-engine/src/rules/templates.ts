@@ -682,7 +682,7 @@ const TEMPLATE_EVIDENCE: Record<string, EvidenceBuilder> = {
         entity,
         figure: Math.round(freq * 10) / 10,
         unit: 'veces por persona en 7 días',
-        comparator: `sobre el tope de ${cap} y ${titleMoney(cpp, cfg)} ${moneyPerResultUnit(cfg)}, ${multiple(cpp, avg)} el promedio de ${titleMoney(avg, cfg)}`,
+        comparator: `sobre el tope de ${cap} y ${titleMoney(cpp, cfg)} por ${resultNoun(cfg)}, ${multiple(cpp, avg)} el promedio de ${titleMoney(avg, cfg)}`,
         window: 'd7',
       }),
       action: action('audience_expand', cfg),

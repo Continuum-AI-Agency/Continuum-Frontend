@@ -14,7 +14,7 @@
 // Design: decisiones.md 17–21; escenarios.html scenarios 01, 07, 09, 13, 21, 25, 26, 27, 29.
 // ---------------------------------------------------------------------------
 
-import type { PlatformId } from '@continuum/contracts';
+import { formatMoney, type PlatformId } from '@continuum/contracts';
 import type { DeliveryState, OptimizationObjective } from '../types';
 import { type PlatformCaps, platformCaps } from './learning';
 
@@ -193,7 +193,6 @@ type PricedLeg = { leg: CrossPlatformLeg; spend: number; results: number; cost: 
 
 const cents = (v: number): number => Math.round(v * 100) / 100;
 const toMinor = (v: number): number => Math.round(v * 100);
-const money = (v: number, currency: string): string => `${cents(v).toFixed(2)} ${currency}`;
 const percent = (fraction: number): string => `${(fraction * 100).toFixed(2)}%`;
 
 const PLATFORM_LABEL: Readonly<Record<PlatformId, string>> = {
@@ -473,7 +472,7 @@ export function crossPlatformMove(input: CrossPlatformMoveInput): CrossPlatformM
   if (ratio < CROSS_PLATFORM_GAP) {
     return refusal(
       'below_threshold',
-      `${donorLabel} pays ${money(donorLeg.cost, currency)} per result and ${receiverLabel} ${money(receiverLeg.cost, currency)}: ${ratio.toFixed(2)}×, under the ${CROSS_PLATFORM_GAP}× that moves money.`,
+      `${donorLabel} pays ${formatMoney(donorLeg.cost, currency)} per result and ${receiverLabel} ${formatMoney(receiverLeg.cost, currency)}: ${ratio.toFixed(2)}×, under the ${CROSS_PLATFORM_GAP}× that moves money.`,
       { ratio, excludedFromComparison },
     );
   }
@@ -525,15 +524,15 @@ export function crossPlatformMove(input: CrossPlatformMoveInput): CrossPlatformM
   const remainderText = (side: string, r: MoveRounding, names: Map<string, string>) =>
     r.remainderMinor === 0
       ? ''
-      : ` Rounding: ${money(r.remainderMinor / 100, currency)} of the ${side} went to ${[...new Set(r.assignedTo)].map((id) => names.get(id) ?? id).join(', ')}.`;
+      : ` Rounding: ${formatMoney(r.remainderMinor / 100, currency)} of the ${side} went to ${[...new Set(r.assignedTo)].map((id) => names.get(id) ?? id).join(', ')}.`;
   const names = new Map(
     [...donor.eligible, ...receiver.eligible].map((e) => [e.m.id, e.m.name ?? e.m.id]),
   );
   const bindingName = names.get(bindingCap.entityId) ?? bindingCap.entityId;
   const reason =
-    `Move ${money(amount, currency)}/day from ${donorLabel} to ${receiverLabel}: last 7 days ` +
-    `${donorLabel} paid ${money(donorLeg.cost, currency)} per result and ${receiverLabel} ` +
-    `${money(receiverLeg.cost, currency)} (${ratio.toFixed(2)}×). ` +
+    `Move ${formatMoney(amount, currency)}/day from ${donorLabel} to ${receiverLabel}: last 7 days ` +
+    `${donorLabel} paid ${formatMoney(donorLeg.cost, currency)} per result and ${receiverLabel} ` +
+    `${formatMoney(receiverLeg.cost, currency)} (${ratio.toFixed(2)}×). ` +
     `Every eligible ${donorLabel} ${UNIT_LABEL[donor.platform]} goes down ${percent(donorPct)} ` +
     `(${count(decreases.length, donor.platform)}) and every eligible ${receiverLabel} ` +
     `${UNIT_LABEL[receiver.platform]} goes up ${percent(receiverPct)} ` +

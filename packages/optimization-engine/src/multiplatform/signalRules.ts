@@ -21,6 +21,7 @@ import {
   PlatformCardSchema,
   type PlatformEntityRef,
   type PlatformSignals,
+  formatMoney,
 } from '@continuum/contracts';
 import { DARK_DAYS_THRESHOLD } from '../delivery';
 import type { OptimizationObjective, WindowMetrics } from '../types';
@@ -159,7 +160,6 @@ type CreativeDay = TikTokCreative['days'][number];
 
 const DAY_MS = 86_400_000;
 const cents = (v: number): number => Math.round(v * 100) / 100;
-const money = (v: number, currency: string): string => `${cents(v).toFixed(2)} ${currency}`;
 const pct = (fraction: number): string => `${(fraction * 100).toFixed(1)}%`;
 const normalize = (text: string): string => text.trim().toLowerCase().replace(/\s+/g, ' ');
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
@@ -299,7 +299,7 @@ function g05NegativeTerms(run: Run, google: GoogleSignals, target: number, curre
   for (const [campaignId, terms] of byCampaign) {
     const campaignName = run.name(campaignId, 'campaign');
     const spend = terms.reduce((sum, t) => sum + t.totals.spend, 0);
-    const list = terms.map((t) => `"${t.term}" (${money(t.totals.spend, currency)})`).join(', ');
+    const list = terms.map((t) => `"${t.term}" (${formatMoney(t.totals.spend, currency)})`).join(', ');
     run.recommend({
       rule: 'G05',
       platform: 'google_ads',
@@ -328,8 +328,8 @@ function g05NegativeTerms(run: Run, google: GoogleSignals, target: number, curre
       },
       reason:
         terms.length === 1
-          ? `The search term ${list} in ${campaignName} cost more than the ${money(target, currency)} target in ${days} days with no conversions. Add it as an exact negative.`
-          : `${terms.length} search terms in ${campaignName} each cost more than the ${money(target, currency)} target in ${days} days with no conversions, ${money(spend, currency)} together: ${list}. Add them as exact negatives.`,
+          ? `The search term ${list} in ${campaignName} cost more than the ${formatMoney(target, currency)} target in ${days} days with no conversions. Add it as an exact negative.`
+          : `${terms.length} search terms in ${campaignName} each cost more than the ${formatMoney(target, currency)} target in ${days} days with no conversions, ${formatMoney(spend, currency)} together: ${list}. Add them as exact negatives.`,
     });
   }
 }
@@ -381,7 +381,7 @@ function promoteTerms(run: Run, google: GoogleSignals, target: number, currency:
         matched_keyword: t.matched_keyword,
       },
       action: { kind: 'add_keyword', ref: adGroup, keyword: { text: t.term, matchType: 'EXACT' } },
-      reason: `"${t.term}" brought ${t.totals.conversions} conversions in ${run.windowDays} days at ${money(cost, currency)} each, at or under the ${money(target, currency)} target, and is not a keyword yet. Add it as an exact keyword to ${adGroupName}.`,
+      reason: `"${t.term}" brought ${t.totals.conversions} conversions in ${run.windowDays} days at ${formatMoney(cost, currency)} each, at or under the ${formatMoney(target, currency)} target, and is not a keyword yet. Add it as an exact keyword to ${adGroupName}.`,
     });
   }
 }
@@ -470,8 +470,8 @@ function g07BidTarget(run: Run, google: GoogleSignals, kpiField: keyof WindowMet
     const actual = d14.spend / conversions;
     const ratio = actual / goal;
     const rankLost = d14.delivery?.rankLostImpressionShare;
-    const pays = `${campaignName} pays ${money(actual, currency)} per conversion over 14 days`;
-    const goalText = `the portfolio CPA goal of ${money(goal, currency)}`;
+    const pays = `${campaignName} pays ${formatMoney(actual, currency)} per conversion over 14 days`;
+    const goalText = `the portfolio CPA goal of ${formatMoney(goal, currency)}`;
     const settingText = `Google Ads target CPA (bid setting)`;
     let direction: 'raise' | 'lower' | null = null;
     if (ratio < G07_RAISE_BELOW) {
@@ -493,7 +493,7 @@ function g07BidTarget(run: Run, google: GoogleSignals, kpiField: keyof WindowMet
       run.abstain(
         'G07',
         b.campaign_id,
-        `${pays}, under ${goalText}, but raising its ${settingText} 10% to ${money(proposed, currency)} would put it above ${goalText}; the bid target is not raised past the goal.`,
+        `${pays}, under ${goalText}, but raising its ${settingText} 10% to ${formatMoney(proposed, currency)} would put it above ${goalText}; the bid target is not raised past the goal.`,
       );
       continue;
     }
@@ -525,8 +525,8 @@ function g07BidTarget(run: Run, google: GoogleSignals, kpiField: keyof WindowMet
       },
       reason:
         direction === 'raise'
-          ? `${pays}, ${Math.round((1 - ratio) * 100)}% under ${goalText}, and loses ${pct(rankLost ?? 0)} of impressions to rank. Its ${settingText} is ${money(bidSetting, currency)}: raise the Google Ads bid target 10% to ${money(proposed, currency)}, still under the portfolio goal.`
-          : `${pays}, over ${goalText} (${ratio.toFixed(2)}×). Its ${settingText} of ${money(bidSetting, currency)} lets Google pay that: lower the Google Ads bid target 10% to ${money(proposed, currency)}.`,
+          ? `${pays}, ${Math.round((1 - ratio) * 100)}% under ${goalText}, and loses ${pct(rankLost ?? 0)} of impressions to rank. Its ${settingText} is ${formatMoney(bidSetting, currency)}: raise the Google Ads bid target 10% to ${formatMoney(proposed, currency)}, still under the portfolio goal.`
+          : `${pays}, over ${goalText} (${ratio.toFixed(2)}×). Its ${settingText} of ${formatMoney(bidSetting, currency)} lets Google pay that: lower the Google Ads bid target 10% to ${formatMoney(proposed, currency)}.`,
     });
   }
 }
@@ -796,7 +796,7 @@ function g12Delivery(run: Run, google: GoogleSignals) {
     )[0]!;
     const refused = dark.reduce((n, c) => n + disapproved(c).length, 0);
     const budgetText = currency
-      ? `${money(budget, currency)}/day`
+      ? `${formatMoney(budget, currency)}/day`
       : `${cents(budget).toFixed(2)}/day`;
     run.recommend({
       rule: 'G12',
@@ -847,7 +847,7 @@ function g12Delivery(run: Run, google: GoogleSignals) {
       continue;
     }
     const what = isDark
-      ? `is ${c.primary_status} with ${currency ? money(c.budget_per_day ?? 0, currency) : cents(c.budget_per_day ?? 0).toFixed(2)}/day of budget and showed no ad for ${plural(c.dark_days, 'day', 'days')}`
+      ? `is ${c.primary_status} with ${currency ? formatMoney(c.budget_per_day ?? 0, currency) : cents(c.budget_per_day ?? 0).toFixed(2)}/day of budget and showed no ad for ${plural(c.dark_days, 'day', 'days')}`
       : `has ${plural(refused.length, 'ad', 'ads')} Google disapproved`;
     run.recommend({
       rule: 'G12',
@@ -1027,7 +1027,7 @@ function t3Fatigue(run: Run, tiktok: TikTokSignals, target: number | null) {
         replacement: replacement ?? null,
       },
       action: null,
-      reason: `"${c.name}" is tiring: ${results7 > 0 ? `${money(spend7 / results7, currency)} per result` : `${money(spend7, currency)} with no results`} in 7 days against a ${money(target, currency)} target, spend under its ${money(average, currency)} daily average ${T3_FALLING_DAYS} days running, and ${growth < 0 ? `reach down ${pct(-growth)}` : `reach up only ${pct(growth)}`} on the week before. Add 1–2 new creatives to ${adGroupName}; do not open another ad group.`,
+      reason: `"${c.name}" is tiring: ${results7 > 0 ? `${formatMoney(spend7 / results7, currency)} per result` : `${formatMoney(spend7, currency)} with no results`} in 7 days against a ${formatMoney(target, currency)} target, spend under its ${formatMoney(average, currency)} daily average ${T3_FALLING_DAYS} days running, and ${growth < 0 ? `reach down ${pct(-growth)}` : `reach up only ${pct(growth)}`} on the week before. Add 1–2 new creatives to ${adGroupName}; do not open another ad group.`,
     });
   }
 }
@@ -1207,8 +1207,8 @@ function t7BudgetBelowLearning(
     const cost = resultsSoFar > 0 ? cents(d7.spend / resultsSoFar) : null;
     const why =
       byMultiple !== null && budget < byMultiple
-        ? `${multiple}× the ${money(target!, currency)} target for ${g.optimization_goal}`
-        : `TikTok's ${money(floor!, currency)} minimum (20 USD × ${ratio})`;
+        ? `${multiple}× the ${formatMoney(target!, currency)} target for ${g.optimization_goal}`
+        : `TikTok's ${formatMoney(floor!, currency)} minimum (20 USD × ${ratio})`;
     run.recommend({
       rule: 'T7',
       platform: 'tiktok_ads',
@@ -1226,7 +1226,7 @@ function t7BudgetBelowLearning(
         results_so_far: resultsSoFar,
       },
       action: null,
-      reason: `${name} has ${money(budget, currency)}/day, under ${why}: ${money(required, currency)}/day. It will not leave learning on this budget — raise it or consolidate ad groups.`,
+      reason: `${name} has ${formatMoney(budget, currency)}/day, under ${why}: ${formatMoney(required, currency)}/day. It will not leave learning on this budget — raise it or consolidate ad groups.`,
     });
   }
 }

@@ -556,13 +556,13 @@ test('C2 measures the winner against the priced sibling, never the zero-conversi
   expect(recommendations.find((r) => r.trigger === 'C1_creative_drag')?.adId).toBe('ad_bonfire');
 });
 
-test('C2 prints the account currency when the config carries one, in the Frontend spelling', () => {
+test('C2 prints the account currency when the config carries one, in the Frontend M1 spelling', () => {
   const mxn = evaluateCreative([adSet('vr', VR_DIC25)], { ...cfg, currency: 'MXN' });
   const reason = mxn.recommendations.find((r) => r.trigger === 'C2_creative_winner')?.reason ?? '';
-  expect(reason).toContain('at 24.94 MXN per conversation (vs 55.37 MXN, 2.22x');
+  expect(reason).toContain('at $24.94 MXN per conversation (vs $55.37 MXN, 2.22x');
   const usd = evaluateCreative([adSet('vr', VR_DIC25)], { ...cfg, currency: 'USD' });
   expect(usd.recommendations.find((r) => r.trigger === 'C2_creative_winner')?.reason).toContain(
-    'at $24.94 per conversation',
+    'at $24.94 USD per conversation',
   );
 });
 

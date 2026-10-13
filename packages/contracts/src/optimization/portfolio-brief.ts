@@ -8,6 +8,7 @@
 // empty and the worker's fallback reads exactly like the Frontend's.
 
 import { z } from 'zod';
+import { formatMoney } from './money';
 
 export const heroModuleSchema = z.enum(['budget', 'pause', 'creative', 'audience', 'none']);
 export type HeroModule = z.infer<typeof heroModuleSchema>;
@@ -313,29 +314,26 @@ export function briefFigures(growth: BriefGrowth, candidates: readonly BriefCand
 
 // ── The deterministic brief ─────────────────────────────────────────────────
 // Same shape, no model. The worker falls back to it; the Frontend composes it while a
-// brief is missing. Money is formatted by the renderer; here the headline carries the
-// figure as a plain number so both sides say the same thing.
-
-const money = (n: number, currency: string | null): string =>
-  `${currency ?? ''}${currency ? ' ' : ''}${Math.round(n).toLocaleString('en-US')}`.trim();
+// brief is missing. Money is spelled by the one money rule (`formatMoney`, M1): "$48.80 MXN",
+// or the bare figure when the account's currency is unknown — never assumed.
 
 function headlineFor(c: BriefCandidate, currency: string | null, resultLabel: string): string {
   const name = c.adset_name ?? c.adset_id ?? 'an ad set';
   switch (c.module) {
     case 'pause':
-      return `Stop ${money(c.impact_per_day, currency)}/day going to ${name}`.slice(0, 90);
+      return `Stop ${formatMoney(c.impact_per_day, currency)}/day going to ${name}`.slice(0, 90);
     case 'budget':
-      return `Move budget toward cheaper ${resultLabel}: ${money(c.impact_per_day, currency)}/day at stake`.slice(
+      return `Move budget toward cheaper ${resultLabel}: ${formatMoney(c.impact_per_day, currency)}/day at stake`.slice(
         0,
         90,
       );
     case 'creative':
-      return `Rotate the creative on ${name}: ${money(c.impact_per_day, currency)}/day at stake`.slice(
+      return `Rotate the creative on ${name}: ${formatMoney(c.impact_per_day, currency)}/day at stake`.slice(
         0,
         90,
       );
     case 'audience':
-      return `Open a new audience beside ${name}: ${money(c.impact_per_day, currency)}/day at stake`.slice(
+      return `Open a new audience beside ${name}: ${formatMoney(c.impact_per_day, currency)}/day at stake`.slice(
         0,
         90,
       );
@@ -443,13 +441,6 @@ const HELD_COPY: Record<string, { why: (resultLabel: string) => string; lever: s
   },
 };
 
-/** A figure as a person writes it: at most two decimals, the currency code after it
- *  ("40.53 MXN"), or bare when the account's currency is unknown — never assumed. */
-const figure = (n: number, currency: string | null): string => {
-  const plain = String(Math.round(n * 100) / 100);
-  return currency ? `${plain} ${currency}` : plain;
-};
-
 const costPerLabel = (resultLabel: string): string =>
   resultLabel === 'impressions'
     ? 'Cost per 1,000 impressions'
@@ -470,7 +461,7 @@ export function calmHero(args: {
   const label = growth.result_label;
   const top = args.candidates[0];
   const underFloor = top
-    ? `No single change clears the impact floor today (largest: ${figure(top.impact_per_day, cur)}/day vs a ${figure(heroMinImpact(args.dailyTotal), cur)}/day floor).`
+    ? `No single change clears the impact floor today (largest: ${formatMoney(top.impact_per_day, cur)}/day vs a ${formatMoney(heroMinImpact(args.dailyTotal), cur)}/day floor).`
     : 'No open recommendations to act on today.';
 
   const allHeld =
@@ -501,11 +492,11 @@ export function calmHero(args: {
         ? `No spend and no ${label} in ${days} days`
         : allHeld
           ? `No ${label} in ${days} days — all ${standing.adsets_total} ad sets are held`
-          : `No ${label} in ${days} days on ${figure(growth.spend, cur)} spent`;
+          : `No ${label} in ${days} days on ${formatMoney(growth.spend, cur)} spent`;
     const lead =
       growth.spend <= 0
         ? 'Nothing delivered in the window.'
-        : `${figure(growth.spend, cur)} spent over ${days} days bought no ${label}.`;
+        : `${formatMoney(growth.spend, cur)} spent over ${days} days bought no ${label}.`;
     why = allHeld
       ? `${lead} ${heldWhy}`
       : `${lead} Check that the ad sets optimize for ${label} and the event is tracked, then the creatives.`;
@@ -514,10 +505,10 @@ export function calmHero(args: {
     why = heldWhy;
   } else if (over != null && over > MATERIAL_OVER_TARGET && cpr != null && target != null) {
     if (confident) {
-      headline = `${costPerLabel(label)} is ${figure(cpr, cur)}, ${Math.round(over * 100)}% over the ${figure(target, cur)} target`;
+      headline = `${costPerLabel(label)} is ${formatMoney(cpr, cur)}, ${Math.round(over * 100)}% over the ${formatMoney(target, cur)} target`;
       why = `${underFloor} The gap is portfolio-wide: new creatives, less budget until cost falls, or a target that fits what ${growth.results} ${label} cost.`;
     } else {
-      headline = `${costPerLabel(label)} is ${figure(cpr, cur)} against a ${figure(target, cur)} target`;
+      headline = `${costPerLabel(label)} is ${formatMoney(cpr, cur)} against a ${formatMoney(target, cur)} target`;
       why = `Confidence is low: too little data to say the gap will hold. ${underFloor}`;
     }
   }

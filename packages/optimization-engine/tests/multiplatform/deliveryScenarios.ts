@@ -27,6 +27,9 @@ import {
 } from '../../src';
 import { loadFixture } from './fixtures';
 
+/** M1: a "$" is only ever the symbol before a figure whose ISO code follows it. */
+const DOLLAR_WITHOUT_CODE = /\$\d[\d,]*(?:\.\d+)?(?![\d.,]| [A-Z]{3}\b)/;
+
 type Recorded<T> = { _source: { query?: string }; data: T };
 type GoogleDelivery = NonNullable<NonNullable<PlatformSignals['google']>['delivery']>;
 
@@ -305,14 +308,14 @@ export function runDeliveryScenarios(rec: Recorder): void {
       if (!PlatformCardSchema.safeParse(x.platform_card).success) problems.push(`${x.rule} card`);
       if (x.action !== null) problems.push(`${x.rule} writes`);
       if (x.needsApproval !== true) problems.push(`${x.rule} auto`);
-      if (x.reason.includes('$')) problems.push(`${x.rule} prints $`);
+      if (DOLLAR_WITHOUT_CODE.test(x.reason)) problems.push(`${x.rule} prints $ without its code`);
       const key = `${x.rule}|${x.entity.id}|${x.subject_key}`;
       if (keys.has(key)) problems.push(`duplicate ${key}`);
       keys.add(key);
     }
   }
   rec.check(
-    `e41–e44: ${all.length} evaluations — every delivery card passes PlatformCardSchema, none writes, all wait for a person, no "$", (rule, entity, subject) unique`,
+    `e41–e44: ${all.length} evaluations — every delivery card passes PlatformCardSchema, none writes, all wait for a person, no "$" without its ISO code (M1), (rule, entity, subject) unique`,
     problems.length === 0,
     problems.join('; ') ||
       `${all.reduce((n, r) => n + r.recommendations.length, 0)} findings checked`,

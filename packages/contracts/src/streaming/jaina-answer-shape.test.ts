@@ -428,7 +428,7 @@ describe('answerShapeOf — template answers', () => {
     const texts = answerTextsOf(templated(rankingBlock({}), 'Placeholder. Two. Three.'));
     expect(texts.template).toBe(true);
     expect(texts.executive).toBe(
-      'A es la que mejor rinde: 249 MXN por compra, contra 300 MXN de la cuenta.',
+      'A es la que mejor rinde: $249 MXN por compra, contra $300 MXN de la cuenta.',
     );
     expect(codesOf(templated(rankingBlock({}), 'Analysis complete.'))).toEqual([]);
   });
@@ -449,10 +449,10 @@ describe('answerShapeOf — template answers', () => {
     ];
     const texts = answerTextsOf(templated(block));
     expect(texts.justification).toContain(
-      'AV CAMACHO // MENSAJES // AGOSTO 2026: De 356 MXN a 249 MXN por compra.',
+      'AV CAMACHO // MENSAJES // AGOSTO 2026: De $356 MXN a $249 MXN por compra.',
     );
     // A text that already opens with its title is not given it twice.
-    expect(texts.justification).toContain('Gastar más: 300 MXN.');
+    expect(texts.justification).toContain('Gastar más: $300 MXN.');
   });
 
   it('a two-sentence template sentence is flagged', () => {

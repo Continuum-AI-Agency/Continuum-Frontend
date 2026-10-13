@@ -3,14 +3,14 @@
 // A recommendation used to lead with a READING ("The auction moved, not the ad", "Spending
 // on nothing") or with the action ("Stop 48.8 MXN/day going to ITESO // AGOSTO - RTG"). Both
 // hide the one thing a person checks first: which entity, what figure, against what. The
-// title is that sentence and nothing else — "ITESO // AGOSTO - RTG: 101 MXN por lead, 2.9×
-// la referencia de 35 MXN" — and the verb moves to a typed `action` the button renders.
+// title is that sentence and nothing else — "ITESO // AGOSTO - RTG: $101 MXN por lead, 2.9×
+// la referencia de $35 MXN" — and the verb moves to a typed `action` the button renders.
 //
 // Every field here is composed from figures the producer already holds (`evidence.value`,
 // `threshold`, the reference it compared against), never from the prose `reason`; the prose
-// stays for one release so nothing that reads it goes blank. Spanish, ISO currency codes
-// after the figure, and never a "$": the money rule for a sentence a client reads is
-// `formatMoneyCode` below, which is `formatMoney`'s digit rule with the symbol removed.
+// stays for one release so nothing that reads it goes blank. Spanish, and money by the one
+// money rule (`formatMoney`, M1): the currency's symbol before the figure and its ISO code
+// after it — "$101 MXN por lead" — and the bare figure when the currency is unknown.
 //
 // On the wire both ride INSIDE `evidence` (`evidence.title`, `evidence.action`):
 // `optimizer_record_cycle` copies `r->'evidence'` whole into a jsonb column and the row
@@ -20,7 +20,7 @@
 // parse it today, and the title is a sentence-level structure beside it, not a replacement.
 
 import { z } from 'zod';
-import { normalizeCurrencyCode } from './money';
+import { formatMoney } from './money';
 
 /** The window the title's figure was measured over. */
 export const titleWindowSchema = z.enum(['d3', 'd7', 'd14']);
@@ -33,12 +33,12 @@ export const recommendationTitleSchema = z.object({
   figure: z.number().finite(),
   /**
    * The words after the figure: "MXN por lead", "MXN", "%", "veces por persona". A money unit
-   * is the ISO code, never a symbol, and bare ("") when the account records no currency —
-   * an unknown currency is not dollars.
+   * is the ISO code (`titleFigure` adds the symbol before the figure), and bare ("") when the
+   * account records no currency — an unknown currency is not dollars.
    */
   unit: z.string().max(64),
   /**
-   * The comparison, in figures the producer held: "2.9× la referencia de 35 MXN",
+   * The comparison, in figures the producer held: "2.9× la referencia de $35 MXN",
    * "en 14 días y 0 leads", "+24% frente a los 7 días previos". Carries direction in words,
    * never a bare minus sign.
    */
@@ -105,30 +105,9 @@ export const recommendationActionSchema = z.object({
 });
 export type RecommendationAction = z.infer<typeof recommendationActionSchema>;
 
-/**
- * Money for a title: the figure, then the ISO code — "25.54 MXN", "324 USD" — and the bare
- * figure when the currency is unknown. `formatMoney`'s digit rule (two decimals under 100,
- * none at or above, en-US grouping) so a title and the card beside it spell one number the
- * same way; without its "$", because a title a client reads never carries a symbol.
- */
-export function formatMoneyCode(
-  value: number | null | undefined,
-  currency: string | null | undefined,
-): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  const code = normalizeCurrencyCode(currency);
-  const digits = Math.abs(value) >= 100 ? 0 : 2;
-  const body = new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value));
-  const sign = value < 0 ? '-' : '';
-  return code ? `${sign}${body} ${code}` : `${sign}${body}`;
-}
-
 const ISO_CODE_UNIT = /^[A-Z]{3}(\s|$)/;
 
-/** The figure with its unit: "101 MXN por lead", "12% de CTR", "3.2 veces por persona", "298". */
+/** The figure with its unit: "$101 MXN por lead", "12% de CTR", "3.2 veces por persona", "298". */
 export function titleFigure(title: Pick<RecommendationTitle, 'figure' | 'unit'>): string {
   const { figure, unit } = title;
   // A percentage glues to its figure — "12%", "12% de CTR" — the way a person writes one.
@@ -136,31 +115,31 @@ export function titleFigure(title: Pick<RecommendationTitle, 'figure' | 'unit'>)
   if (ISO_CODE_UNIT.test(unit)) {
     const code = unit.slice(0, 3);
     const rest = unit.slice(3).trim();
-    const money = formatMoneyCode(figure, code);
+    const money = formatMoney(figure, code);
     return rest ? `${money} ${rest}` : money;
   }
   return unit ? `${figure} ${unit}` : String(figure);
 }
 
 /**
- * The title as one line: "ITESO // AGOSTO - RTG: 101 MXN por lead, 2.9× la referencia de
- * 35 MXN". One renderer, so a card, a row and a Slack line cannot say the same finding
+ * The title as one line: "ITESO // AGOSTO - RTG: $101 MXN por lead, 2.9× la referencia de
+ * $35 MXN". One renderer, so a card, a row and a Slack line cannot say the same finding
  * three ways.
  */
 export function titleText(title: RecommendationTitle): string {
   return `${title.entity}: ${titleFigure(title)}, ${title.comparator}`;
 }
 
-/** The button: "Pausar · 48.80 MXN/día", "Ajustar la configuración · 400 → 360 MXN", or the verb alone. */
+/** The button: "Pausar · $48.80 MXN/día", "Ajustar la configuración · $400 MXN → $360 MXN", or the verb alone. */
 export function actionLabel(action: RecommendationAction): string {
   const verb = ACTION_VERB_LABEL[action.verb];
   const sizing = action.sizing;
   if (!sizing) return verb;
   if (sizing.from != null && sizing.to != null) {
-    return `${verb} · ${formatMoneyCode(sizing.from, null)} → ${formatMoneyCode(sizing.to, sizing.currency)}`;
+    return `${verb} · ${formatMoney(sizing.from, sizing.currency)} → ${formatMoney(sizing.to, sizing.currency)}`;
   }
   if (sizing.perDay != null && sizing.perDay > 0) {
-    return `${verb} · ${formatMoneyCode(sizing.perDay, sizing.currency)}/día`;
+    return `${verb} · ${formatMoney(sizing.perDay, sizing.currency)}/día`;
   }
   return verb;
 }
