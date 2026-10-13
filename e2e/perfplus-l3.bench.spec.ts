@@ -238,6 +238,7 @@ async function collectFigures(page: Page): Promise<FigureNode[]> {
           'data-figure-currency': el.getAttribute('data-figure-currency'),
           'data-figure-window': el.getAttribute('data-figure-window'),
           'data-figure-unit': el.getAttribute('data-figure-unit'),
+          'data-figure-code': el.getAttribute('data-figure-code'),
         },
         text: el.textContent ?? '',
       })),

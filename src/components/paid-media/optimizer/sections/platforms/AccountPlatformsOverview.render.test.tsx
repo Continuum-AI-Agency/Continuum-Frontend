@@ -164,6 +164,18 @@ describe('AllPlatformsTiles', () => {
     expect(tile(container, 'tile-spend')).toContain('$23,911 MXN · $11,200 USD');
     expect(tile(container, 'tile-spend')).not.toContain('%');
   });
+
+  it('stamps the raw spend it prints even when the producer names no currency', () => {
+    const frame = buildMetrics([{ ...META_TOTALS, share_of_spend: 1 }]);
+    frame.spend_by_currency = [{ currency: null, spend: 13890 }];
+    const { container } = render(
+      <AllPlatformsTiles metrics={frame} pendingCount={2} onOpenActions={() => {}} />,
+    );
+    const figure = container.querySelector('[data-figure="tiles.spend"]');
+    expect(figure?.textContent).toBe('13,890');
+    expect(figure?.getAttribute('data-figure-raw')).toBe('13890');
+    expect(figure?.getAttribute('data-figure-currency')).toBe('none');
+  });
 });
 
 describe('AllPlatformsTiles — the per-platform second line (feature 04)', () => {
