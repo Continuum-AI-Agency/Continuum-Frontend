@@ -117,14 +117,29 @@ export function reallocate(
     return x.sc.composite;
   };
 
-  // --- 4. Share & raw (diagnostics, mirrors Excel) ---------------------
+  // --- 4. Allocation weight: efficiency × the budget the ad set holds today ----------
+  // The solver targets `pool × weight ÷ Σweight`. With the score alone as the weight, an ad
+  // set's target ignored what it has: when the cheapest ad sets already held most of the
+  // money (what Meta does with its winners), their score share came out below their budget
+  // and the engine cut them to fund pricier ones — Easy Fit's WhatsApp portfolio cut its
+  // cheapest ad set 8 % and raised a 45 %-dearer one 25 % (2026-10-13). Weighting by
+  // score × current budget makes each target `current × (score ÷ budget-weighted mean score)`,
+  // rescaled to the pool: better than the portfolio grows, worse shrinks, never inverted. With
+  // equal budgets it is exactly the score share it replaces. An ad set holding nothing today
+  // is anchored on the eligible average so it can still be funded.
+  const anchorBudget = (s: AdSetSnapshot): number =>
+    s.currentBudget > 0 ? s.currentBudget : avgEligibleBudget > 0 ? avgEligibleBudget : 1;
+  const allocationWeight = (x: { s: AdSetSnapshot; sc: { composite: number } }): number =>
+    effectiveScore(x) * anchorBudget(x.s);
+
+  // --- 4b. Share & raw (diagnostics, mirrors Excel) ---------------------
   const eligible = scored.filter((x) => isEligible(x.s));
-  const denom = sum(eligible.map(effectiveScore));
+  const denom = sum(eligible.map(allocationWeight));
 
   // --- 5. Build solver items for eligible ad sets ----------------------
   const solverItems: SolverItem[] = eligible.map((x) => ({
     id: x.s.id,
-    score: effectiveScore(x),
+    score: allocationWeight(x),
     current: x.s.currentBudget,
     floor,
     velocityDown: x.s.currentBudget * (1 - downPctFor(x.s)),
@@ -153,7 +168,7 @@ export function reallocate(
   const items: ItemDiagnostics[] = scored.map((x) => {
     const s = x.s;
     const eff = effectiveScore(x);
-    const share = isEligible(s) && denom > 0 ? eff / denom : 0;
+    const share = isEligible(s) && denom > 0 ? allocationWeight(x) / denom : 0;
     const raw = isEligible(s) ? share * pool : 0;
     const velocityCapped = isEligible(s)
       ? clamp(

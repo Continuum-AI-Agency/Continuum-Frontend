@@ -38,7 +38,8 @@ function platformOf(s: AdSetSnapshot): PlatformId {
 /**
  * Is this entity in its platform's learning phase?
  *
- * - Meta (and any snapshot without a platform): the engine's own proxy, unchanged.
+ * - Meta (and any snapshot without a platform): the learning stage Meta's read carries; the
+ *   engine's 50-events-in-7-days proxy only when the snapshot has no delivery read.
  * - Google: the bid strategy says so (LEARNING_*). The 50-event proxy never applies.
  * - TikTok: no API state exists, so it is inferred — younger than 7 days, or its campaign
  *   has fewer than 25 results in d7. `campaignResults7d` is the campaign's total; without
@@ -51,9 +52,14 @@ export function isPlatformLearning(
 ): boolean {
   switch (platformOf(s)) {
     case 'meta':
-      return (
-        kpiEvents(s.windows.d7, cfg) < cfg.learningConvThreshold || s.ageDays < cfg.learningMinDays
-      );
+      // Meta says whether an ad set is learning: learning_stage_info carries a status only while
+      // it is LEARNING (or FAIL / LEARNING_LIMITED, which are not a learning phase the engine
+      // should protect). The proxy — under 50 KPI events in 7 days — marked every Easy Fit
+      // WhatsApp ad set "learning" months after Meta had them out of it, which capped their cuts
+      // at −8 % while raises ran to +25 %. The proxy stays for a snapshot with no delivery read.
+      if (s.ageDays < cfg.learningMinDays) return true;
+      if (s.delivery) return s.delivery.learningStage === 'LEARNING';
+      return kpiEvents(s.windows.d7, cfg) < cfg.learningConvThreshold;
     case 'google_ads':
       return isGoogleBidLearning(s.bidding?.systemStatus);
     case 'tiktok_ads': {
