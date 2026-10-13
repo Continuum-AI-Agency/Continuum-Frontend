@@ -32,7 +32,11 @@ export function HeadlineSkeleton({ label }: { label: string }) {
 /** What each tile's three lines stand in for: label, figure, sub-line. The words are the
  *  usual ones, so each bar is the width the real text takes. */
 const TILE_WORDS = [
-  { label: 'Spend · 7 days', value: '30,517 MXN', sub: '▲ 13% vs prior 7 days · Meta 36%' },
+  {
+    label: 'Spend · 7 days',
+    value: '30,517 MXN',
+    sub: '▲ 136% vs prior 7 days · Meta 36% · Google 64%',
+  },
   { label: 'Conversations', value: '230', sub: '47.47 MXN each · no target' },
   { label: 'Leads', value: '14', sub: '65.75 MXN each · target 70' },
   { label: 'Decisions', value: '19', sub: 'waiting across your portfolios' },
@@ -68,8 +72,10 @@ export function OverviewTilesSkeleton({
               <p className={hero ? typeScale.figureHero : typeScale.figureTile}>
                 <SkeletonText>{words.value}</SkeletonText>
               </p>
+              {/* The sub-line wraps as the real one does: the spend split runs to two lines on a
+               *  217px tile at 768, which a one-line bar left 14px short. */}
               <p className="mt-1 text-xs">
-                <SkeletonText>{words.sub}</SkeletonText>
+                <SkeletonText wrap>{words.sub}</SkeletonText>
               </p>
               {decision ? (
                 // The real action is a text-xs button on the cell's own line box.
@@ -134,7 +140,9 @@ export function PlatformComparisonSkeleton({
 }
 
 /** "What Jaina recommends" while the account read loads: its heading and one card's lines, on
- *  the page rather than in a box. One card is what most reads open with. */
+ *  the page rather than in a box. One card is what most reads open with. The card's own grid is
+ *  kept — the title column beside the footer's "Ask Jaina" — so the title wraps where a real
+ *  title does: a full-width one-line bar was 21px shorter than the card at 768. */
 export function RecommendationsSkeleton() {
   return (
     <section
@@ -145,30 +153,53 @@ export function RecommendationsSkeleton() {
       <p className={cn(typeScale.label, 'px-1 font-semibold')}>
         <SkeletonText>What Jaina recommends</SkeletonText>
       </p>
-      <div className="flex min-w-0 flex-col gap-2 p-4">
-        {/* The chip row is as tall as its platform chip. */}
-        <div className="flex min-h-[18px] items-center text-xs">
-          <SkeletonText>Meta · Lead · High · Adjust the setting</SkeletonText>
-        </div>
-        <div className="min-w-0 space-y-1.5">
-          <p className={cn(typeScale.bodyLg, 'font-semibold')}>
-            <SkeletonText>Account: 27% over the plan, projected against the plan</SkeletonText>
-          </p>
-          <p className="text-xs">
-            <SkeletonText>392 MXN/day · 11,762 MXN/mo</SkeletonText>
-          </p>
-          <p className="text-sm">
-            <SkeletonText>7056.86 over the period budget on this pace</SkeletonText>
-          </p>
-          <p className="text-xs">
-            <SkeletonText>Acts on its own, within your limits.</SkeletonText>
-          </p>
-          <p className="text-xs">
-            <SkeletonText>{'MENSAJES // TODOS'}</SkeletonText>
-          </p>
+      <div className="@container/recs">
+        <div className="flex min-w-0 flex-col gap-2 p-4">
+          {/* The chip row is as tall as its platform chip. */}
+          <div className="flex min-h-[18px] items-center text-xs">
+            <SkeletonText>Meta · Lead · High · Adjust the setting</SkeletonText>
+          </div>
+          <div className="grid gap-x-6 gap-y-3 @2xl/recs:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0 space-y-1.5">
+              <p className={cn(typeScale.bodyLg, 'font-semibold')}>
+                <SkeletonText wrap>
+                  Account: 27% over the plan, 33,158 MXN projected against 26,101 MXN of the plan
+                </SkeletonText>
+              </p>
+              <p className="text-xs">
+                <SkeletonText>392 MXN/day · 11,762 MXN/mo</SkeletonText>
+              </p>
+              <p className="text-sm">
+                <SkeletonText>7056.86 over the period budget on this pace</SkeletonText>
+              </p>
+              <p className="text-xs">
+                <SkeletonText>Acts on its own, within your limits.</SkeletonText>
+              </p>
+              <p className="text-xs">
+                <SkeletonText>{'MENSAJES // TODOS'}</SkeletonText>
+              </p>
+            </div>
+            {/* The card's footer: a small ghost button's height and width ("Ask Jaina"). */}
+            <div
+              className="flex h-7 items-center self-start px-2.5 text-[0.8rem]"
+              data-testid="recommendation-footer-skeleton"
+            >
+              <SkeletonText>✦ Ask Jaina</SkeletonText>
+            </div>
+          </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/** The read's freshness fact on the meta line while the account read loads ("Read 21 hours
+ *  ago · 2026-10-13 UTC  Re-read"). Arriving unreserved, it wrapped the line at 768. */
+export function AccountReadFreshnessSkeleton() {
+  return (
+    <span aria-hidden="true" data-testid="account-read-freshness-skeleton">
+      <SkeletonText>Read 21 hours ago · 2026-10-13 UTC · Re-read</SkeletonText>
+    </span>
   );
 }
 

@@ -1197,6 +1197,42 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     expect(second.queryByTestId('account-tiles-skeleton')).toBeNull();
   });
 
+  // PP-L1V-cls-overview-0.865 residual (768: 0.117–0.216, measured on the dev tree). Three
+  // late arrivals still moved the rows: the read's freshness fact wrapped the meta line onto a
+  // second line (+18px), the real card's title wrapped beside its footer column while the
+  // placeholder ran full width on one line (+21px), and the spend tile's platform split wrapped
+  // to two lines (+14px). Each placeholder now takes the shape the arrival will.
+  it("holds the meta line's freshness fact while the account read loads", () => {
+    accountReadLoading = true;
+    const { getByTestId } = mount();
+    const held = getByTestId('account-read-freshness-skeleton');
+    expect(held.getAttribute('aria-hidden')).toBe('true');
+    expect(getByTestId('overview-subline').contains(held)).toBe(true);
+  });
+
+  it('lays the recommendation placeholder out as the card: the title column beside its footer', () => {
+    accountReadLoading = true;
+    const { getByTestId } = mount();
+    const held = getByTestId('overview-recommendations-skeleton');
+    const grid = held.querySelector('.grid');
+    expect(grid?.className).toContain('@2xl/recs:grid-cols-[minmax(0,1fr)_auto]');
+    expect(held.querySelector('.\\@container\\/recs')).toBeTruthy();
+    expect(grid?.querySelector('[data-testid="recommendation-footer-skeleton"]')).toBeTruthy();
+    // The title is a sentence: it wraps where a title does, not one unbreakable bar.
+    const title = grid?.querySelector('p [data-slot="skeleton-text"]');
+    expect(title?.className).toContain('box-decoration-clone');
+    expect(held.outerHTML).not.toMatch(/(^|\s|")(border|bg-card|bg-primary\/5|bg-muted\/50)(\s|")/);
+  });
+
+  it("writes the spend placeholder's line as the platforms split it, so it wraps where it will", () => {
+    metricsState = { status: 'loading' };
+    const { getAllByTestId } = mount();
+    const spend = getAllByTestId('tile-skeleton')[0];
+    expect(spend.textContent).toMatch(/Meta \d+% · Google \d+%/);
+    const sub = spend.querySelector('p.mt-1 [data-slot="skeleton-text"]');
+    expect(sub?.className).toContain('box-decoration-clone');
+  });
+
   it('names a failed read and falls back to the Meta figures', () => {
     metricsState = { status: 'error', message: 'Could not read the multi-platform numbers.' };
     const { getByTestId } = mount();

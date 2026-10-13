@@ -80,6 +80,7 @@ import {
 import { JainaEntryChips } from './JainaEntryChips';
 import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import {
+  AccountReadFreshnessSkeleton,
   HeadlineSkeleton,
   OverviewTilesSkeleton,
   PlatformComparisonSkeleton,
@@ -504,6 +505,11 @@ export function OptimizerOverview({
                 requesting={requestRead.isPending}
                 utcDay={accountRead.data.utc_day}
               />
+            </>
+          ) : accountRead.isLoading ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <AccountReadFreshnessSkeleton />
             </>
           ) : null}
         </div>
