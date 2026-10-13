@@ -5,11 +5,10 @@ import { join } from 'node:path';
 import { buttonVariants } from './button';
 
 // PP-L1V-22px-icon-buttons-everywhere: the row toggles ("Show ad sets"), chips and dismiss
-// buttons are the shared `xs` / `icon-xs` Button. On the 14.5px root ladder `h-6` / `size-6`
-// paints at 21.75px, and the invisible `hit-area` pseudo-element is a hit box the user has but
-// not one getBoundingClientRect reports — the tap-target audit (and a target-size check in
-// assistive tech) reads the layout box. The shared sizes therefore grow the LAYOUT box to the
-// 24px floor and hand the growth back as negative margin, so rows keep their height.
+// buttons are the shared `xs` / `icon-xs` Button, painted at 21.75px on the 14.5px root ladder.
+// The redesign's constraint: the target grows INVISIBLY — the painted box, the glyph and the
+// Portfolios / Campaigns row heights stay exactly as drawn. The pointer target is the `hit-area`
+// pseudo-element (24px floor, 44px under a coarse pointer), which the L1V detector now grades.
 
 const globals = readFileSync(join(import.meta.dir, '../../app/globals.css'), 'utf8');
 
@@ -21,27 +20,27 @@ function utilityBlock(name: string): string {
 }
 
 describe('shared small button hit box', () => {
-  it('grows the block axis of xs and icon-xs to the 24px floor', () => {
-    expect(buttonVariants({ size: 'xs' })).toContain('hit-area-block');
-    expect(buttonVariants({ size: 'icon-xs' })).toContain('hit-area-block');
+  it('gives xs and icon-xs the invisible hit area', () => {
+    expect(buttonVariants({ size: 'xs' }).split(' ')).toContain('hit-area');
+    expect(buttonVariants({ size: 'icon-xs' }).split(' ')).toContain('hit-area');
   });
 
-  it('grows the inline axis of the square icon-xs only', () => {
-    expect(buttonVariants({ size: 'icon-xs' })).toContain('hit-area-inline');
-    expect(buttonVariants({ size: 'xs' })).not.toContain('hit-area-inline');
+  it('keeps the painted box at its own size — no layout growth, no margin hand-back', () => {
+    for (const size of ['xs', 'icon-xs'] as const) {
+      const classes = buttonVariants({ size });
+      expect(classes).not.toMatch(/hit-area-(block|inline)/);
+      expect(classes).not.toMatch(/\bmin-[hw]-/);
+      expect(classes).not.toMatch(/(^|\s)-?m[xy]?-/);
+    }
+    expect(globals).not.toContain('@utility hit-area-block');
+    expect(globals).not.toContain('@utility hit-area-inline');
   });
 
-  it('declares the growth as a layout box with the row height handed back', () => {
-    const block = utilityBlock('hit-area-block');
-    expect(block).toContain('min-block-size: 24px');
-    expect(block).toMatch(/margin-block: min\(0px, calc\(\(var\(--hit-area-box, 1\.5rem\) - 24px\) \/ 2\)\)/);
-    const inline = utilityBlock('hit-area-inline');
-    expect(inline).toContain('min-inline-size: 24px');
-    expect(inline).toMatch(/margin-inline: min\(0px, calc\(\(var\(--hit-area-box, 1\.5rem\) - 24px\) \/ 2\)\)/);
-  });
-
-  it('keeps the 44px coarse-pointer box on the invisible pseudo-element', () => {
+  it('pads the pointer target on a transparent pseudo-element: 24px floor, 44px when coarse', () => {
     const hitArea = utilityBlock('hit-area');
+    expect(hitArea).toContain('&::after');
+    expect(hitArea).toContain('opacity: 0');
+    expect(hitArea).toContain('max(100%, 24px)');
     expect(hitArea).toContain('pointer: coarse');
     expect(hitArea).toContain('max(100%, 44px)');
   });

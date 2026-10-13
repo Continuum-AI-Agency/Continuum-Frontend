@@ -1355,22 +1355,6 @@ body {
   }
 }
 
-/* The pseudo-element is a hit box the user has, but not one getBoundingClientRect reports —
-   the tap-target audit and an assistive-tech target-size check read the LAYOUT box, and the
-   shared `h-6` / `size-6` Button paints at 21.75px on the 14.5px root ladder. These grow the
-   layout box to the 24px floor and hand the growth back as negative margin, so a table row
-   keeps its height and the glyph its size (`--hit-area-box` is the control's own 1.5rem).
-   `hit-area-inline` is for the square icon button only; a text button's width is its content. */
-@utility hit-area-block {
-  min-block-size: 24px;
-  margin-block: min(0px, calc((var(--hit-area-box, 1.5rem) - 24px) / 2));
-}
-
-@utility hit-area-inline {
-  min-inline-size: 24px;
-  margin-inline: min(0px, calc((var(--hit-area-box, 1.5rem) - 24px) / 2));
-}
-
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer {
     animation: none;
