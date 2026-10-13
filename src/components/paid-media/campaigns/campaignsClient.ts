@@ -14,6 +14,7 @@ import {
 } from '@continuum/contracts';
 import { z } from 'zod';
 import type { OperatorActionResult } from '@/hooks/useJainaOperatorAction';
+import { loadFailureWhy } from '@/lib/api/loadFailure';
 import { createConversationSessionResponseSchema } from '@/lib/jaina/conversations';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -139,6 +140,12 @@ export class ScaleLoadError extends Error {
   }
 }
 
+/**
+ * The failure as the tab may print it under "Couldn't load campaigns": the function's own
+ * sentence when its body is JSON with one, else the transport's cause in words — never the
+ * supabase-js constant "Edge Function returned a non-2xx status code", which is what a 500 with
+ * an HTML body used to print. The raw error goes to the log.
+ */
 async function toLoadError(error: { message: string; context?: unknown }): Promise<ScaleLoadError> {
   const context = error.context as { json?: () => Promise<unknown> } | undefined;
   const payload = (await context?.json?.().catch(() => null)) as {
@@ -146,11 +153,12 @@ async function toLoadError(error: { message: string; context?: unknown }): Promi
     errorCode?: string;
     retryAfter?: number;
   } | null;
-  return new ScaleLoadError(
-    payload?.error ?? error.message,
-    payload?.errorCode,
-    payload?.retryAfter,
-  );
+  console.error('[campaignsClient] paid-media-reporting read failed', error);
+  const why =
+    (typeof payload?.error === 'string' ? loadFailureWhy(new Error(payload.error)) : null) ??
+    loadFailureWhy(error) ??
+    'Meta did not answer.';
+  return new ScaleLoadError(why, payload?.errorCode, payload?.retryAfter);
 }
 
 const budgetSchema = z

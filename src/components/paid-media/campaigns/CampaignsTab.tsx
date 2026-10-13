@@ -354,6 +354,7 @@ function QuietState({
   );
 }
 
+/** The "why" the client attached (`toLoadError`), with the retry-after when Meta set one. */
 function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Meta did not answer.';
   const retryAfter = (error as { retryAfter?: unknown } | null)?.retryAfter;
@@ -643,7 +644,7 @@ function ChildRows({
     return (
       <MessageRow depth={depth}>
         <span role="alert" className="text-destructive">
-          {errorMessage(query.error)}
+          Couldn't load {noun}s — {errorMessage(query.error)}
         </span>{' '}
         <Button
           type="button"

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { jainaOperatorActionSchema } from '@continuum/contracts';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import * as supabaseClientModule from '@/lib/supabase/client';
 import {
   budgetDisplay,
@@ -206,11 +207,30 @@ describe('fetchScaleCampaigns', () => {
     const failure = await fetchScaleCampaigns(scope).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(ScaleLoadError);
+    // The function's own sentence, as the "why" under "Couldn't load campaigns".
     expect(failure).toMatchObject({
-      message: 'Rate limited by Meta',
+      message: 'rate limited by Meta.',
       errorCode: 'RATE_LIMITED',
       retryAfter: 30,
     });
+  });
+
+  it('a 500 with an HTML body says the service answered with an error — never the library string', async () => {
+    stubInvoke({
+      data: null,
+      error: Object.assign(
+        new FunctionsHttpError(new Response('<!DOCTYPE html>502', { status: 500 })),
+        {
+          context: { status: 500, json: async () => Promise.reject(new SyntaxError('not JSON')) },
+        },
+      ),
+    });
+
+    const failure = await fetchScaleCampaigns(scope).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ScaleLoadError);
+    expect((failure as Error).message).toBe('the service answered with an error.');
+    expect((failure as Error).message).not.toContain('non-2xx');
   });
 });
 
