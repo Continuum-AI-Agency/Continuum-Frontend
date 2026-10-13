@@ -75,6 +75,20 @@ describe('rule 1 — format', () => {
     expect(expectedText(node({ unit: 'percent-signed', raw: -8 }))).toBe('-8%');
     expect(expectedText(node({ unit: 'count', raw: 1234 }))).toBe('1,234');
   });
+  it('grades the figure and lets the design label it ("779 conversations", "2 of 7", "4.20 MXN/day")', () => {
+    expect(checkFormat(node({ unit: 'count', raw: 779, text: '779 conversations' })).grade).toBe(
+      'PASS',
+    );
+    expect(checkFormat(node({ unit: 'count', raw: 2, text: '2 of 7' })).grade).toBe('PASS');
+    expect(checkFormat(node({ raw: 4.197, currency: 'MXN', text: '4.20 MXN/day' })).grade).toBe(
+      'PASS',
+    );
+    expect(checkFormat(node({ unit: 'count', raw: 2, text: '27 of 70' })).grade).toBe('FAIL');
+  });
+  it('passes a bare money figure whose node declares the currency, and never a wrong one', () => {
+    expect(checkFormat(node({ raw: 48.83, currency: 'MXN', text: '48.83' })).grade).toBe('PASS');
+    expect(checkFormat(node({ raw: 48.83, currency: 'MXN', text: '48.80' })).grade).toBe('FAIL');
+  });
   it('accepts the placeholder only when no figure was declared', () => {
     expect(checkFormat(node({ raw: null, text: '—' })).grade).toBe('PASS');
     expect(checkFormat(node({ raw: null, text: '$0' })).grade).toBe('FAIL');
@@ -92,6 +106,12 @@ describe('rule 2 — symbol', () => {
     expect(checkSymbol(node({ currency: 'USD', text: '2,000' })).grade).toBe('FAIL');
     expect(checkSymbol(node({ currency: 'MXN', text: '2,000 MXN' })).grade).toBe('PASS');
     expect(checkSymbol(node({ currency: 'MXN', text: '$2,000' })).grade).toBe('FAIL');
+  });
+  it('warns, not fails, when the code rides on the node and not in the text', () => {
+    const result = checkSymbol(node({ currency: 'MXN', raw: 48.83, text: '48.83' }));
+    expect(result.grade).toBe('WARN');
+    expect(result.detail).toContain('MXN is on the node');
+    expect(checkSymbol(node({ currency: 'MXN', text: '2,000 USD' })).grade).toBe('FAIL');
   });
   it('skips figures that are not money', () => {
     expect(checkSymbol(node({ unit: 'percent', raw: 33, text: '33%' })).grade).toBe('SKIP');

@@ -126,14 +126,37 @@ export function checkFormat(node: FigureNode): RuleResult {
           detail: `declared no raw figure but rendered "${actual}"`,
         };
   }
-  return actual === expected
-    ? { rule: 'format', key: node.key, grade: 'PASS', detail: `"${actual}"` }
-    : {
-        rule: 'format',
-        key: node.key,
-        grade: 'FAIL',
-        detail: `rendered "${actual}", expected "${expected}" from raw ${node.raw} (${node.unit}, ${node.currency})`,
-      };
+  if (actual === expected) {
+    return { rule: 'format', key: node.key, grade: 'PASS', detail: `"${actual}"` };
+  }
+  // The figure followed by its unit word ("779 conversations", "4.20 MXN/day", "2 of 7"):
+  // the raw value is graded, the words after it are the label the design gives it.
+  if (actual.startsWith(expected) && /^[\s/]/.test(actual.slice(expected.length))) {
+    return {
+      rule: 'format',
+      key: node.key,
+      grade: 'PASS',
+      detail: `"${actual}" leads with ${expected}`,
+    };
+  }
+  // A money figure printed bare while its node declares the currency: the code rides on
+  // data-figure-currency and the design puts the unit in the sub-line (module D anchor).
+  const bare =
+    MONEY_UNITS.has(node.unit) && node.raw != null ? formatMoney(node.raw, 'none') : null;
+  if (bare != null && actual === bare && ISO_CURRENCY.test(node.currency)) {
+    return {
+      rule: 'format',
+      key: node.key,
+      grade: 'PASS',
+      detail: `"${actual}" is ${node.raw} with ${node.currency} on the node`,
+    };
+  }
+  return {
+    rule: 'format',
+    key: node.key,
+    grade: 'FAIL',
+    detail: `rendered "${actual}", expected "${expected}" from raw ${node.raw} (${node.unit}, ${node.currency})`,
+  };
 }
 
 const MONEY_UNITS: ReadonlySet<FigureUnit> = new Set(['currency', 'per-period', 'per-month']);
@@ -157,6 +180,16 @@ export function checkSymbol(node: FigureNode): RuleResult {
   } else {
     ok = !hasDollar && codes.every((code) => code === node.currency) && codes.length > 0;
     want = `the code ${node.currency}`;
+    if (!ok && !hasDollar && codes.length === 0) {
+      // No symbol at all, the code declared on the node: not wrong money, but the text alone
+      // does not say it. Visible as WARN until the anchor decision (unit in the sub-line).
+      return {
+        rule: 'symbol',
+        key: node.key,
+        grade: 'WARN',
+        detail: `"${text}" carries no code in its text; ${node.currency} is on the node`,
+      };
+    }
   }
   return ok
     ? { rule: 'symbol', key: node.key, grade: 'PASS', detail: want }
