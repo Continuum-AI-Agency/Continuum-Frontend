@@ -547,9 +547,9 @@ export function deterministicBrief(args: {
 }): PortfolioBrief {
   const ranked = rankCandidates(args.candidates);
   const top = ranked[0];
-  const hero: BriefHero =
-    top && heroThresholdMet(ranked, args.dailyTotal)
-      ? {
+  const heroIsTop = top !== undefined && heroThresholdMet(ranked, args.dailyTotal);
+  const hero: BriefHero = heroIsTop
+    ? {
           module: top.module,
           candidate_id: top.id,
           headline: headlineFor(top, args.growth.currency, args.growth.result_label),
@@ -561,19 +561,23 @@ export function deterministicBrief(args: {
           confidence_note: null,
           cta: top.cta,
         }
-      : calmHero({
-          growth: args.growth,
-          candidates: ranked,
-          dailyTotal: args.dailyTotal,
-          standing: args.standing ?? null,
-        });
+    : calmHero({
+        growth: args.growth,
+        candidates: ranked,
+        dailyTotal: args.dailyTotal,
+        standing: args.standing ?? null,
+      });
+  // The news row is what the hero did not lead with. A calm hero led with nothing, so the row
+  // starts at the top candidate; slicing from 1 regardless dropped the only sized candidate
+  // and carded a zero-impact one in its place.
+  const newsFrom = heroIsTop ? 1 : 0;
   return {
     version: 1,
     growth: args.growth,
     hero,
     growth_sentence: growthSentence(args.growth),
     candidates: ranked,
-    secondary: ranked.slice(1, 3).map((c) => c.id),
+    secondary: ranked.slice(newsFrom, newsFrom + 2).map((c) => c.id),
     prompt_version: args.promptVersion,
     model: 'deterministic',
     generated_at: args.generatedAt,

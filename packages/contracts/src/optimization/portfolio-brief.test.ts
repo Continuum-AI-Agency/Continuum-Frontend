@@ -154,6 +154,23 @@ describe('portfolio brief', () => {
     });
     expect(none.hero.module).toBe('none');
   });
+  // PP-L1-brief-secondary-skips-dropped-hero: MENSAJES carried a 48.85/day creative
+  // recommendation under a 60/day hero floor and a 0/day budget candidate. The hero went
+  // calm, and the news row — ranked.slice(1, 3) — skipped the only sized candidate and
+  // carded the zero-impact one. A calm hero leads nothing, so the news row starts at the top.
+  it('starts the news row at the top candidate when the calm hero dropped it', () => {
+    const creative = cand({ id: 'rec:creative', module: 'creative', impact_per_day: 48.85 });
+    const budget = cand({ id: 'budget:portfolio', module: 'budget', impact_per_day: 0 });
+    const brief = deterministicBrief({
+      growth,
+      candidates: [budget, creative],
+      dailyTotal: 3000,
+      promptVersion: 'v1',
+      generatedAt: 'x',
+    });
+    expect(brief.hero.module).toBe('none');
+    expect(brief.secondary).toEqual(['rec:creative', 'budget:portfolio']);
+  });
 });
 
 // ── The calm hero tells the truth ───────────────────────────────────────────
