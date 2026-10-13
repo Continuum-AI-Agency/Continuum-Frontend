@@ -8,6 +8,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { registerStrategicRunsCatchUp } from './realtimeBus';
+import { planCatchUp } from './strategicCatchUp';
 
 type Props = {
   brandId: string;
@@ -59,23 +60,30 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
     };
 
     const catchUpMissed = async () => {
-      const since = lastCompletedAtRef.current ?? '1970-01-01T00:00:00Z';
-      const { data, error } = await supabase
+      // With no stamp the query is bounded to the newest row: enough to learn where "now" is,
+      // and nothing to announce (planCatchUp). With one, everything completed since.
+      const since = lastCompletedAtRef.current;
+      let query = supabase
         .schema('brand_trends' as never)
         .from('strategic_analysis_runs')
         .select('id, completed_at')
         .eq('brand_id', brandId)
-        .eq('status', 'completed')
-        .gt('completed_at', since)
-        .order('completed_at', { ascending: true });
+        .eq('status', 'completed');
+      query = since ? query.gt('completed_at', since) : query.limit(1);
+      const { data, error } = await query.order('completed_at', {
+        ascending: since ? true : false,
+      });
 
-      if (error || !data) return;
+      if (error || !data || !isActive) return;
 
-      const rows = data as Array<{ id: string | null; completed_at: string | null }>;
-      for (const row of rows) {
-        const runId = row.id ?? undefined;
-        if (!runId || seenRunIdsRef.current.has(runId)) continue;
-        handleCompletion(runId, row.completed_at);
+      const rows = (data as Array<{ id: string | null; completed_at: string | null }>).flatMap(
+        (row) => (row.id ? [{ id: row.id, completedAt: row.completed_at }] : []),
+      );
+      const plan = planCatchUp(rows, since, seenRunIdsRef.current);
+      for (const run of plan.announce) handleCompletion(run.id, run.completedAt);
+      if (plan.announce.length === 0 && plan.lastCompletedAt !== since && plan.lastCompletedAt) {
+        setLastCompletedAt(plan.lastCompletedAt);
+        lastCompletedAtRef.current = plan.lastCompletedAt;
       }
     };
 

@@ -236,7 +236,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastPrimitive.Provider>
       <ToastBridge>{children}</ToastBridge>
       <ToastPrimitive.Portal>
-        <ToastPrimitive.Viewport className="fixed bottom-4 right-4 z-[9999] flex w-[360px] max-w-[90vw] flex-col gap-4 outline-none">
+        {/* Phone widths: the viewport spans the screen minus the gutters instead of a 360px box
+            that sits over the controls under the hero at 375px. From 26rem up it is the box. */}
+        <ToastPrimitive.Viewport className="fixed inset-x-4 bottom-4 z-[9999] flex flex-col gap-4 outline-none min-[26rem]:inset-x-auto min-[26rem]:right-4 min-[26rem]:w-[360px] min-[26rem]:max-w-[90vw]">
           <ToastList />
         </ToastPrimitive.Viewport>
       </ToastPrimitive.Portal>
