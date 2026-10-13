@@ -25,6 +25,7 @@ import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 
 type Props = {
   brandId: string;
@@ -453,7 +454,7 @@ export function PaidMediaReportingWidget({
             platform,
             accountId: selectedAdAccount,
             campaignId,
-            range: { preset: 'last_7d' },
+            range: lastCompleteDays(7),
           }),
         });
 

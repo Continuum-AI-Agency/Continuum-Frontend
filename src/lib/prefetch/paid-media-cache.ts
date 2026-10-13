@@ -3,6 +3,7 @@ import {
   fetchCampaignPerformanceRows,
 } from '@/lib/paid-media/campaign-performance-loader';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 
 export type CacheEntry = {
   promise: Promise<unknown>;
@@ -49,7 +50,8 @@ export function prefetchPaidMediaDashboard(params: { brandId: string; adAccountI
     brandId,
     adAccountId,
     platform: 'meta',
-    range: { preset: 'last_7d' },
+    // The Dashboard's default ask (toMetricsRange of last_7d): the cache key must be the same.
+    range: lastCompleteDays(7),
   };
 
   const campaignsKey = buildCampaignsKey(campaignParams);

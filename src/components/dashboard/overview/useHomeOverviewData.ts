@@ -1,7 +1,7 @@
 'use client';
 
-// Loads what the Home overview shows for the ad accounts in scope: account totals (last 7 days
-// vs the 7 before), campaigns and ads ranked by the primary objective, a fresh image for the
+// Loads what the Home overview shows for the ad accounts in scope: account totals (the last 7
+// complete days vs the 7 before), campaigns and ads ranked by the primary objective, a fresh image for the
 // best and worst ad, and the brand's organic rollups. Each read fails on its own; a block whose
 // read failed says so and the rest of the Home still renders.
 
@@ -22,9 +22,13 @@ import {
   type PaidAccountOverview,
 } from '@/lib/paid-media/paid-overview.client';
 import { fetchPaidRanking } from '@/lib/paid-media/paid-ranking.client';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 import { type OverviewTotals, rankingKpisFor, sumOverviews } from './homeOverviewModel';
 
-const RANGE = { preset: 'last_7d' } as const;
+// The seven complete days ending yesterday, asked as an explicit range: the edge's `last_7d`
+// is [now − 7d, now], eight days with today half-written (PP-L3-last-7d-asks-eight-days-
+// including-today). Read per call, not once at import, because yesterday moves at midnight.
+const homeRange = () => lastCompleteDays(7);
 
 export type HomeAdAccount = { id: string; name: string; currency: string | null };
 
@@ -49,7 +53,7 @@ export function useAccountTotals(brandId: string, accounts: HomeAdAccount[], att
     const ids = key ? key.split(',') : [];
     Promise.allSettled(
       ids.map((adAccountId) =>
-        fetchPaidAccountOverview({ brandId, adAccountId, platform: 'meta', range: RANGE }),
+        fetchPaidAccountOverview({ brandId, adAccountId, platform: 'meta', range: homeRange() }),
       ),
     ).then((results) => {
       if (cancelled) return;
@@ -88,7 +92,7 @@ async function rankAcross(
         kpi,
         direction,
         limit,
-        range: RANGE,
+        range: homeRange(),
       }).then((rows) => rows.map((row) => ({ ...row, adAccountId }))),
     ),
   );

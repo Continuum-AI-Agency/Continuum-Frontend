@@ -24,6 +24,7 @@ import {
   type PaidLeaderboardRow,
 } from '@/lib/paid-media/paid-leaderboard-rows';
 import { fetchPaidRanking } from '@/lib/paid-media/paid-ranking.client';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 import { InsightActionsDropdown, InsightContextActions } from './insightActions';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from './panelLayout';
@@ -36,7 +37,6 @@ const LEVEL_LABELS: Record<PaidEntityLevel, string> = {
   account: 'Account',
 };
 
-const RANGE = { preset: 'last_7d' } as const;
 // Fetched once, ranked server-side by ROAS; re-sorting by other KPIs happens in
 // place over this pool, so a modest set gives the selector room to work.
 const FETCH_LIMIT = 8;
@@ -92,7 +92,7 @@ export function PaidEntityTable({
         kpi: 'roas',
         direction: 'top',
         limit: FETCH_LIMIT,
-        range: RANGE,
+        range: lastCompleteDays(7),
       }),
       getLatestInsights({ brandId, adAccountId, limit: 20 }).catch(
         () => [] as PersistedCampaignInsight[],

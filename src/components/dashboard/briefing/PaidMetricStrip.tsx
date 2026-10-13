@@ -8,8 +8,7 @@ import {
   type PaidAccountOverview,
 } from '@/lib/paid-media/paid-overview.client';
 import { buildPaidStatCards } from '@/lib/paid-media/paid-stat-cards';
-
-const RANGE = { preset: 'last_7d' } as const;
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 
 type State =
   | { status: 'idle' | 'loading' }
@@ -17,7 +16,7 @@ type State =
   | { status: 'success'; overview: PaidAccountOverview };
 
 // The headline KPIs for the paid dashboard — spend, ROAS, and CTR over the last 7
-// days with deltas — rendered as a quiet inline strip under the Overview header.
+// complete days with deltas — rendered as a quiet inline strip under the Overview header.
 // Sourced from the paid account-overview edge scope.
 export function PaidMetricStrip({
   brandId,
@@ -35,7 +34,9 @@ export function PaidMetricStrip({
     }
     let cancelled = false;
     setState({ status: 'loading' });
-    fetchPaidAccountOverview({ brandId, adAccountId, platform: 'meta', range: RANGE })
+    // The seven complete days ending yesterday, as an explicit range: the edge's own `last_7d`
+    // is eight days with today half-written (PP-L3-last-7d-asks-eight-days-including-today).
+    fetchPaidAccountOverview({ brandId, adAccountId, platform: 'meta', range: lastCompleteDays(7) })
       .then((overview) => {
         if (!cancelled) setState({ status: 'success', overview });
       })

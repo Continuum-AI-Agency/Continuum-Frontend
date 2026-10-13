@@ -1,3 +1,12 @@
+// Every rolling preset here is N COMPLETE days ending yesterday (PP-L3-last-7d-asks-eight-
+// days-including-today): the window the truth calculator, Meta's own presets and the Optimizer
+// mean, and the one a reader can hold a figure against. The edge resolves a preset on the
+// clock ([now − N days, now] = N + 1 days with today half-written), so the preset is never
+// sent; `toMetricsRange` asks with the explicit window. The arithmetic and the calendar it
+// reads today in live in lib/paid-media/reportingWindow.ts.
+
+import { completeDaysEndingYesterday } from '@/lib/paid-media/reportingWindow';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -37,18 +46,20 @@ function daysForPreset(preset: RollingTimePreset): number {
   }
 }
 
-export function buildDefaultCustomRange(now: Date = new Date()): { since: string; until: string } {
-  const until = toIsoDay(now);
-  const since = toIsoDay(new Date(now.getTime() - 7 * DAY_MS));
-  return { since, until };
+export function buildDefaultCustomRange(
+  now: Date = new Date(),
+  timeZone?: string,
+): { since: string; until: string } {
+  return completeDaysEndingYesterday(7, now, timeZone);
 }
 
 export function normalizeCustomRange(
   range: { since: string; until: string },
   now: Date = new Date(),
+  timeZone?: string,
 ): { since: string; until: string } {
   if (!isValidDateOnly(range.since) || !isValidDateOnly(range.until)) {
-    return buildDefaultCustomRange(now);
+    return buildDefaultCustomRange(now, timeZone);
   }
 
   if (range.since <= range.until) {
@@ -64,9 +75,10 @@ export function normalizeCustomRange(
 export function resolveTimeRangeWindow(
   range: PaidMediaTimeRange,
   now: Date = new Date(),
+  timeZone?: string,
 ): { since: string; until: string; dayCount: number } {
   if (range.preset === 'custom') {
-    const custom = normalizeCustomRange({ since: range.since, until: range.until }, now);
+    const custom = normalizeCustomRange({ since: range.since, until: range.until }, now, timeZone);
     const sinceDate = new Date(`${custom.since}T00:00:00.000Z`);
     const untilDate = new Date(`${custom.until}T00:00:00.000Z`);
     const dayCount = Math.max(
@@ -77,22 +89,16 @@ export function resolveTimeRangeWindow(
   }
 
   const dayCount = daysForPreset(range.preset);
-  return {
-    since: toIsoDay(new Date(now.getTime() - dayCount * DAY_MS)),
-    until: toIsoDay(now),
-    dayCount,
-  };
+  return { ...completeDaysEndingYesterday(dayCount, now, timeZone), dayCount };
 }
 
-export function toMetricsRange(range: PaidMediaTimeRange): PaidMediaTimeRange {
-  if (range.preset !== 'custom') {
-    return { preset: range.preset };
-  }
-
-  const custom = normalizeCustomRange({ since: range.since, until: range.until });
-  return {
-    preset: 'custom',
-    since: custom.since,
-    until: custom.until,
-  };
+/** What the edge is asked with: always the explicit window, so a rolling preset reads the same
+ *  N complete days the picker's label promises. */
+export function toMetricsRange(
+  range: PaidMediaTimeRange,
+  now: Date = new Date(),
+  timeZone?: string,
+): Extract<PaidMediaTimeRange, { preset: 'custom' }> {
+  const { since, until } = resolveTimeRangeWindow(range, now, timeZone);
+  return { preset: 'custom', since, until };
 }
