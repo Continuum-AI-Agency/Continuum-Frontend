@@ -39,7 +39,7 @@ export function BrandIdentityHeader({ brandId, name, logoUrl }: BrandIdentityHea
       </div>
       <Link
         href="/settings?section=brands"
-        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        className="hit-area inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
       >
         <ArrowLeftRight className="h-3 w-3" aria-hidden />
         Switch brand

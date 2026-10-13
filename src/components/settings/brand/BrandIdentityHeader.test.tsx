@@ -12,5 +12,7 @@ describe('BrandIdentityHeader', () => {
     expect(markup).toContain('brand-123');
     expect(markup.match(/Copy brand ID/g)).toHaveLength(1);
     expect(markup).toContain('Switch brand');
+    // PP-L1V-crawler-small-signatures: the 22px link grows its target invisibly, not its box.
+    expect(markup).toMatch(/<a [^>]*class="[^"]*\bhit-area\b[^"]*"[^>]*>.*Switch brand/);
   });
 });

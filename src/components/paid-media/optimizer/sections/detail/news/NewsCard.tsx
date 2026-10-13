@@ -82,7 +82,7 @@ export function FindingEvidence({
 }) {
   return (
     <details className="group/evidence">
-      <summary className="w-fit cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+      <summary className="hit-area w-fit cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
         <span className="group-open/evidence:hidden">Show the evidence</span>
         <span className="hidden group-open/evidence:inline">Hide the evidence</span>
       </summary>

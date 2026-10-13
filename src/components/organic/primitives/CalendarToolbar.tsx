@@ -290,7 +290,7 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
           </div>
         </div>
         <details className="mt-1">
-          <summary className="w-fit cursor-pointer rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+          <summary className="hit-area w-fit cursor-pointer rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
             More calendar tools
           </summary>
           <div className="mt-2">

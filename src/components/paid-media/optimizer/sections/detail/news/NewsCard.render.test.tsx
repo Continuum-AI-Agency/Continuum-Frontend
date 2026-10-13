@@ -15,7 +15,7 @@ mock.module('motion/react', () => {
 });
 
 import { InsightCard } from './InsightCard';
-import { NewsCard } from './NewsCard';
+import { FindingEvidence, NewsCard } from './NewsCard';
 import type { NewsCardModel } from './newsModel';
 
 afterEach(cleanup);
@@ -156,5 +156,18 @@ describe('InsightCard', () => {
     expect(band?.textContent).toContain('cost per lead +120%');
     fireEvent.click(getByText('Review the budget moves'));
     expect(clicks).toEqual(['budget:as-1']);
+  });
+});
+
+// PP-L1V-crawler-small-signatures: "Show the evidence" is an 18px disclosure; its target reaches
+// 24px through the invisible hit area, the line keeps its height.
+describe('NewsCard evidence disclosure', () => {
+  it('gives the summary the invisible hit area', () => {
+    const { container } = render(
+      <FindingEvidence card={card()} currency="USD" resultLabel="leads" />,
+    );
+    const summary = container.querySelector('summary');
+    expect(summary?.textContent).toContain('Show the evidence');
+    expect(summary?.className.split(' ')).toContain('hit-area');
   });
 });

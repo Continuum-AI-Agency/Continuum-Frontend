@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { BrandIntelligenceOverview } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { BrandIntelligenceWorkspace } from './BrandIntelligenceWorkspace';
+import { BrandIntelligenceWorkspace, scoreBandColor } from './BrandIntelligenceWorkspace';
 
 const overview = {
   refreshedAt: '2026-07-27T12:00:00.000Z',
@@ -78,5 +78,17 @@ describe('BrandIntelligenceWorkspace', () => {
     expect(screen.getByText('Observed visibility')).toBeTruthy();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     expect(screen.getByRole('tab', { name: 'Competition' })).toBeTruthy();
+  });
+});
+
+// PP-L1V-crawler-small-signatures: the score figure was the dark theme's pale tint in BOTH themes
+// — #ffd230 on the light card's #eeecfc is 1.24:1, emerald-400 1.67:1. Light reads the ink of the
+// same hue; dark keeps the pale tint it was drawn for.
+describe('scoreBandColor', () => {
+  test('reads an ink in light and the pale tint in dark, per band', () => {
+    expect(scoreBandColor('strong')).toBe('text-emerald-700 dark:text-emerald-400');
+    expect(scoreBandColor('developing')).toBe('text-amber-800 dark:text-amber-300');
+    expect(scoreBandColor('limited')).toBe('text-rose-700 dark:text-rose-300');
+    expect(scoreBandColor(null)).toBe('text-muted-foreground');
   });
 });

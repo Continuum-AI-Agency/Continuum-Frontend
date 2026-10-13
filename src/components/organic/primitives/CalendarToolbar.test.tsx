@@ -184,6 +184,8 @@ describe('CalendarToolbar', () => {
     const details = container.querySelector('details');
     expect(details?.open).toBe(false);
     expect(container.querySelector('summary')?.textContent).toBe('More calendar tools');
+    // PP-L1V-crawler-small-signatures: the 18px disclosure reaches 24px on an invisible hit area.
+    expect(container.querySelector('summary')?.className.split(' ')).toContain('hit-area');
     expect(container.querySelectorAll('button[aria-pressed="true"]')[0]?.textContent).toBe('Month');
     expect(container.textContent).toContain('Create content');
     expect(container.textContent).toContain('Generate plan');
