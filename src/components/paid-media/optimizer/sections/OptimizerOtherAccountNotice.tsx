@@ -4,12 +4,14 @@
 // another ad account. That state used to fall into "Set up the Optimizer" onboarding,
 // which told the user their work did not exist. It exists — it is one account switch
 // away — so this names the owning account(s), offers the switch, and (when more than the
-// single-switch shortcut is useful) hands off to the cross-account browser.
+// single-switch shortcut is useful) hands off to the cross-account browser. The copy also
+// promises a portfolio for THIS account, so the create control sits here too: without it an
+// account whose brand builds elsewhere could never reach the setup at all.
 //
 // The account-resolution logic lives in ./portfolioAccounts so it stays testable without
 // rendering; this file is presentation only.
 
-import { ArrowRightLeftIcon, FolderSearchIcon, LibraryIcon } from 'lucide-react';
+import { ArrowRightLeftIcon, FolderSearchIcon, LibraryIcon, PlusIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { HiddenPortfolioAccount } from './portfolioAccounts';
@@ -22,6 +24,8 @@ type OptimizerOtherAccountNoticeProps = {
   /** Open the cross-account browser. This is the only path into it when the selected
    *  account has no portfolios, because the tabbed view never renders in that state. */
   onBrowseAll?: () => void;
+  /** Open the create view for the selected account — the path the copy promises. */
+  onCreate?: () => void;
 };
 
 export function OptimizerOtherAccountNotice({
@@ -29,6 +33,7 @@ export function OptimizerOtherAccountNotice({
   accounts,
   onSwitchAccount,
   onBrowseAll,
+  onCreate,
 }: OptimizerOtherAccountNoticeProps) {
   const portfolioLabel = hiddenCount === 1 ? '1 portfolio' : `${hiddenCount} portfolios`;
 
@@ -69,12 +74,20 @@ export function OptimizerOtherAccountNotice({
         ))}
       </ul>
 
-      {onBrowseAll ? (
-        <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={onBrowseAll}>
-          <LibraryIcon className="size-3.5" aria-hidden="true" />
-          Browse all {hiddenCount} portfolios
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {onCreate ? (
+          <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={onCreate} type="button">
+            <PlusIcon className="size-3.5" aria-hidden="true" />
+            New portfolio
+          </Button>
+        ) : null}
+        {onBrowseAll ? (
+          <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={onBrowseAll}>
+            <LibraryIcon className="size-3.5" aria-hidden="true" />
+            Browse all {hiddenCount} portfolios
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

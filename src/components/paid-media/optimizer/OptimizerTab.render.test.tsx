@@ -23,15 +23,18 @@ const setView = mock((_next: string) => undefined);
 const setPlatform = mock((_next: string) => undefined);
 let overviewProps: Record<string, unknown> | null = null;
 const refetch = mock(async () => undefined);
+const openCreate = mock(() => undefined);
+/** The brand's portfolios on OTHER ad accounts: what the selected-account read hides. */
+let elsewhere: PortfolioListItem[] = [];
 
 mock.module('./useOptimizerData', () => ({
   ...realOptimizerData,
   useOptimizerPortfolios: () => ({
     ...portfolios,
     refetch,
-    brandPortfolios: portfolios.data,
-    brandPortfolioCount: portfolios.data.length,
-    otherAccountIds: [],
+    brandPortfolios: [...portfolios.data, ...elsewhere],
+    brandPortfolioCount: portfolios.data.length + elsewhere.length,
+    otherAccountIds: [...new Set(elsewhere.map((p) => p.ad_account_id))],
     droppedRowCount: 0,
   }),
   // Secondary reads: a pending one must never hold the surface.
@@ -54,7 +57,7 @@ mock.module('./useOptimizerUrlState', () => ({
     range: '30d',
     openPortfolio: () => undefined,
     closePortfolio: () => undefined,
-    openCreate: () => undefined,
+    openCreate,
     setAdset: () => undefined,
     setMetric: () => undefined,
     setRange: () => undefined,
@@ -130,8 +133,30 @@ beforeEach(() => {
   view = 'overview';
   platformTab = 'all';
   overviewProps = null;
+  elsewhere = [];
   setView.mockClear();
   setPlatform.mockClear();
+  openCreate.mockClear();
+});
+
+// PP-L1-other-account-notice-promises-create-with-no-control: an account whose brand owns
+// portfolios elsewhere never reached the onboarding, and the notice that replaced it promised
+// "or create a portfolio for this account" with nothing to click. The create path the copy
+// names is the same New portfolio control every other state of the surface carries.
+describe('OptimizerTab on an account with no portfolios while the brand has them elsewhere', () => {
+  beforeEach(() => {
+    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
+    elsewhere = [{ ...PORTFOLIO, id: '22222222-2222-4222-8222-222222222222', ad_account_id: 'act_2' }];
+  });
+
+  it('offers the New portfolio control the notice promises, and it opens the create view', () => {
+    renderTab();
+
+    expect(screen.getByRole('heading', { name: 'No portfolios on this ad account' })).toBeTruthy();
+    expect(screen.queryByTestId('onboarding-section')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New portfolio' }));
+    expect(openCreate).toHaveBeenCalledTimes(1);
+  });
 });
 
 afterEach(() => {

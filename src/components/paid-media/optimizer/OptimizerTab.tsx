@@ -400,6 +400,7 @@ export function OptimizerTab({
           accounts={resolveHiddenAccounts(portfoliosQuery.otherAccountIds, accountsQuery.data)}
           onSwitchAccount={onSelectAdAccount}
           onBrowseAll={() => setBrowsingAllAccounts(true)}
+          onCreate={openCreate}
         />
       </section>
     );
