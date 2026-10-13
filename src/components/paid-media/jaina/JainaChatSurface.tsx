@@ -34,6 +34,7 @@ const AnimatedShaderBackground = dynamic(
 
 import type {
   AgentSessionListFilters,
+  BillingPaymentRequired,
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaUIMessage,
@@ -61,6 +62,7 @@ import {
   QueueSectionTrigger,
 } from '@/components/ai-elements/queue';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import { PaymentRequiredNotice } from '@/components/billing/PaymentRequiredNotice';
 import { AgentDataScopePicker } from '@/components/chat/AgentDataScopePicker';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import {
@@ -840,6 +842,16 @@ export function JainaChatSurface({
     messages: JainaUIMessage[];
   } | null>(null);
 
+  // The Backend's billing gate refused the last turn (402). Rendered in the transcript with the
+  // control that unblocks it, and cleared the moment a new turn is sent or the context changes;
+  // the ref is what the dispatch-failure toast reads synchronously so the refusal is said once.
+  const [paymentRequired, setPaymentRequired] = React.useState<BillingPaymentRequired | null>(null);
+  const paymentRequiredRef = React.useRef<BillingPaymentRequired | null>(null);
+  const handlePaymentRequired = React.useCallback((body: BillingPaymentRequired) => {
+    paymentRequiredRef.current = body;
+    setPaymentRequired(body);
+  }, []);
+
   const {
     messages: uiMessages,
     status: chatStatus,
@@ -851,7 +863,18 @@ export function JainaChatSurface({
     sessionId,
     initialMessages: chatSeed?.sessionId === sessionId ? chatSeed.messages : undefined,
     onNotice: handleStreamNotice,
+    onPaymentRequired: handlePaymentRequired,
   });
+
+  React.useEffect(() => {
+    if (chatStatus !== 'submitted') return;
+    paymentRequiredRef.current = null;
+    setPaymentRequired(null);
+  }, [chatStatus]);
+  React.useEffect(() => {
+    paymentRequiredRef.current = null;
+    setPaymentRequired(null);
+  }, [sessionId, adAccountId]);
   // The CURRENT chat's setter, for async loads. `setMessages` is bound to one chat and changes
   // identity with it, so an effect that depends on it re-runs on every conversation switch — the
   // bootstrap did, and re-running it navigated straight back to the most recent conversation.
@@ -2042,7 +2065,10 @@ export function JainaChatSurface({
           if (input.forceReportArtifact) {
             setPendingReportArtifactResponseId(null);
           }
-          show({ title: 'Request failed', description: message, variant: 'error' });
+          // A billing refusal is already on screen as the notice with its control.
+          if (!paymentRequiredRef.current) {
+            show({ title: 'Request failed', description: message, variant: 'error' });
+          }
           input.onDispatchError?.(message);
         },
       });
@@ -2921,6 +2947,14 @@ export function JainaChatSurface({
                   onLoadEarlier={loadEarlier}
                 >
                   {isConversationSwitching ? <ConversationSkeleton /> : null}
+
+                  {paymentRequired ? (
+                    <PaymentRequiredNotice
+                      body={paymentRequired}
+                      className="mx-auto my-3 w-full max-w-3xl"
+                      from={`/scale?tab=jaina`}
+                    />
+                  ) : null}
 
                   {!isConversationSwitching && messages.length === 0 && (
                     <JainaEmptyState
