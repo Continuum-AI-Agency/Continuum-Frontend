@@ -590,6 +590,7 @@ export function DCOActionsWidget({
     logs,
     isLoading,
     error,
+    selectorError,
     pagination,
     filters,
     sort,
@@ -876,6 +877,11 @@ export function DCOActionsWidget({
 
         <Separator className="mb-3" />
 
+        {selectorError ? (
+          <p className="mb-2 text-destructive text-xs" role="alert">
+            {selectorError}
+          </p>
+        ) : null}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <FilterControls
             filters={filters}

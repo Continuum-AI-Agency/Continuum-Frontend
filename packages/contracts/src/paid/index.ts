@@ -18,6 +18,9 @@ export * from './openai-ads';
 // automation type, BudgetRef and the ISO-minor <-> platform budget unit conversions.
 export * from './platform';
 export * from './ranking';
+// The fetch-rule-action-logs edge response: the envelope and per-row validation the Dashboard
+// reads action logs through.
+export * from './rule-action-logs';
 // The typed plan behind a paid scaffold version (evidence, expected results, optimizer
 // enrollment) and the Campaign Canvas save request/response.
 export * from './scaffold-plan';
