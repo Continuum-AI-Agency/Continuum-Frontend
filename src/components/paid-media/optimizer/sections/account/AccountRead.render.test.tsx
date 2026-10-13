@@ -167,7 +167,7 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
   it('prints the title the Backend stamped, and the verb it chose', () => {
     const { container } = view([stamped]);
     expect(container.querySelector('h3')?.textContent).toBe(
-      'ITESO // AGOSTO - RTG: 101 MXN por lead, 2.9× la referencia de 35 MXN',
+      'ITESO // AGOSTO - RTG: $101 MXN por lead, 2.9× la referencia de 35 MXN',
     );
     // The figures sit in mono at the claim's own weight; the entity's name is left as written.
     const figures = [...(container.querySelector('h3')?.querySelectorAll('.font-mono') ?? [])];
@@ -253,7 +253,7 @@ describe('AccountRead — the way into Jaina', () => {
     const href = getByTestId('account-card-jaina').getAttribute('href') ?? '';
     expect(href.startsWith('/scale?tab=jaina&prompt=')).toBe(true);
     const prompt = decodeURIComponent(href.slice('/scale?tab=jaina&prompt='.length));
-    expect(prompt).toContain('ITESO // AGOSTO - RTG: 101 MXN por lead');
+    expect(prompt).toContain('ITESO // AGOSTO - RTG: $101 MXN por lead');
     expect(prompt).toContain('FORMULARIOS // TODOS');
     expect(getByTestId('account-card-jaina').textContent).toContain('Ask Jaina');
   });

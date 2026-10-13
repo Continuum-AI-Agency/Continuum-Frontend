@@ -111,6 +111,7 @@ export function useSetupAdvice({
   mode,
   dailyTotal,
   target,
+  currency,
 }: {
   snapshots: AdSetSnapshot[];
   selectedIds: string[];
@@ -118,6 +119,8 @@ export function useSetupAdvice({
   mode: OptimizationModeDto;
   dailyTotal: string;
   target: string;
+  /** The account's code, so the advice quotes money in it ("$70.00 MXN"). */
+  currency: string | null;
 }): SetupAdvice {
   return useMemo(() => {
     const ids = new Set(selectedIds);
@@ -131,8 +134,9 @@ export function useSetupAdvice({
       mode,
       typedDailyTotal: parsed(dailyTotal),
       typedTarget: parsed(target),
+      currency,
     });
-  }, [snapshots, selectedIds, objective, mode, dailyTotal, target]);
+  }, [snapshots, selectedIds, objective, mode, dailyTotal, target, currency]);
 }
 
 /** The one-line hint that lives under the Daily budget input. */
@@ -189,9 +193,12 @@ export function SetupAdvisor({
   onChangeSelection,
   onUseBudget,
   onUseTarget,
+  currency,
 }: {
   advice: SetupAdvice;
   brandId: string;
+  /** The account's code: the repair buttons say the money they fill in. */
+  currency: string | null;
   selectedIds: string[];
   disabled?: boolean;
   onChangeSelection: (ids: string[]) => void;
@@ -212,13 +219,13 @@ export function SetupAdvisor({
     }
     if (issue.code === 'target_defaulted' && advice.suggestedTarget != null) {
       return {
-        label: `Use ${advice.suggestedTarget}`,
+        label: `Use ${formatCurrency(advice.suggestedTarget, currency)}`,
         run: () => onUseTarget(String(advice.suggestedTarget)),
       };
     }
     if (issue.code === 'budget_below_current' && advice.suggestedDailyTotal != null) {
       return {
-        label: `Use ${advice.suggestedDailyTotal}`,
+        label: `Use ${formatCurrency(advice.suggestedDailyTotal, currency)}/day`,
         run: () => onUseBudget(String(advice.suggestedDailyTotal)),
       };
     }

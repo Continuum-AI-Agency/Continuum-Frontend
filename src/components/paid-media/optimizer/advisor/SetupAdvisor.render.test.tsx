@@ -50,6 +50,7 @@ const advise = (snapshots: unknown[], target: number | null = null) =>
     mode: 'balanced',
     typedDailyTotal: null,
     typedTarget: target,
+    currency: 'USD',
   });
 
 afterEach(() => {
@@ -62,6 +63,7 @@ describe('SetupAdvisor', () => {
     const advice = advise([adset('a'), adset('b'), adset('c')], 25);
     const { container } = wrap(
       <SetupAdvisor
+        currency="USD"
         advice={advice}
         brandId="brand"
         selectedIds={['a', 'b', 'c']}
@@ -78,6 +80,7 @@ describe('SetupAdvisor', () => {
     const advice = advise([adset('a'), adset('b')]);
     wrap(
       <SetupAdvisor
+        currency="USD"
         advice={advice}
         brandId="brand"
         selectedIds={['a', 'b']}
@@ -86,7 +89,7 @@ describe('SetupAdvisor', () => {
         onUseTarget={() => {}}
       />,
     );
-    expect(document.body.textContent).toContain('$50 default');
+    expect(document.body.textContent).toContain('$50.00 USD default');
     expect(document.body.textContent).toContain('proposed for pause');
   });
 
@@ -103,6 +106,7 @@ describe('SetupAdvisor', () => {
     const onChangeSelection = mock((_ids: string[]) => {});
     wrap(
       <SetupAdvisor
+        currency="USD"
         advice={advice}
         brandId="brand"
         selectedIds={selected}

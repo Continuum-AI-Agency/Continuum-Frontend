@@ -5,47 +5,19 @@
 // A currency with no symbol of its own prints the code alone ("85.47 CHF" style); an unknown
 // currency prints the bare figure, because a guessed "$" on a peso account misreads by ~20x.
 //
-// Every money formatter on these screens (the optimizer's, Home's, Jaina's blocks) joins its
-// figure through `joinMoney`, so the screens spell money one way. `splitMoney` is the inverse,
-// used where a large figure dims its symbol and code.
-//
-// NOT YET THE BACKEND'S RULE. Prose the Backend composes, and the line a model is told to follow,
-// come from `formatMoney` / `moneyProseRule` in @continuum/contracts (optimization/money.ts),
-// which still spell "324 MXN" / "$324". Moving them to M1 changes what Jaina writes and needs a
-// Backend deploy, so it ships as its own change; until then a sentence the Backend wrote may
-// read "324 MXN" beside a figure printed "$324 MXN" — the same money, never a different one.
+// The symbol, the code and the sentence rule are @continuum/contracts' (optimization/money.ts),
+// the same ones the Backend's prose and Jaina's prompt line follow, so a sentence the Backend
+// wrote and the figure the screen prints beside it spell money one way. This file adds only what
+// a screen needs on top: the parts (so a large figure can dim its symbol and code), the cell
+// spelling for a column whose header names the code, and `splitMoney`, the inverse.
 
-const ISO_CURRENCY = /^[A-Z]{3}$/;
+import { currencyGlyph, normalizeCurrencyCode } from '@continuum/contracts';
+
+export { currencyGlyph };
 
 /** The account's ISO code, or null when the value is not a usable one. Null is the answer,
  *  never a fallback: an unknown currency is not dollars. */
-export function normalizeCurrency(currency: string | null | undefined): string | null {
-  const trimmed = (currency ?? '').trim().toUpperCase();
-  return ISO_CURRENCY.test(trimmed) ? trimmed : null;
-}
-
-const glyphCache = new Map<string, string | null>();
-
-/** The currency's narrow symbol ("$" for MXN and USD, "€", "R$"), or null when it has none
- *  that differs from its code. */
-export function currencyGlyph(code: string): string | null {
-  if (glyphCache.has(code)) return glyphCache.get(code) ?? null;
-  let glyph: string | null = null;
-  try {
-    const part = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      currencyDisplay: 'narrowSymbol',
-    })
-      .formatToParts(0)
-      .find((p) => p.type === 'currency')?.value;
-    glyph = part && part !== code && !/^[A-Z]{3}$/.test(part) ? part : null;
-  } catch {
-    glyph = null;
-  }
-  glyphCache.set(code, glyph);
-  return glyph;
-}
+export const normalizeCurrency = normalizeCurrencyCode;
 
 export type MoneyParts = {
   /** "-" or "". Stays outside the symbol: "-$25.54" reads as a debit, "$-25.54" as a typo. */

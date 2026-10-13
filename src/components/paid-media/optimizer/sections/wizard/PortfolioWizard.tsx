@@ -176,6 +176,7 @@ export function PortfolioWizard({
     mode: draft.mode,
     dailyTotal: draft.dailyTotal,
     target: draft.target,
+    currency,
   });
 
   const issues = stepIssues(draft, step, {

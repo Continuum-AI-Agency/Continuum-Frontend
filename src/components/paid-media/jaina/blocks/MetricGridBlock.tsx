@@ -49,12 +49,10 @@ function printMetric(metric: MetricItemV2, value: MetricItemV2['value']): string
     unit: metric.unit,
   });
   const currency = paidCurrencyCodeSchema.safeParse(metric.unit);
-  return displayFormat === 'currency' && !currency.success
-    ? `${formatValue(value, 'number')} (currency unknown)`
-    : formatValue(value, displayFormat, {
-        ...(currency.success ? { currency: currency.data } : {}),
-        percentBasis: metric.percent_basis ?? null,
-      });
+  return formatValue(value, displayFormat, {
+    ...(currency.success ? { currency: currency.data } : {}),
+    percentBasis: metric.percent_basis ?? null,
+  });
 }
 
 /**

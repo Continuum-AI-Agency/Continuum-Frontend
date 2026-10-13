@@ -1,14 +1,14 @@
 /**
  * JG-frontend-null-currency-label: every money cell a Jaina block prints follows the ONE money
- * rule (`formatMoney`, @continuum/contracts): unknown currency → the bare figure, USD → `$`,
- * anything else → `1,250 MXN`. The Backend materializer and the Optimizer prose follow it;
+ * rule (`formatMoney`, @continuum/contracts, M1 since 2026-10-13): unknown currency → the bare
+ * figure, any known one → its symbol before and its code after, `$1,250 MXN` / `$1,250 USD`. The Backend materializer and the Optimizer prose follow it;
  * these two blocks dressed the figure themselves — "(currency unknown)" on a null, "MX$" on
  * MXN — so the same figure read differently on two surfaces of one answer.
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
 import { formatMoney } from '@continuum/contracts';
+import { cleanup, render, screen } from '@testing-library/react';
 import type { DataTableBlockV2, MetricGridBlockV2 } from '@/lib/jaina/schemas';
 
 mock.module('@/lib/api/http', () => ({
@@ -71,10 +71,11 @@ describe('DataTableBlock money cells', () => {
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
-  it('an MXN cell prints the figure followed by the code, never a $ symbol', () => {
+  it('an MXN cell prints "$" before the figure and MXN after it, never the locale\u2019s "MX$"', () => {
     render(<DataTableBlock block={table('MXN')} isStreaming={false} />);
     expect(screen.getByText(formatMoney(SPEND, 'MXN'))).toBeTruthy();
-    expect(screen.queryByText(/\$/)).toBeNull();
+    expect(formatMoney(SPEND, 'MXN')).toBe('$2,889 MXN');
+    expect(screen.queryByText(/MX\$/)).toBeNull();
   });
 });
 
@@ -86,9 +87,9 @@ describe('MetricGridBlock money values', () => {
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
-  it('an MXN value prints the figure followed by the code, never a $ symbol', () => {
+  it('an MXN value prints "$" before the figure and MXN after it, never the locale\u2019s "MX$"', () => {
     render(<MetricGridBlock block={grid('MXN')} isStreaming={false} />);
     expect(screen.getByText(formatMoney(SPEND, 'MXN'))).toBeTruthy();
-    expect(screen.queryByText(/\$/)).toBeNull();
+    expect(screen.queryByText(/MX\$/)).toBeNull();
   });
 });

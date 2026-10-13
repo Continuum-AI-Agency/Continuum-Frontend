@@ -14,8 +14,8 @@
 // not a 3-letter ISO code prints the bare figure: `324`, not `$324`. This is the rule
 // `money()` in `@continuum/contracts/optimization/account-card-html` already follows for the
 // COMPILED card of the same finding ("Null prints bare figures"), the rule the portfolio
-// briefs follow (the model may not emit a symbol at all), and the rule Jaina follows
-// ("N (currency unknown)"). It is adopted here rather than reinvented, so the card and the
+// briefs follow (the model may not emit a symbol at all), and the rule Jaina's blocks follow
+// (formatValue → contracts formatMoney). It is adopted here rather than reinvented, so the card and the
 // screen behind it cannot disagree about what money a figure is in.
 //
 // THE DIGIT RULE IS ALSO THEIRS. `perPeriod` passes the day through unrounded and cent-rounds

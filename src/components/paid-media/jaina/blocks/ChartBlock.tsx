@@ -65,9 +65,6 @@ function formatDatapointMeta(
 }
 
 function formatChartValue(value: string | number, block: ChartBlockV2): string {
-  if (block.value_format === 'currency' && !block.currency_code) {
-    return `${formatValue(value, 'number')} (currency unknown)`;
-  }
   return formatValue(
     value,
     block.value_format,

@@ -28,6 +28,7 @@
 //                   for pause. The most expensive lie in the setup form is the word "optional".
 
 import type { AdSetSnapshot, OptimizationObjective, WindowMetrics } from './index';
+import { formatMoney } from './money';
 import { getOptimizationMetricDefinition } from './service';
 
 /** The engine's fallback when a portfolio stores no cpa_target
@@ -81,6 +82,9 @@ export type SetupAdviceInput = {
   typedDailyTotal: number | null;
   /** Parsed from the form, in DISPLAY units; null when blank. */
   typedTarget: number | null;
+  /** The ad account's ISO code, so every figure an issue quotes follows the money rule
+   *  (`formatMoney`: "$70.00 MXN"); null/absent prints the bare figure, never a guessed "$". */
+  currency?: string | null;
 };
 
 /** Round UP to a clean step. Ceil, never round: a total BELOW the current sum makes cycle 1 a
@@ -123,6 +127,7 @@ function spendIn(snapshot: AdSetSnapshot): number {
  * Pure: same input, same advice, always.
  */
 export function adviseSetup(input: SetupAdviceInput): SetupAdvice {
+  const money = (value: number) => formatMoney(value, input.currency);
   const { snapshots, objective, mode, typedDailyTotal, typedTarget } = input;
   const metric = getOptimizationMetricDefinition(objective);
   const kpiField = metric.kpiField as keyof WindowMetrics;
@@ -205,10 +210,10 @@ export function adviseSetup(input: SetupAdviceInput): SetupAdvice {
       severity: 'warn',
       message:
         `${metric.targetLabel} is blank — the optimizer scores against its ` +
-        `$${ENGINE_DEFAULT_CPA_TARGET} default, which sets the per-ad-set budget floor and the ` +
+        `${money(ENGINE_DEFAULT_CPA_TARGET)} default, which sets the per-ad-set budget floor and the ` +
         `spend at which an ad set with no results is proposed for pause` +
         (suggestedTarget !== null
-          ? `. Suggested: $${suggestedTarget}, the blended actual across your selection.`
+          ? `. Suggested: ${money(suggestedTarget)}, the blended actual across your selection.`
           : `, and we cannot suggest one: no tracked ${metric.resultLabel} across the selection in 14 days.`),
       adsetIds: [],
     });
@@ -252,7 +257,7 @@ export function adviseSetup(input: SetupAdviceInput): SetupAdvice {
         `0 tracked ${metric.resultLabel} in 14 days.` +
         (pauseBound.length > 0
           ? ` ${subject(pauseBound.length)} ${plural(pauseBound.length, 'has', 'have')} already spent past the ` +
-            `$${effectiveTarget} target with nothing to show, so the optimizer will propose ` +
+            `${money(effectiveTarget)} target with nothing to show, so the optimizer will propose ` +
             `${plural(pauseBound.length, 'a pause', 'pauses')}.`
           : '') +
         (heldCount > 0
@@ -290,7 +295,7 @@ export function adviseSetup(input: SetupAdviceInput): SetupAdvice {
       code: 'budget_below_current',
       severity: 'warn',
       message:
-        `Your daily budget ($${typedDailyTotal}) is below the $${currentBudgetSum}/day these ` +
+        `Your daily budget (${money(typedDailyTotal)}) is below the ${money(currentBudgetSum)}/day these ` +
         `${snapshots.length} ad ${plural(snapshots.length, 'set runs', 'sets run')} today — the first cycle would cut about ` +
         `${cutPct}% of their delivery.`,
       adsetIds: [],
@@ -308,7 +313,7 @@ export function adviseSetup(input: SetupAdviceInput): SetupAdvice {
       code: 'budget_above_current',
       severity: 'info',
       message:
-        `Your daily budget ($${typedDailyTotal}) is ${upPct}% above the $${currentBudgetSum}/day these ad sets ` +
+        `Your daily budget (${money(typedDailyTotal)}) is ${upPct}% above the ${money(currentBudgetSum)}/day these ad sets ` +
         `run today — the optimizer pushes the extra into the best-scoring ad sets, within its per-cycle cap.` +
         (mode === 'efficiency'
           ? ' In Efficiency mode the total is a ceiling: it may deliberately underspend rather than force money onto weak inventory.'
@@ -323,8 +328,8 @@ export function adviseSetup(input: SetupAdviceInput): SetupAdvice {
       code: 'target_below_best',
       severity: 'warn',
       message:
-        `Your ${metric.targetLabel.toLowerCase()} ($${typedTarget}) is below every selected ad set's actual cost ` +
-        `(best: $${Math.round(costSpread.best)}) — every one of them will read as over-target.`,
+        `Your ${metric.targetLabel.toLowerCase()} (${money(typedTarget)}) is below every selected ad set's actual cost ` +
+        `(best: ${money(Math.round(costSpread.best))}) — every one of them will read as over-target.`,
       adsetIds: [],
     });
   }

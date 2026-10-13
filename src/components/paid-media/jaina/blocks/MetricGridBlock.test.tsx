@@ -58,11 +58,11 @@ const block = (unit: string | null): MetricGridBlockV2 => ({
 describe('MetricGridBlock', () => {
   it('uses the source currency and never defaults an unknown currency to USD', () => {
     const { rerender } = render(<MetricGridBlock block={block('MXN')} isStreaming={false} />);
-    expect(screen.getByText('$1,500.00 MXN')).toBeTruthy();
+    expect(screen.getByText('$1,500 MXN')).toBeTruthy();
 
     rerender(<MetricGridBlock block={block(null)} isStreaming={false} />);
-    expect(screen.getByText('1,500 (currency unknown)')).toBeTruthy();
-    expect(screen.queryByText('$1,500.00 USD')).toBeNull();
+    expect(screen.getByText('1,500')).toBeTruthy();
+    expect(screen.queryByText('$1,500 USD')).toBeNull();
   });
 });
 

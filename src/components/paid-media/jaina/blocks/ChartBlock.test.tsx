@@ -103,7 +103,7 @@ describe('ChartBlock', () => {
     ).toBeTruthy();
   });
 
-  it('qualifies currency values when no currency metadata is supplied', () => {
+  it('prints bare figures, never a guessed symbol, when no currency metadata is supplied', () => {
     const block: ChartBlockV2 = {
       block_id: 'unknown-currency-spend',
       category: 'chart',
@@ -136,8 +136,8 @@ describe('ChartBlock', () => {
 
     // Two entities is a pair, and a pair is two tiles — the qualified figure is on them.
     expect(screen.getByTestId('chart-as-tiles')).toBeTruthy();
-    expect(screen.getAllByText('0 (currency unknown)').length).toBeGreaterThan(0);
-    expect(screen.getByText('4 (currency unknown)')).toBeTruthy();
+    expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
+    expect(screen.getByText('4.00')).toBeTruthy();
     expect(screen.queryByText('$0.00 USD')).toBeNull();
   });
 });

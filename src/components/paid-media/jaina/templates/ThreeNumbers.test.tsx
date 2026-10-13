@@ -55,7 +55,7 @@ describe('three_numbers — the answer (month, no comparable prior)', () => {
   it('says the three numbers in one sentence', () => {
     const { container } = render(<TemplateExecutive block={month} />);
     expect(container.querySelector('p')?.textContent).toBe(
-      'Este mes llevamos 64,351 MXN de gasto, 1,463 conversaciones y un costo por conversación de 36.62 MXN.',
+      'Este mes llevamos $64,351 MXN de gasto, 1,463 conversaciones y un costo por conversación de $36.62 MXN.',
     );
     expectFigureParity(month, container);
   });
@@ -69,9 +69,9 @@ describe('three_numbers — the answer (month, no comparable prior)', () => {
       'cpr',
     ]);
     expect(panels.map((panel) => panel.textContent)).toEqual([
-      'Gasto64,351 MXNeste mes',
+      'Gasto$64,351 MXNeste mes',
       'Conversaciones1,463este mes',
-      'Costo por conversación36.62 MXNeste mes',
+      'Costo por conversación$36.62 MXNeste mes',
     ]);
     expect(container.querySelector('[data-direction]')).toBeNull();
   });
@@ -84,7 +84,7 @@ describe('three_numbers — the answer (month, no comparable prior)', () => {
     expect(labelled).toContain('day_25');
     expect(labelled.every((id) => id.startsWith('day_'))).toBe(true);
     expect(chart?.textContent).toContain(
-      'Gasto por día en este mes, sumando las 16 campañas: 64,351 MXN en total.',
+      'Gasto por día en este mes, sumando las 16 campañas: $64,351 MXN en total.',
     );
   });
 });
@@ -99,7 +99,7 @@ describe('three_numbers — the justification', () => {
       'cpr',
     ]);
     expect(derivations[2]?.querySelector('p')?.textContent).toBe(
-      '53,577 MXN gastados en esas campañas ÷ 1,463 conversaciones = 36.62 MXN.',
+      '$53,577 MXN gastados en esas campañas ÷ 1,463 conversaciones = $36.62 MXN.',
     );
     const rows = [...container.querySelectorAll('tbody tr')].map(
       (row) => row.querySelector('td')?.textContent,
@@ -128,9 +128,9 @@ describe('three_numbers — last 7 days against the 7 before', () => {
     expect(direction('results')?.className).toContain('text-success');
     expect(direction('cpr')?.className).toContain('text-destructive');
     expect(figureIdsIn(direction('cpr'))).toEqual(['cpr_change', 'cpr_prior']);
-    expect(direction('spend')?.textContent).toBe('↑ 23.3% · los 7 días anteriores 20,062 MXN');
+    expect(direction('spend')?.textContent).toBe('↑ 23.3% · los 7 días anteriores $20,062 MXN');
     expect(container.querySelector('p')?.textContent).toBe(
-      'En los últimos 7 días llevamos 24,746 MXN de gasto, 503 conversaciones y un costo por conversación de 40.45 MXN: el gasto subió 23.3% y el costo por conversación subió 0.7% frente a los 7 días anteriores.',
+      'En los últimos 7 días llevamos $24,746 MXN de gasto, 503 conversaciones y un costo por conversación de $40.45 MXN: el gasto subió 23.3% y el costo por conversación subió 0.7% frente a los 7 días anteriores.',
     );
     expectFigureParity(week, container);
   });

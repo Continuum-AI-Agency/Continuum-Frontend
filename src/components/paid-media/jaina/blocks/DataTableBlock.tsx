@@ -29,9 +29,7 @@ const displayValue = (
   percentBasis?: 'fraction' | 'points' | null,
 ): string => {
   if (value == null) return '—';
-  if (format === 'currency' && !currency) {
-    return `${formatValue(value, 'number')} (currency unknown)`;
-  }
+  // Money, known currency or not, is the one rule's (formatValue → contracts formatMoney).
   return formatValue(value, format ?? undefined, {
     ...(currency ? { currency } : {}),
     percentBasis: percentBasis ?? null,
