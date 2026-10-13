@@ -516,3 +516,56 @@ describe('seedBucketsFromSnapshot', () => {
     expect(buckets.result).toBe(result);
   });
 });
+
+it('forwards original intake, documents, and social evidence without inventing a website', async () => {
+  runOnboardingPreviewMock.mockReset();
+  const intake = {
+    kind: 'description' as const,
+    brand_name: 'Acme',
+    url: null,
+    description: 'We install solar for homeowners.',
+  };
+  let observed: unknown;
+  runOnboardingPreviewMock.mockImplementation(async ({ payload, onEvent }) => {
+    observed = payload;
+    onEvent?.({ type: 'business', payload: { business_description: 'Solar installation' } });
+    return { runId: 'new-run' };
+  });
+  const instagramProfile = {
+    handle: 'acme',
+    url: 'https://instagram.com/acme',
+    source: 'og_scrape' as const,
+    fetched_at: '2026-10-10T00:00:00Z',
+    og_description: 'We install solar.',
+    recent_posts: [],
+  };
+  const facebookProfile = {
+    name: 'Acme',
+    url: 'https://facebook.com/acme',
+    description: 'We install solar.',
+    image_url: null,
+    fetched_at: '2026-10-10T00:00:00Z',
+    source: 'public_page' as const,
+  };
+  const result = await runAgentPreview(
+    {
+      ...makeInput(),
+      websiteUrl: '',
+      intake,
+      instagramProfile,
+      facebookProfile,
+      documentIds: ['00000000-0000-4000-8000-000000000001'],
+      inputKey: 'input:key',
+    },
+    new AbortController().signal,
+  );
+  expect(observed).toMatchObject({
+    intake,
+    instagram_profile: instagramProfile,
+    facebook_profile: facebookProfile,
+    document_ids: ['00000000-0000-4000-8000-000000000001'],
+    brandProfile: { description: intake.description, website_url: undefined },
+    runContext: { platform_urls: [] },
+  });
+  expect(result.inputKey).toBe('input:key');
+});

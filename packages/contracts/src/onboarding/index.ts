@@ -17,6 +17,8 @@ export * from './brand-voice';
 export * from './business-summary';
 export * from './first-impression';
 export * from './inspirations';
+export * from './instagram';
+export * from './intake';
 export * from './readiness';
 export * from './readiness-criteria';
 export * from './readiness-summary';

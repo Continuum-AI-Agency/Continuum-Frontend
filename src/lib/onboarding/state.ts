@@ -2,6 +2,7 @@ import {
   documentCategorySchema,
   documentRetentionSchema,
   onboardingInspirationSelectionSchema,
+  onboardingIntakeSchema,
 } from '@continuum/contracts';
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { z } from 'zod';
@@ -204,6 +205,11 @@ export const brandInviteSchema = z.object({
 export const LAST_ONBOARDING_STEP = 8;
 
 const onboardingStateSchema = z.object({
+  intake: onboardingIntakeSchema.nullable().optional(),
+  previewRequest: z
+    .object({ inputKey: z.string(), runId: z.string().nullable() })
+    .nullable()
+    .optional(),
   catalogCompleted: z.boolean().default(false),
   step: z.number().int().min(0).max(LAST_ONBOARDING_STEP),
   brand: brandSchema,
@@ -224,6 +230,11 @@ const onboardingStateSchema = z.object({
 });
 
 const onboardingPatchSchema = z.object({
+  intake: onboardingIntakeSchema.nullable().optional(),
+  previewRequest: z
+    .object({ inputKey: z.string(), runId: z.string().nullable() })
+    .nullable()
+    .optional(),
   catalogCompleted: z.boolean().optional(),
   step: z.number().int().min(0).max(LAST_ONBOARDING_STEP).optional(),
   brand: brandSchema.partial().optional(),
@@ -293,6 +304,8 @@ function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState
 export function createDefaultOnboardingState(owner?: BrandMember): OnboardingState {
   const ownerHandle = owner?.email?.split('@')[0];
   return {
+    intake: null,
+    previewRequest: null,
     catalogCompleted: false,
     step: 0,
     brand: {
@@ -348,6 +361,8 @@ export function repairOnboardingState(
   }
 
   const topLevelKeys = [
+    'intake',
+    'previewRequest',
     'catalogCompleted',
     'step',
     'documents',
@@ -462,6 +477,9 @@ export function mergeOnboardingState(
   patch: OnboardingPatch,
 ): OnboardingState {
   const next: OnboardingState = {
+    intake: patch.intake === undefined ? (current.intake ?? null) : patch.intake,
+    previewRequest:
+      patch.previewRequest === undefined ? (current.previewRequest ?? null) : patch.previewRequest,
     catalogCompleted: current.catalogCompleted ?? false,
     step: current.step,
     brand: { ...current.brand },

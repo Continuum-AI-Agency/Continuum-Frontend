@@ -3,8 +3,8 @@
 import { FileText } from '@phosphor-icons/react';
 
 import { DesignSystemCard } from '@/components/design-system/DesignSystemCard';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { DocumentUploader } from '@/components/onboarding/shared/DocumentUploader';
-
 import { HelpPopover } from '../HelpPopover';
 
 type DocumentsScreenProps = {
@@ -28,6 +28,7 @@ export function DocumentsScreen({
   brandId,
   onDesignSystemBusyChange,
 }: DocumentsScreenProps) {
+  const { state } = useOnboarding();
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-2xl">
@@ -50,8 +51,9 @@ export function DocumentsScreen({
             </HelpPopover>
           </div>
           <p className="mx-auto mt-3 max-w-md text-[0.875rem] leading-relaxed text-muted-foreground">
-            Optional. Upload assets to ground your Brand DNA in real materials — or skip and let us
-            infer from your website.
+            {state.intake?.kind === 'documents'
+              ? 'Upload at least one readable document to ground your Brand DNA in your actual work.'
+              : 'Optional. Add brand materials to strengthen the analysis of your starting source.'}
           </p>
         </div>
 

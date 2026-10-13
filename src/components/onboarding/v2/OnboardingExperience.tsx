@@ -1,5 +1,6 @@
 'use client';
 
+import type { OnboardingIntake, OnboardingSourceResponse } from '@continuum/contracts';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -15,15 +16,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useBrandAssignedAccountIds } from '@/hooks/useBrandAssignedAccountIds';
-import {
-  computePreviewInputHash,
-  fetchPreviewLatest,
-  fetchPreviewSnapshot,
-  PREVIEW_PROMPT_VERSION,
-  PreviewRateLimitedError,
-} from '@/lib/onboarding/agentClient';
+import { fetchPreviewLatest, fetchPreviewSnapshot } from '@/lib/onboarding/agentClient';
 import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
 import { persistOnboardingBrandKit } from '@/lib/onboarding/inspirationsClient';
+import {
+  intakeDocumentsProcessing,
+  intakeInputKey,
+  readyIntakeDocuments,
+} from '@/lib/onboarding/intake';
 import { PLAN_SCREEN, resumeScreenFor, type ScreenIndex } from '@/lib/onboarding/resumeScreen';
 import { useBrandProfileRevealCache } from '@/lib/onboarding/revealCache';
 import { prepareOnboardingStarter } from '@/lib/onboarding/starterKit';
@@ -54,7 +54,7 @@ import {
 } from './state/agentPreview';
 import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJobsProvider';
 import { JobPersistor } from './state/JobPersistor';
-import { runScrape } from './state/jobRunners';
+import { readOnboardingSource } from './state/jobRunners';
 
 const TOTAL_STEPS = 6;
 
@@ -109,6 +109,10 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
   const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? '');
   const { start, patch, jobs, reset } = useBackgroundJobs();
   const { brandId, resetState, state, updateState } = useOnboarding();
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const sourceRef = useRef<{ url: string; value: OnboardingSourceResponse } | null>(null);
+  const analysisGenerationRef = useRef(0);
+  const lastStartedKeyRef = useRef<string | null>(null);
   const emailReportOptInRef = useRef(state.emailReportOptIn ?? true);
 
   const navigate = useCallback(
@@ -149,6 +153,9 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
   };
 
   const handleStartOver = () => {
+    analysisGenerationRef.current += 1;
+    lastStartedKeyRef.current = null;
+    sourceRef.current = null;
     startReset(async () => {
       reset();
       prewarmedRef.current = false;
@@ -334,123 +341,184 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     });
   };
 
-  const handleUrlSubmit = async (url: string) => {
-    if (domain && domain !== url) {
-      useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
-    }
-    setDomain(url);
-    if (!(await navigate(1))) return; // Documents
+  const analyzeIntake = async (snapshot: OnboardingState, force = false): Promise<boolean> => {
+    const intake = snapshot.intake;
+    if (!intake || intakeDocumentsProcessing(snapshot)) return false;
+    if (intake.kind === 'documents' && !readyIntakeDocuments(snapshot).length) return false;
+    const initialGeneration = analysisGenerationRef.current;
+    const existingKey = await intakeInputKey(snapshot);
+    if (initialGeneration !== analysisGenerationRef.current) return false;
+    if (
+      !force &&
+      lastStartedKeyRef.current === existingKey &&
+      (jobs.scrape.status === 'running' || ['running', 'done'].includes(jobs.agentPreview.status))
+    )
+      return true;
+    lastStartedKeyRef.current = existingKey;
+    const generation = ++analysisGenerationRef.current;
+    setSourceError(null);
+    useBrandProfileRevealCache.getState().invalidateBrand(brandId);
     patch('agentPreview', emptyBuckets());
-
-    const scrapePromise = start('scrape', (signal) => runScrape(brandId, url, signal));
-
-    const supabase = createSupabaseBrowserClient();
-    const { data } = await supabase.auth.getUser();
-    const userId = data.user?.id;
-    if (!userId) return;
-
-    const scrape = await scrapePromise;
-    const brandName = resolveSafeBrandName({
-      scrapeTitle: scrape?.title,
-      fallbackName: initialState.brand.name,
-      url,
-    });
-
-    void (async () => {
-      const previewTimer = timing();
-      trackOnboardingEvent('onboarding_agent_preview_started', { url });
-
-      const inputHash = await computePreviewInputHash({
-        payload: {
-          brandProfile: {
-            id: brandId,
-            brand_name: brandName,
-            website_url: url || undefined,
-          },
-          runContext: {
-            user_id: userId,
-            brand_id: brandId,
-            brand_name: brandName,
-            created_at: new Date().toISOString(),
-            platform_urls: url ? [url] : [],
-            integrated_platforms: [],
-            brand_voice_tags: initialState.brand.brandVoiceTags ?? [],
-            integration_account_ids: [],
-          },
-          scrape,
-        },
-        promptVersion: PREVIEW_PROMPT_VERSION,
-      }).catch(() => null);
-
-      try {
-        const outcome = await start('agentPreview', (signal) =>
-          runAgentPreview(
-            {
-              brandId,
-              userId,
-              brandName,
-              websiteUrl: url,
-              voiceTags: initialState.brand.brandVoiceTags ?? [],
-              scrape: scrape ?? null,
-              onUpdate: (next) => patch('agentPreview', next),
-            },
-            signal,
-          ),
-        );
-        if (outcome) {
-          useBrandProfileRevealCache.getState().write(brandId, url, {
-            buckets: outcome.buckets,
-            scrape,
-            runId: outcome.runId,
-            inputHash,
-          });
-          trackOnboardingEvent('onboarding_agent_preview_completed', {
-            duration_ms: previewTimer.sinceStart(),
-            has_voice: Boolean(outcome.buckets.voice),
-            has_audience: Boolean(outcome.buckets.audience),
-            has_business: Boolean(outcome.buckets.business),
-            has_readiness: Boolean(outcome.buckets.readiness),
-            has_understanding: Boolean(outcome.buckets.result?.understanding),
-          });
-        } else {
-          trackOnboardingEvent('onboarding_agent_preview_failed', {
-            duration_ms: previewTimer.sinceStart(),
-          });
-        }
-      } catch (error) {
-        if (error instanceof PreviewRateLimitedError) {
-          show({
-            title: 'Slow down a moment',
-            description: `We can analyze again in ${error.retryAfterSeconds}s.`,
-            variant: 'error',
-          });
-        }
-        trackOnboardingEvent('onboarding_agent_preview_failed', {
-          duration_ms: previewTimer.sinceStart(),
-          message: error instanceof Error ? error.message : 'Unknown error',
+    const user = await createSupabaseBrowserClient().auth.getUser();
+    const userId = user.data.user?.id;
+    if (!userId || generation !== analysisGenerationRef.current) return false;
+    let source: OnboardingSourceResponse | null = null;
+    if (intake.url) {
+      if (sourceRef.current?.url === intake.url && !force) {
+        source = sourceRef.current.value;
+      } else {
+        let sourceFailure: string | null = null;
+        source = await start('scrape', async (signal) => {
+          try {
+            return await readOnboardingSource(brandId, intake.url!, signal);
+          } catch (error) {
+            sourceFailure = error instanceof Error ? error.message : 'Couldn’t read that source.';
+            throw error;
+          }
         });
+        if (generation !== analysisGenerationRef.current) return false;
+        if (!source) {
+          setSourceError(
+            sourceFailure ??
+              'Couldn’t read that source. Use brand documents or a business description.',
+          );
+          await navigate(0);
+          return false;
+        }
+        sourceRef.current = { url: intake.url, value: source };
       }
-    })();
+    }
+    const scrape = source?.kind === 'web' ? source.scrape : null;
+    const brandName =
+      intake.kind === 'website'
+        ? resolveSafeBrandName({
+            scrapeTitle: scrape?.title,
+            fallbackName: intake.brand_name,
+            url: intake.url ?? '',
+          })
+        : intake.brand_name;
+    const nextIntake = { ...intake, brand_name: brandName };
+    const nextState: OnboardingState = {
+      ...snapshot,
+      intake: nextIntake,
+      brand: { ...snapshot.brand, name: brandName, website: scrape?.url ?? snapshot.brand.website },
+    };
+    const inputKey = await intakeInputKey(nextState);
+    if (generation !== analysisGenerationRef.current) return false;
+    if (scrape) setDomain(scrape.url);
+    await updateState({
+      intake: nextIntake,
+      brand: { name: brandName, ...(scrape ? { website: scrape.url } : {}) },
+      previewRequest: { inputKey, runId: null },
+    });
+    if (generation !== analysisGenerationRef.current) return false;
+    lastStartedKeyRef.current = inputKey;
+    trackOnboardingEvent('onboarding_agent_preview_started', { source_kind: intake.kind });
+    void start('agentPreview', (signal) =>
+      runAgentPreview(
+        {
+          brandId,
+          userId,
+          brandName,
+          websiteUrl: nextState.brand.website ?? '',
+          voiceTags: snapshot.brand.brandVoiceTags ?? [],
+          intake: nextIntake,
+          description: intake.description,
+          instagramProfile: source?.kind === 'instagram' ? source.instagram_profile : null,
+          facebookProfile: source?.kind === 'facebook' ? source.facebook_profile : null,
+          documentIds: readyIntakeDocuments(snapshot).map((doc) => doc.id),
+          scrape,
+          inputKey,
+          onRunId: (runId) => {
+            if (generation === analysisGenerationRef.current)
+              void updateState({ previewRequest: { inputKey, runId } });
+          },
+          onUpdate: (next) => {
+            if (generation === analysisGenerationRef.current) patch('agentPreview', next);
+          },
+        },
+        signal,
+      ),
+    ).then((outcome) => {
+      if (generation !== analysisGenerationRef.current) return;
+      if (outcome) {
+        useBrandProfileRevealCache.getState().write(brandId, inputKey, {
+          buckets: outcome.buckets,
+          scrape,
+          runId: outcome.runId,
+          inputHash: inputKey,
+        });
+        trackOnboardingEvent('onboarding_agent_preview_completed', {
+          source_kind: intake.kind,
+          has_voice: Boolean(outcome.buckets.voice),
+          has_audience: Boolean(outcome.buckets.audience),
+          has_business: Boolean(outcome.buckets.business),
+        });
+      } else trackOnboardingEvent('onboarding_agent_preview_failed', { source_kind: intake.kind });
+    });
+    return true;
+  };
+
+  const handleIntakeSubmit = async (intake: OnboardingIntake) => {
+    ++analysisGenerationRef.current;
+    reset();
+    lastStartedKeyRef.current = null;
+    sourceRef.current = null;
+    prewarmedRef.current = false;
+    setSourceError(null);
+    const website = state.brand.website;
+    setDomain(intake.kind === 'website' ? (intake.url ?? '') : (website ?? ''));
+    await updateState({
+      intake,
+      preview: null,
+      previewRequest: null,
+      brand: { name: intake.brand_name },
+    });
+    if (!(await navigate(1))) return;
+    if (intake.kind !== 'documents')
+      await analyzeIntake({
+        ...state,
+        intake,
+        brand: { ...state.brand, name: intake.brand_name, website },
+      });
+  };
+
+  const handleDocumentsContinue = async () => {
+    if (state.intake && !(await analyzeIntake(state))) return;
+    await navigate(2);
   };
 
   const handleScrapeRetry = () => {
-    if (!domain) return;
-    void handleUrlSubmit(domain);
+    if (state.intake) void handleIntakeSubmit(state.intake);
+    else if (domain)
+      void handleIntakeSubmit({
+        kind: 'website',
+        url: domain,
+        brand_name: state.brand.name || 'My Brand',
+        description: null,
+      });
   };
 
-  const handleAgentRerun = useCallback(() => {
-    if (!domain) return;
-    useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
-    patch('agentPreview', emptyBuckets());
-    void handleUrlSubmit(domain);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, domain]);
+  const handleAgentRerun = () => {
+    prewarmedRef.current = false;
+    const intake =
+      state.intake ??
+      (domain
+        ? {
+            kind: 'website' as const,
+            url: domain,
+            brand_name: state.brand.name || 'My Brand',
+            description: null,
+          }
+        : null);
+    if (intake) void analyzeIntake({ ...state, intake }, true);
+  };
 
   const steps = useMemo(
     () => [
       {
         id: 'website' as const,
-        label: 'Your website',
+        label: 'Your brand',
         description: 'Tell us where to start',
         state: stepState(screen, 0),
       },
@@ -512,6 +580,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     screen,
     navigate,
     onChangeUrl: () => void navigate(0),
+    onDocumentsContinue: handleDocumentsContinue,
     onLaunch: handleLaunch,
     onContinueToInspirations: handleContinueToInspirations,
     planRequired,
@@ -535,6 +604,50 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
 
   useEffect(() => {
     if (screen !== 5) return;
+    if (state.intake) {
+      let cancelled = false;
+      void (async () => {
+        if (intakeDocumentsProcessing(state)) return;
+        const inputKey = await intakeInputKey(state);
+        if (cancelled || lastStartedKeyRef.current === inputKey) return;
+        const saved = state.previewRequest;
+        const cached = useBrandProfileRevealCache.getState().read(brandId, inputKey);
+        if (cached && saved?.inputKey === inputKey) {
+          lastStartedKeyRef.current = inputKey;
+          await start('agentPreview', () =>
+            Promise.resolve({ runId: cached.runId, buckets: cached.buckets, inputKey }),
+          );
+          return;
+        }
+        if (saved?.inputKey === inputKey && saved.runId) {
+          lastStartedKeyRef.current = inputKey;
+          const generation = ++analysisGenerationRef.current;
+          await start('agentPreview', (signal) =>
+            runAgentPreview(
+              {
+                brandId,
+                userId: '',
+                brandName: state.brand.name,
+                websiteUrl: domain,
+                voiceTags: state.brand.brandVoiceTags,
+                intake: state.intake,
+                inputKey,
+                resumeRunId: saved.runId,
+                onUpdate: (next) => {
+                  if (generation === analysisGenerationRef.current) patch('agentPreview', next);
+                },
+              },
+              signal,
+            ),
+          );
+          return;
+        }
+        if (!cancelled) await analyzeIntake(state);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
     if (jobs.agentPreview.status !== 'idle') return;
     if (!domain) return;
 
@@ -632,6 +745,9 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     state.brand.brandVoiceTags,
     state.brand.name,
     state.members,
+    state.intake,
+    state.documents,
+    state.previewRequest,
   ]);
 
   useEffect(() => {
@@ -682,8 +798,10 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           {screen === 0 ? (
             <UrlScreen
               defaultUrl={domain || defaultUrl}
-              onSubmit={handleUrlSubmit}
-              error={jobs.scrape.status === 'error' ? jobs.scrape.error : null}
+              defaultIntake={state.intake}
+              defaultBrandName={state.brand.name}
+              onSubmit={handleIntakeSubmit}
+              error={sourceError}
               onRetry={handleScrapeRetry}
               retrying={jobs.scrape.status === 'running'}
             />
@@ -772,6 +890,7 @@ function useBottomBar({
   screen,
   navigate,
   onChangeUrl,
+  onDocumentsContinue,
   onLaunch,
   onContinueToInspirations,
   inspirationsEnabled,
@@ -783,6 +902,7 @@ function useBottomBar({
   screen: ScreenIndex;
   navigate: (next: ScreenIndex) => Promise<boolean>;
   onChangeUrl: () => void;
+  onDocumentsContinue: () => Promise<void>;
   onLaunch: () => void;
   onContinueToInspirations: () => void;
   inspirationsEnabled: boolean;
@@ -792,6 +912,10 @@ function useBottomBar({
   catalogBusy: boolean;
 }) {
   const { jobs } = useBackgroundJobs();
+  const { state } = useOnboarding();
+  const documentsBusy = designSystemBusy || intakeDocumentsProcessing(state);
+  const needsDocuments =
+    state.intake?.kind === 'documents' && readyIntakeDocuments(state).length === 0;
   const dnaReady = jobs.agentPreview.status === 'done';
 
   if (screen === 0) {
@@ -799,29 +923,29 @@ function useBottomBar({
   }
   if (screen === 1) {
     return {
-      hint: designSystemBusy
-        ? 'Reading your design system — you can review what we understood in Brand Kit settings.'
-        : "Add brand assets — or skip and we'll infer from your website.",
+      hint: documentsBusy
+        ? 'Reading your brand materials — you can continue when they’re ready.'
+        : 'Add brand assets to ground the analysis in your actual work.',
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={onChangeUrl}>
-            ← Change URL
+            Change starting source
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => void navigate(2)}
-            disabled={designSystemBusy}
+            onClick={() => void onDocumentsContinue()}
+            disabled={documentsBusy || needsDocuments}
           >
             Skip for now
           </Button>
           <Button
             variant="default"
             size="sm"
-            onClick={() => void navigate(2)}
-            disabled={designSystemBusy}
+            onClick={() => void onDocumentsContinue()}
+            disabled={documentsBusy || needsDocuments}
           >
-            {designSystemBusy ? 'Reading design system…' : 'Continue →'}
+            {documentsBusy ? 'Reading brand materials…' : 'Continue →'}
           </Button>
         </>
       ),

@@ -1,3 +1,4 @@
+import { intakeDocumentsProcessing, readyIntakeDocuments } from './intake';
 import { LAST_ONBOARDING_STEP, type OnboardingState } from './state';
 
 // Which onboarding screen a brand resumes on. Pure, so the billing-live and not-live wizards are
@@ -9,6 +10,16 @@ export type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export const PLAN_SCREEN = LAST_ONBOARDING_STEP;
 
 export function resumeScreenFor(state: OnboardingState, planRequired: boolean): ScreenIndex {
+  if (
+    state.intake &&
+    !state.completedAt &&
+    (intakeDocumentsProcessing(state) ||
+      (state.intake.kind === 'documents' && !readyIntakeDocuments(state).length))
+  )
+    return 1;
+  if (state.intake && !state.completedAt) {
+    return Math.min(planRequired ? PLAN_SCREEN : 7, Math.max(1, state.step)) as ScreenIndex;
+  }
   const brand = state.brand;
   const hasAnyConnection = Object.values(state.connections).some((c) => c.connected);
   const hasDna = Boolean(brand.overview) || brand.colors.length > 0 || Boolean(brand.brandVoice);
@@ -19,7 +30,7 @@ export function resumeScreenFor(state: OnboardingState, planRequired: boolean): 
   // OnboardingState (the products are Elements, read over HTTP), and a floor that
   // guessed would skip the step for a brand that never saw it.
   let dataFloor: ScreenIndex = 0;
-  if (brand.website) dataFloor = 1;
+  if (brand.website || state.intake) dataFloor = 1;
   if (hasDocuments) dataFloor = 2;
   if (hasAnyConnection) dataFloor = 4;
   if (hasInvites) dataFloor = 5;
