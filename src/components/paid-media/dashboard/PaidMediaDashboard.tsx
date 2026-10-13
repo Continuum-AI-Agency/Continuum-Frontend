@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { PendingActivityTabs } from '@/components/approvals/PendingActivityTabs';
+import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -88,6 +89,7 @@ export function PaidMediaDashboard({
   const [activeOnly, setActiveOnly] = React.useState(true);
   const [loadState, setLoadState] = React.useState<LoadState>({ status: 'idle' });
   const prefersReducedMotion = useReducedMotion();
+  const accountCurrency = useAdAccountCurrency(brandId, adAccountId);
 
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | undefined>();
@@ -572,6 +574,7 @@ export function PaidMediaDashboard({
               }}
               onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
               toolbarSlot={dashboardToolbar}
+              currency={accountCurrency}
             />
 
             {platform === 'meta' ? (
