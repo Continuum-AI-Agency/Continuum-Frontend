@@ -57,6 +57,7 @@
     "forge:ingest-heal:live:bench": "FORGE_STUDIO_LIVE=1 playwright test --config playwright.forge-studio.config.ts e2e/ingest-heal.forge-studio.bench.spec.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
+    "video-contrast:bench": "playwright test --config playwright.video-contrast.config.ts --workers=1",
     "brands:dedupe:e2e:bench": "playwright test --config playwright.brand-dedupe.config.ts --workers=1",
     "billing:settings:e2e:bench": "playwright test --config playwright.billing-settings.config.ts --workers=1",
     "billing:gates:fe:bench": "playwright test --config playwright.billing-gates.config.ts --workers=1",

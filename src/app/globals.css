@@ -2,7 +2,9 @@
 @import "tw-animate-css";
 @source "../../packages/contracts/src";
 @source "../node_modules/streamdown/dist/*.js";
-@source "../node_modules/loomix/dist/*.js";
+/* Relative to this file, so the Frontend's own node_modules (the standalone install
+   Vercel builds). A path above the Frontend leaves Turbopack's root there and panics. */
+@source "../../node_modules/loomix/dist/*.js";
 @source not "../../.next-shell-review-41739";
 @source not "../../tmp/continuum-next-e2e-shell";
 
@@ -948,7 +950,13 @@ body {
 [data-theme="light"] [class*="border-white"] {
   border-color: var(--border) !important;
 }
-[data-theme="light"] [class*="text-white"] {
+/* Not the video player's chrome (painted over the picture) or text on a neutral-900
+   surface (its menus): neither surface is lightened here, so a remapped white reads
+   dark on dark. */
+[data-theme="light"]
+  [class*="text-white"]:not(
+    :where([class*="group/loomix"], [class*="group/loomix"] *, [class*="bg-neutral-9"] *)
+  ) {
   color: var(--foreground) !important;
 }
 [data-theme="light"] [class*='"text-slate-100"'],
