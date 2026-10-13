@@ -97,6 +97,13 @@ export type CreateTrackedLinkResponse = z.infer<typeof createTrackedLinkResponse
 export const trackedLinkStatsSchema = z.object({
   linkId: z.string().uuid(),
   code: trackedLinkCodeSchema,
+  /**
+   * The full address to hand out, built server-side like the create response's.
+   * Without it the rules screen assembled its own from the API base and showed
+   * `localhost:4000` in development — a second, wrong answer to "what does this
+   * link look like".
+   */
+  url: z.string().url(),
   clicks: z.number().int().nonnegative(),
   firstClickAt: z.string().nullable(),
   lastClickAt: z.string().nullable(),

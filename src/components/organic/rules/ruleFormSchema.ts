@@ -27,6 +27,7 @@ import {
   MAX_LINK_BUTTON_LABEL_LENGTH,
   MAX_PUBLIC_REPLY_VARIATIONS,
   MAX_REPLY_MESSAGE_LENGTH,
+  MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON,
   type SaveCommentTriggerRuleRequest,
 } from '@continuum/contracts';
 import { z } from 'zod';
@@ -68,7 +69,20 @@ export const ruleFormSchema = z
   .refine((form) => form.destinationUrl === '' || isHttpUrl(form.destinationUrl), {
     message: 'Enter a full web address starting with https://',
     path: ['destinationUrl'],
-  });
+  })
+  // A button shrinks the room the message has, and Instagram refuses the WHOLE
+  // message past its limit rather than trimming it — so an over-long body with a
+  // button means the commenter receives nothing at all. The complaint goes on the
+  // message, not the label, because the message is what has to get shorter.
+  .refine(
+    (form) =>
+      form.linkButtonLabel.trim() === '' ||
+      form.replyMessage.length <= MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON,
+    {
+      message: `With a button, Instagram caps the message at ${MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON} characters. Shorten it, or clear the button text to send the link in the message.`,
+      path: ['replyMessage'],
+    },
+  );
 
 /** Mirrors the contract's destination rule so the form refuses what the server would. */
 function isHttpUrl(raw: string): boolean {
@@ -146,8 +160,6 @@ export function formToRule(
     destinationUrl: values.destinationUrl === '' ? null : values.destinationUrl,
     linkButtonLabel:
       values.destinationUrl === '' || values.linkButtonLabel === '' ? null : values.linkButtonLabel,
-    followUpMessage: context.existing?.followUpMessage ?? null,
-    followUpDelayMinutes: context.existing?.followUpDelayMinutes ?? 0,
     enabled: values.enabled,
     priority: context.existing?.priority ?? 0,
     activeFrom: fromLocalInput(values.activeFrom),

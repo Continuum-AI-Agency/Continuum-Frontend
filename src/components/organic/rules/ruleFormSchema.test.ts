@@ -160,8 +160,6 @@ describe('formToRule', () => {
       trackedLinkId: '33333333-3333-4333-8333-333333333333',
       destinationUrl: 'https://example.com/guide',
       linkButtonLabel: null,
-      followUpMessage: 'still interested?',
-      followUpDelayMinutes: 1440,
       enabled: true,
       priority: 900,
       activeFrom: null,
@@ -171,9 +169,7 @@ describe('formToRule', () => {
 
     const rule = formToRule(filled(), { brandId: BRAND_ID, existing });
     expect(rule.id).toBe(RULE_ID);
-    // The form has no controls for these; an edit must not quietly erase them.
-    expect(rule.followUpMessage).toBe('still interested?');
-    expect(rule.followUpDelayMinutes).toBe(1440);
+    // The form has no control for priority; an edit must not quietly erase it.
     expect(rule.priority).toBe(900);
   });
 
@@ -190,8 +186,6 @@ describe('formToRule', () => {
       trackedLinkId: null,
       destinationUrl: 'https://example.com/guide',
       linkButtonLabel: 'Open the guide',
-      followUpMessage: null,
-      followUpDelayMinutes: 0,
       enabled: false,
       priority: 0,
       activeFrom: '2026-09-01T12:00:00.000Z',

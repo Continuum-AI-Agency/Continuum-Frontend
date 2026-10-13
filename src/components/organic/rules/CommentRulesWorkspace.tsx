@@ -18,7 +18,6 @@
 
 import type { CommentTriggerRule } from '@continuum/contracts';
 import React from 'react';
-import { getApiBaseUrl } from '@/lib/api/config';
 import { CommentRuleForm } from './CommentRuleForm';
 import { CommentRulesList } from './CommentRulesList';
 import { emptyRuleForm, formToRule, type RuleFormValues, ruleToForm } from './ruleFormSchema';
@@ -52,8 +51,9 @@ export function CommentRulesWorkspace({
     if (editing.kind !== 'existing') return null;
     const linkId = editing.rule.trackedLinkId;
     if (linkId === null) return null;
-    const code = linkStats.find((entry) => entry.linkId === linkId)?.code;
-    return code === undefined ? null : `${getApiBaseUrl()}/r/${code}`;
+    // The server hands out the finished address. Building it here from the API
+    // base showed `localhost:4000` in development — the address nobody receives.
+    return linkStats.find((entry) => entry.linkId === linkId)?.url ?? null;
   }, [editing, linkStats]);
 
   // A new object every render would reset the form on every keystroke, so the
@@ -123,7 +123,7 @@ export function CommentRulesWorkspace({
             instagramAccountId={instagramAccountId}
           />
         ) : (
-          <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+          <p className="flex h-full items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
             Pick a rule to edit it, or create a new one.
           </p>
         )}

@@ -66,6 +66,17 @@ export const MAX_KEYWORD_LENGTH = 60;
 export const MAX_REPLY_MESSAGE_LENGTH = 900;
 
 /**
+ * The same body, when the rule gives its link a button label.
+ *
+ * Instagram sends a button as a template whose `text` field Meta documents at
+ * "up to 640 characters", and it refuses the WHOLE message past that — the
+ * commenter receives nothing, with no sign of why. A plain-text message has room
+ * for 1000, which is where the 900 above comes from, so the ceiling moves
+ * depending on a choice made three fields away.
+ */
+export const MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON = 640;
+
+/**
  * Public reply variations kept per rule. Answering a hundred commenters with
  * one identical sentence is what platform spam detection is built to catch, and
  * the account that pays for it is the customer's. Rotating a handful of
@@ -76,8 +87,19 @@ export const MAX_PUBLIC_REPLY_VARIATIONS = 10;
 /** Button labels are rendered in a fixed-width chip; long ones are truncated by the platform, not by us. */
 export const MAX_LINK_BUTTON_LABEL_LENGTH = 20;
 
-/** How long a follow-up may wait. Beyond a week the moment has passed. */
-export const MAX_FOLLOW_UP_DELAY_MINUTES = 10_080;
+/**
+ * There is no follow-up message, and there cannot be one.
+ *
+ * The idea was to nudge someone who got the private reply and never answered.
+ * Meta does not allow it: "only when the Instagram user responds to the private
+ * message can you continue the conversation". One message per comment is all
+ * there is, and a person who ignores it cannot be written to again.
+ *
+ * `followUpMessage` and `followUpDelayMinutes` were carried here, stored and read
+ * back for weeks with nothing able to send them — a promise the platform forbids
+ * us to keep. The columns are left in the database because dropping them is
+ * destructive and they harm nothing empty.
+ */
 
 /** The fields of a rule, before the cross-field invariants below are applied. */
 const commentTriggerRuleFields = z.object({
@@ -132,14 +154,6 @@ const commentTriggerRuleFields = z.object({
      * a URL in a paragraph is scrolled past. `null` takes the product default.
      */
     linkButtonLabel: z.string().min(1).max(MAX_LINK_BUTTON_LABEL_LENGTH).nullable(),
-    /**
-     * A second private message, sent later to people who did not act on the
-     * first. `null` means none — again no separate flag, so "enabled with no
-     * message" cannot be expressed.
-     */
-    followUpMessage: z.string().min(1).max(MAX_REPLY_MESSAGE_LENGTH).nullable(),
-    /** Minutes to wait before the follow-up. Ignored when there is no follow-up message. */
-    followUpDelayMinutes: z.number().int().min(0).max(MAX_FOLLOW_UP_DELAY_MINUTES),
     enabled: z.boolean(),
     /** Higher wins. Ties fall through to a deterministic rule — see `matchCommentTrigger`. */
     priority: z.number().int().min(0).max(1000),
@@ -167,12 +181,35 @@ const POSTS_NEEDED = {
   path: ['platformPostIds'],
 };
 
+/**
+ * A button shrinks the room the message has. Checked here rather than on the
+ * field, because the limit depends on `linkButtonLabel`.
+ */
+const replyFitsTheButtonTemplate = (rule: {
+  replyMessage: string;
+  linkButtonLabel: string | null;
+}) =>
+  (rule.linkButtonLabel ?? '').trim() === '' ||
+  rule.replyMessage.length <= MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON;
+const REPLY_FITS_BUTTON = {
+  message: `a message sent with a button cannot pass ${MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON} characters — Instagram refuses the whole message`,
+  path: ['replyMessage'],
+};
+
 const windowIsOrdered = (rule: RuleInvariantFields) =>
   rule.activeFrom === null ||
   rule.activeUntil === null ||
   Date.parse(rule.activeFrom) <= Date.parse(rule.activeUntil);
 const WINDOW_ORDERED = { message: 'the rule cannot end before it starts', path: ['activeUntil'] };
 
+/**
+ * Deliberately WITHOUT `replyFitsTheButtonTemplate`. Rules saved before that
+ * limit existed may already be over it, and this schema parses the listing: one
+ * row failing takes the whole screen down with it, showing "could not load the
+ * rules" for rules that are fine. That exact failure has happened once already,
+ * over a date format. The limit is enforced where it can be acted on — when
+ * someone saves — and the send path caps the body so an old rule still delivers.
+ */
 export const commentTriggerRuleSchema = commentTriggerRuleFields
   .refine(hasKeywordsWhenNeeded, KEYWORDS_NEEDED)
   .refine(hasPostsWhenNeeded, POSTS_NEEDED)
@@ -206,7 +243,8 @@ export const saveCommentTriggerRuleRequestSchema = commentTriggerRuleFields
   })
   .refine(hasKeywordsWhenNeeded, KEYWORDS_NEEDED)
   .refine(hasPostsWhenNeeded, POSTS_NEEDED)
-  .refine(windowIsOrdered, WINDOW_ORDERED);
+  .refine(windowIsOrdered, WINDOW_ORDERED)
+  .refine(replyFitsTheButtonTemplate, REPLY_FITS_BUTTON);
 export type SaveCommentTriggerRuleRequest = z.infer<typeof saveCommentTriggerRuleRequestSchema>;
 
 /**

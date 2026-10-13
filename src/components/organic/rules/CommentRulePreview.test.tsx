@@ -107,26 +107,54 @@ describe('the button', () => {
   });
 
   // The label is what creates the button. With none, the link travels in the
-  // text, which is the form that also works on instagram.com.
-  it('puts the link in the message when there is no button text', () => {
+  // text — and the link that travels is the TRACKED one, the address that counts
+  // the tap. This preview once printed the destination there instead, showing a
+  // message nobody receives.
+  it('puts the tracked link in the message when there is no button text', () => {
+    render(
+      <CommentRulePreview
+        values={values({ linkButtonLabel: '', destinationUrl: 'https://example.com/guide' })}
+        trackedLinkUrl="https://api.trycontinuum.ai/r/aB3xK9mQ2pLn"
+      />,
+    );
+    expect(screen.getByText('https://api.trycontinuum.ai/r/aB3xK9mQ2pLn')).toBeDefined();
+    expect(screen.queryByText('https://example.com/guide')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  // A rule not saved yet has no short link: it is created on save. Showing the
+  // destination in its place would be inventing the message; the absence is drawn
+  // as an absence, like every other one in this panel.
+  it('says the short link comes on save, rather than showing the destination', () => {
     render(
       <CommentRulePreview
         values={values({ linkButtonLabel: '', destinationUrl: 'https://example.com/guide' })}
       />,
     );
-    expect(screen.getByText('https://example.com/guide')).toBeDefined();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(/created when you save/i)).toBeDefined();
+    expect(screen.queryByText('https://example.com/guide')).toBeNull();
   });
 
-  // Only what was observed: the app rendered it, instagram.com on a desktop did
-  // not. Whether web fails everywhere was never tested, so the note stops there.
-  // Says what works first, and names the client the way a reader would. "Shows"
-  // before "may not" so the note reads as a caveat and not as a failure, and
+  // Only what was observed — and both halves now have been: the app renders it,
+  // and a browser does not, on a computer and on a phone alike. The note said
+  // "may not" while only the computer had been tried; keeping that hedge after
+  // the phone was checked would understate a thing a person needs to decide on.
+  // Says what works first, so it reads as a caveat and not as a failure, and
   // "a browser" rather than the domain, which a reader can take to mean
   // Instagram as a whole.
-  it('says where the button shows, then where it may not', () => {
+  it('says where the button shows, then where it does not', () => {
     render(<CommentRulePreview values={values({ linkButtonLabel: 'Get it' })} />);
-    expect(screen.getByText(/shows in the instagram app; may not in a browser/i)).toBeDefined();
+    expect(
+      screen.getByText(/the button shows in the instagram app, not in a browser/i),
+    ).toBeDefined();
+  });
+
+  // The line sits under the message, and without a subject it was read as being
+  // about the whole DM — that the message itself never arrives in a browser,
+  // which is false and frightening for someone deciding whether to use a button.
+  it('names the button, so the caveat is not read as being about the message', () => {
+    render(<CommentRulePreview values={values({ linkButtonLabel: 'Get it' })} />);
+    expect(screen.getByText(/^the button shows/i)).toBeDefined();
   });
 
   it('does not name the domain, which a reader would read as all of Instagram', () => {

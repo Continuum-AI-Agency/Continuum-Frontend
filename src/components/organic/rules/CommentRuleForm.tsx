@@ -50,7 +50,9 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { ButtonReachNote } from './ButtonReachNote';
 import { CommentRulePreview } from './CommentRulePreview';
+import { PANEL_HEADER_FRAME, PANEL_TITLE } from './panelHeader';
 import { PostPicker } from './PostPicker';
 import { type RuleFormValues, ruleFormSchema } from './ruleFormSchema';
 import { usePublishedPosts } from './usePublishedPosts';
@@ -273,8 +275,8 @@ export function CommentRuleForm({
         className="flex h-full min-h-0 flex-col"
         aria-label={isEditing ? 'Edit rule' : 'New rule'}
       >
-        <div className="flex items-center justify-between gap-2 border-b px-4 py-2.5">
-          <h2 className="text-sm font-semibold">{isEditing ? 'Edit rule' : 'New rule'}</h2>
+        <div className={`flex items-center justify-between gap-2 ${PANEL_HEADER_FRAME}`}>
+          <h2 className={PANEL_TITLE}>{isEditing ? 'Edit rule' : 'New rule'}</h2>
           <FormField
             control={form.control}
             name="enabled"
@@ -407,7 +409,10 @@ export function CommentRuleForm({
                     name="linkButtonLabel"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Button text</FormLabel>
+                        <div className="flex items-center gap-1.5">
+                          <FormLabel className="text-xs">Button text</FormLabel>
+                          <ButtonReachNote />
+                        </div>
                         <FormControl>
                           <Input
                             {...field}
@@ -478,7 +483,7 @@ export function CommentRuleForm({
             </div>
 
             <div className="@2xl/rule-form:sticky @2xl/rule-form:top-0">
-              <CommentRulePreview values={previewValues} />
+              <CommentRulePreview values={previewValues} trackedLinkUrl={trackedLinkUrl} />
             </div>
           </div>
         </div>

@@ -1082,7 +1082,12 @@ function MetricCard({
 
   return (
     <Popover>
-      <PopoverTrigger render={cardContent} />
+      {/* The card is a positioning wrapper holding two real buttons — the metric
+          itself and the pin-to-agent action — so it cannot be a <button> without
+          nesting them. nativeButton={false} is Base UI's other sanctioned answer:
+          it applies the button role and keyboard handling to the element it is
+          actually given. */}
+      <PopoverTrigger nativeButton={false} render={cardContent} />
       <PopoverContent
         side="bottom"
         align="start"

@@ -15,15 +15,26 @@
 // - THE LABEL IS WHAT CREATES THE BUTTON. With no label the link travels in the
 //   message text instead, which is the form every client can render.
 // - What was actually OBSERVED about buttons: they render in the Instagram app on
-//   a phone, and did not on instagram.com in a desktop browser. Whether a phone
-//   browser also fails was never tested, so the note says "may not" rather than
-//   "does not" and must not be sharpened into a claim nobody has checked.
+//   a phone, and do not render on instagram.com from a desktop browser OR from a
+//   phone browser. Both were checked, which is why this now says "does not"
+//   where it once hedged with "may not". Meta documents structured templates as
+//   unsupported on desktop, so the limit is theirs; `ButtonReachNote` is where
+//   the person writing a rule is told about it.
+// - That caveat NAMES THE BUTTON. It sits under the message, and worded as
+//   "shows in the app, not in a browser" it was read as being about the whole
+//   message — as if the DM itself never arrived in a browser, which is false and
+//   alarming. A line floating under a block has to say what it is about.
 // - It says "in a browser", not "instagram.com". The domain is our word for it;
 //   a reader seeing it can take the warning to mean Instagram as a whole, which
 //   is both wider than the truth and the opposite of reassuring.
 // - The button belongs INSIDE the message. What we send is one message whose
 //   payload carries `text` and `buttons` together, so drawing the button as a
 //   separate bubble would show a conversation that never happens.
+// - The link IN THE TEXT is the tracked address, because that is what is sent.
+//   An earlier version printed the destination there, so the preview showed a
+//   message nobody receives. A rule not saved yet has no short link — it is made
+//   on save — so that case is drawn as an absence rather than filled with the
+//   destination, which would be inventing the message all over again.
 // - The button opens the DESTINATION, never the tracked address. Opening the
 //   tracked one would record a click nobody made; opening the destination costs
 //   nothing and catches the one mistake a person can actually make here, which
@@ -147,14 +158,20 @@ function Warning({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function CommentRulePreview({ values }: { values: RuleFormValues }) {
+export function CommentRulePreview({
+  values,
+  trackedLinkUrl = null,
+}: {
+  values: RuleFormValues;
+  /** The short address the server built for this rule, or null before it is saved. */
+  trackedLinkUrl?: string | null;
+}) {
   const publicReply = values.publicReplyMessages.find((message) => message.trim() !== '');
   const dmText = values.replyMessage.trim();
   const hasLink = values.destinationUrl.trim() !== '';
   const buttonLabel = values.linkButtonLabel.trim();
   const openable = openableDestination(values.destinationUrl);
   const sendsLinkAsText = hasLink && buttonLabel === '';
-  const linkPreview = values.destinationUrl.trim();
   const sendsNothing = publicReply === undefined && dmText === '' && !hasLink;
 
   return (
@@ -211,7 +228,13 @@ export function CommentRulePreview({ values }: { values: RuleFormValues }) {
                     <>
                       {dmText === '' ? null : <br />}
                       <br />
-                      <span className="break-all text-primary">{linkPreview}</span>
+                      {trackedLinkUrl === null ? (
+                        <span className="italic text-muted-foreground">
+                          Your short link — created when you save
+                        </span>
+                      ) : (
+                        <span className="break-all text-primary">{trackedLinkUrl}</span>
+                      )}
                     </>
                   ) : null}
                 </p>
@@ -238,7 +261,7 @@ export function CommentRulePreview({ values }: { values: RuleFormValues }) {
         )}
         {hasLink ? null : <Absence>No link — the message goes out with nothing to tap.</Absence>}
         {hasLink && !sendsLinkAsText ? (
-          <Absence>Shows in the Instagram app; may not in a browser.</Absence>
+          <Absence>The button shows in the Instagram app, not in a browser.</Absence>
         ) : null}
       </section>
 

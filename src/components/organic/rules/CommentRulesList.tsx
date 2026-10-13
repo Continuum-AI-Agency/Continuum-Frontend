@@ -23,6 +23,7 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PANEL_HEADER_FRAME, PANEL_TITLE } from './panelHeader';
 
 /** Live, scheduled, expired or off — the four states a person needs to tell apart at a glance. */
 type RuleState = 'live' | 'scheduled' | 'expired' | 'off';
@@ -171,9 +172,11 @@ export function CommentRulesList({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-4 py-2.5">
+      <div
+        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 ${PANEL_HEADER_FRAME}`}
+      >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <h2 className="text-sm font-semibold leading-none">Comment rules</h2>
+          <h2 className={PANEL_TITLE}>Comment rules</h2>
           {liveCount > 0 ? (
             <span className="text-xs leading-none text-muted-foreground">
               {liveCount} sending automatically
