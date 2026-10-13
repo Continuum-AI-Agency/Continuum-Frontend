@@ -1412,6 +1412,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
           oneSurface,
           anchorText: anchorFigure?.textContent ?? '',
           anchorPx: anchorFigure ? Number.parseFloat(getComputedStyle(anchorFigure).fontSize) : 0,
+          anchorUnitPx: [...(anchorFigure?.querySelectorAll('[data-money]') ?? [])].map((unit) =>
+            Number.parseFloat(getComputedStyle(unit).fontSize),
+          ),
           anchorPrior: pick('anchor-prior')?.textContent ?? '',
           readInJainaBar: Boolean(jaina?.querySelector('[data-testid="jaina-read"]')),
           status: pick('headline-status')?.textContent ?? '',
@@ -1458,8 +1461,17 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.facts).toEqual(['target', 'objective', 'strategy', 'window', 'budget']);
 
       // The anchor: the cost per result at 44px, and the two windows by their dates.
-      expect(report.anchorText).toMatch(/^(\d[\d,]*(\.\d+)?|—)$/);
+      // M1: "$85.47 MXN" — the symbol and the code dimmed beside the 44px figure, never under
+      // 12px; the bare figure only when the account's currency is unknown.
+      expect(report.anchorText).toMatch(/^(\$[\d,]+(\.\d+)? [A-Z]{3}|[\d,]+(\.\d+)?|—)$/);
       expect(Math.round(report.anchorPx)).toBe(44);
+      if (/ [A-Z]{3}$/.test(report.anchorText)) {
+        expect(report.anchorUnitPx).toHaveLength(2);
+        for (const px of report.anchorUnitPx) {
+          expect(px).toBeGreaterThanOrEqual(12);
+          expect(px).toBeLessThan(report.anchorPx);
+        }
+      }
       if (report.anchorText !== '—') expect(report.anchorPrior).toMatch(/\d+–\d+.*: /);
 
       // Two sentences with a figure; the third only when a blocker exists.
