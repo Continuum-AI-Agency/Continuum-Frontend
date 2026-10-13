@@ -320,7 +320,10 @@ export function OptimizerOverview({
   }, [platformTab, portfolios, windows, adAccountId]);
   // "All" spans every platform, so its questions carry none; a platform's tab carries its own.
   const jainaPlatform = platformTab === 'all' ? null : platformTab;
-  const jainaBand = (
+  // An unconnected tab is its empty state and nothing else: a question that deep-links to a
+  // TikTok Ads prompt implies ads data the account does not have.
+  const tabConnected = platformTab === 'all' || connected[platformTab];
+  const jainaBand = !tabConnected ? null : (
     <div className="rounded-lg bg-primary/5 px-3 py-2">
       <JainaEntryChips
         entries={jainaEntries}

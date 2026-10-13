@@ -116,6 +116,8 @@ mock.module('../useOptimizerData', () => ({
   useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
   useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
   useOptimizerPortfolioEfficiency: () => efficiency,
+  // The pacing read is a query per flight; the rows' pacing is not what this file renders.
+  useOptimizerPortfolioPacing: () => new Map(),
   // A card's own control asks the service through this; nothing here confirms a write.
   useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
   useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
@@ -620,6 +622,7 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
   });
 
   it("asks Google's questions on the Google tab, carrying google_ads", () => {
+    grantGoogle();
     const { labels, hrefs } = bandOn('platform=google_ads');
     expect(labels).toEqual([
       'Which search terms bring leads?',
@@ -634,12 +637,24 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
   });
 
   it("asks TikTok's questions on the TikTok tab, carrying tiktok_ads", () => {
+    metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     const { labels, hrefs } = bandOn('platform=tiktok_ads');
     expect(labels[0]).toBe('Which video is fatiguing?');
     expect(labels).toHaveLength(4);
     for (const href of hrefs) {
       expect(href).toStartWith('/scale?tab=jaina&platform=tiktok_ads&new=1&prompt=');
       expect(decodeURIComponent(href.split('prompt=')[1] ?? '')).toContain('TikTok Ads account');
+    }
+  });
+
+  // PP-L1-tiktok-tab-ask-jaina-band-on-unconnected-tab: a question that deep-links to a TikTok
+  // Ads prompt implies ads data the account does not have. The empty state is the whole tab.
+  it('renders no band on a tab whose platform is not connected', () => {
+    for (const platform of ['tiktok_ads', 'google_ads'] as const) {
+      navigation.params = new URLSearchParams(`tab=performance&platform=${platform}`);
+      const { queryByTestId, getByTestId } = mount();
+      expect(getByTestId(`platform-connect-${platform}`)).toBeTruthy();
+      expect(queryByTestId('jaina-entry-chips')).toBeNull();
     }
   });
 });
