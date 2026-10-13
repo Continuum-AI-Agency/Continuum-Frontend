@@ -1188,6 +1188,17 @@ const approvalDestinationIdsField = z.array(z.string().uuid()).max(20).optional(
  */
 const finalField = z.boolean().optional();
 
+/**
+ * Which renderer to try. Omitted or `after_effects` is the fleet, which is every render before
+ * this field existed. `experimental` asks for the owned renderer on Cloud Run (engine `micro`):
+ * it renders only what it can reproduce and refuses everything else by name, and a refused job
+ * goes to the fleet with that refusal recorded on it (`engineFallback`), so asking never costs a
+ * delivery. Signed into the confirmation like `final`.
+ */
+export const RENDERERS = ['after_effects', 'experimental'] as const;
+export type Renderer = (typeof RENDERERS)[number];
+const rendererField = z.enum(RENDERERS).optional();
+
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
@@ -1238,6 +1249,7 @@ export const apiRenderPreflightRequestSchema = z
     acceptMissingFonts: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
+    renderer: rendererField,
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage)
@@ -1340,6 +1352,7 @@ export const apiRenderBatchPreflightRequestSchema = z
     acceptMissingFonts: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
+    renderer: rendererField,
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -1434,6 +1447,17 @@ export const apiRenderJobSchema = z
     // It is what was REQUESTED: the fleet's watermark switch is off upstream, so today a proof
     // and a final are the same pixels.
     test: z.boolean().default(true),
+    /**
+     * Which engine rendered (or is rendering) the job: `fleet` (After Effects), `paint` (the PSD
+     * still painter) or `micro` (the Experimental Renderer on Cloud Run).
+     */
+    engine: z.enum(['fleet', 'paint', 'micro']).default('fleet'),
+    /**
+     * Why the Experimental Renderer handed this job to After Effects — the refusal it named
+     * (`text:raster:arithmetic-underived`, `binding:color`, ...). Null when it was never asked,
+     * or when it rendered the job itself.
+     */
+    engineFallback: z.string().nullable().default(null),
     outputs: z.array(apiRenderOutputSchema),
     delivery: z.array(apiRenderDeliveryReceiptSchema),
     error: z.string().nullable(),

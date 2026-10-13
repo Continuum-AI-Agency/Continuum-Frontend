@@ -29,6 +29,7 @@ import {
   formatsNamedByJob,
   imageFailed,
   jobTransitionName,
+  RenderEnginePill,
   RenderJobDetail,
   RenderModePill,
   TemplateVersion,
@@ -369,6 +370,7 @@ export function RenderJobsGrid({
                 : ''}
             </Badge>
             <RenderModePill test={job.test} />
+            <RenderEnginePill job={job} />
           </span>
         ),
       },
