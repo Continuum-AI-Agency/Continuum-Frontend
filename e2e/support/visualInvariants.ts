@@ -869,18 +869,20 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
             covered = { by: helpers.describe(top), at: [cx, cy] };
           } else {
             const painted = helpers.toRect(rect);
+            const insidePainted = (x: number, y: number) =>
+              x >= painted.x &&
+              x < painted.x + painted.width &&
+              y >= painted.y &&
+              y < painted.y + painted.height;
             hitArea = helpers.measureHitArea({ x: cx, y: cy }, tapFloor, (x, y) => {
               const onScreen = x >= 0 && y >= 0 && x < viewport.width && y < viewport.height;
               // Off the screen elementFromPoint answers nothing; the painted box decides there.
-              if (!onScreen) {
-                return (
-                  x >= painted.x &&
-                  x < painted.x + painted.width &&
-                  y >= painted.y &&
-                  y < painted.y + painted.height
-                );
-              }
-              return isHit(el, topAt(x, y));
+              if (!onScreen) return insidePainted(x, y);
+              const hit = topAt(x, y);
+              // The dev server's indicator badge is not product UI and ships nowhere: like the
+              // covered check above, it never decides a hit — the painted box does under it.
+              if (hit && hit.tagName.toLowerCase() === 'nextjs-portal') return insidePainted(x, y);
+              return isHit(el, hit);
             });
           }
         }
