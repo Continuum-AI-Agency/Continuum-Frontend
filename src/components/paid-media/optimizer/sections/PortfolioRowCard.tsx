@@ -433,7 +433,7 @@ export function PortfolioRowCard({
             window="d7"
           />
           <FigureCell
-            caption={currency ? `${currency} 7d` : '7d'}
+            caption="spend 7d"
             currency={currency}
             figureKey={figureKey('spend')}
             raw={window?.spend ?? null}

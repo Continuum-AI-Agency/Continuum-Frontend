@@ -122,7 +122,7 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     expect(figure(container, 'results').textContent).toBe('50');
     expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
     expect(figure(container, 'spend').textContent).toBe('$2,000 USD');
-    expect(getByTestId('portfolio-row-spend').textContent).toContain('USD 7d');
+    expect(getByTestId('portfolio-row-spend').textContent).toContain('$2,000 USDspend 7d');
   });
 
   // PP-L3-pacing-noun-from-window-kind: a lead portfolio never captions itself in purchases,
@@ -195,11 +195,11 @@ describe('PortfolioRowCard — one line per portfolio', () => {
   it('spells the window in the account currency, or leaves it bare without one', () => {
     const pf = portfolio({ cpa_target: 30 });
     const mxn = render(<PortfolioRowCard currency="MXN" portfolio={pf} window={windowFor(pf)} />);
-    expect(mxn.getByTestId('portfolio-row-spend').textContent).toContain('MXN 7d');
+    expect(mxn.getByTestId('portfolio-row-spend').textContent).toContain('$2,000 MXNspend 7d');
     expect(figure(mxn.container, 'cost').textContent).toBe('$40.00 MXN');
     cleanup();
     const bare = render(<PortfolioRowCard portfolio={pf} window={windowFor(pf)} />);
-    expect(bare.getByTestId('portfolio-row-spend').textContent).toBe('2,0007d');
+    expect(bare.getByTestId('portfolio-row-spend').textContent).toBe('2,000spend 7d');
     expect(figure(bare.container, 'spend').getAttribute('data-figure-currency')).toBe('none');
   });
 

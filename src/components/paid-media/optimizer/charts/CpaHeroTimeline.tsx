@@ -34,7 +34,13 @@ import { ReferenceArea } from '@/components/charts/reference-area';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
 import { YAxis } from '@/components/charts/y-axis';
-import { figureProps, formatCpa, formatCurrency } from '../format';
+import {
+  currencyColumnSuffix,
+  figureProps,
+  formatCpa,
+  formatCurrency,
+  formatCurrencyInColumn,
+} from '../format';
 import { confidenceBand as bandMeta } from '../reportModel';
 import * as typeScale from '../typeScale';
 import { ChartEmpty } from './ChartStates';
@@ -118,6 +124,7 @@ export function CpaHeroTimeline({
           className={`${typeScale.label} -translate-y-1/2 -rotate-90 pointer-events-none absolute top-1/2 left-0 origin-left whitespace-nowrap text-muted-foreground`}
         >
           {metric.costLabel}
+          {currencyColumnSuffix(currency)}
         </span>
         <ComposedChart
           // aspect-ratio yields to max-height in CSS: about 130px on a 390px panel and capped
@@ -154,7 +161,8 @@ export function CpaHeroTimeline({
           ) : null}
           <CycleActionPins points={points} />
           <XAxis />
-          <YAxis formatValue={(value) => formatCpa(value, currency)} numTicks={4} />
+          {/* M1: the ticks print "$80" and the axis title carries the code, as a column header does. */}
+          <YAxis formatValue={(value) => formatCurrencyInColumn(value, currency)} numTicks={4} />
           <ChartTooltip
             content={({ point }) => (
               <HeroTooltip
