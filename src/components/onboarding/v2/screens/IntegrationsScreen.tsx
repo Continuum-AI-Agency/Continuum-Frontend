@@ -49,8 +49,8 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
                     YouTube, and DV360 accounts plus performance data.
                   </li>
                   <li>
-                    <span className="font-medium text-foreground">TikTok</span> — ad accounts and
-                    campaign-level metrics.
+                    <span className="font-medium text-foreground">TikTok</span> — your creator
+                    profile and its organic posts.
                   </li>
                 </ul>
                 <p className="text-[0.75rem] text-muted-foreground">

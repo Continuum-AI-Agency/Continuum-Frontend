@@ -131,7 +131,9 @@ describe('jainaTabEntryPrompts', () => {
     noResults: null,
   };
 
-  it('asks across platforms on All, naming the portfolios and all three platforms', () => {
+  // PP-L1-copy-sells-tiktok-ads-in-seven-places: TikTok Ads has no connector, so no prompt may
+  // name it as a platform the account runs on.
+  it('asks across the connected platforms on All, naming the portfolios and no TikTok', () => {
     const entries = jainaTabEntryPrompts('all', account);
     expect(entries.map((e) => e.label)).toEqual([
       'Which platform buys leads cheapest?',
@@ -140,7 +142,8 @@ describe('jainaTabEntryPrompts', () => {
       'Summary for the client',
     ]);
     for (const entry of entries) {
-      expect(entry.prompt).toContain('across Meta, Google Ads and TikTok');
+      expect(entry.prompt).toContain('across every ad platform connected to it');
+      expect(entry.prompt).not.toContain('TikTok');
       expect(entry.prompt).toContain('"Leads MX" (objective: Lead)');
     }
   });

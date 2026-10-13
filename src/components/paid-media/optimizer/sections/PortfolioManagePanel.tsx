@@ -1317,7 +1317,7 @@ export function PortfolioManagePanel({
           <Section
             id={sectionId('platform-limits')}
             title="Daily limit per platform"
-            description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound Meta, Google and TikTok writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
+            description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound every platform's writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
           >
             <PlatformCapsField portfolioId={portfolio.id} />
           </Section>

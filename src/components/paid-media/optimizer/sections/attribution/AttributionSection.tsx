@@ -32,7 +32,7 @@ import { type SheetAttributionApi, sheetAttributionApi } from './sheetAttributio
 
 const CARD_COPY: Record<AttributionKind, string> = {
   platform:
-    'Meta counts with its pixel and lead forms, Google with its conversions, TikTok with its pixel. Each platform is judged by its own count.',
+    'Meta counts with its pixel and lead forms, Google with its conversions. Each platform is judged by its own count.',
   ga4: "One count for every platform, by source and medium. GA4 arrives 24–48 h late: the Optimizer moves money with the platform's count and reports with GA4.",
   spreadsheet:
     'A sheet with a date, an ad set or campaign, and a conversions count, read every morning. For clients who count leads in their CRM.',
