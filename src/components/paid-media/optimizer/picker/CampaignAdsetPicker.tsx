@@ -238,13 +238,14 @@ const AdsetRow = memo(function AdsetRow({
             ) : null}
           </span>
 
-          {/* The reason is always VISIBLE, never tooltip-only — line-clamped so the row height
-              stays exact, with the full text on hover. */}
+          {/* The reason is always VISIBLE, never tooltip-only — one line, ellipsized so the row
+              height stays exact, with the full text on hover. `truncate`, not `line-clamp-1`:
+              the clamp hides the overflow with no text-overflow, which reads as clipped text. */}
           {!row.eligible && row.reason ? (
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="mt-0.5 line-clamp-1 block text-xs text-warning">
+                  <span className="mt-0.5 block truncate text-xs text-warning">
                     {row.reason}
                   </span>
                 }
@@ -253,7 +254,10 @@ const AdsetRow = memo(function AdsetRow({
             </Tooltip>
           ) : null}
           {row.eligible && row.mismatch ? (
-            <span className="mt-0.5 line-clamp-1 block text-xs text-warning">
+            <span
+              className="mt-0.5 block truncate text-xs text-warning"
+              title={`Buys ${row.kpiField} — the optimizer freezes it and never moves its budget.`}
+            >
               Buys {row.kpiField} — the optimizer freezes it and never moves its budget.
             </span>
           ) : null}
@@ -263,9 +267,14 @@ const AdsetRow = memo(function AdsetRow({
               that dead end is shown here rather than found the hard way. */}
           {row.enrolledIn ? (
             <span
-              className={`mt-0.5 line-clamp-1 block text-xs ${
+              className={`mt-0.5 block truncate text-xs ${
                 row.enrolledIn.canRelease ? 'text-muted-foreground' : 'text-warning'
               }`}
+              title={
+                row.enrolledIn.canRelease
+                  ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
+                  : 'Another brand’s portfolio holds this. You need edit access there to move it.'
+              }
             >
               {row.enrolledIn.canRelease
                 ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
