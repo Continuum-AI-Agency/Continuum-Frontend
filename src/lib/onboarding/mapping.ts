@@ -94,7 +94,11 @@ export function mapOnboardingStateToAgentPayload(
     target_audience: state.brand.targetAudience
       ? { summary: clampText(state.brand.targetAudience, AUDIENCE_SUMMARY_MAX) }
       : undefined,
-    description: [state.brand.industry, state.brand.name].filter(Boolean).join(' — ') || undefined,
+    description:
+      state.brand.overview ||
+      state.intake?.description ||
+      [state.brand.industry, state.brand.name].filter(Boolean).join(' — ') ||
+      undefined,
   };
 
   const runContext: AgentRunContext = {
@@ -108,5 +112,11 @@ export function mapOnboardingStateToAgentPayload(
     integration_account_ids: integrationAccountIds,
   };
 
-  return { brandProfile, runContext };
+  return {
+    brandProfile,
+    runContext,
+    ...(state.intake
+      ? { intake: state.intake, preview_run_id: state.previewRequest?.runId ?? null }
+      : {}),
+  };
 }

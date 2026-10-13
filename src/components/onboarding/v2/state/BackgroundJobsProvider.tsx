@@ -54,13 +54,14 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
     }));
     try {
       const data = await runner(ctrl.signal);
+      if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
       setJobs((prev) => ({
         ...prev,
         [key]: { status: 'done', data, error: null, startedAt: prev[key].startedAt },
       }));
       return data;
     } catch (error) {
-      if (ctrl.signal.aborted) return null;
+      if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
       const message = error instanceof Error ? error.message : 'Unknown error';
       setJobs((prev) => ({
         ...prev,

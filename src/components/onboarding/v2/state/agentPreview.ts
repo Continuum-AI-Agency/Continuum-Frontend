@@ -1,4 +1,10 @@
-import type { BrandGuidelines, BrandStrategy } from '@continuum/contracts';
+import type {
+  BrandGuidelines,
+  BrandStrategy,
+  FacebookPageProfile,
+  InstagramProfile,
+  OnboardingIntake,
+} from '@continuum/contracts';
 import {
   type AgentBrandProfile,
   type BrandVoice,
@@ -117,6 +123,12 @@ export type AgentPreviewInput = {
   userId: string;
   brandName: string;
   websiteUrl: string;
+  intake?: OnboardingIntake | null;
+  description?: string | null;
+  instagramProfile?: InstagramProfile | null;
+  facebookProfile?: FacebookPageProfile | null;
+  documentIds?: string[];
+  inputKey?: string;
   voiceTags: string[];
   scrape?: ScrapeResult | null;
   resumeRunId?: string | null;
@@ -126,6 +138,7 @@ export type AgentPreviewInput = {
 };
 
 export type AgentPreviewOutcome = {
+  inputKey?: string;
   runId: string | null;
   buckets: AgentPreviewBuckets;
 };
@@ -425,6 +438,7 @@ export async function runAgentPreview(
                 id: input.brandId,
                 brand_name: input.brandName || 'Untitled brand',
                 website_url: input.websiteUrl || undefined,
+                description: input.description || input.intake?.description || undefined,
               },
               runContext: {
                 user_id: input.userId,
@@ -437,6 +451,10 @@ export async function runAgentPreview(
                 integration_account_ids: [],
               },
               scrape: input.scrape ?? null,
+              intake: input.intake,
+              instagram_profile: input.instagramProfile,
+              facebook_profile: input.facebookProfile,
+              document_ids: input.documentIds,
             },
             signal: activeController.signal,
             onEvent: handleEvent,
@@ -471,7 +489,7 @@ export async function runAgentPreview(
       throw new Error('Brand analysis returned no data. Please retry.');
     }
 
-    return { runId, buckets };
+    return { inputKey: input.inputKey, runId, buckets };
   } finally {
     if (watchdogTimer) clearInterval(watchdogTimer);
     signal.removeEventListener('abort', onCallerAbort);
