@@ -261,10 +261,14 @@ async function render(options: RenderShaderStackFrameOptions): Promise<ImageBitm
   for (const [index, effect] of enabled.entries()) {
     const final = index === enabled.length - 1;
     const target = final ? renderer.output : renderer.targets[index % 2];
+    const params = uniformsFor(effect, width, height, options.timeSec ?? 0, options.viewport);
     renderer.shader.set({
       src: source,
       srcSampler: renderer.sampler,
-      params: uniformsFor(effect, width, height, options.timeSec ?? 0, options.viewport),
+      params: {
+        ...params,
+        secondary: [params.secondary[0], params.secondary[1], params.secondary[2], final ? 1 : 0],
+      },
     });
     if (final) {
       renderer.api.frame(renderer.gpu, (currentFrame) =>

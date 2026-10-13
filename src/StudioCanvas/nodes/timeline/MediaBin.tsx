@@ -27,6 +27,7 @@ function BinTile({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `${BIN_DRAG_PREFIX}${source.nodeId}`,
     data: { type: 'bin', sourceNodeId: source.nodeId, kind: source.kind },
+    disabled: Boolean(source.unavailableReason),
   });
 
   return (
@@ -35,10 +36,12 @@ function BinTile({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      onDoubleClick={() => onPlace(source)}
+      onDoubleClick={() => { if (!source.unavailableReason) onPlace(source); }}
+      aria-disabled={Boolean(source.unavailableReason)}
       className={cn(
         'group/tile flex cursor-grab items-center gap-2 rounded-md border border-border/60 bg-muted/30 p-2 active:cursor-grabbing',
         isDragging && 'opacity-50',
+        source.unavailableReason && 'cursor-default active:cursor-default',
       )}
     >
       <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded bg-black/80">
@@ -78,11 +81,12 @@ function BinTile({
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-xs font-medium">{source.label}</span>
         <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-          {source.kind}
+          {source.unavailableReason ?? source.kind}
         </span>
       </div>
 
       <Button
+        disabled={Boolean(source.unavailableReason)}
         variant="ghost"
         size="icon"
         className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover/tile:opacity-100"

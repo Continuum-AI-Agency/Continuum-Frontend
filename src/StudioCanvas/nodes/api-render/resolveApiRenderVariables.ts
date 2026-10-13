@@ -46,7 +46,13 @@ export function inspectApiRenderMediaInputs(args: {
             connected: wired.length,
             ready: wired.filter((edge) => {
               const source = byId.get(edge.source);
-              return source ? pinFromNode(source, edge.sourceHandle) !== null : false;
+              return source
+                ? pinFromNode(
+                    source,
+                    edge.sourceHandle,
+                    definition.kind === 'image' ? 'transparent-still' : 'forge-overlay',
+                  ) !== null
+                : false;
             }).length,
             picked: pinsFromValue(args.data.variables?.[definition.key]).length,
           },

@@ -6,6 +6,11 @@ import {
 } from './api-renders';
 import { renderOutputForHandle } from './implementation-nodes';
 import {
+  type MotionExportProfile,
+  type MotionMediaOutput,
+  motionMediaOutputsSchema,
+} from './internal-motion';
+import {
   apiRenderVariableHandleId,
   type GraphEdgeLike,
   type GraphNodeLike,
@@ -51,26 +56,38 @@ function textFromNode(node: GraphNodeLike): string | null {
   return null;
 }
 
+/** Select only an evidenced derivative; an explicit profile map never falls back to opaque media. */
+export function motionMediaOutputForProfile(
+  data: unknown,
+  profile: MotionExportProfile,
+): MotionMediaOutput | null {
+  if (!data || typeof data !== 'object' || !('motionMediaOutputs' in data)) return null;
+  const parsed = motionMediaOutputsSchema.safeParse(data.motionMediaOutputs);
+  if (!parsed.success) return null;
+  const output = parsed.data[profile];
+  if (!output || output.consumer !== 'pass') return null;
+  if (profile !== 'opaque-video' && output.alpha !== 'pass') return null;
+  return output;
+}
+
 /**
- * The Library coordinate an upstream node holds, or null when it holds none.
- *
- * The ASSET id is what makes a pin. The version is sent when the node knows it and left
- * off when it does not: preflight resolves the head version and freezes the exact pair
- * into the signed confirmation, so an omitted version costs no reproducibility.
- *
- * Requiring both is what made the node refuse assets that were demonstrably in the
- * Library — several producers stamp an asset id without a version, and a Library asset
- * that never had its `head_version_id` materialized has no version to stamp.
+ * Resolve an evidenced motion profile or the existing node's Library coordinate.
+ * Legacy sources may omit a version: preflight resolves and freezes their exact head.
  */
 export function pinFromNode(
   node: GraphNodeLike,
   sourceHandle: string | null | undefined,
+  profile: MotionExportProfile,
 ): PinnedRenderAsset | null {
+  const data = (node.data ?? {}) as Record<string, unknown>;
+  if ('motionMediaOutputs' in data) {
+    const output = motionMediaOutputForProfile(data, profile);
+    return output ? { assetId: output.assetId, versionId: output.versionId } : null;
+  }
   if (node.type === 'apiRender') {
     const output = renderOutputForHandle(node, sourceHandle);
     return output ? { assetId: output.assetId, versionId: output.versionId } : null;
   }
-  const data = (node.data ?? {}) as Record<string, unknown>;
   const generated = Array.isArray(data.generatedImages)
     ? (data.generatedImages as Array<{ assetId?: unknown; assetVersionId?: unknown }>)
     : [];
@@ -141,6 +158,7 @@ export function resolveApiRenderVariables(args: ResolveApiRenderVariablesArgs): 
     );
 
     if (definition.kind === 'image' || definition.kind === 'video') {
+      const mediaKind = definition.kind;
       // A media slot fills two ways, and a WIRED source wins over the picked one — the
       // same precedence the text branch below states. Once an edge exists the canvas
       // depicts media flowing into this slot; rendering the picked asset instead would
@@ -153,7 +171,13 @@ export function resolveApiRenderVariables(args: ResolveApiRenderVariablesArgs): 
         wired.length > 0
           ? wired.map((edge) => {
               const source = byId.get(edge.source);
-              return source ? pinFromNode(source, edge.sourceHandle) : null;
+              return source
+                ? pinFromNode(
+                    source,
+                    edge.sourceHandle,
+                    mediaKind === 'image' ? 'transparent-still' : 'forge-overlay',
+                  )
+                : null;
             })
           : pinsFromValue(args.data.variables?.[definition.key]);
 
