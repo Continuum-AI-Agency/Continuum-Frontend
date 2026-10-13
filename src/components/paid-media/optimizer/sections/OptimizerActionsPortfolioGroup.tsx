@@ -50,7 +50,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
@@ -113,6 +112,7 @@ import { KindTag, type KindTone, kindTone, kindWord } from './kindTag';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { isStale, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
+import { QueueTraySkeleton } from './QueueTraySkeleton';
 import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
@@ -943,7 +943,7 @@ export function OptimizerActionsPortfolioGroup({
       ? null
       : selectedBudgetRows.reduce((sum, row) => sum + (row.item.change_abs ?? 0), 0);
 
-  if (performanceQuery.isLoading) return <Skeleton className="h-28 rounded-lg" />;
+  if (performanceQuery.isLoading) return <QueueTraySkeleton portfolio={portfolio} />;
   // A failed read used to fall through to rows.length === 0 and return null, so the whole
   // group disappeared from a queue that had just counted this portfolio as having work.
   // Name it instead — the count and the list must never disagree in silence.

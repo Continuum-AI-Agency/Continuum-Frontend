@@ -79,6 +79,13 @@ import {
 } from './account/overviewModel';
 import { JainaEntryChips } from './JainaEntryChips';
 import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
+import {
+  HeadlineSkeleton,
+  OverviewTilesSkeleton,
+  PlatformComparisonSkeleton,
+  RecommendationsSkeleton,
+  SublineFactsSkeleton,
+} from './OverviewSkeletons';
 import { PortfolioRowCard } from './PortfolioRowCard';
 import type { PlatformCardAction } from './platformCards/platformCardActionModel';
 import {
@@ -88,6 +95,7 @@ import {
   PlatformMetricsSection,
 } from './platforms/AccountPlatformsOverview';
 import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
+import { readComparisonHidden } from './platforms/comparisonPreference';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
 import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
 import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
@@ -359,6 +367,10 @@ export function OptimizerOverview({
   // "All" reads the producer; "Meta" is today's O1 whatever the producer says.
   const allFrame = platformTab === 'all' ? platformMetrics : null;
   const multiplatform = allFrame?.status === 'ready' ? allFrame.metrics : null;
+  // While the producer reads, its blocks are held open at their own size (OverviewSkeletons):
+  // inserting them when the read lands pushed the portfolio rows down the page.
+  const producerLoading = allFrame?.status === 'loading';
+  const connectedCount = Object.values(connected).filter(Boolean).length;
 
   return (
     <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
@@ -418,14 +430,8 @@ export function OptimizerOverview({
       <section className="space-y-1.5 px-1" data-testid="overview-hero">
         {multiplatform ? (
           <AllPlatformsHeadline metrics={multiplatform} pendingCount={pendingCount} />
-        ) : allFrame?.status === 'loading' ? (
-          <p
-            className={`${typeScale.headline} text-muted-foreground`}
-            data-pending="true"
-            data-testid="overview-headline"
-          >
-            Reading the account across platforms…
-          </p>
+        ) : producerLoading ? (
+          <HeadlineSkeleton label="Reading the account across platforms…" />
         ) : efficiency.failed > 0 && !efficiency.pending ? (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
@@ -476,10 +482,12 @@ export function OptimizerOverview({
         >
           {multiplatform ? (
             <AllPlatformsSubline metrics={multiplatform} />
+          ) : producerLoading ? (
+            <SublineFactsSkeleton />
           ) : window ? (
             <span data-testid="overview-window">{window}</span>
           ) : null}
-          {multiplatform || window ? <span aria-hidden="true">·</span> : null}
+          {multiplatform || producerLoading || window ? <span aria-hidden="true">·</span> : null}
           <span data-testid="book-line">
             {portfolios.length} {portfolioNoun} · {book.managed}{' '}
             {book.managed === 1 ? 'ad set' : 'ad sets'}
@@ -513,7 +521,17 @@ export function OptimizerOverview({
           onOpenActions={onOpenActions}
           pendingCount={pendingCount}
         />
-      ) : allFrame?.status === 'loading' ? null : (
+      ) : producerLoading ? (
+        <>
+          <OverviewTilesSkeleton cells={5} withAction={pendingCount > 0} />
+          {connectedCount >= 2 ? (
+            <PlatformComparisonSkeleton
+              hidden={readComparisonHidden()}
+              platforms={connectedCount}
+            />
+          ) : null}
+        </>
+      ) : (
         <KpiRow testId="account-tiles">
           <KpiTile
             emphasis="hero"
@@ -628,6 +646,8 @@ export function OptimizerOverview({
             portfolioNames={names}
           />
         </section>
+      ) : accountRead.isLoading ? (
+        <RecommendationsSkeleton />
       ) : null}
 
       {/* 6 — the portfolios, one line each, sortable by distance to target. */}

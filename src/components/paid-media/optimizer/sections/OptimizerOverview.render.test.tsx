@@ -16,6 +16,7 @@ mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 // Every read the Overview makes is driven from these handles. Spread the real module: a
 // partial replacement here would reach the next file in the run.
 let accountReadData: unknown = null;
+let accountReadLoading = false;
 let approvalMaps: { families: Record<string, string>; insights: Record<string, string> } = {
   families: {},
   insights: {},
@@ -112,7 +113,11 @@ mock.module('../useOptimizerData', () => ({
     isError: false,
     isSuccess: true,
   }),
-  useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
+  useOptimizerAccountRead: () => ({
+    data: accountReadData,
+    isLoading: accountReadLoading,
+    isError: false,
+  }),
   useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
   useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
   useOptimizerPortfolioEfficiency: () => efficiency,
@@ -291,6 +296,7 @@ afterEach(() => {
   tiktokAsked.length = 0;
   window.localStorage.clear();
   accountReadData = null;
+  accountReadLoading = false;
   approvalMaps = { families: {}, insights: {} };
   efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
   cleanup();
@@ -1111,10 +1117,84 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   it('says it is reading across platforms while the producer loads, with no figure', () => {
     metricsState = { status: 'loading' };
     const { getByTestId, queryByTestId } = mount();
-    expect(getByTestId('overview-headline').textContent).toBe(
+    const headline = getByTestId('overview-headline');
+    expect(headline.getAttribute('data-pending')).toBe('true');
+    expect(headline.querySelector('.sr-only')?.textContent).toBe(
       'Reading the account across platforms…',
     );
+    // The sentence-long bar is a placeholder, not a figure: hidden from assistive tech.
+    expect(headline.querySelector('[data-slot="skeleton-text"]')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+    expect(headline.querySelector('[data-figure]')).toBeNull();
     expect(queryByTestId('account-tiles')).toBeNull();
+  });
+
+  // PP-L1V-cls-overview-0.865: the rows used to sit under the band until the producer and the
+  // account read landed, then got pushed down twice. Each block is held at its own size.
+  it('holds the figure row and the platforms table open while the producer reads, borderless', () => {
+    metricsState = { status: 'loading' };
+    adAccounts = [
+      ...adAccounts,
+      {
+        platform: 'google_ads',
+        account_id: '123',
+        name: 'Easy Fit Google',
+        status: 'active',
+        currency: 'MXN',
+      },
+    ];
+    const { getByTestId, getAllByTestId, queryByTestId } = mount();
+    const tiles = getByTestId('account-tiles-skeleton');
+    expect(getAllByTestId('tile-skeleton')).toHaveLength(5);
+    expect(getByTestId('platform-comparison-skeleton').textContent).toContain(
+      'Platforms side by side',
+    );
+    expect(
+      getByTestId('overview-subline').querySelectorAll('[data-slot="skeleton-text"]').length,
+    ).toBeGreaterThan(0);
+    const rows = getByTestId('portfolio-rows');
+    expect(follows(tiles, rows)).toBe(true);
+    for (const block of [tiles, getByTestId('platform-comparison-skeleton')]) {
+      expect(
+        block.getAttribute('aria-hidden') ?? block.querySelector('[aria-hidden]'),
+      ).toBeTruthy();
+      expect(block.outerHTML).not.toMatch(/(^|\s|")(border|rounded-lg border|bg-card)(\s|")/);
+    }
+    expect(queryByTestId('account-tiles')).toBeNull();
+  });
+
+  it('collapses the platforms placeholder to its Show line for a viewer who hid the table', () => {
+    metricsState = { status: 'loading' };
+    window.localStorage.setItem('continuum:optimizer:overview:platform-comparison', 'hidden');
+    adAccounts = [
+      ...adAccounts,
+      { platform: 'google_ads', account_id: '1', name: null, status: 'active', currency: 'MXN' },
+    ];
+    const { getByTestId } = mount();
+    expect(getByTestId('platform-comparison-skeleton').textContent).toBe(
+      'Show platforms side by side',
+    );
+  });
+
+  it('reserves no platforms table for a brand on one platform', () => {
+    metricsState = { status: 'loading' };
+    const { queryByTestId, getByTestId } = mount();
+    expect(getByTestId('account-tiles-skeleton')).toBeTruthy();
+    expect(queryByTestId('platform-comparison-skeleton')).toBeNull();
+  });
+
+  it('holds the recommendations open while the account read loads, and drops it once read', () => {
+    accountReadLoading = true;
+    const first = mount();
+    const held = first.getByTestId('overview-recommendations-skeleton');
+    expect(follows(held, first.getByTestId('portfolio-rows'))).toBe(true);
+    expect(held.querySelector('[data-testid="account-card"]')).toBeNull();
+    cleanup();
+    accountReadLoading = false;
+    const second = mount();
+    expect(second.queryByTestId('overview-recommendations-skeleton')).toBeNull();
+    expect(second.queryByTestId('account-tiles-skeleton')).toBeNull();
   });
 
   it('names a failed read and falls back to the Meta figures', () => {
