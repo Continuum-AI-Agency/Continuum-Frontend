@@ -25,6 +25,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
   const {
     sendMagicLink,
     signInWithPassword,
+    verifyEmailCode,
     signInWithGooglePopup,
     isPending,
     isGooglePending,
@@ -86,6 +87,14 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
   const handleResend = async () => {
     if (submittedEmail) {
       await sendMagicLink({ email: submittedEmail, redirectTo });
+    }
+  };
+
+  const handleVerifyCode = async (token: string) => {
+    const success = await verifyEmailCode({ email: submittedEmail, token, redirectTo });
+    if (success) {
+      const posthog = await import('posthog-js');
+      posthog.default.capture('user_logged_in', { method: 'email_code', email: submittedEmail });
     }
   };
 
@@ -253,7 +262,13 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
       transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
       className="glass-panel rounded-[2rem] border-subtle p-8 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.55)]"
     >
-      <EmailSent email={submittedEmail} onResend={handleResend} isResending={isPending} />
+      <EmailSent
+        email={submittedEmail}
+        onVerifyCode={handleVerifyCode}
+        onResend={handleResend}
+        isPending={isPending}
+        error={error}
+      />
     </motion.div>
   );
 }

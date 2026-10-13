@@ -7,8 +7,9 @@ import {
   sendMagicLinkAction,
   signInWithGoogleAction,
   signInWithPasswordAction,
+  verifyEmailCodeAction,
 } from '@/lib/auth/actions';
-import type { MagicLinkInput, PasswordSignInInput } from '@/lib/auth/schemas';
+import type { EmailCodeInput, MagicLinkInput, PasswordSignInInput } from '@/lib/auth/schemas';
 import { buildOAuthStartUrl } from '@/lib/oauth';
 import { openCenteredPopup, waitForPopupMessage } from '@/lib/popup';
 import { purgeStorageForLogout } from '@/lib/storage/brandScopedStorage';
@@ -17,6 +18,8 @@ import { teardownAll } from '@/lib/storage/storeRegistry';
 type UseAuthOptions = {
   initialError?: string;
 };
+
+type SignInResult = Awaited<ReturnType<typeof signInWithPasswordAction>>;
 
 export function useAuth(options?: UseAuthOptions) {
   const [isPending, startTransition] = useTransition();
@@ -68,12 +71,12 @@ export function useAuth(options?: UseAuthOptions) {
     });
   };
 
-  const signInWithPassword = async (input: PasswordSignInInput): Promise<boolean> => {
+  const completeSignIn = async (signIn: () => Promise<SignInResult>): Promise<boolean> => {
     setError(null);
 
     return new Promise((resolve) => {
       startTransition(async () => {
-        const result = await signInWithPasswordAction(input);
+        const result = await signIn();
 
         if (!result.success) {
           setError(result.error);
@@ -89,6 +92,12 @@ export function useAuth(options?: UseAuthOptions) {
       });
     });
   };
+
+  const signInWithPassword = (input: PasswordSignInInput) =>
+    completeSignIn(() => signInWithPasswordAction(input));
+
+  const verifyEmailCode = (input: EmailCodeInput) =>
+    completeSignIn(() => verifyEmailCodeAction(input));
 
   const signInWithGooglePopup = async (redirectTo?: string): Promise<void> => {
     setError(null);
@@ -158,6 +167,7 @@ export function useAuth(options?: UseAuthOptions) {
     logout,
     sendMagicLink,
     signInWithPassword,
+    verifyEmailCode,
     signInWithGooglePopup,
     isPending,
     isGooglePending,

@@ -20,6 +20,8 @@ type LoginPageProps = {
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: 'Authentication failed. Please try again.',
+  link_used:
+    "This sign-in link was already used or replaced by a newer email. Enter your email and we'll send a fresh link and code.",
   unexpected_error: 'An unexpected error occurred. Please try again.',
 };
 

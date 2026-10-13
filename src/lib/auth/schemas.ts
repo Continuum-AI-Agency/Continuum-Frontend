@@ -25,3 +25,18 @@ export type PasswordSignInInput = z.infer<typeof passwordSignInSchema>;
 export const magicLinkFormSchema = magicLinkSchema.extend({
   password: z.string(),
 });
+
+// The magic-link email also carries its one-time code. Typing it signs in on the
+// device the user is onboarding on, whichever device opened the email, and it
+// survives a link that a mail-app preview or a second open already spent.
+// Supabase issues 6 digits by default and up to 10 when configured.
+export const emailCodeSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  token: z
+    .string()
+    .trim()
+    .regex(/^\d{6,10}$/, 'Enter the code from your email'),
+  redirectTo: z.string().min(1).optional(),
+});
+
+export type EmailCodeInput = z.infer<typeof emailCodeSchema>;

@@ -22,14 +22,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  if (tokenHash) {
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
-    if (!error) {
-      return NextResponse.redirect(new URL(next, origin));
-    }
-    console.error('[AUTH_CONFIRM] Failed to verify email link:', error.message);
+  if (!tokenHash) {
+    return NextResponse.redirect(new URL('/login?error=auth_callback_failed', origin));
   }
 
-  return NextResponse.redirect(new URL('/login?error=auth_callback_failed', origin));
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
+  if (!error) {
+    return NextResponse.redirect(new URL(next, origin));
+  }
+
+  // The link is single-use. A second open (in-app browser then the real one, a
+  // double click) or an older email after a resend gets "One-time token not found".
+  // If this browser already holds the session, the user is in: carry on.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    return NextResponse.redirect(new URL(next, origin));
+  }
+
+  console.error('[AUTH_CONFIRM] Failed to verify email link:', error.message);
+  return NextResponse.redirect(new URL('/login?error=link_used', origin));
 }

@@ -6,8 +6,8 @@ import { redirect } from 'next/navigation';
 import { resolveHeadersOrigin } from '@/lib/server/origin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildAuthCallbackUrl, resolveAuthRedirectPath } from './redirect';
-import type { MagicLinkInput, PasswordSignInInput } from './schemas';
-import { magicLinkSchema, passwordSignInSchema } from './schemas';
+import type { EmailCodeInput, MagicLinkInput, PasswordSignInInput } from './schemas';
+import { emailCodeSchema, magicLinkSchema, passwordSignInSchema } from './schemas';
 
 async function resolveRuntimeSiteUrl(): Promise<string> {
   const headerStore = await headers();
@@ -21,6 +21,8 @@ const SAFE_ERROR_MESSAGES: Record<string, string> = {
   'Invalid login credentials': 'Invalid email or password',
   'Email not confirmed': 'Please verify your email address before logging in',
   'User already registered': 'An account with this email already exists',
+  'Token has expired or is invalid':
+    'That code is wrong or has expired. Use the code from the newest email, or send a new one.',
 };
 
 function getSafeErrorMessage(error: Error | { message: string }): string {
@@ -192,6 +194,54 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
     return {
       success: true,
       data: undefined,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: getSafeErrorMessage(error as Error),
+    };
+  }
+}
+
+export async function verifyEmailCodeAction(
+  input: EmailCodeInput,
+): Promise<ActionResult<{ redirectPath: string }>> {
+  const validation = emailCodeSchema.safeParse(input);
+
+  if (!validation.success) {
+    return {
+      success: false,
+      error: validation.error.issues[0]?.message || 'Invalid input',
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const siteUrl = await resolveRuntimeSiteUrl();
+
+  try {
+    const { error } = await supabase.auth.verifyOtp({
+      email: validation.data.email,
+      token: validation.data.token,
+      type: 'email',
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: getSafeErrorMessage(error),
+      };
+    }
+
+    revalidatePath('/', 'layout');
+
+    return {
+      success: true,
+      data: {
+        redirectPath: resolveAuthRedirectPath({
+          requestedRedirect: validation.data.redirectTo,
+          siteUrl,
+        }),
+      },
     };
   } catch (error) {
     return {
