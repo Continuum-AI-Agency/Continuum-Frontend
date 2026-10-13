@@ -34,6 +34,7 @@ const AnimatedShaderBackground = dynamic(
 
 import type {
   AgentSessionListFilters,
+  BillingPaymentRequired,
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaUIMessage,
@@ -61,6 +62,7 @@ import {
   QueueSectionTrigger,
 } from '@/components/ai-elements/queue';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import { PaymentRequiredNotice } from '@/components/billing/PaymentRequiredNotice';
 import { AgentDataScopePicker } from '@/components/chat/AgentDataScopePicker';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import {
@@ -102,6 +104,8 @@ import type {
 } from '@/lib/agent-references';
 import { isSessionStreaming, selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
 import {
   campaignCanvasActionsEnvelopeSchema,
   extractCampaignCanvasActionsEnvelope,
@@ -177,6 +181,8 @@ import {
   updateQueuedMessageContent,
 } from './queueing';
 import type { JainaChatMessage } from './types';
+
+const HISTORY_TIMEOUT_MS = READ_TIMEOUT_MS * 3;
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 
@@ -840,6 +846,16 @@ export function JainaChatSurface({
     messages: JainaUIMessage[];
   } | null>(null);
 
+  // The Backend's billing gate refused the last turn (402). Rendered in the transcript with the
+  // control that unblocks it, and cleared the moment a new turn is sent or the context changes;
+  // the ref is what the dispatch-failure toast reads synchronously so the refusal is said once.
+  const [paymentRequired, setPaymentRequired] = React.useState<BillingPaymentRequired | null>(null);
+  const paymentRequiredRef = React.useRef<BillingPaymentRequired | null>(null);
+  const handlePaymentRequired = React.useCallback((body: BillingPaymentRequired) => {
+    paymentRequiredRef.current = body;
+    setPaymentRequired(body);
+  }, []);
+
   const {
     messages: uiMessages,
     status: chatStatus,
@@ -847,11 +863,24 @@ export function JainaChatSurface({
     sendTurn,
     stop: stopChat,
     setMessages: setUiMessages,
+    resumeStream,
+    clearError: clearChatError,
   } = useJainaChat({
     sessionId,
     initialMessages: chatSeed?.sessionId === sessionId ? chatSeed.messages : undefined,
     onNotice: handleStreamNotice,
+    onPaymentRequired: handlePaymentRequired,
   });
+
+  React.useEffect(() => {
+    if (chatStatus !== 'submitted') return;
+    paymentRequiredRef.current = null;
+    setPaymentRequired(null);
+  }, [chatStatus]);
+  React.useEffect(() => {
+    paymentRequiredRef.current = null;
+    setPaymentRequired(null);
+  }, [sessionId, adAccountId]);
   // The CURRENT chat's setter, for async loads. `setMessages` is bound to one chat and changes
   // identity with it, so an effect that depends on it re-runs on every conversation switch — the
   // bootstrap did, and re-running it navigated straight back to the most recent conversation.
@@ -913,6 +942,10 @@ export function JainaChatSurface({
   );
   const [shaderReady, setShaderReady] = React.useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
+  // Why the last history read failed, as a sentence for the sidebar; Retry bumps the attempt.
+  const [historyError, setHistoryError] = React.useState<string | null>(null);
+  const [historyAttempt, setHistoryAttempt] = React.useState(0);
+  const retryHistory = React.useCallback(() => setHistoryAttempt((count) => count + 1), []);
   const [isConversationSwitching, setIsConversationSwitching] = React.useState(false);
   // True once the first history load has settled on its thread. `isHistoryLoading` cannot say
   // this: it starts false and flips true inside the same effect flush a mount-time send reads it.
@@ -1251,12 +1284,18 @@ export function JainaChatSurface({
         {
           method: 'GET',
           cache: 'no-store',
+          // The one read every Jaina visit waits on. Bounded so a hung Backend becomes the
+          // sidebar's named state with Retry, not "Loading conversations…" for good. Wider
+          // than the 10 s read bound: history is a big read and the Backend has taken 20–45 s.
+          signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
         },
       );
 
       if (!response.ok) {
-        const detail = await response.text().catch(() => 'Failed to load conversation history.');
-        throw new Error(detail || 'Failed to load conversation history.');
+        const detail = await response.text().catch(() => '');
+        throw Object.assign(new Error(detail || `${response.status} ${response.statusText}`), {
+          status: response.status,
+        });
       }
 
       const payload = await response.json().catch(() => null);
@@ -1746,6 +1785,7 @@ export function JainaChatSurface({
       processedReportArtifactJobIdsRef.current.clear();
       persistedAssistantResponseIdsRef.current.clear();
       setIsHistoryLoading(true);
+      setHistoryError(null);
 
       try {
         const cachedSessions = getFreshConversationSessionsFromCache();
@@ -1801,8 +1841,9 @@ export function JainaChatSurface({
         setShaderState(conversationPayload.uiMessages.length > 0 ? 'hidden' : 'visible');
       } catch (error) {
         if (cancelled) return;
-        const message =
-          error instanceof Error ? error.message : 'Unable to load conversation history.';
+        console.error('[jaina] conversation history failed', error);
+        const message = loadFailureMessage('conversations', error);
+        setHistoryError(message);
         show({
           title: 'History unavailable',
           description: message,
@@ -1832,6 +1873,7 @@ export function JainaChatSurface({
     setEarlierCursor,
     showConversation,
     show,
+    historyAttempt,
   ]);
 
   React.useEffect(() => {
@@ -2042,7 +2084,10 @@ export function JainaChatSurface({
           if (input.forceReportArtifact) {
             setPendingReportArtifactResponseId(null);
           }
-          show({ title: 'Request failed', description: message, variant: 'error' });
+          // A billing refusal is already on screen as the notice with its control.
+          if (!paymentRequiredRef.current) {
+            show({ title: 'Request failed', description: message, variant: 'error' });
+          }
           input.onDispatchError?.(message);
         },
       });
@@ -2899,6 +2944,8 @@ export function JainaChatSurface({
               sessionTitleById={sessionTitleById}
               generatingSessionIds={generatingSessionIdsForSidebar}
               isLoading={isHistoryLoading}
+              loadError={historyError}
+              onRetryLoad={retryHistory}
               isInteractionDisabled={isConversationSwitching || Boolean(deletingSessionId)}
               deletingSessionId={deletingSessionId}
               brandId={brandProfileId}
@@ -2921,6 +2968,14 @@ export function JainaChatSurface({
                   onLoadEarlier={loadEarlier}
                 >
                   {isConversationSwitching ? <ConversationSkeleton /> : null}
+
+                  {paymentRequired ? (
+                    <PaymentRequiredNotice
+                      body={paymentRequired}
+                      className="mx-auto my-3 w-full max-w-3xl"
+                      from={`/scale?tab=jaina`}
+                    />
+                  ) : null}
 
                   {!isConversationSwitching && messages.length === 0 && (
                     <JainaEmptyState
@@ -3077,6 +3132,26 @@ export function JainaChatSurface({
                         </QueueSection>
                       </Queue>
                     </div>
+                  ) : null}
+
+                  {chatError && !isStreaming && !paymentRequired ? (
+                    <p
+                      className="mx-1 mb-2 flex flex-wrap items-center gap-x-2 text-destructive-ink text-xs"
+                      data-testid="jaina-chat-error"
+                      role="alert"
+                    >
+                      {loadFailureMessage("Jaina's answer", chatError)}
+                      <button
+                        className="font-medium underline underline-offset-4"
+                        onClick={() => {
+                          clearChatError();
+                          void resumeStream();
+                        }}
+                        type="button"
+                      >
+                        Try again
+                      </button>
+                    </p>
                   ) : null}
 
                   <div data-tour-id="paid-jaina-chat" className="w-full">

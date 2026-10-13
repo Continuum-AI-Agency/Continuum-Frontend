@@ -1,3 +1,5 @@
+import type { RuleActionLog, RuleActionLogPagination } from '@continuum/contracts';
+
 export type ActionStatus = 'APPROVED' | 'FAILED' | 'PENDING' | 'SUCCESS' | 'EXECUTED' | 'REJECTED';
 
 export type ActionType =
@@ -39,36 +41,13 @@ export interface CreativeSwitchExternalPayload {
   maintenance_file?: string;
 }
 
-export interface ActionLog {
-  id: string;
-  brandId: string;
-  metaAccountId: string;
-  metaCampaignId?: string | null;
-  metaAdsetId?: string | null;
-  metaAdId?: string | null;
-  actionType: ActionType;
-  status: ActionStatus;
-  scopeType: ScopeType;
-  scopeId: string;
-  occurredAt: string; // ISO 8601
-  actionPayload: Record<string, unknown>;
-  paramsChanged: Record<string, unknown>;
-  result: Record<string, unknown>;
-  decisionNote: string | null;
-  error: string | null;
-}
+/** One action log row, as validated at the edge boundary (`@continuum/contracts`). */
+export type ActionLog = RuleActionLog;
 
-export interface ActionLogResponse {
+export type ActionLogResponse = {
   data: ActionLog[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
-}
+  pagination: RuleActionLogPagination;
+};
 
 export interface ActionLogFilters {
   metaAccountId?: string;

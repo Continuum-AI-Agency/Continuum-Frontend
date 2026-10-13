@@ -9,7 +9,8 @@
 // RPC before the migration renders exactly as it did — and never invents a figure it was
 // not handed.
 
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { PacingStamp, PortfolioListItem } from '@continuum/contracts';
+import { pacingPlanFreshness } from '@continuum/contracts';
 
 export type StalenessRead = Pick<
   PortfolioListItem,
@@ -101,6 +102,39 @@ export function underManagement(
     gone += Math.min(portfolio.adset_count, Math.max(0, portfolio.roster_missing_count ?? 0));
   }
   return { enrolled, managed: enrolled - gone, gone };
+}
+
+/** What a `pacingPlanVersion` stamp (`start..end@budget`) says in words: "Oct 1–Oct 31 at 45,000". */
+function describePlan(version: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})@(.+)$/.exec(version);
+  if (!match) return version;
+  const [, start, end, budget] = match;
+  const day = (iso: string) => SINCE_FMT.format(new Date(`${iso}T00:00:00Z`));
+  const amount = Number(budget);
+  return `${day(start as string)}–${day(end as string)} at ${
+    Number.isFinite(amount) ? amount.toLocaleString('en-US') : budget
+  }`;
+}
+
+/**
+ * The pacing verdict's standing against the flight the row holds NOW. The last run paced the
+ * portfolio row as it was at cycle time; after a rebase the row carries a new flight and the
+ * verdict is about a plan it no longer has. `pacingPlanFreshness` (contracts) is the one
+ * derivation both the Optimizer's stamp and this reader use, so "stale" is a comparison, never
+ * a guess. Null unless the verdict is stale: a current, unversioned or absent stamp says nothing.
+ */
+export function pacingStaleLine(
+  pacing: PacingStamp | null | undefined,
+  portfolio: Pick<PortfolioListItem, 'period_start' | 'period_end' | 'period_budget'>,
+): { text: string; title: string } | null {
+  const reading = pacingPlanFreshness(pacing, portfolio);
+  if (reading.freshness !== 'stale' || reading.runPlan === null) return null;
+  const flight =
+    reading.currentPlan === null ? 'no complete flight' : describePlan(reading.currentPlan);
+  return {
+    text: 'pacing stale',
+    title: `The last cycle paced the ${describePlan(reading.runPlan)} plan; the flight is now ${flight}. The verdict is about a plan this portfolio no longer has.`,
+  };
 }
 
 /** How many of the given portfolios have missed a cycle. */

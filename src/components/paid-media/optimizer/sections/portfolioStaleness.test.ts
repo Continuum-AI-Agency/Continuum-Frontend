@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
 import {
   isStale,
+  pacingStaleLine,
   rosterLine,
   rosterTone,
   staleCount,
@@ -159,5 +160,41 @@ describe('staleCount', () => {
   it('counts the rows that missed a cycle, ignoring rows without the read', () => {
     expect(staleCount([DANIEL, CITAS, REPORTE, FRESH, LEGACY])).toBe(3);
     expect(staleCount([FRESH, LEGACY])).toBe(0);
+  });
+});
+
+// The ledger's figures (PP-L3-pacing-period-budget-two-sources-disagree): the run paced the
+// original October plan, the row was rebased on the 8th.
+describe('pacingStaleLine', () => {
+  const rebased = { period_start: '2026-10-08', period_end: '2026-10-31', period_budget: 26101 };
+  const original = { period_start: '2026-10-01', period_end: '2026-10-31', period_budget: 45000 };
+  const stamp = { source: 'pacing', planVersion: '2026-10-01..2026-10-31@45000' };
+
+  it('reads stale beside the rebased row, naming both plans', () => {
+    const line = pacingStaleLine(stamp, rebased);
+    expect(line?.text).toBe('pacing stale');
+    expect(line?.title).toContain('Oct 1–Oct 31 at 45,000');
+    expect(line?.title).toContain('Oct 8–Oct 31 at 26,101');
+  });
+
+  it('says nothing beside the plan it paced', () => {
+    expect(pacingStaleLine(stamp, original)).toBeNull();
+  });
+
+  it('says nothing for a run from before the stamp, or a flat observed/fixed total', () => {
+    expect(pacingStaleLine({ source: 'pacing' }, rebased)).toBeNull();
+    expect(pacingStaleLine({ source: 'observed', planVersion: 'x' }, rebased)).toBeNull();
+    expect(pacingStaleLine(null, rebased)).toBeNull();
+    expect(pacingStaleLine(undefined, rebased)).toBeNull();
+  });
+
+  it('reads stale when the row lost its flight since the run, and says so', () => {
+    const line = pacingStaleLine(stamp, {
+      period_start: null,
+      period_end: null,
+      period_budget: null,
+    });
+    expect(line?.text).toBe('pacing stale');
+    expect(line?.title).toContain('no complete flight');
   });
 });

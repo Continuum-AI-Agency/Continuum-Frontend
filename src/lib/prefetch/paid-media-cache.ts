@@ -4,7 +4,7 @@ import {
 } from '@/lib/paid-media/campaign-performance-loader';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
 
-type CacheEntry = {
+export type CacheEntry = {
   promise: Promise<unknown>;
   timestamp: number;
 };
@@ -16,6 +16,26 @@ const indexesCache = new Map<string, CacheEntry>();
 
 function isStale(entry: CacheEntry): boolean {
   return Date.now() - entry.timestamp > CACHE_TTL_MS;
+}
+
+/**
+ * Stores a prefetch promise and owns its failure. A cached promise nobody has consumed yet has
+ * no handler, so a 500 from the edge became an unhandled rejection on the Jaina tab
+ * (PP-L1-jaina-tab-uncaught-campaign-prefetch-rejection). The entry is dropped so the next
+ * consumer fetches afresh and sees the error on its own path; the cause goes to the log. The
+ * stored promise is the original one: a consumer that picks it up still gets the rejection.
+ */
+export function remember(
+  cache: Map<string, CacheEntry>,
+  key: string,
+  promise: Promise<unknown>,
+): void {
+  const entry: CacheEntry = { promise, timestamp: Date.now() };
+  cache.set(key, entry);
+  promise.catch((cause: unknown) => {
+    if (cache.get(key) === entry) cache.delete(key);
+    console.warn('[paid-media-cache] prefetch failed; dropped the cache entry', { key, cause });
+  });
 }
 
 /**
@@ -33,23 +53,23 @@ export function prefetchPaidMediaDashboard(params: { brandId: string; adAccountI
   };
 
   const campaignsKey = buildCampaignsKey(campaignParams);
-  if (!campaignsCache.has(campaignsKey) || isStale(campaignsCache.get(campaignsKey)!)) {
-    campaignsCache.set(campaignsKey, {
-      promise: fetchCampaignPerformanceRows(campaignParams),
-      timestamp: Date.now(),
-    });
+  const cachedCampaigns = campaignsCache.get(campaignsKey);
+  if (!cachedCampaigns || isStale(cachedCampaigns)) {
+    remember(campaignsCache, campaignsKey, fetchCampaignPerformanceRows(campaignParams));
   }
 
   const indexesKey = buildIndexesKey(brandId, adAccountId);
-  if (!indexesCache.has(indexesKey) || isStale(indexesCache.get(indexesKey)!)) {
+  const cachedIndexes = indexesCache.get(indexesKey);
+  if (!cachedIndexes || isStale(cachedIndexes)) {
     const params = new URLSearchParams({
       brandId,
       metaAccountId: adAccountId,
     });
-    indexesCache.set(indexesKey, {
-      promise: fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then((r) => r.json()),
-      timestamp: Date.now(),
-    });
+    remember(
+      indexesCache,
+      indexesKey,
+      fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then((r) => r.json()),
+    );
   }
 }
 

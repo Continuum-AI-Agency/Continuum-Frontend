@@ -33,6 +33,9 @@ type JainaConversationSidebarProps = {
   sessionTitleById?: Record<string, string>;
   generatingSessionIds?: ReadonlySet<string>;
   isLoading: boolean;
+  /** Why the conversation list could not be read ("Couldn't load conversations — …"). */
+  loadError?: string | null;
+  onRetryLoad?: () => void;
   isInteractionDisabled: boolean;
   deletingSessionId?: string | null;
   brandId: string;
@@ -86,6 +89,8 @@ export function JainaConversationSidebar({
   sessionTitleById,
   generatingSessionIds,
   isLoading,
+  loadError = null,
+  onRetryLoad,
   isInteractionDisabled,
   deletingSessionId,
   brandId,
@@ -213,13 +218,32 @@ export function JainaConversationSidebar({
                 </span>
               ) : null}
 
+              {!isLoading && loadError && sessions.length === 0 && !search.isActive ? (
+                <span
+                  className="px-2 py-3 text-destructive-ink text-xs"
+                  data-testid="jaina-conversations-error"
+                  role="alert"
+                >
+                  {loadError}{' '}
+                  {onRetryLoad ? (
+                    <button
+                      className="font-medium underline underline-offset-4"
+                      onClick={onRetryLoad}
+                      type="button"
+                    >
+                      Retry
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
+
               {search.isActive && !search.isSearching && visibleSessions.length === 0 ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
                   No conversations match these filters.
                 </span>
               ) : null}
 
-              {!isLoading && !search.isActive && sessions.length === 0 ? (
+              {!isLoading && !loadError && !search.isActive && sessions.length === 0 ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
                   Start a chat to create your first conversation.
                 </span>

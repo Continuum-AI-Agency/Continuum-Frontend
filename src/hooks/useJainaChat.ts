@@ -23,11 +23,13 @@
 // show for it.
 
 import { useChat } from '@ai-sdk/react';
-import type { JainaUIMessage } from '@continuum/contracts';
+import type { BillingPaymentRequired, JainaUIMessage } from '@continuum/contracts';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useMemo, useRef } from 'react';
 import { getApiBaseUrl } from '@/lib/api/config';
+import { backendTimeoutPolicy, fetchWithTimeout } from '@/lib/api/timeout';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { paymentRequiredFetch, readPaymentRequired } from '@/lib/billing/paymentRequired';
 import { buildJainaChatStreamRequest, type JainaChatInput } from '@/lib/jaina/chatRequest';
 
 const STREAM_PATH = '/api/agents/jaina/chat/stream';
@@ -54,9 +56,20 @@ export type UseJainaChatOptions = {
   initialMessages?: JainaUIMessage[];
   /** Transient parts — the keepalive and the session fence. Never part of the transcript. */
   onNotice?: (notice: Record<string, unknown>) => void;
+  /**
+   * The Backend's billing gate refused the turn with a 402 (contracts `BillingPaymentRequired`).
+   * The surface renders the refusal and its control in place; without this the gate closed the
+   * chat silently for two real customers (PP-L4-jaina-402-for-two-customer-accounts).
+   */
+  onPaymentRequired?: (body: BillingPaymentRequired) => void;
 };
 
-export function useJainaChat({ sessionId, initialMessages, onNotice }: UseJainaChatOptions) {
+export function useJainaChat({
+  sessionId,
+  initialMessages,
+  onNotice,
+  onPaymentRequired,
+}: UseJainaChatOptions) {
   // The failure callback of the turn currently in flight. `sendMessage` resolves before the fetch
   // settles, so the only honest place to learn a turn was dropped is the hook's own error path.
   const dispatchErrorRef = useRef<((message: string) => void) | null>(null);
@@ -66,6 +79,12 @@ export function useJainaChat({ sessionId, initialMessages, onNotice }: UseJainaC
 
     return new DefaultChatTransport<JainaUIMessage>({
       api,
+      // A 402 is thrown as PaymentRequiredError with the contracts body, instead of the SDK's
+      // Error whose message is the raw JSON text. The Backend bound applies to the headers
+      // only — the resume GET at the read bound, the turn's POST at the job bound — so a hung
+      // Backend ends as a named error instead of a transcript that never settles, while a
+      // streaming answer keeps its connection.
+      fetch: fetchWithTimeout(backendTimeoutPolicy, paymentRequiredFetch),
       // Resolved per request, not captured once: a Supabase access token expires mid-session and a
       // stale bearer would 401 the turn the reader is waiting on.
       headers: async () => {
@@ -115,6 +134,8 @@ export function useJainaChat({ sessionId, initialMessages, onNotice }: UseJainaC
     onError: (error) => {
       const notify = dispatchErrorRef.current;
       dispatchErrorRef.current = null;
+      const paymentRequired = readPaymentRequired(error);
+      if (paymentRequired) onPaymentRequired?.(paymentRequired);
       notify?.(error instanceof Error ? error.message : 'Jaina did not receive it.');
     },
     onFinish: () => {

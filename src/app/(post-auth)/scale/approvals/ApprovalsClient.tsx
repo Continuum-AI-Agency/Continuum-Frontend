@@ -9,8 +9,10 @@ import { LiveStatusDot } from '@/components/approvals/LiveStatusDot';
 import { QueueList } from '@/components/approvals/QueueList';
 import { QueueTable } from '@/components/approvals/QueueTable';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import { useDryRunMode, usePendingActions } from '@/lib/approvals/queries';
 import { useApprovalsStore } from '@/lib/approvals/store';
 
@@ -83,6 +85,8 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
 
   const total = list.data?.total ?? actions.length;
   const isDryRun = dryRun.data?.enabled ?? false;
+  // The queue never answered: nothing read, nothing to show as a queue.
+  const queueUnavailable = list.isError && !list.data;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-6 p-4">
@@ -101,56 +105,75 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
         action={<KeymapHint />}
       />
 
-      <LaneStrip actions={actions} focusedId={focusedActionId} onFocus={setFocusedActionId} />
+      {queueUnavailable ? (
+        <ErrorRetryState
+          className="min-h-[220px]"
+          message={loadFailureMessage('the approvals queue', list.error)}
+          onRetry={() => void list.refetch()}
+          title="Couldn't load the approvals queue"
+        />
+      ) : (
+        <>
+          <LaneStrip actions={actions} focusedId={focusedActionId} onFocus={setFocusedActionId} />
 
-      <FocusComposer
-        action={focusedAction}
-        brandId={brandProfileId}
-        isLoading={list.isLoading}
-        onAdvance={advance}
-      />
+          <FocusComposer
+            action={focusedAction}
+            brandId={brandProfileId}
+            isLoading={list.isLoading}
+            onAdvance={advance}
+          />
 
-      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'focus' | 'table')}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-2xs uppercase tracking-wider text-muted-foreground">
-            Queue ({actions.length})
-          </span>
-          <TooltipProvider delay={200}>
-            <TabsList className="h-7 p-0.5">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <TabsTrigger value="focus" className="size-6 p-0" aria-label="List view">
-                      <List className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </TabsTrigger>
-                  }
-                />
-                <TooltipContent side="bottom" className="text-xs">
-                  List view
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <TabsTrigger value="table" className="size-6 p-0" aria-label="Table view (T)">
-                      <TableIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </TabsTrigger>
-                  }
-                />
-                <TooltipContent side="bottom" className="text-xs">
-                  Table view · T
-                </TooltipContent>
-              </Tooltip>
-            </TabsList>
-          </TooltipProvider>
-        </div>
-        <TabsContent value="focus" className="mt-2">
-          <QueueList actions={actions} focusedId={focusedActionId} onFocus={setFocusedActionId} />
-        </TabsContent>
-        <TabsContent value="table" className="mt-2">
-          <QueueTable actions={actions} onSelect={setFocusedActionId} />
-        </TabsContent>
-      </Tabs>
+          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'focus' | 'table')}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-2xs uppercase tracking-wider text-muted-foreground">
+                Queue ({actions.length})
+              </span>
+              <TooltipProvider delay={200}>
+                <TabsList className="h-7 p-0.5">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <TabsTrigger value="focus" className="size-6 p-0" aria-label="List view">
+                          <List className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        </TabsTrigger>
+                      }
+                    />
+                    <TooltipContent side="bottom" className="text-xs">
+                      List view
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <TabsTrigger
+                          value="table"
+                          className="size-6 p-0"
+                          aria-label="Table view (T)"
+                        >
+                          <TableIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        </TabsTrigger>
+                      }
+                    />
+                    <TooltipContent side="bottom" className="text-xs">
+                      Table view · T
+                    </TooltipContent>
+                  </Tooltip>
+                </TabsList>
+              </TooltipProvider>
+            </div>
+            <TabsContent value="focus" className="mt-2">
+              <QueueList
+                actions={actions}
+                focusedId={focusedActionId}
+                onFocus={setFocusedActionId}
+              />
+            </TabsContent>
+            <TabsContent value="table" className="mt-2">
+              <QueueTable actions={actions} onSelect={setFocusedActionId} />
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
     </div>
   );
 }

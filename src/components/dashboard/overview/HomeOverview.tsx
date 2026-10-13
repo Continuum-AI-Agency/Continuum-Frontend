@@ -21,6 +21,7 @@ import {
   saveHomeObjectivesAction,
 } from '@/app/(post-auth)/dashboard/actions';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrganicSnapshot';
@@ -104,8 +105,18 @@ function Bars({ rows }: { rows: { name: string; value: number; label: string }[]
   );
 }
 
-function Unavailable({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs text-muted-foreground">{children}</p>;
+/** A block with nothing to show. With `onRetry` it is a block whose READ failed: an alert that
+ *  says so and offers the read again, never quiet grey text that reads like an empty week. */
+function Unavailable({ children, onRetry }: { children: React.ReactNode; onRetry?: () => void }) {
+  if (!onRetry) return <p className="text-xs text-muted-foreground">{children}</p>;
+  return (
+    <p className="text-destructive-ink text-xs" role="alert">
+      {children}{' '}
+      <Button className="h-5 px-1 text-xs" onClick={onRetry} size="sm" type="button" variant="link">
+        Retry
+      </Button>
+    </p>
+  );
 }
 
 function CreativeSlot({
@@ -170,7 +181,10 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
   const currencies = new Set(scopedAccounts.map((account) => account.currency).filter(Boolean));
   const currency = currencies.size === 1 ? ([...currencies][0] ?? null) : null;
 
-  const totalsState = useAccountTotals(brandId, scopedAccounts);
+  // Retry re-runs every block's read; a hung read ends at the client bound as an error.
+  const [attempt, setAttempt] = useState(0);
+  const retry = () => setAttempt((count) => count + 1);
+  const totalsState = useAccountTotals(brandId, scopedAccounts, attempt);
   const totals = totalsState.status === 'ready' ? totalsState.data : null;
 
   const resolved = resolveHomeObjectives({
@@ -186,9 +200,9 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
     ? objectiveFigure({ id: 'spend', label: 'Spend', metric: 'spend', role: 'secondary' }, totals)
     : null;
 
-  const campaigns = useTopCampaigns(brandId, scopedAccounts, primary?.metric ?? null);
-  const creatives = useCreativeExtremes(brandId, scopedAccounts, primary?.metric ?? null);
-  const organic = useOrganicSnapshot(brandId, organicAccounts);
+  const campaigns = useTopCampaigns(brandId, scopedAccounts, primary?.metric ?? null, attempt);
+  const creatives = useCreativeExtremes(brandId, scopedAccounts, primary?.metric ?? null, attempt);
+  const organic = useOrganicSnapshot(brandId, organicAccounts, attempt);
 
   const saveObjectives = (next: HomeObjective[]) => {
     const previous = rows;
@@ -325,8 +339,8 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
           ))}
         </div>
       ) : totalsState.status === 'error' ? (
-        <Unavailable>
-          Paid results could not be loaded right now. Try again in a minute.
+        <Unavailable onRetry={retry}>
+          Couldn't load paid results — the ad platform didn't answer. Try again in a minute.
         </Unavailable>
       ) : (
         <ObjectiveStrip
@@ -360,7 +374,7 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
           {campaigns.status === 'loading' ? (
             <Skeleton className="h-24 bg-muted/70" />
           ) : campaigns.status === 'error' ? (
-            <Unavailable>Campaigns could not be loaded right now.</Unavailable>
+            <Unavailable onRetry={retry}>Couldn't load campaigns right now.</Unavailable>
           ) : campaigns.data.length === 0 ? (
             <Unavailable>
               No campaign brought {primary?.label.toLowerCase() ?? 'results'} this week.
@@ -385,7 +399,7 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
           ) : organic.status === 'loading' ? (
             <Skeleton className="h-32 bg-muted/70" />
           ) : organic.status === 'error' || reach.every((item) => item.value === null) ? (
-            <Unavailable>Organic results could not be loaded right now.</Unavailable>
+            <Unavailable onRetry={retry}>Couldn't load organic results right now.</Unavailable>
           ) : (
             <>
               <div className="flex flex-wrap gap-x-5 gap-y-2">
@@ -453,7 +467,7 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
           {creatives.status === 'loading' ? (
             <Skeleton className="h-40 bg-muted/70" />
           ) : creatives.status === 'error' ? (
-            <Unavailable>Ads could not be loaded right now.</Unavailable>
+            <Unavailable onRetry={retry}>Couldn't load ads right now.</Unavailable>
           ) : !creatives.data.best ? (
             <Unavailable>
               No ad brought {primary?.label.toLowerCase() ?? 'results'} this week.

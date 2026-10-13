@@ -130,12 +130,17 @@ export function ScaffoldRecordBar({
   const [selectedId, setSelectedId] = React.useState<string>('');
   const [isLoadingGraph, setIsLoadingGraph] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Bumped by Retry: the brand read's effect re-ran only on a brand change, so a failed read
+  // left the bar with an error and no way back but a reload.
+  const [readAttempt, setReadAttempt] = React.useState(0);
   const readGeneration = React.useRef(0);
 
   React.useLayoutEffect(() => {
     // Invalidate before late promises can write into a different brand or selection.
     readGeneration.current++;
-    return () => { readGeneration.current++; };
+    return () => {
+      readGeneration.current++;
+    };
   }, [brandId, requestedScaffoldId]);
 
   const loadScaffold = React.useCallback(
@@ -158,7 +163,9 @@ export function ScaffoldRecordBar({
           setError(cause instanceof Error ? cause.message : 'Could not load that proposal.');
           return false;
         })
-        .finally(() => { if (isCurrent()) setIsLoadingGraph(false); });
+        .finally(() => {
+          if (isCurrent()) setIsLoadingGraph(false);
+        });
     },
     [brandId, loadHydratedGraph, onAdAccountChange],
   );
@@ -274,13 +281,13 @@ export function ScaffoldRecordBar({
       .catch((cause: unknown) => {
         if (cancelled) return;
         setScaffolds([]);
-        setError(cause instanceof Error ? cause.message : 'Could not load this brand’s proposals.');
+        setError(cause instanceof Error ? cause.message : "Couldn't load this brand's proposals.");
       });
     return () => {
       cancelled = true;
       readGeneration.current++;
     };
-  }, [brandId, onAdAccountChange, requestedScaffoldId, loadScaffold]);
+  }, [brandId, onAdAccountChange, requestedScaffoldId, loadScaffold, readAttempt]);
 
   const handleSelect = React.useCallback(
     (scaffoldId: string) => {
@@ -290,8 +297,11 @@ export function ScaffoldRecordBar({
     [loadScaffold, scaffolds],
   );
 
-  const proposeBlockedBecause =
-    isLoadingGraph ? 'Wait for the selected proposal to finish loading.' : nodeCount === 0 ? 'Load a proposal or add a node — there is nothing to propose yet.' : null;
+  const proposeBlockedBecause = isLoadingGraph
+    ? 'Wait for the selected proposal to finish loading.'
+    : nodeCount === 0
+      ? 'Load a proposal or add a node — there is nothing to propose yet.'
+      : null;
 
   return (
     <div
@@ -350,8 +360,22 @@ export function ScaffoldRecordBar({
       ) : null}
 
       {error ? (
-        <span className="text-destructive text-xs" data-testid="canvas-record-error" role="alert">
+        <span
+          className="flex items-center gap-1.5 text-destructive-ink text-xs"
+          data-testid="canvas-record-error"
+          role="alert"
+        >
           {error}
+          <Button
+            className="h-6 px-1.5 text-xs"
+            data-testid="canvas-record-retry"
+            onClick={() => setReadAttempt((attempt) => attempt + 1)}
+            size="sm"
+            type="button"
+            variant="link"
+          >
+            Retry
+          </Button>
         </span>
       ) : null}
 

@@ -4,6 +4,7 @@ import {
   jainaCreativePreviewResponseSchema,
 } from '@continuum/contracts';
 import { http } from '@/lib/api/http';
+import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
 
 // A `format:"creative"` table cell can only resolve a preview when the ref
 // carries the brand + account context and at least one creative/ad id.
@@ -28,5 +29,7 @@ export async function fetchJainaCreativePreview(
     schema: jainaCreativePreviewResponseSchema,
     cache: 'no-store',
     signal,
+    // A POST, but a read: Home waits on it for the best and worst ad's image.
+    timeoutMs: READ_TIMEOUT_MS,
   });
 }

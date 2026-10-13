@@ -64,6 +64,55 @@ describe('buildFlightPacing', () => {
     ).toBe('no_flight');
   });
 
+  it('derives from daily spend when the run is stamped with an earlier flight (a rebase)', () => {
+    const m = buildFlightPacing({
+      portfolio: flight,
+      runPacing: {
+        dailyTotal: 100,
+        idealCumulative: 1000,
+        pacingRatio: 1.72,
+        status: 'overpacing',
+        note: 'Overpacing (172%)',
+        source: 'pacing',
+        periodBudget: 3000,
+        periodDays: 30,
+        dayIndex: 11,
+        actualSpendToDate: 800,
+        planVersion: `2026-09-20..${flight.period_end}@3000`,
+      },
+      snapshots: [],
+      enrolledIds: [],
+      today: TODAY,
+    });
+    // No daily series reaches the flight start, so there is nothing to derive from yet —
+    // and the stale engine verdict must not fill the gap.
+    expect(m.kind).toBe('awaiting_cycle');
+  });
+
+  it('keeps the budget match for a run from before the plan stamp existed', () => {
+    const m = buildFlightPacing({
+      portfolio: flight,
+      runPacing: {
+        dailyTotal: 100,
+        idealCumulative: 1000,
+        pacingRatio: 0.8,
+        status: 'underpacing',
+        note: 'Underpacing (80%)',
+        source: 'pacing',
+        periodBudget: 3000,
+        periodDays: 30,
+        dayIndex: 11,
+        actualSpendToDate: 800,
+      },
+      snapshots: [],
+      enrolledIds: [],
+      today: TODAY,
+    });
+    expect(m.kind).toBe('ready');
+    if (m.kind !== 'ready') return;
+    expect(m.source).toBe('engine');
+  });
+
   it('prefers the engine figures when the run paced this flight', () => {
     const m = buildFlightPacing({
       portfolio: flight,
@@ -78,6 +127,7 @@ describe('buildFlightPacing', () => {
         periodDays: 30,
         dayIndex: 11,
         actualSpendToDate: 800,
+        planVersion: `${flight.period_start}..${flight.period_end}@${flight.period_budget}`,
       },
       snapshots: [],
       enrolledIds: [],

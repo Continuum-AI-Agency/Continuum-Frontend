@@ -4,13 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { onBrandChange } from '@/lib/brands/brand-switch';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { retryUnlessTimeout } from './retry';
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 5 * 60 * 1000,
-        retry: 1,
+        // Once for an error; never for a timeout (the bound was already the wait).
+        retry: retryUnlessTimeout(1),
         refetchOnWindowFocus: false,
       },
       mutations: {

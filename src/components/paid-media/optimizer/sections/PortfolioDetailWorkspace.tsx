@@ -106,7 +106,7 @@ import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
 import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
-import { isStale } from './portfolioStaleness';
+import { isStale, pacingStaleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
 
@@ -289,6 +289,8 @@ export function PortfolioDetailWorkspace({
     enrolledIds,
     today,
   });
+  // The run's verdict beside the flight the row holds now: stale after a rebase, and said so.
+  const pacingStale = pacingStaleLine(latestRun?.pacing ?? null, portfolio);
   const recap = buildRecap({
     snapshots: snapshotsQuery.data,
     enrolledIds,
@@ -819,11 +821,22 @@ export function PortfolioDetailWorkspace({
 
           <OptimizerPanel
             meta={
-              flightPacing.kind === 'ready' ? (
-                <span className="text-xs text-muted-foreground">
-                  {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
-                </span>
-              ) : null
+              <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                {flightPacing.kind === 'ready' ? (
+                  <span>
+                    {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
+                  </span>
+                ) : null}
+                {pacingStale ? (
+                  <span
+                    className="text-warning"
+                    data-testid="pacing-stale-chip"
+                    title={pacingStale.title}
+                  >
+                    {pacingStale.text}
+                  </span>
+                ) : null}
+              </span>
             }
             title="Flight pacing"
           >

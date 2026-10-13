@@ -20,6 +20,7 @@
  */
 
 import { type PaidScaffoldPlan, paidScaffoldPlanSchema } from '@continuum/contracts';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import { fetchBrandAuthors } from '@/lib/library/commentAuthors';
 import { displayNameFromEmail } from '@/lib/library/comments';
 import { mediaSchema } from '@/lib/media/supabase-media';
@@ -83,6 +84,13 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
+/** A read that failed, as the screen may say it: "Couldn't load <what> — <why>." PostgREST's
+ *  own message (which carried a gateway's HTML body onto the Campaign Canvas) goes to the log. */
+function readFailure(what: string, cause: unknown): Error {
+  console.error(`[jaina-activity-client] could not load ${what}`, cause);
+  return new Error(loadFailureMessage(what, cause));
+}
+
 /* -- scaffolds ------------------------------------------------------------------ */
 
 export type ScaffoldSummary = {
@@ -114,7 +122,7 @@ export async function fetchBrandScaffolds(params: { brandId: string }): Promise<
     .is('archived_at', null)
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error(`Could not load this brand's scaffolds: ${error.message}`);
+  if (error) throw readFailure("this brand's proposals", error);
 
   return (data ?? []).map((entry) => {
     const raw = entry as unknown as Record<string, unknown>;
@@ -142,7 +150,7 @@ export async function fetchScaffoldVersions(params: {
     .eq('scaffold_id', params.scaffoldId)
     .order('version', { ascending: false });
 
-  if (error) throw new Error(`Could not load the scaffold's versions: ${error.message}`);
+  if (error) throw readFailure("the proposal's versions", error);
 
   return (data ?? []).map((entry) => {
     const raw = entry as unknown as Record<string, unknown>;
@@ -174,7 +182,7 @@ async function fetchScaffoldGates(params: {
     .select('gate,status,approved_by,approved_at')
     .eq('version_id', params.versionId);
 
-  if (error) throw new Error(`Could not load the scaffold's approvals: ${error.message}`);
+  if (error) throw readFailure("the proposal's approvals", error);
 
   const gates: Partial<Record<ScaffoldGateName, CanvasGate>> = {};
   for (const entry of data ?? []) {
@@ -233,7 +241,7 @@ export async function fetchBrandAudienceGroups(params: {
     .is('archived_at', null)
     .order('created_at', { ascending: false });
 
-  if (groupError) throw new Error(`Could not load the audience groups: ${groupError.message}`);
+  if (groupError) throw readFailure('the audience groups', groupError);
 
   const groups = (groupData ?? []).map((entry) => entry as unknown as Record<string, unknown>);
   const versionIds = groups
@@ -270,9 +278,9 @@ export async function fetchBrandAudienceGroups(params: {
     ]);
 
   if (versionError) {
-    throw new Error(`Could not load the audience group versions: ${versionError.message}`);
+    throw readFailure('the audience group versions', versionError);
   }
-  if (gateError) throw new Error(`Could not load the audience approvals: ${gateError.message}`);
+  if (gateError) throw readFailure('the audience approvals', gateError);
 
   const manifestById = new Map<string, Record<string, unknown>>();
   const statusById = new Map<string, string | null>();
@@ -395,7 +403,7 @@ async function fetchScaffoldVersionDetail(params: { versionId: string }): Promis
     .eq('id', params.versionId)
     .maybeSingle();
 
-  if (error) throw new Error(`Could not load the scaffold version: ${error.message}`);
+  if (error) throw readFailure('the proposal version', error);
 
   const raw = asRecord(data);
   const parsed = paidScaffoldPlanSchema.safeParse(asRecord(raw.manifest).plan);
@@ -474,7 +482,7 @@ export async function fetchCanvasScaffoldRead(params: {
       .eq('id', params.scaffold.id)
       .is('archived_at', null)
       .maybeSingle();
-    if (error) throw new Error(`Could not refresh the scaffold: ${error.message}`);
+    if (error) throw readFailure('the proposal', error);
     if (!data) throw new Error('That scaffold is unavailable for this brand.');
     const raw = data as unknown as Record<string, unknown>;
     return {

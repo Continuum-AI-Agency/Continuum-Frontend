@@ -151,3 +151,47 @@ describe('JainaConversationSidebar list rows', () => {
     expect(personRow.textContent).toContain('#q4');
   });
 });
+
+describe('JainaConversationSidebar when the list could not be read', () => {
+  it('names the failure in place of "Loading conversations…" and offers Retry', () => {
+    const onRetryLoad = mock(() => {});
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled={false}
+        loadError="Couldn't load conversations — the server didn't answer in time."
+        onRetryLoad={onRetryLoad}
+      />,
+    );
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain("Couldn't load conversations");
+    expect(screen.queryByText('Loading conversations…')).toBeNull();
+    expect(screen.queryByText('Start a chat to create your first conversation.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the list when a refresh failed after conversations were already read', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled={false}
+        loadError="Couldn't load conversations."
+        sessions={[
+          {
+            sessionId: 'session-2',
+            brandId: null,
+            adAccountId: null,
+            title: 'Budget review',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastMessageAt: null,
+            messageCount: 2,
+          } as never,
+        ]}
+      />,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Budget review')).not.toBeNull();
+  });
+});
