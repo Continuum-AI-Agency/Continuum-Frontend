@@ -88,8 +88,7 @@ export const brandAudienceTokenSchema = z.object({
 });
 export type BrandAudienceToken = z.infer<typeof brandAudienceTokenSchema>;
 
-// Per-brand defaults for generated images/slides. These live in the existing
-// Brand Book token document so generation does not need a parallel settings row.
+// Durable per-brand defaults for headless image and slide generation.
 export const brandGenerationPreferencesSchema = z.object({
   number_slides: z.boolean().default(false),
   avoid_colors: z.array(z.preprocess(canonicalHex, hexColorSchema)).max(24).default([]),

@@ -181,7 +181,7 @@ describe('parseBrandMd tolerance (never throws)', () => {
       brand_name: 'Mocky',
       logo: { treatment_default: 'logo' },
       generation: {
-        number_slides: false,
+        number_slides: true,
         avoid_colors: ['#ff0000'],
         additional_guidance: 'Use natural light.',
       },
@@ -189,7 +189,7 @@ describe('parseBrandMd tolerance (never throws)', () => {
     const parsed = parseBrandMd(serializeBrandMd({ tokens, body: '# Body' }));
     expect(parsed.tokens?.logo?.treatment_default).toBe('logo');
     expect(parsed.tokens?.generation).toMatchObject({
-      number_slides: false,
+      number_slides: true,
       avoid_colors: ['#ff0000'],
       additional_guidance: 'Use natural light.',
     });

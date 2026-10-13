@@ -263,6 +263,40 @@ export const templateFontSchema = z
   .passthrough();
 export type TemplateFont = z.infer<typeof templateFontSchema>;
 
+/**
+ * One Essential Graphics knob that is not a text or media slot — a colour, checkbox, fill,
+ * opacity, slider, point, angle, tint or dropdown control a template publishes — keyed per
+ * (name, AE property). The forge emits these since 6e059a4; an older parse simply has none.
+ *
+ * `kind` stays a string, not an enum: the forge names unknown knobs `other` today, and a closed
+ * enum here would turn a new upstream kind into a rejected parse, i.e. a dead ingestion.
+ */
+export const templateControlSchema = z
+  .object({
+    key: z.string().min(1),
+    name: z.string(),
+    kind: z.string().min(1),
+    /** The AE match name the knob drives, e.g. "ADBE Color Control-0001". */
+    property: z.string(),
+    comps: z.array(z.number().int()).default([]),
+    instances: z
+      .array(
+        z
+          .object({
+            compId: z.number().int(),
+            layerId: z.number().int(),
+            /** False when the knob sits under a precomp switched off in this comp. */
+            active: z.boolean().optional(),
+          })
+          .passthrough(),
+      )
+      .default([]),
+    /** The knob's static value when the parse could read one. */
+    default: z.unknown().optional(),
+  })
+  .passthrough();
+export type TemplateControl = z.infer<typeof templateControlSchema>;
+
 export const templateParseSchema = z
   .object({
     parser: z.string().min(1),
@@ -277,6 +311,10 @@ export const templateParseSchema = z
     ratios: z.array(templateRatioSchema).default([]),
     slots: z.array(templateSlotSchema).default([]),
     fonts: z.array(templateFontSchema).default([]),
+    /** Essential Graphics knobs that are not text/media slots. Without this key the outer
+     *  `.strip()` dropped every knob the forge read, so a template's colour/checkbox/fill
+     *  inputs never reached `media.template_sources.parse`. */
+    controls: z.array(templateControlSchema).optional(),
     /**
      * Every DISTINCT string the design currently contains — which is NOT what the name says.
      *

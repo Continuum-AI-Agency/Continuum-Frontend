@@ -130,6 +130,23 @@ describe('templateParseSchema', () => {
     expect(templateParseSchema.parse({ ...REAL_PARSE, projectCount: 2 }).projectCount).toBe(2);
   });
 
+  // The outer schema strips unknown keys, so `controls` must be declared or every Essential
+  // Graphics knob the forge read is dropped before it reaches the stored parse.
+  it('keeps the forge controls, tolerating a kind it has not seen and an older parse without any', () => {
+    const control = {
+      key: 'control__team-colour',
+      name: 'team-colour',
+      kind: 'gradient-map',
+      property: 'ADBE Color Control-0001',
+      comps: [1],
+      instances: [{ compId: 1, comp: 'Main', layerId: 7, layerName: 'Controls', active: false }],
+      default: [1, 0, 0, 1],
+    };
+    const parsed = templateParseSchema.parse({ ...REAL_PARSE, controls: [control] });
+    expect(parsed.controls).toEqual([control]);
+    expect(templateParseSchema.parse(REAL_PARSE).controls).toBeUndefined();
+  });
+
   // The rational trap: AEP stores frame rate as a dividend/divisor pair, and reading the
   // dividend alone yields a plausible-looking six-digit number. Nothing downstream would
   // notice, so the schema has to.
