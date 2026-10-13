@@ -12,9 +12,14 @@ import { cn } from '@/lib/utils';
 import { KpiRow } from '../components/KpiTile';
 import * as typeScale from '../typeScale';
 
+/** How many platforms the brand reads, known from its connected accounts before the producer
+ *  answers. The placeholders say what the page will say for that many: one platform has no
+ *  top-spend fact and no platform split, and its sentence ends "on Meta". */
+type PlatformCount = { platforms: number };
+
 /** The sentence while the producer reads: said to assistive tech, drawn as a sentence-long bar
  *  that wraps where the real sentence will (one line on a wide pane, two or three on a phone). */
-export function HeadlineSkeleton({ label }: { label: string }) {
+export function HeadlineSkeleton({ label, platforms }: { label: string } & PlatformCount) {
   return (
     <p
       className={`${typeScale.headline} max-w-[62ch]`}
@@ -23,7 +28,9 @@ export function HeadlineSkeleton({ label }: { label: string }) {
     >
       <span className="sr-only">{label}</span>
       <SkeletonText wrap>
-        The account spent 30,517 MXN in 7 days across two platforms. 19 decisions waiting.
+        {platforms >= 2
+          ? 'The account spent 30,517 MXN in 7 days across two platforms. 19 decisions waiting.'
+          : 'The account spent 13,890 MXN in 7 days on Meta. 2 decisions waiting.'}
       </SkeletonText>
     </p>
   );
@@ -31,12 +38,13 @@ export function HeadlineSkeleton({ label }: { label: string }) {
 
 /** What each tile's three lines stand in for: label, figure, sub-line. The words are the
  *  usual ones, so each bar is the width the real text takes. */
+const SPEND_SUB = {
+  several: '▲ 136% vs prior 7 days · Meta 36% · Google 64%',
+  one: 'Meta 13,890 MXN',
+} as const;
+
 const TILE_WORDS = [
-  {
-    label: 'Spend · 7 days',
-    value: '30,517 MXN',
-    sub: '▲ 136% vs prior 7 days · Meta 36% · Google 64%',
-  },
+  { label: 'Spend · 7 days', value: '30,517 MXN', sub: SPEND_SUB.several },
   { label: 'Conversations', value: '230', sub: '47.47 MXN each · no target' },
   { label: 'Leads', value: '14', sub: '65.75 MXN each · target 70' },
   { label: 'Decisions', value: '19', sub: 'waiting across your portfolios' },
@@ -48,10 +56,11 @@ const TILE_WORDS = [
 export function OverviewTilesSkeleton({
   cells,
   withAction,
+  platforms,
 }: {
   cells: number;
   withAction: boolean;
-}) {
+} & PlatformCount) {
   const shown = TILE_WORDS.slice(0, Math.max(2, Math.min(cells, TILE_WORDS.length)));
   return (
     <KpiRow testId="account-tiles-skeleton">
@@ -75,7 +84,9 @@ export function OverviewTilesSkeleton({
               {/* The sub-line wraps as the real one does: the spend split runs to two lines on a
                *  217px tile at 768, which a one-line bar left 14px short. */}
               <p className="mt-1 text-xs">
-                <SkeletonText wrap>{words.sub}</SkeletonText>
+                <SkeletonText wrap>
+                  {hero && platforms < 2 ? SPEND_SUB.one : words.sub}
+                </SkeletonText>
               </p>
               {decision ? (
                 // The real action is a text-xs button on the cell's own line box.
@@ -205,11 +216,11 @@ export function AccountReadFreshnessSkeleton() {
 
 /** The meta line's facts while the producer reads (window, top spend, attribution), so the
  *  line wraps where the real one will. */
-export function SublineFactsSkeleton() {
+export function SublineFactsSkeleton({ platforms }: PlatformCount) {
   return (
     <>
       <SkeletonText>Oct 5 – Oct 11</SkeletonText>
-      <SkeletonText wrap>· Google takes 64% of the spend</SkeletonText>
+      {platforms >= 2 ? <SkeletonText wrap>· Google takes 64% of the spend</SkeletonText> : null}
       <SkeletonText wrap>· attribution: what each platform reports</SkeletonText>
     </>
   );

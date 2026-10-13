@@ -1224,9 +1224,26 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     expect(held.outerHTML).not.toMatch(/(^|\s|")(border|bg-card|bg-primary\/5|bg-muted\/50)(\s|")/);
   });
 
+  // The bench's own brand reads Meta only: the two-platform placeholders (a top-spend fact, a
+  // platform split, "across two platforms") wrapped onto lines the real page never has, and
+  // everything below moved UP 47px when the producer landed (768 CLS 0.267).
+  it('shapes the placeholders for one platform when only one is connected', () => {
+    metricsState = { status: 'loading' };
+    const { getByTestId, getAllByTestId } = mount();
+    expect(getByTestId('overview-headline').textContent).toContain('on Meta');
+    expect(getByTestId('overview-headline').textContent).not.toContain('two platforms');
+    expect(getByTestId('overview-subline').textContent).not.toMatch(/takes \d+% of the spend/);
+    expect(getAllByTestId('tile-skeleton')[0].textContent).not.toMatch(/Meta \d+% · Google/);
+  });
+
   it("writes the spend placeholder's line as the platforms split it, so it wraps where it will", () => {
     metricsState = { status: 'loading' };
-    const { getAllByTestId } = mount();
+    adAccounts = [
+      ...adAccounts,
+      { platform: 'google_ads', account_id: '1', name: null, status: 'active', currency: 'MXN' },
+    ];
+    const { getAllByTestId, getByTestId } = mount();
+    expect(getByTestId('overview-subline').textContent).toMatch(/takes \d+% of the spend/);
     const spend = getAllByTestId('tile-skeleton')[0];
     expect(spend.textContent).toMatch(/Meta \d+% · Google \d+%/);
     const sub = spend.querySelector('p.mt-1 [data-slot="skeleton-text"]');

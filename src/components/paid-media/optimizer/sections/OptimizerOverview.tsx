@@ -432,7 +432,10 @@ export function OptimizerOverview({
         {multiplatform ? (
           <AllPlatformsHeadline metrics={multiplatform} pendingCount={pendingCount} />
         ) : producerLoading ? (
-          <HeadlineSkeleton label="Reading the account across platforms…" />
+          <HeadlineSkeleton
+            label="Reading the account across platforms…"
+            platforms={connectedCount}
+          />
         ) : efficiency.failed > 0 && !efficiency.pending ? (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
@@ -484,7 +487,7 @@ export function OptimizerOverview({
           {multiplatform ? (
             <AllPlatformsSubline metrics={multiplatform} />
           ) : producerLoading ? (
-            <SublineFactsSkeleton />
+            <SublineFactsSkeleton platforms={connectedCount} />
           ) : window ? (
             <span data-testid="overview-window">{window}</span>
           ) : null}
@@ -529,7 +532,11 @@ export function OptimizerOverview({
         />
       ) : producerLoading ? (
         <>
-          <OverviewTilesSkeleton cells={5} withAction={pendingCount > 0} />
+          <OverviewTilesSkeleton
+            cells={5}
+            platforms={connectedCount}
+            withAction={pendingCount > 0}
+          />
           {connectedCount >= 2 ? (
             <PlatformComparisonSkeleton
               hidden={readComparisonHidden()}
