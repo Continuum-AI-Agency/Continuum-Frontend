@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-
+import { organicEdgeErrorResponse } from '@/lib/organic-metrics/edgeErrorResponse';
 import { normalizeInstagramOrganicMetricsResponse } from '@/lib/organic-metrics/normalize';
 import {
   organicAnalyticsScopeSchema,
@@ -58,16 +58,7 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      const edgeBody = (await (error as { context?: { json?: () => Promise<unknown> } }).context
-        ?.json?.()
-        .catch(() => null)) as { error?: string; errorCode?: string; retryAfter?: number } | null;
-      if (edgeBody?.errorCode) {
-        return NextResponse.json(edgeBody, { status: 502 });
-      }
-      return NextResponse.json(
-        { error: edgeBody?.error ?? 'Failed to fetch Facebook organic analytics' },
-        { status: 500 },
-      );
+      return organicEdgeErrorResponse(error, 'Failed to fetch Facebook organic analytics');
     }
 
     const normalized = normalizeInstagramOrganicMetricsResponse(data);
