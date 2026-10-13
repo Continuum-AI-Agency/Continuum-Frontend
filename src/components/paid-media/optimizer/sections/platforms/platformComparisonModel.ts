@@ -27,7 +27,8 @@ export type ComparisonColumn = {
   /** This result on this platform; null when the platform bought none of it. */
   results: number | null;
   costPerResult: number | null;
-  /** results / every column's results — only when the whole row is one currency. */
+  /** This platform's results over the payload's total for the compared kind
+   *  (`results_by_kind[kind].results`) — only when the whole row is one currency. */
   shareOfResults: number | null;
   cheapest: boolean;
 };
@@ -35,6 +36,10 @@ export type ComparisonColumn = {
 export type PlatformComparison = {
   /** The compared result's KPI field ('leads', 'conversations', …); null when none is bought. */
   kind: string | null;
+  /** What every share in the row is a share of: the compared kind, by name. A share without
+   *  its basis read as a share of everything the account bought (PP-L3-overview-meta-share-
+   *  100-where-results-say-89); null when nothing is compared or the row has no one currency. */
+  shareOf: string | null;
   columns: ComparisonColumn[];
   /** Every currency the columns bill in, in column order. */
   currencies: string[];
@@ -88,7 +93,15 @@ export function buildPlatformComparison(
 
   const kindOf = (row: PlatformTotals) =>
     kind == null ? null : (row.results_by_kind.find((entry) => entry.kind === kind) ?? null);
-  const totalResults = rows.reduce((sum, row) => sum + (kindOf(row)?.results ?? 0), 0);
+  // The denominator is the producer's figure for the kind, not a sum recomputed over the
+  // columns on screen: the two agree only when every buyer of the kind is a connected column.
+  const kindTotal =
+    kind == null
+      ? null
+      : (metrics.results_by_kind.find(
+          (entry) => entry.kind === kind && (oneCurrency == null || entry.currency === oneCurrency),
+        ) ?? null);
+  const totalResults = kindTotal?.results ?? 0;
 
   const priced = rows
     .flatMap((row) => {
@@ -124,7 +137,8 @@ export function buildPlatformComparison(
         }
       : null;
 
-  return { kind, columns, currencies, currency: oneCurrency, cheapest, totals };
+  const shareOf = oneCurrency != null && kindTotal != null ? kind : null;
+  return { kind, shareOf, columns, currencies, currency: oneCurrency, cheapest, totals };
 }
 
 function listed(parts: string[]): string {

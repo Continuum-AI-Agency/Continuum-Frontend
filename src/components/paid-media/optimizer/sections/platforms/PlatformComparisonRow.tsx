@@ -107,6 +107,7 @@ function Row({
       </td>
       <td
         className={NUMBER_CELL}
+        data-share-of={row.shareOf ?? undefined}
         {...figureProps(key('share'), sharePoints(column.shareOfResults), null, window, 'percent')}
       >
         {column.shareOfResults == null ? '—' : pct(column.shareOfResults)}
@@ -236,7 +237,7 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
                 {words ? `Cost per ${words.one}` : 'Cost per result'}
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
-                Share
+                {row.shareOf ? `Share of ${kindWords(row.shareOf).many}` : 'Share'}
               </th>
             </tr>
           </thead>

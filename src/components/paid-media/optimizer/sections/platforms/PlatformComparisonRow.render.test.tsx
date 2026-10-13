@@ -42,7 +42,7 @@ describe('PlatformComparisonRow — the table', () => {
     const table = getByTestId('platform-comparison').querySelector('table');
     expect(
       [...(table?.querySelectorAll('thead th') ?? [])].map((node) => node.textContent),
-    ).toEqual(['Leads by platform', 'Spend · 7 days', 'Leads', 'Cost per lead', 'Share']);
+    ).toEqual(['Leads by platform', 'Spend · 7 days', 'Leads', 'Cost per lead', 'Share of leads']);
     const google = getAllByTestId('comparison-column')[1];
     expect([...(google?.querySelectorAll('td') ?? [])].map((node) => node.textContent)).toEqual([
       '11,200 MXN',
@@ -80,6 +80,16 @@ describe('PlatformComparisonRow — the table', () => {
     expect(marked).toHaveLength(1);
     expect(marked[0]?.closest('[data-platform]')?.getAttribute('data-platform')).toBe('google_ads');
     expect(marked[0]?.textContent).toBe('· cheapest');
+  });
+
+  // PP-L3-overview-meta-share-100-where-results-say-89: a share without its basis read as a
+  // share of everything. The header says which result it is a share of and the node names it.
+  it('declares the basis of every share: the compared result kind, on the header and the node', () => {
+    const { getAllByTestId } = render(<PlatformComparisonRow metrics={EASY_FIT_MP1} />);
+    for (const row of getAllByTestId('comparison-column')) {
+      const node = row.querySelector('[data-figure$=".share"]');
+      expect(node?.getAttribute('data-share-of')).toBe('leads');
+    }
   });
 
   it('stamps each share node in percent points, the raw its "NN%" text is formatted from', () => {

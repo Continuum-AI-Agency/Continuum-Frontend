@@ -485,10 +485,13 @@ function resolveOptimizer(node: FigureNode, portfolioId: string | null): Expect 
         );
       // The share node carries percent points (the formatter contract, format.ts `percent`:
       // raw already in display units — PP-L3-share-figure-node-raw-is-a-fraction), so the
-      // payload figure is the ratio × 100.
+      // payload figure is the ratio × 100. Its basis is the ONE compared kind (the header says
+      // "Share of leads"; PP-L3-overview-meta-share-100-where-results-say-89), so the
+      // denominator is the payload's results_by_kind[kind].results — not every kind's results.
+      const kindTotal = num(kinds.find((k) => str(k.kind) === byResults?.kind)?.results) ?? 0;
       return value(
-        `results share of ${platform} (percent points)`,
-        allResults > 0 ? (results / allResults) * 100 : null,
+        `results_by_kind[${byResults?.kind}].platforms[${platform}].results / results_by_kind[${byResults?.kind}].results (percent points; all kinds together would be ${allResults > 0 ? Math.round((results / allResults) * 1000) / 10 : '—'}%)`,
+        kindTotal > 0 ? (results / kindTotal) * 100 : null,
       );
     }
   }
