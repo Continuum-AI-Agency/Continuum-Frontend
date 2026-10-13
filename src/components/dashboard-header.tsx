@@ -10,12 +10,12 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useToastContext } from '@/components/ui/ToastProvider';
 import { useSession } from '@/hooks/useSession';
-import { cn } from '@/lib/utils';
 import type { ChangelogEntry } from '@/lib/changelog/schema';
 import {
   createDashboardWelcomeToastOptions,
   shouldShowDashboardWelcomeToast,
 } from '@/lib/ui/dashboardWelcomeToast';
+import { cn } from '@/lib/utils';
 import {
   APP_HEADER_MODULE_SLOT_ID,
   APP_NAVIGATION,
@@ -110,7 +110,7 @@ function useDashboardWelcomeToast() {
   React.useEffect(() => {
     if (!user) return;
     if (!toast) return;
-    if (!shouldShowDashboardWelcomeToast(pathname)) return;
+    if (!shouldShowDashboardWelcomeToast(pathname, window.innerWidth)) return;
 
     const key = `continuum:dashboard-welcome:${user.id}`;
     if (lastShownKeyRef.current === key) return;

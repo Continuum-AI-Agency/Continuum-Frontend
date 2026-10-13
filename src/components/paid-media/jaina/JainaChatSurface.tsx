@@ -1842,13 +1842,9 @@ export function JainaChatSurface({
       } catch (error) {
         if (cancelled) return;
         console.error('[jaina] conversation history failed', error);
-        const message = loadFailureMessage('conversations', error);
-        setHistoryError(message);
-        show({
-          title: 'History unavailable',
-          description: message,
-          variant: 'error',
-        });
+        // Said once, where it happened: the sidebar names the failure and offers Retry. A toast
+        // repeating it sat over the composer's controls for its whole life.
+        setHistoryError(loadFailureMessage('conversations', error));
         // History failing is no reason to drop a question the reader already asked: the queued
         // turn drains into the session this surface mounted with once loading ends.
         setShaderState('visible');
@@ -1872,7 +1868,6 @@ export function JainaChatSurface({
     setConversationSessionsWithCache,
     setEarlierCursor,
     showConversation,
-    show,
     historyAttempt,
   ]);
 
