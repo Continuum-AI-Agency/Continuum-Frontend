@@ -361,7 +361,7 @@ export function ScaffoldRecordBar({
 
       {error ? (
         <span
-          className="flex items-center gap-1.5 text-destructive text-xs"
+          className="flex items-center gap-1.5 text-destructive-ink text-xs"
           data-testid="canvas-record-error"
           role="alert"
         >

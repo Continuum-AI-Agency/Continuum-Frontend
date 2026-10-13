@@ -36,7 +36,7 @@ export function WhatsWorkingAdsCard({
       <section className="space-y-1">
         <h3 className="font-semibold text-foreground text-sm">Ads</h3>
         <p
-          className="text-destructive text-xs"
+          className="text-destructive-ink text-xs"
           data-testid="creative-intelligence-error"
           role="alert"
         >

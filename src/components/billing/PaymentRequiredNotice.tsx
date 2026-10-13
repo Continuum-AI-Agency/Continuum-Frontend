@@ -63,7 +63,7 @@ export function PaymentRequiredNotice({ body, from, className }: PaymentRequired
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm',
+        'flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/10 px-4 py-3 text-sm',
         className,
       )}
       data-action={body.action.kind}
@@ -71,7 +71,7 @@ export function PaymentRequiredNotice({ body, from, className }: PaymentRequired
       role="alert"
     >
       <div className="min-w-0 space-y-0.5">
-        <p className="font-semibold text-primary-ink">{body.productName} is not on this plan</p>
+        <p className="font-semibold text-foreground">{body.productName} is not on this plan</p>
         <p className="text-muted-foreground">{body.message}</p>
       </div>
       <ActionControl body={body} from={from} />

@@ -220,7 +220,7 @@ export function JainaConversationSidebar({
 
               {!isLoading && loadError && sessions.length === 0 && !search.isActive ? (
                 <span
-                  className="px-2 py-3 text-destructive text-xs"
+                  className="px-2 py-3 text-destructive-ink text-xs"
                   data-testid="jaina-conversations-error"
                   role="alert"
                 >

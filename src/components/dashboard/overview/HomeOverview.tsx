@@ -110,7 +110,7 @@ function Bars({ rows }: { rows: { name: string; value: number; label: string }[]
 function Unavailable({ children, onRetry }: { children: React.ReactNode; onRetry?: () => void }) {
   if (!onRetry) return <p className="text-xs text-muted-foreground">{children}</p>;
   return (
-    <p className="text-destructive text-xs" role="alert">
+    <p className="text-destructive-ink text-xs" role="alert">
       {children}{' '}
       <Button className="h-5 px-1 text-xs" onClick={onRetry} size="sm" type="button" variant="link">
         Retry

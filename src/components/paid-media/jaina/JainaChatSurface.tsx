@@ -3136,7 +3136,7 @@ export function JainaChatSurface({
 
                   {chatError && !isStreaming && !paymentRequired ? (
                     <p
-                      className="mx-1 mb-2 flex flex-wrap items-center gap-x-2 text-destructive text-xs"
+                      className="mx-1 mb-2 flex flex-wrap items-center gap-x-2 text-destructive-ink text-xs"
                       data-testid="jaina-chat-error"
                       role="alert"
                     >

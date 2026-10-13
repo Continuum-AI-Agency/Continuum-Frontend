@@ -878,7 +878,7 @@ export function DCOActionsWidget({
         <Separator className="mb-3" />
 
         {selectorError ? (
-          <p className="mb-2 text-destructive text-xs" role="alert">
+          <p className="mb-2 text-destructive-ink text-xs" role="alert">
             {selectorError}
           </p>
         ) : null}
