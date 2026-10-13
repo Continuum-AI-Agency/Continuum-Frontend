@@ -45,6 +45,34 @@ import { graphFingerprint, useCampaignStore } from '../stores/useCampaignStore';
  */
 
 /**
+ * The named state of a canvas with nothing on it, or null when there is something to show or
+ * it is still loading. A brand with proposals used to land on a blank canvas with an empty
+ * picker and two disabled buttons — nothing said what the page was for
+ * (PP-L1-campaign-canvas-near-blank-landing).
+ */
+export function recordBarEmptyState(params: {
+  /** null while the brand's proposals are still being read. */
+  scaffoldCount: number | null;
+  hydration: CanvasHydration | null;
+  nodeCount: number;
+  isLoadingGraph: boolean;
+}): string | null {
+  const { scaffoldCount, hydration, nodeCount, isLoadingGraph } = params;
+  if (scaffoldCount === null) return null;
+  if (scaffoldCount === 0) {
+    return 'No proposals yet — ask Jaina to propose a campaign and it will appear here.';
+  }
+  if (hydration || nodeCount > 0 || isLoadingGraph) return null;
+  return 'Nothing on the canvas yet. Pick a proposal to edit it here, or ask Jaina to propose a campaign.';
+}
+
+/** The picker's value: `''` is a value to the Select (an empty trigger, no placeholder), so
+ *  "nothing chosen" is handed over as null. */
+export function pickerValue(selectedId: string): string | null {
+  return selectedId === '' ? null : selectedId;
+}
+
+/**
  * What stops Save and Deploy paused right now, each said in the words a person acts on. Pure,
  * so the rules are graded apart from the bar.
  */
@@ -297,6 +325,13 @@ export function ScaffoldRecordBar({
     [loadScaffold, scaffolds],
   );
 
+  const emptyState = recordBarEmptyState({
+    scaffoldCount: scaffolds?.length ?? null,
+    hydration,
+    nodeCount,
+    isLoadingGraph,
+  });
+
   const proposeBlockedBecause = isLoadingGraph
     ? 'Wait for the selected proposal to finish loading.'
     : nodeCount === 0
@@ -310,12 +345,8 @@ export function ScaffoldRecordBar({
     >
       {scaffolds === null ? (
         <Skeleton className="h-9 w-[260px] rounded-md" />
-      ) : scaffolds.length === 0 ? (
-        <span className="px-1 text-muted-foreground text-xs" data-testid="canvas-record-empty">
-          No proposals yet — ask Jaina to propose a campaign and it will appear here.
-        </span>
-      ) : (
-        <Select value={selectedId} onValueChange={handleSelect}>
+      ) : scaffolds.length === 0 ? null : (
+        <Select value={pickerValue(selectedId)} onValueChange={handleSelect}>
           <SelectTrigger className="w-[260px]" data-testid="canvas-scaffold-picker">
             {/* Without `items` the closed trigger renders the raw uuid, not the name. */}
             <SelectValue
@@ -332,6 +363,12 @@ export function ScaffoldRecordBar({
           </SelectContent>
         </Select>
       )}
+
+      {emptyState ? (
+        <span className="px-1 text-muted-foreground text-xs" data-testid="canvas-record-empty">
+          {emptyState}
+        </span>
+      ) : null}
 
       {isLoadingGraph ? (
         <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
