@@ -27,6 +27,7 @@ import {
   type VisualNode,
   violation,
 } from './visualGeometry';
+import { hitTestPoint, measureHitArea, TAP_TARGET_COARSE_PX } from './visualInvariants';
 
 const rect = (x: number, y: number, width: number, height: number): Rect => ({
   x,
@@ -166,6 +167,90 @@ describe('tap targets', () => {
     expect(tapTargetShortfall(rect(0, 0, 20, 32))).toBe('width 20px < 24px');
     expect(tapTargetShortfall(rect(0, 0, 32, 16))).toBe('height 16px < 24px');
     expect(tapTargetShortfall(rect(0, 0, 16, 16))).toBe('width 16px, height 16px < 24px');
+  });
+});
+
+// PP-L1V-detector-tap-target-reads-box-not-hit-area: the rule grades what the pointer can
+// reach, not the painted box. `hits` stands in for elementFromPoint.
+describe('tap targets are the hit area, not the painted box', () => {
+  const centre = { x: 100, y: 100 };
+  const squareHit =
+    (half: number) =>
+    (x: number, y: number): boolean =>
+      Math.abs(x - centre.x) <= half && Math.abs(y - centre.y) <= half;
+
+  test('a 22 px control whose pseudo-element pads the hit area to 28 px meets the floor', () => {
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, squareHit(14));
+    expect(area).not.toBeNull();
+    expect(tapTargetShortfall({ x: 0, y: 0, ...(area ?? { width: 0, height: 0 }) })).toBeNull();
+  });
+
+  test('a 22 px control with no padding still falls short on both axes', () => {
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, squareHit(10));
+    expect(area).toEqual({ width: 21, height: 21 });
+  });
+
+  test('the measure stops at the floor: a big button is not scanned to its edge', () => {
+    let probes = 0;
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, (x, y) => {
+      probes += 1;
+      return squareHit(200)(x, y);
+    });
+    expect(area).toEqual({ width: 2 * MIN_TAP_TARGET_PX + 1, height: 2 * MIN_TAP_TARGET_PX + 1 });
+    expect(probes).toBeLessThan(40);
+  });
+
+  test('names the short axis: a wide 18 px-tall row of chips', () => {
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, (x, y) => {
+      return Math.abs(x - centre.x) <= 60 && Math.abs(y - centre.y) <= 8;
+    });
+    expect(area).toEqual({ width: 49, height: 17 });
+    expect(tapTargetShortfall({ x: 0, y: 0, ...(area ?? { width: 0, height: 0 }) })).toBe(
+      'height 17px < 24px',
+    );
+  });
+
+  test('a covered centre has no hit area to measure', () => {
+    expect(measureHitArea(centre, MIN_TAP_TARGET_PX, () => false)).toBeNull();
+  });
+
+  test('the coarse-pointer floor is 44 px', () => {
+    expect(TAP_TARGET_COARSE_PX).toBe(44);
+  });
+});
+
+// PP-L1V-detector-hit-tests-points-outside-inner-scroll: the hit-test point is chosen inside
+// the part of the control that is on screen once every overflow ancestor has clipped it.
+describe('the hit-test point lies in the visible part of the control', () => {
+  const viewport = { width: 375, height: 812 };
+
+  test('a control fully on screen is tested at its centre', () => {
+    const box = rect(10, 100, 100, 40);
+    expect(hitTestPoint(box, box, viewport)).toEqual({ point: [60, 120], partial: false });
+  });
+
+  test('a control scrolled past its inner ScrollArea edge is partial and tested inside the slice', () => {
+    const box = rect(10, 780, 100, 40);
+    const clipped = rect(10, 780, 100, 8); // the panel ends at y=788, the viewport at 812
+    const probe = hitTestPoint(box, clipped, viewport);
+    expect(probe.partial).toBe(true);
+    expect(probe.point).toEqual([60, 784]);
+  });
+
+  test('a control entirely clipped by its scroll container has no point', () => {
+    expect(hitTestPoint(rect(10, 900, 100, 40), null, viewport)).toEqual({
+      point: null,
+      partial: true,
+    });
+  });
+
+  test('the viewport clips too', () => {
+    const box = rect(10, 800, 100, 40);
+    expect(hitTestPoint(box, box, viewport)).toEqual({ point: [60, 806], partial: true });
+    expect(hitTestPoint(rect(10, 900, 100, 40), rect(10, 900, 100, 40), viewport)).toEqual({
+      point: null,
+      partial: true,
+    });
   });
 });
 

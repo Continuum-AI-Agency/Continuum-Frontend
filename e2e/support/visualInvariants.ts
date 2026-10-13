@@ -25,8 +25,10 @@ import {
 //                           ancestor and descendant (overlays and fixed layers excluded)
 //   clipped-text            scrollWidth > clientWidth + 1 without text-overflow: ellipsis;
 //                           scrollHeight > clientHeight + 1 in a box that hides its overflow
-//   covered-control         elementsFromPoint at a control's centre is not the control
-//   tap-target              an interactive element under 24 × 24 CSS px
+//   covered-control         elementsFromPoint at the visible centre of a control (its box
+//                           clipped by every overflow ancestor) is not the control
+//   tap-target              a control whose HIT AREA (elementFromPoint around that centre) is
+//                           under 24 × 24 CSS px, 44 × 44 under a coarse pointer
 //   horizontal-scroll       document.documentElement.scrollWidth > clientWidth
 //   layout-shift            cumulative layout-shift over the settle window > 0.1
 //   contrast                axe-core `color-contrast` and `link-in-text-block` (AA)
@@ -119,7 +121,10 @@ export const FLOATING_SELECTOR =
 /* Probes installed before navigation                                        */
 /* ------------------------------------------------------------------------- */
 
-type PageHelpers = ReturnType<typeof pageHelpers>;
+type PageHelpers = ReturnType<typeof pageHelpers> & {
+  measureHitArea: typeof measureHitArea;
+  hitTestPoint: typeof hitTestPoint;
+};
 
 declare global {
   interface Window {
@@ -237,6 +242,11 @@ type ClippedTextFact = ElementFact & {
 type ControlFact = ElementFact & {
   inlineTextLink: boolean;
   covered: { by: string; at: [number, number] } | null;
+  /** What the pointer can reach around the hit-test point, measured with elementFromPoint;
+   *  `null` when the centre was off screen or covered, and the painted box is all we have. */
+  hitArea: { width: number; height: number } | null;
+  /** The tap-target floor this page is graded against (coarse pointer → 44 px). */
+  tapFloor: number;
 };
 
 type HorizontalScrollFact = {
@@ -338,8 +348,16 @@ export async function auditVisual(
         );
       }
       if (control.inlineTextLink) continue;
-      const short = tapTargetShortfall(control.bbox, MIN_TAP_TARGET_PX);
-      if (short) violations.push(violation('tap-target', control.selector, control.bbox, short));
+      const measured = control.hitArea
+        ? { ...control.bbox, ...control.hitArea }
+        : control.bbox;
+      const short = tapTargetShortfall(measured, control.tapFloor);
+      if (short) {
+        const how = control.hitArea ? 'hit area' : 'painted box (centre not on screen)';
+        violations.push(
+          violation('tap-target', control.selector, control.bbox, `${how}: ${short}`),
+        );
+      }
     }
   });
 
@@ -434,6 +452,63 @@ export async function auditVisual(
  *  pointer would be measured as covering the page. */
 async function parkMouse(page: Page, viewport: { width: number; height: number }): Promise<void> {
   await page.mouse.move(viewport.width - 2, Math.floor(viewport.height / 2)).catch(() => undefined);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Hit-test geometry — pure, pinned by visualInvariants.test.ts, and installed */
+/* in the page next to the helpers below (so they must be self-contained)     */
+/* ------------------------------------------------------------------------- */
+
+/** WCAG 2.5.8 floor under a coarse pointer (`(pointer: coarse)`: touch). The fine-pointer
+ *  floor is `MIN_TAP_TARGET_PX` in visualGeometry.ts. */
+export const TAP_TARGET_COARSE_PX = 44;
+
+/** How far the pointer reaches around `centre` and still hits the control. `hits` is
+ *  elementFromPoint in the page; `cap` bounds the scan per direction, so a measure of
+ *  `2 * cap + 1` on an axis means "at least the floor", never the painted width. A control
+ *  whose own centre does not hit (it is covered) has no hit area: `null`. The region is
+ *  assumed contiguous from the centre, which lets each direction be a binary search. */
+export function measureHitArea(
+  centre: { x: number; y: number },
+  cap: number,
+  hits: (x: number, y: number) => boolean,
+): { width: number; height: number } | null {
+  if (!hits(centre.x, centre.y)) return null;
+  const extent = (dx: number, dy: number): number => {
+    let lo = 0;
+    let hi = cap;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (hits(centre.x + mid * dx, centre.y + mid * dy)) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  return {
+    width: extent(-1, 0) + extent(1, 0) + 1,
+    height: extent(0, -1) + extent(0, 1) + 1,
+  };
+}
+
+/** Where rule (c) hit-tests a control: the centre of the part of its box that is on screen
+ *  once its overflow ancestors (`clipped`, from `clipToAncestors`) and the viewport have cut
+ *  it. `point` is `null` when nothing of it is on screen; `partial` says some of the painted
+ *  box is clipped, so the caller scrolls it into view before trusting the point. */
+export function hitTestPoint(
+  bbox: { x: number; y: number; width: number; height: number },
+  clipped: { x: number; y: number; width: number; height: number } | null,
+  viewport: { width: number; height: number },
+): { point: [number, number] | null; partial: boolean } {
+  if (!clipped) return { point: null, partial: true };
+  const x = Math.max(clipped.x, 0);
+  const y = Math.max(clipped.y, 0);
+  const right = Math.min(clipped.x + clipped.width, viewport.width);
+  const bottom = Math.min(clipped.y + clipped.height, viewport.height);
+  if (right <= x || bottom <= y) return { point: null, partial: true };
+  const width = right - x;
+  const height = bottom - y;
+  const partial = width < bbox.width - 1 || height < bbox.height - 1;
+  return { point: [Math.round(x + width / 2), Math.round(y + height / 2)], partial };
 }
 
 /* ------------------------------------------------------------------------- */
@@ -575,7 +650,9 @@ async function installPageHelpers(page: Page): Promise<void> {
   // A string script, not a closure: `pageHelpers` is plain JS once Playwright strips the types
   // and the page needs its SOURCE, which a closure passed to evaluate would not carry.
   await page.evaluate(
-    `window.__l1vHelpers = (${pageHelpers.toString()})(${JSON.stringify(OVERLAY_SELECTOR)})`,
+    `window.__l1vHelpers = (${pageHelpers.toString()})(${JSON.stringify(OVERLAY_SELECTOR)});` +
+      `window.__l1vHelpers.measureHitArea = ${measureHitArea.toString()};` +
+      `window.__l1vHelpers.hitTestPoint = ${hitTestPoint.toString()};`,
   );
 }
 
@@ -733,7 +810,7 @@ async function collectClippedText(
 
 async function collectControls(page: Page, maxControls: number): Promise<ControlFact[]> {
   return page.evaluate(
-    ({ controlSelector, maxControls }) => {
+    ({ controlSelector, maxControls, tapFine, tapCoarse }) => {
       const helpers = window.__l1vHelpers;
       if (!helpers) throw new Error('page helpers not installed');
       const facts: ControlFact[] = [];
@@ -748,6 +825,14 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
           !el.closest('[inert]') &&
           window.getComputedStyle(el).pointerEvents !== 'none',
       );
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      const tapFloor = window.matchMedia('(pointer: coarse)').matches ? tapCoarse : tapFine;
+      // The element the pointer lands on at (x, y); the control is hit when that is itself or
+      // something inside it (a pseudo-element pad reports its originating element).
+      const topAt = (x: number, y: number): Element | null =>
+        document.elementsFromPoint(x, y)[0] ?? null;
+      const isHit = (el: Element, top: Element | null): boolean =>
+        top !== null && (top === el || el.contains(top));
       for (const el of controls.slice(0, maxControls)) {
         const bbox = helpers.toRect(el.getBoundingClientRect());
         const style = window.getComputedStyle(el);
@@ -757,36 +842,66 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
         );
         const inlineTextLink = el.tagName === 'A' && style.display === 'inline' && parentText;
 
+        // The hit-test point lives in the part of the control that is on screen: an inner
+        // ScrollArea clips as much as the viewport does, and a point inside the clipped-away
+        // slice hits the container, not the control.
         let rect = el.getBoundingClientRect();
-        const outside =
-          rect.bottom < 0 ||
-          rect.right < 0 ||
-          rect.top > window.innerHeight ||
-          rect.left > window.innerWidth;
-        if (outside) {
+        let probe = helpers.hitTestPoint(
+          helpers.toRect(rect),
+          helpers.clipToAncestors(el, rect),
+          viewport,
+        );
+        if (probe.partial) {
           el.scrollIntoView({ block: 'center', inline: 'nearest' });
           rect = el.getBoundingClientRect();
+          probe = helpers.hitTestPoint(
+            helpers.toRect(rect),
+            helpers.clipToAncestors(el, rect),
+            viewport,
+          );
         }
-        const cx = Math.round(rect.left + rect.width / 2);
-        const cy = Math.round(rect.top + rect.height / 2);
         let covered: ControlFact['covered'] = null;
-        if (cx >= 0 && cy >= 0 && cx < window.innerWidth && cy < window.innerHeight) {
-          const top = document.elementsFromPoint(cx, cy)[0] ?? null;
-          if (
-            top &&
-            top.tagName.toLowerCase() !== 'nextjs-portal' &&
-            top !== el &&
-            !el.contains(top)
-          ) {
+        let hitArea: ControlFact['hitArea'] = null;
+        if (probe.point) {
+          const [cx, cy] = probe.point;
+          const top = topAt(cx, cy);
+          if (top && top.tagName.toLowerCase() !== 'nextjs-portal' && !isHit(el, top)) {
             covered = { by: helpers.describe(top), at: [cx, cy] };
+          } else {
+            const painted = helpers.toRect(rect);
+            hitArea = helpers.measureHitArea({ x: cx, y: cy }, tapFloor, (x, y) => {
+              const onScreen = x >= 0 && y >= 0 && x < viewport.width && y < viewport.height;
+              // Off the screen elementFromPoint answers nothing; the painted box decides there.
+              if (!onScreen) {
+                return (
+                  x >= painted.x &&
+                  x < painted.x + painted.width &&
+                  y >= painted.y &&
+                  y < painted.y + painted.height
+                );
+              }
+              return isHit(el, topAt(x, y));
+            });
           }
         }
-        facts.push({ selector: helpers.describe(el), bbox, inlineTextLink, covered });
+        facts.push({
+          selector: helpers.describe(el),
+          bbox,
+          inlineTextLink,
+          covered,
+          hitArea,
+          tapFloor,
+        });
       }
       helpers.restoreScroll(scrollSnapshot);
       return facts;
     },
-    { controlSelector: CONTROL_SELECTOR, maxControls },
+    {
+      controlSelector: CONTROL_SELECTOR,
+      maxControls,
+      tapFine: MIN_TAP_TARGET_PX,
+      tapCoarse: TAP_TARGET_COARSE_PX,
+    },
   );
 }
 
