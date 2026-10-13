@@ -516,3 +516,45 @@ describe('PortfolioRowCard — one chip per member platform (feature 07)', () =>
     expect(queryByTestId('platform-chip')).toBeNull();
   });
 });
+
+describe('PortfolioRowCard — the pacing verdict against the flight the row holds now', () => {
+  const rebased = portfolio({
+    period_start: '2026-10-08',
+    period_end: '2026-10-31',
+    period_budget: 26101,
+  });
+
+  it('says "pacing stale" in the same quiet place as the other staleness text, with both plans in the title', () => {
+    const { getByTestId } = render(
+      <PortfolioRowCard
+        currency="MXN"
+        pacing={{ source: 'pacing', planVersion: '2026-10-01..2026-10-31@45000' }}
+        portfolio={rebased}
+      />,
+    );
+    const chip = getByTestId('pacing-stale-chip');
+    expect(chip.textContent).toBe('pacing stale');
+    expect(chip.className).toContain('text-warning');
+    expect(chip.getAttribute('title')).toContain('Oct 1–Oct 31 at 45,000');
+    expect(chip.getAttribute('title')).toContain('Oct 8–Oct 31 at 26,101');
+  });
+
+  it('says nothing when the run paced this flight, or carries no stamp', () => {
+    const current = render(
+      <PortfolioRowCard
+        currency="MXN"
+        pacing={{ source: 'pacing', planVersion: '2026-10-08..2026-10-31@26101' }}
+        portfolio={rebased}
+      />,
+    );
+    expect(current.queryByTestId('pacing-stale-chip')).toBeNull();
+    cleanup();
+    const unversioned = render(
+      <PortfolioRowCard currency="MXN" pacing={{ source: 'pacing' }} portfolio={rebased} />,
+    );
+    expect(unversioned.queryByTestId('pacing-stale-chip')).toBeNull();
+    cleanup();
+    const unread = render(<PortfolioRowCard currency="MXN" portfolio={rebased} />);
+    expect(unread.queryByTestId('pacing-stale-chip')).toBeNull();
+  });
+});

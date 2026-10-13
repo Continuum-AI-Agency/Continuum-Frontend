@@ -20,7 +20,7 @@
 // brand owns, and an account read is per ACCOUNT — a line there would mean one read per account
 // group to decorate a list whose entire job is to get you into a portfolio.
 
-import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import type { AccountCandidate, PacingStamp, PortfolioListItem } from '@continuum/contracts';
 import { ACCOUNT_DETECTOR_META, clipLine } from '@continuum/contracts';
 import { ChevronRight, Plus, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -42,6 +42,7 @@ import {
   useOptimizerArchivedPortfolios,
   useOptimizerMutations,
   useOptimizerPortfolioEfficiency,
+  useOptimizerPortfolioPacing,
 } from '../useOptimizerData';
 import { headlineFigureUnit } from './account/candidateHeadline';
 import { type PortfolioWindow, portfolioWindow } from './account/overviewModel';
@@ -133,6 +134,7 @@ function PortfolioTableRow({
   portfolio,
   currency,
   window,
+  pacing = null,
   onOpenDetail,
   onPrefetch,
   lead = null,
@@ -140,6 +142,8 @@ function PortfolioTableRow({
   portfolio: PortfolioListItem;
   currency?: string | null;
   window: PortfolioWindow | null;
+  /** The latest run's pacing block, when read; the row labels a verdict about an earlier flight. */
+  pacing?: PacingStamp | null;
   onOpenDetail: (portfolioId: string) => void;
   onPrefetch?: () => void;
   /** Today's best finding inside this portfolio. Absent, the line under the name says what the
@@ -193,7 +197,7 @@ function PortfolioTableRow({
                   applyMode={portfolio.apply_mode}
                   autopilotPaused={portfolio.autopilot_paused}
                 />
-                <StalenessNote portfolio={portfolio} />
+                <StalenessNote pacing={pacing} portfolio={portfolio} />
               </>
             }
             name={portfolio.name}
@@ -311,6 +315,7 @@ export function OptimizerPortfolios({
   );
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
+  const pacingById = useOptimizerPortfolioPacing(portfolios);
   const windows = useMemo(() => {
     const byId = new Map<string, PortfolioWindow>();
     portfolios.forEach((portfolio, index) => {
@@ -373,6 +378,7 @@ export function OptimizerPortfolios({
                 portfolio={portfolio}
                 currency={currency}
                 window={windows.get(portfolio.id) ?? null}
+                pacing={pacingById.get(portfolio.id) ?? null}
                 lead={leads.get(portfolio.id) ?? null}
                 onOpenDetail={onOpenDetail}
                 onPrefetch={

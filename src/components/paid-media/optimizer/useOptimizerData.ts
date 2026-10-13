@@ -53,13 +53,16 @@ import {
   type CyclePreviewRequest,
   type CyclePreviewResponse,
   CyclePreviewResponseSchema,
+  type CycleRunPacing,
   type CycleRunReport,
   CycleRunReportSchema,
+  CycleRunRowSchema,
   type CycleSkipReason,
   type EfficiencySeriesPoint,
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
+  flightOf,
   type InsightState,
   OptimizerActionRowSchema,
   OptimizerAdsetInventoryEnvelopeSchema,
@@ -1653,6 +1656,42 @@ export function useOptimizerPortfolioEfficiency(
       retry: 2,
     })),
     combine: combineEfficiencySeries,
+  });
+}
+
+/** The latest run's pacing block for every listed portfolio that holds a complete flight, by
+ *  id. A row without a flight cannot have a stale verdict (`pacingPlanFreshness` reads it as
+ *  not_pacing), so it is never asked for — the extra optimizer-status reads are bounded to the
+ *  pacing portfolios. Same key as the detail's own read, so opening a portfolio is a cache hit.
+ *  A read that fails or has not landed yet is simply absent: the row says nothing. */
+export function useOptimizerPortfolioPacing(
+  portfolios: readonly Pick<
+    PortfolioListItem,
+    'id' | 'period_start' | 'period_end' | 'period_budget'
+  >[],
+): Map<string, CycleRunPacing | null> {
+  const flightIds = useMemo(
+    () => portfolios.filter((portfolio) => flightOf(portfolio) !== null).map((p) => p.id),
+    [portfolios],
+  );
+  return useQueries({
+    queries: flightIds.map((portfolioId) => ({
+      queryKey: optimizerQueryKeys.performance(portfolioId),
+      queryFn: () => withReadTimeout(fetchPerformance(portfolioId)),
+      staleTime: FIVE_MINUTES,
+      gcTime: THIRTY_MINUTES,
+      retry: 1,
+    })),
+    combine: (results) => {
+      const byId = new Map<string, CycleRunPacing | null>();
+      results.forEach((result, index) => {
+        const id = flightIds[index];
+        if (!id || result.data === undefined) return;
+        const run = CycleRunRowSchema.safeParse(result.data?.latest_run);
+        byId.set(id, run.success ? (run.data.pacing ?? null) : null);
+      });
+      return byId;
+    },
   });
 }
 

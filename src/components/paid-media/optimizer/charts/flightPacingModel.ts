@@ -10,6 +10,7 @@
 // "estimated from spend" rather than pretending the engine judged it.
 
 import type { CycleRunPacing } from '@continuum/contracts';
+import { pacingPlanFreshness } from '@continuum/contracts';
 import { daysBetween, isIsoDate } from '../sections/detail/rangeModel';
 
 export type FlightPacingStatus = 'on_track' | 'underpacing' | 'overpacing';
@@ -127,14 +128,19 @@ export function buildFlightPacing(args: {
   if (dayIndex < 1) return { kind: 'not_started', start, end, budget };
 
   // Spend to date: the engine's own figure when it paced THIS flight, else the client sum.
+  // "This flight" is the contracts' plan-version comparison: a run stamped with an earlier
+  // flight (a rebase since the cycle) is stale and must not stand in for today's plan. A run
+  // from before the stamp existed is unversioned, and the budget match is all there is.
   let spent: number | null = null;
   let source: 'engine' | 'client' = 'client';
   let note: string | null = null;
+  const { freshness } = pacingPlanFreshness(runPacing, portfolio);
   const engineSaysPacing =
     runPacing?.source === 'pacing' &&
     typeof runPacing.actualSpendToDate === 'number' &&
     typeof runPacing.periodBudget === 'number' &&
-    Math.abs(runPacing.periodBudget - budget) < 0.5;
+    (freshness === 'current' ||
+      (freshness === 'unversioned' && Math.abs(runPacing.periodBudget - budget) < 0.5));
   if (engineSaysPacing && runPacing) {
     spent = runPacing.actualSpendToDate as number;
     source = 'engine';

@@ -13,7 +13,7 @@
 // The Overview's figures come from `portfolioWindow()` in account/overviewModel, the same rows
 // the headline sentence is built from, so a row can be checked against the tiles.
 
-import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import type { AccountCandidate, PacingStamp, PortfolioListItem } from '@continuum/contracts';
 import { getOptimizationMetricDefinition, rankAccountCandidates } from '@continuum/contracts';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
@@ -37,7 +37,7 @@ import {
 } from './account/overviewModel';
 import { PlatformChip } from './platforms/PlatformChip';
 import { type AdPlatform, orderPlatforms } from './platforms/platformTabsModel';
-import { rosterLine, rosterTone, staleLine } from './portfolioStaleness';
+import { pacingStaleLine, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 
 // ---------------------------------------------------------------------------
 // The row primitive
@@ -300,13 +300,22 @@ export function StatusCell({ window }: { window: PortfolioWindow | null }) {
 
 const ROSTER_TONE = { danger: 'text-destructive', warning: 'text-warning' } as const;
 
-/** "last cycle 49 days ago" · "roster gone since Aug 6 · 12 of 12 ad sets" as quiet text
- *  beside the name. Nothing when the read carries no staleness. */
-export function StalenessNote({ portfolio }: { portfolio: PortfolioListItem }) {
+/** "last cycle 49 days ago" · "roster gone since Aug 6 · 12 of 12 ad sets" · "pacing stale" as
+ *  quiet text beside the name. `pacing` is the latest run's pacing block, when the surface
+ *  holds one: a verdict stamped with an earlier flight than the row's reads as stale, and the
+ *  title names both plans. Nothing when the read carries no staleness. */
+export function StalenessNote({
+  portfolio,
+  pacing,
+}: {
+  portfolio: PortfolioListItem;
+  pacing?: PacingStamp | null;
+}) {
   const stale = staleLine(portfolio);
   const roster = rosterLine(portfolio);
   const tone = rosterTone(portfolio);
-  if (!stale && !roster) return null;
+  const pacingStale = pacingStaleLine(pacing, portfolio);
+  if (!stale && !roster && !pacingStale) return null;
   return (
     <>
       {stale ? (
@@ -317,6 +326,15 @@ export function StalenessNote({ portfolio }: { portfolio: PortfolioListItem }) {
       {roster && tone ? (
         <span className={cn('text-xs', ROSTER_TONE[tone])} data-testid="roster-chip">
           {roster}
+        </span>
+      ) : null}
+      {pacingStale ? (
+        <span
+          className="text-warning text-xs"
+          data-testid="pacing-stale-chip"
+          title={pacingStale.title}
+        >
+          {pacingStale.text}
         </span>
       ) : null}
     </>
@@ -366,6 +384,9 @@ type PortfolioRowCardProps = {
   /** Every platform the portfolio holds members on (portfolioPlatforms.ts): one chip each,
    *  Meta, Google, TikTok, whatever order they arrive in. Empty while they are being read. */
   platforms?: readonly AdPlatform[];
+  /** The latest run's pacing block (`useOptimizerPortfolioPacing`), so the row can say when
+   *  the verdict is about a flight the portfolio no longer has. Absent while being read. */
+  pacing?: PacingStamp | null;
 };
 
 /** The Overview's portfolio row. It draws no header above it, so each figure carries its own
@@ -379,6 +400,7 @@ export function PortfolioRowCard({
   window = null,
   platform,
   platforms,
+  pacing = null,
 }: PortfolioRowCardProps) {
   const chips = platforms ? orderPlatforms(platforms) : platform ? [platform] : [];
   const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
@@ -433,7 +455,7 @@ export function PortfolioRowCard({
                   autopilotPaused={portfolio.autopilot_paused}
                   scopes={portfolio.autopilot_scopes ?? null}
                 />
-                <StalenessNote portfolio={portfolio} />
+                <StalenessNote pacing={pacing} portfolio={portfolio} />
               </>
             }
             name={portfolio.name}

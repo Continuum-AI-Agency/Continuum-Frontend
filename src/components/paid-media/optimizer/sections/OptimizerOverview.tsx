@@ -50,6 +50,7 @@ import {
   useOptimizerAccountRead,
   useOptimizerAdAccounts,
   useOptimizerPortfolioEfficiency,
+  useOptimizerPortfolioPacing,
   useRequestAccountRead,
 } from '../useOptimizerData';
 import { useOptimizerUrlState } from '../useOptimizerUrlState';
@@ -229,6 +230,7 @@ export function OptimizerOverview({
   const [sortDir, setSortDir] = useState<RowSortDir>('asc');
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
+  const pacingById = useOptimizerPortfolioPacing(portfolios);
   const memberStates = usePortfolioMemberStates(portfolioIds);
   // The account read opens the cards when the worker has written one. Absent is absent:
   // no spinner, no empty shell — the sentence and the tiles stand on their own.
@@ -682,6 +684,7 @@ export function OptimizerOverview({
                 memberStates.get(portfolio.id),
                 OPTIMIZER_MANAGED_PLATFORM,
               )}
+              pacing={pacingById.get(portfolio.id) ?? null}
               portfolio={portfolio}
               window={windows.get(portfolio.id) ?? null}
             />
