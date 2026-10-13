@@ -95,7 +95,7 @@ describe('ChartBlock', () => {
       'Product quality and transparent pricing for growing families',
     );
     expect(longLabel.querySelectorAll('tspan').length).toBeGreaterThan(1);
-    expect(screen.getAllByText('€0.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('€0.00 EUR').length).toBeGreaterThan(0);
     expect(
       screen.getByRole('img', {
         name: /Family lunch: Spend €0\.00.*Product quality and transparent pricing/i,
@@ -138,7 +138,7 @@ describe('ChartBlock', () => {
     expect(screen.getByTestId('chart-as-tiles')).toBeTruthy();
     expect(screen.getAllByText('0 (currency unknown)').length).toBeGreaterThan(0);
     expect(screen.getByText('4 (currency unknown)')).toBeTruthy();
-    expect(screen.queryByText('$0.00')).toBeNull();
+    expect(screen.queryByText('$0.00 USD')).toBeNull();
   });
 });
 
@@ -188,7 +188,7 @@ describe('ChartBlock — a chart only when there is a trend or a comparison', ()
       '2026-09-02',
       '2026-09-03',
     ]);
-    expect(screen.getByText('MX$10.00')).toBeTruthy();
+    expect(screen.getByText('$10.00 MXN')).toBeTruthy();
   });
 
   it('draws a seven-point series as a chart', () => {

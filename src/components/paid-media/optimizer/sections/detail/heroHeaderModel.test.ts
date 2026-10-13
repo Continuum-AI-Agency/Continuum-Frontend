@@ -50,8 +50,8 @@ describe('FORMULARIOS — the header names the mode, the freshness and every fac
   it('lists the fixed facts as chips, objective first, each opening its Manage field', () => {
     expect(header.chips.map((c) => [c.setting, c.label, c.value])).toEqual([
       ['objective', 'Objective', 'leads'],
-      ['budget', 'Budget', '324 MXN/day · follows spend'],
-      ['target', 'Target', '35.00 MXN / lead'],
+      ['budget', 'Budget', '$324 MXN/day · follows spend'],
+      ['target', 'Target', '$35.00 MXN / lead'],
       ['window', 'Window', '14 days'],
       ['strategy', 'Strategy', 'Balanced'],
     ]);
@@ -138,7 +138,7 @@ describe('the edges the four bodies do not reach', () => {
     const fixed = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     fixed.portfolio.budget_source = 'fixed';
     expect(read(fixed).chips.find((c) => c.setting === 'budget')?.value).toBe(
-      '324 MXN/day · fixed',
+      '$324 MXN/day · fixed',
     );
     const none = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     none.portfolio.daily_total = null;

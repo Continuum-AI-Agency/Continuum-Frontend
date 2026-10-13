@@ -190,7 +190,7 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
 
   it('keeps the money as the support line under a title', () => {
     const { container } = view([reallocation]);
-    expect(container.textContent).toContain('$66.67/day · $2,000/mo');
+    expect(container.textContent).toContain('$66.67 USD/day · $2,000 USD/mo');
     expect(container.textContent).toContain('leads');
   });
 
@@ -199,7 +199,7 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
     expect(container.querySelector('h3')?.textContent).toBe(ACCOUNT_DETECTOR_META.dead_tail.label);
     expect(container.querySelector('[data-headline="money_fallback"]')).toBeTruthy();
     expect(container.textContent).toContain('$102');
-    expect(container.textContent).toContain('$3,060/mo');
+    expect(container.textContent).toContain('$3,060 USD/mo');
   });
 
   it('prints the body under the title', () => {

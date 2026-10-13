@@ -37,7 +37,7 @@ describe('GoogleAdsTabView — from a recorded real response', () => {
       <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview }} />,
     );
     expect(getByTestId('google-headline').textContent).toBe(
-      'Google spent 55,205 MXN: Search bought 34 conversions at 1,315 MXN and Display bought 88 conversions at 119 MXN.',
+      'Google spent $55,205 MXN: Search bought 34 conversions at $1,315 MXN and Display bought 88 conversions at $119 MXN.',
     );
     expect(getByTestId('google-subline').textContent).toBe(
       'Sep 1 – Sep 30·Vivo 47 (3710693645)·attribution: what Google reports',
@@ -52,21 +52,21 @@ describe('GoogleAdsTabView — from a recorded real response', () => {
     expect(tiles.length).toBeGreaterThanOrEqual(4);
     expect(tiles.length).toBeLessThanOrEqual(6);
     expect(tiles.map(tileText)).toEqual([
-      { label: 'Spend', value: '55,205 MXN', sub: 'no prior period to compare' },
+      { label: 'Spend', value: '$55,205 MXN', sub: 'no prior period to compare' },
       {
         label: 'Conversions',
         value: '122',
-        sub: '453 MXN each · as Google attributes them',
+        sub: '$453 MXN each · as Google attributes them',
       },
       {
         label: 'Search · 3 campaigns',
         value: '34 conv.',
-        sub: "1,315 MXN each · 190% above Google's 453 MXN · 81% of spend",
+        sub: "$1,315 MXN each · 190% above Google's $453 MXN · 81% of spend",
       },
       {
         label: 'Display · 4 campaigns',
         value: '88 conv.',
-        sub: "119 MXN each · 74% below Google's 453 MXN · 19% of spend",
+        sub: "$119 MXN each · 74% below Google's $453 MXN · 19% of spend",
       },
     ]);
   });

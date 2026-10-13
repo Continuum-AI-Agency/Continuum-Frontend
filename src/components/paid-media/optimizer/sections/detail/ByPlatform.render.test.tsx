@@ -29,9 +29,9 @@ describe('ByPlatformView', () => {
     expect(screen.queryByRole('img')).toBeNull();
     const google = rowFor('google_ads');
     expect(within(google).getByTestId('platform-chip').textContent).toContain('Google');
-    expect(within(google).getByTestId('by-platform-cost').textContent).toBe('34.42 MXN per lead');
+    expect(within(google).getByTestId('by-platform-cost').textContent).toBe('$34.42 MXN per lead');
     expect(within(google).getByTestId('by-platform-results').textContent).toBe('118 · 55%');
-    expect(within(google).getByTestId('by-platform-spend').textContent).toBe('4,062 MXN · 46%');
+    expect(within(google).getByTestId('by-platform-spend').textContent).toBe('$4,062 MXN · 46%');
     expect(within(google).getByTestId('by-platform-state').textContent).toBe('on target');
     expect(within(rowFor('tiktok_ads')).getByTestId('by-platform-state').textContent).toBe(
       '106% over target',
@@ -69,7 +69,7 @@ describe('ByPlatformView', () => {
     expect(own.textContent).toBe('78 by Meta');
     expect(own.className).toContain('text-muted-foreground');
     expect(within(meta).getByTestId('by-platform-cost').textContent).toBe(
-      '66.44 MXN per lead · Spreadsheet',
+      '$66.44 MXN per lead · Spreadsheet',
     );
   });
 
@@ -115,9 +115,7 @@ describe('ByPlatformView', () => {
   });
 
   it('says "not available yet" only for a portfolio known to hold a member off Meta', () => {
-    render(
-      <ByPlatformView nonMetaMember now={FIXTURE_NOW} state={{ status: 'unavailable' }} />,
-    );
+    render(<ByPlatformView nonMetaMember now={FIXTURE_NOW} state={{ status: 'unavailable' }} />);
     expect(screen.getByTestId('multiplatform-unavailable').textContent).toContain(
       "aren't available yet",
     );

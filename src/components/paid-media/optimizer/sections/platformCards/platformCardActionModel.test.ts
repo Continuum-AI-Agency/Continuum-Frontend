@@ -112,9 +112,9 @@ describe('cardActionTitle', () => {
 describe('cardActionChange', () => {
   it("states the change in the action's own figures", () => {
     expect(cardActionChange(write(RAISE_GOOGLE_BUDGET), 'MXN')).toBe(
-      '1,179.00 MXN/day → 1,473.75 MXN/day',
+      '$1,179.00 MXN/day → $1,473.75 MXN/day',
     );
-    expect(cardActionChange(write(LOWER_GOOGLE_TCPA), 'MXN')).toBe('35.00 MXN → 32.00 MXN');
+    expect(cardActionChange(write(LOWER_GOOGLE_TCPA), 'MXN')).toBe('$35.00 MXN → $32.00 MXN');
     expect(cardActionChange(write(PAUSE_GOOGLE_CAMPAIGN), null)).toStartWith('Active → paused.');
     expect(cardActionChange(write(ADD_GOOGLE_NEGATIVES), null)).toBe(
       '"free gym" (exact), "gym jobs" (exact), "gym near me cheap" (exact)',
@@ -154,7 +154,7 @@ describe('previewVerdict', () => {
     );
     expect(verdict.tone).toBe('refused');
     expect(verdict.text).toBe(
-      'Google refused it in its check: the budget is under Google\'s daily minimum; the lowest it accepts is 400.00 MXN/day; Google says: "Budget below minimum.". Nothing was written.',
+      'Google refused it in its check: the budget is under Google\'s daily minimum; the lowest it accepts is $400.00 MXN/day; Google says: "Budget below minimum.". Nothing was written.',
     );
     expect(verdict.text).not.toContain('req-1');
   });
@@ -307,7 +307,7 @@ describe('undoAuditIdOf', () => {
 describe('undoRestoresText', () => {
   it('says the money it puts back', () => {
     expect(undoRestoresText({ minor: 117_900, currency: 'MXN' }, 'set_budget', null)).toBe(
-      'Back to 1,179.00 MXN',
+      'Back to $1,179.00 MXN',
     );
   });
 
@@ -318,7 +318,7 @@ describe('undoRestoresText', () => {
   it("names Google's bid setting, in currency units, never as the portfolio's goal", () => {
     expect(
       undoRestoresText({ field: 'target_cpa_micros', value: 35_000_000 }, 'set_bid_target', 'MXN'),
-    ).toBe('Google Ads bid target back to 35.00 MXN');
+    ).toBe('Google Ads bid target back to $35.00 MXN');
     expect(undoRestoresText({ field: 'target_roas', value: 3.5 }, 'set_bid_target', null)).toBe(
       'Google Ads target ROAS (bid setting) back to 350%',
     );

@@ -30,9 +30,14 @@ import { resolveAdsetName } from './adsetName';
 import { AdSetIdLabel } from './charts/AdSetIdLabel';
 import { pct } from './charts/chartScale';
 import { DeliveryPill } from './DeliveryPill';
-import { deriveEfficiency, formatCpa } from './format';
-import { HeldPill } from './HeldPill';
 import { type EntityNounSource, entityOf } from './entityNoun';
+import {
+  currencyColumnSuffix,
+  deriveEfficiency,
+  formatCpa,
+  formatCurrencyInColumn,
+} from './format';
+import { HeldPill } from './HeldPill';
 import { freezeLabel, measuredCpa, upperBoundNote } from './reportModel';
 
 const DASH = '—';
@@ -206,7 +211,8 @@ function costColumn(
 ): InsightColumn<OptimizerAdsetRow> {
   return {
     id: 'cost',
-    header: metric.costLabel,
+    // M1: the code once in the header ("CPL · MXN"), the cells "$99.57".
+    header: `${metric.costLabel}${currencyColumnSuffix(currency)}`,
     align: 'right',
     // Held rows carry no cost — sink them below every scored one on a desc sort.
     sortValue: (row) => (row.freezeReason ? -1 : (row.cost ?? -1)),
@@ -305,7 +311,7 @@ function CostCell({
       <TooltipTrigger
         render={
           <span className="inline-flex flex-col items-end gap-0.5">
-            <span className="tabular-nums">{formatCpa(cost, currency)}</span>
+            <span className="tabular-nums">{formatCurrencyInColumn(cost, currency)}</span>
             {hasInterval ? (
               <span
                 aria-hidden="true"

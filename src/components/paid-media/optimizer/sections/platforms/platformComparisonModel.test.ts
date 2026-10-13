@@ -70,7 +70,7 @@ describe('buildPlatformComparison', () => {
       'google_ads',
     ]);
     expect(cheapestSentence(row)).toBe(
-      'Google buys leads cheapest: 31.40 MXN per lead, against 41.30 MXN on Meta and 53.00 MXN on TikTok.',
+      'Google buys leads cheapest: $31.40 MXN per lead, against $41.30 MXN on Meta and $53.00 MXN on TikTok.',
     );
   });
 

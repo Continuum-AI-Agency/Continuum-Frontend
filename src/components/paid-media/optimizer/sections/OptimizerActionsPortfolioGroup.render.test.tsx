@@ -675,11 +675,11 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     const { container } = renderGroup();
 
     fireEvent.click(screen.getByLabelText('Select budget move for Retarget 30d'));
-    expect(container.textContent).toContain('Net +$15.00/day');
+    expect(container.textContent).toContain('Net +$15.00 USD/day');
 
     fireEvent.click(screen.getByLabelText('Select budget move for Cold Lookalike'));
     expect(container.textContent).toContain('Spend stays flat');
-    expect(container.textContent).not.toContain('Net +$15.00/day');
+    expect(container.textContent).not.toContain('Net +$15.00 USD/day');
   });
 
   it('selects the whole group from the header checkbox, then clears it', () => {
@@ -734,7 +734,7 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     activeReport = rebalanceReport;
     const { container } = renderGroup();
     fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
-    expect(container.textContent).toContain('Before → after: $50.00 → $65.00');
+    expect(container.textContent).toContain('Before → after: $50.00 USD → $65.00 USD');
     // The row's own detail carries no why; the story above may still explain the donor.
     const detail = screen.getByText(/Before → after/).closest('[data-testid="queue-row-detail"]');
     expect(detail?.textContent ?? '').not.toContain('Why:');
@@ -1457,10 +1457,10 @@ describe('queueSentence', () => {
       'MXN',
     );
     expect(text(parts)).toBe(
-      '9 waiting on a decision: 3 refresh creative for creative fatigue, 224 MXN/day at stake; 4 not being delivered for off meta.',
+      '9 waiting on a decision: 3 refresh creative for creative fatigue, $224 MXN/day at stake; 4 not being delivered for off meta.',
     );
     const figures = (parts ?? []).filter((part) => part.figure).map((part) => part.text);
-    expect(figures).toEqual(['9', '3', '224 MXN/day', '4']);
+    expect(figures).toEqual(['9', '3', '$224 MXN/day', '4']);
     expect((parts ?? []).find((part) => part.figureKey)?.figureKey).toBe(
       'queue.summary.creative_refresh:F1_creative_fatigue.impact',
     );

@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TargetHint } from '../../advisor/SetupAdvisor';
-import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../../format';
+import { currencyFieldSuffix, formatCurrency, humanize, normalizeCurrency } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { MODES, OBJECTIVES } from '../suggestionModel';
 import { ANALOG_LABEL, buildConversionDescriptor } from './conversionDescriptor';
@@ -49,7 +49,7 @@ type StepGoalProps = {
 };
 
 export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGoalProps) {
-  const symbol = currencySymbol(currency);
+  const symbol = normalizeCurrency(currency);
   const unit = currencyFieldSuffix(currency);
   const allowed = allowedTargetMetrics(draft.objective);
   const targetMetric = effectiveTargetMetric(draft);

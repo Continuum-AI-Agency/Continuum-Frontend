@@ -45,10 +45,10 @@ describe('Google budget-limited', () => {
   it('leads with the impression share lost to budget and the cost per result', () => {
     const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_BUDGET_LIMITED} />);
     expect(getByRole('heading').textContent).toBe(
-      'VIVO 47-EKATAR loses 28% of impressions to budget with leads at 773 MXN, 6 days running',
+      'VIVO 47-EKATAR loses 28% of impressions to budget with leads at $773 MXN, 6 days running',
     );
     expect(getByTestId('platform-card-budget').textContent).toBe(
-      'Campaign budget 1,179 MXN/day, 28% of impressions lost to budget. Proposed: 1,474 MXN/day.',
+      'Campaign budget $1,179 MXN/day, 28% of impressions lost to budget. Proposed: $1,474 MXN/day.',
     );
   });
 
@@ -64,7 +64,7 @@ describe('Google budget-limited', () => {
     });
     const { getByTestId } = render(<PlatformCardBody card={card} />);
     expect(getByTestId('platform-card-projection').textContent).toBe(
-      'At 1,474 MXN/day: about 1.7–2.3 leads/day (now 1.5), based on 28 days',
+      'At $1,474 MXN/day: about 1.7–2.3 leads/day (now 1.5), based on 28 days',
     );
   });
 
@@ -173,11 +173,11 @@ describe('TikTok scheduled decrease', () => {
   it("explains the 105% floor and when the decrease lands, in the advertiser's timezone", () => {
     const { getByRole, getByTestId } = render(<PlatformCardBody card={TIKTOK_SCHEDULED} />);
     expect(getByRole('heading').textContent).toBe(
-      'EF | Leads | Intereses fitness: budget down to 825 MXN/day from 1,000 MXN, scheduled for Thu, 1 Oct at 00:00 (America/Mexico_City)',
+      'EF | Leads | Intereses fitness: budget down to $825 MXN/day from $1,000 MXN, scheduled for Thu, 1 Oct at 00:00 (America/Mexico_City)',
     );
     const body = getByTestId('platform-card-scheduled').textContent ?? '';
-    expect(body).toContain('TikTok already spent 986 MXN today');
-    expect(body).toContain('under 1,035 MXN (105% of today');
+    expect(body).toContain('TikTok already spent $986 MXN today');
+    expect(body).toContain('under $1,035 MXN (105% of today');
   });
 
   it('falls back to UTC for a timezone Intl does not know', () => {
@@ -190,7 +190,7 @@ describe('cross-platform move', () => {
     const { getByRole, getAllByTestId, getByTestId } = render(
       <PlatformCardBody card={CROSS_PLATFORM_MOVE} />,
     );
-    expect(getByRole('heading').textContent).toBe('Move 59.22 MXN/day from TikTok to Meta');
+    expect(getByRole('heading').textContent).toBe('Move $59.22 MXN/day from TikTok to Meta');
     const legs = getAllByTestId('platform-card-leg');
     expect(legs).toHaveLength(3);
     const changes = getAllByTestId('platform-card-leg-change').map((node) => node.textContent);
@@ -246,16 +246,16 @@ describe('Google negative terms', () => {
       <PlatformCardBody card={GOOGLE_NEGATIVE_TERMS} onAddNegatives={() => {}} />,
     );
     expect(getByRole('heading').textContent).toBe(
-      '3 search terms in Search | Leads MX spent 478 MXN in 14 days without a conversion',
+      '3 search terms in Search | Leads MX spent $478 MXN in 14 days without a conversion',
     );
     const rows = getAllByTestId('platform-card-term').map((row) => row.textContent);
     expect(rows).toEqual([
-      '"free gym"214 MXN380',
-      '"gym jobs"168 MXN290',
-      '"gym near me cheap"96.00 MXN170',
+      '"free gym"$214 MXN380',
+      '"gym jobs"$168 MXN290',
+      '"gym near me cheap"$96.00 MXN170',
     ]);
     expect(getByTestId('platform-card-negatives').textContent).toBe(
-      'Adding them as exact negatives stops about 34.14 MXN/day.',
+      'Adding them as exact negatives stops about $34.14 MXN/day.',
     );
     expect(getByTestId('platform-card-mark').getAttribute('data-platform')).toBe('google_ads');
   });
@@ -292,7 +292,7 @@ describe('Google promote term', () => {
   it('says what the term brought and the keyword it comes in through', () => {
     const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_PROMOTE_TERM} />);
     expect(getByRole('heading').textContent).toBe(
-      '"24 hour gym guadalajara" brought 19 conversions at 22.10 MXN in 14 days and is not a keyword yet',
+      '"24 hour gym guadalajara" brought 19 conversions at $22.10 MXN in 14 days and is not a keyword yet',
     );
     expect(getByTestId('platform-card-promote').textContent).toBe(
       'It comes in through "gym guadalajara". As an exact keyword in "Locations" it gets its own bid and its own ad.',
@@ -305,16 +305,16 @@ describe('Google bid target', () => {
   it('shows the current target, the actual cost and the proposal, with the cooldown in words', () => {
     const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_BID_TARGET} />);
     expect(getByRole('heading').textContent).toBe(
-      'Search | Leads MX: Google Ads bid target (tCPA) 35.00 MXN, actual 31.40 MXN over 14 days',
+      'Search | Leads MX: Google Ads bid target (tCPA) $35.00 MXN, actual $31.40 MXN over 14 days',
     );
     expect(getByTestId('platform-card-bid').textContent).toBe(
-      'Current target35.00 MXNActual, 14 days31.40 MXNProposed32.00 MXN',
+      'Current target$35.00 MXNActual, 14 days$31.40 MXNProposed$32.00 MXN',
     );
     expect(getByTestId('platform-card-cooldown').textContent).toBe(
       'The target last changed 3 days ago. Google is still relearning, so wait 4 more days before changing it again.',
     );
     expect(platformCardActionLabel(GOOGLE_BID_TARGET)).toBe(
-      'Lower the Google Ads bid target (tCPA) to 32.00 MXN',
+      'Lower the Google Ads bid target (tCPA) to $32.00 MXN',
     );
   });
 
@@ -344,7 +344,7 @@ describe('Google low-quality keyword', () => {
       <PlatformCardBody card={GOOGLE_LOW_QUALITY_KEYWORD} />,
     );
     expect(getByRole('heading').textContent).toBe(
-      '"fitness classes" has Quality Score 3/10 and spent 412 MXN in 14 days with 0 conversions',
+      '"fitness classes" has Quality Score 3/10 and spent $412 MXN in 14 days with 0 conversions',
     );
     expect(getByTestId('platform-card-quality').textContent).toContain(
       'Phrase match in ad group "Generic" · Quality Score 3/10.',
@@ -389,13 +389,13 @@ describe('TikTok budget below learning', () => {
       <PlatformCardBody card={TIKTOK_BUDGET_BELOW_LEARNING} />,
     );
     expect(getByRole('heading').textContent).toBe(
-      'Leads MX · Broad: budget 300 MXN/day, under the 900 MXN/day learning needs',
+      'Leads MX · Broad: budget $300 MXN/day, under the $900 MXN/day learning needs',
     );
     expect(getByTestId('platform-card-learning').textContent).toBe(
-      'TikTok documents a daily budget of 20× the cost per result for this goal; at 45.00 MXN per result that is 900 MXN/day. 4 results so far.',
+      'TikTok documents a daily budget of 20× the cost per result for this goal; at $45.00 MXN per result that is $900 MXN/day. 4 results so far.',
     );
     expect(platformCardActionLabel(TIKTOK_BUDGET_BELOW_LEARNING)).toBe(
-      'Raise the budget to 900 MXN/day',
+      'Raise the budget to $900 MXN/day',
     );
   });
 });
@@ -456,7 +456,7 @@ describe('Google delivery issue', () => {
       'No campaign in the account has served for 6 days: one cause for the whole account',
     );
     expect(getByTestId('platform-card-delivery').textContent).toBe(
-      'Google says: ads disapproved by policy; limited by budget. 3 ads disapproved. Budget 500 MXN/day.',
+      'Google says: ads disapproved by policy; limited by budget. 3 ads disapproved. Budget $500 MXN/day.',
     );
     expect(getByTestId('platform-card-account-wide').textContent).toContain(
       'one cause for the whole account',

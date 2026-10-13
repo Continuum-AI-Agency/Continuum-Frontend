@@ -356,7 +356,7 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   it('states the spend, the window and the decisions in one sentence', () => {
     const { getByTestId } = mount();
     expect(getByTestId('overview-headline').textContent).toBe(
-      'The account spent 23,911 MXN in 7 days. 4 decisions waiting.',
+      'The account spent $23,911 MXN in 7 days. 4 decisions waiting.',
     );
     expect(getByTestId('overview-decisions').className).toContain('text-primary-ink');
   });
@@ -495,7 +495,7 @@ describe('OptimizerOverview — the tiles', () => {
     expect(delta?.textContent).toBe('▼ 3%');
     expect(delta?.getAttribute('data-direction')).toBe('down');
     expect(delta?.className).toContain('text-success');
-    expect(delta?.getAttribute('title')).toBe('prev. week 41.37 MXN');
+    expect(delta?.getAttribute('title')).toBe('prev. week $41.37 MXN');
     // A kind with no prior cost gets no delta at all — none is invented.
     expect(
       getByTestId('tile-kind-purchases').querySelector('[data-testid="cost-prior-delta"]'),
@@ -506,14 +506,14 @@ describe('OptimizerOverview — the tiles', () => {
     const { getByTestId } = mount();
     expect(getByTestId('tile-kind-conversations').textContent).toContain('516');
     expect(getByTestId('tile-kind-conversations').textContent).toContain(
-      '39.95 MXN each · target 30.00 MXN · 33% over target · ▼ 3%',
+      '$39.95 MXN each · target $30.00 MXN · 33% over target · ▼ 3%',
     );
     const distance = getByTestId('tile-kind-conversations').querySelector(
       '[data-testid="cost-target-distance"]',
     );
     expect(distance?.className).toContain('text-destructive');
-    expect(getByTestId('tile-kind-leads').textContent).toContain('target 25.00 MXN–35.00 MXN');
-    expect(getByTestId('tile-kind-purchases').textContent).toContain('408 MXN no results');
+    expect(getByTestId('tile-kind-leads').textContent).toContain('target $25.00 MXN–$35.00 MXN');
+    expect(getByTestId('tile-kind-purchases').textContent).toContain('$408 MXN no results');
   });
 
   it("shows 'no target' in the neutral state when the portfolio has no target", () => {
@@ -533,8 +533,8 @@ describe('OptimizerOverview — the tiles', () => {
   it('reads the spend against the plan and names who only recommends', () => {
     const { getByTestId, onOpenActions } = mount();
     const spend = getByTestId('tile-spend');
-    expect(spend.textContent).toContain('23,911 MXN');
-    expect(spend.textContent).toContain('3,416 MXN per day · plan 4,184 MXN');
+    expect(spend.textContent).toContain('$23,911 MXN');
+    expect(spend.textContent).toContain('$3,416 MXN per day · plan $4,184 MXN');
     expect(spend.getAttribute('data-state')).toBe('warn');
     expect(getByTestId('tile-autopilot').textContent).toContain('3/4');
     expect(getByTestId('tile-autopilot').textContent).toContain(
@@ -558,9 +558,9 @@ describe('the tile words', () => {
       EASY_FIT.map((row, index) => [row.id, portfolioWindow(row, EASY_FIT_SERIES[index] ?? [])]),
     );
     const [conversations, leads, purchases] = resultKinds(EASY_FIT, windows as never);
-    expect(kindTileSub(conversations as never, 'MXN')).toBe('39.95 MXN each · target 30.00 MXN');
-    expect(kindTileSub(leads as never, 'MXN')).toContain('target 25.00 MXN–35.00 MXN');
-    expect(kindTileSub(purchases as never, 'MXN')).toBe('408 MXN no results');
+    expect(kindTileSub(conversations as never, 'MXN')).toBe('$39.95 MXN each · target $30.00 MXN');
+    expect(kindTileSub(leads as never, 'MXN')).toContain('target $25.00 MXN–$35.00 MXN');
+    expect(kindTileSub(purchases as never, 'MXN')).toBe('$408 MXN no results');
   });
 
   it('writes the second line of the autopilot tile', () => {
@@ -809,9 +809,9 @@ describe('OptimizerOverview — the rows', () => {
     const rows = getByTestId('portfolio-rows');
     const mensajes = [...rows.querySelectorAll('[data-testid="portfolio-row"]')][0] as HTMLElement;
     expect(mensajes.getAttribute('data-state')).toBe('bad');
-    expect(mensajes.textContent).toContain('39.95 MXN');
+    expect(mensajes.textContent).toContain('$39.95 MXN');
     expect(mensajes.textContent).toContain('516');
-    expect(mensajes.textContent).toContain('20,612 MXN');
+    expect(mensajes.textContent).toContain('$20,612 MXN');
   });
 
   it('reorders by name and flips direction', () => {
@@ -961,7 +961,7 @@ describe('OptimizerOverview — the platform tabs', () => {
     googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     const { getByTestId, queryByTestId } = mount();
-    expect(getByTestId('google-headline').textContent).toStartWith('Google spent 55,205 MXN');
+    expect(getByTestId('google-headline').textContent).toStartWith('Google spent $55,205 MXN');
     expect(getByTestId('google-tiles')).toBeTruthy();
     expect(queryByTestId('platform-connect-google_ads')).toBeNull();
     expect(getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe('true');
@@ -970,7 +970,7 @@ describe('OptimizerOverview — the platform tabs', () => {
   it("keeps All exactly today's O1 for a Meta-only brand once the tabs sit above it", () => {
     const { getByTestId } = mount();
     expect(getByTestId('overview-headline').textContent).toStartWith(
-      'The account spent 23,911 MXN',
+      'The account spent $23,911 MXN',
     );
     expect(getByTestId('portfolio-rows')).toBeTruthy();
   });
@@ -1071,12 +1071,12 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     const headline = getByTestId('overview-headline');
     expect(headline.getAttribute('data-source')).toBe('account-platform-metrics');
     expect(headline.textContent).toStartWith(
-      'The account spent 38,411 MXN in 7 days across three platforms',
+      'The account spent $38,411 MXN in 7 days across three platforms',
     );
     const tiles = getByTestId('account-tiles');
     expect(tiles.getAttribute('data-source')).toBe('account-platform-metrics');
     expect(tiles.textContent).toContain('Meta 62% · Google 29% · TikTok 9%');
-    expect(tiles.textContent).toContain('Google cheapest at 31.40 MXN');
+    expect(tiles.textContent).toContain('Google cheapest at $31.40 MXN');
     expect(getByTestId('overview-subline').textContent).toContain('Meta takes 62% of the spend');
     expect(queryByTestId('multiplatform-unavailable')).toBeNull();
     // The cards and the rows stay: they are the O1 below the frame.
@@ -1110,7 +1110,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     ]);
     expect(getByTestId('overview-headline').getAttribute('data-source')).toBeNull();
     expect(getByTestId('overview-headline').textContent).toStartWith(
-      'The account spent 23,911 MXN',
+      'The account spent $23,911 MXN',
     );
   });
 
@@ -1202,7 +1202,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     const { getByTestId } = mount();
     expect(getByTestId('multiplatform-error').textContent).toContain('The figures below are Meta');
     expect(getByTestId('overview-headline').textContent).toStartWith(
-      'The account spent 23,911 MXN',
+      'The account spent $23,911 MXN',
     );
   });
 
@@ -1223,7 +1223,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     const { getByTestId, queryByTestId } = mount();
-    expect(getByTestId('platform-headline').textContent).toStartWith('Google spent 11,200 MXN');
+    expect(getByTestId('platform-headline').textContent).toStartWith('Google spent $11,200 MXN');
     expect(getByTestId('platform-tiles-google_ads').textContent).toContain('118');
     // The edge read is the breakdown here, not a second headline.
     expect(queryByTestId('google-headline')).toBeNull();
@@ -1265,7 +1265,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
       "The live figures below come straight from Google. The Optimizer's own reading of Google starts once a portfolio holds Google campaigns.",
     );
     // Google's own read stands in full beneath it, over the producer's window.
-    expect(getByTestId('google-headline').textContent).toStartWith('Google spent 55,205 MXN');
+    expect(getByTestId('google-headline').textContent).toStartWith('Google spent $55,205 MXN');
     expect(googleAsked.at(-1)?.[1]).toEqual({ since: '2026-09-21', until: '2026-09-27' });
     expect(getByTestId('platform-reading-note').querySelector('button')?.textContent).toBe(
       'Create a portfolio',
@@ -1285,7 +1285,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     const connected = mount();
     expect(connected.getByTestId('platform-headline').textContent).toStartWith(
-      'TikTok spent 3,300 MXN',
+      'TikTok spent $3,300 MXN',
     );
     expect(connected.queryByTestId('tiktok-empty')).toBeNull();
     connected.unmount();
@@ -1313,9 +1313,9 @@ describe('OptimizerOverview — the TikTok tab reads its snapshots (feature 06)'
     const { getByTestId, getAllByTestId, queryByTestId } = mount();
     expect(tiktokAsked).toContain('7000000000000000001');
     expect(getByTestId('tiktok-read').getAttribute('data-source')).toBe('tiktok-snapshots');
-    expect(getByTestId('tiktok-tile-spend').textContent).toContain('8,542 MXN');
+    expect(getByTestId('tiktok-tile-spend').textContent).toContain('$8,542 MXN');
     expect(getByTestId('tiktok-tile-results').textContent).toContain('101');
-    expect(getByTestId('tiktok-tile-cost').textContent).toContain('64.83 MXN');
+    expect(getByTestId('tiktok-tile-cost').textContent).toContain('$64.83 MXN');
     expect(getAllByTestId('tiktok-adgroup-row')).toHaveLength(3);
     expect(queryByTestId('tiktok-empty')).toBeNull();
   });

@@ -9,7 +9,12 @@
 import type { AccountPlatformMetrics } from '@continuum/contracts';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { figureProps, formatCurrency } from '../../format';
+import {
+  currencyColumnSuffix,
+  figureProps,
+  formatCurrency,
+  formatCurrencyInColumn,
+} from '../../format';
 import * as typeScale from '../../typeScale';
 import {
   capitalise,
@@ -57,6 +62,13 @@ function Row({
   const window = figureWindowOfMetrics(metrics);
   const key = (name: string) => `comparison.${column.platform}.${name}`;
   const muted = idle(column);
+  // One currency across the row: its code sits in the column headers and the cells print "$"
+  // alone (M1). Several: each cell carries its own code.
+  const codeIn = row.currency == null ? 'text' : 'header';
+  const money = (value: number) =>
+    codeIn === 'header'
+      ? formatCurrencyInColumn(value, column.currency)
+      : formatCurrency(value, column.currency);
   return (
     <tr
       className={cn(
@@ -89,9 +101,9 @@ function Row({
       </th>
       <td
         className={NUMBER_CELL}
-        {...figureProps(key('spend'), column.spend, column.currency, window)}
+        {...figureProps(key('spend'), column.spend, column.currency, window, 'currency', codeIn)}
       >
-        {column.spend == null ? 'not added up' : formatCurrency(column.spend, column.currency)}
+        {column.spend == null ? 'not added up' : money(column.spend)}
       </td>
       <td
         className={NUMBER_CELL}
@@ -101,9 +113,16 @@ function Row({
       </td>
       <td
         className={NUMBER_CELL}
-        {...figureProps(key('cost'), column.costPerResult, column.currency, window)}
+        {...figureProps(
+          key('cost'),
+          column.costPerResult,
+          column.currency,
+          window,
+          'currency',
+          codeIn,
+        )}
       >
-        {column.costPerResult == null ? '—' : formatCurrency(column.costPerResult, column.currency)}
+        {column.costPerResult == null ? '—' : money(column.costPerResult)}
       </td>
       <td
         className={NUMBER_CELL}
@@ -229,12 +248,14 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
                 Spend · {windowDaysLabel(metrics)}
+                {currencyColumnSuffix(row.currency)}
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
                 {words ? capitalise(words.many) : 'Results'}
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
                 {words ? `Cost per ${words.one}` : 'Cost per result'}
+                {currencyColumnSuffix(row.currency)}
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
                 {row.shareOf ? `Share of ${kindWords(row.shareOf).many}` : 'Share'}

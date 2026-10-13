@@ -8,8 +8,8 @@ import { formatMetric, metricFigure } from './CampaignAdSetWorkspace';
 // on the node that prints the text, so the L3 bench can grade them against the payload.
 describe('Dashboard metric cards', () => {
   it('prints money in the account currency, bare when unknown, never a default $', () => {
-    expect(formatMetric('spend', 28780.16, 'MXN')).toBe('28,780 MXN');
-    expect(formatMetric('cpc', 0.7, 'USD')).toBe('$0.70');
+    expect(formatMetric('spend', 28780.16, 'MXN')).toBe('$28,780 MXN');
+    expect(formatMetric('cpc', 0.7, 'USD')).toBe('$0.70 USD');
     expect(formatMetric('cpa', 41.3, null)).toBe('41.30');
     expect(formatMetric('impressions', 184230, 'MXN')).toBe('184,230');
   });

@@ -58,11 +58,11 @@ const block = (unit: string | null): MetricGridBlockV2 => ({
 describe('MetricGridBlock', () => {
   it('uses the source currency and never defaults an unknown currency to USD', () => {
     const { rerender } = render(<MetricGridBlock block={block('MXN')} isStreaming={false} />);
-    expect(screen.getByText('MX$1,500.00')).toBeTruthy();
+    expect(screen.getByText('$1,500.00 MXN')).toBeTruthy();
 
     rerender(<MetricGridBlock block={block(null)} isStreaming={false} />);
     expect(screen.getByText('1,500 (currency unknown)')).toBeTruthy();
-    expect(screen.queryByText('$1,500.00')).toBeNull();
+    expect(screen.queryByText('$1,500.00 USD')).toBeNull();
   });
 });
 
@@ -198,7 +198,9 @@ describe('MetricGridBlock — the J2 tile: this period, the prior, and the read'
 
   it('prints the prior period under the figure, in the metric’s own format and window', () => {
     renderIn('es', [j2({})]);
-    expect(screen.getByTestId('metric-prior').textContent).toBe('vs MX$35.10 · 1 al 27 de agosto');
+    expect(screen.getByTestId('metric-prior').textContent).toBe(
+      'vs $35.10 MXN · 1 al 27 de agosto',
+    );
   });
 
   it('prints no prior line when no prior period was read', () => {

@@ -165,7 +165,7 @@ describe('OptimizerPortfolios', () => {
     const line = getByTestId('portfolio-lead');
     expect(line.tagName).toBe('P');
     expect(line.getAttribute('data-detector')).toBe('dead_tail');
-    expect(line.textContent).toBe('Spending on nothing · $69.75 a day buying nothing');
+    expect(line.textContent).toBe('Spending on nothing · $69.75 USD a day buying nothing');
     const figure = line.querySelector('[data-figure="portfolios.p1.lead.figure"]');
     expect(figure?.getAttribute('data-figure-raw')).toBe('69.75');
   });
@@ -240,11 +240,15 @@ describe('OptimizerPortfolios', () => {
       expect(lineOf(formularios).textContent).toBe(
         'The month will not land · 20% over plan · leads',
       );
-      expect(lineOf(tours).textContent).toBe('The month will not land · 10% under plan · purchases');
+      expect(lineOf(tours).textContent).toBe(
+        'The month will not land · 10% under plan · purchases',
+      );
       expect(formularios.textContent).not.toContain('purchases');
       expect(formularios.textContent).not.toContain('166');
 
-      const figure = lineOf(formularios).querySelector('[data-figure="portfolios.p1.pacing.figure"]');
+      const figure = lineOf(formularios).querySelector(
+        '[data-figure="portfolios.p1.pacing.figure"]',
+      );
       expect(figure?.textContent).toBe('20%');
       expect(figure?.getAttribute('data-figure-raw')).toBe('20');
       expect(figure?.getAttribute('data-figure-unit')).toBe('percent');
@@ -402,10 +406,10 @@ describe('OptimizerPortfolios — a live table, one row per portfolio', () => {
     const row = getByRole('button', { name: 'Open Prospecting' });
     expect(row.getAttribute('data-state')).toBe('bad');
     const cost = container.querySelector('[data-figure="portfolios.p1.cost"]');
-    expect(cost?.textContent).toBe('$40.00');
+    expect(cost?.textContent).toBe('$40.00 USD');
     expect(cost?.className).toContain('text-destructive');
     expect(container.querySelector('[data-figure="portfolios.p1.target"]')?.textContent).toBe(
-      '$30.00',
+      '$30.00 USD',
     );
     expect(container.querySelector('[data-testid="portfolio-cost-bar"]')).not.toBeNull();
     expect(row.querySelector('[data-testid="portfolio-state-chip"]')?.textContent).toBe('33% over');
@@ -417,7 +421,7 @@ describe('OptimizerPortfolios — a live table, one row per portfolio', () => {
     });
     expect(container.querySelector('[data-figure="portfolios.p1.cost"]')?.textContent).toBe('—');
     expect(container.querySelector('[data-figure="portfolios.p1.target"]')?.textContent).toBe(
-      '$30.00',
+      '$30.00 USD',
     );
     const row = getByRole('button', { name: 'Open Prospecting' });
     expect(row.querySelector('[data-testid="portfolio-state-chip"]')?.textContent).toBe(
@@ -437,7 +441,7 @@ describe('OptimizerPortfolios — a live table, one row per portfolio', () => {
       ],
     });
     const daily = container.querySelector('[data-figure="portfolios.p1.daily"]');
-    expect(daily?.textContent).toBe('$500');
+    expect(daily?.textContent).toBe('$500 USD');
     expect(daily?.getAttribute('data-figure-raw')).toBe('500');
     expect(getByTestId('portfolio-pending-count').textContent).toBe('3');
   });

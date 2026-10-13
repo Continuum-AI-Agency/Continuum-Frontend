@@ -87,7 +87,7 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
-import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../format';
+import { currencyFieldSuffix, formatCurrency, humanize, normalizeCurrency } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
@@ -646,7 +646,7 @@ export function PortfolioManagePanel({
     archive.mutate(portfolio.id, { onSuccess: () => onDone?.() });
   }
 
-  const symbol = currencySymbol(currency);
+  const symbol = normalizeCurrency(currency);
   const unit = currencyFieldSuffix(currency);
   const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
   const rootError = form.formState.errors.root?.message;

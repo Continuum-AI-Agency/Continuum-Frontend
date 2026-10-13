@@ -65,7 +65,7 @@ describe('DataTableBlock', () => {
     expect(within(card).getByRole('heading', { name: 'Move with confidence' })).toBeTruthy();
     expect(within(card).getByText('Preview unavailable')).toBeTruthy();
     expect(within(card).getByText('Spend')).toBeTruthy();
-    expect(within(card).getByText('€1,250.00')).toBeTruthy();
+    expect(within(card).getByText('€1,250.00 EUR')).toBeTruthy();
     expect(within(card).getByText('Cost per result')).toBeTruthy();
     expect(within(card).getAllByText('—')).toHaveLength(2);
     expect(screen.queryByText('Impressions')).toBeNull();
@@ -86,7 +86,7 @@ describe('DataTableBlock', () => {
     const table = screen.getByRole('table');
     expect(within(table).getByRole('columnheader', { name: 'Impressions' })).toBeTruthy();
     expect(within(table).getByText('98,231')).toBeTruthy();
-    expect(within(table).getByText('€1,250.00')).toBeTruthy();
+    expect(within(table).getByText('€1,250.00 EUR')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Winning creatives' })).toBeNull();
   });
 
@@ -99,14 +99,14 @@ describe('DataTableBlock', () => {
       />,
     );
 
-    expect(screen.getByText('£0.00')).toBeTruthy();
+    expect(screen.getByText('£0.00 GBP')).toBeTruthy();
 
     rerender(
       <DataTableBlock block={{ ...baseBlock, rows: [row], row_meta: [{}] }} isStreaming={false} />,
     );
 
     expect(screen.getByText('0 (currency unknown)')).toBeTruthy();
-    expect(screen.queryByText('$0.00')).toBeNull();
+    expect(screen.queryByText('$0.00 USD')).toBeNull();
   });
 
   it('exposes bounded typed audience evidence without inferring missing identities', () => {
@@ -169,7 +169,7 @@ describe('DataTableBlock', () => {
 
     expect(screen.getByText('Audience evidence: Partial')).toBeTruthy();
     expect(screen.getByText('3 of 4 eligible ads')).toBeTruthy();
-    expect(screen.getByText('€750.00 covered spend (75%)')).toBeTruthy();
+    expect(screen.getByText('€750.00 EUR covered spend (75%)')).toBeTruthy();
     expect(screen.getByText('Current targeting')).toBeTruthy();
     expect(screen.getByText('US-CO, US-UT')).toBeTruthy();
     expect(screen.getByText('customers-90d')).toBeTruthy();

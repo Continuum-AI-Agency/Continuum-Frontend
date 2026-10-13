@@ -33,7 +33,7 @@ describe('buildPaidStatCards', () => {
 
   it('formats values by unit and carries the delta', () => {
     const [spend, roas, ctr] = buildPaidStatCards(overview, 'MXN');
-    expect(spend.value).toBe('2,346 MXN');
+    expect(spend.value).toBe('$2,346 MXN');
     expect(spend.deltaPct).toBe(11.7);
     expect(roas.value).toBe('4.12x');
     expect(ctr.value).toBe('1.8%');
@@ -47,7 +47,7 @@ describe('buildPaidStatCards', () => {
 
   it('surfaces the prior window in the hover detail', () => {
     const [spend] = buildPaidStatCards(overview, 'MXN');
-    expect(spend.detail[0]).toEqual({ label: 'Prev 7d', value: '2,100 MXN' });
+    expect(spend.detail[0]).toEqual({ label: 'Prev 7d', value: '$2,100 MXN' });
   });
 
   // PP-L3-home-paid-prints-dollar-signs-no-currency: the payload's own currency outranks the
@@ -55,10 +55,10 @@ describe('buildPaidStatCards', () => {
   // the raw figure, its unit and its currency so the strip can stamp provenance.
   it('labels money with the payload currency first, the account currency second, never $', () => {
     const [fromPayload] = buildPaidStatCards({ ...overview, currency: 'MXN' }, 'USD');
-    expect(fromPayload.value).toBe('2,346 MXN');
+    expect(fromPayload.value).toBe('$2,346 MXN');
     expect(fromPayload).toMatchObject({ raw: 2345.6, unit: 'currency', currency: 'MXN' });
     const [fromAccount] = buildPaidStatCards({ ...overview, currency: null }, 'MXN');
-    expect(fromAccount.value).toBe('2,346 MXN');
+    expect(fromAccount.value).toBe('$2,346 MXN');
     const [unknown] = buildPaidStatCards(overview, null);
     expect(unknown.value).toBe('2,346');
     expect(unknown.currency).toBeNull();

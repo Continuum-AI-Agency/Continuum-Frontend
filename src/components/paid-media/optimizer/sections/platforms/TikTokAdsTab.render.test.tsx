@@ -19,7 +19,7 @@ describe('TikTokAdsTabView — a connected advertiser', () => {
   it('says what TikTok spent and what each result kind cost, from the snapshots read', () => {
     const { container } = render(<TikTokAdsTabView state={{ status: 'ready', overview }} />);
     expect(text(container, 'tiktok-headline')).toBe(
-      'TikTok spent 8,542 MXN in 7 days: 101 leads at 64.83 MXN and 30 conversations at 66.50 MXN.',
+      'TikTok spent $8,542 MXN in 7 days: 101 leads at $64.83 MXN and 30 conversations at $66.50 MXN.',
     );
     expect(
       container.querySelector('[data-testid="tiktok-read"]')?.getAttribute('data-source'),

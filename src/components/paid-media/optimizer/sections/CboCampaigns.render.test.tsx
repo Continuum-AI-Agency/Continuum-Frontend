@@ -151,11 +151,11 @@ describe('CboCampaigns', () => {
       />,
     );
     expect(getByText('Broad')).toBeTruthy();
-    expect(getByText('$42.00/d')).toBeTruthy();
+    expect(getByText('$42.00 USD/d')).toBeTruthy();
     expect(getByText('Lookalike')).toBeTruthy();
-    expect(getByText('$15.00/d')).toBeTruthy();
+    expect(getByText('$15.00 USD/d')).toBeTruthy();
     // The changeover headline: campaign-held budget today vs the sum of new budgets.
-    expect(getByText('$57.00/d')).toBeTruthy();
+    expect(getByText('$57.00 USD/d')).toBeTruthy();
     const apply = getByRole('button', { name: 'Apply' }) as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
   });
@@ -320,7 +320,7 @@ describe('CboCampaigns', () => {
     );
     fireEvent.click(getByRole('button', { name: /Preview as converted/ }));
     // The summary is split across spans (gainers / losers / net), so assert on the text.
-    expect(container.textContent).toContain('+$8.00 to 1');
+    expect(container.textContent).toContain('+$8.00 USD to 1');
     expect(container.textContent).toContain('across 2 ad sets');
     expect(getByText('2 action recommendations raised on the converted ad sets.')).toBeTruthy();
   });

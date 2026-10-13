@@ -37,10 +37,10 @@ describe('PaidMetricStrip', () => {
     const { findByText, container } = render(
       <PaidMetricStrip accountCurrency="MXN" adAccountId="act_1" brandId="brand-1" />,
     );
-    await findByText('28,780 MXN');
-    expect(container.textContent).not.toContain('$');
+    await findByText('$28,780 MXN');
+    expect(container.textContent).not.toContain('USD');
     const node = container.querySelector('[data-figure="home.strip.spend"]');
-    expect(node?.textContent).toBe('28,780 MXN');
+    expect(node?.textContent).toBe('$28,780 MXN');
     expect(node?.getAttribute('data-figure-raw')).toBe('28780.16');
     expect(node?.getAttribute('data-figure-currency')).toBe('MXN');
     expect(node?.getAttribute('data-figure-window')).toBe('d7');
@@ -55,6 +55,6 @@ describe('PaidMetricStrip', () => {
     const { findByText } = render(
       <PaidMetricStrip accountCurrency="MXN" adAccountId="act_1" brandId="brand-1" />,
     );
-    await findByText('$120');
+    await findByText('$120 USD');
   });
 });

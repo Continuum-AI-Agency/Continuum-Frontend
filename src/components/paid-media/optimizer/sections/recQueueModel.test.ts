@@ -30,7 +30,7 @@ const evidence = (over: Record<string, unknown> = {}) => ({
 describe('evidenceLine', () => {
   it('renders metric, value, comparator and window in one line', () => {
     expect(evidenceLine(evidence(), 'USD')).toBe(
-      'Cost per result $140 vs 2.5× the robust reference ($10) · 14d',
+      'Cost per result $140 USD vs 2.5× the robust reference ($10) · 14d',
     );
   });
   it('formats CTR as a percentage and reach growth as a multiple', () => {
@@ -56,7 +56,9 @@ describe('impact', () => {
   it('reads the daily money and labels it, and is 0 / null when unknown', () => {
     expect(impactPerDay({ evidence: evidence() })).toBe(100);
     // Day AND month — the same pair the account cards print, from the same helper.
-    expect(impactLabel({ evidence: evidence() }, 'USD')).toBe('$100/day · $3,000/mo at stake');
+    expect(impactLabel({ evidence: evidence() }, 'USD')).toBe(
+      '$100 USD/day · $3,000 USD/mo at stake',
+    );
     expect(impactPerDay({ evidence: null })).toBe(0);
     expect(impactLabel({ evidence: evidence({ estImpactPerDay: null }) }, 'USD')).toBeNull();
   });
@@ -106,7 +108,7 @@ describe('the headline a queue row leads with', () => {
         },
         'USD',
       ),
-    ).toBe('$96.00 a day buying nothing');
+    ).toBe('$96.00 USD a day buying nothing');
   });
 
   it('reads a malformed headline as no headline, rather than printing a figure nobody computed', () => {
@@ -234,7 +236,7 @@ describe('a real production row, before and after the engine carries a headline'
       ),
       // 25.54 is not 26, and pesos are not dollars: the queue line says both, exactly as the
       // compiled card of the same finding does.
-    ).toBe('25.54 MXN a day buying nothing');
+    ).toBe('$25.54 MXN a day buying nothing');
   });
 });
 
@@ -311,7 +313,7 @@ describe('settings patch', () => {
     expect(formatSettingsValue('max_change_pct_per_cycle', 0.3, 'USD')).toBe('30%');
     // The stored field is a fraction; the formatter it goes through never multiplies twice.
     expect(formatSettingsValue('max_change_pct_per_cycle', 1, 'USD')).toBe('100%');
-    expect(formatSettingsValue('daily_total', 340, 'USD')).toBe('$340');
+    expect(formatSettingsValue('daily_total', 340, 'USD')).toBe('$340 USD');
     expect(formatSettingsValue('daily_total', null, 'USD')).toBe('not set');
   });
 });
@@ -356,7 +358,7 @@ describe('evidenceSeries', () => {
     expect(evidenceSeries(evidence({ metric: 'cap_binding_share' }), snapshot, 'leads')).toBeNull();
   });
   it('formats by unit', () => {
-    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40.00');
+    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40.00 USD');
     expect(formatEvidenceValue('money', 40, null)).toBe('40.00');
     expect(formatEvidenceValue('percent', 0.0125, null)).toBe('1.25%');
     expect(formatEvidenceValue('number', 3.4, null)).toBe('3.4');

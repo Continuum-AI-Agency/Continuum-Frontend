@@ -94,7 +94,7 @@ describe('a Google write on a platform card', () => {
       'Change the campaign budget of "VIVO 47-EKATAR" on Google',
     );
     expect(within(dialog).getByTestId('platform-card-action-change').textContent).toBe(
-      '1,179.00 MXN/day → 1,473.75 MXN/day',
+      '$1,179.00 MXN/day → $1,473.75 MXN/day',
     );
     const preview = await within(dialog).findByTestId('platform-card-action-preview');
     expect(preview.textContent).toContain('validate_only ok');
@@ -276,7 +276,7 @@ describe('undoing an applied Google write', () => {
       'Google checked the undo (validate_only ok). Nothing changes until you confirm.',
     );
     expect(within(undoDialog).getByTestId('platform-card-undo-restores').textContent).toBe(
-      'Back to 1,179.00 MXN',
+      'Back to $1,179.00 MXN',
     );
     expect(undoSent).toEqual([
       { portfolio_id: actions.PORTFOLIO_ID, audit_id: AUDIT_ID, dryRun: true },

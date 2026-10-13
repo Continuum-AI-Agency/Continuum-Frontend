@@ -72,7 +72,7 @@ describe('GoalPacingBlock', () => {
   it('carries the money and the calendar it is judged against in one sentence', () => {
     const { container } = render(<GoalPacingBlock block={block()} isStreaming={false} />);
     const sentence = container.querySelector('[data-testid="goal-pacing-sentence"]');
-    expect(sentence?.textContent).toContain('$9,000.00 of $12,000.00');
+    expect(sentence?.textContent).toContain('$9,000.00 USD of $12,000.00 USD');
     expect(sentence?.textContent).toContain('60% of 2026-09-01 – 2026-09-30 elapsed');
   });
 
@@ -81,7 +81,7 @@ describe('GoalPacingBlock', () => {
       <GoalPacingBlock block={block({ currency_code: 'MXN' })} isStreaming={false} />,
     );
     expect(container.querySelector('[data-testid="goal-pacing-sentence"]')?.textContent).toContain(
-      'MX$9,000.00',
+      '$9,000.00 MXN',
     );
   });
 
@@ -99,7 +99,7 @@ describe('GoalPacingBlock', () => {
     const { container, rerender } = render(<GoalPacingBlock block={block()} isStreaming={false} />);
     expect(
       container.querySelector('[data-testid="goal-pacing-projection"]')?.textContent,
-    ).toContain('$15,000.00 projected by 2026-09-30');
+    ).toContain('$15,000.00 USD projected by 2026-09-30');
     rerender(<GoalPacingBlock block={block({ projected_end: null })} isStreaming={false} />);
     expect(container.querySelector('[data-testid="goal-pacing-projection"]')).toBeNull();
   });

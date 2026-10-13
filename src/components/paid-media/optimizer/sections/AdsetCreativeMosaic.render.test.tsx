@@ -162,7 +162,7 @@ describe('AdsetCreativeMosaic', () => {
     expect(screen.getByText('Hook B')).toBeTruthy();
     expect(container.querySelectorAll('img').length).toBe(2);
     // The derived CPM for ad-1, and its angle chip.
-    expect(document.body.textContent).toContain('$250 · CPM $10');
+    expect(document.body.textContent).toContain('$250 USD · CPM $10.00 USD');
     expect(document.body.textContent).toContain('Scarcity');
   });
 

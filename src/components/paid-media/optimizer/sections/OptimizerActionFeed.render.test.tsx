@@ -121,8 +121,8 @@ describe('OptimizerActionFeed', () => {
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
     expect(screen.getAllByText('Daily budget').length).toBeGreaterThan(0);
-    expect(screen.getByText('$5,000')).toBeTruthy();
-    expect(screen.getByText('$4,500')).toBeTruthy();
+    expect(screen.getByText('$5,000 USD')).toBeTruthy();
+    expect(screen.getByText('$4,500 USD')).toBeTruthy();
     expect(screen.getByTestId('action-timeline').textContent).toContain('Autopilot');
     expect(screen.getByText('Why: Earned a larger share of the pool.')).toBeTruthy();
     expect(screen.getByText('AbC123traceZ')).toBeTruthy();
@@ -270,10 +270,10 @@ describe('OptimizerActionFeed — timeline by day', () => {
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
     const timeline = screen.getByTestId('action-timeline');
-    expect(within(timeline).getByText('6,340 MXN')).toBeTruthy();
-    expect(within(timeline).getByText('6,974 MXN')).toBeTruthy();
+    expect(within(timeline).getByText('$6,340 MXN')).toBeTruthy();
+    expect(within(timeline).getByText('$6,974 MXN')).toBeTruthy();
     expect(within(timeline).getByText('+10%')).toBeTruthy();
-    expect(timeline.textContent).not.toContain('$');
+    expect(timeline.textContent).not.toContain('USD');
   });
 
   // An account whose currency nobody recorded is not an account that spends dollars.
@@ -286,7 +286,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
     const timeline = screen.getByTestId('action-timeline');
     expect(within(timeline).getByText('5,706')).toBeTruthy();
     expect(within(timeline).getByText('-10%')).toBeTruthy();
-    expect(timeline.textContent).not.toContain('$');
+    expect(timeline.textContent).not.toContain('USD');
   });
 
   it('names the portfolio beside the change, and keeps a reverted action reading as reverted', () => {
@@ -456,8 +456,8 @@ describe('money is divided by the currency’s own minor unit', () => {
       isLoading: false,
     };
     const { container, unmount } = render(<OptimizerActionFeed brandId="brand-1" currency="JPY" />);
-    expect(container.textContent).toContain('5,000 JPY');
-    expect(container.textContent).toContain('6,000 JPY');
+    expect(container.textContent).toContain('¥5,000 JPY');
+    expect(container.textContent).toContain('¥6,000 JPY');
     unmount();
     render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
     expect(screen.getAllByText(/50\.00 MXN/).length).toBeGreaterThan(0);
@@ -474,7 +474,7 @@ describe('money is divided by the currency’s own minor unit', () => {
         />
       </ul>,
     );
-    expect(screen.getByText('5,000 JPY')).toBeTruthy();
+    expect(screen.getByText('¥5,000 JPY')).toBeTruthy();
   });
 });
 
@@ -512,7 +512,7 @@ describe('a cross-platform move in the action feed', () => {
     const cards = screen.getAllByTestId('move-decision');
     expect(cards).toHaveLength(1);
     const card = cards[0] as HTMLElement;
-    expect(card.textContent).toContain('Move 120.00 MXN/day from Meta to Google');
+    expect(card.textContent).toContain('Move $120.00 MXN/day from Meta to Google');
     const legs = within(card).getAllByTestId('move-decision-leg');
     expect(legs.map((leg) => leg.getAttribute('data-platform'))).toEqual(['meta', 'google_ads']);
     expect(

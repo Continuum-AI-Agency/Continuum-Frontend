@@ -1,3 +1,5 @@
+import { joinMoney, moneyParts } from '@/lib/money/display';
+
 export type ValueFormat =
   | 'currency'
   | 'percent'
@@ -79,11 +81,17 @@ export function formatValue(
       const code = (options?.currency ?? '').trim().toUpperCase();
       if (!/^[A-Z]{3}$/.test(code))
         return `${formatValue(num, 'number', options)} (currency unknown)`;
-      return new Intl.NumberFormat(locale, {
+      // The product's money rule (M1, @/lib/money/display): "$87,551.90 MXN", "$3.21 USD" —
+      // the same spelling the Optimizer and Home print, never the locale's "MX$".
+      const minor = new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: code,
+      }).resolvedOptions().minimumFractionDigits;
+      const body = new Intl.NumberFormat(locale, {
+        minimumFractionDigits: Math.min(minor ?? 2, 2),
         maximumFractionDigits: 2,
-      }).format(num);
+      }).format(Math.abs(num));
+      return joinMoney(moneyParts(num < 0, body, code));
     }
 
     case 'percent': {

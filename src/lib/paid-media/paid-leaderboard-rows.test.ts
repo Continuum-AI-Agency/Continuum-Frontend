@@ -33,9 +33,9 @@ describe('formatKpiValue', () => {
   // only for USD, the ISO code after the figure otherwise, a bare figure when unknown. Never
   // a `$` the account did not earn.
   it('formats money in the account currency, never a bare dollar sign', () => {
-    expect(formatKpiValue(2345.6, 'currency', 'MXN')).toBe('2,346 MXN');
-    expect(formatKpiValue(2345.6, 'currency', 'USD')).toBe('$2,346');
-    expect(formatKpiValue(0.7, 'currency', 'MXN')).toBe('0.70 MXN');
+    expect(formatKpiValue(2345.6, 'currency', 'MXN')).toBe('$2,346 MXN');
+    expect(formatKpiValue(2345.6, 'currency', 'USD')).toBe('$2,346 USD');
+    expect(formatKpiValue(0.7, 'currency', 'MXN')).toBe('$0.70 MXN');
     expect(formatKpiValue(2345.6, 'currency', null)).toBe('2,346');
   });
 
@@ -58,7 +58,7 @@ describe('buildPaidLeaderboardRows', () => {
     });
     expect(rows[0]?.insightLine).toBe('ROAS climbing 18% WoW');
     expect(rows[0]?.metricValue).toBe('3.10x');
-    expect(rows[0]?.subLabel).toBe('1,200 MXN spend');
+    expect(rows[0]?.subLabel).toBe('$1,200 MXN spend');
   });
 
   it('rolls up the parent campaign insight onto an ad set by campaign name', () => {

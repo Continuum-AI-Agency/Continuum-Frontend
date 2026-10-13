@@ -14,7 +14,9 @@ describe('CostIntervalLine', () => {
     const { container } = render(
       <CostIntervalLine adsetId="a1" ci={{ cpa: 22, lo: 16, hi: 30, events: 55 }} currency="USD" />,
     );
-    expect(container.textContent).toBe('Cost: $22.00 (likely $16.00–$30.00) from 55 events');
+    expect(container.textContent).toBe(
+      'Cost: $22.00 USD (likely $16.00 USD–$30.00 USD) from 55 events',
+    );
     expect(figure(container, 'queue.a1.detail.ci.hi')?.getAttribute('data-figure-raw')).toBe('30');
   });
 

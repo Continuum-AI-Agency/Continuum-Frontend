@@ -99,7 +99,7 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     const { container } = render(<PortfolioRowCard currency="USD" portfolio={portfolio()} />);
     expect(container.textContent).toContain('Lead');
     expect(container.textContent).toContain('2 ad sets');
-    expect(container.textContent).toContain('$500/day');
+    expect(container.textContent).toContain('$500 USD/day');
   });
 
   it('counts a single ad set in the singular', () => {
@@ -115,13 +115,13 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     const { container, getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
-    expect(figure(container, 'cost').textContent).toBe('$40.00');
-    expect(figure(container, 'target').textContent).toBe('$30.00');
+    expect(figure(container, 'cost').textContent).toBe('$40.00 USD');
+    expect(figure(container, 'target').textContent).toBe('$30.00 USD');
     expect(figure(container, 'target').getAttribute('data-figure-raw')).toBe('30');
     expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead');
     expect(figure(container, 'results').textContent).toBe('50');
     expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
-    expect(figure(container, 'spend').textContent).toBe('$2,000');
+    expect(figure(container, 'spend').textContent).toBe('$2,000 USD');
     expect(getByTestId('portfolio-row-spend').textContent).toContain('USD 7d');
   });
 
@@ -196,7 +196,7 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     const pf = portfolio({ cpa_target: 30 });
     const mxn = render(<PortfolioRowCard currency="MXN" portfolio={pf} window={windowFor(pf)} />);
     expect(mxn.getByTestId('portfolio-row-spend').textContent).toContain('MXN 7d');
-    expect(figure(mxn.container, 'cost').textContent).toBe('40.00 MXN');
+    expect(figure(mxn.container, 'cost').textContent).toBe('$40.00 MXN');
     cleanup();
     const bare = render(<PortfolioRowCard portfolio={pf} window={windowFor(pf)} />);
     expect(bare.getByTestId('portfolio-row-spend').textContent).toBe('2,0007d');

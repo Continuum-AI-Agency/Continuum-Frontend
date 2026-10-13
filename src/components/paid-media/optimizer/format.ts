@@ -3,6 +3,11 @@
 // MCP account_map tool uses), passed in so a JPY account never reads as USD. The engine already
 // reasons/scales in the account currency; the FE only displays — no math here.
 //
+// THE SPELLING IS M1 (picked 2026-10-13): the currency's symbol before the figure and its
+// ISO code after it, for every known currency — "$85.47 MXN", "$85.47 USD". MXN and USD share
+// "$", so both spellings have one shape and the code says which. The join lives in
+// `@/lib/money/display`, shared with Home and Jaina, so the screens cannot spell it two ways.
+//
 // AN UNKNOWN CURRENCY IS NOT DOLLARS. `account.currency` is null on real accounts, and every
 // live one here is Mexican. A formatter that answers a missing code with "$" does not fail
 // loudly — it silently relabels pesos as dollars on a card a client reads. So a code that is
@@ -20,27 +25,46 @@
 // grouping separator stays (a screen has room for "$2,000"; a 320px frame does not).
 
 import { type CandidateHeadline, perPeriod } from '@continuum/contracts';
+import {
+  currencyGlyph,
+  joinMoney,
+  joinMoneyInColumn,
+  moneyParts,
+  normalizeCurrency,
+} from '@/lib/money/display';
 
-const ISO_CURRENCY = /^[A-Z]{3}$/;
+export { normalizeCurrency };
 
 export function formatCurrency(
   value: number | null | undefined,
   currency: string | null | undefined,
 ): string {
   if (value == null || !Number.isFinite(value)) return '—';
+  return joinMoney(moneyParts(value < 0, digitRuleBody(value), currency));
+}
+
+/** A table cell under a header that names the code ("CPL · MXN" over "$99.57"): the symbol
+ *  stays, the code moves to the header. Stamp the node with `figureProps(…, 'header')`. */
+export function formatCurrencyInColumn(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return joinMoneyInColumn(moneyParts(value < 0, digitRuleBody(value), currency));
+}
+
+/** A column header's code, " · MXN", or nothing when the code is unknown. */
+export function currencyColumnSuffix(currency: string | null | undefined): string {
   const code = normalizeCurrency(currency);
+  return code ? ` · ${code}` : '';
+}
+
+function digitRuleBody(value: number): string {
   const digits = Math.abs(value) >= 100 ? 0 : 2;
-  const body = new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(Math.abs(value));
-  return withUnit(value < 0 ? '-' : '', body, code);
-}
-
-// The sign stays outside the unit: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
-function withUnit(sign: string, body: string, code: string | null): string {
-  if (!code) return `${sign}${body}`;
-  return code === 'USD' ? `${sign}$${body}` : `${sign}${body} ${code}`;
 }
 
 /** Money to an exact number of decimals, for an amount that has to read to the minor unit —
@@ -56,7 +80,7 @@ export function formatCurrencyExact(
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   }).format(Math.abs(value));
-  return withUnit(value < 0 ? '-' : '', body, normalizeCurrency(currency));
+  return joinMoney(moneyParts(value < 0, body, currency));
 }
 
 /** Cost per result, in the account's own currency. The digit rule owns the precision — a
@@ -69,27 +93,22 @@ export function formatCpa(
   return formatCurrency(value, currency);
 }
 
-/** The currency prefix for an input adornment (e.g. "$"). EMPTY when the account carries no
- *  code — a field labelled "Daily budget ($)" on a peso account is the same lie the figures
- *  used to tell. Non-USD gets the ISO code, the same spelling `formatCurrency` appends. */
+/** The currency prefix for an input adornment ("$" for MXN and USD, "€"). EMPTY when the
+ *  account carries no code — a "$" on a field of an unknown-currency account is the same lie
+ *  the figures used to tell. A currency with no symbol of its own gets its ISO code. The
+ *  field's label carries the code (`currencyFieldSuffix`), so "$" never stands alone. */
 export function currencySymbol(currency: string | null | undefined): string {
   const code = normalizeCurrency(currency);
   if (!code) return '';
-  return code === 'USD' ? '$' : code;
+  return currencyGlyph(code) ?? code;
 }
 
-/** A field label's parenthetical currency hint, or nothing at all when the code is unknown.
+/** A field label's parenthetical currency, " (MXN)" / " (USD)", or nothing at all when the
+ *  code is unknown. The code, not the symbol: "$" alone does not say which dollar.
  *  One definition so three forms cannot each decide differently what "()" means. */
 export function currencyFieldSuffix(currency: string | null | undefined): string {
-  const symbol = currencySymbol(currency);
-  return symbol ? ` (${symbol})` : '';
-}
-
-/** The account's ISO code, or null when the row does not carry a usable one. Null is the
- *  answer, never a fallback: see the note at the top of this file. */
-export function normalizeCurrency(currency: string | null | undefined): string | null {
-  const trimmed = (currency ?? '').trim().toUpperCase();
-  return ISO_CURRENCY.test(trimmed) ? trimmed : null;
+  const code = normalizeCurrency(currency);
+  return code ? ` (${code})` : '';
 }
 
 /** Derive an objective's cost efficiency from spend / result count. Awareness
@@ -253,6 +272,8 @@ export type FigureProps = {
   'data-figure-currency': string;
   'data-figure-window': FigureWindow;
   'data-figure-unit': FigureUnit;
+  /** `header` on a table cell whose column header names the code (`formatCurrencyInColumn`). */
+  'data-figure-code'?: 'header';
 };
 
 /**
@@ -269,6 +290,7 @@ export function figureProps(
   currency: string | null | undefined,
   window: FigureWindow = 'none',
   unit: FigureUnit = 'currency',
+  codeIn: 'text' | 'header' = 'text',
 ): FigureProps {
   return {
     'data-testid': 'figure',
@@ -277,5 +299,6 @@ export function figureProps(
     'data-figure-currency': normalizeCurrency(currency) ?? 'none',
     'data-figure-window': window,
     'data-figure-unit': unit,
+    ...(codeIn === 'header' ? { 'data-figure-code': 'header' as const } : {}),
   };
 }

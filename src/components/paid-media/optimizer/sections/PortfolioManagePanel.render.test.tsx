@@ -494,14 +494,14 @@ describe('target metric, plan granularity and the scale plan', () => {
       period_budget: 240_000,
       budget_granularity: 'daily',
     });
-    const budget = () => screen.getByLabelText(/^Budget \(\$\)/) as HTMLInputElement;
+    const budget = () => screen.getByLabelText(/^Budget \(USD\)/) as HTMLInputElement;
     expect(budget().value).toBe('8000');
     fireEvent.click(screen.getByRole('button', { name: 'Whole flight' }));
     expect(budget().value).toBe('240000');
     fireEvent.click(screen.getByRole('button', { name: 'Per month' }));
     expect(budget().value).toBe('240000');
-    expect(document.body.textContent).toContain('= $240,000 for the flight');
-    expect(document.body.textContent).toContain('$8,000/day');
+    expect(document.body.textContent).toContain('= $240,000 USD for the flight');
+    expect(document.body.textContent).toContain('$8,000 USD/day');
   });
 
   it('creative analysis is a switch with its state in words', () => {

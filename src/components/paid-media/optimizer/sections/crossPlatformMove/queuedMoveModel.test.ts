@@ -75,10 +75,10 @@ describe('readQueuedMove', () => {
 
 describe('formatMinorExact', () => {
   test('prints every minor digit the currency has', () => {
-    expect(formatMinorExact(95_768, 'MXN')).toBe('957.68 MXN');
-    expect(formatMinorExact(100_000, 'MXN')).toBe('1,000.00 MXN');
-    expect(formatMinorExact(5_341, 'USD')).toBe('$53.41');
-    expect(formatMinorExact(5_000, 'JPY')).toBe('5,000 JPY');
+    expect(formatMinorExact(95_768, 'MXN')).toBe('$957.68 MXN');
+    expect(formatMinorExact(100_000, 'MXN')).toBe('$1,000.00 MXN');
+    expect(formatMinorExact(5_341, 'USD')).toBe('$53.41 USD');
+    expect(formatMinorExact(5_000, 'JPY')).toBe('¥5,000 JPY');
     expect(formatMinorExact(12_345, 'KWD')).toBe('12.345 KWD');
   });
 

@@ -75,7 +75,7 @@ describe('the status sentence — how we are doing', () => {
   it('reads the count, the cost, the distance to target and the week before, with figures', () => {
     const sentence = statusSentence(quoted, LEADS, 'MXN', 7);
     expect(text(sentence)).toBe(
-      '56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN and 34% cheaper than the week before.',
+      '56 leads in 7 days at $38.59 MXN, 10% over the target of $35.00 MXN and 34% cheaper than the week before.',
     );
     expect(figures(sentence).map((f) => [f.key, f.raw, f.unit])).toEqual([
       ['headline.results', 56, 'count'],
@@ -140,7 +140,7 @@ describe('the status sentence — how we are doing', () => {
       7,
     );
     expect(text(sentence)).toBe(
-      '56 leads in 7 days at 31.50 MXN, 10% under the target of 35.00 MXN and 12% dearer than the week before.',
+      '56 leads in 7 days at $31.50 MXN, 10% under the target of $35.00 MXN and 12% dearer than the week before.',
     );
   });
 
@@ -152,7 +152,7 @@ describe('the status sentence — how we are doing', () => {
 
   it('with no target it says so; with no prior it stops at the target', () => {
     expect(text(statusSentence({ ...quoted, target: null }, LEADS, 'MXN', 7))).toBe(
-      '56 leads in 7 days at 38.59 MXN, no target set and 34% cheaper than the week before.',
+      '56 leads in 7 days at $38.59 MXN, no target set and 34% cheaper than the week before.',
     );
     expect(
       text(
@@ -163,7 +163,7 @@ describe('the status sentence — how we are doing', () => {
           7,
         ),
       ),
-    ).toBe('56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN.');
+    ).toBe('56 leads in 7 days at $38.59 MXN, 10% over the target of $35.00 MXN.');
   });
 
   it('with nothing bought it says what was spent for it', () => {
@@ -173,7 +173,7 @@ describe('the status sentence — how we are doing', () => {
       'MXN',
       4,
     );
-    expect(text(none)).toBe('0 purchases in 4 days with 408 MXN spent.');
+    expect(text(none)).toBe('0 purchases in 4 days with $408 MXN spent.');
     expect(
       text(
         statusSentence({ ...quoted, results: 0, cost_per_result: null, spend: 0 }, LEADS, 'MXN', 4),
@@ -321,7 +321,7 @@ describe('the other two blockers', () => {
     });
     expect(headline.blocker?.code).toBe('no_signal');
     expect(text(headline.blocker?.sentence ?? [])).toBe(
-      'Blocked: no signal, 3,655 MXN spent and 0 leads in 14 days; nothing to decide on.',
+      'Blocked: no signal, $3,655 MXN spent and 0 leads in 14 days; nothing to decide on.',
     );
   });
 
@@ -409,17 +409,17 @@ describe('the anchor — the cost per result, and the two windows by their dates
       beforeAfter,
     });
     expect(anchor).toMatchObject({
-      value: '38.59',
+      value: '$38.59 MXN',
       state: 'warn',
-      unit: 'MXN per lead',
+      unit: 'per lead',
       target: 'target 35.00',
       vsTarget: '+10%',
       empty: null,
     });
     expect(anchor.figure).toMatchObject({ key: 'anchor.cost', raw: 38.59, window: 'd7' });
     expect(anchor.windows.map((w) => `${w.label}: ${w.text}`)).toEqual([
-      'week of Sep 21–27: 38.59',
-      'week of Sep 14–20: 58.78',
+      'week of Sep 21–27: $38.59 MXN',
+      'week of Sep 14–20: $58.78 MXN',
     ]);
   });
 
