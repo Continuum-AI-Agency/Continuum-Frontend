@@ -548,6 +548,17 @@ function resolveOptimizer(node: FigureNode, portfolioId: string | null): Expect 
       `optimizer_list_portfolios[${daily[1].slice(0, 8)}].daily_total`,
       num(list.find((p) => p.id === daily[1])?.daily_total),
     );
+  // Under an account-wide pacing finding each row prints ITS OWN run's drift from plan:
+  // |pacingRatio − 1| in percent points, from the optimizer-status read for that portfolio.
+  const pacingRow = /^portfolios\.([0-9a-f-]+)\.pacing\.figure$/.exec(key);
+  if (pacingRow) {
+    const status = obj(payload('optimizer-status', (b) => b.portfolio_id === pacingRow[1])?.json);
+    const ratio = num(obj(obj(status?.latest_run)?.pacing)?.pacingRatio);
+    return value(
+      `optimizer-status[${pacingRow[1].slice(0, 8)}].latest_run.pacing.pacingRatio − 1, in points`,
+      ratio === null ? null : Math.abs(Math.round((ratio - 1) * 100)),
+    );
+  }
   const lead = /^portfolios\.([0-9a-f-]+)\.lead\.(figure|money)$/.exec(key);
   if (lead) {
     const read = obj(obj(payload('optimizer_get_account_read')?.json)?.read);
@@ -834,7 +845,7 @@ async function optimizerSurfaces(context: BrowserContext): Promise<void> {
   await gradeBareNumbers('Optimizer/Portfolios', page);
   const byPortfolio = new Map<string, string[]>();
   for (const n of nodes) {
-    const m = /^portfolios\.([0-9a-f-]+)\.lead\.(figure|money)$/.exec(n.key);
+    const m = /^portfolios\.([0-9a-f-]+)\.(?:lead|pacing)\.(figure|money)$/.exec(n.key);
     if (m) byPortfolio.set(m[1], [...(byPortfolio.get(m[1]) ?? []), `${m[2]}=${n.text.trim()}`]);
   }
   const leadRows = [...byPortfolio.entries()];

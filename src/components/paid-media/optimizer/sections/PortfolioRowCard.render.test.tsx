@@ -125,6 +125,22 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     expect(getByTestId('portfolio-row-spend').textContent).toContain('USD 7d');
   });
 
+  // PP-L3-pacing-noun-from-window-kind: a lead portfolio never captions itself in purchases,
+  // whatever kind the window it was handed claims to be.
+  it('names the result from the portfolio’s own metric, not from the window’s kind', () => {
+    const pf = portfolio({ cpa_target: 30 });
+    const { getByTestId } = render(
+      <PortfolioRowCard
+        currency="USD"
+        portfolio={pf}
+        window={{ ...windowFor(pf), kind: 'purchases' }}
+      />,
+    );
+    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead');
+    expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
+    expect(getByTestId('portfolio-row').textContent).not.toContain('purchase');
+  });
+
   it('carries provenance on every figure so the parity bench can grade it', () => {
     const pf = portfolio({ cpa_target: 30 });
     const { container } = render(

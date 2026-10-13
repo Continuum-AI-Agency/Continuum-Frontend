@@ -404,7 +404,10 @@ export function PortfolioRowCard({
 }: PortfolioRowCardProps) {
   const chips = platforms ? orderPlatforms(platforms) : platform ? [platform] : [];
   const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
-  const words = resultWords(window?.kind ?? metric.kpiField, metric.resultLabel);
+  // The noun is the portfolio's own metric. A window is a read of this portfolio and its kind
+  // should agree, but the noun must not depend on it: a window cut for another metric would
+  // caption a lead portfolio's cost "per purchase".
+  const words = resultWords(metric.kpiField, metric.resultLabel);
   const figureKey = (name: string) => `portfolio-row.${portfolio.id}.${name}`;
 
   return (

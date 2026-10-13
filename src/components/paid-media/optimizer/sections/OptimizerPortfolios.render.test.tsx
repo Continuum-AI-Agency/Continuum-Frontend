@@ -19,6 +19,8 @@ let accountReadCandidates: unknown[] = [];
 let archivedPortfolios: unknown[] = [];
 /** Each portfolio's efficiency series, in the order the portfolios arrive. Empty = no cycle. */
 let efficiencySeries: unknown[][] = [];
+/** Each portfolio's latest-run pacing block, by id. Empty = nothing read. */
+let pacingById = new Map<string, unknown>();
 
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
@@ -32,6 +34,7 @@ mock.module('../useOptimizerData', () => ({
   // The foot band's source. Stubbed rather than stripped, because the band is now part of
   // what this file renders — leaving the hook out is how "No QueryClient set" gets in.
   useOptimizerAccountRead: () => ({ data: { read: { candidates: accountReadCandidates } } }),
+  useOptimizerPortfolioPacing: () => pacingById,
   useOptimizerMutations: () => ({
     restore: { mutate: () => {}, isPending: false, isError: false, error: null },
   }),
@@ -86,6 +89,7 @@ afterEach(() => {
   accountReadCandidates = [];
   efficiencySeries = [];
   archivedPortfolios = [];
+  pacingById = new Map();
   cleanup();
 });
 
@@ -172,6 +176,90 @@ describe('OptimizerPortfolios', () => {
 
     expect(queryByTestId('portfolio-lead')).toBeNull();
     expect(getByRole('button', { name: 'Open Prospecting' }).textContent).toContain('Lead');
+  });
+
+  // PP-L3-identical-pacing-block-on-every-portfolio / PP-L3-pacing-noun-from-window-kind: the
+  // account_pacing candidate names EVERY flight on the account, so printing it as each row's
+  // lead put the same account verdict and the account's noun on a lead portfolio, a 0-ad-set
+  // purchase portfolio and the third one alike. A pacing row reads its OWN run's pacing and
+  // names its OWN result.
+  describe('under an account-wide pacing finding', () => {
+    const leadPortfolio = portfolio({
+      id: 'p1',
+      name: 'FORMULARIOS',
+      objective: 'lead',
+      period_start: '2026-10-01',
+      period_end: '2026-10-31',
+      period_budget: 31_000,
+    });
+    const purchasePortfolio = portfolio({
+      id: 'p2',
+      name: 'Tours',
+      objective: 'purchase',
+      period_start: '2026-10-01',
+      period_end: '2026-10-31',
+      period_budget: 15_000,
+    });
+    const accountPacing = candidate({
+      id: 'account_pacing:act_1',
+      detector: 'account_pacing',
+      portfolio_ids: ['p1', 'p2'],
+      impact_per_day: 2608,
+      result_label: 'purchases',
+      headline: {
+        kind: 'drift',
+        value: 166,
+        unit: 'percent',
+        label: 'over plan',
+        from: 78_252,
+        to: 46_000,
+      },
+    });
+    const run = (pacingRatio: number, status: string) => ({
+      dailyTotal: 1000,
+      idealCumulative: 12_000,
+      pacingRatio,
+      status,
+      note: '',
+      source: 'pacing',
+    });
+
+    it('prints each row’s own pacing and its own result noun, never the account’s', () => {
+      accountReadCandidates = [accountPacing];
+      pacingById = new Map([
+        ['p1', run(1.2, 'overpacing')],
+        ['p2', run(0.9, 'underpacing')],
+      ]);
+      const { getByRole } = renderList({ portfolios: [leadPortfolio, purchasePortfolio] });
+
+      const formularios = getByRole('button', { name: 'Open FORMULARIOS' });
+      const tours = getByRole('button', { name: 'Open Tours' });
+      const lineOf = (row: HTMLElement) =>
+        row.querySelector('[data-testid="portfolio-lead"]') as HTMLElement;
+
+      expect(lineOf(formularios).textContent).toBe(
+        'The month will not land · 20% over plan · leads',
+      );
+      expect(lineOf(tours).textContent).toBe('The month will not land · 10% under plan · purchases');
+      expect(formularios.textContent).not.toContain('purchases');
+      expect(formularios.textContent).not.toContain('166');
+
+      const figure = lineOf(formularios).querySelector('[data-figure="portfolios.p1.pacing.figure"]');
+      expect(figure?.textContent).toBe('20%');
+      expect(figure?.getAttribute('data-figure-raw')).toBe('20');
+      expect(figure?.getAttribute('data-figure-unit')).toBe('percent');
+    });
+
+    it('says what the portfolio buys when its own run holds no pacing verdict', () => {
+      accountReadCandidates = [accountPacing];
+      pacingById = new Map([['p1', run(1.2, 'overpacing')]]);
+      const { getByRole } = renderList({ portfolios: [leadPortfolio, purchasePortfolio] });
+
+      const tours = getByRole('button', { name: 'Open Tours' });
+      expect(tours.querySelectorAll('[data-testid="portfolio-lead"]')).toHaveLength(0);
+      expect(tours.textContent).toContain('Purchase');
+      expect(tours.textContent).not.toContain('166');
+    });
   });
 
   // The brand-wide scope is a navigation list across every ad account the brand owns, and an
