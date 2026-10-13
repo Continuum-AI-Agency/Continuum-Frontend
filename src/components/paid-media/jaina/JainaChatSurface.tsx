@@ -863,6 +863,8 @@ export function JainaChatSurface({
     sendTurn,
     stop: stopChat,
     setMessages: setUiMessages,
+    resumeStream,
+    clearError: clearChatError,
   } = useJainaChat({
     sessionId,
     initialMessages: chatSeed?.sessionId === sessionId ? chatSeed.messages : undefined,
@@ -3130,6 +3132,26 @@ export function JainaChatSurface({
                         </QueueSection>
                       </Queue>
                     </div>
+                  ) : null}
+
+                  {chatError && !isStreaming && !paymentRequired ? (
+                    <p
+                      className="mx-1 mb-2 flex flex-wrap items-center gap-x-2 text-destructive text-xs"
+                      data-testid="jaina-chat-error"
+                      role="alert"
+                    >
+                      {loadFailureMessage("Jaina's answer", chatError)}
+                      <button
+                        className="font-medium underline underline-offset-4"
+                        onClick={() => {
+                          clearChatError();
+                          void resumeStream();
+                        }}
+                        type="button"
+                      >
+                        Try again
+                      </button>
+                    </p>
                   ) : null}
 
                   <div data-tour-id="paid-jaina-chat" className="w-full">

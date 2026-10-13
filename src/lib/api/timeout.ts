@@ -8,8 +8,11 @@
 // ("didn't answer in time") and offer a retry for. Long operations (a cycle run, an upload, a
 // model call) keep a much larger budget, chosen by URL, never by the caller forgetting.
 
-/** A read a person is waiting on: past this the surface says so instead of spinning. */
-export const READ_TIMEOUT_MS = 10_000;
+/** A read a person is waiting on: past this the surface says so instead of spinning. 8 s, not
+ *  10: the intent is a named state within 15 s of opening the page, and hydration plus the
+ *  account resolution ahead of the first read cost 3–5 s on the real surfaces (the Optimizer
+ *  lived at 8 s before this module existed). */
+export const READ_TIMEOUT_MS = 8_000;
 /** A write or a job the server works on for a while (a cycle, an upload, a model call). */
 export const LONG_OPERATION_TIMEOUT_MS = 120_000;
 
@@ -68,7 +71,14 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, what: string): P
   });
 }
 
-type TimedSignal = { signal: AbortSignal; timedOut: () => boolean; clear: () => void };
+type TimedSignal = {
+  signal: AbortSignal;
+  timedOut: () => boolean;
+  /** Stops the timer; the parent's abort still propagates. */
+  clearTimer: () => void;
+  /** Stops the timer and detaches from the parent. */
+  clear: () => void;
+};
 
 /** A signal that aborts after `ms` or when `parent` aborts, whichever is first. `timedOut()`
  *  says which, so the caller's own abort (an unmount) is never reported as a timeout. */
@@ -87,6 +97,7 @@ export function timeoutSignal(ms: number, parent?: AbortSignal | null): TimedSig
   return {
     signal: controller.signal,
     timedOut: () => timedOut,
+    clearTimer: () => clearTimeout(timer),
     clear: () => {
       clearTimeout(timer);
       parent?.removeEventListener('abort', onParentAbort);
@@ -105,25 +116,27 @@ const requestUrl = (input: RequestInfo | URL): string =>
 const requestMethod = (input: RequestInfo | URL, init?: RequestInit): string =>
   (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
 
-/** `fetch` with the policy's bound. A caller's own `signal` still aborts the request; only the
- *  policy's timer is reported as `RequestTimeoutError`. Typed as `typeof fetch` for the clients
- *  that take one (supabase-js `global.fetch`); the Node-only `preconnect` is never called. */
+/** `fetch` with the policy's bound on the time to the response headers. "Didn't answer" is the
+ *  server not answering at all; a body that streams for minutes (a chat turn, a report) keeps
+ *  its connection once the headers are in. A caller's own `signal` still aborts the request at
+ *  any point; only the policy's timer is reported as `RequestTimeoutError`. Typed as `typeof
+ *  fetch` for the clients that take one (supabase-js `global.fetch`); the Node-only
+ *  `preconnect` is never called. */
 export function fetchWithTimeout(policy: TimeoutPolicy, base: FetchLike = fetch): typeof fetch {
   const bounded: FetchLike = async (input, init) => {
     const url = requestUrl(input);
     const ms = policy(url, requestMethod(input, init));
     if (ms === null) return base(input, init);
-    const timed = timeoutSignal(
-      ms,
-      init?.signal ?? (input instanceof Request ? input.signal : null),
-    );
+    const parent = init?.signal ?? (input instanceof Request ? input.signal : null);
+    const timed = timeoutSignal(ms, parent);
     try {
       return await base(input, { ...init, signal: timed.signal });
     } catch (error) {
       if (timed.timedOut()) throw new RequestTimeoutError(url, ms);
       throw error;
     } finally {
-      timed.clear();
+      // Stops the timer only; the parent's abort still reaches the body through the signal.
+      timed.clearTimer();
     }
   };
   return bounded as unknown as typeof fetch;

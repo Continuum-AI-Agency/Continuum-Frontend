@@ -259,8 +259,8 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
 
       <div className="min-h-0 overflow-auto">
         {state === 'error' ? (
-          <QuietState role="alert" title="Couldn't load campaigns">
-            {errorMessage(campaigns.error)}{' '}
+          <QuietState role="alert" title="Campaigns didn't load">
+            Couldn't load campaigns — {errorMessage(campaigns.error)}{' '}
             <Button
               type="button"
               variant="link"

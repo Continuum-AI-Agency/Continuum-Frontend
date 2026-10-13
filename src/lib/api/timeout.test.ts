@@ -102,6 +102,27 @@ describe('fetchWithTimeout', () => {
     expect((caught as Error).name).toBe('AbortError');
   });
 
+  it('bounds the time to the headers, never a body that streams past the bound', async () => {
+    const base = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          setTimeout(() => {
+            if (signal?.aborted) controller.error(new Error('body aborted'));
+            else {
+              controller.enqueue(new TextEncoder().encode('late chunk'));
+              controller.close();
+            }
+          }, 40);
+        },
+      });
+      return new Response(body);
+    };
+    const bounded = fetchWithTimeout(() => 10, base);
+    const response = await bounded('https://backend/api/agents/jaina/chat/stream');
+    expect(await response.text()).toBe('late chunk');
+  });
+
   it('passes a null-bound request straight through, and a fast response untouched', async () => {
     const seen: Array<RequestInit | undefined> = [];
     const base = (_input: RequestInfo | URL, init?: RequestInit) => {

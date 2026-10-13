@@ -27,6 +27,7 @@ import type { BillingPaymentRequired, JainaUIMessage } from '@continuum/contract
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useMemo, useRef } from 'react';
 import { getApiBaseUrl } from '@/lib/api/config';
+import { backendTimeoutPolicy, fetchWithTimeout } from '@/lib/api/timeout';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { paymentRequiredFetch, readPaymentRequired } from '@/lib/billing/paymentRequired';
 import { buildJainaChatStreamRequest, type JainaChatInput } from '@/lib/jaina/chatRequest';
@@ -79,9 +80,11 @@ export function useJainaChat({
     return new DefaultChatTransport<JainaUIMessage>({
       api,
       // A 402 is thrown as PaymentRequiredError with the contracts body, instead of the SDK's
-      // Error whose message is the raw JSON text.
-      // `typeof fetch` also declares Node's `preconnect`; the transport only ever calls it.
-      fetch: paymentRequiredFetch as unknown as typeof fetch,
+      // Error whose message is the raw JSON text. The Backend bound applies to the headers
+      // only — the resume GET at the read bound, the turn's POST at the job bound — so a hung
+      // Backend ends as a named error instead of a transcript that never settles, while a
+      // streaming answer keeps its connection.
+      fetch: fetchWithTimeout(backendTimeoutPolicy, paymentRequiredFetch),
       // Resolved per request, not captured once: a Supabase access token expires mid-session and a
       // stale bearer would 401 the turn the reader is waiting on.
       headers: async () => {
