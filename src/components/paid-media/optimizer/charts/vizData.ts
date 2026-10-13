@@ -358,6 +358,8 @@ function numeric(value: number | null | undefined): number | null {
 // buildCycleActionMap extracts those labels from the parsed report.
 
 export type CpaHeroPoint = {
+  /** The unrounded cost the cycle scored: what a printed figure states. `cpa` is the chart's rounded y. */
+  cpaExact: number;
   date: Date;
   cpa: number;
   spend: number;
@@ -393,6 +395,7 @@ export function buildCpaHeroPoints(
       return {
         date: new Date(point.ts),
         cpa: Math.round(point.cpa),
+        cpaExact: point.cpa,
         spend: Math.round(point.spend),
         conv: point.conv,
         ts: point.ts,

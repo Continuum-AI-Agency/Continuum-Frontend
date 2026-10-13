@@ -81,7 +81,7 @@ export function CpaHeroTimeline({
     { targetCpa },
   );
   const hasProjection = projection.length >= 2;
-  const last = points.at(-1)?.cpa ?? null;
+  const last = points.at(-1)?.cpaExact ?? null;
   const projectedEnd = projectionEndpoint(projection);
   const band = bandMeta(confidenceBand);
   // Goldilocks only when the portfolio set an explicit target — same gate the
