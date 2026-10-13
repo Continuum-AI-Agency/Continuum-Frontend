@@ -1,7 +1,12 @@
 'use client';
 
 import type { ApiRenderTemplateContract, EncodeSettingKey } from '@continuum/contracts';
-import { describeEncodeSettings, mergeEncodeSettings } from '@continuum/contracts';
+import {
+  describeEncodeSettings,
+  describeMxfAudio,
+  encodeFilesOf,
+  mergeEncodeSettings,
+} from '@continuum/contracts';
 import { useState } from 'react';
 import {
   containersOf,
@@ -77,13 +82,36 @@ export function EncodeOverrideCell({
         ];
 
   const overridden = Object.keys(effective?.outputs ?? {}).length;
+  const audioChoices = [
+    ...new Set(
+      inScope.flatMap((item) =>
+        containersOf(item).flatMap((container) => {
+          const settings = mergeEncodeSettings(
+            item.encode,
+            effective?.default,
+            effective?.outputs?.[item.id],
+          );
+          return encodeFilesOf(settings, container).includes('mxf')
+            ? [describeMxfAudio(settings)]
+            : [];
+        }),
+      ),
+    ),
+  ];
   const described =
-    describeEncodeSettings(effective?.default, inherited[0]?.container ?? null) ??
-    (effective?.default ? 'Custom settings' : null);
+    describeEncodeSettings(
+      mergeEncodeSettings(inherited[0]?.settings, effective?.default),
+      inherited[0]?.container ?? null,
+    ) ?? (effective?.default ? 'Custom settings' : null);
   const summary =
-    [described, overridden ? `${overridden} output${overridden === 1 ? '' : 's'} adjusted` : null]
-      .filter(Boolean)
-      .join(' · ') || 'Template default';
+    audioChoices.length > 1
+      ? 'MXF audio varies by output'
+      : [
+          described,
+          overridden ? `${overridden} output${overridden === 1 ? '' : 's'} adjusted` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'Template default';
   const scopes: Array<[string, string]> = [
     ['all', 'All outputs'],
     ...inScope.map((item): [string, string] => [
@@ -106,9 +134,14 @@ export function EncodeOverrideCell({
             variant="outline"
             aria-label={`Output settings: ${summary}`}
             title={summary}
-            className="max-w-40 truncate"
+            className="h-auto max-w-40 flex-col items-start gap-0.5 py-1.5 text-left"
           >
-            {summary}
+            <span className="w-full truncate">{summary}</span>
+            {audioChoices.length ? (
+              <span className="whitespace-normal text-xs font-normal text-muted-foreground">
+                {audioChoices.length === 1 ? audioChoices[0] : 'Open to inspect each output'}
+              </span>
+            ) : null}
           </Button>
         }
       />

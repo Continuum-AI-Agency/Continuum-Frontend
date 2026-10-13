@@ -17,8 +17,13 @@ export const apiRenderMasterDownloadRequestSchema = z
     brandId: z.string().uuid(),
     outputId: z.string().min(1),
     format: z.enum(['mov', 'mxf']),
+    remaster: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((request) => request.remaster !== true || request.format === 'mxf', {
+    message: 'Remaster is available for MXF only',
+    path: ['remaster'],
+  });
 export type ApiRenderMasterDownloadRequest = z.infer<typeof apiRenderMasterDownloadRequestSchema>;
 export const apiRenderMasterDownloadResponseSchema = z
   .object({ path: z.string().startsWith('/') })
@@ -29,6 +34,44 @@ export const apiRenderMasterDownloadStatusSchema = z
     status: z.enum(['processing', 'ready', 'failed']),
   })
   .strict();
+export const apiRenderFieldOrderSchema = z.enum(['progressive', 'tt', 'bb', 'tb', 'bt', 'unknown']);
+/** Measured file facts; null means the probe could not establish that fact. */
+export const apiRenderFileSpecsSchema = z
+  .object({
+    outputId: z.string().min(1),
+    status: z.enum(['measured', 'unavailable']),
+    video: z
+      .object({
+        codec: z.string().nullable(),
+        profile: z.string().nullable(),
+        frameRate: z.number().positive().nullable(),
+        frameRateRational: z.string().nullable(),
+        bitDepth: z.number().int().positive().nullable(),
+        fieldOrder: apiRenderFieldOrderSchema.nullable().optional(),
+      })
+      .strict()
+      .nullable(),
+    audioStreams: z
+      .array(
+        z
+          .object({
+            index: z.number().int().nonnegative(),
+            codec: z.string().nullable(),
+            channels: z.number().int().positive().nullable(),
+            sampleRate: z.number().int().positive().nullable(),
+            bitDepth: z.number().int().positive().nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+    probedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+export type ApiRenderFileSpecs = z.infer<typeof apiRenderFileSpecsSchema>;
+
+export const apiRenderFileSpecsRoute = (jobId: string, outputId: string) =>
+  `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}/outputs/${encodeURIComponent(outputId)}/specs`;
+
 export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
 export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
 export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
@@ -553,6 +596,7 @@ export const encodeSettingsSchema = z
     audio: z
       .object({
         enabled: z.boolean().optional(),
+        layout: z.enum(['stereo', 'broadcast-4x-aes3']).optional(),
         codec: z.enum(['aac', 'pcm_s16le', 'pcm_s24le']).optional(),
         bitrate: z
           .string()
@@ -576,6 +620,7 @@ export const encodeSettingsSchema = z
           .enum(['yuv420p', 'yuv422p', 'yuv444p', 'yuva444p12le', 'yuv422p10le', 'yuv444p10le'])
           .optional(),
         proresProfile: z.enum(['4444', '4444xq', 'hq', 'standard', 'lt', 'proxy']).optional(),
+        mxfProfile: z.enum(['dnxhr-hq', 'xdcam-hd422-1080i5994']).optional(),
       })
       .strict()
       .optional(),
@@ -619,6 +664,7 @@ export type ApiRenderEncodeOverride = EncodeBlock;
 export const ENCODE_SETTING_KEYS = [
   'fps',
   'audio.enabled',
+  'audio.layout',
   'audio.codec',
   'audio.bitrate',
   'audio.sampleRate',
@@ -626,6 +672,7 @@ export const ENCODE_SETTING_KEYS = [
   'video.crf',
   'video.pixFmt',
   'video.proresProfile',
+  'video.mxfProfile',
   'files.mp4',
   'files.mov',
   'files.mxf',
@@ -721,7 +768,7 @@ export const ENCODE_STYLES = [
   {
     id: 'broadcast',
     label: 'Broadcast',
-    description: 'MXF (DNxHR HQ, OP1a, 48 kHz PCM) plus the MP4.',
+    description: 'MP4 plus MXF. Choose the MXF video profile and audio layout for delivery.',
     files: ['mp4', 'mxf'],
   },
   {
@@ -821,8 +868,24 @@ export function describeEncodeSettings(
   const parts = [
     fpsLabel(settings?.fps),
     changedFiles ? files.map((file) => FILE_LABEL[file]).join(' + ') || 'No file' : null,
+    files.includes('mxf') ? describeMxfAudio(settings) : null,
+    files.includes('mxf') ? describeMxfVideo(settings) : null,
   ].filter((part): part is string => part !== null);
   return parts.length ? parts.join(' · ') : null;
+}
+
+/** MXF fixes PCM depth and rate; numeric channel counts belong to the other files. */
+export function describeMxfAudio(settings: EncodeSettings | null | undefined): string {
+  if (settings?.audio?.enabled === false) return 'No audio';
+  const tracks =
+    settings?.audio?.layout === 'stereo' ? '1 stereo track' : '4 mono tracks (L/R/L/R)';
+  return `${tracks} · 48 kHz · 24-bit PCM`;
+}
+
+export function describeMxfVideo(settings: EncodeSettings | null | undefined): string {
+  return settings?.video?.mxfProfile === 'xdcam-hd422-1080i5994'
+    ? 'XDCAM HD422 · 1080i59.94 · 50 Mb/s'
+    : 'DNxHR HQ · Progressive';
 }
 
 /** A delivery comp and every measured slot box in it — enough to DRAW the layout. */

@@ -106,7 +106,7 @@ describe('bucket-only render files', () => {
 describe('describeEncodeSettings', () => {
   it('reads fps and files in one line', () => {
     expect(describeEncodeSettings({ fps: 25, files: { mxf: true } }, 'mp4')).toBe(
-      '25 fps · MP4 + MXF',
+      '25 fps · MP4 + MXF · 4 mono tracks (L/R/L/R) · 48 kHz · 24-bit PCM · DNxHR HQ · Progressive',
     );
     expect(describeEncodeSettings({ fps: '30000/1001' }, 'mp4')).toBe('29.97 fps');
     expect(describeEncodeSettings({ fps: 'comp' }, 'mov')).toBe('Comp rate');

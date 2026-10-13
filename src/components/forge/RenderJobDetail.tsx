@@ -29,6 +29,7 @@ import {
 import { LibraryStateLine, useLibraryState } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { RenderFileSpecs } from '@/components/forge/RenderFileSpecs';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -369,15 +370,18 @@ export function RenderJobDetail({
   const missingMasters = (['mov', 'mxf'] as const).filter(
     (format) => !current.some((file) => extOf(file.fileName) === format),
   );
-  const prepareDownload = async (format: 'mov' | 'mxf') => {
-    if (!source || preparing) return;
+  const existingMxf = current.find((file) => extOf(file.fileName) === 'mxf');
+  const prepareDownload = async (format: 'mov' | 'mxf', remaster = false) => {
+    const selected = remaster ? existingMxf : source;
+    if (!selected || preparing) return;
     setPreparing(format);
     setDownloadError(null);
     try {
       const { path } = await apiRendersApi.prepareMasterDownload(job.id, {
         brandId: job.brandId,
-        outputId: source.id,
+        outputId: selected.id,
         format,
+        ...(remaster ? { remaster: true } : {}),
       });
       const deadline = Date.now() + 11 * 60_000;
       while (mounted.current && Date.now() < deadline) {
@@ -491,6 +495,23 @@ export function RenderJobDetail({
                 </a>
               );
             })}
+            {job.status === 'finished' && existingMxf ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-auto px-0 py-0 text-xs text-primary"
+                disabled={preparing !== null}
+                onClick={() => void prepareDownload('mxf', true)}
+              >
+                {preparing === 'mxf' ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  <Download className="size-3" aria-hidden />
+                )}
+                Remake broadcast MXF
+              </Button>
+            ) : null}
             {job.status === 'finished' &&
               source &&
               missingMasters.map((format) => (
@@ -523,6 +544,24 @@ export function RenderJobDetail({
               </a>
             ) : null}
           </div>
+          {job.status === 'finished'
+            ? current
+                .filter((file) => file.kind === 'video')
+                .map((output) => (
+                  <RenderFileSpecs
+                    key={output.id}
+                    brandId={job.brandId}
+                    jobId={job.id}
+                    output={output}
+                  />
+                ))
+            : null}
+          {job.status === 'finished' && existingMxf ? (
+            <p className="m-0 text-xs text-muted-foreground">
+              Remake preserves the picture and rebuilds audio as CH1/2 L/R repeated on CH3/4. The
+              original stays available.
+            </p>
+          ) : null}
           {job.status === 'finished' && source && missingMasters.length > 0 ? (
             <p className="m-0 text-2xs text-muted-foreground">
               Generated files are converted from the existing video.

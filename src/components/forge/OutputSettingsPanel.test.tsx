@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import type { EncodeSettings } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   cleanup,
@@ -8,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   chooseOption,
   installPickerDomGlobals,
@@ -69,7 +70,9 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 // `request` too: other modules import the bare function, and Bun shares this mock across a multi-file run.
 mock.module('@/lib/api/http', () => ({ http: { request }, request }));
 
-const { OutputSettingsPanel } = await import('./OutputSettingsPanel');
+const { OutputSettingsPanel, EncodeSettingsFields, setEncodeLeaves } = await import(
+  './OutputSettingsPanel'
+);
 
 installPickerDomGlobals();
 
@@ -105,6 +108,157 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('OutputSettingsPanel', () => {
+  test('operators can select interlaced MXF and Stereo, inspect the effective audio, and save both', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      outputs: [{ ...contract().outputs[0]!, frameRate: 29.97 }],
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    fireEvent.click(screen.getByText('MXF'));
+    openSelect('MXF video profile');
+    chooseOption('XDCAM HD422 · 1080i59.94');
+    await waitFor(() => expect(shown('Frame rate')).toContain('Match the comp'));
+    expect(screen.getByText('XDCAM HD422 · 1080i59.94 · 50 Mb/s')).toBeTruthy();
+    openSelect('MXF audio layout');
+    chooseOption('Stereo');
+    await waitFor(() =>
+      expect(screen.getByText('1 stereo track · 48 kHz · 24-bit PCM')).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      body: {
+        encode: {
+          default: {
+            fps: 'comp',
+            files: { mxf: true },
+            video: { mxfProfile: 'xdcam-hd422-1080i5994' },
+            audio: { layout: 'stereo' },
+          },
+        },
+      },
+    });
+  });
+
+  test('the inherited client profile and four mono tracks are visible before any edit', async () => {
+    const defaults = {
+      fps: 'comp',
+      files: { mxf: true },
+      video: { mxfProfile: 'xdcam-hd422-1080i5994' },
+      audio: { enabled: true, layout: 'broadcast-4x-aes3' },
+    };
+    getContract.mockImplementationOnce(
+      async () =>
+        ({
+          ...contract(),
+          encode: { stored: {}, defaults: { mp4: defaults, mov: defaults } },
+        }) as never,
+    );
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() =>
+      expect(shown('MXF video profile')).toBe('Inherited: XDCAM HD422 · 1080i59.94'),
+    );
+    expect(screen.getByText('4 mono tracks (L/R/L/R) · 48 kHz · 24-bit PCM')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  test('unset inherited and own settings can add Broadcast without a null dereference', async () => {
+    function EmptySettings() {
+      const [settings, setSettings] = useState<EncodeSettings | undefined>(undefined);
+      return (
+        <EncodeSettingsFields
+          settings={settings}
+          inherited={[{ container: 'mp4', settings: undefined }]}
+          onSet={(changes) => setSettings((previous) => setEncodeLeaves(previous, changes))}
+        />
+      );
+    }
+    render(<EmptySettings />);
+    fireEvent.click(screen.getByText('MXF'));
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+  });
+
+  test('Stereo stays dormant when MXF is turned off and saving the other files remains possible', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
+    fireEvent.click(screen.getByText('MXF'));
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+    openSelect('MXF audio layout');
+    chooseOption('Stereo');
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Stereo'));
+    fireEvent.click(screen.getByText('MXF'));
+    expect(screen.queryByRole('combobox', { name: 'MXF audio layout' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: { default: { fps: 25 }, outputs: { square: { audio: { layout: 'stereo' } } } },
+        },
+      },
+    ]);
+  });
+  test('MXF defaults to Broadcast independently of inherited channels and saves explicit Stereo', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      encode: {
+        ...contract().encode,
+        stored: {
+          default: { audio: { channels: 2 }, files: { mp4: false, mov: false, mxf: true } },
+        },
+      },
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+    expect(screen.queryByRole('combobox', { name: 'Channels' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Audio codec' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Sample rate' })).toBeNull();
+    expect(screen.getByText(/4 mono tracks \(L\/R\/L\/R\) · 48 kHz · 24-bit PCM/)).toBeTruthy();
+    openSelect('MXF audio layout');
+    chooseOption('Stereo');
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Stereo'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: {
+            default: {
+              audio: { channels: 2, layout: 'stereo' },
+              files: { mp4: false, mov: false, mxf: true },
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  test('turning MXF audio off explains that the file will have no audio tracks', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      encode: {
+        ...contract().encode,
+        stored: { default: { files: { mp4: false, mov: false, mxf: true } } },
+      },
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('MXF audio layout')).toBe('Inherited: Broadcast 4× AES3'));
+    openSelect('Audio');
+    chooseOption('Off');
+    await waitFor(() =>
+      expect(
+        screen.getByText('MXF audio is off. The file will have no audio tracks.'),
+      ).toBeTruthy(),
+    );
+  });
   test('reuses the contract already loaded by the template detail', async () => {
     const client = new QueryClient();
     client.setQueryData(forgeQueryKeys.contract('brand-1', null, '133'), contract());
@@ -218,7 +372,7 @@ describe('OutputSettingsPanel', () => {
       ).toBeTruthy(),
     );
     expect(screen.queryByRole('combobox', { name: 'Frame rate' })).toBeNull();
-    expect(screen.queryByRole('checkbox', { name: 'MXF (DNxHR)' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'MXF' })).toBeNull();
   });
 
   test('a frame rate off the standard list stays visible and chosen', async () => {
@@ -254,7 +408,7 @@ describe('OutputSettingsPanel', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
     await waitFor(() => expect(fileBox('MP4').getAttribute('aria-checked')).toBe('true'));
     expect(fileBox('MOV (ProRes)').getAttribute('aria-checked')).toBe('false');
-    expect(fileBox('MXF (DNxHR)').getAttribute('aria-checked')).toBe('false');
+    expect(fileBox('MXF').getAttribute('aria-checked')).toBe('false');
     // The one file this MP4 output makes cannot be turned off, and the panel says why.
     expect(fileBox('MP4').hasAttribute('data-disabled')).toBe(true);
     expect(screen.getByText('MP4 stays on: every render delivers at least one file.')).toBeTruthy();
@@ -276,7 +430,7 @@ describe('OutputSettingsPanel', () => {
     expect(fileBox('MOV (ProRes)').hasAttribute('data-disabled')).toBe(true);
 
     // MP4 back on is the template's own state again, so it is unset rather than stored.
-    fireEvent.click(screen.getByText('MXF (DNxHR)'));
+    fireEvent.click(screen.getByText('MXF'));
     fireEvent.click(screen.getByText('MP4'));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
@@ -304,7 +458,7 @@ describe('OutputSettingsPanel', () => {
     openSelect('Output style');
     chooseOption(/^Broadcast/);
     await waitFor(() => expect(shown('Output style')).toBe('Broadcast'));
-    expect(fileBox('MXF (DNxHR)').getAttribute('aria-checked')).toBe('true');
+    expect(fileBox('MXF').getAttribute('aria-checked')).toBe('true');
     expect(fileBox('MOV (ProRes)').getAttribute('aria-checked')).toBe('false');
     expect(fileBox('MP4').getAttribute('aria-checked')).toBe('true');
 
