@@ -36,6 +36,8 @@ type Slide = {
   storageUrl: string;
   assetId?: string | null;
   storagePath: string;
+  kind?: 'image' | 'video';
+  poster?: string | null;
 };
 
 type CarouselSlideStripProps = {
@@ -108,17 +110,30 @@ function SortableThumb({
         )}
         {...listeners}
       >
-        <Image
-          // Tiles are keyed by position so a reorder animates in place; the image
-          // inside must be keyed by URL or the browser keeps painting the old decode.
-          key={slide.storageUrl}
-          src={slide.storageUrl}
-          alt={`Slide ${label}`}
-          fill
-          unoptimized
-          sizes="56px"
-          className="object-cover"
-        />
+        {slide.kind === 'video' ? (
+          <video
+            key={slide.storageUrl}
+            src={`${slide.storageUrl}#t=0.01`}
+            poster={slide.poster ?? undefined}
+            aria-label={`Video slide ${label}`}
+            preload="metadata"
+            muted
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <Image
+            // Tiles are keyed by position so a reorder animates in place; the image
+            // inside must be keyed by URL or the browser keeps painting the old decode.
+            key={slide.storageUrl}
+            src={slide.storageUrl}
+            alt={`Slide ${label}`}
+            fill
+            unoptimized
+            sizes="56px"
+            className="object-cover"
+          />
+        )}
         <div className="absolute bottom-0.5 right-0.5 rounded-full bg-black/60 px-1 py-px text-3xs font-semibold text-white tabular-nums">
           {label}
         </div>

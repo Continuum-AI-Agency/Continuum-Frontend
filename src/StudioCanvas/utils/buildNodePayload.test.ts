@@ -79,6 +79,47 @@ describe('buildNodePayload', () => {
       expect(payload?.imageSize).toBe('2K');
     });
 
+    it('keeps the connected prompt and selected 4K-capable model on an explicit 4K run', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana-2',
+          positivePrompt: 'stale local prompt',
+          imageSize: '4K',
+          aspectRatio: '1:1',
+        },
+      };
+      const prompt: StudioNode = {
+        id: 'prompt',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'connected prompt must survive reruns' },
+      };
+      const edges: Edge[] = [
+        {
+          id: 'prompt-edge',
+          source: 'prompt',
+          target: 'nano',
+          sourceHandle: 'text',
+          targetHandle: 'prompt',
+        },
+      ];
+      const resolved = new Map<string, NodeOutput>([
+        ['prompt', { type: 'text', value: 'connected prompt must survive reruns' }],
+      ]);
+
+      const payload = buildNanoGenPayload(node, resolved, [prompt, node], edges);
+
+      expect(payload).toMatchObject({
+        prompt: 'connected prompt must survive reruns',
+        model: 'gemini-3.1-flash-image',
+        imageSize: '4K',
+        resolution: '4096x4096',
+      });
+    });
+
     it('should default nano-banana-2 to 512px size', () => {
       const node: StudioNode = {
         id: 'nano',

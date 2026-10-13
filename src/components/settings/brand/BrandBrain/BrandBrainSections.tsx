@@ -91,6 +91,80 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
       </BrainSection>
 
       <BrainSection
+        title="Generation defaults"
+        hint="Defaults for images and slides created for this brand. Request-specific instructions can still override them."
+      >
+        <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
+          Logo use
+          <select
+            aria-label="Default logo use"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+            disabled={disabled}
+            value={doc.tokens.logo?.treatment_default ?? 'palette-only'}
+            onChange={(event) =>
+              onChange(brain.withLogoTreatment(doc, event.target.value as 'palette-only' | 'logo'))
+            }
+          >
+            <option value="palette-only">Use the palette; omit the logo by default</option>
+            <option value="logo">Include the logo by default</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            disabled={disabled}
+            checked={doc.tokens.generation?.number_slides ?? false}
+            onChange={(event) =>
+              onChange(brain.withGenerationPreferences(doc, { number_slides: event.target.checked }))
+            }
+          />
+          Number slides by default
+        </label>
+        {doc.tokens.colors.length > 0 ? (
+          <fieldset className="space-y-2" disabled={disabled}>
+            <legend className="text-xs font-medium text-muted-foreground">Colors to avoid</legend>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {doc.tokens.colors.map((color) => {
+                const avoided = doc.tokens.generation?.avoid_colors.includes(color.value) ?? false;
+                return (
+                  <label key={color.value} className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={avoided}
+                      onChange={(event) => {
+                        const current = doc.tokens.generation?.avoid_colors ?? [];
+                        const avoidColors = event.target.checked
+                          ? [...current, color.value]
+                          : current.filter((value) => value !== color.value);
+                        onChange(brain.withGenerationPreferences(doc, { avoid_colors: avoidColors }));
+                      }}
+                    />
+                    <span className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: color.value }} />
+                    {color.name ?? color.value}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        ) : null}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="generation-guidance">
+            Additional generation guidance
+          </label>
+          <Textarea
+            id="generation-guidance"
+            maxLength={1200}
+            disabled={disabled}
+            value={doc.tokens.generation?.additional_guidance ?? ''}
+            placeholder="Optional visual rules to apply to generated images and slides."
+            onChange={(event) =>
+              onChange(brain.withGenerationPreferences(doc, { additional_guidance: event.target.value || undefined }))
+            }
+          />
+        </div>
+      </BrainSection>
+
+      <BrainSection
         title="Never say"
         hint="Every caption the AI writes is told never to use these words."
       >

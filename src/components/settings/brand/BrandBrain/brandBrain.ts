@@ -234,3 +234,31 @@ export function withFonts(doc: BrainDoc, typography: BrandFontToken[]): BrainDoc
   const families = cleanList(typography.map((font) => font.family)).join(' / ');
   return withBodyLine(next, SECTION_TITLES.visual, 'Typography: ', families);
 }
+
+export function withLogoTreatment(doc: BrainDoc, treatment: 'palette-only' | 'logo'): BrainDoc {
+  return {
+    ...doc,
+    tokens: {
+      ...doc.tokens,
+      logo: { storage_path: doc.tokens.logo?.storage_path ?? null, treatment_default: treatment },
+    },
+  };
+}
+
+export function withGenerationPreferences(
+  doc: BrainDoc,
+  patch: Partial<NonNullable<BrandMdTokens['generation']>>,
+): BrainDoc {
+  return {
+    ...doc,
+    tokens: {
+      ...doc.tokens,
+      generation: {
+        number_slides: false,
+        avoid_colors: [],
+        ...(doc.tokens.generation ?? {}),
+        ...patch,
+      },
+    },
+  };
+}

@@ -684,6 +684,17 @@ describe('OrganicDraftPreview — attached video renders', () => {
 // #235: one editable draft, N destinations. The frame selector is the payoff of
 // multi-select — check how ONE copy lands on each surface before committing.
 describe('OrganicDraftPreview — multi-platform frame selector', () => {
+  it('offers a platform-neutral publish action for a multi-platform draft', () => {
+    cleanup();
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ platforms: ['instagram', 'facebook', 'linkedin'] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Publish now' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Publish to Instagram' })).toBeNull();
+  });
   const multiPlatformDraft = () =>
     baseDraft({
       platforms: ['instagram', 'facebook', 'linkedin'],

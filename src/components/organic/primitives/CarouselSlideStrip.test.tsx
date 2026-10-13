@@ -99,6 +99,27 @@ describe('CarouselSlideStrip', () => {
     expect(screen.getByAltText('Slide 3').getAttribute('src')).toBe('https://cdn/c.jpg');
   });
 
+  it('renders video slides as video thumbnails while retaining their order', () => {
+    render(
+      <CarouselSlideStrip
+        slides={[
+          sparseSlides[0],
+          { storageUrl: 'https://cdn/clip.mp4', storagePath: 'clip.mp4', kind: 'video' },
+          sparseSlides[2],
+        ]}
+        activeIndex={1}
+        onSelectSlide={mock()}
+        placement={placementStub()}
+        onAddRequest={mock()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Video slide 2').getAttribute('src')).toBe(
+      'https://cdn/clip.mp4#t=0.01',
+    );
+    expect(screen.getByLabelText('Slide 2 (active)')).toBeTruthy();
+  });
+
   it('routes remove, replace and enlarge through the same position', () => {
     const placement = placementStub();
     const onReplaceRequest = mock();

@@ -138,7 +138,11 @@ export function creativeRefFromAsset(asset: MediaAsset): CreativeRef {
  * picker refuses the selection — silently truncating is what made an attach look
  * successful while discarding the user's other picks.
  */
-export function findMultiVideoSelectionError(creatives: CreativeRef[]): string | null {
+export function findMultiVideoSelectionError(
+  creatives: CreativeRef[],
+  format?: PublishFormat,
+): string | null {
+  if (format === 'CAROUSEL') return null;
   const videoCount = creatives.filter((creative) => creative.kind === 'video').length;
   return videoCount > 1 ? 'Only one video per post' : null;
 }
@@ -228,7 +232,7 @@ export function shapeUserSuppliedMedia(
   if (list.length === 0) {
     throw new Error('shapeUserSuppliedMedia: at least one creative is required');
   }
-  const multiVideo = findMultiVideoSelectionError(list);
+  const multiVideo = findMultiVideoSelectionError(list, options?.format);
   if (multiVideo) {
     throw new Error(`shapeUserSuppliedMedia: ${multiVideo}`);
   }

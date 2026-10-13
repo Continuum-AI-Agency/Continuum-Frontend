@@ -150,10 +150,14 @@ interface ReelPublishBody extends PublishTarget {
   shareToFeed: true;
 }
 
+export type CarouselPublishItem =
+  | { imageUrl: string; videoUrl?: never }
+  | { videoUrl: string; imageUrl?: never };
+
 interface CarouselPublishBody extends PublishTarget {
   postType: 'CAROUSEL';
   placementId: string;
-  items?: Array<{ imageUrl: string }>;
+  items?: CarouselPublishItem[];
   caption?: string;
 }
 
@@ -239,27 +243,30 @@ export function buildFullCaption(
  * writes when a user assigns or replaces a creative. Generated `mediaSuggestion.assets` are
  * the headless fallback, and only reachable when nothing has been assigned.
  */
-function carouselItems(draft: PublishableDraft): Array<{ imageUrl: string }> {
+function carouselItems(draft: PublishableDraft): CarouselPublishItem[] {
   const assigned = (draft.publishingAssets ?? [])
-    .filter((asset) => asset.kind === 'image')
+    .filter((asset) => !!asset.storageUrl)
     .slice()
     .sort((a, b) => (a.slideIndex ?? 0) - (b.slideIndex ?? 0))
-    .map((asset) => ({ imageUrl: asset.storageUrl }))
-    .filter((item) => !!item.imageUrl);
+    .map(
+      (asset): CarouselPublishItem =>
+        asset.kind === 'video' ? { videoUrl: asset.storageUrl } : { imageUrl: asset.storageUrl },
+    );
 
-  if (assigned.length >= 2) return assigned;
+  if (draft.publishingAssets?.length) return assigned;
 
   return (draft.mediaSuggestion?.assets ?? [])
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map((asset) => {
-      if (asset.assetUrl) return { imageUrl: asset.assetUrl };
-      if (asset.assetBase64) {
-        return { imageUrl: `data:${asset.mimeType ?? 'image/png'};base64,${asset.assetBase64}` };
-      }
-      return { imageUrl: '' };
-    })
-    .filter((item) => !!item.imageUrl);
+    .flatMap((asset): CarouselPublishItem[] => {
+      const url =
+        asset.assetUrl ||
+        (asset.assetBase64
+          ? `data:${asset.mimeType ?? 'image/png'};base64,${asset.assetBase64}`
+          : '');
+      if (!url) return [];
+      return [asset.mimeType?.startsWith('video/') ? { videoUrl: url } : { imageUrl: url }];
+    });
 }
 
 export function buildPublishBody(
@@ -311,8 +318,8 @@ export function buildPublishBody(
     return {
       postType: 'CAROUSEL',
       placementId: draft.id,
-      // Below the platform minimum the backend derives slides from content_json instead.
-      ...(items.length >= 2 ? { items } : {}),
+      // Preserve the selected media; the backend enforces the platform minimum.
+      ...(items.length > 0 ? { items } : {}),
       caption,
       ...target,
     };

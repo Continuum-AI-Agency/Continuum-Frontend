@@ -128,6 +128,14 @@ describe('ActionNode', () => {
     expect((getByRole('button', { name: /run/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('keeps the Run action inside the preview at its top-left corner', () => {
+    const { getByRole } = renderNode(nodeData({ actionId: 'video.grade' }));
+
+    const run = getByRole('button', { name: /run/i });
+    expect(run.className).toContain('left-1.5 top-1.5');
+    expect(run.className).not.toContain('right-1.5 bottom-1.5');
+  });
+
   it('draws exactly the handles the graph contract allows, for every op family', () => {
     for (const actionId of ['image.rotate', 'video.overlay', 'text.concat'] as ActionId[]) {
       const data = nodeData({ actionId });

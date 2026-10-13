@@ -109,4 +109,16 @@ describe('resolveGroupPublishTargets', () => {
     expect(inferPublishPlatform(makeDraft({ platforms: ['linkedin'] }))).toBe('linkedin');
     expect(inferPublishPlatform(makeDraft({ platforms: ['tiktok'] }))).toBe('tiktok');
   });
+
+  it('names the platform of the persisted row rather than the first group platform', () => {
+    expect(
+      inferPublishPlatform(
+        makeDraft({
+          backendDraftId: 'row-linkedin',
+          platforms: ['instagram', 'facebook', 'linkedin'],
+          groupMembers: [member('instagram'), member('facebook'), member('linkedin')],
+        }),
+      ),
+    ).toBe('linkedin');
+  });
 });

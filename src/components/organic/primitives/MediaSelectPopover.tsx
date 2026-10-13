@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import type { MediaAsset } from '@continuum/contracts';
+import type { MediaAsset, PublishFormat } from '@continuum/contracts';
 import { creativeRefFromAsset, findMultiVideoSelectionError } from '@continuum/contracts';
 import { ImageOff, Loader2, PencilRuler, Play, Search, Wand2 } from 'lucide-react';
 import * as React from 'react';
@@ -117,6 +117,7 @@ export function MediaSelectPopover({
   isEnriching = false,
   initialKind,
   maxSelectable,
+  format,
 }: {
   brandProfileId: string;
   open: boolean;
@@ -134,6 +135,8 @@ export function MediaSelectPopover({
   initialKind?: KindFilterValue;
   /** Hard cap on the selection, for a caller whose target accepts a fixed number. */
   maxSelectable?: number;
+  /** Explicit draft format; only a carousel can accept multiple videos. */
+  format?: PublishFormat;
 }) {
   const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
     useStudioLibraryBrowser(brandProfileId, {
@@ -181,7 +184,10 @@ export function MediaSelectPopover({
 
   // A post has exactly one video slot, so the shape a 2-video selection produces
   // keeps only the first pick. Refuse it here instead of losing the rest silently.
-  const multiVideoError = findMultiVideoSelectionError(selectedAssets.map(creativeRefFromAsset));
+  const multiVideoError = findMultiVideoSelectionError(
+    selectedAssets.map(creativeRefFromAsset),
+    format,
+  );
 
   const handleAttach = () => {
     if (selectedAssets.length === 0 || multiVideoError) return;

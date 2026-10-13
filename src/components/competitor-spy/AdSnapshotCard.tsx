@@ -1,11 +1,20 @@
 'use client';
 
 import type { TimelineEntry } from '@continuum/contracts';
+import { useState } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromCompetitorAdSnapshot } from '@/components/chat/media/media';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useCreativeUrl } from '@/lib/api/competitorSpy';
 import { cn } from '@/lib/utils';
 import { SaveToBoardButton } from './SaveToBoardButton';
@@ -47,6 +56,7 @@ export function AdSnapshotCard({
   inspiration?: boolean;
   brandId?: string;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const hasMedia = entry.hasCreativeMedia ?? false;
   const { data: creativeUrl, refetch: refetchCreativeUrl } = useCreativeUrl(
     entry.snapshotId,
@@ -75,6 +85,12 @@ export function AdSnapshotCard({
             {hasMedia ? 'Loading…' : 'No creative'}
           </div>
         )}
+        <button
+          type="button"
+          aria-label={`View full ad details for ${entry.competitorName}`}
+          onClick={() => setDetailsOpen(true)}
+          className="absolute inset-0 rounded-t-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        />
         <Badge
           variant={entry.status === 'active' ? 'success' : 'secondary'}
           className="absolute left-2 top-2 text-2xs capitalize shadow-sm"
@@ -150,6 +166,84 @@ export function AdSnapshotCard({
           </div>
         </div>
       </CardContent>
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="gap-4 sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{metadata?.pageName ?? entry.competitorName}</DialogTitle>
+            <DialogDescription>
+              {platformLabel ? `Platforms: ${platformLabel}` : 'Competitor ad'}
+              {entry.cta ? ` · Call to action: ${entry.cta}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
+            <div className="flex min-h-48 items-center justify-center overflow-hidden rounded-lg bg-muted">
+              {media?.kind === 'video' ? (
+                <video
+                  src={media.url}
+                  poster={media.thumbnailUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  aria-label={`${entry.competitorName} ad video`}
+                  className="max-h-[65vh] w-full object-contain"
+                >
+                  <track kind="captions" />
+                </video>
+              ) : media?.kind === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element -- signed competitor creative URL
+                <img
+                  src={media.url}
+                  alt={`${entry.competitorName} ad creative`}
+                  className="max-h-[65vh] w-full object-contain"
+                />
+              ) : (
+                <p className="p-6 text-sm text-muted-foreground">No creative media available.</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-4 overflow-y-auto">
+              {entry.body ? (
+                <section aria-labelledby={`ad-copy-${entry.snapshotId}`}>
+                  <h3 id={`ad-copy-${entry.snapshotId}`} className="mb-1 text-xs font-semibold">
+                    Full ad copy
+                  </h3>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{entry.body}</p>
+                </section>
+              ) : (
+                <p className="text-sm text-muted-foreground">No ad copy was captured.</p>
+              )}
+              <dl className="grid gap-1 border-t border-border/70 pt-3 text-xs text-muted-foreground">
+                <div>First seen {formatDate(entry.firstSeenAt)}</div>
+                <div>Last seen {formatDate(entry.lastSeenAt)}</div>
+                {languageLabel ? <div>Languages {languageLabel}</div> : null}
+                {metadata?.deliveryStart ? (
+                  <div>
+                    Delivery {formatDate(metadata.deliveryStart)}
+                    {metadata.deliveryStop ? ` to ${formatDate(metadata.deliveryStop)}` : ''}
+                  </div>
+                ) : null}
+              </dl>
+            </div>
+          </div>
+          <DialogFooter className="flex-row flex-wrap justify-end gap-2 sm:justify-end">
+            {brandId ? (
+              <SaveToBoardButton
+                brandId={brandId}
+                request={{ kind: 'paid', snapshotId: entry.snapshotId }}
+              />
+            ) : null}
+            {entry.snapshotUrl ? (
+              <a
+                href={entry.snapshotUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                View on Meta
+              </a>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

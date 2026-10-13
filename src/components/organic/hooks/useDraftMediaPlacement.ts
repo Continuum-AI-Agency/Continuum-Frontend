@@ -82,6 +82,10 @@ export type UseDraftMediaPlacementResult = {
 
 type PublishingAsset = NonNullable<OrganicCalendarDraft['publishingAssets']>[number];
 
+function isSlideKind(kind: MediaAsset['kind']): kind is 'image' | 'video' {
+  return kind === 'image' || kind === 'video';
+}
+
 /** Slides the user arranged are the media of record; the flag is what survives a refetch. */
 function asUserSupplied(
   draft: OrganicCalendarDraft,
@@ -98,24 +102,23 @@ function validateKindForTarget(
   creatives: CreativeRef[],
   target: SlotTarget,
 ): PlacementError | null {
+  if (creatives.some((creative) => !isSlideKind(creative.kind))) {
+    return { type: 'invalid_kind', message: 'Carousel slides must be images or videos.' };
+  }
   const videoCount = creatives.filter((c) => c.kind === 'video').length;
   const imageCount = creatives.filter((c) => c.kind === 'image').length;
 
-  if (target.kind === 'carousel_slide' && videoCount > 0) {
-    return {
-      type: 'invalid_kind',
-      message: 'Carousels are image-only in v1. Use the Reel slot for video.',
-    };
-  }
-
-  // The reel slot holds exactly one video, and `shapeUserSuppliedMedia` keeps only
-  // the first — so refuse the selection rather than discard the rest of it.
-  const multiVideo = findMultiVideoSelectionError(creatives);
+  // A carousel is the only target that can keep more than one video. Other targets
+  // represent a single post/reel and must refuse selections the shaper would truncate.
+  const multiVideo = findMultiVideoSelectionError(
+    creatives,
+    target.kind === 'carousel_slide' ? 'CAROUSEL' : undefined,
+  );
   if (multiVideo) {
     return { type: 'too_many_videos', message: `${multiVideo}.` };
   }
 
-  if (videoCount > 0 && imageCount > 0) {
+  if (target.kind !== 'carousel_slide' && videoCount > 0 && imageCount > 0) {
     return {
       type: 'invalid_kind',
       message: 'Cannot mix image and video in a single post.',
@@ -221,14 +224,51 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
       setError(null);
 
+      let placementError: PlacementError | null = null;
       applyMedia((current) => {
+        if (target.kind === 'carousel_slide') {
+          const slides = [...(current.publishingAssets ?? [])].sort(
+            (a, b) => (a.slideIndex ?? Number.MAX_SAFE_INTEGER) - (b.slideIndex ?? Number.MAX_SAFE_INTEGER),
+          );
+          if (target.slideIndex < 0 || target.slideIndex >= slides.length) {
+            placementError = { type: 'empty_selection', message: 'That slide no longer exists.' };
+            return current;
+          }
+
+          setUndoSnapshot({
+            mediaSuggestion: current.mediaSuggestion,
+            publishingAssets: current.publishingAssets,
+            format: current.format,
+          });
+
+          const currentRefs: CreativeRef[] = slides.map((asset) => ({
+            assetId: asset.assetId ?? `${asset.bucket ?? 'media-library'}/${asset.storagePath}`,
+            bucket: asset.bucket ?? 'media-library',
+            storagePath: asset.storagePath,
+            kind: asset.kind,
+            mimeType: asset.mimeType,
+            width: asset.width,
+            height: asset.height,
+            signedUrl: asset.storageUrl,
+          }));
+          // Replace the targeted slide only; additional selected media follows it in
+          // selection order, while every untouched slide remains in its prior order.
+          currentRefs.splice(target.slideIndex, 1, ...refs);
+          const shaped = shapeUserSuppliedMedia(currentRefs, { format: 'CAROUSEL' });
+          return {
+            ...current,
+            publishingAssets: shaped.publishingAssets,
+            mediaSuggestion: { ...current.mediaSuggestion, ...shaped.mediaSuggestionPatch },
+            format: shaped.contentPatch.format,
+          };
+        }
+
         // Snapshot for undo BEFORE patching.
         setUndoSnapshot({
           mediaSuggestion: current.mediaSuggestion,
           publishingAssets: current.publishingAssets,
           format: current.format,
         });
-
         const { mediaSuggestionPatch, publishingAssets } = shapeUserSuppliedMedia(refs);
 
         return {
@@ -240,6 +280,11 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           },
         };
       });
+
+      if (placementError) {
+        setError(placementError);
+        return placementError;
+      }
 
       return null;
     },
@@ -261,9 +306,9 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
   const reorderSlides = React.useCallback(
     (fromIndex: number, toIndex: number) => {
       applyMedia((current) => {
-        const slides = (current.publishingAssets ?? [])
-          .filter((a) => a.kind === 'image')
-          .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
+        const slides = [...(current.publishingAssets ?? [])].sort(
+          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
+        );
 
         if (fromIndex < 0 || fromIndex >= slides.length) return current;
         if (toIndex < 0 || toIndex >= slides.length) return current;
@@ -278,8 +323,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           slideIndex: i,
         }));
 
-        const nonSlides = (current.publishingAssets ?? []).filter((a) => a.kind !== 'image');
-        return asUserSupplied(current, [...nonSlides, ...reindexed]);
+        return asUserSupplied(current, reindexed);
       });
     },
     [applyMedia],
@@ -293,12 +337,12 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       let slideErr: PlacementError | null = null;
 
       applyMedia((current) => {
-        const slides = (current.publishingAssets ?? [])
-          .filter((a) => a.kind === 'image')
-          .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
+        const slides = [...(current.publishingAssets ?? [])].sort(
+          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
+        );
 
         if (slides.length <= 1) {
-          slideErr = { type: 'min_slides', message: 'A carousel needs at least one image.' };
+          slideErr = { type: 'min_slides', message: 'A carousel needs at least one slide.' };
           return current;
         }
 
@@ -308,8 +352,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           .filter((_, i) => i !== position)
           .map((a, i) => ({ ...a, slideIndex: i }));
 
-        const nonSlides = (current.publishingAssets ?? []).filter((a) => a.kind !== 'image');
-        return asUserSupplied(current, [...nonSlides, ...remaining]);
+        return asUserSupplied(current, remaining);
       });
 
       if (slideErr) setError(slideErr);
@@ -318,14 +361,15 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
     [applyMedia],
   );
 
-  // Replace the image at `position` (same slideIndex-sorted order as removeSlide)
-  // with a library image, preserving its place in the carousel.
+  // Replace the media at `position` (same slideIndex-sorted order as removeSlide)
+  // with a library image or video, preserving its place in the carousel.
   const replaceSlide = React.useCallback(
     (position: number, asset: MediaAsset): PlacementError | null => {
-      if (asset.kind === 'video') {
+      const kind = asset.kind;
+      if (!isSlideKind(kind)) {
         const err: PlacementError = {
           type: 'invalid_kind',
-          message: 'Carousels are image-only in v1.',
+          message: 'Carousel slides must be images or videos.',
         };
         setError(err);
         return err;
@@ -333,9 +377,9 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
       let slideErr: PlacementError | null = null;
       applyMedia((current) => {
-        const slides = (current.publishingAssets ?? [])
-          .filter((a) => a.kind === 'image')
-          .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
+        const slides = [...(current.publishingAssets ?? [])].sort(
+          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
+        );
 
         if (position < 0 || position >= slides.length) {
           slideErr = { type: 'empty_selection', message: 'That slide no longer exists.' };
@@ -346,7 +390,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           i === position
             ? {
                 role: existing.role ?? 'primary',
-                kind: 'image',
+                kind,
                 slideIndex: i,
                 assetId: asset.id,
                 bucket: asset.bucket,
@@ -359,8 +403,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
             : { ...existing, slideIndex: i },
         );
 
-        const nonSlides = (current.publishingAssets ?? []).filter((a) => a.kind !== 'image');
-        return asUserSupplied(current, [...nonSlides, ...replaced]);
+        return asUserSupplied(current, replaced);
       });
 
       if (slideErr) setError(slideErr);
@@ -371,23 +414,24 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
   const addSlide = React.useCallback(
     (asset: MediaAsset): PlacementError | null => {
-      if (asset.kind === 'video') {
+      const kind = asset.kind;
+      if (!isSlideKind(kind)) {
         const err: PlacementError = {
           type: 'invalid_kind',
-          message: 'Carousels are image-only in v1.',
+          message: 'Carousel slides must be images or videos.',
         };
         setError(err);
         return err;
       }
 
       applyMedia((current) => {
-        const slides = (current.publishingAssets ?? [])
-          .filter((a) => a.kind === 'image')
-          .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
+        const slides = [...(current.publishingAssets ?? [])].sort(
+          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
+        );
 
         const newSlide: PublishingAsset = {
           role: 'primary',
-          kind: 'image',
+          kind,
           slideIndex: slides.length,
           assetId: asset.id,
           bucket: asset.bucket,
@@ -398,8 +442,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           height: asset.height ?? undefined,
         };
 
-        const nonSlides = (current.publishingAssets ?? []).filter((a) => a.kind !== 'image');
-        return asUserSupplied(current, [...nonSlides, ...slides, newSlide]);
+        return asUserSupplied(current, [...slides, newSlide]);
       });
 
       return null;
