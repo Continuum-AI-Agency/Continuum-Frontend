@@ -17,6 +17,13 @@ const FRONTEND_ROOT = resolve(__dirname, '..');
 
 export type ProdSupabasePin = { url: string; publishableKey: string; serviceRoleKey: string };
 
+/** The one Easy Fit brand row the bench reads. Declared, not discovered: the bench user's
+ *  active brand moved between runs and parity measured 6f597f42 (Meta + Google) on one commit
+ *  and 148583e0 (Meta only) on the next. Named and defaulted like optimizer:e2e:bench's
+ *  EASYFIT_LEDGER_BRAND_ID, so both benches read one account. */
+export const PARITY_BRAND_ID =
+  process.env.EASYFIT_LEDGER_BRAND_ID?.trim() || '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+
 export function pinProdSupabase(): ProdSupabasePin {
   try {
     return loadProdSupabaseEnv();

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { pinProdSupabase } from './paid-parity.env';
+import { PARITY_BRAND_ID, pinProdSupabase } from './paid-parity.env';
 import {
   type FigureNode,
   gradeNodes,
@@ -74,13 +74,11 @@ const { serviceRoleKey } = pinProdSupabase();
 //
 // Easy Fit has TWO brand profiles on the same Meta account (Backend scripts/_bench/accounts.ts:
 // `easyfitVivo47` and `easyFit`) and the portfolios have already moved between them once
-// (2026-10-09: the agency row 148583e0 owned none, 6f597f42 owned all four). Which row owns
-// them today is read at run time, not pinned.
+// (2026-10-09: the agency row 148583e0 owned none, 6f597f42 owned all four). Since both own
+// enrolled portfolios, the bench reads ONE declared row (PARITY_BRAND_ID, env
+// EASYFIT_LEDGER_BRAND_ID, default 6f597f42) and checks the premise on it alone.
 const OWNER_EMAIL = 'mercadotecniavivo@gmail.com';
-const EASY_FIT_BRAND_IDS = [
-  '148583e0-5538-462b-8d3a-acd25b80344e',
-  '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64',
-] as const;
+const EASY_FIT_BRAND_IDS = [PARITY_BRAND_ID] as const;
 /** Owns the live portfolios and their ad sets. */
 const PORTFOLIO_ACCOUNT_ID = '521903353286118';
 
