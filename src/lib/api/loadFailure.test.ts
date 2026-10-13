@@ -37,7 +37,7 @@ describe('loadFailureMessage', () => {
       status: 429,
     });
     expect(loadFailureMessage('campaigns', error)).toBe(
-      "Couldn't load campaigns — meta is rate limiting this ad account.",
+      "Couldn't load campaigns — Meta is rate limiting this ad account.",
     );
   });
 
@@ -54,6 +54,17 @@ describe('loadFailureMessage', () => {
     expect(loadFailureMessage('action logs', new SyntaxError("Unexpected token '<'"))).toBe(
       "Couldn't load action logs — the data came back in an unexpected shape.",
     );
+  });
+
+  it('reads the cause when a client wrapped the library error in its own Error', () => {
+    const wrapped = new Error('rule-actions edge function failed', {
+      cause: new FunctionsHttpError(new Response(HTML_502, { status: 500 })),
+    });
+    expect(loadFailureMessage('the approvals queue', wrapped)).toBe(
+      "Couldn't load the approvals queue — the service answered with an error.",
+    );
+    const timedOut = new Error('x', { cause: { context: new RequestTimeoutError('u', 10_000) } });
+    expect(loadFailureCause(timedOut)).toBe('timeout');
   });
 
   it('reads a status off the error or its response context', () => {

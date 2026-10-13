@@ -68,5 +68,7 @@ export function usePaidCreativeReport(brandId?: string) {
     refreshedAt: query.data?.refreshedAt ?? null,
     isLoading: query.isLoading,
     isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
   };
 }

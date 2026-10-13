@@ -134,4 +134,29 @@ describe('withTimeout and isRequestTimeout', () => {
     expect(isRequestTimeout(new Error('timeout'))).toBe(false);
     expect(isRequestTimeout(null)).toBe(false);
   });
+
+  it('still recognises a bound after supabase-js wrapped it or kept only its message', () => {
+    const timeout = new RequestTimeoutError('https://x/rest/v1/a', 10_000);
+    // functions-js: FunctionsFetchError(context = the fetch error)
+    expect(
+      isRequestTimeout({
+        name: 'FunctionsFetchError',
+        message: 'Failed to send',
+        context: timeout,
+      }),
+    ).toBe(true);
+    // postgrest-js (no throwOnError): { message, details, hint, code }
+    expect(isRequestTimeout({ message: timeout.message, details: '', hint: '', code: '' })).toBe(
+      true,
+    );
+    // an Error a client threw with the library error as its cause
+    expect(
+      isRequestTimeout(new Error('rule-actions failed', { cause: { context: timeout } })),
+    ).toBe(true);
+    expect(isRequestTimeout({ message: 'the server answered 500' })).toBe(false);
+  });
+
+  it('is an abort to postgrest-js, which would otherwise retry a failed GET three times', () => {
+    expect(new RequestTimeoutError('https://x/rest/v1/a', 10_000).code).toBe('ABORT_ERR');
+  });
 });

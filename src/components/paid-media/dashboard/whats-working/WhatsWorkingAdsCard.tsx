@@ -7,9 +7,11 @@
 
 import { useMemo, useState } from 'react';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
 import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import { VerdictColumns } from './VerdictColumns';
 import { WhatsWorkingSynopsis } from './WhatsWorkingSynopsis';
 import { FUNNEL_TABS, type FunnelTab, selectVerdictsByKind } from './whatsWorkingModel';
@@ -21,12 +23,37 @@ export function WhatsWorkingAdsCard({
   brandId: string;
   adAccountId: string | null;
 }) {
-  const { status, report, isLoading } = usePaidCreativeReport(brandId);
+  const { status, report, isLoading, isError, error, refetch } = usePaidCreativeReport(brandId);
   const [funnel, setFunnel] = useState<FunnelTab>('all');
   const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId });
   const currency = useAdAccountCurrency(brandId, adAccountId);
 
   const verdictsByKind = useMemo(() => selectVerdictsByKind(report, funnel), [report, funnel]);
+
+  // A read that failed is not a report still assembling: say so, and offer the read again.
+  if (isError && !report) {
+    return (
+      <section className="space-y-1">
+        <h3 className="font-semibold text-foreground text-sm">Ads</h3>
+        <p
+          className="text-destructive text-xs"
+          data-testid="creative-intelligence-error"
+          role="alert"
+        >
+          {loadFailureMessage('creative intelligence', error)}{' '}
+          <Button
+            className="h-5 px-1 text-xs"
+            onClick={() => void refetch()}
+            size="sm"
+            type="button"
+            variant="link"
+          >
+            Retry
+          </Button>
+        </p>
+      </section>
+    );
+  }
 
   if (status === 'assembling' && !report) {
     return (

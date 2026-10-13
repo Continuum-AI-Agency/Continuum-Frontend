@@ -108,7 +108,9 @@ import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
+import { READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import { retryUnlessTimeout } from '@/lib/react-query/retry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
 import { recommendationInsightKey } from './insightKey';
@@ -1166,31 +1168,16 @@ const EMPTY_AD_ANGLES: PaidAdAngle[] = [];
 const FIVE_MINUTES = 5 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
 const THIRTY_MINUTES = 30 * 60 * 1_000;
-const READ_TIMEOUT_MS = 8_000;
 // Meta throttles on repeated snapshot reads, so a manual refresh is gated behind a
 // client-side cooldown. In-memory only (per hook instance) — a page reload clears it.
 const SNAPSHOTS_REFRESH_COOLDOWN_MS = 120_000;
 
-/** Supabase can hold a socket open without resolving when a locally-unwired Edge
- * function is selected. Bound the read so a panel reaches its retry state instead
- * of presenting an infinite skeleton. */
+/** The shared read bound (src/lib/api/timeout.ts), on the promise rather than the socket: the
+ *  Supabase client already bounds the socket, and this keeps a parse or a second hop from
+ *  holding a panel past it. A bound that fires is never retried (`retryUnlessTimeout`), so a
+ *  dead read reaches OptimizerOffline at the bound, not at the bound times the retries. */
 function withReadTimeout<T>(promise: Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = globalThis.setTimeout(
-      () => reject(new Error('optimizer_read_timeout')),
-      READ_TIMEOUT_MS,
-    );
-    promise.then(
-      (value) => {
-        globalThis.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        globalThis.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
+  return withTimeout(promise, READ_TIMEOUT_MS, 'optimizer read');
 }
 
 type OptimizerReadOptions<T> = {
@@ -1224,7 +1211,7 @@ function useOptimizerRead<T>({
     staleTime,
     gcTime,
     refetchInterval,
-    retry: 1,
+    retry: retryUnlessTimeout(1),
     placeholderData: placeholderData as UseQueryOptions<T>['placeholderData'],
   });
 
@@ -1253,7 +1240,7 @@ export function useOptimizerPortfolios(brandId: string, adAccountId: string | nu
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
     gcTime: THIRTY_MINUTES,
-    retry: 1,
+    retry: retryUnlessTimeout(1),
   });
   const scope = query.data ?? EMPTY_PORTFOLIO_SCOPE;
 
@@ -1653,7 +1640,7 @@ export function useOptimizerPortfolioEfficiency(
       gcTime: THIRTY_MINUTES,
       // The Overview fires one of these per portfolio the moment the page mounts, which is
       // also when the session is still settling; two retries ride that out where one did not.
-      retry: 2,
+      retry: retryUnlessTimeout(2),
     })),
     combine: combineEfficiencySeries,
   });
@@ -1680,7 +1667,7 @@ export function useOptimizerPortfolioPacing(
       queryFn: () => withReadTimeout(fetchPerformance(portfolioId)),
       staleTime: FIVE_MINUTES,
       gcTime: THIRTY_MINUTES,
-      retry: 1,
+      retry: retryUnlessTimeout(1),
     })),
     combine: (results) => {
       const byId = new Map<string, CycleRunPacing | null>();
@@ -2037,7 +2024,7 @@ function useOptimizerPagedRead<TRow extends { id: string | number }>({
     staleTime,
     gcTime: THIRTY_MINUTES,
     refetchInterval,
-    retry: 1,
+    retry: retryUnlessTimeout(1),
   });
 
   const pages = query.data?.pages;
@@ -2120,7 +2107,7 @@ export function useOptimizerAccountSnapshots(
     enabled,
     staleTime: TEN_MINUTES,
     gcTime: THIRTY_MINUTES,
-    retry: 1,
+    retry: retryUnlessTimeout(1),
   });
 
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -2180,7 +2167,7 @@ export function useOptimizerAdsetInventory(
     enabled: canQuery,
     staleTime: TEN_MINUTES,
     gcTime: THIRTY_MINUTES,
-    retry: 1,
+    retry: retryUnlessTimeout(1),
   });
 
   const [cooldownUntil, setCooldownUntil] = useState(0);

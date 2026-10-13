@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import type { CampaignIndexRecord } from '@/lib/paid-media/campaign-indexes';
 import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
 import type { CampaignPerformanceRow, PaidMediaPlatform } from '@/lib/paid-media/performance-types';
@@ -162,10 +163,7 @@ export function PaidMediaDashboard({
           return;
         }
         console.error('Failed to load campaigns:', error);
-        setLoadState({
-          status: 'error',
-          message: error instanceof Error ? error.message : 'Failed to load campaigns',
-        });
+        setLoadState({ status: 'error', message: loadFailureMessage('campaigns', error) });
       }
     },
     [adAccountId, brandId, loadCampaignPerformance, metricsRange, platform],

@@ -13,9 +13,16 @@ export const READ_TIMEOUT_MS = 10_000;
 /** A write or a job the server works on for a while (a cycle, an upload, a model call). */
 export const LONG_OPERATION_TIMEOUT_MS = 120_000;
 
+/** The sentence every timeout carries; `isRequestTimeout` recognises it after supabase-js has
+ *  reduced the error to `{ message }` (PostgREST) or wrapped it in `FunctionsFetchError`. */
+const TIMEOUT_MESSAGE = /didn't answer in \d+ s\.$/;
+
 export class RequestTimeoutError extends Error {
   readonly timeoutMs: number;
   readonly url: string;
+  /** postgrest-js retries a failed GET three times unless the error is an abort; this names it
+   *  one, so a bound that fired is final instead of paid four times over. */
+  readonly code = 'ABORT_ERR';
 
   constructor(url: string, timeoutMs: number) {
     super(`The server didn't answer in ${Math.round(timeoutMs / 1000)} s.`);
@@ -25,14 +32,21 @@ export class RequestTimeoutError extends Error {
   }
 }
 
-/** True for our own bound, and for a platform `AbortSignal.timeout` firing. */
-export function isRequestTimeout(error: unknown): boolean {
+const field = (error: unknown, key: string): unknown =>
+  error && typeof error === 'object' ? Reflect.get(error, key) : undefined;
+
+/** True for our own bound, for a platform `AbortSignal.timeout` firing, and for either once a
+ *  client library has wrapped it (`context`, `cause`) or kept only its message. */
+export function isRequestTimeout(error: unknown, depth = 0): boolean {
   if (error instanceof RequestTimeoutError) return true;
+  if (!error || typeof error !== 'object') return false;
+  if (field(error, 'name') === 'TimeoutError') return true;
+  const message = field(error, 'message');
+  if (typeof message === 'string' && TIMEOUT_MESSAGE.test(message)) return true;
+  if (depth >= 3) return false;
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    (error as { name?: unknown }).name === 'TimeoutError'
+    isRequestTimeout(field(error, 'context'), depth + 1) ||
+    isRequestTimeout(field(error, 'cause'), depth + 1)
   );
 }
 
@@ -92,9 +106,10 @@ const requestMethod = (input: RequestInfo | URL, init?: RequestInit): string =>
   (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
 
 /** `fetch` with the policy's bound. A caller's own `signal` still aborts the request; only the
- *  policy's timer is reported as `RequestTimeoutError`. */
-export function fetchWithTimeout(policy: TimeoutPolicy, base: FetchLike = fetch): FetchLike {
-  return async (input, init) => {
+ *  policy's timer is reported as `RequestTimeoutError`. Typed as `typeof fetch` for the clients
+ *  that take one (supabase-js `global.fetch`); the Node-only `preconnect` is never called. */
+export function fetchWithTimeout(policy: TimeoutPolicy, base: FetchLike = fetch): typeof fetch {
+  const bounded: FetchLike = async (input, init) => {
     const url = requestUrl(input);
     const ms = policy(url, requestMethod(input, init));
     if (ms === null) return base(input, init);
@@ -111,6 +126,7 @@ export function fetchWithTimeout(policy: TimeoutPolicy, base: FetchLike = fetch)
       timed.clear();
     }
   };
+  return bounded as unknown as typeof fetch;
 }
 
 /**

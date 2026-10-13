@@ -209,7 +209,7 @@ describe('fetchScaleCampaigns', () => {
     expect(failure).toBeInstanceOf(ScaleLoadError);
     // The function's own sentence, as the "why" under "Couldn't load campaigns".
     expect(failure).toMatchObject({
-      message: 'rate limited by Meta.',
+      message: 'Rate limited by Meta.',
       errorCode: 'RATE_LIMITED',
       retryAfter: 30,
     });

@@ -38,7 +38,8 @@ export type CreativeExtremes = {
   images: Record<string, string | null>;
 };
 
-export function useAccountTotals(brandId: string, accounts: HomeAdAccount[]) {
+/** `attempt` is Retry's counter: bumping it re-runs the read with the same inputs. */
+export function useAccountTotals(brandId: string, accounts: HomeAdAccount[], attempt = 0) {
   const [state, setState] = useState<Load<OverviewTotals>>({ status: 'loading' });
   const key = accounts.map((account) => account.id).join(',');
 
@@ -64,7 +65,7 @@ export function useAccountTotals(brandId: string, accounts: HomeAdAccount[]) {
     return () => {
       cancelled = true;
     };
-  }, [brandId, key]);
+  }, [brandId, key, attempt]);
 
   return state;
 }
@@ -108,6 +109,7 @@ export function useTopCampaigns(
   brandId: string,
   accounts: HomeAdAccount[],
   metric: HomeObjectiveMetric | null,
+  attempt = 0,
 ) {
   const [state, setState] = useState<Load<RankedWithAccount[]>>({ status: 'loading' });
   const key = accounts.map((account) => account.id).join(',');
@@ -129,7 +131,7 @@ export function useTopCampaigns(
     return () => {
       cancelled = true;
     };
-  }, [brandId, key, metric]);
+  }, [brandId, key, metric, attempt]);
 
   return state;
 }
@@ -138,6 +140,7 @@ export function useCreativeExtremes(
   brandId: string,
   accounts: HomeAdAccount[],
   metric: HomeObjectiveMetric | null,
+  attempt = 0,
 ) {
   const [state, setState] = useState<Load<CreativeExtremes>>({ status: 'loading' });
   const key = accounts.map((account) => account.id).join(',');
@@ -164,12 +167,12 @@ export function useCreativeExtremes(
             .map(async (row) => {
               try {
                 const preview = await fetchJainaCreativePreview(
-                datasetCreativeRefSchema.parse({
-                  brand_id: brandId,
-                  ad_account_id: row.adAccountId,
-                  ad_id: row.id,
-                }),
-              );
+                  datasetCreativeRefSchema.parse({
+                    brand_id: brandId,
+                    ad_account_id: row.adAccountId,
+                    ad_id: row.id,
+                  }),
+                );
                 images[row.id] = preview.image_url ?? preview.thumbnail_url;
               } catch {
                 images[row.id] = null;
@@ -182,12 +185,12 @@ export function useCreativeExtremes(
     return () => {
       cancelled = true;
     };
-  }, [brandId, key, metric]);
+  }, [brandId, key, metric, attempt]);
 
   return state;
 }
 
-export function useOrganicSnapshot(brandId: string, accounts: SnapshotAccountRef[]) {
+export function useOrganicSnapshot(brandId: string, accounts: SnapshotAccountRef[], attempt = 0) {
   const [state, setState] = useState<Load<BrandOrganicSnapshot>>({ status: 'loading' });
   const key = accounts
     .map((account) => `${account.platform}|${account.integrationAccountId}|${account.name}`)
@@ -217,7 +220,7 @@ export function useOrganicSnapshot(brandId: string, accounts: SnapshotAccountRef
     return () => {
       cancelled = true;
     };
-  }, [brandId, stableAccounts]);
+  }, [brandId, stableAccounts, attempt]);
 
   return state;
 }

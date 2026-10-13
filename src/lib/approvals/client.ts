@@ -1,5 +1,6 @@
 'use client';
 
+import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   type ActionStatus,
@@ -17,11 +18,21 @@ import {
 
 type InvokeArgs = Record<string, unknown> & { action: string };
 
+/** Actions that only read. `rule-actions` is one edge function for the queue AND the approvals
+ *  that execute against the platform, so the client's bound by URL is the long one; a read
+ *  carries its own read bound here so a hung queue ends as a named state, not a skeleton. */
+const READ_ACTIONS: ReadonlySet<string> = new Set(['list', 'get', 'dryRun']);
+
 async function invoke<T>(args: InvokeArgs): Promise<T> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.functions.invoke<T>('rule-actions', { body: args });
+  const { data, error } = await supabase.functions.invoke<T>('rule-actions', {
+    body: args,
+    ...(READ_ACTIONS.has(args.action) ? { signal: AbortSignal.timeout(READ_TIMEOUT_MS) } : {}),
+  });
   if (error) {
-    throw new Error(error.message ?? 'rule-actions edge function failed');
+    // The library's own error rides along as the cause, so the surface can say why in words
+    // (loadFailureMessage) instead of printing "Edge Function returned a non-2xx status code".
+    throw new Error(error.message ?? 'rule-actions edge function failed', { cause: error });
   }
   if (!data) {
     throw new Error('rule-actions edge function returned no data');

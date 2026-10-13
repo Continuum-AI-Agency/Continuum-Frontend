@@ -53,9 +53,14 @@ const statusOf = (error: unknown): number | null => {
   return typeof nested === 'number' ? nested : null;
 };
 
-/** Which kind of failure this is, read from the error's class and status, never its words. */
-export function loadFailureCause(error: unknown): LoadFailureCause {
+/** Which kind of failure this is, read from the error's class and status, never its words.
+ *  An Error that wraps the library's own (`cause`) is read through it. */
+export function loadFailureCause(error: unknown, depth = 0): LoadFailureCause {
   if (isRequestTimeout(error)) return 'timeout';
+  if (depth === 0 && error instanceof Error && error.cause !== undefined) {
+    const inner = loadFailureCause(error.cause, 1);
+    if (inner !== 'unknown') return inner;
+  }
   if (error instanceof FunctionsFetchError) return 'offline';
   if (error instanceof ZodError) return 'unexpected_shape';
   if (error instanceof FunctionsRelayError) return 'server_error';
@@ -92,16 +97,24 @@ const ownMessage = (error: unknown): string | null => {
 };
 
 /**
- * The "why" alone, as a lowercase clause ending in a period: "the server didn't answer in
- * time." A server-written sentence stands in for the generic clause only when it reads as one
+ * The "why" alone, a clause ending in a period: "the server didn't answer in time." A
+ * server-written sentence stands in for the generic clause only when it reads as one
  * (`isPlainSentence`); null when nothing can be said beyond "it failed".
  */
 export function loadFailureWhy(error: unknown): string | null {
-  const cause = loadFailureCause(error);
-  const own = ownMessage(error);
+  // A client's own Error around the library's ("rule-actions edge function failed") is the
+  // developer's wording; the library error underneath is what happened.
+  const source =
+    error instanceof Error &&
+    error.cause !== undefined &&
+    loadFailureCause(error.cause, 1) !== 'unknown'
+      ? error.cause
+      : error;
+  const cause = loadFailureCause(source);
+  const own = ownMessage(source);
   if (cause !== 'timeout' && cause !== 'offline' && isPlainSentence(own)) {
-    const sentence = own.trim().replace(/[.]+$/, '');
-    return `${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}.`;
+    // As the server wrote it (a leading "Meta" is a name, not a sentence start), one period.
+    return `${own.trim().replace(/[.]+$/, '')}.`;
   }
   return cause === 'unknown' ? null : WHY[cause];
 }
