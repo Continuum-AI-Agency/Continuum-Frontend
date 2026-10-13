@@ -95,7 +95,7 @@ function Row({
       </td>
       <td
         className={NUMBER_CELL}
-        {...figureProps(key('results'), column.results, null, window, 'count')}
+        {...figureProps(key('results'), column.results ?? 0, null, window, 'count')}
       >
         {column.results == null ? '0' : formatResults(column.results)}
       </td>

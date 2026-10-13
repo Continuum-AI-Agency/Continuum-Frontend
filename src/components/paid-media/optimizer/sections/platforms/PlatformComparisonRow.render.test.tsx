@@ -84,6 +84,25 @@ describe('PlatformComparisonRow — the table', () => {
 
   // PP-L3-overview-meta-share-100-where-results-say-89: a share without its basis read as a
   // share of everything. The header says which result it is a share of and the node names it.
+  // paid:parity:e2e:bench 2026-10-13: comparison.google_ads.results printed "0" and declared
+  // no raw figure. A platform that bought none of the result is a zero, and the node says so.
+  it('stamps a platform that bought none of the result as raw 0, the figure its "0" is', () => {
+    const { getAllByTestId } = render(
+      <PlatformComparisonRow
+        metrics={buildMetrics([
+          META_TOTALS,
+          { ...GOOGLE_TOTALS, results_by_kind: [], unclassified_spend: GOOGLE_TOTALS.spend ?? 0 },
+        ])}
+      />,
+    );
+    const google = getAllByTestId('comparison-column').find(
+      (row) => row.getAttribute('data-platform') === 'google_ads',
+    );
+    const node = google?.querySelector('[data-figure$=".results"]');
+    expect(node?.textContent).toBe('0');
+    expect(node?.getAttribute('data-figure-raw')).toBe('0');
+  });
+
   it('declares the basis of every share: the compared result kind, on the header and the node', () => {
     const { getAllByTestId } = render(<PlatformComparisonRow metrics={EASY_FIT_MP1} />);
     for (const row of getAllByTestId('comparison-column')) {

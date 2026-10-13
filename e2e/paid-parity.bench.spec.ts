@@ -664,7 +664,7 @@ function resolve(node: FigureNode): PayloadExpectation {
 
   // -- Portfolio cards (Overview) and list rows (Portfolios) -----------------------
   const rowFigure =
-    /^(portfolio-row|portfolios)\.(archived\.)?([0-9a-f-]{36})\.(daily|target|lead\.figure|lead\.money|lead\.from|lead\.to)$/.exec(
+    /^(portfolio-row|portfolios)\.(archived\.)?([0-9a-f-]{36})\.(daily|target|lead\.figure|lead\.money|lead\.from|lead\.to|pacing\.figure)$/.exec(
       key,
     );
   if (rowFigure) {
@@ -675,6 +675,17 @@ function resolve(node: FigureNode): PayloadExpectation {
     if (!portfolio) return unmapped(`portfolio ${id} not in ${listName}`);
     if (part === 'daily')
       return value(`${listName}[${id}].daily_total`, num(portfolio.daily_total));
+    // Under an account-wide pacing finding a row prints ITS OWN run's drift from plan:
+    // |pacingRatio − 1| in percent points, from that portfolio's optimizer-status read
+    // (PP-L3-identical-pacing-block-on-every-portfolio).
+    if (part === 'pacing.figure') {
+      const status = obj(payload('optimizer-status', (b) => b.portfolio_id === id));
+      const ratio = num(obj(obj(status?.latest_run)?.pacing)?.pacingRatio);
+      return value(
+        `optimizer-status[${id}].latest_run.pacing.pacingRatio − 1, in points`,
+        ratio === null ? null : Math.abs(Math.round((ratio - 1) * 100)),
+      );
+    }
     if (part === 'target')
       return value(`${listName}[${id}].cpa_target × denominatorMultiplier`, targetOf(portfolio));
     const candidates = candidatesOfRead().filter((c) =>
