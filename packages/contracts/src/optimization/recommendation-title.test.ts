@@ -72,6 +72,25 @@ describe('money in a title', () => {
     expect(titleCarriesVerb('Pausar ITESO')).toBe(true);
   });
 
+  it('prints the figure with the decimals that tell it from its reference, and rounded when they match', () => {
+    const title = recommendationTitleSchema.parse({
+      entity: 'A',
+      figure: 100.01,
+      unit: 'MXN',
+      comparator: `en 14 días y 0 leads, más que el objetivo de ${formatMoney(100, 'MXN', { distinguishFrom: 100.01 })}`,
+      reference: 100,
+      window: 'd14',
+    });
+    expect(titleText(title)).toBe(
+      'A: $100.01 MXN, en 14 días y 0 leads, más que el objetivo de $100.00 MXN',
+    );
+    expect(titleFigure({ figure: 1473.75, unit: 'MXN por lead', reference: 1474 })).toBe(
+      '$1,473.75 MXN por lead',
+    );
+    expect(titleFigure({ figure: 298, unit: 'MXN', reference: 298 })).toBe('$298 MXN');
+    expect(titleFigure({ figure: 298, unit: 'MXN', reference: 100 })).toBe('$298 MXN');
+  });
+
   it('sizes the button by the day, by a from → to, or says the verb alone', () => {
     expect(
       actionLabel({

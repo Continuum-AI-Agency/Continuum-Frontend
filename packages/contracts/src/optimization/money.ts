@@ -19,6 +19,10 @@
 // "$25.54/day · $766/mo" is the compiled card's spelling, and a sentence that says "$26/day"
 // beside it is a sentence a reader multiplies and finds wrong.
 //
+// A COMPARISON NEVER READS AS A TIE IT IS NOT. A sentence that sets a figure against a
+// threshold passes `distinguishFrom` on both sides: 100.01 against a 100 target prints
+// "$100.01 MXN" over "$100.00 MXN", never "$100 MXN over a $100 MXN target".
+//
 // Never "currency units". A model handed a null currency once wrote "44.86 currency units"
 // — its own workaround, and worse than the bare figure: it reads as a unit nobody has.
 
@@ -54,6 +58,62 @@ export function currencyGlyph(code: string): string | null {
   return glyph;
 }
 
+export interface FormatMoneyOptions {
+  /**
+   * The figure (or figures) this one is compared against in the same sentence — the target,
+   * the goal, the threshold. When the digit rule would print both sides the same while the
+   * values differ ("$100 MXN over a $100 MXN target" for 100.01 against 100), the decimals
+   * rise just enough to tell them apart ("$100.01 MXN" against "$100.00 MXN"). Pass it on
+   * BOTH sides of the comparison so the two figures carry the same decimals. Equal values
+   * keep the ordinary rounding.
+   */
+  distinguishFrom?: number | readonly number[] | null;
+}
+
+/** Two decimals under 100, none at or above it. */
+const digitRule = (value: number): number => (Math.abs(value) >= 100 ? 0 : 2);
+
+/** Never more than this: past it the difference is not money anyone can spend. */
+const MAX_DISTINGUISHING_DIGITS = 6;
+
+const digitFormatters = new Map<number, Intl.NumberFormat>();
+function formatDigits(value: number, digits: number): string {
+  let formatter = digitFormatters.get(digits);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    digitFormatters.set(digits, formatter);
+  }
+  return formatter.format(value);
+}
+
+/** True when the two figures read as the same amount at the digits each one would print. */
+const readAlike = (a: number, aDigits: number, b: number, bDigits: number): boolean =>
+  Number(formatDigits(a, aDigits).replace(/,/g, '')) ===
+  Number(formatDigits(b, bDigits).replace(/,/g, ''));
+
+/**
+ * The decimals a figure prints at: the digit rule, raised only when a figure it is compared
+ * against would otherwise read as the same amount.
+ */
+function distinguishingDigits(value: number, others: readonly number[]): number {
+  let digits = digitRule(value);
+  for (const other of others) {
+    if (!Number.isFinite(other) || other === value) continue;
+    const otherDigits = digitRule(other);
+    if (!readAlike(value, digits, other, otherDigits)) continue;
+    for (let d = Math.max(digits, otherDigits, 2); d <= MAX_DISTINGUISHING_DIGITS; d++) {
+      if (formatDigits(value, d) !== formatDigits(other, d)) {
+        digits = Math.max(digits, d);
+        break;
+      }
+    }
+  }
+  return digits;
+}
+
 /**
  * A money figure for a sentence: "$25.54 USD", "$25.54 MXN", "25.54 CHF", or the bare
  * "25.54" when the currency is unknown. A missing or non-finite value prints "—", exactly as
@@ -62,14 +122,17 @@ export function currencyGlyph(code: string): string | null {
 export function formatMoney(
   value: number | null | undefined,
   currency: string | null | undefined,
+  options: FormatMoneyOptions = {},
 ): string {
   if (value == null || !Number.isFinite(value)) return '—';
   const code = normalizeCurrencyCode(currency);
-  const digits = Math.abs(value) >= 100 ? 0 : 2;
-  const body = new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value));
+  const others =
+    options.distinguishFrom == null
+      ? []
+      : typeof options.distinguishFrom === 'number'
+        ? [options.distinguishFrom]
+        : options.distinguishFrom;
+  const body = formatDigits(Math.abs(value), distinguishingDigits(value, others));
   // The sign stays outside the symbol: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
   const sign = value < 0 ? '-' : '';
   if (!code) return `${sign}${body}`;

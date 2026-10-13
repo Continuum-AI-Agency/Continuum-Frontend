@@ -206,6 +206,21 @@ test('P3 states the spend, the window and the nothing it bought', () => {
   expect(button).toBe('Pausar · $21.29 MXN/día');
 });
 
+test('P3 never prints the spend and the target it exceeded as the same figure', () => {
+  const dead = mk({
+    id: 'aleira',
+    name: 'ALEIRA',
+    kpiField: 'leads',
+    windows: { d3: wl(0, 0), d7: wl(50, 0), d14: wl(100.01, 0) },
+  });
+  const cfg: EngineConfig = { ...leadsMxn, cpaTarget: 100 };
+  const rec = byTrigger(evaluateTriggers([dead], cfg).recommendations, 'P3_low_significance');
+  const { text } = wire(rec);
+  expect(text).toBe(
+    'ALEIRA: $100.01 MXN, en 14 días y 0 leads, más que el objetivo de $100.00 MXN por lead',
+  );
+});
+
 test('P1 names the dead upper funnel in the objective’s own nouns', () => {
   const rec = byTrigger(
     evaluateTriggers([mk({ windows: flat(w(90, 0)) })], purchasesMxn).recommendations,

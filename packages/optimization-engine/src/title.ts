@@ -86,9 +86,14 @@ export function moneyPerResultUnit(cfg: EngineConfig, s?: Pick<AdSetSnapshot, 'k
   return `${currencyCode(cfg)} por ${resultNoun(cfg, s)}`.trim();
 }
 
-/** Money for a comparator: "$35 MXN", or the bare "25.54" when the currency is unknown. */
-export const titleMoney = (value: number, cfg: Pick<EngineConfig, 'currency'>): string =>
-  formatMoney(value, cfg.currency);
+/** Money for a comparator: "$35 MXN", or the bare "25.54" when the currency is unknown.
+ *  `distinguishFrom` is the title's figure when the comparator sets this one against it, so
+ *  the two never print alike while they differ (the title carries it back as `reference`). */
+export const titleMoney = (
+  value: number,
+  cfg: Pick<EngineConfig, 'currency'>,
+  distinguishFrom?: number,
+): string => formatMoney(value, cfg.currency, { distinguishFrom });
 
 /** "2.9×" — the multiple of one figure over another, one decimal, for a comparison. */
 export const multiple = (value: number, reference: number): string =>

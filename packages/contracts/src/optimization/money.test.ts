@@ -52,6 +52,39 @@ describe('formatMoney mirrors the Frontend M1 money rule', () => {
   });
 });
 
+describe('formatMoney distinguishFrom — a comparison never prints a tie it is not', () => {
+  test('100.01 against a 100 target prints the cents on both sides', () => {
+    expect(formatMoney(100.01, 'MXN', { distinguishFrom: 100 })).toBe('$100.01 MXN');
+    expect(formatMoney(100, 'MXN', { distinguishFrom: 100.01 })).toBe('$100.00 MXN');
+  });
+
+  test('1473.75 against 1474 prints the cents on both sides', () => {
+    expect(formatMoney(1473.75, 'USD', { distinguishFrom: 1474 })).toBe('$1,473.75 USD');
+    expect(formatMoney(1474, 'USD', { distinguishFrom: 1473.75 })).toBe('$1,474.00 USD');
+  });
+
+  test('equal values keep the ordinary rounding', () => {
+    expect(formatMoney(100, 'MXN', { distinguishFrom: 100 })).toBe('$100 MXN');
+    expect(formatMoney(1474, null, { distinguishFrom: 1474 })).toBe('1,474');
+    expect(formatMoney(25.54, 'MXN', { distinguishFrom: 25.54 })).toBe('$25.54 MXN');
+  });
+
+  test('values that already read apart keep the ordinary rounding', () => {
+    expect(formatMoney(101, 'MXN', { distinguishFrom: 100 })).toBe('$101 MXN');
+    expect(formatMoney(25.54, 'MXN', { distinguishFrom: 30 })).toBe('$25.54 MXN');
+  });
+
+  test('a figure under 100 that rounds up to the target gets the digit it needs', () => {
+    expect(formatMoney(99.999, 'MXN', { distinguishFrom: 100 })).toBe('$99.999 MXN');
+    expect(formatMoney(100, 'MXN', { distinguishFrom: 99.999 })).toBe('$100.000 MXN');
+  });
+
+  test('a figure compared against several takes the decimals the closest one needs', () => {
+    expect(formatMoney(100, 'MXN', { distinguishFrom: [140, 100.01] })).toBe('$100.00 MXN');
+    expect(formatMoney(100, null, { distinguishFrom: [] })).toBe('100');
+  });
+});
+
 describe('normalizeCurrencyCode', () => {
   test('accepts only a 3-letter ISO code, case-folded and trimmed', () => {
     expect(normalizeCurrencyCode(' mxn ')).toBe('MXN');

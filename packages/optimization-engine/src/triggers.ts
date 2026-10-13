@@ -139,7 +139,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
             comparator:
               upper3d === 0
                 ? `en 3 días con 0 ${resultNounPlural(cfg, s)} y 0 ${upperFunnelNoun(upperLabel, 0)}`
-                : `en 3 días con 0 ${resultNounPlural(cfg, s)}, ${titleMoney(atcCost3d, cfg)} por ${upperFunnelNoun(upperLabel, 1)} frente a ${titleMoney(avgAtcCost, cfg)} de promedio (${multiple(atcCost3d, avgAtcCost)})`,
+                : `en 3 días con 0 ${resultNounPlural(cfg, s)}, ${titleMoney(atcCost3d, cfg, avgAtcCost)} por ${upperFunnelNoun(upperLabel, 1)} frente a ${titleMoney(avgAtcCost, cfg, atcCost3d)} de promedio (${multiple(atcCost3d, avgAtcCost)})`,
             window: 'd3',
           }),
           action: action('pause', cfg, { perDay: perDayOver(d3.spend, 'd3') }),
@@ -226,7 +226,8 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
             entity: entityOf(s),
             figure: d14.spend,
             unit: currencyCode(cfg),
-            comparator: `en 14 días y 0 ${resultNounPlural(cfg, s)}, más que el objetivo de ${titleMoney(cfg.cpaTarget, cfg)} por ${resultNoun(cfg, s)}`,
+            comparator: `en 14 días y 0 ${resultNounPlural(cfg, s)}, más que el objetivo de ${titleMoney(cfg.cpaTarget, cfg, round2(d14.spend))} por ${resultNoun(cfg, s)}`,
+            reference: cfg.cpaTarget,
             window: 'd14',
           }),
           action: action('pause', cfg, { perDay: perDayOver(d14.spend, 'd14') }),

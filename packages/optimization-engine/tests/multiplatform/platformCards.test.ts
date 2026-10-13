@@ -51,6 +51,13 @@ describe('G03 projection (feature 14)', () => {
     expect('projection' in runs.mxn700).toBe(false);
   });
 
+  test('a cost just over the target never reads as equal to it', () => {
+    // 772.98 per result against a 772.50 target: both round to $773 at the digit rule.
+    const r = g03BudgetLimitedRaise(ekatar, { ...base, ...history, cpaTarget: mxn(772.5) });
+    expect(r.outcome).toBe('refusal');
+    expect(r.reason).toContain('at $772.98 MXN per result, above the $772.50 MXN target.');
+  });
+
   test('a proposal projects now, low and high from the d7 window', () => {
     const r = g03BudgetLimitedRaise(ekatar, { ...base, ...history, cpaTarget: mxn(900) });
     expect(r.outcome).toBe('proposal');

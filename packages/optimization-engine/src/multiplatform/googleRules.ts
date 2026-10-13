@@ -131,7 +131,7 @@ export function g03BudgetLimitedRaise(s: MultiPlatformSnapshot, ctx: G03Context)
   if (cost >= ctx.cpaTarget.amount) {
     return refuse(
       'above_target',
-      `${name} loses ${lostText} to budget at ${formatMoney(cost, currency)} per result, above the ${formatMoney(ctx.cpaTarget.amount, currency)} target.`,
+      `${name} loses ${lostText} to budget at ${formatMoney(cost, currency, { distinguishFrom: ctx.cpaTarget.amount })} per result, above the ${formatMoney(ctx.cpaTarget.amount, currency, { distinguishFrom: cost })} target.`,
     );
   }
   if (isGoogleBidLearning(s.bidding?.systemStatus)) {

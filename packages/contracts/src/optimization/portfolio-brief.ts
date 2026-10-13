@@ -461,7 +461,7 @@ export function calmHero(args: {
   const label = growth.result_label;
   const top = args.candidates[0];
   const underFloor = top
-    ? `No single change clears the impact floor today (largest: ${formatMoney(top.impact_per_day, cur)}/day vs a ${formatMoney(heroMinImpact(args.dailyTotal), cur)}/day floor).`
+    ? `No single change clears the impact floor today (largest: ${formatMoney(top.impact_per_day, cur, { distinguishFrom: heroMinImpact(args.dailyTotal) })}/day vs a ${formatMoney(heroMinImpact(args.dailyTotal), cur, { distinguishFrom: top.impact_per_day })}/day floor).`
     : 'No open recommendations to act on today.';
 
   const allHeld =
@@ -505,10 +505,10 @@ export function calmHero(args: {
     why = heldWhy;
   } else if (over != null && over > MATERIAL_OVER_TARGET && cpr != null && target != null) {
     if (confident) {
-      headline = `${costPerLabel(label)} is ${formatMoney(cpr, cur)}, ${Math.round(over * 100)}% over the ${formatMoney(target, cur)} target`;
+      headline = `${costPerLabel(label)} is ${formatMoney(cpr, cur, { distinguishFrom: target })}, ${Math.round(over * 100)}% over the ${formatMoney(target, cur, { distinguishFrom: cpr })} target`;
       why = `${underFloor} The gap is portfolio-wide: new creatives, less budget until cost falls, or a target that fits what ${growth.results} ${label} cost.`;
     } else {
-      headline = `${costPerLabel(label)} is ${formatMoney(cpr, cur)} against a ${formatMoney(target, cur)} target`;
+      headline = `${costPerLabel(label)} is ${formatMoney(cpr, cur, { distinguishFrom: target })} against a ${formatMoney(target, cur, { distinguishFrom: cpr })} target`;
       why = `Confidence is low: too little data to say the gap will hold. ${underFloor}`;
     }
   }

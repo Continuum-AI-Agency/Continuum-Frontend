@@ -43,6 +43,13 @@ export const recommendationTitleSchema = z.object({
    * never a bare minus sign.
    */
   comparator: z.string().min(1).max(200),
+  /**
+   * The money figure the comparator sets this one against (the target, the reference), when
+   * there is one. `titleFigure` prints the figure with the decimals that tell the two apart,
+   * so "$100.01 MXN" never shows as "$100 MXN" beside "más que el objetivo de $100.00 MXN".
+   * The producer formats the comparator's figure with `distinguishFrom: figure`.
+   */
+  reference: z.number().finite().optional(),
   window: titleWindowSchema,
 });
 export type RecommendationTitle = z.infer<typeof recommendationTitleSchema>;
@@ -108,14 +115,16 @@ export type RecommendationAction = z.infer<typeof recommendationActionSchema>;
 const ISO_CODE_UNIT = /^[A-Z]{3}(\s|$)/;
 
 /** The figure with its unit: "$101 MXN por lead", "12% de CTR", "3.2 veces por persona", "298". */
-export function titleFigure(title: Pick<RecommendationTitle, 'figure' | 'unit'>): string {
-  const { figure, unit } = title;
+export function titleFigure(
+  title: Pick<RecommendationTitle, 'figure' | 'unit' | 'reference'>,
+): string {
+  const { figure, unit, reference } = title;
   // A percentage glues to its figure — "12%", "12% de CTR" — the way a person writes one.
   if (unit.startsWith('%')) return `${figure}${unit}`;
   if (ISO_CODE_UNIT.test(unit)) {
     const code = unit.slice(0, 3);
     const rest = unit.slice(3).trim();
-    const money = formatMoney(figure, code);
+    const money = formatMoney(figure, code, { distinguishFrom: reference });
     return rest ? `${money} ${rest}` : money;
   }
   return unit ? `${figure} ${unit}` : String(figure);

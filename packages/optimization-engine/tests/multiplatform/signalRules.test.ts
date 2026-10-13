@@ -188,7 +188,10 @@ describe('G05 negative terms', () => {
       scope: 'campaign',
       terms: [{ text: 'gym barato', matchType: 'EXACT' }],
     });
-    expect(rec.reason).toContain('$100 MXN');
+    // 100.01 over a 100 target: the cents show on both sides, never "$100 MXN ... $100 MXN target".
+    expect(rec.reason).toContain('"gym barato" ($100.01 MXN)');
+    expect(rec.reason).toContain('cost more than the $100.00 MXN target');
+    expect(rec.reason).not.toContain('$100 MXN');
   });
 
   test('a converting term, an ADDED term and an active keyword are never negatives', () => {
