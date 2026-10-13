@@ -74,6 +74,9 @@ function Label({
   testId?: string;
   children: React.ReactNode;
 }) {
+  // A label hung below a point near the floor leaves the band and lands on whatever sits under
+  // it (the ranking table's header, at 768). Past 85% of the box it hangs above its point.
+  const resolvedAnchor: Anchor = anchor === 'below' && y >= 85 ? 'above' : anchor;
   return (
     <span
       className={cn(
@@ -82,7 +85,7 @@ function Label({
         strong ? 'font-semibold text-sm' : 'text-xs',
         TEXT_TONE[tone],
         ALIGN[align],
-        ANCHOR[anchor],
+        ANCHOR[resolvedAnchor],
       )}
       data-testid={testId}
       style={{ left: pct(x), top: pct(y) }}

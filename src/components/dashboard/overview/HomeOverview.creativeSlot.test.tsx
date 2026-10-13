@@ -22,3 +22,24 @@ describe('HomeOverview — the creative slot', () => {
     expect(worst.getByText('Worst').className).not.toMatch(/(^|\s)text-destructive(\s|$)/);
   });
 });
+
+describe('HomeOverview — the creative slot image', () => {
+  // PP-L1V-overlaps-jaina-band-labels-home-image: the value badge sat on the image, which the
+  // geometry audit reads as an image over text. The value has its own line under the image.
+  it('keeps the value label out of the image box', () => {
+    const { container, getByText } = render(
+      <CreativeSlot
+        tone="best"
+        row={row}
+        image="https://cdn.example/creative.jpg"
+        valueLabel="251.26x"
+      />,
+    );
+    const imageBox = container.querySelector('img')?.parentElement;
+    expect(imageBox).toBeTruthy();
+    expect(imageBox?.textContent).toBe('');
+    const value = getByText('251.26x');
+    expect(imageBox?.contains(value)).toBe(false);
+    expect(getByText('Tours — Octubre')).toBeTruthy();
+  });
+});

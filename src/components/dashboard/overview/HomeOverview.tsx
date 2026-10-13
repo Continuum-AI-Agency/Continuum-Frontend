@@ -142,7 +142,10 @@ export function CreativeSlot({
       </span>
       {row ? (
         <>
-          <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
+          {/* The value has its own line under the image, never a badge on it: an image under
+           *  text is what the geometry audit reads as an overlap, and the line is readable at any
+           *  width. */}
+          <div className="aspect-square w-full overflow-hidden rounded-md bg-muted">
             {image ? (
               // biome-ignore lint/performance/noImgElement: Meta CDN URLs expire and are not in next/image remotePatterns.
               <img src={image} alt={row.name} className="size-full object-cover" loading="lazy" />
@@ -151,12 +154,12 @@ export function CreativeSlot({
                 <ImageOff className="size-5" />
               </span>
             )}
-            <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 font-mono text-2xs tabular-nums">
-              {valueLabel}
-            </span>
           </div>
-          <span className="truncate text-xs" title={row.name}>
-            {row.name}
+          <span className="flex items-baseline justify-between gap-2 text-xs">
+            <span className="min-w-0 truncate" title={row.name}>
+              {row.name}
+            </span>
+            <span className="shrink-0 font-mono tabular-nums">{valueLabel}</span>
           </span>
         </>
       ) : (
