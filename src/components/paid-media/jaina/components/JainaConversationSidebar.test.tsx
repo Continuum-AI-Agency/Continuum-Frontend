@@ -171,6 +171,21 @@ describe('JainaConversationSidebar when the list could not be read', () => {
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
   });
 
+  it('gives Retry an invisible 24px hit area on its text line', () => {
+    // PP-L1V tap-target: the inline Retry painted 15px tall.
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled={false}
+        loadError="Couldn't load conversations."
+        onRetryLoad={mock(() => {})}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Retry' }).className.split(' ')).toContain(
+      'hit-area',
+    );
+  });
+
   it('keeps the list when a refresh failed after conversations were already read', () => {
     render(
       <JainaConversationSidebar

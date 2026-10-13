@@ -56,6 +56,7 @@ import {
   sumFunnelWindow,
 } from '../charts/vizData';
 import { DateRangeControl } from '../components/DateRangeControl';
+import { TEXT_DISCLOSURE } from '../components/disclosure';
 import { costCiLegend, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
@@ -873,7 +874,7 @@ export function PortfolioDetailWorkspace({
         {/* The two red-to-green ramps — the step funnel and the reallocation flow — wait
             behind a disclosure: the news above already says where the cost comes from. */}
         <details className="group" data-testid="portfolio-detail-more">
-          <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+          <summary className={TEXT_DISCLOSURE}>
             <span className="group-open:hidden">Show detail</span>
             <span className="hidden group-open:inline">Hide detail</span>
           </summary>
@@ -964,7 +965,7 @@ export function PortfolioDetailWorkspace({
                 target={targetDisplay}
               />
               <details className="group">
-                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                <summary className="hit-area cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                   Exact figures per ad set
                 </summary>
                 <div className="pt-2">

@@ -123,7 +123,7 @@ export function HomeBaseDashboard({
                       title={config.microcopy}
                       onClick={() => handleViewChange(view)}
                       className={cn(
-                        'h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
+                        'hit-area h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
                         isActive
                           ? 'bg-muted/60 text-foreground'
                           : 'text-muted-foreground hover:text-foreground',

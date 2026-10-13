@@ -45,7 +45,7 @@ type Props = {
   profileRows: HomeProfileRow[];
 };
 
-function ModuleCard({
+export function ModuleCard({
   title,
   accent,
   href,
@@ -70,7 +70,7 @@ function ModuleCard({
         <h2 className="text-sm font-semibold">{title}</h2>
         <Link
           href={href}
-          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+          className="hit-area inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
         >
           Open <ArrowUpRight className="size-3" />
         </Link>

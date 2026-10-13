@@ -227,7 +227,7 @@ export function JainaConversationSidebar({
                   {loadError}{' '}
                   {onRetryLoad ? (
                     <button
-                      className="font-medium underline underline-offset-4"
+                      className="hit-area font-medium underline underline-offset-4"
                       onClick={onRetryLoad}
                       type="button"
                     >

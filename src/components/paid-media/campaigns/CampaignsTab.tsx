@@ -573,7 +573,7 @@ function StatusFilter({
   };
   const item = (pressed: boolean) =>
     cn(
-      'rounded-md px-2 py-0.5 text-xs transition-colors motion-reduce:transition-none',
+      'hit-area rounded-md px-2 py-0.5 text-xs transition-colors motion-reduce:transition-none',
       pressed ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
     );
   const total = counts.active + counts.paused + counts.archived;

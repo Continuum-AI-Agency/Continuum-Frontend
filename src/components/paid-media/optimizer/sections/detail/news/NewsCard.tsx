@@ -12,6 +12,7 @@
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { TEXT_DISCLOSURE } from '../../../components/disclosure';
 import type { HeroCta } from '../heroModel';
 import { CardBand } from './CardBand';
 import { FINDING_ROW } from './cardShape';
@@ -82,7 +83,7 @@ export function FindingEvidence({
 }) {
   return (
     <details className="group/evidence">
-      <summary className="hit-area w-fit cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+      <summary className={cn('w-fit', TEXT_DISCLOSURE)}>
         <span className="group-open/evidence:hidden">Show the evidence</span>
         <span className="hidden group-open/evidence:inline">Hide the evidence</span>
       </summary>
@@ -142,7 +143,7 @@ export function NewsCard({
             ·
           </span>
           <a
-            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+            className="hit-area inline-flex items-center gap-1 underline-offset-4 hover:underline"
             href={explainHref}
           >
             Explain with Jaina <ExternalLinkIcon aria-hidden className="size-3" />

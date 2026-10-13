@@ -27,6 +27,7 @@ import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contra
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { TEXT_DISCLOSURE } from '../../components/disclosure';
 import { asOfLine } from '../recQueueModel';
 import { BeforeAfterStrip, type BeforeAfterStripProps } from './BeforeAfterStrip';
 import { anchorOf, type PortfolioHeadline as HeadlineModel, relevantTiles } from './headlineModel';
@@ -263,7 +264,7 @@ export function PortfolioHero({
             className="group border-border/60 border-t pt-3"
             data-testid="portfolio-news-more"
           >
-            <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+            <summary className={TEXT_DISCLOSURE}>
               <span className="group-open:hidden">
                 {more.length} more finding{more.length === 1 ? '' : 's'}
               </span>

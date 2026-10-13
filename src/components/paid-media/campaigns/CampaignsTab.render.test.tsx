@@ -145,6 +145,18 @@ describe('CampaignsTab', () => {
     expect(screen.getByTestId('scale-campaigns-table').textContent).not.toContain('paused');
   });
 
+  it('grows each status filter button to a 24px target invisibly, the 19px pill as drawn', () => {
+    // PP-L1V tap-target: the status pills paint at py-0.5 text-xs (19px).
+    renderWith({ fetchedAt: null, rows: [campaign({ id: 'c1', status: 'ACTIVE' })] });
+    const buttons = within(screen.getByTestId('scale-campaigns-filter')).getAllByRole('button');
+    expect(buttons.length).toBe(4);
+    for (const button of buttons) {
+      const classes = button.className.split(' ');
+      expect(classes).toContain('hit-area');
+      expect(classes).toContain('py-0.5');
+    }
+  });
+
   it("sums an active ABO campaign's ad-set budgets and marks a paused one as on its ad sets", () => {
     queryClient.setQueryData(scaleEntitiesKey('adset', scope, 'abo'), {
       fetchedAt: null,

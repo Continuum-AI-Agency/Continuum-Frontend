@@ -159,6 +159,26 @@ describe('InsightCard', () => {
   });
 });
 
+// PP-L1V tap-target: "Explain with Jaina" is an inline text link 15px tall; its target reaches
+// 24px through the invisible hit area, the Jaina line keeps its height.
+describe('NewsCard Explain link', () => {
+  it('gives the link the invisible hit area', () => {
+    const { getByRole } = render(
+      <NewsCard
+        card={card()}
+        currency="USD"
+        draft={false}
+        explainHref="/scale?tab=jaina"
+        onCta={() => {}}
+        resultLabel="leads"
+        tier={{ label: 'High impact', tone: 'destructive' }}
+      />,
+    );
+    const link = getByRole('link', { name: /Explain with Jaina/ });
+    expect(link.className.split(' ')).toContain('hit-area');
+  });
+});
+
 // PP-L1V-crawler-small-signatures: "Show the evidence" is an 18px disclosure; its target reaches
 // 24px through the invisible hit area, the line keeps its height.
 describe('NewsCard evidence disclosure', () => {

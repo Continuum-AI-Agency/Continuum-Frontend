@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'bun:test';
-import { render } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { cleanup, render } from '@testing-library/react';
 
-import { CreativeSlot } from './HomeOverview';
+import { CreativeSlot, ModuleCard } from './HomeOverview';
 
 const row = {
   id: 'ad-1',
@@ -9,6 +9,8 @@ const row = {
   accountId: 'act_1',
   accountName: 'Easy Fit',
 } as unknown as Parameters<typeof CreativeSlot>[0]['row'];
+
+afterEach(() => cleanup());
 
 describe('HomeOverview — the creative slot', () => {
   // PP-L1V-muted-caption-contrast-4.41: text-success / text-destructive measure 3.0:1 and 3.5:1
@@ -41,5 +43,19 @@ describe('HomeOverview — the creative slot image', () => {
     const value = getByText('251.26x');
     expect(imageBox?.contains(value)).toBe(false);
     expect(getByText('Tours — Octubre')).toBeTruthy();
+  });
+});
+
+describe('HomeOverview — a module card', () => {
+  it("gives the header's Open link an invisible 24px hit area, the header line as drawn", () => {
+    // PP-L1V tap-target: "Open ↗" painted 15px tall in each module header.
+    const { getByRole } = render(
+      <ModuleCard accent="perf" href="/scale" title="Performance +">
+        <p>body</p>
+      </ModuleCard>,
+    );
+    const open = getByRole('link', { name: /Open/ });
+    expect(open.className.split(' ')).toContain('hit-area');
+    expect(open.className).not.toMatch(/\b(min-h|h|py|p)-/);
   });
 });
