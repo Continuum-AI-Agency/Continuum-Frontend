@@ -138,7 +138,12 @@ mock.module('@/components/ui/tabs', () => ({
   Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+  // The class is forwarded so the shell's own tab classes (the muted ink) can be asserted.
+  TabsTrigger: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <button className={className} type="button">
+      {children}
+    </button>
+  ),
 }));
 
 mock.module('@xyflow/react', () => ({
@@ -434,6 +439,24 @@ describe('PaidMediaClientPage brand context', () => {
         expect(name?.className).toContain('@[26rem]/scale-bar:not-sr-only');
         expect(tab.querySelector('svg')?.getAttribute('class')).toContain(
           '@[26rem]/scale-bar:hidden',
+        );
+      }
+    });
+
+    it('reads an inactive module in the muted ink, which holds AA on the bar', async () => {
+      searchParamsValue = '';
+      render(
+        <PaidMediaClientPage
+          brandProfileId="brand-a"
+          brandName="Brand A"
+          initialAccounts={[{ id: 'act_1', name: 'Account One' }]}
+          initialAdAccountId="act_1"
+        />,
+      );
+      await screen.findByTestId('scale-header-bar');
+      for (const label of ['Optimizer', 'Campaigns', 'Jaina']) {
+        expect(screen.getByRole('button', { name: label }).className).toContain(
+          'text-muted-foreground',
         );
       }
     });

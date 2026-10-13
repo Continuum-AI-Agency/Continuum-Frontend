@@ -81,8 +81,10 @@ function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
 
 // The module tabs answer to the bar's width (`scale-bar`, see ScaleHeaderBar): narrow, each is
 // its mark with the name kept for assistive tech, so the segmented control never clips; with
-// room, the name replaces the mark. The marks match the sidebar's (Gauge, Bot).
-const SCALE_TAB_CLASS = 'px-1.5 text-xs @[26rem]/scale-bar:px-3';
+// room, the name replaces the mark. The marks match the sidebar's (Gauge, Bot). An inactive
+// module reads in the muted ink: the primitive's text-foreground/65 measures 4.4:1 on the bar's
+// muted fill, the ink 5.6:1 (PP-L1V-muted-caption-contrast-4.41).
+const SCALE_TAB_CLASS = 'px-1.5 text-xs text-muted-foreground @[26rem]/scale-bar:px-3';
 const SCALE_TAB_ICON_CLASS = 'size-3.5 @[26rem]/scale-bar:hidden';
 const SCALE_TAB_LABEL_CLASS = 'sr-only @[26rem]/scale-bar:not-sr-only';
 

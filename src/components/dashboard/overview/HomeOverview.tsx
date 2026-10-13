@@ -119,7 +119,7 @@ function Unavailable({ children, onRetry }: { children: React.ReactNode; onRetry
   );
 }
 
-function CreativeSlot({
+export function CreativeSlot({
   tone,
   row,
   image,
@@ -135,7 +135,7 @@ function CreativeSlot({
       <span
         className={cn(
           'text-2xs font-semibold uppercase tracking-wide',
-          tone === 'best' ? 'text-success' : 'text-destructive',
+          tone === 'best' ? 'text-success-ink' : 'text-destructive-ink',
         )}
       >
         {tone === 'best' ? 'Best' : 'Worst'}
