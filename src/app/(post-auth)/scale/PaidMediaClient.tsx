@@ -84,7 +84,9 @@ function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
 // room, the name replaces the mark. The marks match the sidebar's (Gauge, Bot). An inactive
 // module reads in the muted ink: the primitive's text-foreground/65 measures 4.4:1 on the bar's
 // muted fill, the ink 5.6:1 (PP-L1V-muted-caption-contrast-4.41).
-const SCALE_TAB_CLASS = 'px-1.5 text-xs text-muted-foreground @[26rem]/scale-bar:px-3';
+// `min-h-[24px]` in px, not `min-h-6`: the root font size steps down to 13px on narrow screens, so
+// rem-sized triggers measured 22px — under the 24px target floor.
+const SCALE_TAB_CLASS = 'min-h-[24px] px-1.5 text-xs text-muted-foreground @[26rem]/scale-bar:px-3';
 const SCALE_TAB_ICON_CLASS = 'size-3.5 @[26rem]/scale-bar:hidden';
 const SCALE_TAB_LABEL_CLASS = 'sr-only @[26rem]/scale-bar:not-sr-only';
 

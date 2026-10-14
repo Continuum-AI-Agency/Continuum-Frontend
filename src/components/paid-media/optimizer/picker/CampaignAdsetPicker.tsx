@@ -245,9 +245,7 @@ const AdsetRow = memo(function AdsetRow({
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="mt-0.5 block truncate text-xs text-warning">
-                    {row.reason}
-                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-warning">{row.reason}</span>
                 }
               />
               <TooltipContent className="max-w-xs">{row.reason}</TooltipContent>
@@ -307,7 +305,9 @@ const AdsetRow = memo(function AdsetRow({
                 <button
                   type="button"
                   aria-label={`Show ads in ${row.name}`}
-                  className="hit-area rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  // A painted 24px box, in px (rem steps down with the root font size): the
+                  // virtualizer's scroll box clips a pseudo-element hit pad at the table's edge.
+                  className="inline-flex size-[24px] items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <ImageIcon className="size-3.5" aria-hidden="true" />
                 </button>
