@@ -1188,13 +1188,24 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     accountReadLoading = true;
     const first = mount();
     const held = first.getByTestId('overview-recommendations-skeleton');
-    expect(follows(held, first.getByTestId('portfolio-rows'))).toBe(true);
     expect(held.querySelector('[data-testid="account-card"]')).toBeNull();
+    // Nothing is painted under cards that have not opened yet, so nothing is pushed.
+    expect(first.queryByTestId('portfolio-rows')).toBeNull();
     cleanup();
     accountReadLoading = false;
     const second = mount();
     expect(second.queryByTestId('overview-recommendations-skeleton')).toBeNull();
     expect(second.queryByTestId('account-tiles-skeleton')).toBeNull();
+    expect(second.getByTestId('portfolio-rows')).toBeTruthy();
+  });
+
+  it('paints the portfolio rows once, in their sorted order, after the cycles land', () => {
+    efficiency = { series: [], pending: true, failed: 0, retryFailed };
+    const first = mount();
+    expect(first.queryByTestId('portfolio-rows')).toBeNull();
+    cleanup();
+    efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
+    expect(mount().getByTestId('portfolio-rows')).toBeTruthy();
   });
 
   // PP-L1V-cls-overview-0.865 residual (768: 0.117–0.216, measured on the dev tree). Three

@@ -663,73 +663,81 @@ export function OptimizerOverview({
         <RecommendationsSkeleton />
       ) : null}
 
-      {/* 6 — the portfolios, one line each, sortable by distance to target. */}
-      <section className="space-y-2" data-testid="portfolio-rows">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
-          <div className="flex items-center gap-1.5">
-            <ToggleGroup
-              aria-label="Sort portfolios by"
-              className="flex-wrap"
-              onValueChange={(value) => {
-                if (value) setSortKey(value as RowSortKey);
-              }}
-              size="sm"
-              type="single"
-              value={sortKey}
-              variant="outline"
-            >
-              <ToggleGroupItem className="h-7 px-2 text-xs" value="distance">
-                Distance to target
-              </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-xs" value="name">
-                Name
-              </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-xs" value="daily">
-                Budget
-              </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-xs" value="pending">
-                Pending
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Button
-              aria-label={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-              className="size-7 p-0"
-              onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {sortDir === 'asc' ? (
-                <ArrowUpIcon aria-hidden="true" className="size-3.5" />
-              ) : (
-                <ArrowDownIcon aria-hidden="true" className="size-3.5" />
-              )}
-            </Button>
+      {/* 6 — the portfolios, one line each, sortable by distance to target. Held back until
+       *  the account read and the cycles have landed: the cards above open to as many as four
+       *  (no placeholder can know how many) and the cycles re-sort the rows, so rows painted
+       *  earlier were pushed and reordered on every load (768 CLS 0.065 + 2 × 0.019). Arriving
+       *  last, at the bottom, they move nothing. */}
+      {accountRead.isLoading || efficiency.pending ? null : (
+        <section className="space-y-2" data-testid="portfolio-rows">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
+            <div className="flex items-center gap-1.5">
+              <ToggleGroup
+                aria-label="Sort portfolios by"
+                className="flex-wrap"
+                onValueChange={(value) => {
+                  if (value) setSortKey(value as RowSortKey);
+                }}
+                size="sm"
+                type="single"
+                value={sortKey}
+                variant="outline"
+              >
+                <ToggleGroupItem className="h-7 px-2 text-xs" value="distance">
+                  Distance to target
+                </ToggleGroupItem>
+                <ToggleGroupItem className="h-7 px-2 text-xs" value="name">
+                  Name
+                </ToggleGroupItem>
+                <ToggleGroupItem className="h-7 px-2 text-xs" value="daily">
+                  Budget
+                </ToggleGroupItem>
+                <ToggleGroupItem className="h-7 px-2 text-xs" value="pending">
+                  Pending
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <Button
+                aria-label={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+                className="size-7 p-0"
+                onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {sortDir === 'asc' ? (
+                  <ArrowUpIcon aria-hidden="true" className="size-3.5" />
+                ) : (
+                  <ArrowDownIcon aria-hidden="true" className="size-3.5" />
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="space-y-1.5">
-          {sorted.map((portfolio) => (
-            <PortfolioRowCard
-              currency={currency}
-              key={portfolio.id}
-              onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
-              onSelect={() => onSelectPortfolio(portfolio.id)}
-              platform={OPTIMIZER_MANAGED_PLATFORM}
-              platforms={memberPlatforms(
-                memberStates.get(portfolio.id),
-                OPTIMIZER_MANAGED_PLATFORM,
-              )}
-              pacing={pacingById.get(portfolio.id) ?? null}
-              portfolio={portfolio}
-              window={windows.get(portfolio.id) ?? null}
-            />
-          ))}
-          {sorted.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No portfolios yet.</p>
-          ) : null}
-        </div>
-      </section>
+          <div className="space-y-1.5">
+            {sorted.map((portfolio) => (
+              <PortfolioRowCard
+                currency={currency}
+                key={portfolio.id}
+                onPrefetch={
+                  onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined
+                }
+                onSelect={() => onSelectPortfolio(portfolio.id)}
+                platform={OPTIMIZER_MANAGED_PLATFORM}
+                platforms={memberPlatforms(
+                  memberStates.get(portfolio.id),
+                  OPTIMIZER_MANAGED_PLATFORM,
+                )}
+                pacing={pacingById.get(portfolio.id) ?? null}
+                portfolio={portfolio}
+                window={windows.get(portfolio.id) ?? null}
+              />
+            ))}
+            {sorted.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No portfolios yet.</p>
+            ) : null}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
