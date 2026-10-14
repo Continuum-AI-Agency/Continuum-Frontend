@@ -68,7 +68,8 @@ export const microRenderRequestSchema = z
       .default([]),
     /** This comp's settings: the template default merged with its per-comp override. */
     encode: encodeSettingsSchema.default({}),
-    /** v1 encodes MP4 only; any other file is refused as `encode:<ext>`. */
+    /** MP4 for a moving comp; JPEG or PNG for a still (one frame, encoded as the fleet does); any other
+     * file is refused as `encode:<ext>`. */
     file: z.enum(['mp4', 'mov', 'mxf', 'webm', 'gif', 'png', 'jpg']),
   })
   .strict();
