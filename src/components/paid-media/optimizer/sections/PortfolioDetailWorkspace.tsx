@@ -609,14 +609,16 @@ export function PortfolioDetailWorkspace({
           running={run.isPending}
           secondaryPending={setPaused.isPending}
           tabs={
-            <TabsList className="h-8 shrink-0" variant="line">
-              <TabsTrigger className="px-2 text-sm" value="performance">
+            // px floors, not rem: the root font steps down to 13px on narrow screens and the
+            // rem-sized triggers measured 22px tall, under the 24px target floor.
+            <TabsList className="h-8 min-h-[30px] shrink-0" variant="line">
+              <TabsTrigger className="min-h-[24px] px-2 text-sm" value="performance">
                 Performance
               </TabsTrigger>
-              <TabsTrigger className="px-2 text-sm" value="manage">
+              <TabsTrigger className="min-h-[24px] px-2 text-sm" value="manage">
                 Manage
               </TabsTrigger>
-              <TabsTrigger className="px-2 text-sm" value="activity">
+              <TabsTrigger className="min-h-[24px] px-2 text-sm" value="activity">
                 Activity
               </TabsTrigger>
             </TabsList>

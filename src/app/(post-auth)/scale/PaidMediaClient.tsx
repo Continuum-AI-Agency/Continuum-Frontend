@@ -717,7 +717,7 @@ export default function PaidMediaClientPage({
                 <span className="sr-only @[44rem]/scale-bar:not-sr-only">Creative Insights</span>
               </button>
             ) : null}
-            <TabsList className="h-8 shrink-0">
+            <TabsList className="h-8 min-h-[30px] shrink-0">
               <TabsTrigger
                 value="performance"
                 className={SCALE_TAB_CLASS}
