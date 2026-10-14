@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 import {
+  BLANK_SURFACE,
   buildContinuityGridPrompt,
   CONTINUITY_SHEET_GRIDS,
   PRODUCT_SHEET_GRIDS,
-  PRODUCT_SHEET_PALETTE,
   PRODUCT_SHEET_SUBJECT,
+  printedFacesShown,
 } from './continuity-sheet';
 
 describe('continuity sheet grids', () => {
@@ -42,12 +43,11 @@ describe('continuity sheet grids', () => {
     expect(lines.at(-1)).toBe('Operator guidance (highest priority): Keep the freckles.');
   });
 
-  it('never repeats a role across the product sheet, and its palette samples its own cells', () => {
+  it('never repeats a role across the product sheet', () => {
     const roles = Object.values(PRODUCT_SHEET_GRIDS).flatMap((grid) =>
       grid.cells.map((cell) => cell.role),
     );
     expect(new Set(roles).size).toBe(roles.length);
-    for (const swatch of PRODUCT_SHEET_PALETTE) expect(roles).toContain(swatch.role);
   });
 
   // Pinned before the subject parameter existed: the person sheet's prompts must not move.
@@ -83,16 +83,71 @@ describe('continuity sheet grids', () => {
     );
   });
 
-  it('asks a product grid to copy printed artwork and to write nothing else', () => {
+  it('asks a product grid to copy printed artwork only where a reference shows it', () => {
+    const subject = PRODUCT_SHEET_SUBJECT;
     const prompt = buildContinuityGridPrompt(PRODUCT_SHEET_GRIDS.turnaround, {
       references: ['source photograph of the product, front view.'],
-      subject: PRODUCT_SHEET_SUBJECT,
+      subject,
+      printedFaces: ['front'],
     });
     expect(prompt).toContain(
       'strict 3x2 grid of 6 separate square studio photographs of the SAME one product',
     );
-    expect(prompt).toContain(`- ${PRODUCT_SHEET_SUBJECT.textRule}`);
+    expect(prompt).toContain(`- ${subject.textRule}`);
     expect(prompt).not.toContain('Do not render any text');
+    // The front is shown, so it keeps its artwork; nobody photographed the back.
+    expect(prompt).toContain(
+      'Row 1, column 1: the product from the front, label and wordmark centred and squarely facing the camera.',
+    );
+    expect(prompt).toContain(
+      `Row 1, column 2: the product from directly behind, ${BLANK_SURFACE}.`,
+    );
     expect(prompt).toContain('Row 2, column 3: the product held in one adult hand');
+    expect(prompt).not.toContain(`hand cropped at the wrist, ${BLANK_SURFACE}`);
+    expect(prompt).toContain(
+      "identical silhouette in every rectangle: the reference's height-to-width proportions, shoulder, neck and closure geometry",
+    );
+  });
+
+  it('requests no printed text for a text view no reference shows', () => {
+    const prompt = buildContinuityGridPrompt(PRODUCT_SHEET_GRIDS.details, {
+      references: ['the front view already made for this sheet.'],
+      subject: PRODUCT_SHEET_SUBJECT,
+      printedFaces: [],
+    });
+    const lines = prompt.split('\n').filter((line) => line.startsWith('Row '));
+    expect(lines).toEqual([
+      `Row 1, column 1: the front of the product, straight on, ${BLANK_SURFACE}.`,
+      `Row 1, column 2: the back of the product, straight on, ${BLANK_SURFACE}.`,
+      'Row 1, column 3: the cap, lid, clasp or closure.',
+      'Row 2, column 1: the surface material and its finish.',
+      `Row 2, column 2: the product surface where its logo would sit, ${BLANK_SURFACE}.`,
+      `Row 2, column 3: plain outer packaging in the product's own colours, every edge inside the rectangle, ${BLANK_SURFACE}.`,
+    ]);
+    // A back member brings the back label back, and only it.
+    const withBack = buildContinuityGridPrompt(PRODUCT_SHEET_GRIDS.details, {
+      references: [],
+      subject: PRODUCT_SHEET_SUBJECT,
+      printedFaces: printedFacesShown(['back']),
+    });
+    expect(withBack).toContain(
+      'Row 1, column 2: the whole back label, straight on, all four edges inside the rectangle.',
+    );
+    expect(withBack).toContain(
+      `Row 1, column 1: the front of the product, straight on, ${BLANK_SURFACE}.`,
+    );
+  });
+
+  it('reads a member with no role as the front, and only the named roles as back or packaging', () => {
+    expect(printedFacesShown([null])).toEqual(['front']);
+    expect(printedFacesShown([undefined, 'in_hand'])).toEqual(['front']);
+    expect(printedFacesShown(['back', 'side'])).toEqual(['back']);
+    expect(printedFacesShown(['label', 'packaging'])).toEqual(['front', 'packaging']);
+    expect(printedFacesShown(['detail', 'top', 'side'])).toEqual([]);
+  });
+
+  it('keeps every person cell free of the printed rule', () => {
+    for (const grid of Object.values(CONTINUITY_SHEET_GRIDS))
+      for (const cell of grid.cells) expect('printed' in cell).toBe(false);
   });
 });

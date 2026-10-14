@@ -12,12 +12,22 @@
 // slicer snaps each cut to the nearest real seam rather than trusting the arithmetic alone.
 
 import type { SheetLayout } from '../creative/contact-sheet-grid';
+import type { ElementMemberRole } from './element';
+
+/** The faces a product's printing sits on. */
+export type PrintedFace = 'front' | 'back' | 'packaging';
 
 export interface ContinuityCell {
   role: string;
   caption: string;
   /** What the cell shows, as the generation prompt states it. */
   view: string;
+  /**
+   * A product cell whose view shows printing. It is asked for with its printing only when an
+   * attached reference shows that face; otherwise it is `blankView` (default `view`) with every
+   * surface blank — a model told to copy printing it has never seen writes gibberish (council r0).
+   */
+  printed?: { face: PrintedFace; blankView?: string };
 }
 
 /** The composite ratios the three grids are generated at. */
@@ -183,25 +193,33 @@ export const PRODUCT_SHEET_GRIDS = {
     layout: layoutOf(3, 2, '3:2'),
     cellAspect: [1, 1],
     imageSize: '4K',
-    shot: 'product photograph with the whole product in frame and a clear band of plain backdrop on every side',
+    shot: 'product photograph with the whole product — closure, label edges and wordmark included — inside the rectangle, and a clear band of plain backdrop, at least a tenth of the rectangle, on every side',
     cells: [
       {
         role: 'front',
         caption: 'FRONT',
-        view: 'the product from the front, label facing the camera',
+        view: 'the product from the front, label and wordmark centred and squarely facing the camera',
+        printed: { face: 'front', blankView: 'the product from the front' },
       },
-      { role: 'back', caption: 'BACK', view: 'the product from directly behind' },
+      {
+        role: 'back',
+        caption: 'BACK',
+        view: 'the product from directly behind',
+        printed: { face: 'back' },
+      },
       { role: 'side', caption: 'SIDE', view: 'the product in strict side view' },
       {
         role: 'three_quarter',
         caption: 'THREE-QUARTER',
         view: 'the product turned 45 degrees from the camera',
+        printed: { face: 'front' },
       },
       { role: 'top', caption: 'TOP', view: 'the product from directly above' },
       {
         role: 'in_hand',
         caption: 'IN HAND',
         view: 'the product held in one adult hand at its true size, the hand cropped at the wrist',
+        printed: { face: 'front' },
       },
     ],
   },
@@ -209,14 +227,38 @@ export const PRODUCT_SHEET_GRIDS = {
     layout: layoutOf(3, 2, '3:2'),
     cellAspect: [1, 1],
     imageSize: '2K',
-    shot: 'macro close-up filling the rectangle',
+    shot: 'close-up photograph with the whole detail inside the rectangle and a margin of surface or backdrop around it — no label edge, letter or logo cut by the frame',
     cells: [
-      { role: 'label_front', caption: 'LABEL FRONT', view: 'the front label, straight on' },
-      { role: 'label_back', caption: 'LABEL BACK', view: 'the back label, straight on' },
+      {
+        role: 'label_front',
+        caption: 'LABEL FRONT',
+        view: 'the whole front label, straight on, all four edges and the whole wordmark inside the rectangle',
+        printed: { face: 'front', blankView: 'the front of the product, straight on' },
+      },
+      {
+        role: 'label_back',
+        caption: 'LABEL BACK',
+        view: 'the whole back label, straight on, all four edges inside the rectangle',
+        printed: { face: 'back', blankView: 'the back of the product, straight on' },
+      },
       { role: 'closure', caption: 'CLOSURE', view: 'the cap, lid, clasp or closure' },
       { role: 'material', caption: 'MATERIAL', view: 'the surface material and its finish' },
-      { role: 'logo_mark', caption: 'LOGO', view: 'the logo mark as printed on the product' },
-      { role: 'packaging', caption: 'PACKAGING', view: 'the outer packaging or box' },
+      {
+        role: 'logo_mark',
+        caption: 'LOGO',
+        view: 'the whole logo mark and its wordmark as printed on the product, centred, with a margin around them',
+        printed: { face: 'front', blankView: 'the product surface where its logo would sit' },
+      },
+      {
+        role: 'packaging',
+        caption: 'PACKAGING',
+        view: 'the whole outer packaging or box, every edge inside the rectangle',
+        printed: {
+          face: 'packaging',
+          blankView:
+            "plain outer packaging in the product's own colours, every edge inside the rectangle",
+        },
+      },
     ],
   },
 } as const satisfies Record<string, ContinuityGrid>;
@@ -225,14 +267,27 @@ export type ProductSheetGridName = keyof typeof PRODUCT_SHEET_GRIDS;
 export type ProductSheetRole =
   (typeof PRODUCT_SHEET_GRIDS)[ProductSheetGridName]['cells'][number]['role'];
 
-/** The swatches a product sheet samples, and the words under them. */
-export const PRODUCT_SHEET_PALETTE = [
-  { role: 'side', label: 'Body' },
-  { role: 'closure', label: 'Closure' },
-  { role: 'label_front', label: 'Label' },
-  { role: 'material', label: 'Material' },
-  { role: 'packaging', label: 'Packaging' },
-] as const satisfies readonly { role: ProductSheetRole; label: string }[];
+/**
+ * Which member roles show which face's printing. A member with no role is a photograph of the
+ * product as uploaded — its front.
+ */
+export const PRINTED_FACE_SHOWN_BY: Record<PrintedFace, readonly (ElementMemberRole | null)[]> = {
+  front: [null, 'identity', 'front', 'three_quarter', 'label', 'in_hand'],
+  back: ['back'],
+  packaging: ['packaging'],
+};
+
+/** The faces whose printing the attached references show, by their roles. */
+export function printedFacesShown(
+  roles: readonly (ElementMemberRole | null | undefined)[],
+): PrintedFace[] {
+  return (Object.keys(PRINTED_FACE_SHOWN_BY) as PrintedFace[]).filter((face) =>
+    roles.some((role) => PRINTED_FACE_SHOWN_BY[face].includes(role ?? null)),
+  );
+}
+
+/** Appended to a printed cell no reference shows. */
+export const BLANK_SURFACE = 'every surface clean and blank: no letters, no numbers, no text';
 
 /** Who the grid photographs, what must hold across the cells, and the rule for text. */
 export interface ContinuitySubject {
@@ -250,15 +305,16 @@ export const PERSON_SHEET_SUBJECT: ContinuitySubject = {
 };
 
 /**
- * A product's own printing is part of its identity, so it is copied, never invented — and
- * nothing else may be written, because the sheet's words are composed afterwards by code.
+ * A product's own printing is part of its identity, so it is copied from a reference, never
+ * invented — and nothing else may be written, because the sheet's words are composed afterwards
+ * by code. The silhouette is pinned to the reference: lower cells drifted in proportion (r0).
  */
 export const PRODUCT_SHEET_SUBJECT: ContinuitySubject = {
   noun: 'the SAME one product, for a product continuity sheet',
   continuity:
-    'The same one product: identical shape, proportions, colours, materials, finish, closure, label artwork and logo.',
+    "The same one product with an identical silhouette in every rectangle: the reference's height-to-width proportions, shoulder, neck and closure geometry, and identical colours, materials, finish, closure, label artwork and logo.",
   textRule:
-    'Reproduce printed artwork, label text and logos exactly as the reference images show them, and add no other text, labels, numbers, captions or watermarks.',
+    'Copy printed artwork, label text and logos only where a reference image shows them, exactly as shown. Never invent letters, numbers, barcodes or copy: a surface no reference shows stays clean and blank, and nothing else is written.',
 };
 
 /**
@@ -276,9 +332,16 @@ export function buildContinuityGridPrompt(
     guidelines?: string | null;
     /** Defaults to the person, whose prompt is pinned byte for byte. */
     subject?: ContinuitySubject;
+    /** The printed faces the attached references show; a printed cell of any other is blank. */
+    printedFaces?: readonly PrintedFace[];
   },
 ): string {
   const subject = input.subject ?? PERSON_SHEET_SUBJECT;
+  const shown = new Set(input.printedFaces ?? []);
+  const viewOf = (cell: ContinuityCell) =>
+    !cell.printed || shown.has(cell.printed.face)
+      ? cell.view
+      : `${cell.printed.blankView ?? cell.view}, ${BLANK_SURFACE}`;
   const { columns, rows, cellCount } = grid.layout;
   const [cellWidth, cellHeight] = grid.cellAspect;
   const orientation =
@@ -286,7 +349,7 @@ export function buildContinuityGridPrompt(
   const manifest = input.references.map((line, index) => `- Image ${index + 1}: ${line}`);
   const cells = grid.cells.map(
     (cell, index) =>
-      `Row ${Math.floor(index / columns) + 1}, column ${(index % columns) + 1}: ${cell.view}.`,
+      `Row ${Math.floor(index / columns) + 1}, column ${(index % columns) + 1}: ${viewOf(cell)}.`,
   );
   const guidelines = input.guidelines?.trim();
 
