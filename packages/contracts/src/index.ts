@@ -21,6 +21,7 @@ export * from './errors/integration-error';
 export * from './goals/index';
 export * from './home/index';
 export * from './headless-content/concepts';
+export * from './headless-content/cutPlan';
 export * from './headless-content/effects';
 export * from './headless-content/index';
 export * from './headless-content/optimizer';

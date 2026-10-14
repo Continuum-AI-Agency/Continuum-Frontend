@@ -1,0 +1,475 @@
+import { z } from 'zod';
+
+/**
+ * A fast-cut montage: cuts placed on the measured beat grid of a music bed, paced along the
+ * owner's interval ladder. The Backend measures the bed and asks for an edit; the planner turns
+ * that into frame-exact cuts; Render encodes each cut and joins them by stream copy.
+ */
+
+/** The interval ladder, longest first. At 60 fps every rung is a whole number of frames. */
+export const CUT_RUNGS_SEC = [1, 0.8, 0.6, 0.4, 0.2, 0.1, 0.05] as const;
+export type CutRungSec = (typeof CUT_RUNGS_SEC)[number];
+export const cutRungSchema = z
+  .number()
+  .refine((value): value is CutRungSec => (CUT_RUNGS_SEC as readonly number[]).includes(value), {
+    message: `a rung is one of ${CUT_RUNGS_SEC.join(' / ')} s`,
+  });
+
+export const cutPacingSchema = z.enum(['steady', 'build', 'stutter', 'drop-hit']);
+export type CutPacing = z.infer<typeof cutPacingSchema>;
+
+export const cutTransientKindSchema = z.enum(['flash', 'punch', 'rgb-shift', 'shake']);
+export type CutTransientKind = z.infer<typeof cutTransientKindSchema>;
+
+/** What a composition asks for. The planner decides the cuts. */
+export const headlessEditSchema = z
+  .object({
+    pacing: cutPacingSchema,
+    /** Steady's rung, or stutter's base rung. */
+    rung: cutRungSchema.optional(),
+    /** The silent shots whose footage the montage cuts from. */
+    montageShotIds: z.array(z.string().min(1)).min(1).max(8),
+    /** The spoken shot the montage follows; null opens the reel on the montage. */
+    afterShotId: z.string().min(1).nullable(),
+    bars: z.number().int().min(2).max(16).default(4),
+    transients: z.array(cutTransientKindSchema).max(4).default(['flash', 'punch', 'rgb-shift']),
+    /** A generated bed at this tempo; null uses the composition's `audioBed`. */
+    music: z
+      .object({
+        bpm: z.number().int().min(70).max(180).default(150),
+        prompt: z.string().trim().min(1).max(400),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type HeadlessEdit = z.infer<typeof headlessEditSchema>;
+
+const timeSpanSchema = z
+  .object({ startSec: z.number().nonnegative(), endSec: z.number().nonnegative() })
+  .strict()
+  .refine((span) => span.endSec > span.startSec, { message: 'a span ends after it starts' });
+
+/** The planner's input: the measured grid, the footage, and the edit. */
+export const cutPlanInputSchema = z
+  .object({
+    beat: z
+      .object({
+        periodSec: z.number().positive().max(2),
+        /** The bed time, on a downbeat, where montage frame 0 lands. */
+        bedAtSec: z.number().nonnegative(),
+        /** RMS per beat, normalised to the loudest: where the drop is. */
+        energy: z.array(z.number().min(0).max(1)).max(4000).optional(),
+      })
+      .strict(),
+    bars: z.number().int().min(2).max(16),
+    pacing: cutPacingSchema,
+    rung: cutRungSchema.optional(),
+    sources: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            durationSec: z.number().positive(),
+            still: z.boolean(),
+            /** Spoken windows: no cut of 0.4 s or longer comes from inside one. */
+            speech: z.array(timeSpanSchema).max(64),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(24),
+    transients: z.array(cutTransientKindSchema).max(4),
+  })
+  .strict();
+export type CutPlanInput = z.infer<typeof cutPlanInputSchema>;
+
+export const cutGridSchema = z.enum(['bar', 'beat', '1/2', '1/4', '1/8', 'stutter']);
+
+export const plannedCutSchema = z
+  .object({
+    sourceId: z.string().min(1),
+    inSec: z.number().nonnegative(),
+    frames: z.number().int().positive(),
+    rung: cutRungSchema,
+    grid: cutGridSchema,
+  })
+  .strict();
+export type PlannedCut = z.infer<typeof plannedCutSchema>;
+
+export const plannedTransientSchema = z
+  .object({
+    kind: cutTransientKindSchema,
+    atFrame: z.number().int().nonnegative(),
+    frames: z.number().int().positive(),
+  })
+  .strict();
+export type PlannedTransient = z.infer<typeof plannedTransientSchema>;
+
+/** The planner's output: every cut a whole number of frames, summing to the montage. */
+export const cutPlanSchema = z
+  .object({
+    version: z.literal(1),
+    fps: z.union([z.literal(30), z.literal(60)]),
+    frames: z.number().int().positive(),
+    bedAtSec: z.number().nonnegative(),
+    cuts: z.array(plannedCutSchema).min(1).max(720),
+    transients: z.array(plannedTransientSchema).max(720),
+  })
+  .strict()
+  .refine((plan) => plan.cuts.reduce((sum, cut) => sum + cut.frames, 0) === plan.frames, {
+    message: 'the cuts add up to the montage',
+  });
+export type CutPlan = z.infer<typeof cutPlanSchema>;
+
+/** The grid: one eighth of a beat. At the default 150 BPM a tick is 50 ms, so every rung lands on it. */
+export const CUT_TICKS_PER_BEAT = 8;
+const TICKS_PER_BAR = 4 * CUT_TICKS_PER_BEAT;
+/** 0.05 s is not drawable at 30 fps, so a plan that cuts this fast or faster runs at 60. */
+const SIXTY_FPS_RUNG = 0.1;
+/** A source reused jumps its in-point at least this far, so a repeat never reads as the same shot. */
+const REUSE_JUMP_SEC = 0.5;
+/** At this length silent lips show, so these cuts never come from inside a speech window. */
+const SILENT_LIPS_SEC = 0.4;
+const FLASH_FRAMES = 2;
+const PULSE_FRAMES = 6;
+const MAX_CUTS = 720;
+const EPSILON = 1e-9;
+
+/** Stutter's base is 0.4 or 0.8; its bursts are 0.05 (under 0.4) or 0.1 (under 0.8). */
+function stutterRungs(rung: CutRungSec | undefined): { base: CutRungSec; burst: CutRungSec } {
+  const base: CutRungSec = rung !== undefined && rung >= 0.2 ? rung : 0.4;
+  const burst: CutRungSec =
+    rung !== undefined && rung <= SIXTY_FPS_RUNG ? rung : base >= 0.8 ? 0.1 : 0.05;
+  return { base, burst };
+}
+
+const LADDER: readonly CutRungSec[] = CUT_RUNGS_SEC;
+
+function pacingRungs(pacing: CutPacing, rung: CutRungSec | undefined): CutRungSec[] {
+  if (pacing === 'steady') return [rung ?? 0.4];
+  if (pacing === 'build') return [...LADDER];
+  if (pacing === 'stutter') return Object.values(stutterRungs(rung));
+  return [1, 0.8, 0.2, 0.4];
+}
+
+/** 60 when the plan cuts at 0.1 s or faster (build and stutter always do), else 30. */
+export function fastCutFps(pacing: CutPacing, rung?: CutRungSec): 30 | 60 {
+  return Math.min(...pacingRungs(pacing, rung)) <= SIXTY_FPS_RUNG + EPSILON ? 60 : 30;
+}
+
+/** A run of whole ticks, or a burst of sub-tick stutters of exactly round(rung × fps) frames. */
+type Slot = { from: number; to: number; rung: CutRungSec; stutter: boolean };
+
+function gridOf(tick: number): z.infer<typeof cutGridSchema> {
+  if (tick % TICKS_PER_BAR === 0) return 'bar';
+  if (tick % CUT_TICKS_PER_BEAT === 0) return 'beat';
+  if (tick % 4 === 0) return '1/2';
+  if (tick % 2 === 0) return '1/4';
+  return '1/8';
+}
+
+/**
+ * Turns a measured beat grid, the footage and a pacing preset into a frame-exact cut list.
+ *
+ * Every boundary is frame round(tick × tickSec × fps) from `bedAtSec`, computed from the tick
+ * itself, so it sits within half a frame of its tick and the error never accumulates. A rung of
+ * a tick or more is round(rung / tickSec) ticks; one under a tick is a stutter of exactly
+ * round(rung × fps) frames inside a burst that starts and ends on ticks.
+ *
+ * Footage goes round-robin: never the same source twice running, a reuse jumps its in-point by
+ * ≥ 0.5 s, and no cut of 0.4 s or longer comes from inside a speech window.
+ */
+export function planCuts(input: CutPlanInput): CutPlan {
+  const { beat, bars, pacing, rung, sources, transients } = input;
+  const fps = fastCutFps(pacing, rung);
+  const totalTicks = bars * TICKS_PER_BAR;
+  const frameAt = (tick: number) =>
+    Math.round((tick * beat.periodSec * fps) / CUT_TICKS_PER_BEAT + EPSILON);
+  const ticksOf = (value: CutRungSec) => (value * CUT_TICKS_PER_BEAT) / beat.periodSec;
+  const subTick = (value: CutRungSec) => ticksOf(value) < 1 - EPSILON;
+  const wholeTicks = (value: CutRungSec) => Math.max(1, Math.round(ticksOf(value)));
+  const stutterFrames = (value: CutRungSec) => Math.max(1, Math.round(value * fps));
+
+  const slots: Slot[] = [];
+  /** Whole-tick cuts of one rung over [from, to); a short remainder joins the last cut. */
+  const fillWhole = (from: number, to: number, value: CutRungSec) => {
+    const step = wholeTicks(value);
+    const first = slots.length;
+    let at = from;
+    while (to - at >= step) {
+      slots.push({ from: at, to: at + step, rung: value, stutter: false });
+      at += step;
+    }
+    if (at >= to) return;
+    const last = slots.at(-1);
+    if (last && slots.length > first && (to - at) * 2 < step) last.to = to;
+    else slots.push({ from: at, to, rung: value, stutter: false });
+  };
+  /** The longest tick-bounded burst from `from` whose frames divide into stutters; whole ticks after. */
+  const fillStutter = (from: number, to: number, value: CutRungSec) => {
+    const size = stutterFrames(value);
+    let end = to;
+    while (end > from && (frameAt(end) - frameAt(from)) % size !== 0) end--;
+    if (end > from && frameAt(end) - frameAt(from) >= size)
+      slots.push({ from, to: end, rung: value, stutter: true });
+    else end = from;
+    for (let tick = end; tick < to; tick++)
+      slots.push({ from: tick, to: tick + 1, rung: value, stutter: false });
+  };
+  const fill = (from: number, to: number, value: CutRungSec) => {
+    if (to <= from) return;
+    if (subTick(value)) fillStutter(from, to, value);
+    else fillWhole(from, to, value);
+  };
+
+  const ladderSpan = (value: CutRungSec, count: number) =>
+    subTick(value)
+      ? Math.max(
+          1,
+          Math.ceil((count * stutterFrames(value) * CUT_TICKS_PER_BEAT) / (beat.periodSec * fps)),
+        )
+      : count * wholeTicks(value);
+  const round = (count: number) => LADDER.reduce((sum, value) => sum + ladderSpan(value, count), 0);
+  const rise = (bar: number) => {
+    const energy = beat.energy ?? [];
+    const at = bar * 4;
+    return at < energy.length
+      ? (energy[at] ?? 0) - (energy[at - 1] ?? 0)
+      : Number.NEGATIVE_INFINITY;
+  };
+  /** The drop: the downbeat with the biggest energy rise, or `fallback` with no energy to read. */
+  const dropBar = (earliest: number, latest: number, fallback: number) => {
+    let best = fallback;
+    for (let bar = earliest; bar <= latest; bar++)
+      if (rise(bar) > Number.NEGATIVE_INFINITY && rise(bar) > rise(best)) best = bar;
+    return Math.min(latest, Math.max(earliest, best));
+  };
+
+  if (pacing === 'steady') fill(0, totalTicks, rung ?? 0.4);
+  else if (pacing === 'stutter') {
+    const { base, burst } = stutterRungs(rung);
+    let at = 0;
+    for (let bar = 2; bar <= bars; bar += 2) {
+      const burstAt = bar * TICKS_PER_BAR - CUT_TICKS_PER_BEAT;
+      fill(at, burstAt, base);
+      fill(burstAt, burstAt + CUT_TICKS_PER_BEAT, burst);
+      at = burstAt + CUT_TICKS_PER_BEAT;
+    }
+    fill(at, totalTicks, base);
+  } else if (pacing === 'drop-hit') {
+    const drop = dropBar(1, bars - 1, Math.max(1, Math.floor(bars / 2))) * TICKS_PER_BAR;
+    let at = 0;
+    for (let index = 0; at < drop; index++) {
+      const value: CutRungSec = index % 2 === 0 ? 1 : 0.8;
+      const to = Math.min(drop, at + wholeTicks(value));
+      const last = slots.at(-1);
+      if (last && (to - at) * 2 < wholeTicks(value)) last.to = to;
+      else slots.push({ from: at, to, rung: value, stutter: false });
+      at = to;
+    }
+    const barEnd = Math.min(totalTicks, drop + TICKS_PER_BAR);
+    fill(drop, barEnd, 0.2);
+    fill(barEnd, totalTicks, 0.4);
+  } else {
+    // Build: the same count at every rung, 1 s down to 0.05 s, laid back from the drop's bar line
+    // so the fastest row lands exactly on it; then 0.4 on the beats.
+    const latest = Math.max(2, bars - 1);
+    const fits = (bar: number) => Math.max(0, Math.floor((bar * TICKS_PER_BAR) / round(1)));
+    let fallback = 2;
+    for (let bar = 2; bar <= latest; bar++) {
+      const head = (candidate: number) =>
+        candidate * TICKS_PER_BAR - round(Math.max(1, fits(candidate)));
+      if (
+        fits(bar) > fits(fallback) ||
+        (fits(bar) === fits(fallback) && head(bar) < head(fallback))
+      )
+        fallback = bar;
+    }
+    const drop = dropBar(2, Math.min(bars, latest), fallback) * TICKS_PER_BAR;
+    const count = Math.max(1, Math.floor(drop / round(1)));
+    let rows = [...LADDER];
+    while (rows.length > 1 && rows.reduce((sum, value) => sum + ladderSpan(value, count), 0) > drop)
+      rows = rows.slice(1);
+    let at = drop - rows.reduce((sum, value) => sum + ladderSpan(value, count), 0);
+    const head = at;
+    for (const value of rows) {
+      const span = Math.min(ladderSpan(value, count), drop - at);
+      fill(at, at + span, value);
+      at += span;
+    }
+    // The opening holds until the ladder starts: the head joins the first rung's first cut.
+    if (head > 0 && slots[0] && !slots[0].stutter) slots[0].from = 0;
+    else if (head > 0) slots.unshift({ from: 0, to: head, rung: rows[0] ?? 1, stutter: false });
+    fill(drop, totalTicks, 0.4);
+  }
+
+  type Placed = {
+    frame: number;
+    frames: number;
+    rung: CutRungSec;
+    grid: PlannedCut['grid'];
+    slot: Slot;
+  };
+  const placed: Placed[] = [];
+  for (const slot of slots) {
+    const start = frameAt(slot.from);
+    const end = frameAt(slot.to);
+    if (!slot.stutter) {
+      if (end > start)
+        placed.push({
+          frame: start,
+          frames: end - start,
+          rung: slot.rung,
+          grid: gridOf(slot.from),
+          slot,
+        });
+      continue;
+    }
+    const size = stutterFrames(slot.rung);
+    for (let frame = start; frame < end; frame += size)
+      placed.push({ frame, frames: size, rung: slot.rung, grid: 'stutter', slot });
+  }
+  if (placed.length > MAX_CUTS)
+    throw new Error(`cut_plan_too_many_cuts: ${placed.length} cuts, at most ${MAX_CUTS}`);
+
+  const cuts = assignFootage(placed, sources, fps);
+
+  const wanted = new Set(transients);
+  const planned: PlannedTransient[] = [];
+  const add = (kind: CutTransientKind, atFrame: number, frames: number) => {
+    if (wanted.has(kind) && frames > 0) planned.push({ kind, atFrame, frames });
+  };
+  const pulse: CutTransientKind | null =
+    (['shake', 'punch', 'rgb-shift'] as const).find((kind) => wanted.has(kind)) ?? null;
+  const dropFrame =
+    pacing === 'drop-hit'
+      ? placed.find((cut, index) => index > 0 && cut.rung === 0.2 && placed[index - 1].rung !== 0.2)
+          ?.frame
+      : undefined;
+  for (const [index, cut] of placed.entries()) {
+    const seconds = cut.frames / fps;
+    // Frame 0 is the join from the hook, which stays a plain cut.
+    const flash =
+      cut.frame > 0 &&
+      (cut.frame === dropFrame ||
+        (!cut.slot.stutter &&
+          cut.slot.from % TICKS_PER_BAR === 0 &&
+          cut.frame === frameAt(cut.slot.from) &&
+          seconds >= SILENT_LIPS_SEC - EPSILON));
+    if (flash) add('flash', cut.frame, Math.min(FLASH_FRAMES, cut.frames));
+    if (seconds >= 0.2 - EPSILON) add('punch', cut.frame, Math.min(PULSE_FRAMES, cut.frames));
+    if (
+      cut.rung <= SIXTY_FPS_RUNG + EPSILON &&
+      (index === 0 || placed[index - 1].rung > SIXTY_FPS_RUNG + EPSILON)
+    ) {
+      let end = index;
+      while (end + 1 < placed.length && placed[end + 1].rung <= SIXTY_FPS_RUNG + EPSILON) end++;
+      add('rgb-shift', cut.frame, placed[end].frame + placed[end].frames - cut.frame);
+    }
+    if (pulse && !cut.slot.stutter) {
+      const firstBeat = Math.floor(cut.slot.from / CUT_TICKS_PER_BEAT + 1) * CUT_TICKS_PER_BEAT;
+      for (let tick = firstBeat; tick < cut.slot.to; tick += CUT_TICKS_PER_BEAT) {
+        const at = frameAt(tick);
+        if (at > cut.frame && at < cut.frame + cut.frames)
+          add(pulse, at, Math.min(PULSE_FRAMES, cut.frame + cut.frames - at));
+      }
+    }
+  }
+  planned.sort((a, b) => a.atFrame - b.atFrame);
+
+  return cutPlanSchema.parse({
+    version: 1,
+    fps,
+    frames: frameAt(totalTicks),
+    bedAtSec: beat.bedAtSec,
+    cuts,
+    transients: planned.slice(0, MAX_CUTS),
+  });
+}
+
+type FootageSource = CutPlanInput['sources'][number];
+
+/**
+ * Round-robin over the sources, the idea of the editor's switchShotClips: each cut takes the next
+ * source that fits, never the one just used, at a cursor that moves on by ≥ 0.5 s per use.
+ */
+function assignFootage(
+  placed: ReadonlyArray<{ frames: number; rung: CutRungSec; grid: PlannedCut['grid'] }>,
+  sources: readonly FootageSource[],
+  fps: number,
+): PlannedCut[] {
+  const cursor = new Map<string, number>();
+  const lastIn = new Map<string, number>();
+  const ms = (seconds: number) => Math.round(seconds * 1000) / 1000;
+  /** The in-points a cut of `seconds` may start at: inside the take, and clear of speech when long. */
+  const allowed = (source: FootageSource, seconds: number): Array<[number, number]> => {
+    const usable = source.durationSec - seconds;
+    if (usable < -EPSILON) return [];
+    let spans: Array<[number, number]> = [[0, Math.max(0, usable)]];
+    if (seconds < SILENT_LIPS_SEC - EPSILON) return spans;
+    for (const speech of source.speech) {
+      const [from, to] = [speech.startSec - seconds, speech.endSec];
+      spans = spans.flatMap(([a, b]): Array<[number, number]> => {
+        if (to <= a || from >= b) return [[a, b]];
+        return [
+          ...(from > a ? [[a, from] as [number, number]] : []),
+          ...(to < b ? [[to, b] as [number, number]] : []),
+        ];
+      });
+    }
+    return spans;
+  };
+  const inPoint = (source: FootageSource, seconds: number, strict: boolean): number | null => {
+    if (source.still) return 0;
+    const previous = lastIn.get(source.id);
+    const far = (at: number) =>
+      !strict || previous === undefined || Math.abs(at - previous) >= REUSE_JUMP_SEC - EPSILON;
+    const candidates = allowed(source, seconds).flatMap(([a, b]) => {
+      const points = [Math.ceil(a * 1000) / 1000];
+      if (previous !== undefined) points.push(Math.ceil((previous + REUSE_JUMP_SEC) * 1000) / 1000);
+      const from = cursor.get(source.id) ?? 0;
+      points.push(Math.ceil(from * 1000) / 1000);
+      return points.filter((at) => at >= a - EPSILON && at <= b + EPSILON && far(at));
+    });
+    if (!candidates.length) return null;
+    const from = cursor.get(source.id) ?? 0;
+    const ahead = candidates.filter((at) => at >= from - EPSILON).sort((a, b) => a - b);
+    return ahead[0] ?? candidates.sort((a, b) => a - b)[0];
+  };
+
+  let turn = 0;
+  let previous: string | null = null;
+  return placed.map((cut) => {
+    const seconds = cut.frames / fps;
+    let chosen: { index: number; inSec: number } | null = null;
+    for (const strict of [true, false]) {
+      for (let offset = 0; offset < sources.length && !chosen; offset++) {
+        const index = (turn + offset) % sources.length;
+        const source = sources[index];
+        if (sources.length > 1 && source.id === previous) continue;
+        const at = inPoint(source, seconds, strict);
+        if (at !== null) chosen = { index, inSec: at };
+      }
+      if (chosen) break;
+    }
+    if (!chosen)
+      throw new Error(
+        `cut_plan_no_footage_fits: no source holds a ${seconds.toFixed(3)} s cut clear of speech`,
+      );
+    const source = sources[chosen.index];
+    turn = chosen.index + 1;
+    previous = source.id;
+    if (!source.still) {
+      lastIn.set(source.id, chosen.inSec);
+      cursor.set(source.id, chosen.inSec + Math.max(seconds, REUSE_JUMP_SEC));
+    }
+    return {
+      sourceId: source.id,
+      inSec: ms(chosen.inSec),
+      frames: cut.frames,
+      rung: cut.rung,
+      grid: cut.grid,
+    };
+  });
+}
