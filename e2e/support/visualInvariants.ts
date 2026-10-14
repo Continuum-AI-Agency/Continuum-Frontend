@@ -828,9 +828,13 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
       const viewport = { width: window.innerWidth, height: window.innerHeight };
       const tapFloor = window.matchMedia('(pointer: coarse)').matches ? tapCoarse : tapFine;
       // The element the pointer lands on at (x, y); the control is hit when that is itself or
-      // something inside it (a pseudo-element pad reports its originating element).
+      // something inside it (a pseudo-element pad reports its originating element). The dev
+      // server's indicator badge (`nextjs-portal`) is not product UI and ships nowhere, so the
+      // scan looks through it to the element underneath instead of letting it decide a hit.
       const topAt = (x: number, y: number): Element | null =>
-        document.elementsFromPoint(x, y)[0] ?? null;
+        document
+          .elementsFromPoint(x, y)
+          .find((hit) => hit.tagName.toLowerCase() !== 'nextjs-portal') ?? null;
       const isHit = (el: Element, top: Element | null): boolean =>
         top !== null && (top === el || el.contains(top));
       for (const el of controls.slice(0, maxControls)) {
@@ -865,7 +869,7 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
         if (probe.point) {
           const [cx, cy] = probe.point;
           const top = topAt(cx, cy);
-          if (top && top.tagName.toLowerCase() !== 'nextjs-portal' && !isHit(el, top)) {
+          if (top && !isHit(el, top)) {
             covered = { by: helpers.describe(top), at: [cx, cy] };
           } else {
             const painted = helpers.toRect(rect);
@@ -878,11 +882,7 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
               const onScreen = x >= 0 && y >= 0 && x < viewport.width && y < viewport.height;
               // Off the screen elementFromPoint answers nothing; the painted box decides there.
               if (!onScreen) return insidePainted(x, y);
-              const hit = topAt(x, y);
-              // The dev server's indicator badge is not product UI and ships nowhere: like the
-              // covered check above, it never decides a hit — the painted box does under it.
-              if (hit && hit.tagName.toLowerCase() === 'nextjs-portal') return insidePainted(x, y);
-              return isHit(el, hit);
+              return isHit(el, topAt(x, y));
             });
           }
         }

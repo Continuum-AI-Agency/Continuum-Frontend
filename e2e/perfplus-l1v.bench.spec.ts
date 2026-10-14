@@ -297,6 +297,15 @@ async function audit(page: Page, key: AuditKey): Promise<VisualReport | null> {
   }
   await page.waitForLoadState('networkidle', { timeout: QUIET_MS }).catch(() => undefined);
   await page.evaluate(() => document.fonts.ready).catch(() => undefined);
+  // A route change animates through a View Transition; while one runs Chrome hit-tests every
+  // point to <html>, so a control measured mid-transition reads as covered by the page itself.
+  await page
+    .waitForFunction(
+      () => !(document as Document & { activeViewTransition?: unknown }).activeViewTransition,
+      undefined,
+      { timeout: QUIET_MS },
+    )
+    .catch(() => undefined);
   await page.waitForTimeout(500);
 
   const theme = await page
