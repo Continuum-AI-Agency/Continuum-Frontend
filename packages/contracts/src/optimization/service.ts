@@ -1231,12 +1231,12 @@ export const PortfolioListItemSchema = z.object({
    *  row — a row that fails to parse disappears from the list entirely. */
   roster_state: PortfolioRosterStateSchema.nullable().catch(null).optional(),
   /** max(missing_since) over the active roster when ALL of it is absent — since the LAST
-   *  member went missing (20261014220200); null otherwise. */
+   *  member went missing (20261014225136); null otherwise. */
   roster_absent_since: z.string().nullable().optional(),
   /** Active enrollments currently absent from Meta. */
   roster_missing_count: z.number().int().nonnegative().nullable().optional(),
   /**
-   * Whether the latest cycle's moves can still be acted on, from migration 20261014220200.
+   * Whether the latest cycle's moves can still be acted on, from migration 20261014225136.
    * False when there is no run, a cycle was missed, or the roster is empty or gone; its moves
    * are then withdrawn (show them read-only) and pending_budget_moves reads 0. Defaulted so a
    * payload from the RPC before the migration parses, and null means "not said", never false.
