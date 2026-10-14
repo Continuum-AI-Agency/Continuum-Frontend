@@ -19,6 +19,7 @@ import {
   collapseDraftGroups,
   mapPersistedRowToCalendarEntry,
   mergeUnsavedLocalDrafts,
+  newRowCopyPatch,
   type PersistedOrganicDraftRow,
   resolvePersistedRowDayId,
 } from '@/lib/organic/calendar-draft-persistence';
@@ -26,6 +27,7 @@ import { getVisibleMonthRange } from '@/lib/organic/calendar-posts';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useDraftFieldPersistence } from './useDraftFieldEditor';
 
 type CalendarEntry = {
   dayId: string;
@@ -141,6 +143,7 @@ export function useCalendarDraftPersistence({
   const lastSyncedRef = React.useRef<SyncedIndex>(new Map());
   const syncInFlightRef = React.useRef(false);
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
+  const { persistDraftFields } = useDraftFieldPersistence();
   // Live view of the current grid so a refetch can preserve in-flight local drafts
   // (manual constructions not yet autosaved) instead of clobbering them.
   const calendarDaysRef = React.useRef(calendarDays);
@@ -310,6 +313,19 @@ export function useCalendarDraftPersistence({
                 ...draft,
                 backendDraftId: created.id,
               }));
+              // Read the live grid, not `entry`: a keystroke that landed while the insert
+              // was in flight is only there, and its own PATCH was skipped for want of a row.
+              const latest =
+                calendarDaysRef.current
+                  .flatMap((day) => day.slots)
+                  .find((draft) => draft.id === entry.draft.id) ?? entry.draft;
+              const copyPatch = newRowCopyPatch(latest);
+              if (copyPatch) {
+                await persistDraftFields(
+                  { id: latest.id, backendDraftId: created.id, updatedAt: null },
+                  copyPatch,
+                );
+              }
               continue;
             }
 
@@ -343,7 +359,15 @@ export function useCalendarDraftPersistence({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById]);
+  }, [
+    brandProfileId,
+    calendarDays,
+    persistDraftFields,
+    platformAccountIds,
+    refetch,
+    supabase,
+    updateDraftById,
+  ]);
 
   // Drain user-initiated draft deletions to the server. This is the ONLY path that
   // deletes: an explicit, user-initiated, confirmed delete. It is brand-scoped

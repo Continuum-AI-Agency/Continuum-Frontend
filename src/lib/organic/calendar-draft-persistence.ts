@@ -6,6 +6,7 @@ import {
   organicMediaStageSchema,
   organicUgcSpecSchema,
   PLANNER_DEFAULT_TIME_OF_DAY,
+  type PlannerDraftFieldPatch,
   parsePlannerTimeOfDay,
   parseSiblingClientKey,
   plannerCompositionSchema,
@@ -488,6 +489,22 @@ export function buildPersistedDraftPayload(args: {
       title: draft.title,
     },
   };
+}
+
+/**
+ * The copy a freshly-inserted manual row must still send through the field-edit route.
+ *
+ * The field editor skips its PATCH while a draft has no row, trusting the autosave
+ * insert to carry the edit. The insert writes `slot_data` only, while the approve gate
+ * and the publisher read `content_json.copy` — so a caption typed before the row
+ * existed showed in the planner and was refused at approve as `caption_missing`.
+ */
+export function newRowCopyPatch(draft: OrganicCalendarDraft): PlannerDraftFieldPatch | null {
+  const caption = draft.captionPreview.trim() ? draft.captionPreview : undefined;
+  const { high = [], medium = [], low = [] } = draft.hashtags ?? {};
+  const hashtags = high.length + medium.length + low.length > 0 ? draft.hashtags : undefined;
+  if (!caption && !hashtags) return null;
+  return { ...(caption ? { caption } : {}), ...(hashtags ? { hashtags } : {}) };
 }
 
 /**

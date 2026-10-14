@@ -116,7 +116,7 @@ describe('useFanOutDraft', () => {
     expect(approveAndScheduleMock.mock.calls[0][0].backendDraftId).toBe('row-instagram');
     expect(approveAndScheduleMock.mock.calls[1][0].backendDraftId).toBe('row-linkedin');
     // Silent per-member approvals: one summary toast beats N toasts.
-    expect(approveAndScheduleMock.mock.calls[0][1]).toEqual({ silent: true });
+    expect(approveAndScheduleMock.mock.calls[0][1]).toMatchObject({ silent: true });
     expect(showMock).toHaveBeenCalledTimes(1);
     expect(showMock.mock.calls[0][0].title).toBe('Approved for 2 platforms');
 
@@ -162,6 +162,28 @@ describe('useFanOutDraft', () => {
     expect(showMock).toHaveBeenCalledTimes(1);
     expect(showMock.mock.calls[0][0].title).toBe('Approved 1 of 2');
     expect(showMock.mock.calls[0][0].description).toContain('LinkedIn');
+  });
+
+  it('names the gate reason once for every member it refused', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => fanOutResponse }),
+    );
+    const reason = 'This draft has no caption — add copy before publishing';
+    approveAndScheduleMock.mockImplementation(
+      async (_member: unknown, options?: { onFailure?: (message: string) => void }) => {
+        options?.onFailure?.(reason);
+        return false;
+      },
+    );
+
+    const { result } = renderHook(() => useFanOutDraft());
+    await act(async () => {
+      await result.current.fanOutAndApprove(draft);
+    });
+
+    expect(showMock.mock.calls[0][0].title).toBe('Approved 0 of 2');
+    expect(showMock.mock.calls[0][0].description).toBe(`Instagram, LinkedIn: ${reason}`);
   });
 
   it('surfaces a refused fan-out and approves nothing', async () => {

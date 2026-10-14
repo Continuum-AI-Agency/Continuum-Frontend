@@ -157,4 +157,40 @@ describe('useCalendarDraftPersistence autosave', () => {
     expect(upsertCalls).toHaveLength(1);
     expect(updateCalls).toEqual([]);
   });
+
+  // Pink Elephant 2026-10-14: a caption pasted into a brand-new manual post landed in
+  // slot_data only, the field editor skipped its PATCH for want of a row, and approve
+  // refused both fan-out members as caption_missing while the planner showed the caption.
+  it('a caption typed before the row existed reaches the field-edit route', async () => {
+    requestMock.mockResolvedValue({ drafts: [manualRow('be-1', 'Hello')] });
+    const { result } = renderHook(useHarness);
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    await waitFor(() =>
+      expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(1),
+    );
+    await act(settle);
+
+    const day = result.current.calendarDays.find((d) => d.id === DAY) as OrganicCalendarDay;
+    act(() => {
+      result.current.appendDraft(day.id, {
+        ...day.slots[0],
+        id: 'local-1',
+        clientKey: 'ck-local-1',
+        backendDraftId: undefined,
+        captionPreview: 'La resiliencia operativa no se aprende en un aula',
+      } as OrganicCalendarDraft);
+    });
+    await act(settle);
+
+    const fieldPatches = requestMock.mock.calls
+      .map(([args]) => args as unknown as { path: string; method?: string; body?: unknown })
+      .filter((args) => args.path.endsWith('/fields'));
+    expect(upsertCalls).toHaveLength(1);
+    expect(fieldPatches).toHaveLength(1);
+    expect(fieldPatches[0].path).toBe('/api/organic/calendar/drafts/be-new/fields');
+    expect(fieldPatches[0].method).toBe('PATCH');
+    expect(fieldPatches[0].body).toMatchObject({
+      caption: 'La resiliencia operativa no se aprende en un aula',
+    });
+  });
 });

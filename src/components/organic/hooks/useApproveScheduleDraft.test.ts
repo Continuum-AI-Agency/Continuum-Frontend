@@ -102,6 +102,30 @@ describe('useApproveScheduleDraft', () => {
     );
   });
 
+  it('hands a silent caller the gate reason instead of a toast', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(422, {
+          error: 'not_publishable',
+          reason: 'caption_missing',
+          message: 'This draft has no caption — add copy before publishing',
+        }),
+      ),
+    );
+    const onFailure = vi.fn();
+
+    const { result } = renderHook(() => useApproveScheduleDraft());
+    await act(async () => {
+      await result.current.approveAndSchedule(draft, { silent: true, onFailure });
+    });
+
+    expect(onFailure).toHaveBeenCalledWith(
+      'This draft has no caption — add copy before publishing',
+    );
+    expect(showMock).not.toHaveBeenCalled();
+  });
+
   it('continues to scheduling when approve returns invalid_state (already approved)', async () => {
     const fetchMock = vi
       .fn()
