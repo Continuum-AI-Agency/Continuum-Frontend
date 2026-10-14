@@ -13,26 +13,74 @@ import {
   judgeDelta,
 } from '../reading';
 import { BlockHeading } from './BlockHeading';
+import { blockFigureAttributes } from './blockFigure';
 import { BlockSourcesFooter, CitationChips } from './citations';
 import { MediaText } from './mediaText';
 import { JAINA_MODULE } from './modules';
 
 type ComparisonBlockProps = { block: ComparisonBlockV2; isStreaming: boolean };
+type Pair = ComparisonBlockV2['pairs'][number];
+
+type Side = NonNullable<ComparisonBlockV2['side_a']>;
+
+/**
+ * A side's heading: its label, and under it what it was read on when that is not already the
+ * label — the window for two entities, the entity for one entity on two windows. A report
+ * stored before 2026-10-13 has no sides and keeps `before_label` / `after_label`.
+ */
+function sideOf(
+  side: Side | undefined,
+  fallback: string,
+): { label: string; detail: string | null } {
+  if (!side) return { label: fallback, detail: null };
+  const detail = [side.entity, side.window].filter(
+    (part): part is string => Boolean(part) && part !== side.label,
+  );
+  return { label: side.label, detail: detail.length > 0 ? detail.join(' · ') : null };
+}
 
 export default function ComparisonBlock({ block }: ComparisonBlockProps) {
+  // Two entities read on one window name that window once, under the title, rather than
+  // twice in narrow column heads.
+  const sharedWindow =
+    block.side_a?.window && block.side_a.window === block.side_b?.window
+      ? block.side_a.window
+      : null;
+  const unshared = (side: Side | undefined) =>
+    side && sharedWindow ? { ...side, window: null } : side;
+  const sideA = sideOf(unshared(block.side_a), block.before_label);
+  const sideB = sideOf(unshared(block.side_b), block.after_label);
   const headings = [
-    { key: 'metric', label: 'Metric', numeric: false },
-    { key: 'before', label: block.before_label, numeric: true },
-    { key: 'after', label: block.after_label, numeric: true },
+    { key: 'metric', label: 'Metric', detail: null, numeric: false },
+    { key: 'before', ...sideA, numeric: true },
+    { key: 'after', ...sideB, numeric: true },
     ...(block.baseline_label
-      ? [{ key: 'baseline', label: block.baseline_label, numeric: true }]
+      ? [{ key: 'baseline', label: block.baseline_label, detail: null, numeric: true }]
       : []),
-    { key: 'change', label: 'Change', numeric: true },
+    { key: 'change', label: 'Change', detail: null, numeric: true },
   ];
+  // Money by the one rule (M1): each leg of a money pair prints through `formatMoney` in the
+  // pair's own currency, and carries its raw value and currency for the parity checks.
+  const leg = (pair: Pair, value: Pair['before'], legKey: string) => (
+    <span
+      className="sm:whitespace-nowrap"
+      {...blockFigureAttributes(`${pair.label} · ${legKey}`, value, pair.currency)}
+    >
+      {formatValue(value, pair.format ?? undefined, {
+        currency: pair.currency ?? undefined,
+        percentBasis: pair.percent_basis ?? null,
+      })}
+    </span>
+  );
 
   return (
     <div className={JAINA_MODULE.neutral} data-jaina-module="block">
       <BlockHeading title={block.title} />
+      {sharedWindow ? (
+        <p className="-mt-1 mb-2 text-sm text-muted-foreground" data-comparison-window>
+          {sharedWindow}
+        </p>
+      ) : null}
       <div className={JAINA_TABLE.wrap}>
         <table className={JAINA_TABLE.table}>
           <thead>
@@ -48,6 +96,11 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
                   className={cn(JAINA_TABLE.th, heading.numeric ? 'text-right' : 'text-left')}
                 >
                   {heading.label}
+                  {heading.detail ? (
+                    <span className="block font-normal normal-case tracking-normal">
+                      {heading.detail}
+                    </span>
+                  ) : null}
                 </th>
               ))}
             </tr>
@@ -77,24 +130,16 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
                     />
                   </td>
                   <td className={cn(JAINA_TABLE.td, 'text-right')}>
-                    {formatValue(pair.before, pair.format ?? undefined, {
-                      percentBasis: pair.percent_basis ?? null,
-                    })}
+                    {leg(pair, pair.before, sideA.label)}
                   </td>
                   <td className={cn(JAINA_TABLE.td, 'text-right')}>
-                    {formatValue(pair.after, pair.format ?? undefined, {
-                      percentBasis: pair.percent_basis ?? null,
-                    })}
+                    {leg(pair, pair.after, sideB.label)}
                   </td>
                   {block.baseline_label ? (
                     // The context floor's third leg: the longer baseline the pair is read
                     // against. "—" when this pair has none.
                     <td className={cn(JAINA_TABLE.td, 'text-right text-muted-foreground')}>
-                      {pair.baseline == null
-                        ? '—'
-                        : formatValue(pair.baseline, pair.format ?? undefined, {
-                            percentBasis: pair.percent_basis ?? null,
-                          })}
+                      {pair.baseline == null ? '—' : leg(pair, pair.baseline, block.baseline_label)}
                     </td>
                   ) : null}
                   <td

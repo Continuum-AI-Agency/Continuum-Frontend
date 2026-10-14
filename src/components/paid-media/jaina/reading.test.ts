@@ -83,6 +83,9 @@ describe('fallsAreGood — narrow on purpose', () => {
       'CPC',
       'CPI',
       'Bounce rate',
+      'Costo por resultado',
+      'Coste por conversación',
+      'Tasa de rebote',
     ]) {
       expect(fallsAreGood(label)).toBe(true);
     }

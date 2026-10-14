@@ -209,12 +209,20 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
       return {
         title: block.title,
         rows: [
-          ['Metric', block.before_label, block.after_label, 'Unit', 'Change'],
+          [
+            'Metric',
+            block.side_a?.label ?? block.before_label,
+            block.side_b?.label ?? block.after_label,
+            'Unit',
+            'Currency',
+            'Change',
+          ],
           ...block.pairs.map((pair) => [
             pair.label,
             pair.before,
             pair.after,
             pair.unit ?? null,
+            pair.currency ?? null,
             pair.change ?? null,
           ]),
         ],
@@ -258,6 +266,22 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ['Pace ratio', block.pace_ratio],
           ['Projected at end', block.projected_end ?? null],
           ['Status', block.status],
+        ],
+      };
+    case 'steps':
+      return {
+        title: block.title,
+        rows: [
+          ['Step', 'Action', 'Where', 'Expected effect', 'Figure', 'Value', 'Currency'],
+          ...block.items.map((item, index) => [
+            index + 1,
+            stripProseMarks(item.action),
+            item.where,
+            stripProseMarks(item.expected_effect),
+            item.figure?.label ?? null,
+            item.figure?.value ?? null,
+            item.figure?.currency ?? null,
+          ]),
         ],
       };
     case 'survey':

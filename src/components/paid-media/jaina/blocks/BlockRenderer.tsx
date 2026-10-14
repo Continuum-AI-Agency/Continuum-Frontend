@@ -19,6 +19,7 @@ const DataScopeBlock = lazy(() => import('./DataScopeBlock'));
 const ActionsBlock = lazy(() => import('./ActionsBlock'));
 const GoalPacingBlock = lazy(() => import('./GoalPacingBlock'));
 const SurveyBlock = lazy(() => import('./SurveyBlock'));
+const StepsBlock = lazy(() => import('./StepsBlock'));
 const TemplateBlock = lazy(() => import('../templates/TemplateBlock'));
 
 const BLOCK_REGISTRY: Record<
@@ -35,6 +36,7 @@ const BLOCK_REGISTRY: Record<
   actions: ActionsBlock,
   goal_pacing: GoalPacingBlock,
   survey: SurveyBlock,
+  steps: StepsBlock,
   answer_template: TemplateBlock,
 } as Record<
   string,

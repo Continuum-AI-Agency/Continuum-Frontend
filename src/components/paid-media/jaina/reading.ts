@@ -132,6 +132,10 @@ export function fallsAreGood(label: string): boolean {
   const l = label.trim().toLowerCase();
   return (
     l.startsWith('cost per') ||
+    // An answer is titled in the account's language, so its labels are too.
+    l.startsWith('costo por') ||
+    l.startsWith('coste por') ||
+    l.includes('rebote') ||
     l.startsWith('cost/') ||
     l.startsWith('cpa') ||
     l.startsWith('cpl') ||
