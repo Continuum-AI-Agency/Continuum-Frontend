@@ -58,6 +58,11 @@ describe('askShapeOf — format', () => {
       'explanation',
     ],
     // direct
+    [
+      'Create a client-ready weekly recap for the current ad account with results, changes, and next steps.',
+      'direct',
+    ],
+    ['¿Cuáles son los siguientes pasos? Dame los pasos para escalar ITESO', 'steps'],
     ['What is our current total ad spend this month?', 'direct'],
     ['¿Cómo vamos este mes?', 'direct'],
     ['How are we pacing against budget this month? Are we on track?', 'direct'],

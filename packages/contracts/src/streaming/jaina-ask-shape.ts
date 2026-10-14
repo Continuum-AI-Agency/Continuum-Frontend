@@ -57,9 +57,13 @@ export const ASK_FORMAT_PHRASES: ReadonlyArray<readonly [AnswerFormat, RegExp]> 
     'steps',
     phrases([
       'paso a paso',
-      'pasos?',
+      // "pasos" / "steps" as the thing asked for — never "next steps" in a recap, which is the
+      // report's closing recommendations, not a how-to.
+      '(?:los|que|cuales|dame|dime|con|en) pasos',
+      'pasos (?:para|a seguir|que)',
       'step[- ]by[- ]step',
-      'steps?',
+      '(?:what|which|the|give me|list the|in) steps',
+      'steps (?:to|for|that)',
       'how (?:do|can|should|would) (?:i|we)',
       'how to',
       'walk me through',
