@@ -79,6 +79,7 @@ import type { ActionLog } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
 import type { AdSet } from './AdSetTable';
 import { mapActionLogsToTimelineMarkers } from './actionMarkers';
+import { campaignsSplit } from './campaignsSplit';
 import { CreativeGallery } from './creatives/CreativeGallery';
 import { CreativeRotationSheet } from './creatives/CreativeRotationSheet';
 import {
@@ -2078,8 +2079,8 @@ export function CampaignAdSetWorkspace({
 
         <CardContent className="flex-1 min-h-0 p-0">
           {viewMode === 'campaigns' ? (
-            <ResizablePanelGroup orientation="horizontal" className="h-full min-h-0 gap-1.5 p-1.5">
-              <ResizablePanel defaultSize={75} minSize={55} className="min-w-0">
+            <ResizablePanelGroup {...campaignsSplit.group} className="h-full min-h-0 gap-1.5 p-1.5">
+              <ResizablePanel {...campaignsSplit.chart} className="min-w-0">
                 <div className="flex h-full min-h-0 flex-col rounded-md border border-border/70 bg-card p-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
@@ -2254,11 +2255,8 @@ export function CampaignAdSetWorkspace({
               <ResizableHandle withHandle className="mx-0.5 bg-transparent" />
 
               <ResizablePanel
+                {...campaignsSplit.rail}
                 panelRef={railPanelRef}
-                defaultSize={25}
-                minSize={14}
-                collapsible
-                collapsedSize={0}
                 onResize={handleRailPanelResize}
                 className="min-w-0"
               >
