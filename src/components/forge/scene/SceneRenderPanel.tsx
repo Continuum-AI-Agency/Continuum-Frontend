@@ -152,7 +152,12 @@ export function SceneRenderHistory({
       </p>
     );
   const renders = history.data.renders.filter((render) => render.jobId !== exclude).slice(0, limit);
-  if (!renders.length) return <p className="m-0 text-xs text-muted-foreground">No renders yet.</p>;
+  if (!renders.length)
+    return (
+      <p className="m-0 text-xs text-muted-foreground">
+        {history.data.renders.length ? 'No earlier renders.' : 'No renders yet.'}
+      </p>
+    );
   return (
     <ul aria-label="Render history" className="m-0 flex list-none flex-col p-0">
       {renders.map((render) => (

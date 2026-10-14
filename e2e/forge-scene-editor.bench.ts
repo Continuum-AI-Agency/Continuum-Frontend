@@ -39,6 +39,8 @@ const USAGE = `${BENCH} — the Blender scene editor end to end on the committed
 
   --dry-run   fixture sha256, sheet and run plan; no network, no env, nothing written
   --headed    show the browser
+  --scene-url=<url>  the continuum-scene the bench Backend renders on, when
+                     CONTINUUM_SCENE_SERVICE_URL is not in the Backend env files
   --help      this text
 
   FORGE_SCENE_BRAND_ID / FORGE_SCENE_OWNER_EMAIL   another brand (it must have Forge)
@@ -52,6 +54,9 @@ if (argv.includes('--help') || argv.includes('-h')) {
   process.exit(0);
 }
 const DRY_RUN = argv.includes('--dry-run');
+const SCENE_URL_FLAG = argv
+  .find((arg) => arg.startsWith('--scene-url='))
+  ?.slice('--scene-url='.length);
 
 /** The bench brand and its owner (Backend `_bench/fixtures.ts`); identities stay overridable. */
 const BRAND_ID = process.env.FORGE_SCENE_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
@@ -305,6 +310,16 @@ async function live(plan: Plan) {
     'CONTINUUM_SCENE_SERVICE_URL',
     'INTERNAL_TEMPLATE_PARSE_SECRET',
   ]);
+  if (SCENE_URL_FLAG) process.env.CONTINUUM_SCENE_SERVICE_URL = SCENE_URL_FLAG;
+  if (!process.env.CONTINUUM_SCENE_SERVICE_URL) {
+    // Without it every draft answers 502 and the editor waits out FIRST_DRAFT_MS for nothing.
+    check(
+      'the bench Backend knows a continuum-scene',
+      false,
+      'no CONTINUUM_SCENE_SERVICE_URL in the Backend env — pass --scene-url=<url>',
+    );
+    return;
+  }
   const admin = createClient(SUPABASE_URL, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
