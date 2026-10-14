@@ -41,6 +41,12 @@ describe('the All frame', () => {
     expect(topSpendLabel(EASY_FIT_MP1)).toBe('Meta takes 62% of the spend');
   });
 
+  it('names no top spender when one platform is connected', () => {
+    const frame = buildMetrics([{ ...META_TOTALS, share_of_spend: 1 }]);
+    expect(frame.headline_facts.top_spend).not.toBeNull();
+    expect(topSpendLabel(frame)).toBeNull();
+  });
+
   it('never adds two currencies: each platform keeps its own figure and no share', () => {
     const usdGoogle = {
       ...GOOGLE_TOTALS,

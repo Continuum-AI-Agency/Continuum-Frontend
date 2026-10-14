@@ -252,10 +252,13 @@ export function kindPriorMove(
   return pct == null ? null : { priorCostPerResult, pct };
 }
 
-/** "Google takes 29% of the spend" — only when the producer could say it (one currency). */
+/** "Google takes 29% of the spend" — only when the producer could say it (one currency), and
+ *  only between two platforms or more: with one connected, "Meta takes 100%" says nothing the
+ *  headline's "on Meta" did not, and the line it added wrapped the meta line past where its
+ *  one-platform placeholder ends (Overview 768 CLS 0.316). */
 export function topSpendLabel(metrics: AccountPlatformMetrics): string | null {
   const top = metrics.headline_facts.top_spend;
-  if (!top) return null;
+  if (!top || connectedTotals(metrics).length < 2) return null;
   return `${platformName(top.platform)} takes ${pct(top.share_of_spend)} of the spend`;
 }
 
