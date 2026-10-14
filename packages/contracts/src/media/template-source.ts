@@ -56,6 +56,7 @@ export const templateSourceFamilySchema = z.enum([
   'after_effects_package',
   'figma',
   'photoshop',
+  'blender',
 ]);
 export type TemplateSourceFamily = z.infer<typeof templateSourceFamilySchema>;
 
@@ -66,6 +67,7 @@ export const templateSourceKindSchema = z.enum([
   'after_effects',
   'figma',
   'hyperframes',
+  'blender',
   'other',
 ]);
 export type TemplateSourceKind = z.infer<typeof templateSourceKindSchema>;
@@ -77,6 +79,7 @@ export const TEMPLATE_SOURCE_KIND_LABELS: Record<TemplateSourceKind, string> = {
   after_effects: 'After Effects',
   figma: 'Figma',
   hyperframes: 'HyperFrames',
+  blender: 'Blender',
   other: 'Other',
 };
 
@@ -744,6 +747,7 @@ export type TemplateFontPushResponse = z.infer<typeof templateFontPushResponseSc
 export const TEMPLATE_SOURCE_FAMILIES_FROM_LIBRARY_FORMAT: Record<string, TemplateSourceFamily> = {
   after_effects: 'after_effects',
   after_effects_package: 'after_effects_package',
+  blender: 'blender',
 };
 
 /**

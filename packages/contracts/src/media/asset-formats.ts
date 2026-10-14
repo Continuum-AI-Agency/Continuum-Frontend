@@ -12,6 +12,8 @@ export type LibraryFormatFamily =
   | 'premiere_project'
   | 'font'
   | 'model_3d'
+  /** A Blender scene: a Forge template source, parsed by the forge's `blend-library`. */
+  | 'blender'
   | 'html_bundle'
   /** Anything no other family claims: stored, versioned, shared and downloaded, never drawn. */
   | 'generic';
@@ -266,6 +268,15 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     previewStrategy: 'model_viewer',
   },
   {
+    // A scene, not a mesh: no browser viewer reads it, so it is a template source the forge
+    // parses rather than a model the 3D viewer draws.
+    family: 'blender',
+    extensions: ['blend'],
+    mimeTypes: ['application/x-blender'],
+    originalKind: 'file',
+    previewStrategy: 'none',
+  },
+  {
     family: 'after_effects',
     extensions: ['aep', 'aepx', 'aet'],
     mimeTypes: ['application/vnd.adobe.aftereffects.project'],
@@ -374,6 +385,7 @@ export const LIBRARY_PROJECT_FILE_MAX_BYTES = 250 * MB;
 const PROJECT_FILE_FAMILIES: readonly LibraryFormatFamily[] = [
   'after_effects',
   'after_effects_package',
+  'blender',
 ];
 
 function megabytes(bytes: number): string {

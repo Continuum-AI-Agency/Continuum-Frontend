@@ -488,7 +488,7 @@ export function ForgeWorkbench({
           onFonts={receiveFonts}
           onRejected={(files) =>
             toast.error(
-              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd or .ai, and .ttf or .otf for fonts.`,
+              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd, .ai or .blend, and .ttf or .otf for fonts.`,
             )
           }
         />

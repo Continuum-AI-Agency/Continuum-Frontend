@@ -7,6 +7,7 @@ export * from './asset-renditions';
 export * from './asset-views';
 export * from './attach';
 export * from './background-removal';
+export * from './blend-scene';
 export * from './canvas-filing';
 export * from './client-render';
 export * from './clip';

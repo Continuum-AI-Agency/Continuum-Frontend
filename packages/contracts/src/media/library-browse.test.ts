@@ -103,6 +103,7 @@ describe('format groups', () => {
     expect(libraryFormatGroupOf({ kind: 'file', fileName: 'deck.pptx' })).toBe('document');
     expect(libraryFormatGroupOf({ kind: 'file', fileName: 'poster.psd' })).toBe('design');
     expect(libraryFormatGroupOf({ kind: 'file', fileName: 'scene.glb' })).toBe('model_3d');
+    expect(libraryFormatGroupOf({ kind: 'file', fileName: 'spot.blend' })).toBe('model_3d');
     expect(libraryFormatGroupOf({ kind: 'file', fileName: 'notes.rar' })).toBe('archive');
     expect(libraryFormatGroupOf({ kind: 'file', fileName: 'mystery.xyz' })).toBe('other');
     expect(libraryFormatGroupOf({ kind: 'file', fileName: 'x', mimeType: 'application/pdf' })).toBe(

@@ -119,6 +119,7 @@ const FAMILY_FORMAT_GROUP: Readonly<Record<LibraryFormatFamily, LibraryFormatGro
   after_effects_package: 'design',
   premiere_project: 'design',
   model_3d: 'model_3d',
+  blender: 'model_3d',
   html_bundle: 'html',
   font: 'other',
   generic: 'other',
