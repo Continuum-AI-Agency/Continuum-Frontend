@@ -348,9 +348,7 @@ export async function auditVisual(
         );
       }
       if (control.inlineTextLink) continue;
-      const measured = control.hitArea
-        ? { ...control.bbox, ...control.hitArea }
-        : control.bbox;
+      const measured = control.hitArea ? { ...control.bbox, ...control.hitArea } : control.bbox;
       const short = tapTargetShortfall(measured, control.tapFloor);
       if (short) {
         const how = control.hitArea ? 'hit area' : 'painted box (centre not on screen)';
@@ -490,6 +488,15 @@ export function measureHitArea(
   };
 }
 
+/** Whether the browser renders `el` at all. A closed `<details>` keeps its content in the
+ *  layout tree but skips painting it (`::details-content` is `content-visibility: hidden`), so
+ *  that content reports a real box, a visible computed style and a `display` that is not
+ *  `none` — and still cannot be seen, hovered or tapped. `checkVisibility()` is the renderer's
+ *  own answer; a browser without it is trusted to render. */
+export function rendersContent(el: { checkVisibility?: () => boolean }): boolean {
+  return typeof el.checkVisibility !== 'function' || el.checkVisibility();
+}
+
 /** Where rule (c) hit-tests a control: the centre of the part of its box that is on screen
  *  once its overflow ancestors (`clipped`, from `clipToAncestors`) and the viewport have cut
  *  it. `point` is `null` when nothing of it is on screen; `partial` says some of the painted
@@ -517,7 +524,7 @@ export function hitTestPoint(
 
 /** Visibility, ancestry, naming and clipping, shared by every collector. It is serialised with
  *  `toString()` and evaluated in the page, so it must reference nothing outside itself. */
-function pageHelpers(overlaySelector: string) {
+function pageHelpers(overlaySelector: string, renders: typeof rendersContent) {
   const isHiddenByStyle = (el: Element): boolean => {
     const style = window.getComputedStyle(el);
     return (
@@ -537,6 +544,7 @@ function pageHelpers(overlaySelector: string) {
   const isVisible = (el: Element): boolean => {
     const rect = el.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return false;
+    if (!renders(el)) return false;
     for (let cursor: Element | null = el; cursor; cursor = cursor.parentElement) {
       if (isHiddenByStyle(cursor) || isScreenReaderOnly(cursor)) return false;
     }
@@ -650,7 +658,7 @@ async function installPageHelpers(page: Page): Promise<void> {
   // A string script, not a closure: `pageHelpers` is plain JS once Playwright strips the types
   // and the page needs its SOURCE, which a closure passed to evaluate would not carry.
   await page.evaluate(
-    `window.__l1vHelpers = (${pageHelpers.toString()})(${JSON.stringify(OVERLAY_SELECTOR)});` +
+    `window.__l1vHelpers = (${pageHelpers.toString()})(${JSON.stringify(OVERLAY_SELECTOR)}, ${rendersContent.toString()});` +
       `window.__l1vHelpers.measureHitArea = ${measureHitArea.toString()};` +
       `window.__l1vHelpers.hitTestPoint = ${hitTestPoint.toString()};`,
   );

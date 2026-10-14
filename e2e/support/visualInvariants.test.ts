@@ -27,7 +27,12 @@ import {
   type VisualNode,
   violation,
 } from './visualGeometry';
-import { hitTestPoint, measureHitArea, TAP_TARGET_COARSE_PX } from './visualInvariants';
+import {
+  hitTestPoint,
+  measureHitArea,
+  rendersContent,
+  TAP_TARGET_COARSE_PX,
+} from './visualInvariants';
 
 const rect = (x: number, y: number, width: number, height: number): Rect => ({
   x,
@@ -251,6 +256,23 @@ describe('the hit-test point lies in the visible part of the control', () => {
       point: null,
       partial: true,
     });
+  });
+});
+
+describe('content the browser does not render is not audited', () => {
+  test('a control inside a closed <details> is not rendered, though it has a box', () => {
+    // Portfolio detail, 2026-10-14: the "Exact figures per ad set" summary and its four sort
+    // buttons sit inside the closed "Show detail" disclosure — 582 × 14.5 px boxes at
+    // y = 1733, checkVisibility() false — and were graded as 15 px tap targets.
+    expect(rendersContent({ checkVisibility: () => false })).toBe(false);
+  });
+
+  test('a rendered control is audited', () => {
+    expect(rendersContent({ checkVisibility: () => true })).toBe(true);
+  });
+
+  test('a browser without checkVisibility is trusted to render', () => {
+    expect(rendersContent({})).toBe(true);
   });
 });
 
