@@ -147,7 +147,8 @@ export function useFanOutDraft(): UseFanOutDraftResult {
           // reason once: "Instagram, Facebook: This draft has no caption — …".
           const platformsByReason = new Map<string, string[]>();
           for (const outcome of failed) {
-            const reason = outcome.reason ?? 'could not be scheduled — open that post and try again.';
+            const reason =
+              outcome.reason ?? 'could not be scheduled — open that post and try again.';
             platformsByReason.set(reason, [
               ...(platformsByReason.get(reason) ?? []),
               publishPlatformLabel(outcome.platform),
