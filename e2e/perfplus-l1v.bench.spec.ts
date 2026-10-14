@@ -94,7 +94,16 @@ const THEMES: readonly VisualTheme[] = ['light', 'dark'];
 /** PERFPLUS_VISUAL_SMOKE=1 runs one viewport and one theme (every surface, every state): a
  *  fifteen-minute check that the detector still runs end to end, before the full matrix. */
 const SMOKE = process.env.PERFPLUS_VISUAL_SMOKE === '1';
-const MATRIX_VIEWPORTS = SMOKE ? [VIEWPORTS[2]] : VIEWPORTS;
+/** PERFPLUS_VISUAL_VIEWPORTS=768,1280 re-runs only those widths (a cell a fix claims to close). */
+const ONLY_WIDTHS = (process.env.PERFPLUS_VISUAL_VIEWPORTS ?? '')
+  .split(',')
+  .map((width) => Number(width.trim()))
+  .filter((width) => width > 0);
+const MATRIX_VIEWPORTS = SMOKE
+  ? [VIEWPORTS[2]]
+  : ONLY_WIDTHS.length > 0
+    ? VIEWPORTS.filter((viewport) => ONLY_WIDTHS.includes(viewport.width))
+    : VIEWPORTS;
 const MATRIX_THEMES: readonly VisualTheme[] = SMOKE ? ['light'] : THEMES;
 
 type Surface = { name: string; path: string; states: readonly VisualState[] };
@@ -108,6 +117,16 @@ const SURFACES: readonly Surface[] = [
   { name: 'Campaign Canvas', path: '/scale/campaign-canvas', states: ['loaded'] },
   { name: 'Home Overview', path: '/dashboard?view=overview', states: ['loaded'] },
 ];
+
+/** PERFPLUS_VISUAL_SURFACES=Optimizer,Jaina re-runs only those surfaces, by name. A partial run
+ *  says so in its notes: it covers less than the matrix. */
+const ONLY_SURFACES = (process.env.PERFPLUS_VISUAL_SURFACES ?? '')
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean);
+const MATRIX_SURFACES = ONLY_SURFACES.length > 0
+  ? SURFACES.filter((surface) => ONLY_SURFACES.includes(surface.name))
+  : SURFACES;
 
 /** The Optimizer's tablist (OptimizerTab.tsx), minus Overview which is the landing view. */
 const OPTIMIZER_TABS = ['Automations', 'Portfolios', 'Actions', 'Activity'] as const;
@@ -561,12 +580,17 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
     browser,
   }) => {
     test.setTimeout(4 * 60 * 60_000);
+    if (ONLY_SURFACES.length > 0 || ONLY_WIDTHS.length > 0) {
+      notes.push(
+        `PARTIAL run: surfaces ${MATRIX_SURFACES.map((surface) => surface.name).join(', ')} at ${MATRIX_VIEWPORTS.map((viewport) => viewport.width).join(', ')} — not the full matrix`,
+      );
+    }
 
     for (const viewport of MATRIX_VIEWPORTS) {
       for (const theme of MATRIX_THEMES) {
         const context = await themedContext(browser, viewport, theme);
         try {
-          for (const surface of SURFACES) {
+          for (const surface of MATRIX_SURFACES) {
             for (const state of surface.states) {
               await test.step(`${surface.name} @${viewport.width} ${theme} ${state}`, async () => {
                 if (surface.name !== 'Optimizer') {
