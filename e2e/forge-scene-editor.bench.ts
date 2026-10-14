@@ -13,7 +13,11 @@
  *               changes, and its pixels show the swatch moved and recoloured (red where it moved
  *               to, the world colour where it was);
  *   5. FINAL    Render final runs to `completed`, the file shows with its Library link, and after a
- *               reload the history lists it as completed.
+ *               reload the history lists it as completed;
+ *   6. SHEET    the editor's way back opens the template's Forge sheet, which shows that final render
+ *               (no draft is drawn just to look); a rename there survives a reload, and Remove takes
+ *               the template out of the brand — the app's soft delete, because opening the sheet
+ *               wrote its baseline revision and revisions are immutable.
  *
  * Cleanup deletes exactly what this run made — the uploaded template, its render jobs and their
  * Library outputs, every storage object behind them and the drafts cached under the template —
@@ -623,6 +627,69 @@ async function live(plan: Plan) {
       top.includes('Completed'),
       top.slice(0, 120),
     );
+
+    // ── 6. The template's sheet ───────────────────────────────────────────────────────────────
+    const draftsBefore = drafts.length;
+    await page.getByRole('link', { name: 'Template', exact: true }).click();
+    const stage = page.getByRole('group', { name: 'Scene preview' });
+    const shown = stage.locator('img[alt^="Render of"]');
+    const shownWidth = await shown
+      .waitFor({ timeout: PAGE_TIMEOUT_MS })
+      .then(() =>
+        shown.evaluate((node) =>
+          (node as HTMLImageElement).decode().then(() => (node as HTMLImageElement).naturalWidth),
+        ),
+      )
+      .catch(() => 0);
+    const badge = shownWidth ? ((await stage.getByText(/^Rendered · /).textContent()) ?? '') : '';
+    check(
+      "the template's sheet shows the last final render",
+      shownWidth > 0 && badge.startsWith('Rendered'),
+      `${shownWidth} px · ${badge || 'no rendered badge'}`,
+    );
+    await page.waitForTimeout(2_000);
+    check(
+      'opening the sheet draws no draft',
+      drafts.length === draftsBefore,
+      `${drafts.length - draftsBefore} draft request(s)`,
+    );
+    await page.screenshot({ path: path.join(SHOTS, 'template-sheet.png'), fullPage: true });
+
+    const renamed = `Bench scene ${runId}`;
+    await page.getByRole('button', { name: /^Rename / }).click();
+    const nameInput = page.getByRole('textbox', { name: /^Rename / });
+    await nameInput.fill(renamed);
+    await nameInput.press('Enter');
+    const sheetHeading = page.getByRole('heading', { level: 2 }).filter({ hasText: renamed });
+    await sheetHeading.waitFor({ timeout: 30_000 }).catch(() => undefined);
+    await page.goto(`${APP}/forge?template=${ticket.assetId}`, { waitUntil: 'domcontentloaded' });
+    const kept = await sheetHeading
+      .waitFor({ timeout: PAGE_TIMEOUT_MS })
+      .then(() => true)
+      .catch(() => false);
+    check('a rename on the sheet survives a reload', kept, kept ? renamed : 'the old name is back');
+
+    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await page.getByRole('button', { name: 'Remove from brand' }).click();
+    let removal = 'still live after 30 s';
+    for (let tries = 0; tries < 30; tries++) {
+      const { data } = await media()
+        .from('assets')
+        .select('deleted_at')
+        .eq('id', ticket.assetId)
+        .maybeSingle();
+      const row = data as { deleted_at: string | null } | null;
+      if (!row || row.deleted_at) {
+        removal = row ? 'soft-deleted' : 'row deleted';
+        break;
+      }
+      await page.waitForTimeout(1_000);
+    }
+    check(
+      'Remove on the sheet takes the template out of the brand',
+      !removal.startsWith('still live'),
+      removal,
+    );
     note(`screenshots: ${SHOTS}`);
   } catch (error) {
     failed = true;
@@ -676,11 +743,16 @@ async function live(plan: Plan) {
         .delete()
         .in('id', [...made.jobs]);
     if (assets.length) await media().from('template_source_events').delete().in('asset_id', assets);
+    const refused: string[] = [];
     for (const id of assets) {
       // One row at a time: a multi-row delete deadlocks (40P01) against fresh-asset writers.
       for (let attempt = 1; attempt <= 5; attempt++) {
         const del = await media().from('assets').delete().eq('id', id).eq('brand_id', BRAND_ID);
-        if (!del.error || del.error.code !== '40P01') break;
+        if (!del.error) break;
+        if (del.error.code !== '40P01' || attempt === 5) {
+          refused.push(`${id.slice(0, 8)} ${del.error.code}: ${del.error.message.slice(0, 120)}`);
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 1_000 * attempt));
       }
     }
@@ -697,13 +769,18 @@ async function live(plan: Plan) {
       );
     for (const jobId of made.jobs)
       await removeFlatPrefix(admin, RENDER_BUCKET, `${BRAND_ID}/scene-renders/${jobId}`);
-    const left = assets.length
-      ? ((await media().from('assets').select('id').in('id', assets)).data?.length ?? 0)
-      : 0;
+    // A template whose sheet was opened keeps its row: its baseline revision is immutable and
+    // points at it, so the app's Remove (a soft delete) is the most that can happen to it.
+    const { data: remaining } = assets.length
+      ? await media().from('assets').select('id, deleted_at').in('id', assets)
+      : { data: [] };
+    const rows = (remaining ?? []) as Array<{ id: string; deleted_at: string | null }>;
+    const left = rows.filter((row) => !row.deleted_at).length;
+    const ledgered = rows.length - left;
     check(
       'cleanup leaves nothing behind',
       left === 0,
-      `${assets.length} asset(s), ${made.jobs.size} job(s), ${made.objects.size} object(s), ${previews} draft(s) removed · ${left} left`,
+      `${assets.length} asset(s), ${made.jobs.size} job(s), ${made.objects.size} object(s), ${previews} draft(s) removed · ${left} left${ledgered ? ` · ${ledgered} removed in the app, row kept by its revision ledger` : ''}${left && refused.length ? ` · refused ${refused.join('; ')}` : ''}`,
     );
     await admin.auth.admin.signOut(session.accessToken, 'local').catch(() => undefined);
   }

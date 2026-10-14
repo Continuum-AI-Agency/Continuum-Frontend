@@ -39,42 +39,57 @@ export function SceneRenderStatePill({ state }: { state: string }) {
   );
 }
 
-/** One finished output, signed for display at its exact version. */
-function SceneOutputMedia({
-  brandId,
-  pin,
-  mediaType,
-  label,
-}: {
+type SceneMediaProps = {
   brandId: string;
   pin: { assetId: string; versionId: string };
   mediaType: BlendOutput['mediaType'];
   label: string;
-}) {
+};
+
+/** One finished output, signed for display at its exact version. `fill` sizes it to its frame. */
+export function SceneSignedMedia({
+  brandId,
+  pin,
+  mediaType,
+  label,
+  fill = false,
+}: SceneMediaProps & { fill?: boolean }) {
   const signed = useQuery({
     queryKey: [...signedAssetUrlQueryKey(brandId, pin.assetId), pin.versionId],
     queryFn: () => signLibraryAsset(brandId, pin.assetId, pin.versionId),
     staleTime: SIGNED_URL_STALE_MS,
     retry: false,
   });
+  if (!signed.data)
+    return (
+      <div className="flex aspect-video items-center justify-center rounded-md bg-muted/70 text-2xs text-muted-foreground">
+        {signed.isError ? 'Could not load this file' : 'Loading…'}
+      </div>
+    );
+  return mediaType === 'video' ? (
+    <Video
+      src={signed.data}
+      className={fill ? 'size-full object-contain' : 'aspect-auto! rounded-md'}
+    />
+  ) : (
+    // biome-ignore lint/performance/noImgElement: a signed Library render, not a Next-optimisable asset
+    <img
+      src={signed.data}
+      alt={`Render of ${label}`}
+      className={
+        fill
+          ? 'size-full object-contain'
+          : 'w-full rounded-md border border-border bg-muted/40 object-contain'
+      }
+    />
+  );
+}
+
+function SceneOutputMedia(props: SceneMediaProps) {
+  const { brandId, pin } = props;
   return (
     <figure className="m-0 flex flex-col gap-1">
-      {signed.data ? (
-        mediaType === 'video' ? (
-          <Video src={signed.data} className="aspect-auto! rounded-md" />
-        ) : (
-          // biome-ignore lint/performance/noImgElement: a signed Library render, not a Next-optimisable asset
-          <img
-            src={signed.data}
-            alt={`Render of ${label}`}
-            className="w-full rounded-md border border-border bg-muted/40 object-contain"
-          />
-        )
-      ) : (
-        <div className="flex aspect-video items-center justify-center rounded-md bg-muted/70 text-2xs text-muted-foreground">
-          {signed.isError ? 'Could not load this file' : 'Loading…'}
-        </div>
-      )}
+      <SceneSignedMedia {...props} />
       <figcaption className="text-xs">
         <OpenInLibrary brandId={brandId} assetId={pin.assetId} />
       </figcaption>

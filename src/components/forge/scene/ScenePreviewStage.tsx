@@ -1,13 +1,13 @@
 'use client';
 
 import type { BlendOutput, ScenePreview } from '@continuum/contracts';
-import { useMemo } from 'react';
-import { Button } from '@/components/ui/button';
+import { type ReactNode, useMemo } from 'react';
 import {
   FormatPreview,
   type PreviewFormat,
   previewFormats,
 } from '@/components/forge/FormatPreview';
+import { Button } from '@/components/ui/button';
 import { sceneProblem } from '@/lib/library/sceneTemplates';
 
 // The draft of the picked output, at that output's own shape. The output chips ARE the output
@@ -39,6 +39,7 @@ export function ScenePreviewStage({
   onOutputChange,
   preview,
   wellClassName = 'h-[min(70vh,48rem)]',
+  final = null,
 }: {
   outputs: readonly BlendOutput[];
   outputId: string | null;
@@ -50,6 +51,8 @@ export function ScenePreviewStage({
     refetch: () => unknown;
   };
   wellClassName?: string;
+  /** The picked output's last final render; shown instead of a draft when there is one. */
+  final?: { node: ReactNode; at: string } | null;
 }) {
   const formats = useMemo(() => sceneFormats(outputs), [outputs]);
   if (!formats.length || !outputId) {
@@ -77,36 +80,43 @@ export function ScenePreviewStage({
             : null
         }
         frame={() =>
-          draft
+          final
             ? {
-                mode: 'preview',
-                at: null,
-                basedOn: null,
-                pending: preview.updating,
-                badge: preview.updating
-                  ? 'Draft · updating…'
-                  : `Draft · ${draft.width}×${draft.height}${draft.cached ? ' · cached' : ''}`,
-                caption:
-                  output?.mediaType === 'video'
-                    ? `Preview of frame ${draft.frame}`
-                    : `Draft of ${output?.label ?? outputId}; Render final draws it at full quality.`,
-                node: (
-                  // biome-ignore lint/performance/noImgElement: a short-lived signed PNG the image optimizer cannot cache
-                  <img
-                    src={draft.url}
-                    alt={`Draft preview of ${output?.label ?? outputId}`}
-                    className="size-full object-contain"
-                    data-cached={draft.cached || undefined}
-                  />
-                ),
+                mode: 'rendered',
+                at: final.at,
+                caption: `Last final render of ${output?.label ?? outputId}; the editor changes it.`,
+                node: final.node,
               }
-            : {
-                mode: 'none',
-                message: problem ?? (preview.updating ? 'Drawing a draft…' : 'No draft yet'),
-              }
+            : draft
+              ? {
+                  mode: 'preview',
+                  at: null,
+                  basedOn: null,
+                  pending: preview.updating,
+                  badge: preview.updating
+                    ? 'Draft · updating…'
+                    : `Draft · ${draft.width}×${draft.height}${draft.cached ? ' · cached' : ''}`,
+                  caption:
+                    output?.mediaType === 'video'
+                      ? `Preview of frame ${draft.frame}`
+                      : `Draft of ${output?.label ?? outputId}; Render final draws it at full quality.`,
+                  node: (
+                    // biome-ignore lint/performance/noImgElement: a short-lived signed PNG the image optimizer cannot cache
+                    <img
+                      src={draft.url}
+                      alt={`Draft preview of ${output?.label ?? outputId}`}
+                      className="size-full object-contain"
+                      data-cached={draft.cached || undefined}
+                    />
+                  ),
+                }
+              : {
+                  mode: 'none',
+                  message: problem ?? (preview.updating ? 'Drawing a draft…' : 'No draft yet'),
+                }
         }
       />
-      {problem ? (
+      {problem && !final ? (
         <p role="alert" className="m-0 flex items-center gap-2 text-xs text-destructive">
           {draft ? problem : null}
           <Button type="button" size="xs" variant="outline" onClick={() => void preview.refetch()}>

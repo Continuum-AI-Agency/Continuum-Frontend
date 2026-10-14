@@ -435,6 +435,11 @@ export function ForgeWorkbench({
           brandId={brandId}
           source={current}
           onBack={() => open(null)}
+          onRename={(title) => void rename(current.assetId, title)}
+          onRemove={() => {
+            setRemovalReturn(null);
+            setRemoving(current);
+          }}
         />
       ) : current ? (
         <TemplateDetail

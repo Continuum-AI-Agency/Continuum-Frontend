@@ -2,20 +2,21 @@
 
 import { type TemplateSourceSummary, templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Box } from 'lucide-react';
+import { ArrowLeft, Box, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { groupSceneFields, SCENE_GROUP_TITLES } from '@/components/forge/scene/SceneInspector';
 import { ScenePreviewStage } from '@/components/forge/scene/ScenePreviewStage';
-import { SceneRenderHistory } from '@/components/forge/scene/SceneRenderPanel';
+import { SceneRenderHistory, SceneSignedMedia } from '@/components/forge/scene/SceneRenderPanel';
 import { useScenePreview } from '@/components/forge/scene/useScenePreview';
+import { InlineRename } from '@/components/forge/TemplateCard';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { fetchSceneTemplate, sceneProblem } from '@/lib/library/sceneTemplates';
+import { fetchSceneTemplate, listSceneRenders, sceneProblem } from '@/lib/library/sceneTemplates';
 
-// A Blender template's sheet in the Forge gallery: what it looks like at the file's own values,
-// which fields it offers, and its recent renders. Editing happens in the scene editor; this sheet
+// A Blender template's sheet in the Forge gallery: each output's last final render (or, before
+// there is one, a draft at the file's own values), which fields it offers, and its recent renders. Editing happens in the scene editor; this sheet
 // only says what is there and opens it.
 
 const NO_CHANGES = {};
@@ -29,10 +30,14 @@ export function SceneTemplateDetail({
   brandId,
   source,
   onBack,
+  onRename,
+  onRemove,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
   onBack: () => void;
+  onRename: (title: string) => void;
+  onRemove: () => void;
 }) {
   const { assetId } = source;
   const name = source.displayName ?? templateDisplayName(source.parse?.filename);
@@ -46,11 +51,22 @@ export function SceneTemplateDetail({
   const [outputId, setOutputId] = useState<string | null>(null);
   const outputs = view.data?.outputs ?? [];
   const output = outputs.find((candidate) => candidate.id === outputId) ?? outputs[0] ?? null;
+  // Same key as SceneRenderHistory below, so the list and the stage share one request.
+  const history = useQuery({
+    queryKey: forgeQueryKeys.sceneRenders(brandId, assetId),
+    queryFn: ({ signal }) => listSceneRenders(brandId, assetId, signal),
+    enabled: parsed,
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const latest = history.data?.renders.find(
+    (render) => render.outputId === output?.id && render.state === 'completed' && render.outputs[0],
+  );
+  // A draft only when there is no final render to show: no Cloud Run render just for looking.
   const preview = useScenePreview({
     brandId,
     assetId,
     versionId: view.data?.versionId ?? null,
-    outputId: output?.id ?? null,
+    outputId: !history.isPending && !latest ? (output?.id ?? null) : null,
     values: NO_CHANGES,
   });
   const cameras = useMemo(() => new Set(outputs.map((entry) => entry.camera)), [outputs]);
@@ -66,7 +82,9 @@ export function SceneTemplateDetail({
             <ArrowLeft className="size-3.5" aria-hidden />
             Templates
           </Button>
-          <h2 className="min-w-0 truncate text-base font-semibold">{name}</h2>
+          <h2 className="min-w-0 text-base font-semibold">
+            <InlineRename value={name} onRename={onRename} />
+          </h2>
           <p className="truncate text-xs text-muted-foreground">
             Blender scene
             {view.data ? ` · ${view.data.fields.length} fields · ${outputs.length} outputs` : null}
@@ -74,6 +92,15 @@ export function SceneTemplateDetail({
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <OpenInLibrary brandId={brandId} assetId={assetId} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2 className="size-3.5" aria-hidden /> Remove
+          </Button>
           {view.data ? (
             <Link
               href={sceneEditorHref(assetId)}
@@ -118,6 +145,22 @@ export function SceneTemplateDetail({
               onOutputChange={setOutputId}
               preview={preview}
               wellClassName="h-[min(60vh,40rem)]"
+              final={
+                latest && output
+                  ? {
+                      at: latest.createdAt,
+                      node: (
+                        <SceneSignedMedia
+                          fill
+                          brandId={brandId}
+                          pin={latest.outputs[0]!}
+                          mediaType={output.mediaType}
+                          label={output.label}
+                        />
+                      ),
+                    }
+                  : null
+              }
             />
           </div>
           <div className="flex min-w-0 flex-col gap-4 p-[var(--card-pad)]">
