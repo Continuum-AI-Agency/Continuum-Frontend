@@ -24,6 +24,7 @@ import {
   cutPacingSchema,
   cutRungSchema,
   cutTransientKindSchema,
+  DEFAULT_CUT_TRANSIENTS,
 } from '../headless-content/cutPlan';
 import { elementStyleSlugsSchema, withElementStyleTokens } from '../media/element';
 import type { ConnectSpec, NodeSpec } from './workflow-builder';
@@ -467,7 +468,7 @@ export const fastCutRecipeSchema = z
     pacing: cutPacingSchema.default('build'),
     rung: cutRungSchema.optional(),
     bars: z.number().int().min(2).max(16).default(4),
-    transients: z.array(cutTransientKindSchema).max(4).default(['flash', 'punch', 'rgb-shift']),
+    transients: z.array(cutTransientKindSchema).max(4).default([...DEFAULT_CUT_TRANSIENTS]),
     imageModel: z.string().min(1).default('nano-banana-2'),
   })
   .strict()

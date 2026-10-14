@@ -4,6 +4,7 @@ import {
   cutPacingSchema,
   cutRungSchema,
   cutTransientKindSchema,
+  DEFAULT_CUT_TRANSIENTS,
 } from '../headless-content/cutPlan';
 import { API_RENDER_MEDIA_LIST_MAX } from './api-renders';
 import { type BatchItemKind, batchItemType, MAX_BATCH_ITEMS } from './batch-node';
@@ -766,7 +767,7 @@ export const fastCutNodeDataSchema = z.object({
   /** Steady's rung, or stutter's base rung (cutPlan.ts). */
   rung: cutRungSchema.optional(),
   bars: z.number().int().min(2).max(16).default(4),
-  transients: z.array(cutTransientKindSchema).max(4).default(['flash', 'punch', 'rgb-shift']),
+  transients: z.array(cutTransientKindSchema).max(4).default([...DEFAULT_CUT_TRANSIENTS]),
   durationSec: z.number().positive().optional(),
   /** The master tier renders 1080×1920 only. */
   aspectRatio: z.literal('9:16').default('9:16'),
@@ -1964,7 +1965,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         data: {
           pacing: 'build',
           bars: 4,
-          transients: ['flash', 'punch', 'rgb-shift'],
+          transients: [...DEFAULT_CUT_TRANSIENTS],
           aspectRatio: '9:16',
         },
         style: { width: 320, height: 380 },

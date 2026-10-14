@@ -20,6 +20,12 @@ export type CutPacing = z.infer<typeof cutPacingSchema>;
 
 export const cutTransientKindSchema = z.enum(['flash', 'punch', 'rgb-shift', 'shake']);
 export type CutTransientKind = z.infer<typeof cutTransientKindSchema>;
+/**
+ * What an edit carries unless it says otherwise. No white flash: the council read it as a washed
+ * grey frame on every round (r0 "transients too hot", r2 "grey ghost" on the downbeat cuts, J5
+ * "neutral" against transients-off). A caller still asks for it by name.
+ */
+export const DEFAULT_CUT_TRANSIENTS: readonly CutTransientKind[] = ['punch', 'rgb-shift'];
 
 /** What a composition asks for. The planner decides the cuts. */
 export const headlessEditSchema = z
@@ -32,7 +38,7 @@ export const headlessEditSchema = z
     /** The spoken shot the montage follows; null opens the reel on the montage. */
     afterShotId: z.string().min(1).nullable(),
     bars: z.number().int().min(2).max(16).default(4),
-    transients: z.array(cutTransientKindSchema).max(4).default(['flash', 'punch', 'rgb-shift']),
+    transients: z.array(cutTransientKindSchema).max(4).default([...DEFAULT_CUT_TRANSIENTS]),
     /** A generated bed at this tempo; null uses the composition's `audioBed`. */
     music: z
       .object({

@@ -1637,7 +1637,7 @@ describe('fastCut', () => {
     expect(fastCutNodeDataSchema.parse(data)).toEqual({
       pacing: 'build',
       bars: 4,
-      transients: ['flash', 'punch', 'rgb-shift'],
+      transients: ['punch', 'rgb-shift'],
       aspectRatio: '9:16',
     });
   });
