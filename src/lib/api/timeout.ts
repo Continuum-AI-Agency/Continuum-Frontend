@@ -1,3 +1,5 @@
+import { CANVAS_FAST_CUT_ROUTE } from '@continuum/contracts';
+
 // The one client timeout policy for Performance+ data calls.
 //
 // No data call carried a client timeout except the Optimizer's, so a hung socket left Jaina,
@@ -207,6 +209,23 @@ export const supabaseTimeoutPolicy: TimeoutPolicy = (url) => {
   return READ_TIMEOUT_MS;
 };
 
-/** The Backend client's bound: a GET is a read; anything else may be a job. */
-export const backendTimeoutPolicy: TimeoutPolicy = (_url, method) =>
-  method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+/** A render answered only once its file exists, so time-to-headers IS the encode: a fast cut
+ *  at 1080×1920 and 60 fps, its master and its delivery copy. */
+export const RENDER_TIMEOUT_MS = 300_000;
+const RENDER_PATHS = new Set<string>([CANVAS_FAST_CUT_ROUTE]);
+
+const pathOf = (url: string): string => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+};
+
+/** The Backend client's bound: a GET is a read, a render is a render, anything else may be a job. */
+export const backendTimeoutPolicy: TimeoutPolicy = (url, method) =>
+  method === 'GET'
+    ? READ_TIMEOUT_MS
+    : RENDER_PATHS.has(pathOf(url))
+      ? RENDER_TIMEOUT_MS
+      : LONG_OPERATION_TIMEOUT_MS;

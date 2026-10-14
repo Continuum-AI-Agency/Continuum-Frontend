@@ -11,6 +11,8 @@ import {
   combineBatches,
   DESIGN_REF_IMAGE_OUTPUT_HANDLE,
   DESIGN_REF_TEXT_OUTPUT_HANDLE,
+  FAST_CUT_AUDIO_INPUT_HANDLE,
+  FAST_CUT_MEDIA_INPUT_HANDLE,
   isActionId,
   LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
@@ -46,6 +48,7 @@ import type { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
   ElementNodeData,
+  FastCutNodeData,
   FrameExtractNodeData,
   GeneratedImageVariation,
   HyperframesAgentNodeData,
@@ -93,6 +96,7 @@ import { extractVideoFrame } from './extractVideoFrame';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
 import { readNodeAssetRef } from './nodeAssetRef';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
+import { runFastCutNode } from './runFastCutNode';
 import { startHyperframesAgentNode } from './startHyperframesAgent';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
 
@@ -366,6 +370,7 @@ const resolveVideoInput = (
       sourceNode?.type === 'omniGen' ||
       sourceNode?.type === 'extendVideo' ||
       sourceNode?.type === 'timelineEditor' ||
+      sourceNode?.type === 'fastCut' ||
       // An action or a router that emitted video persisted it to the same
       // `generatedVideo*` fields every other video producer uses. Both re-run on every
       // pass today, so the live path reads `resolvedOutputs` above — this is the
@@ -1125,6 +1130,37 @@ const getNodeReadiness = (
       awaiting: true,
       reason: 'Awaiting manual edit — open the Video Editor and render',
     };
+  }
+
+  // Fast Cut renders server-side from the saved room; this only refuses a run the server
+  // would refuse, with the reason said on the canvas instead of after a round trip.
+  if (node.type === 'fastCut') {
+    const poolEdges = incomingEdges.filter(
+      (edge) => edge.targetHandle === FAST_CUT_MEDIA_INPUT_HANDLE,
+    );
+    if (poolEdges.length === 0) {
+      return { ready: false, reason: 'Connect clips or stills to the Fast Cut footage pool' };
+    }
+    if (!incomingEdges.some((edge) => edge.targetHandle === FAST_CUT_AUDIO_INPUT_HANDLE)) {
+      return { ready: false, reason: 'Connect one music bed (an Audio node) to Fast Cut' };
+    }
+    for (const edge of poolEdges) {
+      const resolvable =
+        resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }) ||
+        resolveImageInput(edge, resolvedOutputs, nodeById);
+      if (!resolvable) {
+        return {
+          ready: false,
+          blockedNodeId: edge.source,
+          reason: unresolvedInputReason(
+            FAST_CUT_MEDIA_INPUT_HANDLE,
+            nodeById.get(edge.source),
+            resolvedOutputs,
+          ),
+        };
+      }
+    }
+    return { ready: true };
   }
 
   if (node.type === 'hyperframesAgent') {
@@ -2053,6 +2089,7 @@ export async function executeWorkflow(
         node.type === 'extendVideo' ||
         node.type === 'hyperframesAgent' ||
         node.type === 'timelineEditor' ||
+        node.type === 'fastCut' ||
         reusableActionModality === 'video'
       ) {
         const genVideo =
@@ -2926,6 +2963,55 @@ export async function executeWorkflow(
         });
         updateNodeStatus(nodeId, 'awaiting');
         return false;
+      }
+
+      if (node.type === 'fastCut') {
+        if (!workflowRoomId) {
+          updateNodeStatus(nodeId, 'failed', 'AI Studio workspace is unavailable');
+          return false;
+        }
+        const controller = controls.registerController(nodeId);
+        try {
+          // The server reads this node and its wires off the SAVED room, so the room must
+          // hold what is on screen before it is asked.
+          await controls.flushSave?.();
+          const cut = await runFastCutNode(
+            { brandProfileId: brandId, roomId: workflowRoomId, nodeId },
+            controller.signal,
+          );
+          setNodeOutput(nodeId, {
+            type: 'video',
+            url: cut.signedUrl,
+            mimeType: 'video/mp4',
+            storagePath: cut.storagePath,
+            storageBucket: cut.bucket,
+            assetId: cut.assetId,
+            ...(cut.assetVersionId ? { assetVersionId: cut.assetVersionId } : {}),
+          });
+          // The same keys the server filed, so this tab's next save agrees with the room
+          // instead of writing back a node that never rendered.
+          const filed: Partial<FastCutNodeData> = {
+            assetId: cut.assetId,
+            assetVersionId: cut.assetVersionId ?? undefined,
+            masterAssetId: cut.masterAssetId,
+            durationSec: cut.durationSec,
+            fastCutFps: cut.fps,
+            fastCutCuts: cut.cuts,
+            fastCutBpm: cut.bpm,
+          };
+          useStudioStore.getState().updateNodeData(nodeId, filed);
+          updateNodeStatus(nodeId, 'completed');
+          return true;
+        } catch (error) {
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            error instanceof Error ? error.message : 'The fast cut could not be rendered',
+          );
+          return false;
+        } finally {
+          controls.releaseController(nodeId, controller);
+        }
       }
 
       // ── Canvas V3 runtime ───────────────────────────────────────────────────

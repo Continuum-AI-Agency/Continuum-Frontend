@@ -5,6 +5,7 @@ import {
   isRequestTimeout,
   LONG_OPERATION_TIMEOUT_MS,
   READ_TIMEOUT_MS,
+  RENDER_TIMEOUT_MS,
   RequestTimeoutError,
   supabaseTimeoutPolicy,
   withTimeout,
@@ -60,6 +61,13 @@ describe('supabaseTimeoutPolicy', () => {
     expect(backendTimeoutPolicy('http://localhost:4000/api/x', 'POST')).toBe(
       LONG_OPERATION_TIMEOUT_MS,
     );
+  });
+
+  it('the Backend policy: a fast cut render gets the render budget, by URL', () => {
+    expect(
+      backendTimeoutPolicy('http://localhost:4000/api/ai-studio/canvas/fast-cut', 'POST'),
+    ).toBe(RENDER_TIMEOUT_MS);
+    expect(backendTimeoutPolicy('/api/ai-studio/canvas/fast-cut', 'POST')).toBe(RENDER_TIMEOUT_MS);
   });
 });
 

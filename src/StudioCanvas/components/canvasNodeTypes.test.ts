@@ -97,6 +97,18 @@ describe('createNodeConfig — literal defaults', () => {
     });
   });
 
+  it('fastCut takes the contracts defaults: build, 4 bars, the three default transients', () => {
+    expect(createNodeConfig('fastCut')).toEqual({
+      data: {
+        pacing: 'build',
+        bars: 4,
+        transients: ['flash', 'punch', 'rgb-shift'],
+        aspectRatio: '9:16',
+      },
+      style: { width: 320, height: 380 },
+    });
+  });
+
   it('videoDecode', () => {
     expect(createNodeConfig('videoDecode')).toEqual({
       data: { value: '' },

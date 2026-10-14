@@ -47,6 +47,7 @@ const VIDEO_SOURCE_TYPES = new Set([
   'omniGen',
   'extendVideo',
   'timelineEditor',
+  'fastCut',
 ]);
 
 const kindFromNode = (node: StudioNode | undefined): 'image' | 'video' | null => {

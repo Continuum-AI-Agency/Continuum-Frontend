@@ -7,6 +7,9 @@ let maybeSingleResponses: any[] = [null];
 let maybeSingleCallCount = 0;
 let upsertSingleResponse: any = null;
 let lastUpsertPayload: any = null;
+/** When set, a write's round trip waits for it: a save that stays in flight. */
+let writeGate: Promise<void> | null = null;
+let writeCount = 0;
 
 const mockSignRequest = mock(async () => ({ items: [] }) as any);
 
@@ -53,7 +56,11 @@ const createMockQueryBuilder = () => {
     order: mock(() => queryBuilder),
     maybeSingle: mock(() => {
       if (isWrite) {
-        return Promise.resolve({ data: upsertSingleResponse, error: null });
+        writeCount += 1;
+        return (writeGate ?? Promise.resolve()).then(() => ({
+          data: upsertSingleResponse,
+          error: null,
+        }));
       }
       maybeSingleCallCount += 1;
       const nextValue = maybeSingleResponses.length > 0 ? maybeSingleResponses.shift() : null;
@@ -129,6 +136,8 @@ describe('useCanvasRealtime', () => {
     maybeSingleCallCount = 0;
     upsertSingleResponse = null;
     lastUpsertPayload = null;
+    writeGate = null;
+    writeCount = 0;
     mockSignRequest.mockReset();
     mockSignRequest.mockImplementation(async () => ({ items: [] }) as any);
     mockStore.nodes = [];
@@ -624,6 +633,52 @@ describe('useCanvasRealtime', () => {
     expect(broadcastImageNode?.data?.sourceUrl).toBe('https://cdn.continuum.test/big.png');
 
     expect((mockStore.nodes[0] as any).data.image).toBe(base64Image);
+  });
+
+  it('a save asked for mid-save resolves only once the follow-up save has written', async () => {
+    mockStore.nodes = [
+      { id: 'n1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'first' } },
+    ] as any;
+    mockStore.edges = [];
+    upsertSingleResponse = {
+      updated_at: '2026-02-18T10:00:05.000Z',
+      revision: 2,
+      editor_session_id: 'sess-x',
+    };
+    const { result } = renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+    const writesBefore = writeCount;
+
+    let release: () => void = () => undefined;
+    writeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let first: Promise<void> = Promise.resolve();
+    let second: Promise<void> = Promise.resolve();
+    let secondDone = false;
+    await act(async () => {
+      first = result.current.saveCanvasToDatabase();
+      mockStore.nodes = [
+        { id: 'n1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'second' } },
+      ] as any;
+      second = result.current.saveCanvasToDatabase().then(() => {
+        secondDone = true;
+      });
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(secondDone).toBe(false);
+
+    writeGate = null;
+    await act(async () => {
+      release();
+      await first;
+      await second;
+    });
+    expect(secondDone).toBe(true);
+    expect(writeCount - writesBefore).toBe(2);
+    expect(JSON.stringify(lastUpsertPayload?.nodes)).toContain('second');
   });
 
   it("drops the client's own postgres echo (self editor_session_id)", async () => {

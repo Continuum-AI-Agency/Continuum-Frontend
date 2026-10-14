@@ -9,6 +9,10 @@ import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   DRAFT_INPUT_HANDLE,
   DRAFT_OUTPUT_HANDLE,
+  FAST_CUT_AUDIO_INPUT_HANDLE,
+  FAST_CUT_MEDIA_INPUT_HANDLE,
+  FAST_CUT_MEDIA_POOL_LIMIT,
+  fastCutNodeDataSchema,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getImageVariationHandleId,
@@ -97,10 +101,11 @@ describe('node type enum + schema', () => {
       'layerEditor',
       'element',
       'designRef',
+      'fastCut',
     ]) {
       expect(STUDIO_NODE_TYPES).toContain(type);
     }
-    expect(STUDIO_NODE_TYPES).toHaveLength(27);
+    expect(STUDIO_NODE_TYPES).toHaveLength(28);
   });
 
   it('rejects an unknown node type', () => {
@@ -1567,5 +1572,85 @@ describe('#293 videoModelOptions', () => {
       (option) => option.model === DEFAULT_VIDEO_GENERATOR_MODEL,
     );
     expect(fallback?.selectable).toBe(true);
+  });
+});
+
+describe('fastCut', () => {
+  const graph = [
+    ...nodes,
+    node('cut1', 'fastCut', createNodeData('fastCut').data),
+    node('element1', 'element', { elementId: 'e1', useIntent: 'subject' }),
+  ];
+  const into = (source: string, sourceHandle: string, targetHandle: string, edges = []) =>
+    isValidConnection({ source, sourceHandle, target: 'cut1', targetHandle }, edges, graph);
+
+  it('takes a footage pool and one bed, and emits a video', () => {
+    expect(getAllowedTargetHandles(node('c', 'fastCut'))).toEqual(['media-in', 'audio-in']);
+    expect(getAllowedSourceHandles(node('c', 'fastCut'))).toEqual(['video']);
+    expect(FAST_CUT_MEDIA_INPUT_HANDLE).toBe(TIMELINE_MEDIA_INPUT_HANDLE);
+    expect(FAST_CUT_AUDIO_INPUT_HANDLE).toBe('audio-in');
+  });
+
+  it('cuts clips, stills, generated media and Elements, never audio, on media-in', () => {
+    expect(into('video1', 'video', 'media-in')).toBe(true);
+    expect(into('image1', 'image', 'media-in')).toBe(true);
+    expect(into('nano1', 'image', 'media-in')).toBe(true);
+    expect(into('extend1', 'video', 'media-in')).toBe(true);
+    expect(into('element1', 'image', 'media-in')).toBe(true);
+    expect(into('audio1', 'audio', 'media-in')).toBe(false);
+    expect(into('string1', 'text', 'media-in')).toBe(false);
+  });
+
+  it('takes exactly one audio node as its bed', () => {
+    expect(into('audio1', 'audio', 'audio-in')).toBe(true);
+    expect(into('video1', 'video', 'audio-in')).toBe(false);
+    const bed = [{ id: 'b', source: 'audio2', target: 'cut1', sourceHandle: 'audio', targetHandle: 'audio-in' }];
+    expect(into('audio1', 'audio', 'audio-in', bed as never)).toBe(false);
+  });
+
+  it('caps the pool at the planner\'s 24 sources', () => {
+    expect(getTargetHandleConnectionLimit(node('c', 'fastCut'), 'media-in', [])).toBe(
+      FAST_CUT_MEDIA_POOL_LIMIT,
+    );
+    expect(FAST_CUT_MEDIA_POOL_LIMIT).toBe(24);
+  });
+
+  it('feeds its montage on like any video', () => {
+    expect(
+      isValidConnection(
+        { source: 'cut1', sourceHandle: 'video', target: 'timeline1', targetHandle: 'media-in' },
+        [],
+        graph,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        { source: 'cut1', sourceHandle: 'video', target: 'publish1', targetHandle: 'video-in' },
+        [],
+        graph,
+      ),
+    ).toBe(true);
+  });
+
+  it('is born a portrait build over four bars with the default transients', () => {
+    const { data } = createNodeData('fastCut');
+    expect(fastCutNodeDataSchema.parse(data)).toEqual({
+      pacing: 'build',
+      bars: 4,
+      transients: ['flash', 'punch', 'rgb-shift'],
+      aspectRatio: '9:16',
+    });
+  });
+
+  it('drops a setting the planner cannot read and keeps the rest', () => {
+    const { data, changes } = coerceNodeConfig('fastCut', {
+      pacing: 'frantic',
+      rung: 0.3,
+      bars: 8,
+      transients: ['flash'],
+    });
+    expect(data).toEqual({ bars: 8, transients: ['flash'] });
+    expect(changes).toHaveLength(2);
+    expect(coerceNodeConfig('fastCut', { pacing: 'stutter', rung: 0.8 }).changes).toEqual([]);
   });
 });

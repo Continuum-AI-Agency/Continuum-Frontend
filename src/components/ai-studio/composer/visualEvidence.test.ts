@@ -37,6 +37,7 @@ describe('isVideoNode', () => {
   it('classifies by node type', () => {
     expect(isVideoNode(node('v', 'video'))).toBe(true);
     expect(isVideoNode(node('t', 'timelineEditor'))).toBe(true);
+    expect(isVideoNode(node('f', 'fastCut'))).toBe(true);
     expect(isVideoNode(node('i', 'image'))).toBe(false);
     expect(isVideoNode(node('n', 'nanoGen'))).toBe(false);
   });

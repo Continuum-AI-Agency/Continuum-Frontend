@@ -15,6 +15,7 @@ import { DocumentNode } from '../nodes/DocumentNode';
 import { ElementNode } from '../nodes/ElementNode';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
 import { ExportNode } from '../nodes/export/ExportNode';
+import { FastCutNode } from '../nodes/FastCutNode';
 import { FrameExtractBlock } from '../nodes/FrameExtractBlock';
 import { HyperframesAgentBlock } from '../nodes/HyperframesAgentBlock';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
@@ -55,6 +56,7 @@ export const NODE_TYPES = new Set<StudioNodeType>([
   'extendVideo',
   'hyperframesAgent',
   'timelineEditor',
+  'fastCut',
   'plannerDraft',
   'organicPublish',
   'paidPublisher',
@@ -131,8 +133,8 @@ export const createNodeConfig = (
     };
   }
 
-  if (type === 'hyperframesAgent') {
-    return createNodeData('hyperframesAgent');
+  if (type === 'hyperframesAgent' || type === 'fastCut') {
+    return createNodeData(type);
   }
 
   if (type === 'string') {
@@ -225,6 +227,7 @@ export const nodeTypes = {
   extendVideo: withLibraryStatus(ExtendVideoBlock),
   hyperframesAgent: withLibraryStatus(HyperframesAgentBlock),
   timelineEditor: TimelineEditorBlock,
+  fastCut: withLibraryStatus(FastCutNode),
   plannerDraft: PlannerDraftBlock,
   organicPublish: OrganicPublishBlock,
   paidPublisher: PaidPublisherBlock,

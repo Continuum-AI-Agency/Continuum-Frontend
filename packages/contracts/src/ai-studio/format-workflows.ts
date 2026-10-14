@@ -15,8 +15,17 @@
 //                         it, so a set shares one exposure instead of N generations.
 //   variation_set      -- N takes on ONE brief is a batch fan-out into ONE generator,
 //                         never N generators; the batch is what repeats the node.
+//   fast_cut           -- a montage cuts from SEVERAL different shots, each its own
+//                         generator, and every shot carries the bound Elements' /slug
+//                         styles so the cuts read as one shoot; the bed is one audio slot.
 
 import { z } from 'zod';
+import {
+  cutPacingSchema,
+  cutRungSchema,
+  cutTransientKindSchema,
+} from '../headless-content/cutPlan';
+import { elementStyleSlugsSchema, withElementStyleTokens } from '../media/element';
 import type { ConnectSpec, NodeSpec } from './workflow-builder';
 
 /** Delivery ratios the organic pipeline actually emits. There is deliberately no 1:1. */
@@ -420,4 +429,109 @@ export function compileVariationSetWorkflow(input: VariationSetRecipe): Compiled
   connections.push({ from_ref: batchRef, to_ref: generatorRef, role: 'prompt' });
 
   return { nodes, connections, outputRefs: [generatorRef] };
+}
+
+// ---------------------------------------------------------------------------
+// fast_cut
+// ---------------------------------------------------------------------------
+
+export const fastCutShotSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/i),
+    prompt: z
+      .string()
+      .min(1)
+      .max(2000)
+      .describe('This shot written out generation-ready: what is in the frame and how it moves.'),
+    kind: z
+      .enum(['image', 'video'])
+      .default('image')
+      .describe('A still is cut in on the long rungs; a clip on any rung.'),
+  })
+  .strict();
+export type FastCutShot = z.infer<typeof fastCutShotSchema>;
+
+export const fastCutRecipeSchema = z
+  .object({
+    recipe: z.literal('fast_cut'),
+    shots: z.array(fastCutShotSchema).min(2).max(8),
+    /** Bound Elements and their /slug style tags (list_elements). Three fit a Veo reference set. */
+    elements: z
+      .array(
+        z
+          .object({ elementId: z.string().min(1), styleSlugs: elementStyleSlugsSchema.default([]) })
+          .strict(),
+      )
+      .max(3)
+      .default([]),
+    pacing: cutPacingSchema.default('build'),
+    rung: cutRungSchema.optional(),
+    bars: z.number().int().min(2).max(16).default(4),
+    transients: z.array(cutTransientKindSchema).max(4).default(['flash', 'punch', 'rgb-shift']),
+    imageModel: z.string().min(1).default('nano-banana-2'),
+  })
+  .strict()
+  .superRefine((recipe, context) => {
+    const ids = recipe.shots.map((shot) => shot.id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: 'custom', path: ['shots'], message: 'Shot ids must be unique' });
+    }
+  });
+export type FastCutRecipe = z.input<typeof fastCutRecipeSchema>;
+
+/**
+ * Element → one generator per shot → a fastCut node, with an empty audio slot for the bed.
+ *
+ * Every shot's prompt LEADS with the bound Elements' style tokens (`withElementStyleTokens`), so
+ * a slug the shot names itself comes later and wins a conflict; the Elements are also wired into
+ * each generator as references, so the subject holds across cuts. The bed is left for the person
+ * to fill: a run with no bed is refused by name, never cut to silence.
+ */
+export function compileFastCutWorkflow(input: FastCutRecipe): CompiledFormatWorkflow {
+  const recipe = fastCutRecipeSchema.parse(input);
+  const nodes: NodeSpec[] = [];
+  const connections: ConnectSpec[] = [];
+  const montageRef = 'fastcut:montage';
+  const bedRef = 'fastcut:bed';
+  const slugs = recipe.elements.flatMap((element) => element.styleSlugs);
+
+  const elementRefs = recipe.elements.map((element) => {
+    const ref = `element:${element.elementId}`;
+    nodes.push({ ref, type: 'element', data: { elementId: element.elementId } });
+    return ref;
+  });
+
+  for (const shot of recipe.shots) {
+    const ref = `shot:${shot.id}`;
+    const prompt = withElementStyleTokens(shot.prompt, slugs);
+    nodes.push(
+      shot.kind === 'image'
+        ? {
+            ref,
+            type: 'nanoGen',
+            data: { model: recipe.imageModel, positivePrompt: prompt, aspectRatio: '9:16' },
+          }
+        : { ref, type: 'videoGen', data: { prompt, aspectRatio: '9:16' } },
+    );
+    for (const elementRef of elementRefs) {
+      connections.push({ from_ref: elementRef, to_ref: ref, role: 'ref-images' });
+    }
+    connections.push({ from_ref: ref, to_ref: montageRef, role: 'media-in' });
+  }
+
+  nodes.push({ ref: bedRef, type: 'audio', data: {} });
+  nodes.push({
+    ref: montageRef,
+    type: 'fastCut',
+    data: {
+      pacing: recipe.pacing,
+      ...(recipe.rung !== undefined ? { rung: recipe.rung } : {}),
+      bars: recipe.bars,
+      transients: recipe.transients,
+      aspectRatio: '9:16',
+    },
+  });
+  connections.push({ from_ref: bedRef, to_ref: montageRef, role: 'audio-in' });
+
+  return { nodes, connections, outputRefs: [montageRef] };
 }
