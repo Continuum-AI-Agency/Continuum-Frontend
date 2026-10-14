@@ -7,6 +7,7 @@ import {
   PRODUCT_SHEET_GRIDS,
   PRODUCT_SHEET_SUBJECT,
   printedFacesShown,
+  productSheetSubject,
 } from './continuity-sheet';
 
 describe('continuity sheet grids', () => {
@@ -104,8 +105,55 @@ describe('continuity sheet grids', () => {
     );
     expect(prompt).toContain('Row 2, column 3: the product held in one adult hand');
     expect(prompt).not.toContain(`hand cropped at the wrist, ${BLANK_SURFACE}`);
+    // No member shows the side or the top: they are silhouette and materials, never print (r1
+    // invented fine print on the gatorade's side).
     expect(prompt).toContain(
-      "identical silhouette in every rectangle: the reference's height-to-width proportions, shoulder, neck and closure geometry",
+      `Row 1, column 3: the product in strict side view, only its silhouette, colours and materials, ${BLANK_SURFACE}.`,
+    );
+    expect(prompt).toContain(
+      `Row 2, column 2: the product from directly above, only its silhouette, colours and materials, ${BLANK_SURFACE}.`,
+    );
+    expect(prompt).toContain(
+      "identical silhouette in every rectangle: the reference's height-to-width proportions; the exact shape of its tip, top edge, shoulder, neck and closure",
+    );
+  });
+
+  it('shows the side and the top as they are once a member photographs them', () => {
+    const prompt = buildContinuityGridPrompt(PRODUCT_SHEET_GRIDS.turnaround, {
+      references: [],
+      subject: PRODUCT_SHEET_SUBJECT,
+      printedFaces: printedFacesShown([null, 'side', 'top']),
+    });
+    expect(prompt).toContain('Row 1, column 3: the product in strict side view.');
+    expect(prompt).toContain('Row 2, column 2: the product from directly above.');
+  });
+
+  it('pins the tip and shoulder, and states the measured height:width when there is one', () => {
+    const measured = productSheetSubject({ heightToWidth: 4.093 });
+    expect(measured.continuity).toContain(
+      "the reference's height-to-width proportions (height : width ≈ 4.1 : 1 as photographed); the exact shape of its tip, top edge, shoulder, neck and closure — the same bevel angle, curve and height in every view, turned with the product and never redrawn;",
+    );
+    expect(PRODUCT_SHEET_SUBJECT.continuity).not.toContain('≈');
+    expect(PRODUCT_SHEET_SUBJECT.continuity).toContain('the same bevel angle, curve and height');
+    const prompt = buildContinuityGridPrompt(PRODUCT_SHEET_GRIDS.details, {
+      references: [],
+      subject: measured,
+    });
+    expect(prompt).toContain(`- ${measured.continuity}`);
+  });
+
+  it('asks for a text-free material macro and a tight crop of the front label', () => {
+    const prompt = buildContinuityGridPrompt(PRODUCT_SHEET_GRIDS.details, {
+      references: [],
+      subject: PRODUCT_SHEET_SUBJECT,
+      printedFaces: ['front'],
+    });
+    const row = (prefix: string) => prompt.split('\n').find((line) => line.startsWith(prefix));
+    expect(row('Row 2, column 1:')).toBe(
+      'Row 2, column 1: a macro of a plain, unprinted patch of the surface material, its texture and finish, away from every label, logo and wordmark, with no letters, no numbers and no text anywhere in the rectangle.',
+    );
+    expect(row('Row 1, column 1:')).toBe(
+      'Row 1, column 1: a tight close-up of the front label alone, straight on, cropped to the label and not the whole product: the label fills most of the rectangle, with all four of its edges and the whole wordmark inside a margin of at least a twentieth of the rectangle.',
     );
   });
 
@@ -117,10 +165,10 @@ describe('continuity sheet grids', () => {
     });
     const lines = prompt.split('\n').filter((line) => line.startsWith('Row '));
     expect(lines).toEqual([
-      `Row 1, column 1: the front of the product, straight on, ${BLANK_SURFACE}.`,
+      `Row 1, column 1: a tight close-up of the front label area alone, straight on, cropped to the label and not the whole product, ${BLANK_SURFACE}.`,
       `Row 1, column 2: the back of the product, straight on, ${BLANK_SURFACE}.`,
       'Row 1, column 3: the cap, lid, clasp or closure.',
-      'Row 2, column 1: the surface material and its finish.',
+      'Row 2, column 1: a macro of a plain, unprinted patch of the surface material, its texture and finish, away from every label, logo and wordmark, with no letters, no numbers and no text anywhere in the rectangle.',
       `Row 2, column 2: the product surface where its logo would sit, ${BLANK_SURFACE}.`,
       `Row 2, column 3: plain outer packaging in the product's own colours, every edge inside the rectangle, ${BLANK_SURFACE}.`,
     ]);
@@ -134,16 +182,17 @@ describe('continuity sheet grids', () => {
       'Row 1, column 2: the whole back label, straight on, all four edges inside the rectangle.',
     );
     expect(withBack).toContain(
-      `Row 1, column 1: the front of the product, straight on, ${BLANK_SURFACE}.`,
+      `Row 1, column 1: a tight close-up of the front label area alone, straight on, cropped to the label and not the whole product, ${BLANK_SURFACE}.`,
     );
   });
 
   it('reads a member with no role as the front, and only the named roles as back or packaging', () => {
     expect(printedFacesShown([null])).toEqual(['front']);
     expect(printedFacesShown([undefined, 'in_hand'])).toEqual(['front']);
-    expect(printedFacesShown(['back', 'side'])).toEqual(['back']);
+    expect(printedFacesShown(['back', 'side'])).toEqual(['back', 'side']);
     expect(printedFacesShown(['label', 'packaging'])).toEqual(['front', 'packaging']);
-    expect(printedFacesShown(['detail', 'top', 'side'])).toEqual([]);
+    expect(printedFacesShown(['detail', 'top', 'side'])).toEqual(['side', 'top']);
+    expect(printedFacesShown(['detail', 'wardrobe', 'pose'])).toEqual([]);
   });
 
   it('keeps every person cell free of the printed rule', () => {

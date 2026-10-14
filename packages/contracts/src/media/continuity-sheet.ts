@@ -15,7 +15,7 @@ import type { SheetLayout } from '../creative/contact-sheet-grid';
 import type { ElementMemberRole } from './element';
 
 /** The faces a product's printing sits on. */
-export type PrintedFace = 'front' | 'back' | 'packaging';
+export type PrintedFace = 'front' | 'back' | 'side' | 'top' | 'packaging';
 
 export interface ContinuityCell {
   role: string;
@@ -207,14 +207,30 @@ export const PRODUCT_SHEET_GRIDS = {
         view: 'the product from directly behind',
         printed: { face: 'back' },
       },
-      { role: 'side', caption: 'SIDE', view: 'the product in strict side view' },
+      {
+        role: 'side',
+        caption: 'SIDE',
+        view: 'the product in strict side view',
+        printed: {
+          face: 'side',
+          blankView: 'the product in strict side view, only its silhouette, colours and materials',
+        },
+      },
       {
         role: 'three_quarter',
         caption: 'THREE-QUARTER',
         view: 'the product turned 45 degrees from the camera',
         printed: { face: 'front' },
       },
-      { role: 'top', caption: 'TOP', view: 'the product from directly above' },
+      {
+        role: 'top',
+        caption: 'TOP',
+        view: 'the product from directly above',
+        printed: {
+          face: 'top',
+          blankView: 'the product from directly above, only its silhouette, colours and materials',
+        },
+      },
       {
         role: 'in_hand',
         caption: 'IN HAND',
@@ -232,8 +248,13 @@ export const PRODUCT_SHEET_GRIDS = {
       {
         role: 'label_front',
         caption: 'LABEL FRONT',
-        view: 'the whole front label, straight on, all four edges and the whole wordmark inside the rectangle',
-        printed: { face: 'front', blankView: 'the front of the product, straight on' },
+        // r1 drew a whole bottle here: the cell is a crop of the label, never the product.
+        view: 'a tight close-up of the front label alone, straight on, cropped to the label and not the whole product: the label fills most of the rectangle, with all four of its edges and the whole wordmark inside a margin of at least a twentieth of the rectangle',
+        printed: {
+          face: 'front',
+          blankView:
+            'a tight close-up of the front label area alone, straight on, cropped to the label and not the whole product',
+        },
       },
       {
         role: 'label_back',
@@ -242,7 +263,12 @@ export const PRODUCT_SHEET_GRIDS = {
         printed: { face: 'back', blankView: 'the back of the product, straight on' },
       },
       { role: 'closure', caption: 'CLOSURE', view: 'the cap, lid, clasp or closure' },
-      { role: 'material', caption: 'MATERIAL', view: 'the surface material and its finish' },
+      {
+        role: 'material',
+        caption: 'MATERIAL',
+        // r1 cropped the wordmark ("XE BEAUT") into this macro: it is the bare surface, never print.
+        view: 'a macro of a plain, unprinted patch of the surface material, its texture and finish, away from every label, logo and wordmark, with no letters, no numbers and no text anywhere in the rectangle',
+      },
       {
         role: 'logo_mark',
         caption: 'LOGO',
@@ -274,6 +300,8 @@ export type ProductSheetRole =
 export const PRINTED_FACE_SHOWN_BY: Record<PrintedFace, readonly (ElementMemberRole | null)[]> = {
   front: [null, 'identity', 'front', 'three_quarter', 'label', 'in_hand'],
   back: ['back'],
+  side: ['side'],
+  top: ['top'],
   packaging: ['packaging'],
 };
 
@@ -304,18 +332,32 @@ export const PERSON_SHEET_SUBJECT: ContinuitySubject = {
     'Do not render any text, labels, numbers, letters, logos or watermarks anywhere in the image.',
 };
 
+/** The reference photograph's silhouette, as measured by the Backend. */
+export interface ProductSilhouette {
+  /** Height over width of the product as photographed. */
+  heightToWidth: number;
+}
+
 /**
  * A product's own printing is part of its identity, so it is copied from a reference, never
  * invented — and nothing else may be written, because the sheet's words are composed afterwards
- * by code. The silhouette is pinned to the reference: lower cells drifted in proportion (r0).
+ * by code. The silhouette is pinned to the reference: lower cells drifted in proportion (r0),
+ * and a lipstick's bullet tip changed shape from cell to cell (r1), so the tip and shoulder are
+ * named and the measured height:width is stated when the reference could be measured.
  */
-export const PRODUCT_SHEET_SUBJECT: ContinuitySubject = {
-  noun: 'the SAME one product, for a product continuity sheet',
-  continuity:
-    "The same one product with an identical silhouette in every rectangle: the reference's height-to-width proportions, shoulder, neck and closure geometry, and identical colours, materials, finish, closure, label artwork and logo.",
-  textRule:
-    'Copy printed artwork, label text and logos only where a reference image shows them, exactly as shown. Never invent letters, numbers, barcodes or copy: a surface no reference shows stays clean and blank, and nothing else is written.',
-};
+export function productSheetSubject(silhouette?: ProductSilhouette | null): ContinuitySubject {
+  const ratio = silhouette
+    ? ` (height : width ≈ ${silhouette.heightToWidth.toFixed(1)} : 1 as photographed)`
+    : '';
+  return {
+    noun: 'the SAME one product, for a product continuity sheet',
+    continuity: `The same one product with an identical silhouette in every rectangle: the reference's height-to-width proportions${ratio}; the exact shape of its tip, top edge, shoulder, neck and closure — the same bevel angle, curve and height in every view, turned with the product and never redrawn; and identical colours, materials, finish, closure, label artwork and logo.`,
+    textRule:
+      'Copy printed artwork, label text and logos only where a reference image shows them, exactly as shown. Never invent letters, numbers, barcodes or copy: a surface no reference shows stays clean and blank, and nothing else is written.',
+  };
+}
+
+export const PRODUCT_SHEET_SUBJECT: ContinuitySubject = productSheetSubject();
 
 /**
  * The prompt for one grid.
