@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 import { templateRevisionLayerEditSchema } from './template-revisions';
+import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 
 export const templateLayerEditSchema = templateRevisionLayerEditSchema;
 
@@ -94,6 +94,14 @@ export const templateLayerPreviewResponseSchema = z
     layers: z.array(templateEditableLayerSchema),
     svg: z.string().min(1),
     warnings: z.array(z.string()),
+    /** Present whenever a recolour was asked for: an older forge drops it without a word. */
+    recolor: z
+      .object({
+        applied: z.number().int().nonnegative(),
+        unmapped: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type TemplateLayerPreviewResponse = z.infer<typeof templateLayerPreviewResponseSchema>;

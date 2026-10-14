@@ -59,6 +59,7 @@ const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
     draftHeadRevisionId: item.assetId,
     publishedHeadRevisionId: index === 1 ? item.assetId : null,
     archivedAt: null,
+    tags: [],
     sourceKind,
     revisions: [
       {
@@ -179,4 +180,18 @@ test('a revision whose outputs run different files lists each output with its fi
   expect(files.textContent).toContain('Halftime · worker file 11');
   expect(files.textContent).toContain('Ambos Equipos Anotan · worker file 12');
   expect(screen.queryByRole('list', { name: 'Original source files' })).toBeNull();
+});
+
+test('a variant made by Apply my design system wears its Brand-aligned tag', () => {
+  const items = registry('after_effects');
+  items[2] = { ...items[2]!, tags: ['brand_aligned'] };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), items);
+  render(
+    <QueryClientProvider client={client}>
+      <VariantsPanel brandId={brandId} assetId={grandchild} expectedVersionId={versionId} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getAllByText('Brand-aligned')).toHaveLength(1);
+  expect(screen.getByText('Brand-aligned').closest('li')?.textContent).toContain('Blue copy');
 });

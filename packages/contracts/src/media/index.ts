@@ -58,6 +58,7 @@ export * from './saved-views';
 export * from './search';
 export * from './share';
 export * from './start-timecode';
+export * from './template-brand-alignment';
 export * from './template-forge-lineage';
 export * from './template-forge-run';
 export * from './template-layer-edits';

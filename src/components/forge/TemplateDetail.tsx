@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
+import { ApplyDesignSystemButton } from '@/components/forge/ApplyDesignSystemButton';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
 import { FactList } from '@/components/forge/FactList';
 import {
@@ -267,6 +268,9 @@ export function TemplateDetail({
   });
   const selectedRevisionVariant = revisionCatalog?.find((variant) =>
     variant.revisions.some((revision) => revision.sourceAssetId === assetId),
+  );
+  const inspectedRevision = selectedRevisionVariant?.revisions.find(
+    (revision) => revision.sourceAssetId === assetId,
   );
   const variantRoot =
     variantCatalog?.find((variant) => variant.assetId === assetId)?.rootAssetId ?? assetId;
@@ -1332,6 +1336,7 @@ export function TemplateDetail({
                   <option key={variant.variantId} value={variant.variantId}>
                     {variant.original ? 'Original' : variant.name} ·{' '}
                     {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
+                    {variant.tags.includes('brand_aligned') ? ' · Brand-aligned' : ''}
                   </option>
                 ))}
               </select>
@@ -1358,6 +1363,21 @@ export function TemplateDetail({
             >
               <Trash2 className="size-3.5" aria-hidden /> Remove
             </Button>
+          ) : null}
+          {onOpenVariant && inspectedRevision && parseState === 'parsed' ? (
+            <ApplyDesignSystemButton
+              brandId={brandId}
+              assetId={assetId}
+              revision={inspectedRevision}
+              designImport={
+                selectedRevisionVariant?.sourceKind === 'photoshop' ||
+                selectedRevisionVariant?.sourceKind === 'illustrator'
+              }
+              onCreated={async (saved) => {
+                await onChanged();
+                await onOpenVariant(saved.sourceAssetId, tab);
+              }}
+            />
           ) : null}
           <DraftWithAiButton templateKey={templateKey} onOpenRender={onOpenRender} />
           {templateKey ? (

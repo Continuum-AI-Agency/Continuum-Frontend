@@ -868,13 +868,18 @@ export function TemplateGallery({
                                     source={SOURCE_TYPES[variant.sourceKind]}
                                     ratios={draft.source.ratios}
                                     status={
-                                      <Badge
-                                        variant={
-                                          variant.publishedHeadRevisionId ? 'success' : 'muted'
-                                        }
-                                      >
-                                        {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
-                                      </Badge>
+                                      <span className="inline-flex flex-wrap gap-1">
+                                        <Badge
+                                          variant={
+                                            variant.publishedHeadRevisionId ? 'success' : 'muted'
+                                          }
+                                        >
+                                          {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
+                                        </Badge>
+                                        {variant.tags.includes('brand_aligned') ? (
+                                          <Badge variant="violet">Brand-aligned</Badge>
+                                        ) : null}
+                                      </span>
                                     }
                                     updatedAt={draft.createdAt}
                                     preview={

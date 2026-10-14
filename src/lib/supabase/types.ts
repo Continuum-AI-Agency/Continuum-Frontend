@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.3"
   }
   agent_workspace: {
     Tables: {
@@ -16578,6 +16578,7 @@ export type Database = {
           delivery_receipts: Json
           delivery_target: Json
           engine: string
+          engine_fallback: string | null
           environment: string | null
           error: string | null
           finished_at: string | null
@@ -16627,6 +16628,7 @@ export type Database = {
           delivery_receipts?: Json
           delivery_target?: Json
           engine?: string
+          engine_fallback?: string | null
           environment?: string | null
           error?: string | null
           finished_at?: string | null
@@ -16676,6 +16678,7 @@ export type Database = {
           delivery_receipts?: Json
           delivery_target?: Json
           engine?: string
+          engine_fallback?: string | null
           environment?: string | null
           error?: string | null
           finished_at?: string | null
@@ -20163,6 +20166,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           enabled: boolean
+          encode_default: Json | null
           environment_key: string
           id: string
           is_default: boolean
@@ -20175,6 +20179,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           enabled?: boolean
+          encode_default?: Json | null
           environment_key: string
           id?: string
           is_default?: boolean
@@ -20187,6 +20192,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           enabled?: boolean
+          encode_default?: Json | null
           environment_key?: string
           id?: string
           is_default?: boolean
@@ -21360,6 +21366,7 @@ export type Database = {
           name: string
           parent_revision_id: string | null
           published_head_revision_id: string | null
+          tags: string[]
           template_id: string
         }
         Insert: {
@@ -21372,6 +21379,7 @@ export type Database = {
           name: string
           parent_revision_id?: string | null
           published_head_revision_id?: string | null
+          tags?: string[]
           template_id: string
         }
         Update: {
@@ -21384,6 +21392,7 @@ export type Database = {
           name?: string
           parent_revision_id?: string | null
           published_head_revision_id?: string | null
+          tags?: string[]
           template_id?: string
         }
         Relationships: [
@@ -21735,6 +21744,48 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_forge_micro_render_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_headless_execution: {
         Args: {
           p_brand_id: string
@@ -22026,6 +22077,49 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      complete_forge_micro_render_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_result_asset_refs?: Json
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       complete_service_render_job: {
         Args: {
           p_job_id: string
@@ -22219,6 +22313,51 @@ export type Database = {
         Returns: number
       }
       expire_client_render_targets: { Args: never; Returns: number }
+      fail_forge_micro_render_job: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_job_id: string
+          p_lease_token: string
+          p_terminal?: boolean
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       fail_service_render_job: {
         Args: {
           p_error_code: string
@@ -22698,6 +22837,7 @@ export type Database = {
         }[]
       }
       reap_expired_client_render_leases: { Args: never; Returns: number }
+      reap_expired_forge_micro_render_jobs: { Args: never; Returns: number }
       reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
@@ -29503,6 +29643,10 @@ export type Database = {
         Returns: undefined
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
+      optimizer_action_count_by_kind: {
+        Args: { p_authorized_kind: string; p_since?: string }
+        Returns: number
+      }
       optimizer_add_portfolio_members: {
         Args: { p_members: Json; p_portfolio_id: string }
         Returns: Json

@@ -120,6 +120,7 @@ const ORIGINAL: TemplateRevisionVariant = {
   draftHeadRevisionId: ORIGINAL_REVISION,
   publishedHeadRevisionId: null,
   archivedAt: null,
+  tags: [],
   sourceKind: 'after_effects',
   revisions: [revisionOf(ORIGINAL_REVISION, ASSET, 1)],
 };

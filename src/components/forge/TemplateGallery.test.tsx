@@ -579,6 +579,7 @@ describe('template families', () => {
     draftHeadRevisionId: revisions.at(-1)!.id,
     publishedHeadRevisionId,
     archivedAt: null,
+    tags: [],
     sourceKind: 'after_effects',
     revisions,
   });

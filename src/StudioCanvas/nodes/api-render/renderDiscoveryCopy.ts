@@ -64,6 +64,10 @@ const TEMPLATE_REVISION_MESSAGES: Record<TemplateRevisionErrorCode, string> = {
     'This revision renders from several After Effects files and cannot be published from just one of them. Ask your Continuum contact to publish it.',
   template_revision_sources_invalid:
     'These files cannot be registered as one template revision: each output must name exactly one file.',
+  template_recolor_refused:
+    'Some colours in this template cannot be changed safely, so this revision changed none of them. Recolour those layers in After Effects, then try again.',
+  template_forge_recolor_unsupported:
+    'Template Forge needs an update before it can save a design-system revision. Ask your Continuum contact.',
 };
 
 const MESSAGES: Record<string, string> = {

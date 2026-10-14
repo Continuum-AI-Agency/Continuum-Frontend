@@ -73,12 +73,30 @@ const revisionArrangementSchema = designArrangementSchema.extend({
   artboardId: z.number().int().nullable().default(null),
 });
 
+/**
+ * Every chromatic colour the forge can write moves to its nearest palette entry (OKLab); white,
+ * black and the greys stay, which is what keeps text legible. A snapshot field like the others, so
+ * a later revision of the variant replays it — a brand colour's nearest entry is itself.
+ */
+export const templateRevisionRecolorSchema = z
+  .object({
+    palette: z
+      .array(z.string().regex(/^#[0-9a-f]{6}$/i))
+      .min(1)
+      .max(12),
+    /** Below this chroma (max − min channel, 0..1) a colour is a neutral and stays. Forge default: 0.008. */
+    minChroma: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+export type TemplateRevisionRecolor = z.infer<typeof templateRevisionRecolorSchema>;
+
 export const templateRevisionEditsSchema = z
   .object({
     arrangement: revisionArrangementSchema.optional(),
     layers: z.array(templateRevisionLayerEditSchema).max(64).default([]),
     slots: z.array(templateSourceSlotEditSchema).max(500).default([]),
     orders: z.array(templateLayerOrderSchema).max(16).default([]),
+    recolor: templateRevisionRecolorSchema.optional(),
   })
   .strict()
   .superRefine((edits, ctx) => {
@@ -135,6 +153,10 @@ export const templateRevisionErrorCodeSchema = z.enum([
   'template_revision_multi_source_edit_unsupported',
   'template_revision_multi_source_publish_unsupported',
   'template_revision_sources_invalid',
+  /** The forge would leave part of the file in the old colours, so it changed none of them. */
+  'template_recolor_refused',
+  /** The forge answered without applying the recolour: it predates it. Deploy the forge first. */
+  'template_forge_recolor_unsupported',
 ]);
 export type TemplateRevisionErrorCode = z.infer<typeof templateRevisionErrorCodeSchema>;
 
@@ -195,6 +217,10 @@ export const templateRevisionSchema = z
   .strict();
 export type TemplateRevision = z.infer<typeof templateRevisionSchema>;
 
+/** What a variant is FOR, beyond its name. `brand_aligned`: made by "Apply my design system". */
+export const templateVariantTagSchema = z.enum(['brand_aligned']);
+export type TemplateVariantTag = z.infer<typeof templateVariantTagSchema>;
+
 export const templateRevisionVariantSchema = z
   .object({
     templateId: z.string().uuid(),
@@ -205,6 +231,7 @@ export const templateRevisionVariantSchema = z
     draftHeadRevisionId: z.string().uuid(),
     publishedHeadRevisionId: z.string().uuid().nullable(),
     archivedAt: z.string().nullable(),
+    tags: z.array(templateVariantTagSchema).default([]),
     sourceKind: templateSourceKindSchema,
     revisions: z.array(templateRevisionSchema),
   })
@@ -231,12 +258,15 @@ export const saveTemplateRevisionRequestSchema = templateRevisionPreviewRequestS
     expectedHeadRevisionId: z.string().uuid(),
     idempotencyKey: z.string().uuid(),
     uploadAssetId: z.string().uuid().optional(),
+    /** Only a new variant is tagged: a tag says what the variant was made for. */
+    tags: z.array(templateVariantTagSchema).max(4).optional(),
   })
   .strict()
   .refine(
     (request) => Boolean(request.variantId) !== Boolean(request.name),
     'Name a new variant or choose an existing one',
-  );
+  )
+  .refine((request) => !request.tags?.length || Boolean(request.name), 'Tag a new variant only');
 export type SaveTemplateRevisionRequest = z.infer<typeof saveTemplateRevisionRequestSchema>;
 
 export const changeRenderSetTemplateRevisionRequestSchema = z

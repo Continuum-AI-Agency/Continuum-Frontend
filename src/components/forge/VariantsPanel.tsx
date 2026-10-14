@@ -204,6 +204,9 @@ export function VariantsPanel({
                   {published ? 'Published' : 'Draft'}
                   {draft && published && draft.id !== published.id ? ' · newer draft' : ''}
                 </Badge>
+                {variant.tags.includes('brand_aligned') ? (
+                  <Badge variant="violet">Brand-aligned</Badge>
+                ) : null}
                 {draft && onInspect ? (
                   <Button
                     size="xs"
