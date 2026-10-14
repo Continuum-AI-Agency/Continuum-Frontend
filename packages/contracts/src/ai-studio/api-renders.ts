@@ -7,6 +7,7 @@ import {
 } from '../media/template-revision-pin';
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
+import { microOutputTimingSchema } from './delivery-timing';
 
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
@@ -1399,6 +1400,9 @@ export const apiRenderOutputSchema = z
     // Download-disposed — a <video> ignores that, an <a> saves it. Absent until the copy exists;
     // `url` stays the fleet's address because other screens match outputs by it.
     libraryUrl: z.string().url().optional(),
+    // An Experimental Renderer output's delivery timing: the planned timeline, this file's
+    // measurements from a full decode, and the job's check. Absent on After Effects outputs.
+    timing: microOutputTimingSchema.optional(),
   })
   .strict();
 export type ApiRenderOutput = z.infer<typeof apiRenderOutputSchema>;

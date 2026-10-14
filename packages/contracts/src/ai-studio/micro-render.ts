@@ -1,5 +1,28 @@
 import { z } from 'zod';
 import { apiRenderVariableKindSchema, encodeSettingsSchema } from './api-renders';
+import {
+  MICRO_DELIVERY_PROFILES,
+  MICRO_OUTPUT_FILES,
+  MICRO_STILL_FILES,
+  microDeliveryTimelineSchema,
+  microMeasuredOutputSchema,
+  microMediaToolSchema,
+} from './delivery-timing';
+
+export {
+  MICRO_DELIVERY_PROFILES,
+  MICRO_OUTPUT_FILES,
+  MICRO_STILL_FILES,
+  type MicroDeliveryTimeline,
+  type MicroMeasuredOutput,
+  type MicroOutputTiming,
+  microDeliveryTimelineSchema,
+  microMeasuredOutputSchema,
+  microMeasuredVideoSchema,
+  microMediaToolSchema,
+  microOutputTimingSchema,
+  microRationalSchema,
+} from './delivery-timing';
 
 /**
  * The Backend → Experimental Renderer (micro-render on Cloud Run) wire: one comp of one Forge job
@@ -42,45 +65,9 @@ export const microRenderBindingSchema = z
   .strict();
 export type MicroRenderBinding = z.infer<typeof microRenderBindingSchema>;
 
-/** A rational rate, frames per second = num / den (never a rounded decimal). */
-const rationalSchema = z
-  .object({ num: z.number().int().positive(), den: z.number().int().positive() })
-  .strict();
-
-/**
- * The delivery timing contract (Claighmor, 2026-10-14, after the InYogo MP4 751 / MXF 749 split): every
- * video export of one render consumes this one timeline. For N frames at rate num/den:
- * - each export decodes to exactly N video frames, at that exact rational rate;
- * - presentation timestamps run 0, 1, ..., N - 1 in ticks of den/num seconds (first 0, last N - 1);
- * - the video duration is N ticks = N × den / num seconds;
- * - the source frames are the comp's [first, last] inclusive (aerender's `-s first -e last`), and
- *   `frames` is resolved once from them by the shared rule — never re-derived from a rounded label.
- * An interlaced profile (XDCAM 1080i59.94) carries the field rate 2 × num / den and top field first.
- * Container duration and audio priming/padding are measured separately and never replace this check.
- */
-export const microDeliveryTimelineSchema = z
-  .object({
-    rate: rationalSchema,
-    frames: z.number().int().positive(),
-    source: z
-      .object({
-        rate: rationalSchema,
-        first: z.number().int().nonnegative(),
-        last: z.number().int().nonnegative(),
-      })
-      .strict(),
-    /** The documented convention every planner, encoder and validator shares. */
-    convention: z.literal('aerender-inclusive/cfr-v1'),
-  })
-  .strict();
-export type MicroDeliveryTimeline = z.infer<typeof microDeliveryTimelineSchema>;
-
-/** Broadcast profiles the renderer encodes; anything else is refused at preflight. */
-export const MICRO_DELIVERY_PROFILES = ['web-h264', 'xdcam-hd422-1080i5994'] as const;
-
 export const microRenderOutputRequestSchema = z
   .object({
-    file: z.enum(['mp4', 'mov', 'mxf', 'webm', 'gif', 'png', 'jpg']),
+    file: z.enum(MICRO_OUTPUT_FILES),
     profile: z.enum(MICRO_DELIVERY_PROFILES).optional(),
     /** A signed PUT URL the renderer uploads the file to (no credential in the renderer). */
     upload: z.object({ url: z.string().url(), contentType: z.string().min(1) }).strict(),
@@ -128,7 +115,13 @@ export const microRenderRequestSchema = z
      */
     outputs: z.array(microRenderOutputRequestSchema).min(1),
   })
-  .strict();
+  .strict()
+  .refine(
+    (request) =>
+      (request.timeline !== undefined) ===
+      request.outputs.some((output) => !(MICRO_STILL_FILES as readonly string[]).includes(output.file)),
+    { message: 'timeline is required exactly when an output is a video file', path: ['timeline'] },
+  );
 export type MicroRenderRequest = z.infer<typeof microRenderRequestSchema>;
 
 export const microRenderRefusalSchema = z
@@ -141,49 +134,6 @@ export const microRenderRefusalSchema = z
   .strict();
 export type MicroRenderRefusal = z.infer<typeof microRenderRefusalSchema>;
 
-/** One output's measured video timing, from a FULL decode of the uploaded file (never a container string). */
-export const microMeasuredVideoSchema = z
-  .object({
-    frames: z.number().int().nonnegative(),
-    rate: rationalSchema,
-    timeBase: rationalSchema,
-    firstPts: z.number().int(),
-    lastPts: z.number().int(),
-    /** N × den / num as an exact decimal string ("25.058366…" is never rounded into a check). */
-    durationSeconds: z.string(),
-    /** sha256 over the complete decoded presentation-timestamp sequence. */
-    ptsSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    fieldOrder: z.enum(['progressive', 'tff', 'bff']),
-    decodeClean: z.boolean(),
-  })
-  .strict();
-
-export const microMeasuredOutputSchema = z
-  .object({
-    file: z.string(),
-    profile: z.enum(MICRO_DELIVERY_PROFILES).nullable(),
-    bytes: z.number().int().nonnegative(),
-    sha256: z.string().regex(/^[a-f0-9]{64}$/),
-    uploaded: z.boolean(),
-    video: microMeasuredVideoSchema.nullable(),
-    /** Audio is reported beside, never instead of, the video timeline check. */
-    audio: z
-      .object({
-        tracks: z.number().int().nonnegative(),
-        channelsPerTrack: z.array(z.number().int()),
-        sampleRate: z.number().int(),
-        bitDepth: z.number().int().nullable(),
-        codec: z.string(),
-        trackSha256: z.array(z.string()),
-        durationSeconds: z.string(),
-      })
-      .strict()
-      .nullable(),
-    containerDurationSeconds: z.string().nullable(),
-  })
-  .strict();
-export type MicroMeasuredOutput = z.infer<typeof microMeasuredOutputSchema>;
-
 /** 200: every output rendered, uploaded and validated against the timeline (and each other). */
 export const microRenderResultSchema = z
   .object({
@@ -191,7 +141,9 @@ export const microRenderResultSchema = z
     outputs: z.array(microMeasuredOutputSchema).min(1),
     validation: z.literal('passed'),
     /** The encoder that produced and verified the files: pinned build and its sha256. */
-    encoder: z.object({ name: z.string(), version: z.string(), sha256: z.string() }).strict(),
+    encoder: microMediaToolSchema,
+    /** The prober that measured them (ffprobe), recorded beside the encoder. */
+    probe: microMediaToolSchema,
     renderMs: z.number().int().nonnegative(),
     encodeMs: z.number().int().nonnegative(),
   })
@@ -208,6 +160,8 @@ export const microRenderTimelineMismatchSchema = z
     error: z.literal(MICRO_TIMELINE_MISMATCH),
     expected: microDeliveryTimelineSchema,
     outputs: z.array(microMeasuredOutputSchema),
+    encoder: microMediaToolSchema,
+    probe: microMediaToolSchema,
     /** Each failed check, with expected and measured values, in plain words. */
     failures: z
       .array(
