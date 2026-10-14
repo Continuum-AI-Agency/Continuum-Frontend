@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
   SyntaxError;
 
 import {
+  type AccountEnrollment,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
   type ApplyRunResponse,
@@ -174,8 +175,15 @@ const applyAdsetStatusMutate = mock(
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
 const realOptimizerData = await import('../useOptimizerData');
+const { currentMoves } = await import('./portfolioStaleness');
+// The roster and membership map the moves split reads; null = not loaded, nothing withdrawn.
+let activeRoster: Set<string> | null = null;
+let activeEnrollments: AccountEnrollment[] = [];
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
+  // The real split, over the roster this test installs (the real hook reads two queries).
+  useCurrentMoves: (p: PortfolioListItem, _brand: string, _account: string, items: CycleItemRow[]) =>
+    currentMoves(items, p, activeRoster, activeEnrollments),
   useOptimizerPerformance: () => ({ data: activeReport, isLoading: false }),
   useOptimizerActions: () => ({ data: recentActions }),
   useOptimizerEnrolledAdsets: () => ({ data: [] }),
@@ -298,6 +306,8 @@ afterEach(() => {
   activeReport = report;
   activeProposals = [];
   recentActions = [];
+  activeRoster = null;
+  activeEnrollments = [];
 });
 
 const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
@@ -401,6 +411,40 @@ describe('buildActionQueue — pure inclusion + selectability', () => {
     const hidden = rows.find((row) => row.route === 'hidden');
     expect(hidden).toBeDefined();
     expect(isSelectableRow(hidden as never)).toBe(false);
+  });
+});
+
+describe('OptimizerActionsPortfolioGroup — withdrawn moves', () => {
+  it('a withdrawn cycle offers no budget move and says why above its moves', () => {
+    renderGroup({
+      last_cycle_current: false,
+      withdrawn_reason: 'missed_cycles',
+      last_actual_cycle_at: '2026-07-20T12:00:00Z',
+    });
+    expect(screen.getByTestId('reallocation-withdrawn').textContent).toBe(
+      'Last proposal, Jul 20 — withdrawn: no cycle has run since',
+    );
+    expect(screen.queryByLabelText('Select budget move for Budget Set')).toBeNull();
+    // The recommendations are not the cycle's moves: they stay decidable.
+    expect(screen.getByLabelText(/^Select .* for Pause Set$/)).toBeDefined();
+  });
+
+  it('a move whose ad set left the portfolio is withdrawn and names its new holder', () => {
+    activeRoster = new Set(['as-pause', 'as-creative']);
+    activeEnrollments = [
+      {
+        adset_id: 'as-budget',
+        portfolio_id: '99999999-9999-4999-8999-999999999999',
+        portfolio_name: 'Conversaciones Whatsapp',
+        same_brand: true,
+        can_release: true,
+      },
+    ];
+    renderGroup();
+    expect(screen.getByTestId('reallocation-row-withdrawn').textContent).toBe(
+      'Withdrawn — now in Conversaciones Whatsapp',
+    );
+    expect(screen.queryByLabelText('Select budget move for Budget Set')).toBeNull();
   });
 });
 

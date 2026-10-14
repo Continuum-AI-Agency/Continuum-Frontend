@@ -1,6 +1,7 @@
 'use client';
 import type {
   CreativeOutputManifest,
+  CycleItemRow,
   OptimizerAction,
   PlatformId,
   PortfolioConfig,
@@ -115,6 +116,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
 import { recommendationInsightKey } from './insightKey';
 import { hasPendingWork } from './reportModel';
+import { type CurrentMoves, currentMoves } from './sections/portfolioStaleness';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
 // The optimizer RPCs/edge functions are not yet in the generated Supabase types
@@ -529,16 +531,19 @@ async function fetchAdsetInventory(brandId: string, accountId: string, forceRefr
 /** The active ad sets currently enrolled in a portfolio (id + name) — reads the
  *  enrolled roster so the manage panel can pre-select the picker and diff on save.
  *  Names are stored at enroll time, so this shows enrolled ad sets even when they
- *  fall outside the current snapshot window. */
+ *  fall outside the current snapshot window.
+ *
+ *  Fails closed: one unreadable row makes the whole read an error, never a shorter or empty
+ *  roster. A member missing from it would read as "left this portfolio" — its moves withdrawn
+ *  (useCurrentMoves) and the manage panel diffing a save against ad sets it never saw. */
 async function fetchEnrolledAdsets(portfolioId: string): Promise<PortfolioAdset[]> {
   const { data, error } = await getClient().rpc('optimizer_list_portfolio_adsets', {
     p_portfolio_id: portfolioId,
   });
   if (error) throw new Error('optimizer_list_portfolio_adsets unreachable');
-  return z
-    .array(PortfolioAdsetSchema)
-    .catch([])
-    .parse(data ?? []);
+  const roster = z.array(PortfolioAdsetSchema).safeParse(data ?? []);
+  if (!roster.success) throw new Error('optimizer_list_portfolio_adsets returned an unreadable roster');
+  return roster.data;
 }
 
 /** Archived portfolios for the "Archived" view (optimizer_list_portfolios hides
@@ -2228,6 +2233,34 @@ export function useOptimizerAccountEnrollments(brandId: string | null, accountId
     enabled: Boolean(brandId && accountId),
     staleTime: FIVE_MINUTES,
   });
+}
+
+/**
+ * The latest cycle's moves this portfolio can still make, and why the rest are withdrawn
+ * (see currentMoves). The membership map is read only when a move's ad set has left the
+ * roster, to name where it went; until then no second read is paid for.
+ */
+export function useCurrentMoves(
+  portfolio: PortfolioListItem,
+  brandId: string,
+  adAccountId: string,
+  items: CycleItemRow[],
+): CurrentMoves {
+  const enrolled = useOptimizerEnrolledAdsets(portfolio.id);
+  const rosterIds = useMemo(
+    () => (enrolled.isSuccess ? new Set(enrolled.data.map((row) => row.adset_id)) : null),
+    [enrolled.isSuccess, enrolled.data],
+  );
+  const unnamed = useMemo(
+    () => currentMoves(items, portfolio, rosterIds),
+    [items, portfolio, rosterIds],
+  );
+  const leftRoster = unnamed.notes.size > 0;
+  const enrollments = useOptimizerAccountEnrollments(leftRoster ? brandId : null, adAccountId);
+  return useMemo(
+    () => (leftRoster ? currentMoves(items, portfolio, rosterIds, enrollments.data) : unnamed),
+    [leftRoster, items, portfolio, rosterIds, enrollments.data, unnamed],
+  );
 }
 
 export function useOptimizerAdsetCreativeWinrates(

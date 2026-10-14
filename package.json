@@ -65,6 +65,7 @@
     "billing:gates:fe:bench": "playwright test --config playwright.billing-gates.config.ts --workers=1",
     "brands:session-tenancy:e2e:bench": "set -a; . ./.env.local; set +a; playwright test --config playwright.brand-session-tenancy.config.ts --workers=1",
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
+    "optimizer:stale-moves:e2e:bench": "playwright test --config playwright.optimizer-stale-moves.config.ts --workers=1",
     "perfplus:l3:ui:bench": "playwright test --config playwright.perfplus-l3.config.ts --workers=1",
     "perfplus:visual:bench": "playwright test --config playwright.perfplus-visual.config.ts --workers=1",
     "perfplus:tiktok:honesty:ui:bench": "playwright test --config playwright.perfplus-tiktok.config.ts --workers=1",

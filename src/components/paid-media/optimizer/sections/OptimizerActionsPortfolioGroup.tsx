@@ -81,6 +81,7 @@ import {
   useOptimizerActions,
   useOptimizerAdsetAds,
   useOptimizerAudienceProposals,
+  useCurrentMoves,
   useOptimizerCreativeSwapJobs,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
@@ -628,6 +629,10 @@ export function OptimizerActionsPortfolioGroup({
   const [confirm, setConfirm] = React.useState<null | 'budget' | 'pause'>(null);
 
   const report = parseReport(performanceQuery.data);
+  // A withdrawn cycle's moves, and a move whose ad set left this portfolio, are never queue
+  // work: the budget rows come from the moves that still stand, so the rows agree with the
+  // list read's pending_budget_moves. The story below still shows them, as history.
+  const moves = useCurrentMoves(portfolio, brandId, adAccountId, report?.latest_items ?? []);
   const nameById = React.useMemo(
     () => new Map(enrolledQuery.data.map((row) => [row.adset_id, row.adset_name ?? ''])),
     [enrolledQuery.data],
@@ -649,8 +654,13 @@ export function OptimizerActionsPortfolioGroup({
     return out;
   }, [askedRecommendationIds, audienceProposalsQuery.data, nameById, report?.recommendations]);
   const rows = React.useMemo(
-    () => buildActionQueue(report, nameById, carriedRecs),
-    [report, nameById, carriedRecs],
+    () =>
+      buildActionQueue(
+        report && { ...report, latest_items: moves.current },
+        nameById,
+        carriedRecs,
+      ),
+    [report, moves.current, nameById, carriedRecs],
   );
   const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
   const [decidingMove, setDecidingMove] = React.useState<string | null>(null);
@@ -1192,7 +1202,7 @@ export function OptimizerActionsPortfolioGroup({
 
       {/* Why the money is moving, before the list of moves: every ad set's cost per result
           against the target beside its budget going from now to proposed. */}
-      {hasBudgetRows && report ? (
+      {(hasBudgetRows || moves.line || moves.notes.size > 0) && report ? (
         <ReallocationStory
           className="border-border/60 border-t pt-3"
           currency={currency}
@@ -1202,6 +1212,8 @@ export function OptimizerActionsPortfolioGroup({
           nameById={transferNameById}
           snapshotById={snapshotById}
           target={targetDisplay}
+          withdrawn={moves.line}
+          withdrawnNotes={moves.notes}
         />
       ) : null}
 

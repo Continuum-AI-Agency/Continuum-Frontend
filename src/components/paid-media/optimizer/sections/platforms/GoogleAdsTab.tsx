@@ -3,9 +3,9 @@
 // The Overview's Google tab (MP2, docs/optimizer-multiplatform/frontend.html §2): Google's own
 // screen, read live for the brand's granted Google Ads customer. A sentence with figures, the
 // window it covers, then four to six tiles by campaign type — each naming its entity, its figure
-// and what the figure is compared with. No chart and no full-width bar. The Optimizer does not
-// manage Google yet, so there are no recommendation cards here and the tab says so instead of
-// showing an empty section.
+// and what the figure is compared with. No chart and no full-width bar. Google's
+// recommendation cards render in the All tab's account read (AccountRead → platformCardOf), not
+// here: this tab is Google's own read plus the note that sends a person to create a portfolio.
 //
 // When the read cannot happen, the empty state names the reason and the one thing that fixes it.
 

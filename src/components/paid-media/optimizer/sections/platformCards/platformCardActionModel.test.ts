@@ -260,6 +260,12 @@ describe('previewVerdict on a bid target past the per-cycle bound', () => {
       "Google's auto-apply recommendations are on for this account, so we do not write to it. Nothing was written.",
     );
   });
+
+  it('words the portfolio write switch being off', () => {
+    expect(
+      resultVerdict(answer({ status: 'refused', reason: 'apply_disabled' }, false), null).text,
+    ).toBe('Writes to this platform are switched off for this portfolio. Nothing was written.');
+  });
 });
 
 const AUDIT_ID = '0f0f0f0f-0000-4000-8000-000000000001';

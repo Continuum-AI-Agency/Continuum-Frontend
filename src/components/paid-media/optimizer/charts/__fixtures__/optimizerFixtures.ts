@@ -108,6 +108,8 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     adset_count: 4,
     pending_recommendations: 2,
     pending_budget_moves: 3,
+    last_cycle_current: true,
+    withdrawn_reason: null,
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
@@ -125,5 +127,7 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     // 0 recommendations, 2 budget moves — the shape the Actions queue used to hide entirely.
     pending_recommendations: 0,
     pending_budget_moves: 2,
+    last_cycle_current: true,
+    withdrawn_reason: null,
   },
 ];

@@ -61,6 +61,7 @@ import { costCiLegend, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   DEFAULT_CPA_SERIES_LIMIT,
+  useCurrentMoves,
   useHeroBriefWatch,
   useOptimizerAccountSnapshots,
   useOptimizerAdAngles,
@@ -179,6 +180,12 @@ export function PortfolioDetailWorkspace({
   const report = parseReport(performanceQuery.data);
   const items = report?.latest_items ?? [];
   const latestRun = report?.latest_run ?? null;
+  // The moves a person may still act on. A withdrawn cycle (the list read says it no longer
+  // stands) or a move whose ad set left this portfolio is shown as history, never offered:
+  // the Apply gate, the decision count and the hero's budget candidate read `currentReport`.
+  const moves = useCurrentMoves(portfolio, brandId, adAccountId, items);
+  const currentReport =
+    report && moves.current !== items ? { ...report, latest_items: moves.current } : report;
   // A scored cycle that raised nothing is a legitimate outcome, not a blank page.
   // When a run landed but produced zero recommendations, explain why off the same
   // account snapshots the engine scores (frozen kpi_mismatch, too-young account,
@@ -202,7 +209,7 @@ export function PortfolioDetailWorkspace({
   // Offer the manual apply only when there are actual moves and the portfolio is in
   // recommend mode (observe hard-halts Meta writes; autopilot applies automatically).
   // runId pins the apply to this run.
-  const reallocation = splitReallocation(items);
+  const reallocation = splitReallocation(moves.current);
   // ONE definition of "moved" — this used to be derived here as gaining+losing while the
   // card counted distinct ids, so the Apply gate and the copy could disagree.
   const movedCount = reallocation.movedCount;
@@ -300,7 +307,7 @@ export function PortfolioDetailWorkspace({
     target: targetDisplay,
   });
   const heroView = buildHeroView({
-    report,
+    report: currentReport,
     recap,
     flightPacing,
     metric,
@@ -324,7 +331,7 @@ export function PortfolioDetailWorkspace({
   // cards use.
   const headline = buildPortfolioHeadline({
     view: heroView,
-    report,
+    report: currentReport,
     portfolio,
     metric,
     currency: currency ?? null,
@@ -965,6 +972,8 @@ export function PortfolioDetailWorkspace({
                 nameById={adsetNameById}
                 snapshotById={snapshotById}
                 target={targetDisplay}
+                withdrawn={moves.line}
+                withdrawnNotes={moves.notes}
               />
               <details className="group">
                 <summary className="hit-area cursor-pointer text-xs text-muted-foreground hover:text-foreground">

@@ -176,6 +176,7 @@ const REFUSAL_WORDS: Readonly<Record<string, string>> = {
   human_approval_required: 'a person has to approve it',
   auto_apply_enabled:
     "Google's auto-apply recommendations are on for this account, so we do not write to it",
+  apply_disabled: 'writes to this platform are switched off for this portfolio',
 };
 
 /** Google's error codes a refusal carries ("google:CODE"), in a person's words. */
