@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { templateAuthoringKeyframesInventorySchema } from './template-authoring-keyframes';
 import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 
 const pairSchema = (limit: number) =>
@@ -14,6 +15,7 @@ export const templateLayerEditSchema = z
     layerId: z.number().int().positive(),
     fontSize: z.number().finite().min(1).max(1000).optional(),
     font: z.string().trim().min(1).max(200).optional(),
+    text: z.string().max(20_000).optional(),
     visible: z.boolean().optional(),
     position: pairSchema(100_000).optional(),
     rotation: z.number().finite().min(-36_000).max(36_000).optional(),
@@ -25,6 +27,7 @@ export const templateLayerEditSchema = z
     (e) =>
       e.fontSize !== undefined ||
       e.font !== undefined ||
+      e.text !== undefined ||
       e.visible !== undefined ||
       TEMPLATE_LAYER_TRANSFORMS.some((key) => e[key] !== undefined),
     'Choose a layer change',
@@ -99,9 +102,26 @@ export const templateEditableLayerSchema = z
     visible: z.boolean(),
     visibilityReason: z.string().nullable(),
     textReason: z.string().nullable(),
+    /** Optional on legacy writer responses; when present, null means font/style fields are editable. */
+    fontReason: z.string().nullable().optional(),
     text: z.string().nullable(),
     font: z.string().nullable(),
     fontSize: z.number().finite().nullable(),
+    /** Supplemental design-file association; Rust comp/layer identity remains authoritative. */
+    designLayerId: z.number().int().nullable().optional(),
+    artboardId: z.number().int().nullable().optional(),
+    /** Optional on legacy inventories; null is affirmative native grouping eligibility. */
+    groupingReason: z.string().nullable().optional(),
+    timingReason: z.string().nullable().optional(),
+    keyframeReasons: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeReasons.optional(),
+    keyframeChannels: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeChannels.optional(),
+    maskReason: z.string().nullable().optional(),
+    /** Writer-supplied text geometry in comp pixels; never a Rust structural identity. */
+    x: z.number().finite().nullable().optional(),
+    y: z.number().finite().nullable().optional(),
+    width: z.number().finite().nullable().optional(),
+    height: z.number().finite().nullable().optional(),
+    geometryReason: z.string().nullable().optional(),
     slotKeys: z.array(z.string()),
     visibilitySlotKeys: z.array(z.string()),
     /** Stack position in its comp; 0 is the top (AE's layer 1). */

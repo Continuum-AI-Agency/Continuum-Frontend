@@ -8,18 +8,24 @@ import { LIBRARY_COLLECTION_MAX_LEVELS } from '@continuum/contracts';
 export type FolderFile = { file: File; folders: string[] };
 
 /** "Shoot/Day 1/a.mp4" → folders ["Shoot", "Day 1"]. A loose file has none. */
-export function foldersOf(relativePath: string): string[] {
-  return relativePath.split('/').filter(Boolean).slice(0, -1).slice(0, LIBRARY_COLLECTION_MAX_LEVELS);
+export function foldersOf(
+  relativePath: string,
+  maxLevels = LIBRARY_COLLECTION_MAX_LEVELS,
+): string[] {
+  return relativePath.split('/').filter(Boolean).slice(0, -1).slice(0, maxLevels);
 }
 
 // Finder and Explorer litter folders with these; they would only show up as refused uploads.
 const isSystemFile = (name: string) => name.startsWith('.') || name === 'Thumbs.db';
 
 /** Files from a `webkitdirectory` input: each carries its path under the picked folder. */
-export function folderFilesFromInput(files: FileList | readonly File[]): FolderFile[] {
+export function folderFilesFromInput(
+  files: FileList | readonly File[],
+  maxLevels = LIBRARY_COLLECTION_MAX_LEVELS,
+): FolderFile[] {
   return Array.from(files)
     .filter((file) => !isSystemFile(file.name))
-    .map((file) => ({ file, folders: foldersOf(file.webkitRelativePath) }));
+    .map((file) => ({ file, folders: foldersOf(file.webkitRelativePath, maxLevels) }));
 }
 
 /** Every folder path, parents before children, each once ("A", "A/B", "A/B/C"). */
@@ -64,11 +70,16 @@ type Entry = {
   };
 };
 
-async function walk(entry: Entry, folders: string[], out: FolderFile[]): Promise<void> {
+async function walk(
+  entry: Entry,
+  folders: string[],
+  out: FolderFile[],
+  maxLevels: number,
+): Promise<void> {
   if (isSystemFile(entry.name)) return;
   if (entry.isFile && entry.file) {
     const file = await new Promise<File>((resolve, reject) => entry.file?.(resolve, reject));
-    out.push({ file, folders: folders.slice(0, LIBRARY_COLLECTION_MAX_LEVELS) });
+    out.push({ file, folders: folders.slice(0, maxLevels) });
     return;
   }
   if (!entry.isDirectory || !entry.createReader) return;
@@ -79,19 +90,20 @@ async function walk(entry: Entry, folders: string[], out: FolderFile[]): Promise
       reader.readEntries(resolve, reject),
     );
     if (batch.length === 0) return;
-    for (const child of batch) await walk(child, [...folders, entry.name], out);
+    for (const child of batch) await walk(child, [...folders, entry.name], out, maxLevels);
   }
 }
 
 /** Null when nothing dropped is a folder — the caller keeps its flat file path. */
 export async function folderFilesFromDrop(
   items: DataTransferItemList,
+  maxLevels = LIBRARY_COLLECTION_MAX_LEVELS,
 ): Promise<FolderFile[] | null> {
   const entries = Array.from(items)
     .map((item) => (item.kind === 'file' ? (item.webkitGetAsEntry() as Entry | null) : null))
     .filter((entry): entry is Entry => Boolean(entry));
   if (!entries.some((entry) => entry.isDirectory)) return null;
   const out: FolderFile[] = [];
-  for (const entry of entries) await walk(entry, [], out);
+  for (const entry of entries) await walk(entry, [], out, maxLevels);
   return out;
 }

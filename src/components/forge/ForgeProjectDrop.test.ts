@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import {
   FORGE_PROJECT_FILE_MAX_MB,

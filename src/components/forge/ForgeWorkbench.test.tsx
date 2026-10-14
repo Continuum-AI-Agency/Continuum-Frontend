@@ -5,7 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import type { TemplateSource } from '@continuum/contracts';
+import type { TemplateSource, WorkspaceTemplate } from '@continuum/contracts';
 import React from 'react';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
@@ -33,13 +33,28 @@ const SOURCE: TemplateSource = {
 };
 
 const toastError = mock((_message: string) => undefined);
-let discovered: unknown[] = [];
+let discovered: WorkspaceTemplate[] = [];
+let discoveryFailures: { bindingId: string; code: string }[] = [];
 let fetchedSources: TemplateSource[] = [SOURCE];
 type UploadFinished = (result: { file: File; uploaded: { assetId: string } }) => void;
 let uploadFinished: UploadFinished | undefined;
 const fetchTemplateSources = mock(async () => fetchedSources);
 const fetchRenderWorkspaces = mock(async () => []);
-const discoverWorkspaceTemplates = mock(async () => ({ items: discovered }));
+const workspaceDiscoveryResponse = (
+  items: WorkspaceTemplate[] = discovered,
+  failures: { bindingId: string; code: string }[] = discoveryFailures,
+) => ({
+  workspace: {
+    id: '00000000-0000-4000-8000-0000000000b1',
+    picinst: 'Continuum_app',
+    environmentKey: 'prod',
+    clientKey: 'starcraft',
+    isDefault: true,
+  },
+  items,
+  failures,
+});
+const discoverWorkspaceTemplates = mock(async () => workspaceDiscoveryResponse());
 const renameTemplateSource = mock(async (_brandId: string, _assetId: string, title: string) => ({
   ...SOURCE,
   displayName: title,
@@ -62,7 +77,6 @@ mock.module('motion/react', () => ({ ...motion, useReducedMotion: () => reducedM
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({ run: null, pushed: true, loading: false, refresh: async () => undefined }),
 }));
-mock.module('@/components/forge/LineagePanel', () => ({ LineagePanel: () => null }));
 mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({ OutputSettingsPanel: () => null }));
 mock.module('@/components/library/useMediaUpload', () => ({
@@ -92,10 +106,12 @@ mock.module('@/components/ui/toast-imperative', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { ForgeWorkbench } from './ForgeWorkbench';
 
 beforeEach(() => {
   discovered = [];
+  discoveryFailures = [];
   fetchedSources = [SOURCE];
   uploadFinished = undefined;
   fetchTemplateSources.mockClear();
@@ -107,9 +123,12 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   reducedMotion = false;
+  window.history.replaceState({}, '', '/');
 });
 
-function workspaceTemplate(overrides: Record<string, unknown>) {
+function workspaceTemplate(
+  overrides: Partial<WorkspaceTemplate> & Pick<WorkspaceTemplate, 'templateKey' | 'name'>,
+): WorkspaceTemplate {
   return {
     templateId: Number(overrides.templateKey),
     bindingId: '00000000-0000-4000-8000-0000000000b1',
@@ -155,7 +174,7 @@ describe('ForgeWorkbench', () => {
       uploadFinished?.({ file: new File(['x'], 'promo.aep'), uploaded: { assetId: 'asset-new' } });
 
       expect(await screen.findByText('Unpacking')).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+      expect(screen.getByLabelText('Search templates')).toBeTruthy();
 
       fetchedSources = [SOURCE];
       if (typeof poll === 'function') poll();
@@ -180,6 +199,75 @@ describe('ForgeWorkbench', () => {
     expect(fetchTemplateSources).toHaveBeenCalledTimes(1);
     expect(fetchRenderWorkspaces).not.toHaveBeenCalled();
     expect(discoverWorkspaceTemplates).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows a shared catalog failure separately from an empty result and can retry', async () => {
+    discoverWorkspaceTemplates.mockRejectedValueOnce(new Error('catalog unavailable'));
+    renderWorkbench();
+    expect(await screen.findByText('Shared catalog unavailable')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    discoverWorkspaceTemplates.mockResolvedValueOnce(workspaceDiscoveryResponse([], []));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByTestId('shared-catalog-empty')).toBeTruthy();
+  });
+
+  test('keeps shared templates visible and offers recovery when the initial own-template read fails', async () => {
+    discovered = [workspaceTemplate({ templateKey: '88', name: 'Shared hero' })];
+    fetchTemplateSources.mockRejectedValueOnce(new Error('private source detail'));
+    renderWorkbench();
+
+    expect(await screen.findByText('Your templates are unavailable')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Shared hero' })).toBeTruthy();
+    expect(toastError).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    expect(screen.queryByText('Your templates are unavailable')).toBeNull();
+  });
+
+  test('retains cached own-template cards after a failed refresh', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(forgeQueryKeys.templateSources(BRAND), [SOURCE], { updatedAt: 0 });
+    fetchTemplateSources.mockRejectedValueOnce(new Error('private source detail'));
+    renderWorkbench(client);
+    expect(await screen.findByText('Your templates could not be refreshed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    expect(fetchTemplateSources).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows a successful empty catalog only when there are no workspace failures', async () => {
+    discovered = [];
+    discoveryFailures = [];
+    renderWorkbench();
+
+    expect(await screen.findByTestId('shared-catalog-empty')).toBeTruthy();
+    expect(screen.queryByText('Shared catalog unavailable')).toBeNull();
+    expect(screen.queryByText('Some shared workspaces could not be checked')).toBeNull();
+  });
+
+  test('preserves own and shared templates while warning that some workspaces failed', async () => {
+    discovered = [workspaceTemplate({ templateKey: '88', name: 'Hero offer', granted: true })];
+    discoveryFailures = [
+      { bindingId: '00000000-0000-4000-8000-0000000000b2', code: 'workspace_discovery_failed' },
+    ];
+    renderWorkbench();
+
+    expect(await screen.findByText('Some shared workspaces could not be checked')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' })).toBeTruthy();
+    expect(screen.queryByTestId('shared-catalog-empty')).toBeNull();
+  });
+
+  test('shows unavailable instead of a confirmed empty catalog when every workspace failed', async () => {
+    discovered = [];
+    discoveryFailures = [
+      { bindingId: '00000000-0000-4000-8000-0000000000b1', code: 'workspace_discovery_failed' },
+    ];
+    renderWorkbench();
+
+    expect(await screen.findByText('Shared catalog unavailable')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+    expect(screen.queryByTestId('shared-catalog-empty')).toBeNull();
   });
 
   test('rename shows at once, and the old name comes back when the server refuses', async () => {
@@ -227,8 +315,18 @@ describe('ForgeWorkbench', () => {
   test('published delivery compositions appear as separate template choices', async () => {
     fetchedSources = [{ ...SOURCE, templateKey: '99' }];
     discovered = [
-      workspaceTemplate({ templateKey: '101', name: 'Inyogo · Card A', sourceAssetId: ASSET, granted: true }),
-      workspaceTemplate({ templateKey: '102', name: 'Inyogo · Card B', sourceAssetId: ASSET, granted: true }),
+      workspaceTemplate({
+        templateKey: '101',
+        name: 'Inyogo · Card A',
+        sourceAssetId: ASSET,
+        granted: true,
+      }),
+      workspaceTemplate({
+        templateKey: '102',
+        name: 'Inyogo · Card B',
+        sourceAssetId: ASSET,
+        granted: true,
+      }),
     ];
     renderWorkbench();
     expect(await screen.findByRole('button', { name: 'Open Inyogo · Card A' })).toBeTruthy();
@@ -283,6 +381,17 @@ describe('ForgeWorkbench', () => {
       expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
     });
 
+    test('a selected template opens the carried composition in its existing Layers workspace', async () => {
+      at(`?template=${ASSET}&hfRevision=revision-42&brand=${BRAND}`);
+      renderWorkbench();
+
+      expect(await screen.findByTestId('hyperframes-seed-handoff')).toBeTruthy();
+      expect(screen.getByRole('tab', { name: 'Layers' })).toBeTruthy();
+      expect(screen.getByText('Source selected · Untitled template')).toBeTruthy();
+      expect(screen.getByText(/privately stage and verify the composition package/i)).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toBeTruthy();
+    });
+
     test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {
       fetchedSources = [{ ...SOURCE, templateKey: '133' }];
       at(`?template=${ASSET}&set=${SET}&row=${ROW}&rerender=1`);
@@ -301,6 +410,25 @@ describe('ForgeWorkbench', () => {
         rowId: ROW,
         rerender: true,
       });
+    });
+
+    test('a HyperFrames handoff stays at the existing source chooser until the person picks a template', async () => {
+      at('?hfRevision=revision-42&brand=' + BRAND);
+      renderWorkbench();
+
+      expect(await screen.findByText('Choose a Forge source')).toBeTruthy();
+      expect(screen.getByLabelText('Search templates')).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+      expect(screen.queryByRole('tab', { name: 'Layers' })).toBeNull();
+    });
+
+    test('a handoff from another active brand is paused without selecting or transferring a source', async () => {
+      at('?hfRevision=revision-42&brand=33333333-3333-4333-8333-333333333333');
+      renderWorkbench();
+
+      expect(await screen.findByText('HyperFrames handoff paused')).toBeTruthy();
+      expect(screen.getByLabelText('Search templates')).toBeTruthy();
+      expect(screen.queryByRole('tab', { name: 'Layers' })).toBeNull();
     });
   });
 });

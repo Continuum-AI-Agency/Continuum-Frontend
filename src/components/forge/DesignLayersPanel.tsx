@@ -305,7 +305,9 @@ function Arrangements({
               <TemplateLayerList
                 label={`${arrangement.name} stack`}
                 rows={rowsOf(layers, arrangement.order)}
-                onReorder={(front) => update(index, { order: [...front].reverse() })}
+                onReorder={(front) =>
+                  update(index, { order: front.filter((id): id is number => typeof id === 'number').reverse() })
+                }
               />
             </section>
           );

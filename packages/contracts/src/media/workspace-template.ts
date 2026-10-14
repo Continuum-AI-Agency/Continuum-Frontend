@@ -15,6 +15,7 @@
 // number to do arithmetic with, and the stores that hold it are text columns.
 
 import { z } from 'zod';
+import { renderWorkspaceSchema } from './render-workspace';
 
 export const workspaceTemplateSchema = z
   .object({
@@ -52,11 +53,38 @@ export const workspaceTemplateSchema = z
   .strict();
 export type WorkspaceTemplate = z.infer<typeof workspaceTemplateSchema>;
 
+/** Safe, stable reason a workspace's template list could not be read. */
+export const workspaceTemplateDiscoveryFailureCodeSchema = z.literal('workspace_discovery_failed');
+
+export const workspaceTemplateDiscoveryFailureSchema = z
+  .object({
+    bindingId: z.string().uuid(),
+    code: workspaceTemplateDiscoveryFailureCodeSchema,
+  })
+  .strict();
+
+/** Aggregate discovery response. Missing failures means an older backend reported no failures. */
+export const workspaceTemplateDiscoveryResponseSchema = z
+  .object({
+    workspace: renderWorkspaceSchema,
+    items: z.array(workspaceTemplateSchema),
+    failures: z.array(workspaceTemplateDiscoveryFailureSchema).default([]),
+  })
+  .strict();
+export type WorkspaceTemplateDiscoveryResponse = z.infer<
+  typeof workspaceTemplateDiscoveryResponseSchema
+>;
+export type WorkspaceTemplateDiscoveryFailure = z.infer<
+  typeof workspaceTemplateDiscoveryFailureSchema
+>;
+
 /** The forge's own prefix for a template that has not been promoted yet. */
 export const DRAFT_TEMPLATE_PREFIX = '[DRAFT/agent]';
 
 export function isDraftTemplateName(name: string | null | undefined): boolean {
-  return String(name ?? '').trimStart().startsWith(DRAFT_TEMPLATE_PREFIX);
+  return String(name ?? '')
+    .trimStart()
+    .startsWith(DRAFT_TEMPLATE_PREFIX);
 }
 
 /** The name without the draft marker, for display. */

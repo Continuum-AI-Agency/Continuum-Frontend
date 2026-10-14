@@ -45,6 +45,8 @@ export type HyperframesRenderResult = {
 };
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+/** Duplicate floor on the 32×18 probe. A slow hold often lands under it; the
+ *  backend treats a declared hold as dead only when these samples are exactly 0. */
 const DUPLICATE_MAD = 1.5;
 const SCENE_CHANGE_MAD = 12;
 

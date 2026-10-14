@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { ClientRenderContext } from '@/lib/client-render/ClientRenderProvider';
 import {
@@ -68,9 +69,17 @@ const renderNode = (data: HyperframesAgentNodeData, queue: Queue | null = null) 
     >
       <ToastProvider>
         <ClientRenderContext.Provider value={queue}>
-          <ReactFlowProvider>
-            <HyperframesAgentBlock {...baseProps} data={data} />
-          </ReactFlowProvider>
+          <CanvasRuntimeProvider
+            value={{
+              brandProfileId: '22222222-2222-4222-8222-222222222222',
+              roomId: 'room-1',
+              flushSave: async () => undefined,
+            }}
+          >
+            <ReactFlowProvider>
+              <HyperframesAgentBlock {...baseProps} data={data} />
+            </ReactFlowProvider>
+          </CanvasRuntimeProvider>
         </ClientRenderContext.Provider>
       </ToastProvider>
     </QueryClientProvider>,
@@ -302,6 +311,12 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     expect(getByText('A three-beat introduction led by the portrait.')).not.toBeNull();
     expect(getByText('The portrait anchors the opening beat.')).not.toBeNull();
     expect(getByText(/Craft 8\/10/i)).not.toBeNull();
+    const handoff = document.querySelector<HTMLAnchorElement>(
+      '[data-testid="hyperframes-edit-in-forge"]',
+    );
+    expect(handoff?.getAttribute('href')).toBe(
+      '/forge?hfRevision=revision-1&brand=22222222-2222-4222-8222-222222222222',
+    );
   });
 
   it('shows persisted quality and turns a scene blocker into a targeted revision', () => {

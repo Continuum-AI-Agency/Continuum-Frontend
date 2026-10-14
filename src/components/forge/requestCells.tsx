@@ -37,9 +37,11 @@ import {
 import {
   createContext,
   Fragment,
+  memo,
   type ReactNode,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -61,6 +63,7 @@ import {
   ownChangeCount,
   type RequestRow,
   type RequestRowMedia,
+  type ResolvedRowInputs,
   type RowDrop,
   rowBreadcrumb,
 } from '@/components/forge/renderRequestRows';
@@ -138,6 +141,7 @@ export type RequestGridMeta = {
   brandId: string;
   contract: ApiRenderTemplateContract;
   rows: RequestRow[];
+  rowInputs?: Map<string, ResolvedRowInputs>;
   clientErrors: Map<string, Record<string, string>>;
   /** Fields the server fills from another (see `derivedFrom`); a source of lines takes several. */
   linkedFields?: ApiRenderVariable[];
@@ -411,7 +415,7 @@ function InheritanceAction({
 }: {
   row: RequestRow;
   variable: ApiRenderVariable;
-  actions: RequestRowActions;
+  actions: Pick<RequestRowActions, 'clearValue' | 'resetValue'>;
 }) {
   if (!row.parentId) return null;
   const changed = variable.key in row.values || row.clearedKeys.includes(variable.key);
@@ -490,14 +494,59 @@ function NumberInput({
 }
 
 export function VariableCell({
-  row: { original: row },
+  row: { original },
   column,
   table,
 }: CellContext<RequestRow, unknown>) {
   const { variable } = column.columnDef.meta as VariableColumnMeta;
-  const { brandId, contract, rows, clientErrors, actions } = gridMeta(table);
-  const error = clientErrors.get(row.id)?.[variable.key];
-  const value = effectiveValues(rows, row.id)[variable.key];
+  const { brandId, contract, rows, rowInputs, clientErrors, actions, linkedFields } =
+    gridMeta(table);
+  const resolved = rowInputs?.get(original.id);
+  const row = resolved?.row ?? original;
+  const { setValue, clearValue, resetValue, pickMedia, clearMedia } = actions;
+  const fieldActions = useMemo(
+    () => ({ setValue, clearValue, resetValue, pickMedia, clearMedia }),
+    [setValue, clearValue, resetValue, pickMedia, clearMedia],
+  );
+  return (
+    <VariableInput
+      row={row}
+      variable={variable}
+      brandId={brandId}
+      contract={contract}
+      linkedFields={linkedFields}
+      actions={fieldActions}
+      value={(resolved?.values ?? effectiveValues(rows, row.id))[variable.key]}
+      media={(resolved?.media ?? effectiveMedia(rows, row.id))[variable.key]}
+      error={clientErrors.get(row.id)?.[variable.key]}
+    />
+  );
+}
+
+const VariableInput = memo(function VariableInput({
+  row,
+  variable,
+  brandId,
+  contract,
+  linkedFields,
+  actions,
+  value,
+  media,
+  error,
+}: {
+  row: RequestRow;
+  variable: ApiRenderVariable;
+  brandId: string;
+  contract: ApiRenderTemplateContract;
+  linkedFields?: ApiRenderVariable[];
+  actions: Pick<
+    RequestRowActions,
+    'setValue' | 'clearValue' | 'resetValue' | 'pickMedia' | 'clearMedia'
+  >;
+  value: ApiRenderInputValue | undefined;
+  media: RequestRowMedia | undefined;
+  error: string | undefined;
+}) {
   // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
   const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
   const inheritance = <InheritanceAction row={row} variable={variable} actions={actions} />;
@@ -512,7 +561,7 @@ export function VariableCell({
     );
 
   if (isMedia(variable)) {
-    const dims = effectiveMedia(rows, row.id)[variable.key];
+    const dims = media;
     const verdict = checkAssetSwap({
       key: variable.key,
       placement: variable.placement,
@@ -629,7 +678,7 @@ export function VariableCell({
     );
 
   // A headline set on several layers: one line per layer, the first on this one.
-  const lineFields = (gridMeta(table).linkedFields ?? []).filter(
+  const lineFields = (linkedFields ?? []).filter(
     (field) => field.derivedFrom?.key === variable.key && field.derivedFrom.line !== null,
   );
   const text = value === undefined ? '' : String(value);
@@ -691,7 +740,7 @@ export function VariableCell({
       {inheritance}
     </div>
   );
-}
+});
 
 function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
   const focusAfter = useRef<(() => HTMLElement | null) | null>(null);
@@ -1033,10 +1082,13 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors } = gridMeta(table);
+  const { contract, rows, rowInputs, clientErrors } = gridMeta(table);
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
-  const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
+  const missing = missingInputs(
+    contract.variables,
+    rowInputs?.get(row.id)?.values ?? effectiveValues(rows, row.id),
+  );
   // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
   if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
     const names = missing.map((key) =>
@@ -1075,9 +1127,10 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
   const cells = row
     .getAllCells()
     .filter((cell) => (cell.column.columnDef.meta as Partial<VariableColumnMeta>)?.variable);
-  const evidenceByKey = effectiveEvidence(table.options.data, rowId);
+  const { rows, rowInputs } = gridMeta(table);
+  const evidenceByKey = effectiveEvidence(rows, rowId);
   const hasDraftEvidence = row.original.evidence !== undefined;
-  const values = effectiveValues(table.options.data, rowId);
+  const values = rowInputs?.get(rowId)?.values ?? effectiveValues(rows, rowId);
   return (
     <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-xs">
       {cells.map((cell) => {

@@ -113,7 +113,7 @@ export function poseDelta(from: Pose, to: Pose): string | null {
 
 export type PreviewEdits = {
   /** The scene's comp. */
-  compId: number;
+  compId: number | null;
   layers: readonly TemplateEditableLayer[];
   /** The edits the SVG was composed with, and the ones on screen now. */
   rendered: Record<number, TemplateLayerEdit>;
@@ -123,14 +123,20 @@ export type PreviewEdits = {
   order: readonly number[];
 };
 
-/** The preview's markup with the edits made since it was composed applied, ready to inline. */
-export function previewMarkup(svg: string, edits: PreviewEdits): string {
+/** Sanitize a scene once; subsequent edits keep its drawn nodes and selection targets alive. */
+export function createLayerPreview(svg: string) {
   const root = safeSvg(svg);
-  if (!root) return '';
+  if (!root) return null;
   root.setAttribute('width', '100%');
   root.setAttribute('height', '100%');
   root.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   const groups = Array.from(root.querySelectorAll('g[data-layer-id]'));
+  const originals = new Map(
+    groups.map((group) => [
+      group,
+      ['transform', 'opacity', 'display'].map((key) => [key, group.getAttribute(key)] as const),
+    ]),
+  );
   const drawn = new Map<number, Element[]>();
   for (const group of groups) {
     const id = Number(group.getAttribute('data-layer-id'));
@@ -144,8 +150,8 @@ export function previewMarkup(svg: string, edits: PreviewEdits): string {
     const holder = group.getAttribute('data-in');
     if (holder) add(inside, Number(holder), Number(group.getAttribute('data-layer-id')));
   }
-  for (const layer of edits.layers)
-    if (layer.parentId) add(parented, layer.parentId, layer.layerId);
+  let layers: PreviewEdits['layers'] | null = null;
+  let lastOrder: string | null = null;
   /** A layer and everything drawn with it: its precomp's children, and (optionally) its children by parenting. */
   const family = (id: number, withParented: boolean) => {
     const seen = new Set<number>();
@@ -159,38 +165,62 @@ export function previewMarkup(svg: string, edits: PreviewEdits): string {
     return [...seen].flatMap((member) => drawn.get(member) ?? []);
   };
 
-  for (const layer of edits.layers) {
-    if (layer.compId !== edits.compId) continue;
-    const from = poseOf(layer, edits.rendered[layer.layerId]);
-    const to = poseOf(layer, edits.current[layer.layerId]);
-    // Parenting carries the transform only; opacity and visibility stay with the layer and what
-    // its precomp draws.
-    const moved = family(layer.layerId, true);
-    const own = family(layer.layerId, false);
-    if (!own.length) continue;
-    if (from.visible && !to.visible) {
-      for (const group of own) group.setAttribute('display', 'none');
-      continue;
+  const update = (edits: PreviewEdits) => {
+    if (layers !== edits.layers) {
+      layers = edits.layers;
+      parented.clear();
+      for (const layer of layers) if (layer.parentId) add(parented, layer.parentId, layer.layerId);
     }
-    // A parented layer's values are in its parent's space: its move waits for the forge.
-    const move = layer.parentId ? null : poseDelta(from, to);
-    if (move)
-      for (const group of moved) {
-        const prior = group.getAttribute('transform');
-        group.setAttribute('transform', prior ? `${move} ${prior}` : move);
+    // Start from the composed pose so repeated moves never compound the previous local delta.
+    for (const [group, attributes] of originals)
+      for (const [key, value] of attributes) {
+        if (group.getAttribute(key) === value) continue;
+        if (value === null) group.removeAttribute(key);
+        else group.setAttribute(key, value);
       }
-    if (from.opacity && to.opacity !== null && to.opacity !== from.opacity) {
-      const factor = to.opacity / from.opacity;
-      for (const group of own) {
-        const prior = Number(group.getAttribute('opacity') ?? 1);
-        group.setAttribute('opacity', String(Math.max(0, Math.min(1, prior * factor))));
+    for (const layer of edits.layers) {
+      if (layer.compId !== edits.compId) continue;
+      const from = poseOf(layer, edits.rendered[layer.layerId]);
+      const to = poseOf(layer, edits.current[layer.layerId]);
+      // Parenting carries the transform only; opacity and visibility stay with the layer and what
+      // its precomp draws.
+      const moved = family(layer.layerId, true);
+      const own = family(layer.layerId, false);
+      if (!own.length) continue;
+      if (from.visible && !to.visible) {
+        for (const group of own) group.setAttribute('display', 'none');
+        continue;
+      }
+      // A parented layer's values are in its parent's space: its move waits for the forge.
+      const move = layer.parentId ? null : poseDelta(from, to);
+      if (move)
+        for (const group of moved) {
+          const prior = group.getAttribute('transform');
+          group.setAttribute('transform', prior ? `${move} ${prior}` : move);
+        }
+      if (from.opacity && to.opacity !== null && to.opacity !== from.opacity) {
+        const factor = to.opacity / from.opacity;
+        for (const group of own) {
+          const prior = Number(group.getAttribute('opacity') ?? 1);
+          group.setAttribute('opacity', String(Math.max(0, Math.min(1, prior * factor))));
+        }
       }
     }
-  }
 
-  if (edits.order.join() !== edits.renderedOrder.join())
-    restack(edits.order, (id) => family(id, false));
-  return root.outerHTML;
+    const nextOrder = edits.order.join();
+    if (nextOrder !== (lastOrder ?? edits.renderedOrder.join()))
+      restack(edits.order, (id) => family(id, false));
+    lastOrder = nextOrder;
+  };
+  return { root, update };
+}
+
+/** The preview's markup with the edits made since it was composed applied, ready to inline. */
+export function previewMarkup(svg: string, edits: PreviewEdits): string {
+  const preview = createLayerPreview(svg);
+  if (!preview) return '';
+  preview.update(edits);
+  return preview.root.outerHTML;
 }
 
 /** Repaint the stack's runs (a layer plus its precomp's children) bottom first, where they stood. */

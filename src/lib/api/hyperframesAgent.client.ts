@@ -1,5 +1,9 @@
 import {
   type HyperframesAgentTurnRequest,
+  type HyperframesAepAuthoringRequest,
+  type HyperframesAepAuthoringResponse,
+  hyperframesAepAuthoringRequestSchema,
+  hyperframesAepAuthoringResponseSchema,
   type HyperframesAgentTurnResponse,
   type HyperframesBrowserReviewRequest,
   type HyperframesRenderCompleteRequest,
@@ -173,5 +177,18 @@ export function failHyperframesRun(
     schema: z.object({ ok: z.boolean() }),
     cache: 'no-store',
     headers: leaseHeaders(leaseToken),
+  });
+}
+
+export function stageHyperframesRevisionForForge(
+  revisionId: string,
+  body: HyperframesAepAuthoringRequest,
+): Promise<HyperframesAepAuthoringResponse> {
+  return http.request({
+    path: `${base()}/revisions/${encodeURIComponent(revisionId)}/aep/authoring`,
+    method: 'POST',
+    body: hyperframesAepAuthoringRequestSchema.parse(body),
+    schema: hyperframesAepAuthoringResponseSchema,
+    cache: 'no-store',
   });
 }

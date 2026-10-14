@@ -9,6 +9,7 @@ import {
   waitingCount,
 } from '@/components/forge/PendingApprovals';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { confirmForgeExit } from '@/components/forge/useForgeExitGuard';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -36,16 +37,19 @@ const PANEL = 'min-h-0 min-w-0 overflow-y-auto overscroll-contain pt-2';
 export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
   const [visited, setVisited] = useState<ReadonlySet<ForgeTab>>(() => new Set(['templates']));
-  const activate = (next: ForgeTab) => {
-    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
-    setTab(next);
+  const activate = (next: ForgeTab, after?: () => void) => {
+    void confirmForgeExit().then((allowed) => {
+      if (!allowed) return;
+      setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+      setTab(next);
+      after?.();
+    });
   };
   // The last "open this in Render" from anywhere on the page, until the grid takes it. Dropped
   // once taken: an intent kept around would replace whatever the person moved on to.
   const [renderIntent, setRenderIntent] = useState<ForgeRenderIntent | undefined>(undefined);
   const openRender = (intent: ForgeRenderIntent) => {
-    setRenderIntent(intent);
-    activate('render');
+    activate('render', () => setRenderIntent(intent));
   };
   // The approval notification links to `/forge#approvals`. A hash never reaches the server, so the
   // ledger opens after mount.
@@ -54,7 +58,16 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     setVisited((current) => new Set(current).add('renders'));
     setTab('renders');
   }, []);
-  const waiting = waitingCount(useRenderApprovals(brandId).data);
+  const approvalQuery = useRenderApprovals(brandId);
+  const waiting = waitingCount(approvalQuery.data);
+  const approvalStatus =
+    approvalQuery.data === undefined
+      ? approvalQuery.isError
+        ? 'unavailable'
+        : 'checking'
+      : approvalQuery.isError
+        ? 'stale'
+        : null;
   return (
     // Bounded by the page: the strip stays put and each panel scrolls on its own.
     <Tabs
@@ -72,6 +85,28 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
               {waiting}
               <span className="sr-only"> waiting for approval</span>
             </Badge>
+          ) : null}
+          {approvalStatus === 'unavailable' ? (
+            <Badge
+              variant="destructive"
+              className="ml-1.5"
+              title="Approval count unavailable. Open the ledger and retry to check pending work."
+            >
+              ?<span className="sr-only"> Approval count unavailable</span>
+            </Badge>
+          ) : null}
+          {approvalStatus === 'checking' ? (
+            <Badge variant="muted" className="ml-1.5" title="Checking approval count">
+              …<span className="sr-only"> Checking approval count</span>
+            </Badge>
+          ) : null}
+          {approvalStatus === 'stale' ? (
+            <span
+              className="ml-1.5 text-xs text-muted-foreground"
+              title="Approval count may be stale"
+            >
+              stale
+            </span>
           ) : null}
         </TabsTrigger>
       </TabsList>

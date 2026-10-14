@@ -125,7 +125,12 @@ mock.module('@/lib/library/approvalDecisions', () => ({ decideApprovals }));
 
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { registerToastSink } from '@/components/ui/toast-imperative';
-import { APPROVAL_RELAY_POLL_MS, approvalPollInterval, PendingApprovals } from './PendingApprovals';
+import {
+  APPROVAL_RELAY_POLL_MS,
+  approvalPollInterval,
+  PendingApprovals,
+  waitingCount,
+} from './PendingApprovals';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run.
 const toasts: string[] = [];
@@ -175,6 +180,35 @@ test('open while something waits, and folds away on a click', async () => {
   fireEvent.click(sectionToggle());
   await waitFor(() => expect(screen.queryByText('Waiting on you')).toBeNull());
   expect(sectionToggle().getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByText('Pending approvals (1)')).toBeTruthy();
+});
+
+test('an initial approvals failure stays unknown until Retry succeeds', async () => {
+  fetchRenderApprovals.mockImplementationOnce(async () => {
+    throw new Error('approvals offline');
+  });
+  renderApprovals();
+  expect(await screen.findByText('Approvals could not be loaded')).toBeTruthy();
+  expect(screen.getByText('Pending approval status is unknown until the list loads.')).toBeTruthy();
+  expect(waitingCount(undefined)).toBeUndefined();
+  expect(screen.queryByText('Pending approvals (0)')).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await screen.findByText('Waiting on you');
+  expect(screen.queryByText('Approvals could not be loaded')).toBeNull();
+  expect(screen.getByText('Pending approvals (1)')).toBeTruthy();
+});
+
+test('a failed approval refresh keeps cached decisions visible and marks them stale', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(forgeQueryKeys.approvals(BRAND), [pending], { updatedAt: 0 });
+  fetchRenderApprovals.mockImplementationOnce(async () => {
+    throw new Error('approvals offline');
+  });
+  renderApprovals(client);
+  expect(await screen.findByText('Approvals could not be refreshed')).toBeTruthy();
+  expect(screen.getByText('Showing the last loaded approvals.')).toBeTruthy();
+  expect(screen.getByText('Waiting on you')).toBeTruthy();
   expect(screen.getByText('Pending approvals (1)')).toBeTruthy();
 });
 
@@ -409,5 +443,7 @@ test('a card links to its render’s thread in the Library, found by the task it
 test('a card whose render is not on the ledger’s page has no Library link', async () => {
   renderApprovals();
   await screen.findByText('Waiting on you');
-  expect(within(card('Waiting on you')).queryByRole('link', { name: /Open in Library/ })).toBeNull();
+  expect(
+    within(card('Waiting on you')).queryByRole('link', { name: /Open in Library/ }),
+  ).toBeNull();
 });

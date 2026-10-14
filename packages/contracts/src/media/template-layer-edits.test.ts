@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   saveTemplateLayerVariantRequestSchema,
+  templateEditableLayerSchema,
   templateLayerPreviewRequestSchema,
 } from './template-layer-edits';
 
@@ -9,6 +10,36 @@ const base = {
   expectedVersionId: '00000000-0000-4000-8000-000000000002',
 };
 describe('template edit boundary', () => {
+  test('accepts additive writer design association and supplemental geometry without changing layer identity', () => {
+    const layer = templateEditableLayerSchema.parse({
+      compId: 1, comp: 'Main', layerId: 17, name: 'Title', kind: 'text', visible: true,
+      visibilityReason: null, textReason: null, text: 'Hello', font: 'DejaVuSans', fontSize: 32,
+      designLayerId: null, artboardId: 10, x: 405.364013671875, y: 644.635986328125,
+      groupingReason: null,
+      width: null, height: null, geometryReason: 'Only text geometry is editable here.',
+      slotKeys: [], visibilitySlotKeys: [], index: 0, position: [405.364013671875, 644.635986328125],
+      rotation: 0, scale: [100, 100], opacity: 100, transformLocks: {}, parentName: null, parentId: null,
+    });
+    expect(layer.compId).toBe(1);
+    expect(layer.layerId).toBe(17);
+    expect(layer.designLayerId).toBeNull();
+    expect(layer.artboardId).toBe(10);
+    expect(layer.groupingReason).toBeNull();
+    expect(layer.geometryReason).toContain('Only text geometry');
+    expect(templateEditableLayerSchema.safeParse({ ...layer, x: Number.NaN }).success).toBe(false);
+  });
+  test('keeps missing grouping preflight distinct from a positive null result', () => {
+    const baseLayer = {
+      compId: 1, comp: 'Main', layerId: 17, name: 'Title', kind: 'text' as const, visible: true,
+      visibilityReason: null, textReason: null, text: 'Hello', font: 'DejaVuSans', fontSize: 32,
+      slotKeys: [], visibilitySlotKeys: [], index: 0, position: [0, 0] as [number, number],
+      rotation: 0, scale: [100, 100] as [number, number], opacity: 100, transformLocks: {},
+      parentName: null, parentId: null,
+    };
+    expect(templateEditableLayerSchema.parse(baseLayer)).not.toHaveProperty('groupingReason');
+    expect(templateEditableLayerSchema.parse({ ...baseLayer, groupingReason: null }).groupingReason).toBeNull();
+    expect(templateEditableLayerSchema.parse({ ...baseLayer, groupingReason: 'animated layer' }).groupingReason).toBe('animated layer');
+  });
   test('rejects invalid sizes, duplicate layers and unknown writes; allows visibility false', () => {
     const layer = { compId: 63, layerId: 113, fontSize: 55 };
     expect(templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [layer] }).success).toBe(
@@ -20,6 +51,8 @@ describe('template edit boundary', () => {
         edits: [{ compId: 63, layerId: 113, visible: false }],
       }).success,
     ).toBe(true);
+    expect(templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [{ compId: 63, layerId: 113, text: '' }] }).success).toBe(true);
+    expect(templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [{ compId: 63, layerId: 113, text: 'x'.repeat(20_001) }] }).success).toBe(false);
     for (const edits of [
       [{ ...layer, fontSize: 0 }],
       [{ ...layer, fontSize: Infinity }],

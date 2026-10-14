@@ -30,20 +30,22 @@ import {
   GripVertical,
   Image as ImageIcon,
   Layers,
+  Shapes,
   Type,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type StackRow = {
-  id: number;
+  id: number | string;
   label: string;
   detail?: string;
-  kind: 'text' | 'composition' | 'artwork';
+  kind: 'text' | 'shape' | 'composition' | 'artwork' | 'group';
   hidden?: boolean;
   /** Visibility is fixed (a guide or control layer): the eye shows the state but cannot change it. */
   visibilityLocked?: boolean;
   edited?: boolean;
+  groupable?: boolean;
 };
 
 export function TemplateLayerList({
@@ -53,15 +55,19 @@ export function TemplateLayerList({
   onSelect,
   onReorder,
   onToggleVisible,
+  groupSelectionIds,
+  onToggleGroupSelection,
 }: {
   label: string;
   /** Front first. */
   rows: readonly StackRow[];
-  selectedId?: number | null;
-  onSelect?: (id: number) => void;
+  selectedId?: number | string | null;
+  onSelect?: (id: number | string) => void;
   /** Omit to show the stack read-only. Receives the whole new order, front first. */
-  onReorder?: (order: number[]) => void;
-  onToggleVisible?: (id: number) => void;
+  onReorder?: (order: Array<number | string>) => void;
+  onToggleVisible?: (id: number | string) => void;
+  groupSelectionIds?: readonly (number | string)[];
+  onToggleGroupSelection?: (id: number | string) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -72,7 +78,7 @@ export function TemplateLayerList({
     if (onReorder && from !== to && to >= 0 && to < ids.length) onReorder(arrayMove(ids, from, to));
   };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (over) move(ids.indexOf(Number(active.id)), ids.indexOf(Number(over.id)));
+    if (over) move(ids.indexOf(active.id as number | string), ids.indexOf(over.id as number | string));
   };
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -89,6 +95,8 @@ export function TemplateLayerList({
               onSelect={onSelect}
               onStep={(step) => move(index, index + step)}
               onToggleVisible={onToggleVisible}
+              groupSelected={groupSelectionIds?.includes(row.id) ?? false}
+              onToggleGroupSelection={onToggleGroupSelection}
             />
           ))}
         </ol>
@@ -106,21 +114,25 @@ function LayerRow({
   onSelect,
   onStep,
   onToggleVisible,
+  groupSelected,
+  onToggleGroupSelection,
 }: {
   row: StackRow;
   first: boolean;
   last: boolean;
   selected: boolean;
   movable: boolean;
-  onSelect?: (id: number) => void;
+  onSelect?: (id: number | string) => void;
   onStep: (step: 1 | -1) => void;
-  onToggleVisible?: (id: number) => void;
+  onToggleVisible?: (id: number | string) => void;
+  groupSelected: boolean;
+  onToggleGroupSelection?: (id: number | string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
     disabled: !movable,
   });
-  const Icon = row.kind === 'text' ? Type : row.kind === 'composition' ? Layers : ImageIcon;
+  const Icon = row.kind === 'text' ? Type : row.kind === 'shape' ? Shapes : row.kind === 'composition' || row.kind === 'group' ? Layers : ImageIcon;
   const name = (
     <>
       <span className={cn('block truncate', row.hidden && 'text-muted-foreground')}>
@@ -152,6 +164,15 @@ function LayerRow({
         >
           <GripVertical className="size-3.5" aria-hidden />
         </button>
+      ) : null}
+      {row.groupable && onToggleGroupSelection ? (
+        <input
+          type="checkbox"
+          aria-label={`Include ${row.label} in group`}
+          checked={groupSelected}
+          onChange={() => onToggleGroupSelection(row.id)}
+          className="size-3.5 shrink-0 accent-primary"
+        />
       ) : null}
       <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       {onSelect ? (

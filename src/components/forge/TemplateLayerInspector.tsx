@@ -44,10 +44,15 @@ const KIND: Record<TemplateEditableLayer['kind'], string> = {
   artwork: 'Artwork',
 };
 
+/** Old writer responses omit fontReason; an explicit null is an unlocked font/style field. */
+export function fontEditReason(layer: Pick<TemplateEditableLayer, 'fontReason' | 'textReason'>) {
+  return Object.hasOwn(layer, 'fontReason') ? layer.fontReason : layer.textReason;
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-2">
-      <h4 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+      <h4 className="text-xs font-medium text-foreground">
         {title}
       </h4>
       {children}
@@ -65,19 +70,27 @@ export function TemplateLayerInspector({
   fonts,
   disabled,
   onEdit,
+  onEditCommit,
+  idPrefix = 'inspector',
 }: {
   layer: TemplateEditableLayer;
   edit?: TemplateLayerEdit;
   fonts: FontInventoryRow[];
   disabled: boolean;
-  onEdit: (change: Partial<TemplateLayerEdit>) => void;
+  onEdit: (change: Partial<TemplateLayerEdit>, group?: string) => void;
+  onEditCommit?: (group: string) => void;
+  idPrefix?: string;
 }) {
   const locked = (key: TemplateLayerTransform) => disabled || !!layer.transformLocks[key];
   const position = edit?.position ?? layer.position ?? [0, 0];
   const scale = edit?.scale ?? layer.scale ?? [100, 100];
   const locks = [...new Set(Object.values(layer.transformLocks))];
   const font = edit?.font ?? layer.font;
+  const fontReason = fontEditReason(layer);
   const weight = boldFaceFor(font, fonts);
+  const numericEdit = (field: string, change: Partial<TemplateLayerEdit>) =>
+    onEdit(change, `${idPrefix}:${layer.layerId}:${field}`);
+  const numericCommit = (field: string) => onEditCommit?.(`${idPrefix}:${layer.layerId}:${field}`);
   return (
     <div className="flex flex-col gap-5">
       <Section title="Layer">
@@ -88,11 +101,11 @@ export function TemplateLayerInspector({
           </p>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`visible-${layer.layerId}`} className="text-xs">
+          <label htmlFor={`${idPrefix}-visible-${layer.layerId}`} className="text-xs">
             Visible in template
           </label>
           <Switch
-            id={`visible-${layer.layerId}`}
+            id={`${idPrefix}-visible-${layer.layerId}`}
             size="sm"
             checked={edit?.visible ?? layer.visible}
             disabled={disabled || !!layer.visibilityReason}
@@ -113,7 +126,8 @@ export function TemplateLayerInspector({
             suffix="px"
             value={position[0]}
             disabled={locked('position')}
-            onChange={(x) => onEdit({ position: [x, position[1]] })}
+            onChange={(x) => numericEdit('x', { position: [x, position[1]] })}
+            onCommit={() => numericCommit('x')}
           />
           <NumberScrubField
             label="Y"
@@ -121,14 +135,16 @@ export function TemplateLayerInspector({
             suffix="px"
             value={position[1]}
             disabled={locked('position')}
-            onChange={(y) => onEdit({ position: [position[0], y] })}
+            onChange={(y) => numericEdit('y', { position: [position[0], y] })}
+            onCommit={() => numericCommit('y')}
           />
           <NumberScrubField
             label="Rotation"
             suffix="°"
             value={edit?.rotation ?? layer.rotation ?? 0}
             disabled={locked('rotation')}
-            onChange={(rotation) => onEdit({ rotation })}
+            onChange={(rotation) => numericEdit('rotation', { rotation })}
+            onCommit={() => numericCommit('rotation')}
           />
           <NumberScrubField
             label="Opacity"
@@ -137,21 +153,24 @@ export function TemplateLayerInspector({
             max={100}
             value={edit?.opacity ?? layer.opacity ?? 100}
             disabled={locked('opacity')}
-            onChange={(opacity) => onEdit({ opacity })}
+            onChange={(opacity) => numericEdit('opacity', { opacity })}
+            onCommit={() => numericCommit('opacity')}
           />
           <NumberScrubField
             label="Scale X"
             suffix="%"
             value={scale[0]}
             disabled={locked('scale')}
-            onChange={(x) => onEdit({ scale: [x, scale[1]] })}
+            onChange={(x) => numericEdit('scale-x', { scale: [x, scale[1]] })}
+            onCommit={() => numericCommit('scale-x')}
           />
           <NumberScrubField
             label="Scale Y"
             suffix="%"
             value={scale[1]}
             disabled={locked('scale')}
-            onChange={(y) => onEdit({ scale: [scale[0], y] })}
+            onChange={(y) => numericEdit('scale-y', { scale: [scale[0], y] })}
+            onCommit={() => numericCommit('scale-y')}
           />
         </div>
         {layer.parentName ? <Note>X and Y are relative to {layer.parentName}.</Note> : null}
@@ -172,17 +191,18 @@ export function TemplateLayerInspector({
               max={1000}
               step={0.5}
               value={edit?.fontSize ?? layer.fontSize ?? 1}
-              disabled={disabled || !!layer.textReason}
-              onChange={(fontSize) => onEdit({ fontSize })}
+              disabled={disabled || !!fontReason}
+              onChange={(fontSize) => numericEdit('font-size', { fontSize })}
+              onCommit={() => numericCommit('font-size')}
             />
             <label
-              htmlFor={`bold-${layer.layerId}`}
+              htmlFor={`${idPrefix}-bold-${layer.layerId}`}
               className="flex h-7 items-center gap-2 text-xs"
             >
               <Checkbox
-                id={`bold-${layer.layerId}`}
+                id={`${idPrefix}-bold-${layer.layerId}`}
                 checked={weight.bold}
-                disabled={disabled || !!layer.textReason || !weight.target}
+                disabled={disabled || !!fontReason || !weight.target}
                 onCheckedChange={() => {
                   if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
                 }}
@@ -191,9 +211,10 @@ export function TemplateLayerInspector({
             </label>
           </div>
           {font ? <Note>{font}</Note> : null}
-          {!layer.textReason && !weight.target ? (
+          {!fontReason && !weight.target ? (
             <Note>Upload this font’s {weight.bold ? 'regular' : 'bold'} face to change bold.</Note>
           ) : null}
+          {fontReason ? <Note>{fontReason}</Note> : null}
           {layer.textReason ? <Note>{layer.textReason}</Note> : null}
         </Section>
       ) : null}

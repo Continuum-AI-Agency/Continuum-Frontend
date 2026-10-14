@@ -14,6 +14,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -126,7 +127,7 @@ function useApprovalAssets(brandId: string, enabled: boolean) {
 }
 
 export const waitingCount = (approvals: RenderApproval[] | undefined) =>
-  approvals?.filter((approval) => approval.status === 'pending').length ?? 0;
+  approvals?.filter((approval) => approval.status === 'pending').length;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -370,6 +371,29 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
   const approvalQuery = useRenderApprovals(brandId);
   const approvals = approvalQuery.data ?? [];
   const assets = useApprovalAssets(brandId, approvals.length > 0);
+  const loadAlert = approvalQuery.isError ? (
+    <Alert variant="destructive" className="py-2">
+      <AlertTitle>
+        {approvalQuery.data ? 'Approvals could not be refreshed' : 'Approvals could not be loaded'}
+      </AlertTitle>
+      <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+        <span>
+          {approvalQuery.data
+            ? 'Showing the last loaded approvals.'
+            : 'Pending approval status is unknown until the list loads.'}
+        </span>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={approvalQuery.isFetching}
+          onClick={() => void approvalQuery.refetch()}
+        >
+          {approvalQuery.isFetching ? 'Retrying…' : 'Retry'}
+        </Button>
+      </AlertDescription>
+    </Alert>
+  ) : null;
 
   const onDecide = useCallback(
     async (approvalId: string, decision: Decision) => {
@@ -434,13 +458,18 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
     [approvalKey, brandId, queryClient],
   );
 
-  if (approvalQuery.isPending || approvals.length === 0) return null;
+  if (approvalQuery.isPending && approvalQuery.data === undefined)
+    return <p className="py-1 text-xs text-muted-foreground">Loading approvals…</p>;
+  if (approvalQuery.data === undefined) return loadAlert;
+  if (approvals.length === 0)
+    return loadAlert ? <section aria-label="Pending approvals status">{loadAlert}</section> : null;
 
-  const waiting = waitingCount(approvals);
+  const waiting = waitingCount(approvals) ?? 0;
   if (open === null && waiting > 0) setOpen(true);
 
   return (
     <Collapsible id="approvals" open={open ?? false} onOpenChange={setOpen} render={<section />}>
+      {loadAlert}
       <h2>
         <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md py-1 text-left hover:bg-muted/30">
           <ChevronRight

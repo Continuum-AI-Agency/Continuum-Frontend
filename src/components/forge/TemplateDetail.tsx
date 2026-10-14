@@ -41,7 +41,7 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
-import { LineagePanel } from '@/components/forge/LineagePanel';
+import type { LayerDraftChange } from '@/components/forge/layerDraft';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
@@ -211,6 +211,8 @@ export function TemplateDetail({
   onOpenVariant,
   revisionFile,
   onRevisionTaken,
+  onDraftChange,
+  hyperframesRevisionId,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
@@ -224,6 +226,9 @@ export function TemplateDetail({
   /** A dropped file to upload as this template's next source revision: opens on that tab. */
   revisionFile?: File;
   onRevisionTaken?: () => void;
+  onDraftChange?: LayerDraftChange;
+  /** A private HyperFrames composition carried in from AI Studio. */
+  hyperframesRevisionId?: string;
 }) {
   const { assetId, templateKey } = source;
   const queryClient = useQueryClient();
@@ -248,6 +253,7 @@ export function TemplateDetail({
     retry: false,
   });
   const [bundleBusy, setBundleBusy] = useState<string | null>(null);
+  const [fontCheckFocusRequestId, setFontCheckFocusRequestId] = useState(0);
   // The formats the file delivers — its parse's comps, else its ratio labels — and the one on screen.
   const formats = useMemo(
     () => previewFormats({ parse: source.parse, ratios: source.ratios }),
@@ -264,7 +270,9 @@ export function TemplateDetail({
   const [savedMediaRepair, setSavedMediaRepair] = useState<string | null>(null);
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
-  const [tab, setTab] = useState(revisionFile ? 'source' : 'variables');
+  const [tab, setTab] = useState(
+    hyperframesRevisionId ? 'layers' : revisionFile ? 'source' : 'variables',
+  );
   const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
@@ -838,7 +846,15 @@ export function TemplateDetail({
                 <Pill
                   variant={font.held ? 'success' : 'warning'}
                   title={
-                    font.via === 'substitute'
+                    font.issue === 'exact_face_required'
+                      ? 'Choose the exact desktop font face. A similar repository name does not resolve this font.'
+                      : font.issue === 'ambiguous_package'
+                      ? 'More than one packaged cut has this exact name. Choose the font file.'
+                      : font.issue === 'package_inventory_pending'
+                        ? 'Waiting for verified packaged font inventory.'
+                        : font.via === 'package'
+                          ? 'Exact font verified in this source package'
+                          : font.via === 'substitute'
                       ? `Nobody holds ${font.family}. It will render with ${font.substitutedBy?.family ?? 'a face you accepted'}.`
                       : font.held
                         ? font.scope === 'house'
@@ -850,7 +866,15 @@ export function TemplateDetail({
                   {/* A substitution never reads as a plain "uploaded". A green tick over a
                       typeface somebody quietly swapped is the 2026-09-15 failure exactly. */}
                   {font.family} ·{' '}
-                  {font.via === 'substitute'
+                  {font.issue === 'exact_face_required'
+                    ? 'choose exact face'
+                    : font.issue === 'ambiguous_package'
+                    ? 'choose exact file'
+                    : font.issue === 'package_inventory_pending'
+                      ? 'checking package'
+                      : font.via === 'package'
+                        ? 'in package'
+                        : font.via === 'substitute'
                     ? `${font.substitutedBy?.family ?? 'substituted'} (substituted)`
                     : font.held
                       ? 'uploaded'
@@ -1606,7 +1630,11 @@ export function TemplateDetail({
           />
 
           <Panel title="Checks" bodyClassName="p-0">
-            <CheckTable rows={checks} action={footerAction} />
+            <CheckTable
+              rows={checks}
+              action={footerAction}
+              focusRowRequest={{ name: 'Fonts', requestId: fontCheckFocusRequestId }}
+            />
             <div className="border-t border-border">
               <TemplateActivity
                 ref={activityTrigger}
@@ -1628,7 +1656,7 @@ export function TemplateDetail({
       <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList
           variant="line"
-          className="h-9 w-full justify-start gap-3 rounded-none border-b border-border px-[var(--card-pad)]"
+          className="h-9 w-full shrink-0 justify-start gap-3 overflow-x-auto rounded-none border-b border-border px-[var(--card-pad)]"
         >
           <TabsTrigger value="variables" className="flex-none px-0 text-xs">
             Variables
@@ -1648,10 +1676,7 @@ export function TemplateDetail({
             Source revision
           </TabsTrigger>
           <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-            Variants
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex-none px-0 text-xs">
-            History
+            Versions
           </TabsTrigger>
           <TabsTrigger value="details" className="flex-none px-0 text-xs">
             Details
@@ -1679,6 +1704,9 @@ export function TemplateDetail({
             active={tab === 'layers'}
             onSaved={onChanged}
             onOpenVariant={onOpenVariant}
+            onDraftChange={onDraftChange}
+            hyperframesRevisionId={hyperframesRevisionId}
+            onOpenFontRepair={() => setFontCheckFocusRequestId((requestId) => requestId + 1)}
           />
         </TabsContent>
         <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
@@ -1709,8 +1737,9 @@ export function TemplateDetail({
           />
         </TabsContent>
         <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
-          {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
-              the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
+          {/* The template as a git history: checkpoints, forks (sizes, languages, looks), tags, and
+              the live checkpoint every render uses. It replaced a History tab that drew only the
+              tree, which production returns empty. */}
           <VariantsPanel
             brandId={brandId}
             assetId={assetId}
@@ -1724,9 +1753,6 @@ export function TemplateDetail({
                 }
               : {})}
           />
-        </TabsContent>
-        <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-          <LineagePanel brandId={brandId} assetId={assetId} />
         </TabsContent>
         <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">

@@ -32,7 +32,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -97,6 +97,7 @@ import {
   rebaseRows,
   renderedRatios,
   resetKey,
+  resolveRowInputs,
   restoreRows,
   reviewSignature,
   rootRowId,
@@ -126,7 +127,9 @@ import {
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
+import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -141,7 +144,7 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
-import { saveTemplateVariables } from '@/lib/library/templateSources';
+import { fetchTemplateLineage, saveTemplateVariables } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
@@ -174,6 +177,14 @@ const AUTOSAVE_RETRY_MS = 5000;
 const KEYBOARD_DROP_STEP_PX = 12;
 
 type Persisted = { rows: RequestRow[]; rowsWithLabel?: never };
+type CollectionLoad = {
+  phase: 'loading' | 'ready' | 'error';
+  error: string | null;
+  initialFailed: boolean;
+  hasData: boolean;
+  unassignedDraft: boolean;
+  refreshing: boolean;
+};
 
 function readDrafts(key: string): RequestRow[] | null {
   try {
@@ -410,8 +421,48 @@ export function RenderRequestsGrid({
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
+  // The checkpoint this grid is pinned to, or null to follow whatever is live.
+  const [templateRef, setTemplateRef] = useState<string | null>(null);
+  // The template's history, for the checkpoint picker: which checkpoint renders, and the rest.
+  const sourceAssetId = contract?.template.sourceAssetId ?? null;
+  const lineage = useQuery({
+    queryKey: forgeQueryKeys.lineage(brandId, sourceAssetId ?? ''),
+    queryFn: () => fetchTemplateLineage(brandId, sourceAssetId as string),
+    enabled: sourceAssetId !== null,
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const checkpoints = useMemo(
+    () => (lineage.data ? checkpointGraph(lineage.data) : null),
+    [lineage.data],
+  );
+  // Every row's dry-run asked about the previous checkpoint; a new pin asks again, so a pin that
+  // cannot hold (live moved) shows on the rows now rather than at Render.
+  const pinCheckpoint = (ref: string | null) => {
+    setTemplateRef(ref);
+    setRows((current) =>
+      current.map((row) =>
+        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
+      ),
+    );
+  };
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
+  const [inputSetLoad, setInputSetLoad] = useState<CollectionLoad>({
+    phase: 'loading',
+    error: null,
+    initialFailed: false,
+    hasData: false,
+    unassignedDraft: false,
+    refreshing: false,
+  });
+  const [renderSetLoad, setRenderSetLoad] = useState<CollectionLoad>({
+    phase: 'loading',
+    error: null,
+    initialFailed: false,
+    hasData: false,
+    unassignedDraft: false,
+    refreshing: false,
+  });
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
   /** What opening a set saved for an earlier template trimmed off; saving it makes that final. */
@@ -464,6 +515,8 @@ export function RenderRequestsGrid({
 
   const latestRows = useRef(rows);
   latestRows.current = rows;
+  const savedSignatureRef = useRef(savedSignature);
+  savedSignatureRef.current = savedSignature;
   // The open set as the server last answered, read by saves that outlive the render that began them.
   const activeSetRef = useRef(activeSet);
   activeSetRef.current = activeSet;
@@ -518,6 +571,15 @@ export function RenderRequestsGrid({
   // Read when a template's sets load, which must not itself reload them as the binding settles.
   const bindingRef = useRef(bindingId);
   bindingRef.current = bindingId;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const loadGeneration = useRef(0);
+  const loadScope = `${brandId}\0${templateKey}\0${bindingId ?? ''}`;
+  const previousLoadScope = useRef(loadScope);
+  if (previousLoadScope.current !== loadScope) {
+    previousLoadScope.current = loadScope;
+    loadGeneration.current += 1;
+  }
 
   // --- discovery ---------------------------------------------------------------------------
   // Bumped each time the tab comes back into view; checks the cached template list without
@@ -554,8 +616,13 @@ export function RenderRequestsGrid({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setTemplates([]);
-        setProblem(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+        const cached = queryClient.getQueryData<{ items: ApiRenderTemplateSummary[] }>(
+          forgeQueryKeys.templateList(brandId, null),
+        );
+        setTemplates(cached?.items ?? []);
+        setProblem(
+          `${cached ? 'Could not refresh templates; showing the last loaded list. ' : ''}${describeRenderDiscoveryFailure(error instanceof Error ? error.message : '')}`,
+        );
       })
       .finally(() => {
         if (!cancelled) setBusy(null);
@@ -634,6 +701,7 @@ export function RenderRequestsGrid({
       savedBase.current = set.rows;
       setActiveSet(set);
       setConflict(null);
+      setRenderSetLoad((current) => ({ ...current, unassignedDraft: false }));
       const loaded = fromRenderSetRows(set.rows);
       const { rows: rebased, dropped } =
         set.contractHash === forContract.template.contractHash
@@ -657,6 +725,25 @@ export function RenderRequestsGrid({
       return;
     }
     let cancelled = false;
+    loadGeneration.current += 1;
+    setInputSetLoad({
+      phase: 'loading',
+      error: null,
+      initialFailed: false,
+      hasData: false,
+      unassignedDraft: false,
+      refreshing: false,
+    });
+    setRenderSetLoad({
+      phase: 'loading',
+      error: null,
+      initialFailed: false,
+      hasData: false,
+      unassignedDraft: false,
+      refreshing: false,
+    });
+    const inputSetKey = forgeQueryKeys.inputSets(brandId, templateKey);
+    const renderSetKey = forgeQueryKeys.renderSetList(brandId, templateKey);
     Promise.all([
       queryClient.fetchQuery({
         queryKey: forgeQueryKeys.contract(brandId, contractBindingId, templateKey),
@@ -665,29 +752,63 @@ export function RenderRequestsGrid({
       }),
       queryClient
         .fetchQuery({
-          queryKey: forgeQueryKeys.inputSets(brandId, templateKey),
+          queryKey: inputSetKey,
           queryFn: () => apiRendersApi.listInputSets(brandId, templateKey),
           staleTime: FORGE_STALE_MS.lists,
         })
-        .catch(() => ({ items: [] })),
+        .then((value) => ({ value, error: null as string | null }))
+        .catch((error: unknown) => ({
+          value:
+            queryClient.getQueryData<Awaited<ReturnType<typeof apiRendersApi.listInputSets>>>(
+              inputSetKey,
+            ),
+          error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        })),
       queryClient
         .fetchQuery({
-          queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
+          queryKey: renderSetKey,
           queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
           staleTime: FORGE_STALE_MS.lists,
         })
-        .catch(() => ({ items: [] })),
+        .then((value) => ({ value, error: null as string | null }))
+        .catch((error: unknown) => ({
+          value:
+            queryClient.getQueryData<Awaited<ReturnType<typeof apiRendersApi.listRenderSets>>>(
+              renderSetKey,
+            ),
+          error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        })),
     ])
-      .then(([next, sets, savedSets]) => {
+      .then(([next, setsResult, savedSetsResult]) => {
         if (cancelled) return;
+        const sets = setsResult.value;
+        const savedSets = savedSetsResult.value;
         setContract(next);
         setLayerSwitches(next.layerSwitchesNotAsked);
         setLinkedFields(next.linkedFields ?? []);
-        setInputSets(sets.items);
+        setInputSets(sets?.items ?? []);
+        setInputSetLoad({
+          phase: setsResult.error ? 'error' : 'ready',
+          error: setsResult.error,
+          initialFailed: Boolean(setsResult.error),
+          hasData: sets !== undefined,
+          unassignedDraft: false,
+          refreshing: false,
+        });
         // A set belongs to the environment it was saved in; one from another would refuse to render.
         const binding = bindingRef.current;
-        const inBinding = savedSets.items.filter((set) => !binding || set.bindingId === binding);
+        const inBinding = (savedSets?.items ?? []).filter(
+          (set) => !binding || set.bindingId === binding,
+        );
         setRenderSets(inBinding);
+        setRenderSetLoad({
+          phase: savedSetsResult.error ? 'error' : 'ready',
+          error: savedSetsResult.error,
+          initialFailed: Boolean(savedSetsResult.error),
+          hasData: savedSets !== undefined,
+          unassignedDraft: false,
+          refreshing: false,
+        });
         const draft = readDrafts(draftStorageKey(brandId, templateKey));
         const saved =
           inBinding.find((set) => set.id === selection.renderSetId) ?? inBinding[0] ?? null;
@@ -708,6 +829,22 @@ export function RenderRequestsGrid({
       .catch((error: unknown) => {
         if (cancelled) return;
         toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+        setInputSetLoad({
+          phase: 'error',
+          error: 'Input sets could not be loaded.',
+          initialFailed: true,
+          hasData: false,
+          unassignedDraft: false,
+          refreshing: false,
+        });
+        setRenderSetLoad({
+          phase: 'error',
+          error: 'Saved render sets could not be loaded.',
+          initialFailed: true,
+          hasData: false,
+          unassignedDraft: false,
+          refreshing: false,
+        });
       });
     return () => {
       cancelled = true;
@@ -834,6 +971,7 @@ export function RenderRequestsGrid({
     new Map<string, { timer: ReturnType<typeof setTimeout>; snapshot: string }>(),
   );
   const variables = contract?.variables;
+  const rowInputs = useMemo(() => resolveRowInputs(rows), [rows]);
   const clientErrors = useMemo(
     () =>
       new Map(
@@ -842,7 +980,7 @@ export function RenderRequestsGrid({
           // split across layers needs exactly its lines — the render refuses otherwise.
           const rendered = effectiveRenderValues(
             [...(variables ?? []), ...linkedFields],
-            effectiveValues(rows, row.id),
+            rowInputs.get(row.id)!.values,
           );
           const errors = validateRow(variables ?? [], rendered.values);
           for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
@@ -854,7 +992,7 @@ export function RenderRequestsGrid({
           return [row.id, errors] as const;
         }),
       ),
-    [rows, variables, linkedFields],
+    [rows, rowInputs, variables, linkedFields],
   );
   const readiness = useMemo(() => {
     const findings = new Map<string, { message: string; rows: string[] }>();
@@ -908,9 +1046,12 @@ export function RenderRequestsGrid({
     const pending = timers.current;
     for (const row of rows) {
       const snapshot = preflightSnapshot(rows, row.id);
+      // Armed for these values AND this checkpoint: a pin made while a dry-run waits must re-arm
+      // it, or it fires with the checkpoint it was armed under.
+      const armedFor = `${snapshot}|${templateRef ?? ''}`;
       const scheduled = pending.get(row.id);
       // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
-      if (scheduled?.snapshot === snapshot) continue;
+      if (scheduled?.snapshot === armedFor) continue;
       if (scheduled) {
         clearTimeout(scheduled.timer);
         pending.delete(row.id);
@@ -969,9 +1110,9 @@ export function RenderRequestsGrid({
         }
         settle(check, 'checking');
       }, PREFLIGHT_DEBOUNCE_MS);
-      pending.set(row.id, { timer, snapshot });
+      pending.set(row.id, { timer, snapshot: armedFor });
     }
-  }, [rows, contract, clientErrors, brandId, bindingId]);
+  }, [rows, contract, clientErrors, brandId, bindingId, templateRef]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -1326,6 +1467,7 @@ export function RenderRequestsGrid({
     !contract ||
     !bindingId ||
     rows.length === 0 ||
+    (!activeSet && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft)) ||
     review !== null ||
     conflict !== null ||
     updateRequired;
@@ -1344,8 +1486,6 @@ export function RenderRequestsGrid({
     setPendingDiscard(() => action);
   };
 
-  // The head this grid is pinned to, or null for the template's live pointer.
-  const [templateRef, setTemplateRef] = useState<string | null>(null);
   // A row an intent named, held until its set's rows are on screen.
   const [focusRow, setFocusRow] = useState<{
     setId: string | undefined;
@@ -1404,6 +1544,7 @@ export function RenderRequestsGrid({
     setActiveSet(saved);
     if (saved.contractHash === contract?.template.contractHash) setRebaseDrops([]);
     setRenderSets((current) => [saved, ...current.filter((set) => set.id !== saved.id)]);
+    setRenderSetLoad((current) => ({ ...current, unassignedDraft: false }));
     setSavedSignature(signatureOf(savedRows, contract));
     setDraftOffer(null);
     setConflict(null);
@@ -1481,6 +1622,11 @@ export function RenderRequestsGrid({
     if (inFlight.current) await inFlight.current;
     const submitted = latestRows.current;
     const set = activeSetRef.current;
+    if (!set && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft)) {
+      if (announce)
+        toast.error('Saved render sets are unavailable. Retry the list or create a named set.');
+      return null;
+    }
     if (proposedIds(submitted).size === submitted.length) return set;
     const run = (async () => {
       setSaveState({ phase: 'saving' });
@@ -1584,6 +1730,21 @@ export function RenderRequestsGrid({
 
   const saveNow = async () => {
     if (busy || !bindingId || rows.length === 0) return;
+    if (!activeSet && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft) && contract) {
+      setNameRequest({
+        title: 'Save render set',
+        description: renderSetLoad.initialFailed
+          ? 'Saved sets could not be checked. Give this set a name to save your rows.'
+          : 'Your edited rows are not assigned to a saved set. Name them here or choose a set.',
+        initialName: 'New set',
+        confirmLabel: 'Save set',
+        onConfirm: async (name) => {
+          const created = await createSet(name, latestRows.current);
+          if (created) setNameRequest(null);
+        },
+      });
+      return;
+    }
     setBusy('saving');
     try {
       await saveRenderSet();
@@ -1594,6 +1755,92 @@ export function RenderRequestsGrid({
 
   const loadRenderSet = (set: ForgeRenderSet) => {
     if (contract) openSet(set, contract);
+  };
+
+  const retryInputSets = async () => {
+    if (!contract) return;
+    const key = forgeQueryKeys.inputSets(brandId, contract.template.key);
+    const generation = loadGeneration.current;
+    const requestedSelection = selection;
+    const isCurrent = () =>
+      generation === loadGeneration.current && selectionRef.current === requestedSelection;
+    setInputSetLoad((current) => ({ ...current, refreshing: true }));
+    try {
+      const result = await queryClient.fetchQuery({
+        queryKey: key,
+        queryFn: () => apiRendersApi.listInputSets(brandId, contract.template.key),
+        staleTime: 0,
+      });
+      if (!isCurrent()) return;
+      setInputSets(result.items);
+      setInputSetLoad((current) => ({
+        ...current,
+        phase: 'ready',
+        error: null,
+        initialFailed: false,
+        hasData: true,
+        refreshing: false,
+      }));
+    } catch (error) {
+      if (!isCurrent()) return;
+      setInputSetLoad((current) => ({
+        ...current,
+        phase: 'error',
+        error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        refreshing: false,
+      }));
+    }
+  };
+
+  const retryRenderSets = async () => {
+    if (!contract) return;
+    const key = forgeQueryKeys.renderSetList(brandId, contract.template.key);
+    const forContract = contract;
+    const generation = loadGeneration.current;
+    const requestedSelection = selection;
+    const isCurrent = () =>
+      generation === loadGeneration.current && selectionRef.current === requestedSelection;
+    setRenderSetLoad((current) => ({ ...current, refreshing: true }));
+    try {
+      const result = await queryClient.fetchQuery({
+        queryKey: key,
+        queryFn: () => apiRendersApi.listRenderSets(brandId, contract.template.key),
+        staleTime: 0,
+      });
+      if (!isCurrent()) return;
+      const inBinding = result.items.filter((set) => !bindingId || set.bindingId === bindingId);
+      const wanted =
+        inBinding.find((set) => set.id === selection.renderSetId) ?? inBinding[0] ?? null;
+      const unassignedDraft =
+        activeSetRef.current === null &&
+        inBinding.length > 0 &&
+        signatureOf(latestRows.current, forContract) !== savedSignatureRef.current;
+      setRenderSets(inBinding);
+      setRenderSetLoad((current) => ({
+        ...current,
+        phase: 'ready',
+        error: null,
+        initialFailed: false,
+        hasData: true,
+        refreshing: false,
+        unassignedDraft,
+      }));
+      if (activeSetRef.current === null) {
+        if (unassignedDraft) {
+          setActiveSet(null);
+        } else if (wanted) {
+          openSet(wanted, forContract);
+        }
+      }
+    } catch (error) {
+      if (!isCurrent()) return;
+      setRenderSetLoad((current) => ({
+        ...current,
+        phase: 'error',
+        error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        refreshing: false,
+      }));
+    }
   };
 
   /** A name or description change, queued behind any row save so both keep their revision. */
@@ -1695,6 +1942,7 @@ export function RenderRequestsGrid({
         contract,
         rows,
         clientErrors,
+        rowInputs,
         linkedFields,
         actions,
         selectedIds,
@@ -2015,9 +2263,11 @@ export function RenderRequestsGrid({
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
-          confirmDiscard(() =>
-            setSelection({ templateKey: picked.key, bindingId: picked.bindingId }),
-          );
+          // A checkpoint belongs to the template it was picked from; never carry it to another.
+          confirmDiscard(() => {
+            setTemplateRef(null);
+            setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
+          });
         }}
         ready={contract !== null}
         inputSets={inputSets}
@@ -2028,8 +2278,12 @@ export function RenderRequestsGrid({
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
         }
-        layerSwitches={layerSwitches}
+        // Only this brand's own upload can be changed from here; a granted template cannot.
+        layerSwitches={contract?.template.sourceAssetId ? layerSwitches : []}
         onAskSwitch={(variable) => void askSwitch(variable)}
+        checkpoints={checkpoints}
+        templateRef={templateRef}
+        onTemplateRefChange={pinCheckpoint}
         onUpload={() => setImportOpen(true)}
         onDownloadTemplate={() =>
           contract &&
@@ -2062,6 +2316,57 @@ export function RenderRequestsGrid({
         onRender={openReview}
       />
       {problem ? <p className="text-xs text-destructive">{problem}</p> : null}
+      {contract && inputSetLoad.phase === 'error' ? (
+        <Alert variant="destructive" className="shrink-0 py-2">
+          <AlertTitle>Input sets could not be loaded</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              {inputSetLoad.hasData
+                ? 'Showing the last loaded input sets.'
+                : 'The input set list is unknown; an empty result has not been assumed.'}
+            </span>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={inputSetLoad.refreshing}
+              onClick={() => void retryInputSets()}
+            >
+              {inputSetLoad.refreshing ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {contract && renderSetLoad.phase === 'error' ? (
+        <Alert variant="destructive" className="shrink-0 py-2">
+          <AlertTitle>Saved render sets could not be loaded</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              {renderSetLoad.hasData
+                ? 'Showing the last loaded sets. Your rows are preserved while you retry.'
+                : 'Saved sets are unknown. Your rows are preserved; use New set to save with a name.'}
+            </span>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={renderSetLoad.refreshing}
+              onClick={() => void retryRenderSets()}
+            >
+              {renderSetLoad.refreshing ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {contract && renderSetLoad.phase === 'ready' && renderSetLoad.unassignedDraft ? (
+        <Alert className="shrink-0 py-2">
+          <AlertTitle>Your edited rows are not assigned to a saved set</AlertTitle>
+          <AlertDescription>
+            Choose an existing set, or use Save to create a named set. Your rows will stay here
+            until you choose.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {updateRequired && activeSet ? (
         <section
           aria-label="Older template"
@@ -2240,8 +2545,12 @@ export function RenderRequestsGrid({
                     onSwitch={loadRenderSet}
                     onNew={async (name) => {
                       const seeded = seededRows(contract);
-                      const created = await createSet(name, seeded);
-                      if (created) showRows(seeded, seeded, contract);
+                      const preserveDraft =
+                        (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft) &&
+                        (dirty || !activeSet);
+                      const rowsToSave = preserveDraft ? latestRows.current : seeded;
+                      const created = await createSet(name, rowsToSave);
+                      if (created && !preserveDraft) showRows(seeded, seeded, contract);
                     }}
                     onRename={(set, name) => updateSetDetails(set, { name })}
                     onDescribe={(set, description) => updateSetDetails(set, { description })}

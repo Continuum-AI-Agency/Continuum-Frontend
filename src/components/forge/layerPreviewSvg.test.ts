@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { TemplateEditableLayer } from '@continuum/contracts';
-import { poseDelta, previewMarkup, safeSvg } from './layerPreviewSvg';
+import { createLayerPreview, poseDelta, previewMarkup, safeSvg } from './layerPreviewSvg';
 
 const layer = (over: Partial<TemplateEditableLayer>): TemplateEditableLayer => ({
   compId: 1,
@@ -197,5 +197,45 @@ describe('previewMarkup', () => {
       Number(g.getAttribute('data-layer-id')),
     );
     expect(painted).toEqual([3, 1, 9, 2, 20]);
+  });
+
+  test('incremental updates retain drawn nodes and do not compound movement, opacity or hiding', () => {
+    const preview = createLayerPreview(SVG)!;
+    const text = preview.root.querySelector('text');
+    preview.update({
+      ...base,
+      current: {
+        1: { compId: 1, layerId: 1, position: [130, 100] },
+        2: { compId: 1, layerId: 2, opacity: 25 },
+      },
+    });
+    preview.update({
+      ...base,
+      current: {
+        1: { compId: 1, layerId: 1, position: [140, 100] },
+        2: { compId: 1, layerId: 2, visible: false },
+      },
+    });
+    expect(preview.root.querySelector('text')).toBe(text);
+    expect(group(preview.root, 1)?.getAttribute('transform')).toContain('translate(140 100)');
+    expect(group(preview.root, 1)?.getAttribute('transform')).not.toContain('translate(130 100)');
+    expect(group(preview.root, 2)?.getAttribute('display')).toBe('none');
+    preview.update(base);
+    expect(group(preview.root, 1)?.getAttribute('transform')).toBeNull();
+    expect(group(preview.root, 2)?.getAttribute('display')).toBeNull();
+    expect(group(preview.root, 2)?.getAttribute('opacity')).toBe('0.5');
+  });
+
+  test('incremental reorder can return to the composed stack without replacing its layers', () => {
+    const preview = createLayerPreview(SVG)!;
+    const text = preview.root.querySelector('text');
+    preview.update({ ...base, order: [2, 9, 1, 3] });
+    preview.update(base);
+    expect(
+      [...preview.root.querySelectorAll('[data-layer-id]')].map((g) =>
+        Number(g.getAttribute('data-layer-id')),
+      ),
+    ).toEqual([3, 2, 20, 1, 9]);
+    expect(preview.root.querySelector('text')).toBe(text);
   });
 });
