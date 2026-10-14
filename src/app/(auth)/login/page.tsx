@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { buildInviteCallbackPath } from '@/lib/invites/urls';
 import { LoginForm } from './LoginForm';
+import { LoginStarfield } from './LoginStarfield';
 import styles from './login.module.css';
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
@@ -56,15 +57,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : {};
 
   return (
-    <main
-      className={`${styles.loginBackground} min-h-[100dvh] w-full max-w-full overflow-x-hidden`}
-    >
-      <div className={styles.wave} />
-      <div className={`${styles.wave} ${styles.waveSecond}`} />
-      <div className={`${styles.wave} ${styles.waveThird}`} />
-
+    <main className={`${styles.sky} min-h-[100dvh] w-full max-w-full overflow-x-hidden`}>
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-4 py-8 text-foreground sm:px-6 lg:px-8">
-        <div className="w-full max-w-[28rem]">
+        <LoginStarfield className="w-full max-w-[28rem]">
           <div className="mb-5 flex justify-center sm:mb-7">
             <Image
               src="/logos/Continuum.png"
@@ -80,7 +75,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             initialError={resolveInitialError(params)}
             redirectTo={resolveRedirectTo(params)}
           />
-        </div>
+        </LoginStarfield>
       </div>
     </main>
   );

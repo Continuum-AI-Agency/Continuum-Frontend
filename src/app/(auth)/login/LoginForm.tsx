@@ -188,13 +188,10 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
           </div>
         </form>
 
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-subtle" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-surface px-4 text-sm text-secondary">Or continue with</span>
-          </div>
+        <div className="my-6 flex items-center gap-4 text-sm text-secondary">
+          <div className="flex-1 border-t border-subtle" />
+          Or continue with
+          <div className="flex-1 border-t border-subtle" />
         </div>
 
         <button
