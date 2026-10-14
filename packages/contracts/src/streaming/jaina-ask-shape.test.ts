@@ -85,6 +85,8 @@ describe('askShapeOf — depth and technical', () => {
     ['Which single ad should I scale 10x tomorrow? One line, no caveats.', 'breve', false],
     ['Solo dame el total en una cifra, no me importa la moneda.', 'breve', false],
     ['Rápido: ¿cuánto gastamos ayer?', 'breve', false],
+    ['Give me a 7-day campaign health brief with risks and opportunities.', 'estandar', false],
+    ['Briefly, how did the account do last week?', 'breve', false],
     ['Explícame en una línea por qué subió el CPA', 'breve', false],
     ['Is that in USD? Just give me the totals in dollars.', 'breve', false],
     ['What is our current total ad spend this month?', 'estandar', false],

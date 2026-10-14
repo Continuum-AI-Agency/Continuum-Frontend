@@ -17,7 +17,7 @@
  * them to a durable table.
  */
 
-import { askFormatOf, formatDelivered } from './jaina-ask-shape';
+import { askShapeOf, formatDelivered } from './jaina-ask-shape';
 import { stripProseMarks } from './jaina-report';
 import {
   figureRefsIn,
@@ -688,13 +688,18 @@ export function answerShapeOf(report: unknown, ask?: { query: string }): AnswerS
     );
   }
 
+  // A breve ask ("rápido", "en una línea", "one line, no caveats") is answered by the sentence:
+  // its figure, window and comparison. The justification's floor and its relation are the
+  // estándar card's rules, never a brief answer's (Ramiro, 2026-10-13).
+  const asked = ask ? askShapeOf(ask.query) : null;
+  const brief = asked?.depth === 'breve';
   const justificationText = texts.justification.join('\n\n');
   const justificationSentences = texts.justification.flatMap(splitSentences);
   const justificationWords = texts.justification.reduce((sum, text) => sum + wordCount(text), 0);
 
   if (justificationWords === 0) {
-    add('justification_missing', 'No justification follows the answer.');
-  } else {
+    if (!brief) add('justification_missing', 'No justification follows the answer.');
+  } else if (!brief) {
     const executiveWords = answered ? wordCount(texts.executive) : 0;
     const floor = Math.max(2 * executiveWords, JUSTIFICATION_MIN_WORDS);
     if (justificationWords <= floor || justificationSentences.length < 2) {
@@ -769,8 +774,8 @@ export function answerShapeOf(report: unknown, ask?: { query: string }): AnswerS
       'A direction word in the answer disagrees with the sign of the change it states.',
     );
   }
-  if (ask) {
-    const format = askFormatOf(ask.query);
+  if (asked) {
+    const format = asked.format;
     if (!formatDelivered(report, format)) {
       out.push({
         code: 'format_requested_not_delivered',

@@ -324,6 +324,17 @@ describe('answerShapeOf — non-template answers', () => {
     );
   });
 
+  it('holds a breve ask to its sentence: no justification floor, no relation rule', () => {
+    const report = {
+      executive_summary: 'We spent 1,200 MXN yesterday, 8% under the day before.',
+      blocks: [{ block_id: 'scope', category: 'data_scope', dates: 'x', source: 'api' }],
+    };
+    const codes = (query: string) =>
+      answerShapeOf(report, { query }).map((violation) => violation.code);
+    expect(codes('What did we spend yesterday?')).toContain('justification_missing');
+    expect(codes('Rápido, en una línea: ¿cuánto gastamos ayer?')).toEqual([]);
+  });
+
   it('names a requested format the answer does not carry, only when the ask is given', () => {
     const report = {
       executive_summary: 'Spend was 1,200 MXN over the last 7 days.',
