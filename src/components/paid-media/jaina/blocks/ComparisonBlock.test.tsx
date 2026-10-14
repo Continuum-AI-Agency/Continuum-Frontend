@@ -169,6 +169,17 @@ describe('ComparisonBlock — two sides, money by the one rule', () => {
     expect(figures[0].getAttribute('data-figure-currency')).toBe('MXN');
   });
 
+  it('names each side on its own figure cell, for the one-card-per-metric narrow reading', () => {
+    render(<ComparisonBlock block={twoAdSets()} isStreaming={false} />);
+    const sides = screen
+      .getAllByTestId('figure')
+      .map((figure) => figure.closest('td')?.getAttribute('data-side'));
+    expect(sides).toEqual(['CAÑADAS // MENSAJES', 'SATÉLITE // MENSAJES']);
+    expect(document.querySelector('table')?.parentElement?.className).toContain(
+      '@container/comparison',
+    );
+  });
+
   it('keeps before_label / after_label on a block stored before the sides existed', () => {
     render(<ComparisonBlock block={block([pair({})])} isStreaming={false} />);
     const headers = Array.from(document.querySelectorAll('th')).map((th) => th.textContent);

@@ -37,7 +37,8 @@ function StepFigureLine({ figure }: { figure: StepFigure }) {
       >
         {text}
       </span>
-      {figure.unit ? <span>{figure.unit}</span> : null}
+      {/* Money already ends in its code ("$67.28 MXN"); a unit of "MXN" beside it doubled it. */}
+      {figure.unit && figure.format !== 'currency' ? <span>{figure.unit}</span> : null}
       <span>· {figure.label}</span>
     </p>
   );

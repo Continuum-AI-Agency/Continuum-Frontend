@@ -74,6 +74,28 @@ describe('StepsBlock — the moves, in the order they are done', () => {
     expect(figure.getAttribute('data-figure-currency')).toBe('MXN');
   });
 
+  it('names the currency once when the payload also sends it as the unit', () => {
+    render(
+      <StepsBlock
+        block={block([
+          item({
+            figure: {
+              label: 'Costo por conversación',
+              value: 67.28,
+              unit: 'MXN',
+              currency: 'MXN',
+              format: 'currency',
+              percent_basis: null,
+            },
+          }),
+        ])}
+        isStreaming={false}
+      />,
+    );
+    const line = screen.getByTestId('figure').parentElement?.textContent ?? '';
+    expect(line).toBe('$67.28 MXN· Costo por conversación');
+  });
+
   it('prints no figure line on a step that stands on none', () => {
     render(<StepsBlock block={block([item({})])} isStreaming={false} />);
     expect(screen.queryByTestId('figure')).toBeNull();
