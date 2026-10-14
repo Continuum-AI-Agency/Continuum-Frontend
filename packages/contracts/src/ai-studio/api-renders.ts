@@ -1365,6 +1365,10 @@ export type ApiRenderCreateJobRequest = z.infer<typeof apiRenderCreateJobRequest
 export const apiRenderOutputSchema = z
   .object({
     id: z.string().min(1),
+    /** Native worker metadata retained for exact source-engine evidence. */
+    workerJobUid: z.string().min(1).max(200).optional(),
+    workerId: z.string().min(1).max(200).optional(),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     kind: z.enum(['image', 'video']),
     fileName: z.string().min(1),
     mimeType: z.string().min(1),

@@ -4,6 +4,8 @@ import {
   CANVAS_MEDIA_SIGN_ROUTE,
   type CanvasMediaCoordinate,
   type CanvasMediaSignResponse,
+  motionMediaOutputForProfile,
+  motionMediaProfileSchema,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -115,6 +117,18 @@ function collectVersionRefs(nodes: StudioNode[]): VersionRef[] {
   const refs = new Map<string, VersionRef>();
   for (const node of nodes) {
     const data = node.data as Record<string, unknown>;
+    if ('motionMediaOutputs' in data) {
+      for (const profile of motionMediaProfileSchema.options) {
+        const output = motionMediaOutputForProfile(data, profile);
+        if (output) {
+          refs.set(versionRefKey(output.assetId, output.versionId), {
+            assetId: output.assetId,
+            versionId: output.versionId,
+          });
+        }
+      }
+      continue;
+    }
     // A HyperFrames film is a Library asset, possibly in GCS, which only /api/library/sign
     // can sign — the canvas coordinate route takes Supabase buckets alone.
     if (node.type === 'hyperframesAgent') {
@@ -260,6 +274,28 @@ function applySignedUrls(
 ): StudioNode[] {
   return nodes.map((node) => {
     const data = node.data as Record<string, unknown>;
+    if ('motionMediaOutputs' in data) {
+      const motionMediaUrls: Record<string, { assetId: string; versionId: string; url: string }> = {};
+      for (const profile of motionMediaProfileSchema.options) {
+        const output = motionMediaOutputForProfile(data, profile);
+        if (!output) continue;
+        const url = versionUrlMap.get(versionRefKey(output.assetId, output.versionId));
+        if (url) motionMediaUrls[profile] = { assetId: output.assetId, versionId: output.versionId, url };
+      }
+      return {
+        ...node,
+        data: {
+          ...data,
+          motionMediaUrls,
+          ...(motionMediaUrls['editor-overlay']
+            ? { generatedVideoUrl: motionMediaUrls['editor-overlay'].url }
+            : {}),
+          ...(motionMediaUrls['transparent-still']
+            ? { generatedImageUrl: motionMediaUrls['transparent-still'].url }
+            : {}),
+        } as StudioNode['data'],
+      };
+    }
     if (node.type === 'hyperframesAgent') {
       const filmUrl =
         typeof data.renderOutputAssetId === 'string' &&

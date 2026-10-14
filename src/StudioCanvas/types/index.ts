@@ -411,6 +411,8 @@ export interface TimelineInputSource {
   sourceAssetId?: string;
   sourceVersionId?: string;
   previewUrl?: string;
+  /** A refused consumer profile remains visible without becoming placeable media. */
+  unavailableReason?: string;
   /** Deferred effects carried by a connected shader action's source media. */
   shaderStack?: ShaderStackV1;
   // Known source duration (seconds), when the host already has it. Absent on the
