@@ -30,6 +30,7 @@ import {
 import {
   hitTestPoint,
   measureHitArea,
+  paintedEdgeThief,
   rendersContent,
   TAP_TARGET_COARSE_PX,
 } from './visualInvariants';
@@ -448,5 +449,26 @@ describe('reporting', () => {
     expect(text).toBe(
       '[Jaina @375 dark loaded] clipped-text p.lead 100×18@10,21: scrollWidth 140 > clientWidth 100',
     );
+  });
+});
+
+// A hit pad only ever grows a control's target; when a neighbour's pad overlaps this control's
+// DRAWN box, a press on what is drawn as this control lands on the neighbour. `ownerAt` stands
+// in for elementsFromPoint resolved to the owning control.
+describe('a neighbour hit pad never wins a tap on a drawn edge', () => {
+  const tab = { x: 100, y: 10, width: 60, height: 22 };
+
+  test('two segments whose pads stay out of each other pass', () => {
+    expect(paintedEdgeThief(tab, () => 'self')).toBeNull();
+  });
+
+  test('the next segment pad reaching 2px into this one is named, at the probe that hit it', () => {
+    // The neighbour starts at x=160 and pads 2px to the left: x >= 158 belongs to it.
+    const ownerAt = (x: number) => (x >= 158 ? 'button#next' : 'self');
+    expect(paintedEdgeThief(tab, ownerAt)).toEqual({ by: 'button#next', at: [158, 21] });
+  });
+
+  test('a non-control on top is the centre rule, not a stolen edge', () => {
+    expect(paintedEdgeThief(tab, () => null)).toBeNull();
   });
 });

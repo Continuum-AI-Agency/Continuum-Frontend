@@ -26,7 +26,8 @@ import {
 //   clipped-text            scrollWidth > clientWidth + 1 without text-overflow: ellipsis;
 //                           scrollHeight > clientHeight + 1 in a box that hides its overflow
 //   covered-control         elementsFromPoint at the visible centre of a control (its box
-//                           clipped by every overflow ancestor) is not the control
+//                           clipped by every overflow ancestor) is not the control, or a
+//                           neighbour control's hit pad wins a tap on its painted edge
 //   tap-target              a control whose HIT AREA (elementFromPoint around that centre) is
 //                           under 24 × 24 CSS px, 44 × 44 under a coarse pointer
 //   horizontal-scroll       document.documentElement.scrollWidth > clientWidth
@@ -123,6 +124,7 @@ export const FLOATING_SELECTOR =
 
 type PageHelpers = ReturnType<typeof pageHelpers> & {
   measureHitArea: typeof measureHitArea;
+  paintedEdgeThief: typeof paintedEdgeThief;
   hitTestPoint: typeof hitTestPoint;
 };
 
@@ -242,6 +244,10 @@ type ClippedTextFact = ElementFact & {
 type ControlFact = ElementFact & {
   inlineTextLink: boolean;
   covered: { by: string; at: [number, number] } | null;
+  /** A neighbour control whose hit pad covers part of this control's painted box. */
+  edgeStolen: { by: string; at: [number, number] } | null;
+  /** For a hit area short of the floor: what the pointer lands on just past its edge. */
+  stopsAt: string | null;
   /** What the pointer can reach around the hit-test point, measured with elementFromPoint;
    *  `null` when the centre was off screen or covered, and the painted box is all we have. */
   hitArea: { width: number; height: number } | null;
@@ -347,13 +353,28 @@ export async function auditVisual(
           ),
         );
       }
+      if (control.edgeStolen) {
+        violations.push(
+          violation(
+            'covered-control',
+            control.selector,
+            control.bbox,
+            `painted edge (${control.edgeStolen.at[0]}, ${control.edgeStolen.at[1]}) hits ${control.edgeStolen.by}: a neighbour's hit area overlaps this control`,
+          ),
+        );
+      }
       if (control.inlineTextLink) continue;
       const measured = control.hitArea ? { ...control.bbox, ...control.hitArea } : control.bbox;
       const short = tapTargetShortfall(measured, control.tapFloor);
       if (short) {
         const how = control.hitArea ? 'hit area' : 'painted box (centre not on screen)';
         violations.push(
-          violation('tap-target', control.selector, control.bbox, `${how}: ${short}`),
+          violation(
+            'tap-target',
+            control.selector,
+            control.bbox,
+            `${how}: ${short}${control.stopsAt ? ` — past its edge the pointer lands on ${control.stopsAt}` : ''}`,
+          ),
         );
       }
     }
@@ -486,6 +507,34 @@ export function measureHitArea(
     width: extent(-1, 0) + extent(1, 0) + 1,
     height: extent(0, -1) + extent(0, 1) + 1,
   };
+}
+
+/** Where a neighbour's hit pad steals part of a control's DRAWN box. An invisible hit area
+ *  (`hit-area` in globals.css) only ever grows a control's pointer target; when two pads, or a
+ *  pad and a painted box, overlap, the later one in paint order wins the tap and a press on
+ *  what is drawn as one control lands on its neighbour (WCAG 2.5.8 assumes targets that do not
+ *  intersect). Probes the midpoint of each edge, `inset` px inside the painted box; `ownerAt`
+ *  answers `'self'` when the control is hit there, the neighbour control's description when
+ *  one is, and `null` when something that is not a control is (that is rule (c)'s centre
+ *  question, not a stolen edge). */
+export function paintedEdgeThief(
+  painted: { x: number; y: number; width: number; height: number },
+  ownerAt: (x: number, y: number) => 'self' | string | null,
+  inset = 1,
+): { by: string; at: [number, number] } | null {
+  const midX = painted.x + painted.width / 2;
+  const midY = painted.y + painted.height / 2;
+  const probes: [number, number][] = [
+    [painted.x + inset, midY],
+    [painted.x + painted.width - 1 - inset, midY],
+    [midX, painted.y + inset],
+    [midX, painted.y + painted.height - 1 - inset],
+  ];
+  for (const [x, y] of probes) {
+    const owner = ownerAt(x, y);
+    if (owner !== null && owner !== 'self') return { by: owner, at: [Math.round(x), Math.round(y)] };
+  }
+  return null;
 }
 
 /** Whether the browser renders `el` at all. A closed `<details>` keeps its content in the
@@ -660,6 +709,7 @@ async function installPageHelpers(page: Page): Promise<void> {
   await page.evaluate(
     `window.__l1vHelpers = (${pageHelpers.toString()})(${JSON.stringify(OVERLAY_SELECTOR)}, ${rendersContent.toString()});` +
       `window.__l1vHelpers.measureHitArea = ${measureHitArea.toString()};` +
+      `window.__l1vHelpers.paintedEdgeThief = ${paintedEdgeThief.toString()};` +
       `window.__l1vHelpers.hitTestPoint = ${hitTestPoint.toString()};`,
   );
 }
@@ -874,6 +924,8 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
         }
         let covered: ControlFact['covered'] = null;
         let hitArea: ControlFact['hitArea'] = null;
+        let edgeStolen: ControlFact['edgeStolen'] = null;
+        let stopsAt: string | null = null;
         if (probe.point) {
           const [cx, cy] = probe.point;
           const top = topAt(cx, cy);
@@ -892,6 +944,30 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
               if (!onScreen) return insidePainted(x, y);
               return isHit(el, topAt(x, y));
             });
+            // Short of the floor: name what the pointer lands on just past the hit edge — the
+            // container (no pad, or a clipping ancestor) or a neighbour that covers the pad.
+            if (hitArea && (hitArea.width < tapFloor || hitArea.height < tapFloor)) {
+              const horizontal = hitArea.width < tapFloor;
+              let step = 0;
+              const reach = tapFloor;
+              while (
+                step < reach &&
+                isHit(el, topAt(cx + (horizontal ? step + 1 : 0), cy + (horizontal ? 0 : step + 1)))
+              ) {
+                step += 1;
+              }
+              const past = topAt(cx + (horizontal ? step + 1 : 0), cy + (horizontal ? 0 : step + 1));
+              stopsAt = past ? helpers.describe(past) : 'nothing (off screen)';
+            }
+            edgeStolen = helpers.paintedEdgeThief(painted, (x, y) => {
+              const onScreen = x >= 0 && y >= 0 && x < viewport.width && y < viewport.height;
+              if (!onScreen) return 'self';
+              const top = topAt(x, y);
+              if (isHit(el, top)) return 'self';
+              const neighbour = top?.closest(controlSelector);
+              if (!neighbour || neighbour.contains(el)) return null;
+              return helpers.describe(neighbour);
+            });
           }
         }
         facts.push({
@@ -899,6 +975,8 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
           bbox,
           inlineTextLink,
           covered,
+          edgeStolen,
+          stopsAt,
           hitArea,
           tapFloor,
         });

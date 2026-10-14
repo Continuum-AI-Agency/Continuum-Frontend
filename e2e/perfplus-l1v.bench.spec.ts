@@ -105,6 +105,9 @@ const MATRIX_VIEWPORTS = SMOKE
     ? VIEWPORTS.filter((viewport) => ONLY_WIDTHS.includes(viewport.width))
     : VIEWPORTS;
 const MATRIX_THEMES: readonly VisualTheme[] = SMOKE ? ['light'] : THEMES;
+/** PERFPLUS_VISUAL_TOUCH=1 audits under a touch screen (`(pointer: coarse)`): the tap floor is
+ *  44 px and every `hit-area` pad grows to it, which is where neighbouring pads collide. */
+const TOUCH = process.env.PERFPLUS_VISUAL_TOUCH === '1';
 
 type Surface = { name: string; path: string; states: readonly VisualState[] };
 
@@ -543,7 +546,7 @@ async function themedContext(
   viewport: { width: number; height: number },
   theme: VisualTheme,
 ): Promise<BrowserContext> {
-  const context = await browser.newContext({ storageState, viewport });
+  const context = await browser.newContext({ storageState, viewport, hasTouch: TOUCH });
   await installVisualProbes(context);
   await seedTheme(context, theme);
   return context;
@@ -585,6 +588,7 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
         `PARTIAL run: surfaces ${MATRIX_SURFACES.map((surface) => surface.name).join(', ')} at ${MATRIX_VIEWPORTS.map((viewport) => viewport.width).join(', ')} — not the full matrix`,
       );
     }
+    if (TOUCH) notes.push('TOUCH run: hasTouch, (pointer: coarse) — the tap floor is 44 px');
 
     for (const viewport of MATRIX_VIEWPORTS) {
       for (const theme of MATRIX_THEMES) {
