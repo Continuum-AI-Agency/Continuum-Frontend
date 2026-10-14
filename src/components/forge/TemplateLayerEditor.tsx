@@ -33,6 +33,7 @@ import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { TemplateColourFields } from '@/components/forge/TemplateColourFields';
 import { TemplateLayerInspector } from '@/components/forge/TemplateLayerInspector';
 import { type StackRow, TemplateLayerList } from '@/components/forge/TemplateLayerList';
+import { TemplateLayerPreview } from '@/components/forge/TemplateLayerPreview';
 import { TemplateWireframe } from '@/components/forge/TemplateWireframe';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -360,6 +361,31 @@ export function TemplateLayerEditor({
     touch();
     setEdits((current) => applyLayerChange(current, layers, target, change));
   };
+  /** One inspector for a layer — the side panel and the canvas popover show the same controls and state. */
+  const inspectorFor = (target: TemplateEditableLayer, idPrefix: string) => (
+    <TemplateLayerInspector
+      key={`${layerKey(target)}:${resetCount}`}
+      layer={target}
+      edit={edits[layerKey(target)]}
+      fonts={fonts.data ?? []}
+      disabled={saving}
+      idPrefix={idPrefix}
+      inputValues={layerInputs[layerKey(target)] ?? {}}
+      invalidFields={layerValidity[layerKey(target)] ?? []}
+      onInputValue={(field, value) => {
+        touch();
+        setLayerInputs((current) => ({
+          ...current,
+          [layerKey(target)]: { ...current[layerKey(target)], [field]: value },
+        }));
+      }}
+      onValidity={(invalid) =>
+        setLayerValidity((current) => ({ ...current, [layerKey(target)]: invalid }))
+      }
+      onEdit={(change) => edit(target, change)}
+    />
+  );
+
   const reorder = (order: number[]) => {
     if (shownComp === null) return;
     touch();
@@ -572,13 +598,18 @@ export function TemplateLayerEditor({
 
           <div className="flex min-h-0 flex-col bg-muted/40">
             <div className="relative flex h-72 items-center justify-center p-4 lg:h-auto lg:min-h-0 lg:flex-1">
-              {markup ? (
-                <div
-                  role="img"
-                  aria-label="Layout preview of template edits"
-                  className={`size-full transition-opacity ${previewing ? 'opacity-80' : ''}`}
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: rebuilt from an element and attribute allowlist in layerPreviewSvg.safeSvg.
-                  dangerouslySetInnerHTML={{ __html: markup }}
+              {markup && shownScene ? (
+                <TemplateLayerPreview
+                  markup={markup}
+                  layers={layers}
+                  compId={shownScene.compId}
+                  layer={layer?.compId === shownScene.compId ? layer : undefined}
+                  edits={edits}
+                  disabled={saving}
+                  previewing={previewing}
+                  controls={layer ? inspectorFor(layer, 'preview') : null}
+                  onSelect={setSelected}
+                  onEdit={edit}
                 />
               ) : shownScene ? (
                 <img
@@ -598,6 +629,13 @@ export function TemplateLayerEditor({
                 <Skeleton className="size-full" />
               )}
             </div>
+            <p
+              id="template-preview-help"
+              className="border-t border-border px-3 py-2 text-2xs text-muted-foreground"
+            >
+              Click a layer for controls. Drag to move; arrow keys nudge, Shift moves 10 px. Edits
+              stay temporary until you save.
+            </p>
             {scene.isError || composed.isError || shownScene?.warnings.length ? (
               <div className="max-h-24 overflow-y-auto border-t border-border px-3 py-2">
                 {scene.isError || composed.isError ? (
@@ -616,26 +654,7 @@ export function TemplateLayerEditor({
 
           <aside className="min-h-0 overflow-y-auto border-t border-border p-3 lg:border-t-0 lg:border-l">
             {layer ? (
-              <TemplateLayerInspector
-                key={`${layerKey(layer)}:${resetCount}`}
-                layer={layer}
-                edit={edits[layerKey(layer)]}
-                fonts={fonts.data ?? []}
-                disabled={saving}
-                inputValues={layerInputs[layerKey(layer)] ?? {}}
-                invalidFields={layerValidity[layerKey(layer)] ?? []}
-                onInputValue={(field, value) => {
-                  touch();
-                  setLayerInputs((current) => ({
-                    ...current,
-                    [layerKey(layer)]: { ...current[layerKey(layer)], [field]: value },
-                  }));
-                }}
-                onValidity={(invalid) =>
-                  setLayerValidity((current) => ({ ...current, [layerKey(layer)]: invalid }))
-                }
-                onEdit={(change) => edit(layer, change)}
-              />
+              inspectorFor(layer, 'inspector')
             ) : inventory.data ? (
               <p className="text-xs text-muted-foreground">Select a layer to edit it.</p>
             ) : (

@@ -76,6 +76,7 @@ export function TemplateLayerInspector({
   inputValues,
   invalidFields,
   onInputValue,
+  idPrefix = 'inspector',
 }: {
   layer: TemplateEditableLayer;
   edit?: TemplateLayerEdit;
@@ -87,6 +88,8 @@ export function TemplateLayerInspector({
   inputValues: Record<string, string>;
   invalidFields: string[];
   onInputValue: (field: string, value: string) => void;
+  /** Keeps DOM ids unique when the same layer is inspected twice (panel + canvas popover). */
+  idPrefix?: string;
 }) {
   const locks = layer.transformLocks ?? {};
   const positionLock = disabled || !!locks.position;
@@ -118,11 +121,14 @@ export function TemplateLayerInspector({
           </p>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`visible-${layer.compId}-${layer.layerId}`} className="text-xs">
+          <label
+            htmlFor={`${idPrefix}-visible-${layer.compId}-${layer.layerId}`}
+            className="text-xs"
+          >
             Visible in template
           </label>
           <Switch
-            id={`visible-${layer.compId}-${layer.layerId}`}
+            id={`${idPrefix}-visible-${layer.compId}-${layer.layerId}`}
             size="sm"
             checked={edit?.visible ?? layer.visible}
             disabled={disabled || !!layer.visibilityReason}
@@ -203,12 +209,12 @@ export function TemplateLayerInspector({
       {layer.kind === 'text' ? (
         <Section title="Text">
           <label
-            htmlFor={`text-${layer.compId}-${layer.layerId}`}
+            htmlFor={`${idPrefix}-text-${layer.compId}-${layer.layerId}`}
             className="flex flex-col gap-1 text-xs"
           >
             Text
             <Input
-              id={`text-${layer.compId}-${layer.layerId}`}
+              id={`${idPrefix}-text-${layer.compId}-${layer.layerId}`}
               aria-label="Layer text"
               className="h-8 text-xs"
               value={edit?.text ?? layer.text ?? ''}
@@ -237,12 +243,12 @@ export function TemplateLayerInspector({
           </label>
           <div className="grid grid-cols-2 items-end gap-2">
             <label
-              htmlFor={`size-${layer.compId}-${layer.layerId}`}
+              htmlFor={`${idPrefix}-size-${layer.compId}-${layer.layerId}`}
               className="flex flex-col gap-1 text-xs"
             >
               Text size (pt)
               <Input
-                id={`size-${layer.compId}-${layer.layerId}`}
+                id={`${idPrefix}-size-${layer.compId}-${layer.layerId}`}
                 type="number"
                 min={1}
                 max={1000}
@@ -255,11 +261,11 @@ export function TemplateLayerInspector({
               />
             </label>
             <label
-              htmlFor={`bold-${layer.compId}-${layer.layerId}`}
+              htmlFor={`${idPrefix}-bold-${layer.compId}-${layer.layerId}`}
               className="flex h-8 items-center gap-2 text-xs"
             >
               <Checkbox
-                id={`bold-${layer.compId}-${layer.layerId}`}
+                id={`${idPrefix}-bold-${layer.compId}-${layer.layerId}`}
                 checked={weight.bold}
                 disabled={textLocked || !weight.target}
                 onCheckedChange={() => {
@@ -283,12 +289,12 @@ export function TemplateLayerInspector({
             {(['width', 'height'] as const).map((property) => (
               <label
                 key={property}
-                htmlFor={`${property}-${layer.compId}-${layer.layerId}`}
+                htmlFor={`${idPrefix}-${property}-${layer.compId}-${layer.layerId}`}
                 className="flex flex-col gap-1 text-xs"
               >
                 {property === 'width' ? 'Text box width' : 'Text box height'}
                 <Input
-                  id={`${property}-${layer.compId}-${layer.layerId}`}
+                  id={`${idPrefix}-${property}-${layer.compId}-${layer.layerId}`}
                   type="number"
                   aria-label={property}
                   className="h-8 text-xs"
