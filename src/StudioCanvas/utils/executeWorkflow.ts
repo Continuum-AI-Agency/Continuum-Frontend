@@ -26,6 +26,7 @@ import {
   TIMELINE_MEDIA_INPUT_HANDLE,
   VIDEO_REFERENCE_VIDEO_HANDLE,
   variationIndexFromHandle,
+  withElementStyleTokens,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { buildCanvasRunResult, type RunNode } from '@/components/ai-studio/canvasRunRequests';
@@ -65,6 +66,7 @@ import {
   collectionSourcesFor,
   runGenerationFanOut,
 } from './batch/generationFanout';
+import { effectiveBrandBookPieces } from './brandEnforcement';
 import {
   buildEnrichPayload,
   buildExtendVideoPayload,
@@ -80,7 +82,6 @@ import {
   startCanvasRunTelemetry,
 } from './canvasRunTelemetry';
 import { compositeImages } from './compositeImages';
-import { effectiveBrandBookPieces } from './brandEnforcement';
 import { blobToBase64, buildDataUrl, parseDataUrl } from './dataUrl';
 import {
   exportKindForSources,
@@ -168,10 +169,30 @@ async function refreshElementSources(nodes: StudioNode[], brandId?: string): Pro
         assetId,
         previewUrl: useIntent === 'motion' ? undefined : url,
         motionUrl: useIntent === 'motion' ? url : undefined,
+        styleSlugs: element.styleSlugs ?? [],
       });
     }),
   );
 }
+
+/**
+ * The `/slug` style defaults of every Element wired into `nodeId`, in wire order, once each.
+ * Prepended to the generator's prompt, so a slug the user typed there still wins.
+ */
+export const elementStyleSlugsFor = (
+  nodeId: string,
+  nodes: readonly StudioNode[],
+  edges: readonly Edge[],
+): string[] => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const slugs = edges
+    .filter((edge) => edge.target === nodeId)
+    .flatMap((edge) => {
+      const source = nodeById.get(edge.source);
+      return source?.type === 'element' ? ((source.data as ElementNodeData).styleSlugs ?? []) : [];
+    });
+  return [...new Set(slugs)];
+};
 
 /**
  * Publisher sinks that sit downstream of the nodes a run would execute — the ones
@@ -2521,7 +2542,7 @@ export async function executeWorkflow(
         const result = await controls.executeOmniTurn(nodeId, {
           brandId,
           turn,
-          prompt,
+          prompt: withElementStyleTokens(prompt, elementStyleSlugsFor(nodeId, nodes, edges)),
           aspectRatio,
           resolution,
           references: references.length > 0 ? references : undefined,
@@ -3148,6 +3169,7 @@ export async function executeWorkflow(
       // anything that reaches it without a payload dies on "Missing required inputs".
       const batchSources = collectionSourcesFor(nodeId, edges, resolvedOutputs, nodeById);
       const isVideoGenerator = isVideoGeneratorNodeType(node.type);
+      const elementStyleSlugs = elementStyleSlugsFor(nodeId, nodes, edges);
       if (batchSources && (node.type === 'nanoGen' || isVideoGenerator)) {
         const plan = batchGenerationPlan(batchSources);
         if (!plan) {
@@ -3173,7 +3195,12 @@ export async function executeWorkflow(
             const built = isVideoGenerator
               ? buildVeoPayload(target, perItem, nodes, edges, brandId)
               : buildNanoGenPayload(target, perItem, nodes, edges, brandId);
-            return built ? toBackendPayload(built) : null;
+            return built
+              ? toBackendPayload({
+                  ...built,
+                  prompt: withElementStyleTokens(built.prompt, elementStyleSlugs),
+                })
+              : null;
           },
           executeGeneration: async (executionId, itemPayload) => {
             const result = await executeGeneration(executionId, itemPayload);
@@ -3226,7 +3253,10 @@ export async function executeWorkflow(
         return false;
       }
 
-      const backendPayload = toBackendPayload(payload);
+      const backendPayload = toBackendPayload({
+        ...payload,
+        prompt: withElementStyleTokens(payload.prompt, elementStyleSlugs),
+      });
       const result = await executeGeneration(nodeId, backendPayload, (preview) => {
         if (preview.type !== 'image') return;
         const rawBase64 = preview.base64 ?? '';

@@ -798,6 +798,8 @@ export interface ElementNodeData extends BaseNodeData {
   motionUrl?: string;
   assetId?: string;
   referenceType?: ImageReferenceType;
+  /** The Element's `/slug` style defaults, refreshed with its sources before every run. */
+  styleSlugs?: string[];
 }
 
 /** One section of the brand design system, emitted as a reference. */

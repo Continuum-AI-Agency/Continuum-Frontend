@@ -1,4 +1,5 @@
-// A person Element's reference: a character continuity sheet.
+// A person Element's reference: a character continuity sheet. A product or object Element's
+// reference: the product continuity sheet (PRODUCT_SHEET_GRIDS, two grids), built the same way.
 //
 // One page per actor — profile, turnaround, face details, expressions, poses, costume and
 // palette — the way a production hands every department the same person. The model draws
@@ -174,6 +175,93 @@ export const CONTINUITY_PALETTE = [
 ] as const satisfies readonly { role: ContinuitySheetRole; label: string }[];
 
 /**
+ * A product or object Element's sheet: a turnaround and a macro detail grid. The in-hand cell is
+ * also the scale reference. Square cells, so both grids are 3 × 2 at 3:2.
+ */
+export const PRODUCT_SHEET_GRIDS = {
+  turnaround: {
+    layout: layoutOf(3, 2, '3:2'),
+    cellAspect: [1, 1],
+    imageSize: '4K',
+    shot: 'product photograph with the whole product in frame and a clear band of plain backdrop on every side',
+    cells: [
+      {
+        role: 'front',
+        caption: 'FRONT',
+        view: 'the product from the front, label facing the camera',
+      },
+      { role: 'back', caption: 'BACK', view: 'the product from directly behind' },
+      { role: 'side', caption: 'SIDE', view: 'the product in strict side view' },
+      {
+        role: 'three_quarter',
+        caption: 'THREE-QUARTER',
+        view: 'the product turned 45 degrees from the camera',
+      },
+      { role: 'top', caption: 'TOP', view: 'the product from directly above' },
+      {
+        role: 'in_hand',
+        caption: 'IN HAND',
+        view: 'the product held in one adult hand at its true size, the hand cropped at the wrist',
+      },
+    ],
+  },
+  details: {
+    layout: layoutOf(3, 2, '3:2'),
+    cellAspect: [1, 1],
+    imageSize: '2K',
+    shot: 'macro close-up filling the rectangle',
+    cells: [
+      { role: 'label_front', caption: 'LABEL FRONT', view: 'the front label, straight on' },
+      { role: 'label_back', caption: 'LABEL BACK', view: 'the back label, straight on' },
+      { role: 'closure', caption: 'CLOSURE', view: 'the cap, lid, clasp or closure' },
+      { role: 'material', caption: 'MATERIAL', view: 'the surface material and its finish' },
+      { role: 'logo_mark', caption: 'LOGO', view: 'the logo mark as printed on the product' },
+      { role: 'packaging', caption: 'PACKAGING', view: 'the outer packaging or box' },
+    ],
+  },
+} as const satisfies Record<string, ContinuityGrid>;
+
+export type ProductSheetGridName = keyof typeof PRODUCT_SHEET_GRIDS;
+export type ProductSheetRole =
+  (typeof PRODUCT_SHEET_GRIDS)[ProductSheetGridName]['cells'][number]['role'];
+
+/** The swatches a product sheet samples, and the words under them. */
+export const PRODUCT_SHEET_PALETTE = [
+  { role: 'side', label: 'Body' },
+  { role: 'closure', label: 'Closure' },
+  { role: 'label_front', label: 'Label' },
+  { role: 'material', label: 'Material' },
+  { role: 'packaging', label: 'Packaging' },
+] as const satisfies readonly { role: ProductSheetRole; label: string }[];
+
+/** Who the grid photographs, what must hold across the cells, and the rule for text. */
+export interface ContinuitySubject {
+  noun: string;
+  continuity: string;
+  textRule: string;
+}
+
+export const PERSON_SHEET_SUBJECT: ContinuitySubject = {
+  noun: 'the SAME one adult person, for a character continuity sheet',
+  continuity:
+    'The same one person: identical face, hair, skin tone, body proportions, marks, wardrobe, footwear and accessories.',
+  textRule:
+    'Do not render any text, labels, numbers, letters, logos or watermarks anywhere in the image.',
+};
+
+/**
+ * A product's own printing is part of its identity, so it is copied, never invented — and
+ * nothing else may be written, because the sheet's words are composed afterwards by code.
+ */
+export const PRODUCT_SHEET_SUBJECT: ContinuitySubject = {
+  noun: 'the SAME one product, for a product continuity sheet',
+  continuity:
+    'The same one product: identical shape, proportions, colours, materials, finish, closure, label artwork and logo.',
+  textRule:
+    'Reproduce printed artwork, label text and logos exactly as the reference images show them, and add no other text, labels, numbers, captions or watermarks.',
+};
+
+/**
  * The prompt for one grid.
  *
  * `references` is one line per attached image, in attachment order — the provider sends
@@ -183,8 +271,14 @@ export const CONTINUITY_PALETTE = [
  */
 export function buildContinuityGridPrompt(
   grid: ContinuityGrid,
-  input: { references: readonly string[]; guidelines?: string | null },
+  input: {
+    references: readonly string[];
+    guidelines?: string | null;
+    /** Defaults to the person, whose prompt is pinned byte for byte. */
+    subject?: ContinuitySubject;
+  },
 ): string {
+  const subject = input.subject ?? PERSON_SHEET_SUBJECT;
   const { columns, rows, cellCount } = grid.layout;
   const [cellWidth, cellHeight] = grid.cellAspect;
   const orientation =
@@ -198,16 +292,16 @@ export function buildContinuityGridPrompt(
 
   return [
     ...(manifest.length ? [...manifest, ''] : []),
-    `Produce a single image laid out as a strict ${columns}x${rows} grid of ${cellCount} separate ${orientation} studio photographs of the SAME one adult person, for a character continuity sheet.`,
+    `Produce a single image laid out as a strict ${columns}x${rows} grid of ${cellCount} separate ${orientation} studio photographs of ${subject.noun}.`,
     'LAYOUT RULES (these override everything below):',
     `- Divide the frame into ${columns} equal columns and ${rows} equal rows with straight lines; every rectangle is exactly the same size.`,
     '- The photographs meet edge to edge. No gutters, borders, margins, frames, drop shadows, rounded corners or captions.',
     `- Each rectangle holds one complete ${grid.shot}.`,
     '- No subject, limb, hair, prop or shadow may cross a dividing line.',
-    '- Do not render any text, labels, numbers, letters, logos or watermarks anywhere in the image.',
+    `- ${subject.textRule}`,
     '',
     'CONTINUITY ACROSS EVERY RECTANGLE (this is the point of the sheet):',
-    '- The same one person: identical face, hair, skin tone, body proportions, marks, wardrobe, footwear and accessories.',
+    `- ${subject.continuity}`,
     '- The same seamless light-grey studio backdrop and the same soft, even studio light in every rectangle.',
     '',
     ...cells,
