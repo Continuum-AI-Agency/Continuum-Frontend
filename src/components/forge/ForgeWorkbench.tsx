@@ -16,6 +16,7 @@ import {
 import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
+import { SceneTemplateDetail } from '@/components/forge/SceneTemplateDetail';
 import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import {
   type SharedTemplate,
@@ -427,7 +428,15 @@ export function ForgeWorkbench({
         onOpen={open}
       />
 
-      {current ? (
+      {current?.family === 'blender' ? (
+        // A .blend is fields and cameras, not comps and slots: none of the After Effects sheet applies.
+        <SceneTemplateDetail
+          key={current.assetId}
+          brandId={brandId}
+          source={current}
+          onBack={() => open(null)}
+        />
+      ) : current ? (
         <TemplateDetail
           key={current.assetId}
           brandId={brandId}

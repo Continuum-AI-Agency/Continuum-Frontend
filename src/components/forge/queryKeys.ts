@@ -99,6 +99,16 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'library-state', assetIds.join(',')] as const,
   mediaAsset: (brandId: string, assetId: string) =>
     ['forge', brandId, 'media-assets', assetId] as const,
+  /** A Blender template as the editor reads it: fields, outputs, the version a render pins. */
+  sceneTemplate: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'scene-template', assetId] as const,
+  /** One draft of one output with one set of values; `request` is part of the key. */
+  scenePreview: (brandId: string, assetId: string, request: unknown) =>
+    ['forge', brandId, 'scene-preview', assetId, request] as const,
+  sceneRenders: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'scene-renders', assetId] as const,
+  sceneRender: (brandId: string, assetId: string, jobId: string) =>
+    ['forge', brandId, 'scene-renders', assetId, jobId] as const,
 } as const;
 
 /** Everything this brand may render, from every binding, as one list. The Forge page reads it on
