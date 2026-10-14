@@ -845,9 +845,24 @@ export function OrganicDraftPreview({
     if (!next) {
       setCreativeOpen(false);
       setHashtagsOpen(false);
+      setMediaSelectOpen(false);
+      replaceTargetRef.current = null;
     }
     setIsEditing(next);
   }, [isEditing, setIsEditing]);
+  // The library picker is anchored on the editable media area, which only mounts in
+  // edit mode on the Post tab. Every "pick media" control routes through here so one
+  // reachable from the read-only preview (the lightbox Replace, #402) or the Publish
+  // tab opens a picker that exists instead of flipping state on nothing.
+  const openMediaPicker = React.useCallback(
+    (replacePosition: number | null = null) => {
+      replaceTargetRef.current = replacePosition;
+      setPanelTab('post');
+      setIsEditing(true);
+      setMediaSelectOpen(true);
+    },
+    [setIsEditing],
+  );
   // Enlarge-and-act lightbox target: a blueprint concept frame or a realized slide.
   const [lightbox, setLightbox] = React.useState<{
     kind: 'blueprint' | 'slide';
@@ -1111,8 +1126,8 @@ export function OrganicDraftPreview({
       handleGenerateMedia();
       return;
     }
-    setMediaSelectOpen(true);
-  }, [canGenerate, handleGenerateMedia]);
+    openMediaPicker();
+  }, [canGenerate, handleGenerateMedia, openMediaPicker]);
 
   const ladder = useDraftEnrichmentLadder(draft, { brandProfileId, onMediaStep: handleMediaStep });
 
@@ -1144,22 +1159,16 @@ export function OrganicDraftPreview({
             alt={resolveDraftMediaAltText(draftForPreview)}
             aspectRatio={mediaAspectRatio}
             slotId={`preview-media-${draft.id}`}
-            onActivate={() => setMediaSelectOpen(true)}
-            onSelectLibrary={() => setMediaSelectOpen(true)}
+            onActivate={() => openMediaPicker()}
+            onSelectLibrary={() => openMediaPicker()}
             onFilesChosen={handleUploadFiles}
             isUploading={isUploading}
             activeIndex={activeSlidePosition}
             onSelectSlide={selectSlide}
             onStepSlide={stepSlide}
             placement={placement}
-            onAddSlideRequest={() => {
-              replaceTargetRef.current = null;
-              setMediaSelectOpen(true);
-            }}
-            onReplaceSlideRequest={(position) => {
-              replaceTargetRef.current = position;
-              setMediaSelectOpen(true);
-            }}
+            onAddSlideRequest={() => openMediaPicker()}
+            onReplaceSlideRequest={(position) => openMediaPicker(position)}
             onGenerate={handleGenerateMedia}
             canGenerate={canGenerate}
             isGenerating={isGenerating}
@@ -1250,9 +1259,8 @@ export function OrganicDraftPreview({
               <button
                 type="button"
                 onClick={() => {
-                  replaceTargetRef.current = null;
                   setLightbox(null);
-                  setMediaSelectOpen(true);
+                  openMediaPicker();
                 }}
                 className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
               >
@@ -1265,9 +1273,8 @@ export function OrganicDraftPreview({
               <button
                 type="button"
                 onClick={() => {
-                  replaceTargetRef.current = isCarouselFormat ? lightbox.index : null;
                   setLightbox(null);
-                  setMediaSelectOpen(true);
+                  openMediaPicker(isCarouselFormat ? lightbox.index : null);
                 }}
                 className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
               >
@@ -1481,7 +1488,7 @@ export function OrganicDraftPreview({
               <EnrichmentLadder ladder={ladder} />
               <MediaEnrichmentSummary
                 draft={draft}
-                onReuseLibrary={() => setMediaSelectOpen(true)}
+                onReuseLibrary={() => openMediaPicker()}
                 onRealize={handleGenerateMedia}
                 canRealize={canGenerate}
               />

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
+import type { MediaAsset } from '@continuum/contracts';
 import {
   act,
   cleanup,
@@ -108,11 +109,45 @@ mock.module('@/components/organic/hooks/useGenerateDraftMedia', () => ({
 }));
 
 // The contextual children are tested in their own files. Stub them here: the
-// media Popover simply renders its anchor (so the media zone + storyboard still
-// render), the chips echo their props, the command menu is a marker.
+// media Popover renders its anchor (so the media zone + storyboard still render)
+// and, only while open, one library pick; the chips echo their props, the command
+// menu is a marker.
+const PICKED_ASSET: MediaAsset = {
+  id: 'picked-1',
+  brandId: 'brand-1',
+  kind: 'image',
+  bucket: 'media-library',
+  storagePath: 'brands/brand-1/picked.jpg',
+  fileName: 'picked.jpg',
+  mimeType: 'image/jpeg',
+  source: 'upload',
+  status: 'ready',
+  tags: [],
+  detectedObjects: [],
+  hasImageEmbedding: false,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  signedUrl: 'https://cdn/picked.jpg',
+};
+
 mock.module('./MediaSelectPopover', () => ({
-  MediaSelectPopover: ({ anchor }: { anchor: ReactNode }) => (
-    <div data-testid="media-select">{anchor}</div>
+  MediaSelectPopover: ({
+    anchor,
+    open,
+    onAttachAssets,
+  }: {
+    anchor: ReactNode;
+    open: boolean;
+    onAttachAssets: (assets: MediaAsset[]) => void;
+  }) => (
+    <div data-testid="media-select">
+      {anchor}
+      {open && (
+        <button type="button" onClick={() => onAttachAssets([PICKED_ASSET])}>
+          Pick library image
+        </button>
+      )}
+    </div>
   ),
 }));
 
@@ -236,6 +271,17 @@ import { OrganicDraftPreview } from './OrganicDraftPreview';
 // The preview's enrichment ladder surfaces enqueue failures as toasts, so it needs the
 // same context the (post-auth) layout wraps the whole app in.
 const render = (ui: ReactNode) => rtlRender(<ToastProvider>{ui}</ToastProvider>);
+
+// The store's updateDraft is a mock, so a media write is observed by replaying its
+// last mutator onto the draft the test rendered.
+const applyLastMediaWrite = (draft: OrganicCalendarDraft): OrganicCalendarDraft => {
+  const calls = (calendarStoreState.updateDraft as ReturnType<typeof mock>).mock.calls;
+  const mutate = calls.at(-1)?.[1] as
+    | ((current: OrganicCalendarDraft) => OrganicCalendarDraft)
+    | undefined;
+  if (!mutate) throw new Error('no media write reached the store');
+  return mutate(draft);
+};
 
 const renderPreview = () =>
   render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
@@ -1009,5 +1055,68 @@ describe('OrganicDraftPreview — carousel slide navigation', () => {
 
     // The lightbox opens on the slide that was on screen, not on slide 1.
     expect(screen.getByText('Slide 2 of 3')).toBeTruthy();
+  });
+
+  // #402: Replace swaps the slide on screen and keeps the others.
+  it('replaces only the enlarged slide from the read-only preview', () => {
+    const draft = sparseCarousel();
+    render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" />);
+
+    fireEvent.click(screen.getByLabelText('Next slide'));
+    fireEvent.click(screen.getByLabelText('Enlarge creative'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+    fireEvent.click(screen.getByText('Pick library image'));
+
+    const paths = applyLastMediaWrite(draft).publishingAssets?.map((asset) => asset.storagePath);
+    expect(paths).toContain(PICKED_ASSET.storagePath);
+    expect(paths).toContain('a.jpg');
+    expect(paths).toContain('b.jpg');
+    expect(paths).not.toContain('c.jpg');
+  });
+});
+
+// #402 — the lightbox Replace opened a library picker that only exists in edit mode,
+// so from the default read-only preview the click closed the lightbox and did nothing.
+describe('OrganicDraftPreview — replacing the creative (#402)', () => {
+  beforeEach(() => cleanup());
+
+  const singleImageDraft = () =>
+    baseDraft({
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'single' },
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'old.jpg',
+          storageUrl: 'https://cdn/old.jpg',
+        },
+      ],
+    });
+
+  it('opens the library picker from the read-only lightbox and swaps the photo', () => {
+    const draft = singleImageDraft();
+    render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" />);
+
+    fireEvent.click(screen.getByLabelText('Enlarge creative'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+
+    expect(calendarStoreState.editingDraftId).toBe('draft-1');
+    fireEvent.click(screen.getByText('Pick library image'));
+
+    const paths = applyLastMediaWrite(draft).publishingAssets?.map((asset) => asset.storagePath);
+    expect(paths).toEqual([PICKED_ASSET.storagePath]);
+  });
+
+  it('does not reopen a picker on the next edit after leaving edit mode with it open', () => {
+    render(<OrganicDraftPreview draft={singleImageDraft()} brandProfileId="brand-1" />);
+
+    fireEvent.click(screen.getByLabelText('Enlarge creative'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(screen.getByText('Pick library image')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('Done editing post'));
+    fireEvent.click(screen.getByLabelText('Edit post'));
+    expect(screen.queryByText('Pick library image')).toBeNull();
   });
 });
