@@ -33,6 +33,7 @@ export * from './generation-error';
 export * from './hyperframes-agent';
 export * from './image-size';
 export * from './internal-motion';
+export * from './motion-font-attestation';
 export * from './model-catalog';
 export * from './motion-eval';
 export * from './motionmaxxing-recipes';
