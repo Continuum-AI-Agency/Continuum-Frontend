@@ -45,6 +45,13 @@ export const headlessEditSchema = z
   .strict();
 export type HeadlessEdit = z.infer<typeof headlessEditSchema>;
 
+/** A source that shows the product or the presenter; absent is b-roll. */
+export const cutSourceRoleSchema = z.enum(['product', 'presenter']);
+export type CutSourceRole = z.infer<typeof cutSourceRoleSchema>;
+/** A burst token is one short word or figure: it is set to fill the frame's width. */
+export const CUT_TYPE_TOKEN_CHARS = 16;
+const MAX_TYPE_BEATS = 64;
+
 const timeSpanSchema = z
   .object({ startSec: z.number().nonnegative(), endSec: z.number().nonnegative() })
   .strict()
@@ -74,12 +81,19 @@ export const cutPlanInputSchema = z
             still: z.boolean(),
             /** Spoken windows: no cut of 0.4 s or longer comes from inside one. */
             speech: z.array(timeSpanSchema).max(64),
+            /** What it shows when it is more than b-roll: the fast rungs draw from these first. */
+            role: cutSourceRoleSchema.optional(),
           })
           .strict(),
       )
       .min(1)
       .max(24),
     transients: z.array(cutTransientKindSchema).max(4),
+    /**
+     * Words the composition already carries (its offer's price, the brand, a heard display word),
+     * set big on the burst beats, one per beat. Absent or empty: no type.
+     */
+    tokens: z.array(z.string().trim().min(1).max(CUT_TYPE_TOKEN_CHARS)).max(6).optional(),
   })
   .strict();
 export type CutPlanInput = z.infer<typeof cutPlanInputSchema>;
@@ -106,6 +120,16 @@ export const plannedTransientSchema = z
   .strict();
 export type PlannedTransient = z.infer<typeof plannedTransientSchema>;
 
+/** One token over whole beats of a burst, in montage frames: it lands on a tick and never flickers. */
+export const plannedTypeSchema = z
+  .object({
+    text: z.string().min(1).max(CUT_TYPE_TOKEN_CHARS),
+    atFrame: z.number().int().nonnegative(),
+    frames: z.number().int().positive(),
+  })
+  .strict();
+export type PlannedType = z.infer<typeof plannedTypeSchema>;
+
 /** The planner's output: every cut a whole number of frames, summing to the montage. */
 export const cutPlanSchema = z
   .object({
@@ -115,10 +139,15 @@ export const cutPlanSchema = z
     bedAtSec: z.number().nonnegative(),
     cuts: z.array(plannedCutSchema).min(1).max(720),
     transients: z.array(plannedTransientSchema).max(720),
+    /** Present only when the input carried tokens. */
+    type: z.array(plannedTypeSchema).max(MAX_TYPE_BEATS).optional(),
   })
   .strict()
   .refine((plan) => plan.cuts.reduce((sum, cut) => sum + cut.frames, 0) === plan.frames, {
     message: 'the cuts add up to the montage',
+  })
+  .refine((plan) => (plan.type ?? []).every((beat) => beat.atFrame + beat.frames <= plan.frames), {
+    message: 'every type beat sits inside the montage',
   });
 export type CutPlan = z.infer<typeof cutPlanSchema>;
 
@@ -138,6 +167,11 @@ const PULSE_FRAMES = 6;
 const STILL_RUNG_SEC = 0.4;
 /** Below this a still's cut is a grid remainder of its rung, not the rung itself. */
 const STILL_MIN_SEC = 0.3;
+/**
+ * A cut this fast is a glimpse (the council's r1 legibility 4: generic b-roll on the fastest cuts):
+ * it draws the product or the presenter when there is one, and its beats carry the burst's type.
+ */
+const FAST_RUNG_SEC = 0.2;
 const MAX_CUTS = 720;
 const EPSILON = 1e-9;
 
@@ -359,10 +393,23 @@ export function planCuts(input: CutPlanInput): CutPlan {
       still:
         cut.frame === dropFrame ||
         (cut.rung >= STILL_RUNG_SEC - EPSILON && cut.frames / fps >= STILL_MIN_SEC - EPSILON),
+      fast: cut.rung <= FAST_RUNG_SEC + EPSILON,
     })),
     sources,
     fps,
   );
+  const type = input.tokens?.length
+    ? burstType({
+        tokens: input.tokens,
+        fast: slots.filter((slot) => slot.rung <= FAST_RUNG_SEC + EPSILON),
+        stills: placed.flatMap((cut, index) =>
+          sources.find((source) => source.id === cuts[index]?.sourceId)?.still
+            ? [{ from: cut.frame, to: cut.frame + cut.frames }]
+            : [],
+        ),
+        frameAt,
+      })
+    : null;
 
   // Transients never wash a short frame: a one-frame flash only on the drop and on bar downbeats
   // held 0.4 s or longer, an RGB shift only inside a stutter burst, and on every other cut at most
@@ -405,7 +452,50 @@ export function planCuts(input: CutPlanInput): CutPlan {
     bedAtSec: beat.bedAtSec,
     cuts,
     transients: planned.slice(0, MAX_CUTS),
+    ...(type ? { type } : {}),
   });
+}
+
+/**
+ * The burst's type: the beats lying wholly inside the fast stretches, one token each in turn. A
+ * token lands on the beat's tick and holds the whole beat (two beats running with one token are
+ * one), so it changes with the music, never with a 3-frame cut; a beat with a still in it carries
+ * none, so the type never covers the packshot.
+ */
+function burstType(input: {
+  tokens: readonly string[];
+  fast: ReadonlyArray<{ from: number; to: number }>;
+  stills: ReadonlyArray<{ from: number; to: number }>;
+  frameAt: (tick: number) => number;
+}): PlannedType[] {
+  const { tokens, frameAt } = input;
+  // Fast slots abut, so a beat split across two fast rungs (0.2 into 0.1) still counts whole.
+  const fast = [...input.fast].sort((a, b) => a.from - b.from);
+  const covered = (from: number, to: number) => {
+    let at = from;
+    for (const slot of fast) if (slot.from <= at && slot.to > at) at = slot.to;
+    return at >= to;
+  };
+  const beats = new Set<number>();
+  for (const slot of fast)
+    for (
+      let beat = Math.floor(slot.from / CUT_TICKS_PER_BEAT);
+      beat * CUT_TICKS_PER_BEAT < slot.to;
+      beat++
+    )
+      if (covered(beat * CUT_TICKS_PER_BEAT, (beat + 1) * CUT_TICKS_PER_BEAT)) beats.add(beat);
+  const type: PlannedType[] = [];
+  let turn = 0;
+  for (const beat of [...beats].sort((a, b) => a - b)) {
+    const from = frameAt(beat * CUT_TICKS_PER_BEAT);
+    const to = frameAt((beat + 1) * CUT_TICKS_PER_BEAT);
+    if (input.stills.some((still) => still.from < to && still.to > from)) continue;
+    const text = tokens[turn++ % tokens.length] as string;
+    const last = type.at(-1);
+    if (last && last.text === text && last.atFrame + last.frames === from) last.frames += to - from;
+    else type.push({ text, atFrame: from, frames: to - from });
+  }
+  return type.slice(0, MAX_TYPE_BEATS);
 }
 
 type FootageSource = CutPlanInput['sources'][number];
@@ -413,7 +503,8 @@ type FootageSource = CutPlanInput['sources'][number];
 /**
  * Round-robin over the sources, the idea of the editor's switchShotClips: each cut takes the next
  * source that fits, never the one just used, at a cursor that moves on by ≥ 0.5 s per use. A still
- * fits only the cuts long enough to read it.
+ * fits only the cuts long enough to read it. A fast cut tries the product and presenter sources
+ * first (b-roll then falls to the longer rungs); with no role on any source it is plain round-robin.
  */
 function assignFootage(
   placed: ReadonlyArray<{
@@ -422,6 +513,8 @@ function assignFootage(
     grid: PlannedCut['grid'];
     /** Whether a still may hold this cut (see STILL_RUNG_SEC). */
     still: boolean;
+    /** A rung of 0.2 s or faster (see FAST_RUNG_SEC). */
+    fast: boolean;
   }>,
   sources: readonly FootageSource[],
   fps: number,
@@ -472,17 +565,22 @@ function assignFootage(
 
   let turn = 0;
   let previous: string | null = null;
+  const featuring = sources.some((source) => source.role !== undefined);
   return placed.map((cut) => {
     const seconds = cut.frames / fps;
     let chosen: { index: number; inSec: number } | null = null;
+    // A reuse's in-point jump outranks the preference: featured, then b-roll, strictly first.
+    const passes = cut.fast && featuring ? [true, false] : [null];
     for (const strict of [true, false]) {
-      for (let offset = 0; offset < sources.length && !chosen; offset++) {
-        const index = (turn + offset) % sources.length;
-        const source = sources[index];
-        if (sources.length > 1 && source.id === previous) continue;
-        const at = inPoint(source, seconds, strict, cut.still);
-        if (at !== null) chosen = { index, inSec: at };
-      }
+      for (const featured of passes)
+        for (let offset = 0; offset < sources.length && !chosen; offset++) {
+          const index = (turn + offset) % sources.length;
+          const source = sources[index];
+          if (sources.length > 1 && source.id === previous) continue;
+          if (featured !== null && (source.role !== undefined) !== featured) continue;
+          const at = inPoint(source, seconds, strict, cut.still);
+          if (at !== null) chosen = { index, inSec: at };
+        }
       if (chosen) break;
     }
     if (!chosen)

@@ -495,6 +495,171 @@ describe('cut-synced transients', () => {
   });
 });
 
+/** The same footage with the spoken takes as the presenter and the packshot as the product. */
+const ROLED: CutPlanInput['sources'] = SOURCES.map((source) =>
+  source.id.startsWith('talk')
+    ? { ...source, role: 'presenter' as const }
+    : source.still
+      ? { ...source, role: 'product' as const }
+      : source,
+);
+const TOKENS = ['$12', 'EASY FIT'];
+
+describe('burst type', () => {
+  /** Beat frames at the planner's rounding: beat b spans [beatFrame(b), beatFrame(b + 1)). */
+  const beatFrame = (beat: number, bpm: number, fps: number) =>
+    Math.round((beat * 60 * fps) / bpm + 1e-9);
+
+  test('no tokens, no type: the plan is the one it always was', () => {
+    for (const preset of PRESETS) {
+      const made = plan(preset);
+      expect('type' in made).toBe(false);
+      const { type: _type, ...withType } = plan({ ...preset, tokens: TOKENS });
+      expect(withType).toEqual(made);
+    }
+  });
+
+  test('a token lands on a beat and holds whole beats, only where every cut is 0.2 s or faster', () => {
+    let beats = 0;
+    for (const bpm of TEMPI)
+      for (const preset of PRESETS)
+        for (const bars of [4, 8]) {
+          const made = plan({ ...preset, beat: beatAt(bpm), bars, tokens: TOKENS });
+          const at = starts(made.cuts);
+          const grid = Array.from({ length: bars * 4 + 1 }, (_, beat) =>
+            beatFrame(beat, bpm, made.fps),
+          );
+          for (const word of made.type ?? []) {
+            const first = grid.indexOf(word.atFrame);
+            const last = grid.indexOf(word.atFrame + word.frames);
+            expect(first).toBeGreaterThanOrEqual(0);
+            expect(last).toBeGreaterThan(first);
+            beats += last - first;
+            // Every cut under the word is a fast rung: never over a held shot.
+            made.cuts.forEach((cut, index) => {
+              if (at[index] < word.atFrame + word.frames && at[index] + cut.frames > word.atFrame)
+                expect(cut.rung).toBeLessThanOrEqual(0.2);
+            });
+          }
+          if (!made.cuts.some((cut) => cut.rung <= 0.2)) expect(made.type).toEqual([]);
+        }
+    expect(beats).toBeGreaterThan(300);
+  });
+
+  test('stutter: the type covers exactly each burst beat, one token per beat in turn', () => {
+    const made = plan({ pacing: 'stutter', bars: 8, tokens: TOKENS });
+    const shifts = made.transients.filter((transient) => transient.kind === 'rgb-shift');
+    const burstFrames = shifts.reduce((sum, shift) => sum + shift.frames, 0);
+    expect((made.type ?? []).reduce((sum, word) => sum + word.frames, 0)).toBe(burstFrames);
+    for (const shift of shifts)
+      expect(made.type?.some((word) => word.atFrame === shift.atFrame)).toBe(true);
+    // One token per beat: a 24-frame beat at 150 BPM and 60 fps, alternating.
+    expect(made.type?.every((word) => word.frames === 24)).toBe(true);
+    made.type?.forEach((word, index) => {
+      expect(word.text).toBe(TOKENS[index % TOKENS.length]);
+    });
+  });
+
+  test('build: the beats from the 0.2 s rung to the drop; drop-hit: the drop bar', () => {
+    const build = plan({ pacing: 'build', bars: 4, tokens: TOKENS });
+    const ramp = buildRamp(build, 4, 150);
+    const last = build.type?.at(-1);
+    expect(last && last.atFrame + last.frames).toBe(ramp.drop);
+    expect(build.type?.length).toBeGreaterThanOrEqual(3);
+    const dropHit = plan({ pacing: 'drop-hit', bars: 4, tokens: TOKENS });
+    const hit = dropFrameOf(dropHit, 'drop-hit', 4, 150);
+    // The drop's first beat may hold the packshot, so the type may start a beat later.
+    expect(dropHit.type?.[0]?.atFrame).toBeGreaterThanOrEqual(hit);
+    expect(
+      (dropHit.type ?? []).every((word) => word.atFrame + word.frames <= hit + dropHit.fps * 1.6),
+    ).toBe(true);
+  });
+
+  test('one token holds the burst whole; the type never covers a still', () => {
+    const made = plan({ pacing: 'stutter', bars: 8, tokens: ['$12'] });
+    expect(made.type?.every((word) => word.text === '$12' && word.frames >= 24)).toBe(true);
+    for (const bpm of TEMPI)
+      for (const preset of PRESETS) {
+        const placed = plan({ ...preset, beat: beatAt(bpm), sources: ROLED, tokens: TOKENS });
+        const at = starts(placed.cuts);
+        placed.cuts.forEach((cut, index) => {
+          if (cut.sourceId !== 'packshot') return;
+          for (const word of placed.type ?? [])
+            expect(
+              at[index] >= word.atFrame + word.frames || at[index] + cut.frames <= word.atFrame,
+            ).toBe(true);
+        });
+      }
+  });
+
+  test('a token longer than the type allows is refused by the schema', () => {
+    expect(
+      cutPlanInputSchema.safeParse({
+        beat: beatAt(150),
+        bars: 4,
+        pacing: 'build',
+        sources: SOURCES,
+        transients: [],
+        tokens: ['THIS IS NOT A WORD'],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('product and presenter on the fast rungs', () => {
+  test('with roles, every 0.05–0.2 s cut draws the product or the presenter; b-roll keeps the long rungs', () => {
+    for (const preset of [
+      { pacing: 'build' },
+      { pacing: 'stutter' },
+      { pacing: 'drop-hit' },
+    ] as const) {
+      const made = plan({ ...preset, sources: ROLED });
+      const role = (id: string) => ROLED.find((source) => source.id === id)?.role;
+      const fast = made.cuts.filter((cut) => cut.rung <= 0.2);
+      expect(fast.length).toBeGreaterThan(0);
+      expect(fast.every((cut) => role(cut.sourceId) !== undefined)).toBe(true);
+      expect(made.cuts.some((cut) => cut.rung >= 0.4 && role(cut.sourceId) === undefined)).toBe(
+        true,
+      );
+    }
+  });
+
+  test('every cut rule holds with roles: no repeat, the in-point jump, no long cut from speech', () => {
+    for (const bpm of TEMPI)
+      for (const preset of PRESETS) {
+        const made = plan({ ...preset, beat: beatAt(bpm), bars: 8, sources: ROLED });
+        const lastIn = new Map<string, number>();
+        made.cuts.forEach((cut, index) => {
+          if (index > 0) expect(cut.sourceId).not.toBe(made.cuts[index - 1].sourceId);
+          const source = ROLED.find((candidate) => candidate.id === cut.sourceId);
+          if (!source || source.still) {
+            expect(cut.rung).toBeGreaterThanOrEqual(0.2);
+            return;
+          }
+          const previous = lastIn.get(cut.sourceId);
+          if (previous !== undefined)
+            expect(Math.abs(cut.inSec - previous)).toBeGreaterThanOrEqual(0.5 - 1e-9);
+          lastIn.set(cut.sourceId, cut.inSec);
+          const seconds = cut.frames / made.fps;
+          if (seconds >= 0.4)
+            for (const speech of source.speech)
+              expect(
+                cut.inSec >= speech.endSec - 1e-9 || cut.inSec + seconds <= speech.startSec + 1e-9,
+              ).toBe(true);
+        });
+      }
+  });
+
+  test('one featured source alternates with b-roll rather than repeat itself', () => {
+    const one = SOURCES.map((source) =>
+      source.id === 'talk-a' ? { ...source, role: 'presenter' as const } : source,
+    );
+    const fast = plan({ pacing: 'build', sources: one }).cuts.filter((cut) => cut.rung <= 0.2);
+    const featured = fast.filter((cut) => cut.sourceId === 'talk-a').length;
+    expect(featured).toBeGreaterThanOrEqual(Math.floor(fast.length / 2));
+  });
+});
+
 test('a rung outside the ladder is refused by the schema', () => {
   expect(
     cutPlanInputSchema.safeParse({
