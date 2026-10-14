@@ -8,6 +8,7 @@ import {
   cutPlanSchema,
   fastCutFps,
   planCuts,
+  stutterBurstBeats,
 } from './cutPlan';
 
 const beatAt = (bpm: number, energy?: number[]) => ({
@@ -56,6 +57,26 @@ const tickFrames = (bpm: number, fps: number) => (60 / bpm / 8) * fps;
 const offTick = (frame: number, bpm: number, fps: number) => {
   const ticks = frame / tickFrames(bpm, fps);
   return Math.abs(Math.round(ticks) * tickFrames(bpm, fps) - frame);
+};
+/** The frame of a bar line, as the planner rounds it. */
+const barFrame = (bar: number, bpm: number, fps: number) =>
+  Math.round((bar * 4 * 60 * fps) / bpm + 1e-9);
+/** Where a plan drops: the build's last bar line, drop-hit's first 0.2 s cut; none otherwise. */
+const dropFrameOf = (made: CutPlan, pacing: string, bars: number, bpm: number) =>
+  pacing === 'build'
+    ? barFrame(bars - 1, bpm, made.fps)
+    : pacing === 'drop-hit'
+      ? starts(made.cuts)[made.cuts.findIndex((cut) => cut.rung === 0.2)]
+      : Number.NaN;
+/** A build's ramp, split at the drop: the bar line one bar before the end. */
+const buildRamp = (made: CutPlan, bars: number, bpm: number) => {
+  const at = starts(made.cuts);
+  const drop = barFrame(bars - 1, bpm, made.fps);
+  return {
+    drop,
+    ramp: made.cuts.filter((_, index) => at[index] < drop),
+    tail: made.cuts.filter((_, index) => at[index] >= drop),
+  };
 };
 
 const PRESETS = [
@@ -168,74 +189,120 @@ describe('the build ladder at 150 BPM and 60 fps', () => {
     0.05: 3,
   };
 
-  test('appears as 60/48/36/24/12/6/3 frames, slowest first, the same count at each rung', () => {
+  test('appears as 60/48/36/24/12/6/3 frames, slowest first, from the montage’s first frame', () => {
     expect(made.fps).toBe(60);
-    const rows = new Map<number, number[]>();
-    // The first cut also holds the opening until the ladder starts (the head before 63 ticks).
-    const ladder = made.cuts.slice(
-      0,
-      made.cuts.findIndex(
-        (cut, index) => index > 0 && cut.rung === 0.4 && made.cuts[index - 1].rung === 0.05,
-      ),
-    );
-    ladder
-      .slice(1)
-      .forEach((cut) => rows.set(cut.rung, [...(rows.get(cut.rung) ?? []), cut.frames]));
-    expect(ladder[0].rung).toBe(1);
-    expect(ladder[0].frames).toBeGreaterThanOrEqual(60);
-    for (const rung of CUT_RUNGS_SEC)
-      for (const frames of rows.get(rung) ?? []) expect(frames).toBe(ladderFrames[rung]);
-    const rungsInOrder = ladder
+    const { ramp } = buildRamp(made, 4, 150);
+    for (const cut of ramp) expect(cut.frames).toBe(ladderFrames[cut.rung]);
+    const rungsInOrder = ramp
       .map((cut) => cut.rung)
       .filter((rung, index, all) => all.indexOf(rung) === index);
     expect(rungsInOrder).toEqual([...CUT_RUNGS_SEC]);
-    const counts = CUT_RUNGS_SEC.map((rung) => ladder.filter((cut) => cut.rung === rung).length);
-    expect(new Set(counts).size).toBe(1);
+    // Each rung is one contiguous run: the ramp never steps back to a slower rung.
+    expect(ramp.every((cut, index) => index === 0 || cut.rung <= ramp[index - 1].rung)).toBe(true);
   });
 
-  test('lands exactly on the drop bar line, then 0.4 on the beats', () => {
-    const at = starts(made.cuts);
-    const lastFast = made.cuts.map((cut) => cut.rung).lastIndexOf(0.05);
-    const dropFrame = at[lastFast] + made.cuts[lastFast].frames;
-    expect(dropFrame % 96).toBe(0); // a bar at 150 BPM, 60 fps
-    expect(dropFrame).toBeGreaterThan(0);
-    const tail = made.cuts.slice(lastFast + 1);
-    expect(tail.length).toBeGreaterThan(0);
-    expect(tail.every((cut) => cut.rung === 0.4 && cut.frames === 24)).toBe(true);
+  test('every rung holds about the same time, so the cut count climbs as the rungs shrink', () => {
+    for (const bpm of TEMPI)
+      for (const bars of [4, 8, 16]) {
+        const built = plan({ pacing: 'build', beat: beatAt(bpm), bars });
+        const { drop, ramp } = buildRamp(built, bars, bpm);
+        const rows = CUT_RUNGS_SEC.map((rung) => ramp.filter((cut) => cut.rung === rung));
+        const counts = rows.map((row) => row.length);
+        const seconds = rows.map(
+          (row) => row.reduce((sum, cut) => sum + cut.frames, 0) / built.fps,
+        );
+        const share = drop / built.fps / CUT_RUNGS_SEC.length;
+        const label = `${bpm} BPM, ${bars} bars: ${counts.join('/')} cuts`;
+        expect(
+          counts.every((count) => count > 0),
+          label,
+        ).toBe(true);
+        expect(
+          counts.every((count, index) => index === 0 || count >= counts[index - 1]),
+          label,
+        ).toBe(true);
+        // Equal time makes the 0.05 s rung eight times the 0.4 s rung's count; the grid keeps half.
+        expect(counts[6], label).toBeGreaterThanOrEqual(4 * counts[3]);
+        // The fast rungs share the screen: no spike of one cut each, no rung swallowing the ramp.
+        for (const held of seconds.slice(4)) {
+          expect(held, label).toBeGreaterThanOrEqual(0.6 * share);
+          expect(held, label).toBeLessThanOrEqual(1.5 * share);
+        }
+      }
   });
 
-  test('a longer montage climbs the ladder more than once per rung', () => {
+  test('lands exactly on the drop’s bar line, then at most one bar of 0.4 on the beats', () => {
+    for (const bpm of TEMPI)
+      for (const bars of [2, 4, 9, 16]) {
+        const built = plan({ pacing: 'build', beat: beatAt(bpm), bars });
+        const { drop, ramp, tail } = buildRamp(built, bars, bpm);
+        const label = `${bpm} BPM, ${bars} bars`;
+        // A cut starts exactly on the drop: the ramp's last cut ends on the bar line.
+        expect(
+          ramp.reduce((sum, cut) => sum + cut.frames, 0),
+          label,
+        ).toBe(drop);
+        expect(Math.min(...ramp.map((cut) => cut.rung)), label).toBe(0.05);
+        expect(built.frames - drop, label).toBe(
+          barFrame(bars, bpm, built.fps) - barFrame(bars - 1, bpm, built.fps),
+        );
+        expect(
+          tail.every((cut) => cut.rung === 0.4),
+          label,
+        ).toBe(true);
+      }
+    const { tail } = buildRamp(made, 4, 150);
+    expect(tail.map((cut) => cut.frames)).toEqual([24, 24, 24, 24]);
+  });
+
+  test('a longer montage climbs the ladder with more cuts per rung', () => {
     const long = plan({ pacing: 'build', bars: 8 });
     expect(long.cuts.filter((cut) => cut.rung === 0.6).length).toBeGreaterThan(1);
   });
 
-  test('with an energy arc the ladder lands on the biggest rise on a downbeat', () => {
-    // 6 bars of 4 beats; the energy jumps at bar 4's downbeat (beat 16).
+  test('an energy arc does not move the drop: no more than one bar follows it', () => {
+    // 6 bars of 4 beats; the energy jumps at bar 4's downbeat (beat 16), two bars from the end.
     const energy = Array.from({ length: 24 }, (_, index) => (index >= 16 ? 1 : 0.3));
     const dropped = plan({ pacing: 'build', bars: 6, beat: beatAt(150, energy) });
-    const at = starts(dropped.cuts);
-    const lastFast = dropped.cuts.map((cut) => cut.rung).lastIndexOf(0.05);
-    expect(at[lastFast] + dropped.cuts[lastFast].frames).toBe(4 * 96);
+    expect(buildRamp(dropped, 6, 150).ramp.reduce((sum, cut) => sum + cut.frames, 0)).toBe(5 * 96);
   });
 });
 
 describe('the other presets', () => {
-  test('stutter: a base of 0.4 with a 0.05 burst on the last beat of every second bar', () => {
+  test('stutter: a base of 0.4 with 0.05 bursts that end every second bar and grow', () => {
     const made = plan({ pacing: 'stutter', bars: 4 });
     const at = starts(made.cuts);
     const burst = made.cuts
       .map((cut, index) => ({ cut, at: at[index] }))
       .filter(({ cut }) => cut.rung === 0.05);
-    // At 150 BPM 0.05 s is one tick: 8 cuts of 3 frames on the last beat of bars 2 and 4.
+    // At 150 BPM 0.05 s is one tick: one beat of 8 cuts ends bar 2, two beats of 16 end bar 4.
     expect(burst.map(({ at: frame }) => frame)).toEqual([
       ...Array.from({ length: 8 }, (_, index) => 168 + index * 3),
-      ...Array.from({ length: 8 }, (_, index) => 360 + index * 3),
+      ...Array.from({ length: 16 }, (_, index) => 336 + index * 3),
     ]);
     expect(
       made.cuts
         .filter((cut) => cut.rung !== 0.05)
         .every((cut) => cut.rung === 0.4 && cut.frames === 24),
     ).toBe(true);
+  });
+
+  test('stutter bursts escalate: each at least as long as the last, the final one longest', () => {
+    expect(stutterBurstBeats(1)).toEqual([1]);
+    expect(stutterBurstBeats(2)).toEqual([1, 2]);
+    expect(stutterBurstBeats(4)).toEqual([1, 2, 3, 4]);
+    expect(stutterBurstBeats(8)).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
+    for (const bpm of TEMPI)
+      for (const bars of [4, 8, 16]) {
+        const made = plan({ pacing: 'stutter', beat: beatAt(bpm), bars });
+        const shifts = made.transients.filter((transient) => transient.kind === 'rgb-shift');
+        const lengths = shifts.map((shift) => shift.frames);
+        expect(lengths).toHaveLength(bars / 2);
+        expect(
+          lengths.every((frames, index) => index === 0 || frames >= lengths[index - 1] - 1),
+        ).toBe(true);
+        expect(lengths.at(-1)).toBeGreaterThan(lengths[0] + 1);
+      }
   });
 
   test('drop-hit: 1 and 0.8 until the drop, a flash and a punch, one bar of 0.2, then 0.4', () => {
@@ -305,24 +372,68 @@ describe('footage', () => {
   });
 });
 
+describe('stills', () => {
+  test('a still lands only on a rung of 0.4 s or longer, or on the drop — never a 0.05–0.2 s cut', () => {
+    let stills = 0;
+    for (const bpm of TEMPI)
+      for (const preset of PRESETS)
+        for (const bars of [4, 8]) {
+          if ('rung' in preset && preset.rung < 0.4) continue;
+          const made = plan({ ...preset, beat: beatAt(bpm), bars });
+          const at = starts(made.cuts);
+          const drop = dropFrameOf(made, preset.pacing, bars, bpm);
+          made.cuts.forEach((cut, index) => {
+            if (cut.sourceId !== 'packshot') return;
+            stills++;
+            // The drop downbeat may hold the packshot even as drop-hit's 0.2 s hit.
+            if (at[index] === drop) return;
+            expect(cut.rung).toBeGreaterThanOrEqual(0.4);
+            expect(cut.frames / made.fps).toBeGreaterThanOrEqual(0.3);
+          });
+        }
+    expect(stills).toBeGreaterThan(50);
+  });
+
+  test('a montage of fast cuts and one still never draws the still', () => {
+    expect(plan({ rung: 0.1, bars: 2 }).cuts.some((cut) => cut.sourceId === 'packshot')).toBe(
+      false,
+    );
+  });
+});
+
 describe('cut-synced transients', () => {
   const made = plan({ pacing: 'build', bars: 4 });
   const at = starts(made.cuts);
-  const of = (kind: string) => made.transients.filter((transient) => transient.kind === kind);
+  const of = (kind: string, from: CutPlan = made) =>
+    from.transients.filter((transient) => transient.kind === kind);
 
-  test('a flash on bar-downbeat cuts of 0.4 s or longer, never on the join from the hook', () => {
+  test('a one-frame flash on bar-downbeat cuts of 0.4 s or longer, never on the join from the hook', () => {
     const steady = plan({ bars: 4 });
     const steadyAt = starts(steady.cuts);
-    const flashes = steady.transients
-      .filter((transient) => transient.kind === 'flash')
-      .map((transient) => transient.atFrame);
+    const flashes = of('flash', steady).map((transient) => transient.atFrame);
     expect(flashes).toEqual([48, 96, 144]); // bars 2–4 at 30 fps; bar 1 is the join
     expect(flashes.every((frame) => steadyAt.includes(frame))).toBe(true);
-    expect(
-      steady.transients
-        .filter((transient) => transient.kind === 'flash')
-        .every((transient) => transient.frames === 2),
-    ).toBe(true);
+    expect(of('flash', steady).every((transient) => transient.frames === 1)).toBe(true);
+  });
+
+  test('a flash only on the drop or a bar downbeat held 0.4 s — never on a shorter cut', () => {
+    for (const bpm of TEMPI)
+      for (const preset of PRESETS) {
+        const each = plan({ ...preset, beat: beatAt(bpm), bars: 8 });
+        const eachAt = starts(each.cuts);
+        const drop = dropFrameOf(each, preset.pacing, 8, bpm);
+        for (const flash of of('flash', each)) {
+          expect(flash.frames).toBe(1);
+          const index = eachAt.indexOf(flash.atFrame);
+          expect(index).toBeGreaterThan(0);
+          const seconds = each.cuts[index].frames / each.fps;
+          expect(flash.atFrame === drop || seconds >= 0.4 - 1e-9).toBe(true);
+          if (flash.atFrame !== drop)
+            expect(offTick(flash.atFrame, bpm, each.fps)).toBeLessThanOrEqual(0.5 + 1e-9);
+        }
+      }
+    // The build's drop flashes.
+    expect(of('flash').map((transient) => transient.atFrame)).toContain(288);
   });
 
   test('a punch on every cut of 0.2 s or longer, 6 frames at most', () => {
@@ -333,12 +444,37 @@ describe('cut-synced transients', () => {
     expect(of('punch').every((transient) => transient.frames <= 6)).toBe(true);
   });
 
-  test('an rgb shift across each burst of 0.1 s cuts and faster', () => {
-    const [shift] = of('rgb-shift');
-    const firstFast = made.cuts.findIndex((cut) => cut.rung <= 0.1);
-    const lastFast = made.cuts.map((cut) => cut.rung <= 0.1).lastIndexOf(true);
-    expect(shift.atFrame).toBe(at[firstFast]);
-    expect(shift.atFrame + shift.frames).toBe(at[lastFast] + made.cuts[lastFast].frames);
+  test('ladder rungs under 0.4 s carry nothing but a punch; the build never shifts RGB', () => {
+    for (const bpm of TEMPI)
+      for (const bars of [4, 8, 16]) {
+        const built = plan({ pacing: 'build', beat: beatAt(bpm), bars });
+        const builtAt = starts(built.cuts);
+        const drop = dropFrameOf(built, 'build', bars, bpm);
+        expect(of('rgb-shift', built)).toEqual([]);
+        for (const transient of built.transients) {
+          // The drop is the hit after the ladder: it flashes even where the grid makes it 0.375 s.
+          if (transient.atFrame === drop) continue;
+          const index = builtAt.findLastIndex((frame) => frame <= transient.atFrame);
+          if (built.cuts[index].frames / built.fps < 0.4 - 1e-9 && transient.kind !== 'punch')
+            expect(`${transient.kind} at ${transient.atFrame}`).toBe('a punch');
+        }
+      }
+  });
+
+  test('an RGB shift spans exactly each stutter burst, and nothing else', () => {
+    for (const bpm of TEMPI) {
+      const stutter = plan({ pacing: 'stutter', beat: beatAt(bpm), bars: 8 });
+      const stutterAt = starts(stutter.cuts);
+      for (const shift of of('rgb-shift', stutter)) {
+        const first = stutterAt.indexOf(shift.atFrame);
+        const last = stutterAt.indexOf(shift.atFrame + shift.frames) - 1;
+        const inside = stutter.cuts.slice(first, last < 0 ? undefined : last + 1);
+        expect(first).toBeGreaterThan(0);
+        expect(inside.every((cut) => cut.rung === 0.05)).toBe(true);
+        expect(stutter.cuts[first - 1].rung).toBe(0.4);
+      }
+      expect(of('rgb-shift', plan({ rung: 0.05, beat: beatAt(bpm), bars: 2 }))).toEqual([]);
+    }
   });
 
   test('on-beat pulses inside held cuts, and only the kinds the edit asked for', () => {
@@ -346,6 +482,8 @@ describe('cut-synced transients', () => {
     expect(held.transients.length).toBeGreaterThan(0);
     expect(held.transients.every((transient) => transient.kind === 'shake')).toBe(true);
     expect(plan({ rung: 1, transients: [] }).transients).toEqual([]);
+    // An RGB shift never pulses on a beat: it belongs to the bursts.
+    expect(plan({ rung: 1, bars: 4, transients: ['rgb-shift'] }).transients).toEqual([]);
   });
 
   test('every transient sits inside the montage', () => {
