@@ -17,6 +17,7 @@
  * them to a durable table.
  */
 
+import { askFormatOf, formatDelivered } from './jaina-ask-shape';
 import { stripProseMarks } from './jaina-report';
 import {
   figureRefsIn,
@@ -34,6 +35,10 @@ export const ANSWER_SHAPE_CODES = [
   'justification_no_relation',
   'sentence_figure_unjustified',
   'sentence_direction_contradicts',
+  // The ask named a format — a list, steps, a table, a comparison, a chart — and the answer
+  // carries no block in it (`askShapeOf`, `formatDelivered` in jaina-ask-shape.ts). The
+  // Backend repairs it from the turn's datasets when it can and records it either way.
+  'format_requested_not_delivered',
 ] as const;
 export type AnswerShapeCode = (typeof ANSWER_SHAPE_CODES)[number];
 
@@ -655,7 +660,7 @@ const proseDirectionContradicts = (executive: string): boolean => {
  * Every way the answer's text misses its shape. Empty is a well-shaped answer. Messages
  * carry counts and figure ids, never the answer's words.
  */
-export function answerShapeOf(report: unknown): AnswerShapeViolation[] {
+export function answerShapeOf(report: unknown, ask?: { query: string }): AnswerShapeViolation[] {
   const rec = recordOf(report);
   const blocks = arrayOf(rec.blocks);
   const texts = answerTextsOf(report);
@@ -763,6 +768,16 @@ export function answerShapeOf(report: unknown): AnswerShapeViolation[] {
       'sentence_direction_contradicts',
       'A direction word in the answer disagrees with the sign of the change it states.',
     );
+  }
+  if (ask) {
+    const format = askFormatOf(ask.query);
+    if (!formatDelivered(report, format)) {
+      out.push({
+        code: 'format_requested_not_delivered',
+        block_id: null,
+        message: `The ask requested a ${format} and the answer carries none.`,
+      });
+    }
   }
   return out;
 }
