@@ -10,11 +10,7 @@ import { FormAlert } from '@/components/auth/FormAlert';
 import { FormInput } from '@/components/auth/FormInput';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  magicLinkFormSchema,
-  type PasswordSignInInput,
-  passwordSignInSchema,
-} from '@/lib/auth/schemas';
+import type { PasswordSignInInput } from '@/lib/auth/schemas';
 
 type LoginFormProps = {
   redirectTo?: string;
@@ -42,8 +38,12 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
     resetField,
     formState: { errors },
   } = useForm<PasswordSignInInput>({
+    // The schemas load on submit with their resolver: zod would otherwise ride /login's first load.
     resolver: async (values, context, options) => {
-      const { zodResolver } = await import('@hookform/resolvers/zod');
+      const [{ zodResolver }, { magicLinkFormSchema, passwordSignInSchema }] = await Promise.all([
+        import('@hookform/resolvers/zod'),
+        import('@/lib/auth/schemas'),
+      ]);
       return zodResolver(usePassword ? passwordSignInSchema : magicLinkFormSchema)(
         values,
         context,

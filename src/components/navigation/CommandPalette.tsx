@@ -4,6 +4,7 @@ import { Building2, Loader2, Moon, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePathname, useRouter } from 'next/navigation';
 import React from 'react';
+import { z } from 'zod';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useTheme } from '@/components/theme-provider';
 import {
@@ -22,14 +23,17 @@ import {
 } from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
-import {
-  brandStorageKeyRecentPages,
-  migrateLegacyRecentPages,
-  type RecentPage,
-  recentPagesSchema,
-} from '@/lib/storage-keys';
+import { brandStorageKeyRecentPages, migrateLegacyRecentPages } from '@/lib/storage-keys';
 import { useCommandPalette } from './CommandPaletteProvider';
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER, getContextualSuggestions } from './routes';
+
+const recentPagesSchema = z.array(
+  z.object({
+    href: z.string().min(1),
+    label: z.string().min(1),
+  }),
+);
+type RecentPage = z.infer<typeof recentPagesSchema>[number];
 
 const MAX_RECENT = 5;
 

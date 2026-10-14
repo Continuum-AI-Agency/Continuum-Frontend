@@ -10,7 +10,7 @@
       "name": "login route",
       "source": "routeFirstLoad",
       "route": "/login",
-      "baselineBytes": 1058321
+      "baselineBytes": 764382
     },
     {
       "name": "authenticated dashboard route",
