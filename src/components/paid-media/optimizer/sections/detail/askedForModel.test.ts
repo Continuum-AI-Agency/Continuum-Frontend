@@ -92,6 +92,19 @@ describe('buildAskedForRows', () => {
     expect(empty?.title).not.toBe(failed?.title);
   });
 
+  // The Backend answers `empty` with `no_delivering_adset` when every enrolled ad set is paused:
+  // an audience or creative suggestion builds from a delivering one, so none is buildable.
+  it('says when nothing is buildable because no ad set is delivering', () => {
+    const message =
+      'No enrolled ad set is delivering, so there is nothing to build a new audience from. Turn one on in Meta, then ask again.';
+    const [row] = buildAskedForRows(
+      [{ ...base, status: 'empty', error: { code: 'no_delivering_adset', message } }],
+      500,
+    );
+    expect(row?.tierLabel).toBe('Nothing to build');
+    expect(row?.basis).toBe(message);
+  });
+
   it('burns the adopt affordance once the row is adopted', () => {
     const [row] = buildAskedForRows([{ ...base, status: 'adopted', suggestion: plan() }], 500);
     expect(row?.adoptToken).toBeNull();
