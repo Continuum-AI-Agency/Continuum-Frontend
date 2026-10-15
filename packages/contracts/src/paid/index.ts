@@ -1,5 +1,7 @@
 export * from './adNaming';
 export * from './audience-groups';
+// Meta Conversions API — raw conversion events, webhook sources and their field maps, delivery log.
+export * from './conversions-api';
 // Google Ads API v25 wire shapes: the pinned version and the GoogleAdsFailure decoder.
 export * from './google-ads';
 export * from './hierarchy';
