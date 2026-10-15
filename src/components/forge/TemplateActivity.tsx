@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplateSourceEvent } from '@continuum/contracts';
+import { isAutoTemplateEvent, type TemplateSourceEvent } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { Ref } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -67,7 +67,14 @@ export function TemplateActivity({
                 {formatRelativeTime(event.at)}
               </time>
               <span className="font-mono uppercase text-muted-foreground">{event.stage}</span>
-              <span className={LEVEL_TONE[event.level]}>{event.message}</span>
+              <span className={LEVEL_TONE[event.level]}>
+                {event.message}
+                {isAutoTemplateEvent(event) ? (
+                  <span className="ml-1.5 rounded border px-1 font-mono text-2xs uppercase text-muted-foreground">
+                    auto
+                  </span>
+                ) : null}
+              </span>
             </li>
           ))}
         </ol>

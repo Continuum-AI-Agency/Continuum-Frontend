@@ -1,4 +1,8 @@
-import type { ApiRenderTemplateContract, TemplateFontReadiness, TemplateMappingReview } from '@continuum/contracts';
+import type {
+  ApiRenderTemplateContract,
+  TemplateFontReadiness,
+  TemplateMappingReview,
+} from '@continuum/contracts';
 import type { ForgeLadderAction, TemplateRunRow } from '@/lib/library/templateSources';
 import type { CheckState, CheckTick } from './CheckTable';
 
@@ -144,7 +148,7 @@ function buildCheck(input: TemplateChecksInput, state: string | null): TemplateC
       state: 'warn',
       result: needs.length
         ? needs.every((need) => need.kind === 'asset')
-          ? `Pick a picture for ${plural(needs.length, 'media variable')}, then build again`
+          ? `Pick a picture for ${plural(needs.length, 'media variable')}`
           : `${plural(needs.length, 'slot')} nothing could bind`
         : labelForState(state),
       action: 'resume',
@@ -171,7 +175,11 @@ function mappingCheck(input: TemplateChecksInput): TemplateCheck {
     return { ...base, state: 'warn', result: 'Forge has not supplied field identities yet' };
   const additional = review.fields.filter((field) => field.match === 'forge_only').length;
   if (review.state === 'needs_review')
-    return { ...base, state: 'fail', result: `${review.matchedSlots} of ${review.slotCount} layers mapped · review ${review.unmatchedSlots.length} unmatched` };
+    return {
+      ...base,
+      state: 'fail',
+      result: `${review.matchedSlots} of ${review.slotCount} layers mapped · review ${review.unmatchedSlots.length} unmatched`,
+    };
   return {
     ...base,
     state: review.identityAvailable ? 'pass' : 'warn',

@@ -102,6 +102,7 @@ import {
   saveTemplateRevision,
   saveTemplateVariables,
   sendTemplateToForge,
+  setTemplateAdoption,
   setTemplateFontAlias,
   type TemplateSlotEdit,
   type TemplateVariable,
@@ -247,6 +248,22 @@ export function TemplateDetail({
 }) {
   const { assetId, templateKey } = source;
   const queryClient = useQueryClient();
+  // The undo for an auto-published template: render access off, the Library file kept.
+  const [removingFromWorkspace, setRemovingFromWorkspace] = useState(false);
+  const removeFromWorkspace = async (key: string) => {
+    setRemovingFromWorkspace(true);
+    try {
+      const result = await setTemplateAdoption({ brandId, templateKey: key, enabled: false });
+      if (!result.granted) throw new Error(result.reason ?? 'Render access stayed on.');
+      await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) });
+      await onChanged();
+      toast.success('Removed from the render workspace');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not remove it');
+    } finally {
+      setRemovingFromWorkspace(false);
+    }
+  };
   const variablesKey = useMemo(
     () => forgeQueryKeys.templateVariables(brandId, assetId, source.versionId),
     [assetId, brandId, source.versionId],
@@ -1381,15 +1398,26 @@ export function TemplateDetail({
           ) : null}
           <DraftWithAiButton templateKey={templateKey} onOpenRender={onOpenRender} />
           {templateKey ? (
-            <Button
-              type="button"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => onOpenRender?.({ templateKey })}
-            >
-              <Play className="size-3.5" aria-hidden />
-              Render with this
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={removingFromWorkspace}
+                onClick={() => void removeFromWorkspace(templateKey)}
+              >
+                Remove from workspace
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => onOpenRender?.({ templateKey })}
+              >
+                <Play className="size-3.5" aria-hidden />
+                Render with this
+              </Button>
+            </>
           ) : null}
         </div>
       </header>

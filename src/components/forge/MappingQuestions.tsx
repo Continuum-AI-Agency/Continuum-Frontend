@@ -1,6 +1,12 @@
 'use client';
 
-import { readableLayerName, type TemplateForgeNeed } from '@continuum/contracts';
+import {
+  decisionsFor,
+  groupMappingNeeds,
+  KEEP_AS_DESIGNED,
+  suggestedAnswer,
+  type TemplateForgeNeed,
+} from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,87 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// The questions a build stopped on, answered where they are asked.
-//
-// A multi-ratio template authors each field once per ratio comp, so the forge asks the same
-// question once per comp — 43 lines for a 5-comp package that has 9 fields. They are grouped
-// here by the slot they name, and one answer is sent for every comp that asked it.
+// The questions a build stopped on, answered where they are asked. The grouping and the
+// suggested answer live in @continuum/contracts so the Backend autopilot takes the same answer.
 
-const KEEP = '__keep';
-
-export interface MappingQuestion {
-  key: string;
-  label: string;
-  reason?: string;
-  needs: TemplateForgeNeed[];
-  /** Ranked by the forge; `score` > 0 means the name itself said something. */
-  options: Array<{ fieldPath: string; label: string; score: number }>;
-}
-
-/** Mapping needs grouped by the slot they name; asset needs are the Variables tab's to answer. */
-export function groupMappingNeeds(needs: readonly TemplateForgeNeed[]): MappingQuestion[] {
-  const groups = new Map<string, MappingQuestion>();
-  for (const need of needs) {
-    if (need.kind !== 'mapping') continue;
-    const label = readableLayerName(need.slot?.label ?? need.id);
-    const key = `${label}\u0000${need.slot?.type ?? ''}`;
-    const group = groups.get(key);
-    if (group) {
-      group.needs.push(need);
-      continue;
-    }
-    groups.set(key, {
-      key,
-      label,
-      ...(need.reason ? { reason: need.reason } : {}),
-      needs: [need],
-      options: (need.options ?? []).flatMap((option) =>
-        typeof option.fieldPath === 'string'
-          ? [
-              {
-                fieldPath: option.fieldPath,
-                label: typeof option.label === 'string' ? option.label : option.fieldPath,
-                score: typeof option.score === 'number' ? option.score : 0,
-              },
-            ]
-          : [],
-      ),
-    });
-  }
-  return [...groups.values()];
-}
-
-/**
- * The answer to start from: the top option only when its NAME matched and nothing tied it.
- * A tie ordered alphabetically is not an answer, so those start unanswered.
- */
-export function suggestedAnswer(question: MappingQuestion): string | undefined {
-  const [top, second] = question.options;
-  if (!top) return KEEP;
-  return top.score > 0 && (!second || second.score < top.score) ? top.fieldPath : undefined;
-}
-
-/** The forge's decisions body: one entry per comp that asked, keyed by comp. */
-export function decisionsFor(
-  questions: readonly MappingQuestion[],
-  answers: Readonly<Record<string, string>>,
-): { mappings: Record<string, Array<Record<string, string>>> } {
-  const mappings: Record<string, Array<Record<string, string>>> = {};
-  for (const question of questions) {
-    const answer = answers[question.key];
-    if (!answer) continue;
-    for (const need of question.needs) {
-      const slotStableKey = need.slot?.stableKey;
-      if (!slotStableKey) continue;
-      const entry: Record<string, string> =
-        answer === KEEP
-          ? { slotStableKey, action: 'leaveStatic', reason: 'kept as designed by a person' }
-          : { slotStableKey, fieldPath: answer };
-      (mappings[need.comp ?? ''] ??= []).push(entry);
-    }
-  }
-  return { mappings };
-}
+const KEEP = KEEP_AS_DESIGNED;
 
 export function MappingQuestions({
   needs,
