@@ -1623,6 +1623,13 @@ export const apiRenderPreflightResponseSchema = z
       .default([]),
     /** Null when nothing in this render goes to Meta, so nothing parks for approval. */
     approval: apiRenderApprovalSummarySchema.nullable().default(null),
+    /**
+     * Who draws this row, as signed into the confirmation: `paint` is a flat design the Backend
+     * draws in the same call, `micro` the Experimental Renderer, `fleet` After Effects. Echoed so
+     * a caller that must not spend a fleet render (an organic draft wearing a template) can refuse
+     * before confirming. Defaulted: a server too old to say is the fleet.
+     */
+    engine: z.enum(['fleet', 'paint', 'micro']).default('fleet'),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
