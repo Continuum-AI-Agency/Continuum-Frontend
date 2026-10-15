@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { pinProdSupabase } from './e2e/paid-parity.env';
+import { benchBrowserChannel } from './e2e/support/prodEnv';
 
 // Harness for `optimizer:stale-moves:e2e:bench` — a portfolio whose last cycle can no longer
 // be acted on shows its moves read-only as withdrawn. See e2e/optimizer-stale-moves.bench.spec.ts.
@@ -27,7 +28,9 @@ export default defineConfig({
   timeout: 300_000,
   expect: { timeout: 60_000 },
   use: { baseURL, trace: 'retain-on-failure', video: 'off' },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
+  // The live benches' one browser rule: installed Chrome by default, Playwright's bundled
+  // Chromium with OPTIMIZER_E2E_BROWSER_CHANNEL=bundled on a machine without it.
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...benchBrowserChannel() } }],
   webServer: {
     command: 'bun run dev',
     env: {

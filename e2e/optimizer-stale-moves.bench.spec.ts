@@ -515,21 +515,37 @@ test.describe('Optimizer — a stale cycle shows its moves as withdrawn', () => 
     // serial run stops here and afterAll names each check it did not reach.
     notReached = SQL_GATE;
     expect(missing, SQL_CHECK).toEqual([]);
+
+    // The list read needs no browser: graded here, so a browser that cannot launch never takes
+    // the SQL half's verdict down with it.
+    const a = after.get('A');
+    check(
+      A_LIST,
+      a?.last_cycle_current === false &&
+        a.withdrawn_reason === 'roster_absent' &&
+        a.pending_budget_moves === 0,
+      describeRow(a),
+    );
+    check(
+      B_LIST,
+      before.get('B1')?.pending_budget_moves === 2 && after.get('B1')?.pending_budget_moves === 0,
+      `before ${describeRow(before.get('B1'))} after ${describeRow(after.get('B1'))}`,
+    );
+    const c = after.get('C');
+    check(
+      C_LIST,
+      c?.last_cycle_current === true && c.withdrawn_reason === null && c.pending_budget_moves === 2,
+      describeRow(c),
+    );
+    notReached = 'not reached: an earlier serial test failed';
   });
 
   test('(A) roster absent: the last proposal is withdrawn, nothing offered', async ({
     browser,
   }) => {
-    if (!sqlApplied) skipAll([A_LIST, ...A_UI], SQL_GATE);
+    if (!sqlApplied) skipAll(A_UI, SQL_GATE);
     test.skip(!sqlApplied, SQL_GATE);
     const row = after.get('A');
-    check(
-      A_LIST,
-      row?.last_cycle_current === false &&
-        row.withdrawn_reason === 'roster_absent' &&
-        row.pending_budget_moves === 0,
-      describeRow(row),
-    );
     if (!assignedAccount) skipAll(A_UI, ACCOUNT_GATE);
     test.skip(!assignedAccount, ACCOUNT_GATE);
 
@@ -552,13 +568,8 @@ test.describe('Optimizer — a stale cycle shows its moves as withdrawn', () => 
   });
 
   test('(B) moved ad set: B1 shows the move withdrawn, nothing offered', async ({ browser }) => {
-    if (!sqlApplied) skipAll([B_LIST, ...B_UI], SQL_GATE);
+    if (!sqlApplied) skipAll(B_UI, SQL_GATE);
     test.skip(!sqlApplied, SQL_GATE);
-    check(
-      B_LIST,
-      before.get('B1')?.pending_budget_moves === 2 && after.get('B1')?.pending_budget_moves === 0,
-      `before ${describeRow(before.get('B1'))} after ${describeRow(after.get('B1'))}`,
-    );
     if (!assignedAccount) skipAll(B_UI, ACCOUNT_GATE);
     test.skip(!assignedAccount, ACCOUNT_GATE);
 
@@ -581,16 +592,8 @@ test.describe('Optimizer — a stale cycle shows its moves as withdrawn', () => 
   });
 
   test('(C) control: a current run keeps its moves actionable', async ({ browser }) => {
-    if (!sqlApplied) skipAll([C_LIST, ...C_UI], SQL_GATE);
+    if (!sqlApplied) skipAll(C_UI, SQL_GATE);
     test.skip(!sqlApplied, SQL_GATE);
-    const row = after.get('C');
-    check(
-      C_LIST,
-      row?.last_cycle_current === true &&
-        row.withdrawn_reason === null &&
-        row.pending_budget_moves === 2,
-      describeRow(row),
-    );
     if (!assignedAccount) skipAll(C_UI, ACCOUNT_GATE);
     test.skip(!assignedAccount, ACCOUNT_GATE);
 
