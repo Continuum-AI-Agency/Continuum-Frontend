@@ -172,7 +172,14 @@ async function openRenderTab(browser: Browser): Promise<Page> {
   });
   const tab = page.getByRole('tab', { name: 'Render', exact: true });
   await expect(async () => {
-    await tab.click();
+    // A pointer resting where the sidebar hover-expands holds it open over the tabs: park it
+    // over the page first, and give each click its own deadline so this loop can retry.
+    await page.mouse.move(1200, 600);
+    await expect(page.locator('.group.peer[data-state]').first()).toHaveAttribute(
+      'data-state',
+      'collapsed',
+    );
+    await tab.click({ timeout: 5_000 });
     await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1_000 });
     // A cold dev server compiles the Forge's client chunks after the first paint.
   }).toPass({ timeout: 180_000 });
@@ -375,7 +382,11 @@ for (const spec of CARDS) {
     // new value. Recorded, not asserted — a template whose scene cannot be read has no Live frame.
     const pane = page.locator('#render-preview');
     const live = pane.locator('img[alt="Live preview"]');
-    const liveSrc = () => live.first().getAttribute('src', { timeout: 1_000 }).catch(() => null);
+    const liveSrc = () =>
+      live
+        .first()
+        .getAttribute('src', { timeout: 1_000 })
+        .catch(() => null);
     const previewDrawsEdit = await expect
       .poll(
         async () => {
@@ -402,7 +413,17 @@ for (const spec of CARDS) {
     // Render opens the review with the nine imported rows — once each has passed its dry-run.
     mark = Date.now();
     const renderButton = page.getByRole('button', { name: /^Render 9 rows/ }).first();
-    await expect(renderButton).toBeEnabled({ timeout: 180_000 });
+    await expect(renderButton)
+      .toBeEnabled({ timeout: 180_000 })
+      .catch(async (error: unknown) => {
+        // Name what each row is waiting on: the grid's own status cells, as a person reads them.
+        const rows = await page
+          .locator('tr[data-row-id]')
+          .evaluateAll((items) =>
+            items.map((item) => (item as HTMLElement).innerText.replace(/\s+/g, ' ').slice(-220)),
+          );
+        throw new Error(`rows never became Ready:\n${rows.join('\n')}`, { cause: error });
+      });
     steps.rowsReadyMs = Date.now() - mark;
     await click(renderButton);
     await expect(
