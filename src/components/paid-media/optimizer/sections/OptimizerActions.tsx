@@ -22,7 +22,7 @@ import * as typeScale from '../typeScale';
 import { type PlatformCardsState, useOptimizerPlatformCards } from '../useOptimizerData';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { PlatformChips } from './platforms/PlatformChip';
-import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
 type OptimizerActionsProps = {
@@ -104,13 +104,7 @@ export function OptimizerActions({
           <OptimizerActionsPortfolioGroup
             brandId={brandId}
             adAccountId={adAccountId}
-            headerLead={
-              <PlatformChips
-                platforms={
-                  portfolio.platforms.length > 0 ? portfolio.platforms : OPTIMIZER_PORTFOLIO_PLATFORMS
-                }
-              />
-            }
+            headerLead={<PlatformChips platforms={portfolioPlatforms(portfolio.platforms)} />}
             platformCards={platformCards.get(portfolio.id) ?? NO_CARDS}
             portfolio={portfolio}
           />

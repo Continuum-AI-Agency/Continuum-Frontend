@@ -373,9 +373,13 @@ export function portfolioLeads(candidates: readonly AccountCandidate[]): {
  *  being read) keeps the Meta word every portfolio had before Google. */
 const MEMBER_NOUN: Partial<Record<AdPlatform, string>> = { meta: 'ad set', google_ads: 'campaign' };
 
-export function memberCountLabel(count: number, platforms: readonly AdPlatform[]): string {
+export function memberNoun(count: number, platforms: readonly AdPlatform[]): string {
   const noun = platforms.length > 1 ? 'member' : (MEMBER_NOUN[platforms[0] ?? 'meta'] ?? 'member');
-  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+  return count === 1 ? noun : `${noun}s`;
+}
+
+export function memberCountLabel(count: number, platforms: readonly AdPlatform[]): string {
+  return `${count} ${memberNoun(count, platforms)}`;
 }
 
 type PortfolioRowCardProps = {

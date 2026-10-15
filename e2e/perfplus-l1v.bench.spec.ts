@@ -13,6 +13,7 @@ import {
   mintSessionBundleForEmail,
   type PlaywrightStorageState,
   pinSessionBrand,
+  restoreBrandPreference,
   revokeBenchSession,
 } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
@@ -777,15 +778,8 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
 
   test.afterAll(async () => {
     try {
-      if (originalBrand && originalBrand !== EASYFIT_BRAND_ID) await selectBrand(originalBrand);
       const cleanup = await revokeBenchSession(storageState, memberToken);
-      const { data } = await admin
-        .schema('brand_profiles')
-        .from('user_brand_preferences')
-        .select('active_brand_id')
-        .eq('user_id', memberId)
-        .maybeSingle();
-      const restored = (data as { active_brand_id?: string } | null)?.active_brand_id ?? null;
+      const restored = await restoreBrandPreference(memberId, originalBrand);
       recorder.record(
         'cleanup session',
         cleanup.revoked && cleanup.pinsLeft === 0 ? 'PASS' : 'FAIL',
@@ -793,7 +787,7 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
       );
       recorder.record(
         'cleanup active brand',
-        restored === (originalBrand ?? EASYFIT_BRAND_ID) ? 'PASS' : 'FAIL',
+        restored === originalBrand ? 'PASS' : 'FAIL',
         `preference ${restored ?? 'none'}, was ${originalBrand ?? 'none'}`,
       );
     } finally {

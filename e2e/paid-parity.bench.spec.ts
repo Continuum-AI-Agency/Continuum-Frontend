@@ -17,6 +17,7 @@ import {
   mintSessionBundleForEmail,
   type PlaywrightStorageState,
   pinSessionBrand,
+  restoreBrandPreference,
   revokeBenchSession,
 } from './support/auth';
 import { benchBrowserChannel, PROD_SUPABASE_URL } from './support/prodEnv';
@@ -1420,7 +1421,6 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
 
   test.afterAll(async () => {
     try {
-      if (originalActiveBrandId) await selectBrand(originalActiveBrandId);
       const latest = context
         ? await context.storageState().catch(() => storageState)
         : storageState;
@@ -1431,7 +1431,7 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
         cleanup.revoked && cleanup.pinsLeft === 0 ? 'PASS' : 'FAIL',
         `${cleanup.detail}; ${cleanup.pinsLeft} session pin(s) left`,
       );
-      const restored = await readActiveBrandPreference();
+      const restored = await restoreBrandPreference(benchUserId, originalActiveBrandId);
       record(
         'cleanup.active-brand',
         restored === originalActiveBrandId ? 'PASS' : 'FAIL',
@@ -1611,7 +1611,13 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
 
       // What the tab is made of, before 20261015160023 ships and after.
       const cards = payload('optimizer_get_platform_cards');
-      const cardCount = await page.getByTestId('account-card').count();
+      // The tab shows the four ranked first and folds the rest behind "N more"; open it, so
+      // every card the read returned is on screen and its figures graded. Guards sit apart.
+      const more = page.getByTestId('account-cards').getByRole('button', { name: / more · / });
+      if ((await more.count()) > 0) await more.click();
+      const cardCount =
+        (await page.getByTestId('account-card').count()) +
+        (await page.locator('[data-testid="account-cards"] [data-guard]').count());
       if (obj(cards)?.code === 'PGRST202') {
         record(
           'google.cards',

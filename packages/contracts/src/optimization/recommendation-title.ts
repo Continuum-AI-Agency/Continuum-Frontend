@@ -74,19 +74,20 @@ export const actionVerbSchema = z.enum([
 ]);
 export type ActionVerb = z.infer<typeof actionVerbSchema>;
 
-/** The verb as the button prints it. */
+/** The verb as the button prints it. Product UI chrome is English (decision 5); a card's prose
+ *  beside it already is. */
 export const ACTION_VERB_LABEL: Record<ActionVerb, string> = {
-  pause: 'Pausar',
-  pause_ad: 'Pausar el anuncio',
-  creative_refresh: 'Renovar el creativo',
-  audience_expand: 'Ampliar la audiencia',
-  variate_creative: 'Hacer variantes',
-  seed_experiment: 'Crear la comparación',
-  restore_delivery: 'Restaurar la entrega',
-  settings: 'Ajustar la configuración',
-  reallocate: 'Mover presupuesto',
-  consolidate: 'Consolidar',
-  review: 'Revisar',
+  pause: 'Pause',
+  pause_ad: 'Pause the ad',
+  creative_refresh: 'Refresh the creative',
+  audience_expand: 'Widen the audience',
+  variate_creative: 'Make variants',
+  seed_experiment: 'Set up the comparison',
+  restore_delivery: 'Restore delivery',
+  settings: 'Adjust the settings',
+  reallocate: 'Move budget',
+  consolidate: 'Consolidate',
+  review: 'Review',
 };
 
 /**
@@ -139,7 +140,7 @@ export function titleText(title: RecommendationTitle): string {
   return `${title.entity}: ${titleFigure(title)}, ${title.comparator}`;
 }
 
-/** The button: "Pausar · $48.80 MXN/día", "Ajustar la configuración · $400 MXN → $360 MXN", or the verb alone. */
+/** The button: "Pause · $48.80 MXN/day", "Adjust the settings · $400 MXN → $360 MXN", or the verb alone. */
 export function actionLabel(action: RecommendationAction): string {
   const verb = ACTION_VERB_LABEL[action.verb];
   const sizing = action.sizing;
@@ -148,7 +149,7 @@ export function actionLabel(action: RecommendationAction): string {
     return `${verb} · ${formatMoney(sizing.from, sizing.currency)} → ${formatMoney(sizing.to, sizing.currency)}`;
   }
   if (sizing.perDay != null && sizing.perDay > 0) {
-    return `${verb} · ${formatMoney(sizing.perDay, sizing.currency)}/día`;
+    return `${verb} · ${formatMoney(sizing.perDay, sizing.currency)}/day`;
   }
   return verb;
 }

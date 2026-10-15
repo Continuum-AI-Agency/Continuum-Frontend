@@ -42,10 +42,15 @@ export function googleCampaignEligibility(channelType: string | null): Eligibili
     case 'PERFORMANCE_MAX':
       return { eligible: true, typeLabel: 'Performance Max', childKind: 'asset_group' };
     case 'DEMAND_GEN':
-    case 'DISCOVERY':
       return { eligible: true, typeLabel: 'Demand Gen', childKind: 'ad_group' };
+    // The three types above are the ones the engine admits (mapSnapshot ADMITTED_GOOGLE_CHANNELS)
+    // and optimizer_add_portfolio_members accepts (20261015204209); decision 14 leaves Shopping out.
     case 'SHOPPING':
-      return { eligible: true, typeLabel: 'Shopping', childKind: 'ad_group' };
+      return {
+        eligible: false,
+        typeLabel: 'Shopping',
+        reason: 'Shopping campaigns are outside this version.',
+      };
     case 'SMART':
       return {
         eligible: false,
@@ -104,6 +109,8 @@ export type PickerCampaignNode = {
   reason: string | null;
   childKind: PickerChildKind;
   children: { id: string; name: string }[];
+  /** The portfolio holds it (optimizer_list_portfolio_members). */
+  held: boolean;
 };
 
 export type PlatformPickerGroup = {
@@ -121,14 +128,30 @@ export function buildGooglePickerGroup(input: {
   portfolioCurrency: string | null;
   campaigns: readonly GoogleCampaignRow[];
   adGroups: readonly GoogleAdGroupRow[];
+  /** The campaigns the portfolio holds. One the spend ranking does not list (paused, no spend
+   *  in its window) is still shown, from the member's own name and catalog type. */
+  held?: readonly { id: string; name: string | null; channelType: string | null }[];
 }): PlatformPickerGroup {
+  const heldIds = new Set((input.held ?? []).map((member) => member.id));
+  const listed = new Set(input.campaigns.map((campaign) => campaign.id));
+  const rows: GoogleCampaignRow[] = [
+    ...input.campaigns,
+    ...(input.held ?? [])
+      .filter((member) => !listed.has(member.id))
+      .map((member) => ({
+        id: member.id,
+        name: member.name ?? member.id,
+        channelType: member.channelType,
+        spend: 0,
+      })),
+  ];
   const childrenByCampaign = new Map<string, { id: string; name: string }[]>();
   for (const group of input.adGroups) {
     const list = childrenByCampaign.get(group.campaignId) ?? [];
     list.push({ id: group.id, name: group.name });
     childrenByCampaign.set(group.campaignId, list);
   }
-  const campaigns = input.campaigns
+  const campaigns = rows
     .map((campaign): PickerCampaignNode & { spend: number } => {
       const eligibility = googleCampaignEligibility(campaign.channelType);
       const childKind = eligibility.eligible ? eligibility.childKind : 'ad_group';
@@ -140,11 +163,13 @@ export function buildGooglePickerGroup(input: {
         reason: eligibility.eligible ? null : eligibility.reason,
         childKind,
         children: childKind === 'asset_group' ? [] : (childrenByCampaign.get(campaign.id) ?? []),
+        held: heldIds.has(campaign.id),
         spend: campaign.spend,
       };
     })
     .sort(
       (left, right) =>
+        Number(right.held) - Number(left.held) ||
         Number(right.eligible) - Number(left.eligible) ||
         right.spend - left.spend ||
         left.name.localeCompare(right.name),

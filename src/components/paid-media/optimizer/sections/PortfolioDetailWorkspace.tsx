@@ -107,7 +107,7 @@ import {
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
-import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import { isStale, pacingStaleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -612,7 +612,7 @@ export function PortfolioDetailWorkspace({
           }
           onRun={() => run.mutate(portfolio.id)}
           onSecondary={onSecondary}
-          platforms={OPTIMIZER_PORTFOLIO_PLATFORMS}
+          platforms={portfolioPlatforms(portfolio.platforms)}
           running={run.isPending}
           secondaryPending={setPaused.isPending}
           tabs={

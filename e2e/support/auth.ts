@@ -1,5 +1,6 @@
 import { combineChunks, createChunks, stringFromBase64URL, stringToBase64URL } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { managementSql } from './prodEnv';
 
 // Supabase auth-mint helper for Playwright E2E.
 //
@@ -260,6 +261,11 @@ export async function pinSessionBrand(accessToken: string, brandId: string): Pro
  * token is traded for a fresh one first. `signOut(…, 'local')` deletes the auth.sessions row,
  * which takes every user_session_brands pin of that session with it (FK cascade); the pins
  * are deleted explicitly as well, then counted — the count is the proof.
+ *
+ * A removed session refuses its own refresh token, and that refusal is the proof it is gone.
+ * A session that still trades the token is live — the signOut failed or did not take — so the
+ * fresh pair signs it out again. GoTrue's admin API removes a session only through a token
+ * of that session, so one that survives both tries is reported with its id, never assumed gone.
  */
 export async function revokeBenchSession(
   state: PlaywrightStorageState,
@@ -276,20 +282,56 @@ export async function revokeBenchSession(
     session = JSON.parse(raw) as typeof session;
   }
   let accessToken = session.access_token ?? fallbackAccessToken;
+  let refreshToken = session.refresh_token;
   const { userId, sessionId, expiresAtMs } = sessionClaimsOf(accessToken);
-  let detail = '';
-  if (expiresAtMs < Date.now() + 30_000 && session.refresh_token) {
-    const anon = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), resolveAnonKey(), {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-    const { data, error } = await anon.auth.refreshSession({
-      refresh_token: session.refresh_token,
-    });
-    if (data.session?.access_token) accessToken = data.session.access_token;
-    else detail = `refresh failed: ${error?.message ?? 'no session'}; `;
+  const anon = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), resolveAnonKey(), {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const steps: string[] = [];
+  if (expiresAtMs < Date.now() + 30_000 && refreshToken) {
+    const { data, error } = await anon.auth.refreshSession({ refresh_token: refreshToken });
+    if (data.session) {
+      accessToken = data.session.access_token;
+      refreshToken = data.session.refresh_token;
+    } else steps.push(`refresh failed: ${error?.message ?? 'no session'}`);
   }
-  const { error } = await admin.auth.admin.signOut(accessToken, 'local');
-  detail += error ? `signOut: ${error.message}` : 'signOut(local) ok';
+  let revoked = false;
+  for (let attempt = 1; attempt <= 2 && !revoked; attempt += 1) {
+    const { error } = await admin.auth.admin.signOut(accessToken, 'local');
+    steps.push(error ? `signOut: ${error.message}` : 'signOut(local) ok');
+    if (!refreshToken) {
+      revoked = !error;
+      break;
+    }
+    const probe = await anon.auth.refreshSession({ refresh_token: refreshToken });
+    if (!probe.data.session) {
+      revoked = !isTransientAuthError(probe.error);
+      steps.push(
+        revoked
+          ? 'refresh refused (session gone)'
+          : `refresh probe failed: ${probe.error?.message ?? 'no session'}`,
+      );
+      break;
+    }
+    accessToken = probe.data.session.access_token;
+    refreshToken = probe.data.session.refresh_token;
+    steps.push('session still live');
+  }
+  if (!revoked) {
+    // GoTrue removes a session only through a token of it; with none left, the row goes
+    // directly — this one session, of this user, on the project the bench ran against.
+    try {
+      const left = await managementSql<{ n: number }>(
+        `delete from auth.sessions where id = '${sessionId}' and user_id = '${userId}';
+         select count(*)::int as n from auth.sessions where id = '${sessionId}';`,
+        requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
+      );
+      revoked = left[0]?.n === 0;
+      steps.push(revoked ? 'session row deleted' : 'session row still present');
+    } catch (error) {
+      steps.push(`session ${sessionId} may still be live: ${(error as Error).message}`);
+    }
+  }
   await admin
     .schema('brand_profiles')
     .from('user_session_brands')
@@ -302,7 +344,33 @@ export async function revokeBenchSession(
     .select('session_id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('session_id', sessionId);
-  return { sessionId, revoked: !error, pinsLeft: count ?? -1, detail };
+  return { sessionId, revoked, pinsLeft: count ?? -1, detail: steps.join('; ') };
+}
+
+/**
+ * Puts a bench user's account brand preference back as the run found it: the original brand,
+ * or NO row when there was none, because an upserted preference the user never chose outlives
+ * the run and picks the brand their next sign-in opens. Returns the preference read back, which
+ * the cleanup records as its proof.
+ */
+export async function restoreBrandPreference(
+  userId: string,
+  original: string | null,
+): Promise<string | null> {
+  const preferences = () =>
+    createAdminClient().schema('brand_profiles').from('user_brand_preferences');
+  const { error } = original
+    ? await preferences().upsert(
+        { user_id: userId, active_brand_id: original, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      )
+    : await preferences().delete().eq('user_id', userId);
+  if (error) throw new Error(`[e2e/auth] brand preference restore failed: ${error.message}`);
+  const { data } = await preferences()
+    .select('active_brand_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as { active_brand_id?: string } | null)?.active_brand_id ?? null;
 }
 
 // The local GoTrue container shares a machine with Turbopack. A cold Next compile pegs the

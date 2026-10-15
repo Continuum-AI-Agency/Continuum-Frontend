@@ -51,6 +51,8 @@ import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
 import {
   CostVsTargetCell,
   FigureCell,
+  memberCountLabel,
+  memberNoun,
   PendingCell,
   PortfolioRow,
   PortfolioRowName,
@@ -60,6 +62,7 @@ import {
   StalenessNote,
   StatusCell,
 } from './PortfolioRowCard';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 import { pacingSideLabel, portfolioPacingLine } from './portfolioPacingLine';
 
@@ -88,7 +91,7 @@ const TABLE_LABELS = [
   'Portfolio',
   'Cost vs target',
   'Per day',
-  'Ad sets',
+  'Members',
   'Pending',
   'Status',
 ] as const;
@@ -204,7 +207,7 @@ function PortfolioTableRow({
             text={formatCurrency(portfolio.daily_total, currency)}
           />
           <FigureCell
-            narrowSuffix={portfolio.adset_count === 1 ? ' ad set' : ' ad sets'}
+            narrowSuffix={` ${memberNoun(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}`}
             raw={portfolio.adset_count}
             text={String(portfolio.adset_count)}
             unit="count"
@@ -288,8 +291,9 @@ function ArchivedPortfolios({
               <div className="min-w-0">
                 <p className="truncate font-medium text-sm">{portfolio.name}</p>
                 <p className="text-xs tabular-nums">
-                  {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
-                  {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+                  {humanize(portfolio.objective)} ·{' '}
+                  {memberCountLabel(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}{' '}
+                  ·{' '}
                   <span
                     {...figureProps(
                       `portfolios.archived.${portfolio.id}.daily`,

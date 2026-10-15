@@ -15,6 +15,7 @@ import {
   accountDetectorSchema,
   withCandidateTitle,
 } from './account-strategy';
+import { formatMoney } from './money';
 import {
   ACTION_VERB_LABEL,
   actionLabel,
@@ -26,7 +27,6 @@ import {
   titleFigure,
   titleText,
 } from './recommendation-title';
-import { formatMoney } from './money';
 
 const candidate = (over: Partial<AccountCandidate>): AccountCandidate =>
   accountCandidateSchema.parse({
@@ -97,14 +97,14 @@ describe('money in a title', () => {
         verb: 'pause',
         sizing: { perDay: 48.8, from: null, to: null, currency: 'MXN' },
       }),
-    ).toBe('Pausar · $48.80 MXN/día');
+    ).toBe('Pause · $48.80 MXN/day');
     expect(
       actionLabel({
         verb: 'settings',
         sizing: { perDay: null, from: 400, to: 360, currency: 'MXN' },
       }),
-    ).toBe('Ajustar la configuración · $400 MXN → $360 MXN');
-    expect(actionLabel({ verb: 'variate_creative', sizing: null })).toBe('Hacer variantes');
+    ).toBe('Adjust the settings · $400 MXN → $360 MXN');
+    expect(actionLabel({ verb: 'variate_creative', sizing: null })).toBe('Make variants');
     for (const verb of actionVerbSchema.options) expect(ACTION_VERB_LABEL[verb]).not.toContain('$');
   });
 
@@ -161,7 +161,7 @@ describe('the account candidates’ titles', () => {
     );
     expect(title?.window).toBe('d14');
     expect(actionLabel(accountCandidateAction(transfer, 'MXN'))).toBe(
-      'Mover presupuesto · $14.00 MXN/día',
+      'Move budget · $14.00 MXN/day',
     );
   });
 
@@ -182,7 +182,7 @@ describe('the account candidates’ titles', () => {
       'ALEIRA // AGOSTO - LKL: $96.00 MXN por día sin resultados, $96.00 MXN por día recuperables',
     );
     expect(title?.window).toBe('d7'); // a daily detector, no window declared
-    expect(actionLabel(accountCandidateAction(dead, 'MXN'))).toBe('Pausar · $96.00 MXN/día');
+    expect(actionLabel(accountCandidateAction(dead, 'MXN'))).toBe('Pause · $96.00 MXN/day');
   });
 
   it('states an auction move as the CPM then and now: "The auction moved, not the ad" is the second line', () => {
@@ -227,7 +227,9 @@ describe('the account candidates’ titles', () => {
       'Cuenta: $96.00 USD por día sin resultados, $96.00 USD por día recuperables',
     );
     // A "$" never stands alone: every one is followed by a figure and then the code.
-    expect(titleText(dollars as NonNullable<typeof dollars>)).not.toMatch(/\$[\d.,]+(?![\d.,]| USD)/);
+    expect(titleText(dollars as NonNullable<typeof dollars>)).not.toMatch(
+      /\$[\d.,]+(?![\d.,]| USD)/,
+    );
     expect(bare && titleText(bare)).not.toContain('$');
   });
 

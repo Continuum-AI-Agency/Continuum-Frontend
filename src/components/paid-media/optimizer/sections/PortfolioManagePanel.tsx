@@ -119,6 +119,7 @@ export { buildConversionDescriptor } from './wizard/conversionDescriptor';
 
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
 import { TierCards } from './fields/TierCards';
+import { PlatformActionsField } from './platformActions/PlatformActionsField';
 import { PlatformCapsField } from './platformCaps/PlatformCapsField';
 import {
   buildPatch,
@@ -674,6 +675,9 @@ export function PortfolioManagePanel({
     budgetSource === 'fixed' && dailyNum > 0 ? dailyNum : selectedBudgetSum || dailyNum;
 
   const sectionId = (key: string) => `manage-${key}-${portfolio.id}`;
+  // The list names each portfolio's platforms (20261015160023); a portfolio on Meta alone has no
+  // action kinds to choose, because Meta's writes never cross the executor that reads them.
+  const holdsNonMeta = (portfolio.platforms ?? []).some((platform) => platform !== 'meta');
   const sheetSections: SheetSection[] = [
     { id: sectionId('identity'), label: 'Identity' },
     { id: sectionId('strategy'), label: 'Strategy' },
@@ -682,6 +686,7 @@ export function PortfolioManagePanel({
     { id: sectionId('attribution'), label: 'Attribution' },
     ...(guardrailsRelevant ? [{ id: sectionId('guardrails'), label: 'Guardrails' }] : []),
     { id: sectionId('platform-limits'), label: 'Daily limits' },
+    ...(holdsNonMeta ? [{ id: sectionId('platform-actions'), label: 'Allowed actions' }] : []),
     { id: sectionId('enrolled'), label: level === 'campaign' ? 'Campaigns' : 'Ad sets' },
   ];
 
@@ -1322,6 +1327,16 @@ export function PortfolioManagePanel({
             <PlatformCapsField portfolioId={portfolio.id} />
           </Section>
 
+          {holdsNonMeta ? (
+            <Section
+              id={sectionId('platform-actions')}
+              title="Allowed actions per platform"
+              description="What the Optimizer may change on each platform when you approve a card. Ticking a kind switches nothing on by itself: every change still waits for your approval, and a platform's changes stay off for this portfolio until they are enabled there."
+            >
+              <PlatformActionsField portfolioId={portfolio.id} />
+            </Section>
+          ) : null}
+
           <Section
             id={sectionId('enrolled')}
             title={level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}
@@ -1334,6 +1349,7 @@ export function PortfolioManagePanel({
               <MultiPlatformPicker
                 brandId={brandId}
                 metaAccount={adAccountId}
+                portfolioId={portfolio.id}
                 portfolioCurrency={currency ?? null}
               >
                 <CampaignAdsetPicker
