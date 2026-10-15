@@ -535,7 +535,7 @@ function googleGroups(campaigns: Row | null): Map<string, { spend: number; conve
 }
 
 /** The brand's Google portfolios as the tab lists them: by the row's own `platforms` once
- *  20261015130000 ships, else by its account being one the brand granted on Google. */
+ *  20261015160023 ships, else by its account being one the brand granted on Google. */
 function googlePortfolios(): Row[] {
   const granted = new Set(
     rows(payload('list_brand_ad_accounts'))
@@ -1609,14 +1609,14 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
       await expect(page.getByTestId('portfolio-rows')).toBeVisible({ timeout: 120_000 });
       await page.waitForTimeout(1_500);
 
-      // What the tab is made of, before 20261015130000 ships and after.
+      // What the tab is made of, before 20261015160023 ships and after.
       const cards = payload('optimizer_get_platform_cards');
       const cardCount = await page.getByTestId('account-card').count();
       if (obj(cards)?.code === 'PGRST202') {
         record(
           'google.cards',
           'SKIP',
-          `optimizer_get_platform_cards is not deployed (PGRST202): no Google card section (${cardCount} card(s) on screen), as expected before 20261015130000`,
+          `optimizer_get_platform_cards is not deployed (PGRST202): no Google card section (${cardCount} card(s) on screen), as expected before 20261015160023`,
         );
       } else {
         record(

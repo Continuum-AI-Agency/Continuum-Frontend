@@ -342,7 +342,7 @@ function scopeToAccount(
 }
 
 /** The brand's portfolios on one platform, whichever ad account the page has selected. A row
- *  lists its platforms from 20261015130000 on; a row without them (an older server) is on the
+ *  lists its platforms from 20261015160023 on; a row without them (an older server) is on the
  *  platform when its own account is one the brand has granted on that platform, and comes back
  *  saying so, so every reader of the list can name its platform. */
 export function portfoliosOnPlatform(
@@ -1316,7 +1316,7 @@ export function useOptimizerPlatformPortfolios(brandId: string, platform: Platfo
 
 const PLATFORM_CARDS_RPC = 'optimizer_get_platform_cards';
 
-/** Still reading; the RPC is not deployed yet (20261015130000 ships separately, never retried);
+/** Still reading; the RPC is not deployed yet (20261015160023 ships separately, never retried);
  *  the read failed or came back in a shape the contract refuses; ready. */
 export type PlatformCardsState =
   | { status: 'loading' }

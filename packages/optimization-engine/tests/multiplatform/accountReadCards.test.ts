@@ -1,5 +1,5 @@
 // The account read files every platform card under a catalogue detector, in SQL (the latest
-// migration that defines the card builder — 20261015130000_optimizer_google_tab_reads.sql's
+// migration that defines the card builder — 20261015160023_optimizer_google_tab_reads.sql's
 // _platform_card_candidates since G2). SQL cannot import the engine's
 // rule list or the contract's detector enum, so this pins the two against the migration: a rule
 // added to the engine without an arm there would persist rows no screen ever shows.
@@ -26,7 +26,7 @@ function findMigrationsDir(): string {
 }
 
 /** The LATEST migration carrying the detector CASE: the one prod runs. Pinning a file name
- *  went stale the day the builder moved (20261007130000 → 20261015130000). */
+ *  went stale the day the builder moved (20261007130000 → 20261015160023). */
 const MIGRATION = (() => {
   const dir = findMigrationsDir();
   const definers = readdirSync(dir)

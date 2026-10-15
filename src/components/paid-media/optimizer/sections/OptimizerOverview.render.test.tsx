@@ -163,7 +163,7 @@ function portfolio(
     next_realloc_at: null,
     adset_count: 2,
     pending_recommendations: 0,
-    // What the contract defaults a row without `platforms` to (a server before 20261015130000).
+    // What the contract defaults a row without `platforms` to (a server before 20261015160023).
     platforms: [],
     ...overrides,
   };
