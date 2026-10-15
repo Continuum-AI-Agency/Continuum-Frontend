@@ -32,6 +32,7 @@ export * from './format-workflows';
 export * from './generation-error';
 export * from './hyperframes-agent';
 export * from './image-size';
+export * from './micro-render';
 export * from './model-catalog';
 export * from './motion-eval';
 export * from './motion-nested';
