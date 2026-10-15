@@ -25,14 +25,6 @@ export const CONCEPT_RULES = {
   /** The close every concept ends on: the offer, said easily. */
   relaxedCta:
     'The cta is a relaxed close, said easily like advice to a friend: the action verb and the whole offer (never renamed: a first month is not a membership), spoken as a natural full sentence ("Pide tu primer mes a $12", "Pide tu 50% de descuento en tu anualidad"). The 24-character button (cta) may be shorter; the spoken line never is the button\'s abbreviation. Omit displayWord on this beat; the end card shows the action. Never add a benefit word to the offer or repeat the call to action.',
-  /**
-   * Every cta Omni's post-generation filter withheld, take and fresh retake (09-29 ×2, 10-14 ×2), had
-   * her hands at her chest or open toward the lens over a fitted top: a towel at the collarbones,
-   * hands clasped at mid-chest, open palms, "invites the viewer". Both ctas with her hands busy on a
-   * prop (zipping a bag, a watch strap) passed.
-   */
-  ctaHandsOnProp:
-    'On the cta her hands are busy with a plain, unprinted prop at waist height while she says the line to the lens: lifting her gym bag by its handles, uncapping a plain water bottle, checking her watch. Never open palms or hands held toward the lens, never hands at her chest, collarbones or neck, and no inviting gesture.',
   /** Every concept but offer-direct: the cta names the offer, the hook never does. */
   ctaCarriesOffer:
     'The spoken lines carry that angle. The cta line names the offer itself (the concrete thing the winner asks people to get); the hook never does.',
@@ -85,7 +77,6 @@ export const CONCEPT_GUIDANCE: readonly ConceptRule[] = [
     heldBy: 'repair',
   },
   { id: 'relaxed-cta', rule: CONCEPT_RULES.relaxedCta, heldBy: 'prompt' },
-  { id: 'cta-hands-on-a-prop', rule: CONCEPT_RULES.ctaHandsOnProp, heldBy: 'prompt' },
   {
     id: 'display-word-from-its-line',
     rule: "A beat's display word is a benefit word of its own line, never an offer word, a filler or another beat's word; one the line does not say is replaced by the line's own benefit word, and the cta has none.",
