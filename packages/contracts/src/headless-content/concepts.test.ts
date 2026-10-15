@@ -54,6 +54,7 @@ describe('the headless concept catalog', () => {
         'end-card-after-last-word',
         'prices-in-brand-currency',
         'relaxed-cta',
+        'cta-hands-on-a-prop',
         'display-word-from-its-line',
         'headline-on-hook',
         'one-person-per-shot',
