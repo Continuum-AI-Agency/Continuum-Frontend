@@ -12,8 +12,10 @@ import {
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   isLayerSwitch,
+  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
+  readinessFindings,
 } from '@continuum/contracts';
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
@@ -50,6 +52,7 @@ import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
+import { explainFinding, type LabelOf } from '@/components/forge/readinessCopy';
 import {
   clipShortBy,
   effectiveEvidence,
@@ -389,7 +392,15 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: string }) {
+function StatusBadge({
+  row,
+  invalidReason,
+  labelOf,
+}: {
+  row: RequestRow;
+  invalidReason?: string;
+  labelOf: LabelOf;
+}) {
   if (invalidReason)
     return (
       <Explained why={invalidReason}>
@@ -409,11 +420,18 @@ function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: 
           Rejected
         </Badge>
       );
-    case 'ready':
+    case 'ready': {
       if (row.check.guardrails?.some((finding) => finding.severity === 'block'))
         return <Badge variant="destructive">Blocked</Badge>;
-      if (row.check.guardrails?.some((finding) => finding.severity === 'unknown'))
-        return <Badge variant="warning">Needs review</Badge>;
+      const review = readinessFindings(row.check).filter(leavesCheckIncomplete);
+      if (review.length)
+        return (
+          <Explained
+            why={[...new Set(review.map((finding) => explainFinding(finding, labelOf)))].join(' ')}
+          >
+            <Badge variant="warning">Needs review</Badge>
+          </Explained>
+        );
       return row.check.fit?.escalate ? (
         <Explained why={aiCheckWhy(row.check.fit)}>
           <Badge variant="warning">AI check after render</Badge>
@@ -421,6 +439,7 @@ function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: 
       ) : (
         <Badge variant="success">Ready</Badge>
       );
+    }
     default:
       return <Badge variant="muted">Draft</Badge>;
   }
@@ -1140,9 +1159,14 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       </Badge>
     );
   }
+  const labelOf: LabelOf = (key) => {
+    const label = contract.variables.find((variable) => variable.key === key)?.label;
+    return label ? readableLayerName(label) : undefined;
+  };
   return (
     <StatusBadge
       row={row}
+      labelOf={labelOf}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {
           const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;

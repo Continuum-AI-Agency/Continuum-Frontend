@@ -15,8 +15,10 @@ import {
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
+  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
+  readinessFindings,
   type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
@@ -74,6 +76,7 @@ import {
 import { NameDialog } from '@/components/forge/RenderSetMenu';
 import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail';
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
+import { explainFinding } from '@/components/forge/readinessCopy';
 import {
   addSibling,
   applyFormats,
@@ -480,12 +483,20 @@ export function RenderRequestsGrid({
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [inputSetLoad, setInputSetLoad] = useState<CollectionLoad>({
-    phase: 'loading', error: null, initialFailed: false, hasData: false,
-    unassignedDraft: false, refreshing: false,
+    phase: 'loading',
+    error: null,
+    initialFailed: false,
+    hasData: false,
+    unassignedDraft: false,
+    refreshing: false,
   });
   const [renderSetLoad, setRenderSetLoad] = useState<CollectionLoad>({
-    phase: 'loading', error: null, initialFailed: false, hasData: false,
-    unassignedDraft: false, refreshing: false,
+    phase: 'loading',
+    error: null,
+    initialFailed: false,
+    hasData: false,
+    unassignedDraft: false,
+    refreshing: false,
   });
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
@@ -745,12 +756,20 @@ export function RenderRequestsGrid({
     let cancelled = false;
     loadGeneration.current += 1;
     setInputSetLoad({
-      phase: 'loading', error: null, initialFailed: false, hasData: false,
-      unassignedDraft: false, refreshing: false,
+      phase: 'loading',
+      error: null,
+      initialFailed: false,
+      hasData: false,
+      unassignedDraft: false,
+      refreshing: false,
     });
     setRenderSetLoad({
-      phase: 'loading', error: null, initialFailed: false, hasData: false,
-      unassignedDraft: false, refreshing: false,
+      phase: 'loading',
+      error: null,
+      initialFailed: false,
+      hasData: false,
+      unassignedDraft: false,
+      refreshing: false,
     });
     const reads = templateLoadQueries(brandId, contractBindingId, templateKey);
     Promise.all([
@@ -823,12 +842,20 @@ export function RenderRequestsGrid({
         if (cancelled) return;
         toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
         setInputSetLoad({
-          phase: 'error', error: 'Input sets could not be loaded.', initialFailed: true,
-          hasData: false, unassignedDraft: false, refreshing: false,
+          phase: 'error',
+          error: 'Input sets could not be loaded.',
+          initialFailed: true,
+          hasData: false,
+          unassignedDraft: false,
+          refreshing: false,
         });
         setRenderSetLoad({
-          phase: 'error', error: 'Saved render sets could not be loaded.', initialFailed: true,
-          hasData: false, unassignedDraft: false, refreshing: false,
+          phase: 'error',
+          error: 'Saved render sets could not be loaded.',
+          initialFailed: true,
+          hasData: false,
+          unassignedDraft: false,
+          refreshing: false,
         });
       });
     return () => {
@@ -849,7 +876,11 @@ export function RenderRequestsGrid({
       if (!isCurrent()) return;
       setInputSets(result.items);
       setInputSetLoad((current) => ({
-        ...current, phase: 'ready', error: null, initialFailed: false, hasData: true,
+        ...current,
+        phase: 'ready',
+        error: null,
+        initialFailed: false,
+        hasData: true,
         refreshing: false,
       }));
     } catch (error) {
@@ -885,8 +916,13 @@ export function RenderRequestsGrid({
         signatureOf(latestRows.current, forContract) !== savedSignatureRef.current;
       setRenderSets(inBinding);
       setRenderSetLoad((current) => ({
-        ...current, phase: 'ready', error: null, initialFailed: false, hasData: true,
-        refreshing: false, unassignedDraft,
+        ...current,
+        phase: 'ready',
+        error: null,
+        initialFailed: false,
+        hasData: true,
+        refreshing: false,
+        unassignedDraft,
       }));
       if (activeSetRef.current === null) {
         if (unassignedDraft) setActiveSet(null);
@@ -1052,16 +1088,22 @@ export function RenderRequestsGrid({
     let review = 0;
     let checking = 0;
     let ready = 0;
+    const labelOf = (key: string | undefined) => {
+      const label = variables?.find((variable) => variable.key === key)?.label;
+      return label ? readableLayerName(label) : undefined;
+    };
     for (const row of rows) {
       const errors = clientErrors.get(row.id) ?? {};
+      // The same findings, and the same words, as the row's "Needs review" badge and the tray.
       const unknown =
         row.check.state === 'ready'
-          ? (row.check.guardrails ?? []).filter((finding) => finding.severity === 'unknown')
+          ? readinessFindings(row.check).filter(leavesCheckIncomplete)
           : [];
       for (const item of unknown) {
-        const finding = findings.get(item.code) ?? { message: item.message, rows: [] };
+        const key = `${item.code}:${item.variableKey ?? ''}`;
+        const finding = findings.get(key) ?? { message: explainFinding(item, labelOf), rows: [] };
         finding.rows.push(row.label || 'Untitled');
-        findings.set(item.code, finding);
+        findings.set(key, finding);
       }
       if (Object.keys(errors).length > 0 || row.check.state === 'error') {
         const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
@@ -1079,12 +1121,7 @@ export function RenderRequestsGrid({
           finding.rows.push(row.label || 'Untitled');
           findings.set('server', finding);
         }
-      } else if (
-        unknown.length ||
-        (row.check.state === 'ready' &&
-          row.check.fit?.slots.some((slot) => slot.state === 'unknown'))
-      )
-        review += 1;
+      } else if (unknown.length) review += 1;
       else if (row.check.state === 'ready') ready += 1;
       else checking += 1;
     }
@@ -2987,6 +3024,7 @@ export function RenderRequestsGrid({
                   templateKey={contract.template.key}
                   contractHash={contract.template.contractHash}
                   templateRef={templateRef}
+                  templateRevisionId={activeSet?.templateRevision?.revisionId ?? null}
                   contract={contract}
                   rows={batch.rows}
                   records={batch.records}

@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 export const FORGE_STALE_MS = {
@@ -5,6 +6,17 @@ export const FORGE_STALE_MS = {
   lists: 5 * 60_000,
   contract: 30 * 60_000,
 } as const;
+
+// A source version and a revision never change, so their layer views cannot go stale.
+const VERSION_VIEWS = new Set(['layer-inventory', 'layer-scene', 'layer-preview']);
+
+/** Refetch the brand's Forge reads after a change — all but the per-version layer views. */
+export function invalidateForgeBrand(queryClient: QueryClient, brandId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: forgeQueryKeys.brand(brandId),
+    predicate: (query) => !VERSION_VIEWS.has(String(query.queryKey[2])),
+  });
+}
 
 export const forgeQueryKeys = {
   all: ['forge'] as const,

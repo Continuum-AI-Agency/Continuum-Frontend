@@ -34,6 +34,13 @@ const READY: ApiRenderBatchReadiness = {
   unknownRows: 1,
   findings: [
     {
+      code: 'ASSET_FIT_UNKNOWN',
+      severity: 'unknown',
+      message: 'this template has no measured placement for the slot',
+      variableKey: 'hero',
+      rowIndexes: [0],
+    },
+    {
       code: 'ASSET_CLIPPED',
       severity: 'warn',
       message: 'The hero image is cropped at the top.',
@@ -243,7 +250,13 @@ const RECORDS: ApiRenderBatchRecord[] = [
   },
 ];
 
-type Snapshot = { reviewKey: number; stale: boolean; recheckBlocked?: string | null };
+type Snapshot = {
+  reviewKey: number;
+  stale: boolean;
+  recheckBlocked?: string | null;
+  /** The records as the grid rebuilt them after an edit. */
+  records?: ApiRenderBatchRecord[];
+};
 
 /** Holds rows the way RenderRequestsGrid does, so a delivery picked in the tray comes back in. */
 function Harness({
@@ -272,7 +285,7 @@ function Harness({
       contractHash="hash"
       contract={contract}
       rows={rows}
-      records={records}
+      records={snapshot.records ?? records}
       reviewKey={snapshot.reviewKey}
       stale={snapshot.stale}
       recheckBlocked={snapshot.recheckBlocked ?? null}
@@ -400,7 +413,12 @@ describe('RenderReviewTray · Review', () => {
     expect(reviewLine('Root / Spain')).toMatchObject({ ratios: ['9:16'], files: '1 file' });
     expect(
       await screen.findByText(
-        'Check incomplete · 1 row couldn’t be fully checked — they can still render',
+        'Check incomplete · 1 row: Hero has no measured placement — they can still render',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Where Hero lands can’t be measured before rendering: the template has no measured placement for it. Re-parse the template to check it.',
       ),
     ).toBeTruthy();
     expect(screen.getByText('Hero: The hero image is cropped at the top.')).toBeTruthy();
@@ -497,9 +515,17 @@ describe('RenderReviewTray · Review', () => {
     await waitFor(() => expect(onRecheck).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock).toHaveBeenCalledTimes(1);
 
-    // The grid re-saved and handed over a fresh snapshot: it is reviewed again, then renders.
-    snapshot({ reviewKey: 2, stale: false });
+    // The grid re-saved and handed over a fresh snapshot: only the edited row is asked about again,
+    // on the set's new revision; the row nobody touched keeps its verdict.
+    const edited = [
+      { ...RECORDS[0]!, expectedRenderSetRevision: 2 },
+      { ...RECORDS[1]!, expectedRenderSetRevision: 2, variables: { headline: 'Hola Madrid' } },
+    ];
+    snapshot({ reviewKey: 2, stale: false, records: edited });
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+    expect(
+      (batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] }).records,
+    ).toEqual([edited[1]!]);
     expect(screen.queryByText('Rows changed since review')).toBeNull();
     await press('Next: delivery');
     await press('Render 3 files');
@@ -1100,10 +1126,12 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Render ledger' }));
     expect(onOpenLedger).toHaveBeenCalledWith(JOB_IDS);
 
-    // Rendering the next selection starts a new review in the same tray.
+    // Rendering the next selection starts a new review in the same tray. These rows were already
+    // checked and nothing in them changed, so their verdicts are read back, not asked again.
     snapshot({ reviewKey: 2, stale: false });
     expect(await screen.findByText('Render 2 rows')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Fired renders' })).toBeNull();
-    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(3));
+    expect(await screen.findByText(/^Check incomplete · 1 row/)).toBeTruthy();
+    expect(batchPreflightMock).toHaveBeenCalledTimes(2);
   }, 30_000);
 });

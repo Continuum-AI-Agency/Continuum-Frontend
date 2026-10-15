@@ -137,7 +137,6 @@ export function TemplateLayerEditor({
   versionId,
   name,
   parse,
-  active,
   onSaved,
   onOpenVariant,
   initialComp,
@@ -149,7 +148,6 @@ export function TemplateLayerEditor({
   name: string;
   /** The parse the page already holds: the shell paints from it before any layer data arrives. */
   parse?: TemplatePreview | null;
-  active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void | Promise<void>;
   /** A composition to open on, by name — an output row's Edit in the gallery. */
@@ -160,7 +158,7 @@ export function TemplateLayerEditor({
   const catalog = useQuery({
     queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
     queryFn: () => fetchTemplateRevisionVariants(brandId, assetId),
-    enabled: active && !!versionId,
+    enabled: !!versionId,
   });
   const variant = catalog.data?.find((item) =>
     item.revisions.some((revision) => pins(revision, assetId, versionId)),
@@ -217,14 +215,17 @@ export function TemplateLayerEditor({
     return () => clearTimeout(timer);
   }, [changes]);
 
-  const ready = active && !!versionId && !unregistered;
-  // The layer list and the default comp's scene are asked for together; each is stored per source
-  // version, so a source the Backend has seen answers both from the database.
+  // Not gated on the tab being open: the list and the default scene load while the template's
+  // other tabs are read, so Layers opens on them. Each is stored per source version, so a source
+  // the Backend has seen answers both from the database — and a version never changes, so they are
+  // kept for the session.
+  const ready = !!versionId && !unregistered;
   const inventory = useQuery({
     queryKey: forgeQueryKeys.layerInventory(brandId, assetId, versionId ?? ''),
     queryFn: () => fetchTemplateLayerInventory(brandId, assetId, versionId ?? ''),
     enabled: ready,
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const startComp = inventory.data?.comps.find((c) => c.name === initialComp)?.id ?? null;
@@ -236,6 +237,7 @@ export function TemplateLayerEditor({
     // A named comp is resolved from the list first, rather than drawing the default comp too.
     enabled: ready && (!initialComp || !!inventory.data),
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     placeholderData: keepPreviousData,
     retry: false,
   });

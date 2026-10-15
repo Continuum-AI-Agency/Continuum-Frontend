@@ -19,7 +19,7 @@ import {
   saveTemplateRevision,
 } from '@/lib/library/templateSources';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
-import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
+import { FORGE_STALE_MS, forgeQueryKeys, invalidateForgeBrand } from './queryKeys';
 import type { ForgeRenderIntent } from './RenderRequestsGrid';
 import { variantLabel } from './templateVersion';
 
@@ -150,7 +150,7 @@ export function VariantsPanel({
         uploadAssetId: uploaded.assetId,
         edits: { layers: [], slots: [], orders: [] },
       });
-      await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+      await invalidateForgeBrand(queryClient, brandId);
       await onInspect?.(saved.sourceAssetId);
       setName('');
     } catch (cause) {
@@ -358,7 +358,7 @@ export function VariantsPanel({
                 setBusy(true);
                 try {
                   await archiveTemplateRevisionVariant(brandId, assetId, archive);
-                  await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+                  await invalidateForgeBrand(queryClient, brandId);
                   const archivedId = archive;
                   setArchive(null);
                   const refreshed = await refetch();

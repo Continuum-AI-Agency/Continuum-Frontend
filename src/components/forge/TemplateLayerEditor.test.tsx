@@ -214,7 +214,6 @@ const editor = (
         assetId={ASSET}
         versionId={VERSION}
         name="Card B"
-        active
         onSaved={async () => {}}
         onOpenVariant={onOpenVariant}
         {...props}
@@ -490,7 +489,9 @@ describe('TemplateLayerEditor', () => {
       new Error('Template revision variants: template_revision_source_missing'),
     );
     editor();
-    expect(await screen.findByText(/No Forge revision is registered for this exact asset version/)).toBeTruthy();
+    expect(
+      await screen.findByText(/No Forge revision is registered for this exact asset version/),
+    ).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Layers' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
