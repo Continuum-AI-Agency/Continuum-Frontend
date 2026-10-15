@@ -13,7 +13,12 @@ import { SceneRenderHistory, SceneSignedMedia } from '@/components/forge/scene/S
 import { useScenePreview } from '@/components/forge/scene/useScenePreview';
 import { InlineRename } from '@/components/forge/TemplateCard';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { fetchSceneTemplate, listSceneRenders, sceneProblem } from '@/lib/library/sceneTemplates';
+import {
+  blendParseProblem,
+  fetchSceneTemplate,
+  listSceneRenders,
+  sceneProblem,
+} from '@/lib/library/sceneTemplates';
 
 // A Blender template's sheet in the Forge gallery: each output's last final render (or, before
 // there is one, a draft at the file's own values), which fields it offers, and its recent renders. Editing happens in the scene editor; this sheet
@@ -21,6 +26,17 @@ import { fetchSceneTemplate, listSceneRenders, sceneProblem } from '@/lib/librar
 
 const NO_CHANGES = {};
 const RECENT_RENDERS = 5;
+/** A big scene has thousands of fields; the sheet names a few and the editor lists them all. */
+const SUMMARY_NAMES = 12;
+
+function fieldSummary(fields: readonly { name: string }[]) {
+  const shown = fields
+    .slice(0, SUMMARY_NAMES)
+    .map((field) => field.name)
+    .join(', ');
+  const more = fields.length - SUMMARY_NAMES;
+  return more > 0 ? `${shown} and ${more} more` : shown;
+}
 
 export function sceneEditorHref(assetId: string) {
   return `/forge/scene/${encodeURIComponent(assetId)}`;
@@ -119,7 +135,7 @@ export function SceneTemplateDetail({
           className="m-0 p-[var(--card-pad)] text-sm text-muted-foreground"
         >
           {source.parseState !== 'pending'
-            ? `This .blend could not be read${source.parseError ? `: ${source.parseError}` : '.'}`
+            ? blendParseProblem(source.parseError)
             : 'Reading the .blend…'}
         </p>
       ) : view.isError ? (
@@ -154,7 +170,7 @@ export function SceneTemplateDetail({
                           fill
                           brandId={brandId}
                           pin={latest.outputs[0]!}
-                          mediaType={output.mediaType}
+                          mediaType={latest.mediaType}
                           label={output.label}
                         />
                       ),
@@ -168,16 +184,19 @@ export function SceneTemplateDetail({
               <h3 className="m-0 text-sm font-medium">Fields</h3>
               {groups.length ? (
                 <dl className="m-0 grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
-                  {groups.map(({ group, fields }) => (
-                    <div key={group} className="contents">
-                      <dt className="text-muted-foreground">
-                        {SCENE_GROUP_TITLES[group]} · {fields.length}
-                      </dt>
-                      <dd className="m-0 truncate" title={fields.map((f) => f.name).join(', ')}>
-                        {fields.map((field) => field.name).join(', ')}
-                      </dd>
-                    </div>
-                  ))}
+                  {groups.map(({ group, fields }) => {
+                    const summary = fieldSummary(fields);
+                    return (
+                      <div key={group} className="contents">
+                        <dt className="text-muted-foreground">
+                          {SCENE_GROUP_TITLES[group]} · {fields.length}
+                        </dt>
+                        <dd className="m-0 truncate" title={summary}>
+                          {summary}
+                        </dd>
+                      </div>
+                    );
+                  })}
                 </dl>
               ) : (
                 <p className="m-0 text-xs text-muted-foreground">This file exposes no fields.</p>

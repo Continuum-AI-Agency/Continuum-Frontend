@@ -175,7 +175,7 @@ export type BlendParse = z.infer<typeof blendParseSchema>;
 
 // ─── Render: Backend API ───────────────────────────────────────────────────────────────
 
-const MAX_FRAMES = 600;
+export const MAX_FRAMES = 600;
 const MAX_PIXELS_SIDE = 4096;
 const MIN_PIXELS_SIDE = 16;
 
@@ -207,6 +207,11 @@ export const sceneRenderRequestSchema = z
         height: z.number().int().min(MIN_PIXELS_SIDE).max(MAX_PIXELS_SIDE).optional(),
         frameStart: z.number().int().optional(),
         frameEnd: z.number().int().optional(),
+        /**
+         * The parser's `mediaType` is a hint: a still scene often keeps Blender's default frame
+         * range. `image` renders `frameStart` alone, whatever the range says.
+         */
+        mediaType: z.enum(['image', 'video']).optional(),
       })
       .strict()
       .optional(),
@@ -244,7 +249,12 @@ export type SceneRenderStatus = z.infer<typeof sceneRenderStatusSchema>;
 export const sceneRenderHistorySchema = z
   .object({
     renders: z.array(
-      sceneRenderStatusSchema.extend({ outputId: z.string().min(1), createdAt: z.string() }),
+      sceneRenderStatusSchema.extend({
+        outputId: z.string().min(1),
+        createdAt: z.string(),
+        /** What the job was asked to make: a still of a video output is an image. */
+        mediaType: z.enum(['image', 'video']),
+      }),
     ),
   })
   .strict();
