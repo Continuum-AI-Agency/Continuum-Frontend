@@ -8,6 +8,7 @@ import {
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
 import { microOutputTimingSchema } from './delivery-timing';
+import { forgeImportMappingSchema } from './forge-render-imports';
 
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
@@ -556,7 +557,9 @@ export const apiRenderTemplateFontSchema = z
      * whole contract and the template stops rendering rather than reporting a swap.
      */
     via: z.enum(['direct', 'substitute', 'package']).optional(),
-    issue: z.enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required']).optional(),
+    issue: z
+      .enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required'])
+      .optional(),
     substitutedBy: z
       .object({
         fontId: z.string().uuid(),
@@ -1745,6 +1748,119 @@ export type ApiRenderDraftSourcesStatusResponse = z.infer<
   typeof apiRenderDraftSourcesStatusResponseSchema
 >;
 
+/**
+ * What the AI button sees of the open grid — its rows, the selection, every sheet attached
+ * (located in the browser, notes and colour legend included) and the set's own rules — so it can
+ * change rows, not only add them. Present means "edit this grid"; absent is the draft-new-rows ask.
+ */
+export const API_RENDER_ASSIST_ROWS_MAX = 50;
+export const API_RENDER_ASSIST_TABLES_MAX = 8;
+export const API_RENDER_ASSIST_TABLE_ROWS_MAX = 200;
+export const apiRenderAssistTableSchema = z
+  .object({
+    name: z.string().max(200),
+    headers: z.array(z.string().max(200)).max(100),
+    rows: z
+      .array(z.record(z.string().max(200), z.string().max(500)))
+      .max(API_RENDER_ASSIST_TABLE_ROWS_MAX),
+    notes: z.array(z.string().max(300)).max(40).default([]),
+    legend: z.record(z.string().max(100), z.string().max(7)).default({}),
+  })
+  .strict();
+export type ApiRenderAssistTable = z.infer<typeof apiRenderAssistTableSchema>;
+export const apiRenderAssistGridSchema = z
+  .object({
+    rows: z
+      .array(
+        z
+          .object({
+            id: z.string().uuid(),
+            parentId: z.string().uuid().nullable(),
+            label: z.string().max(200),
+            outputIds: z.array(z.string().min(1)).max(20),
+            /** Effective values, inheritance resolved — what the row renders. */
+            values: apiRenderVariableMapSchema,
+          })
+          .strict(),
+      )
+      .max(API_RENDER_ASSIST_ROWS_MAX),
+    selection: z.array(z.string().uuid()).max(API_RENDER_ASSIST_ROWS_MAX).default([]),
+    tables: z.array(apiRenderAssistTableSchema).max(API_RENDER_ASSIST_TABLES_MAX).default([]),
+    /** The set's description — where a team writes its rules ("red box on the higher odd"). */
+    setDescription: z.string().max(4000).nullable().default(null),
+    /** Map the attached sheet's columns instead of changing rows. */
+    mapColumns: z.boolean().default(false),
+  })
+  .strict();
+export type ApiRenderAssistGrid = z.infer<typeof apiRenderAssistGridSchema>;
+
+const assistRowIds = z.array(z.string().uuid()).min(1).max(API_RENDER_ASSIST_ROWS_MAX);
+const assistScalar = z.union([z.string().max(2000), z.number(), z.boolean()]);
+/**
+ * One change the AI button asks the grid to make, already checked against the contract. The grid
+ * applies a whole answer as ONE undo step; nothing here renders.
+ */
+export const apiRenderAssistOpSchema = z.discriminatedUnion('op', [
+  z
+    .object({
+      op: z.literal('set'),
+      rowIds: assistRowIds,
+      key: apiRenderVariableKeySchema,
+      value: assistScalar,
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal('add_rows'),
+      rows: z
+        .array(
+          z
+            .object({
+              /** Names this new row for a later row's parentRef. */
+              ref: z.string().min(1).max(40),
+              /** An existing row id or an earlier new row's ref; null for a new root. */
+              parentRef: z.string().min(1).max(40).nullable(),
+              label: z.string().min(1).max(200),
+              overrides: apiRenderVariableMapSchema,
+              outputIds: z.array(z.string().min(1)).max(20).default([]),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(API_RENDER_ASSIST_ROWS_MAX),
+    })
+    .strict(),
+  z.object({ op: z.literal('delete_rows'), rowIds: assistRowIds }).strict(),
+  z
+    .object({
+      op: z.literal('set_outputs'),
+      rowIds: assistRowIds,
+      outputIds: z.array(z.string().min(1)).min(1).max(20),
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal('rename'),
+      rowId: z.string().uuid(),
+      label: z.string().min(1).max(200),
+    })
+    .strict(),
+  z.object({ op: z.literal('select'), rowIds: assistRowIds }).strict(),
+  z
+    .object({
+      op: z.literal('map'),
+      mapping: forgeImportMappingSchema.pick({
+        columns: true,
+        label: true,
+        outputs: true,
+        decimals: true,
+        kits: true,
+      }),
+    })
+    .strict(),
+]);
+export type ApiRenderAssistOp = z.infer<typeof apiRenderAssistOpSchema>;
+
 export const API_RENDER_SUGGEST_ROWS_MAX = 20;
 /** Variations drafted under each new row. Rows and their variations together stay within the max. */
 export const API_RENDER_SUGGEST_FORKS_MAX = 4;
@@ -1776,11 +1892,14 @@ export const apiRenderSuggestRowsRequestSchema = z
       })
       .strict()
       .optional(),
+    grid: apiRenderAssistGridSchema.optional(),
   })
   .strict()
   .refine(
     (request) =>
-      request.prompt.length > 0 || request.documentIds.length + request.mediaAssetIds.length > 0,
+      request.prompt.length > 0 ||
+      request.documentIds.length + request.mediaAssetIds.length > 0 ||
+      (request.grid?.tables.length ?? 0) > 0,
     {
       message: 'A brief or uploaded file is required',
       path: ['prompt'],
@@ -1891,6 +2010,14 @@ export const apiRenderSuggestRowsResponseSchema = z
     unfilled: z.array(z.string()).default([]),
     /** A source was too large to read in full, or has no matching template slot. */
     sourceWarnings: z.array(z.string()).default([]),
+    /** Answering a `grid`: the changes to apply, in order. Absent on a draft. */
+    ops: z.array(apiRenderAssistOpSchema).optional(),
+    /** One or two sentences on what changed, said to the person. */
+    reply: z.string().max(2000).optional(),
+    /** Every rule the answer inferred rather than read ("red box on the higher odd"). */
+    assumptions: z.array(z.string().max(500)).max(20).optional(),
+    /** What was asked and could not be done, by name ("Card A is not in this CSV"). */
+    cannot: z.array(z.string().max(500)).max(20).optional(),
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;

@@ -217,6 +217,8 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     updateRenderSet: updateRenderSetMock,
     deleteRenderSet: deleteRenderSetMock,
     suggestRows: suggestRowsMock,
+    getImportMapping: async () => null,
+    saveImportMapping: async () => ({ mapping: null }),
     getRenderSet: async (_brandId: string, id: string) => SAVED_SETS.find((set) => set.id === id),
     batchPreflight: batchPreflightMock,
     listDeliveryDestinations: async () => ({
@@ -843,7 +845,7 @@ describe('RenderRequestsGrid', () => {
       return screen.findByRole('dialog', { name: 'Import render rows' });
     };
     const importButton = (dialog: HTMLElement) =>
-      within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Import reviewed rows' });
+      within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Import \d+ rows$/ });
 
     const rows = (count: number) =>
       ['headline', ...Array.from({ length: count }, (_, index) => `Row ${index}`)].join('\n');
@@ -856,12 +858,15 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
     expect(screen.getAllByLabelText('Select row')).toHaveLength(1);
 
-    // Parent and Formats are columns a paste understands too, and a bad cell is named.
+    // Parent and Formats are columns a paste understands too; a bad cell is named, and imports
+    // empty rather than holding the other rows back.
     dialog = await paste(
       'Name\tParent\tHeadline\tPrice\nSpain\t\tHola\tcheap\nSale\tSpain\tRebajas\t\n',
     );
-    expect(within(dialog).getByText('Row 1 · Price: Not a number')).toBeTruthy();
-    expect(importButton(dialog).disabled).toBe(true);
+    expect(
+      within(dialog).getByText('Row 1 · Price: Not a number — imported empty'),
+    ).toBeTruthy();
+    await waitFor(() => expect(importButton(dialog).disabled).toBe(false));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
 
@@ -1942,8 +1947,9 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
+    // With rows on the grid the button is the assistant; a brief for new rows is its second action.
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), { target: { value: 'Summer' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft new rows' }));
 
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     expect(banner.textContent).toContain('2 proposed rows');
@@ -1971,14 +1977,69 @@ describe('RenderRequestsGrid', () => {
     ]);
   });
 
+  test('the AI button edits the rows on screen: one ask, one undo step, nothing proposed', async () => {
+    withSavedSets();
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const row = await screen.findByDisplayValue('Newest row');
+    const rowId = row.closest('tr')!.getAttribute('data-row-id')!;
+    suggestRowsMock.mockImplementationOnce(async () => ({
+      rows: [],
+      assets: [],
+      dropped: [],
+      unfilled: [],
+      ops: [
+        { op: 'set', rowIds: [rowId], key: 'headline', value: 'Precio loco' },
+        { op: 'select', rowIds: [rowId] },
+      ],
+      reply: 'Cambié el titular.',
+      assumptions: [],
+      cannot: ['Hero: pictures are chosen in the grid, not by the assistant'],
+    }));
+    await openMenu('Add', 'Draft with AI…');
+    const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), {
+      target: { value: 'Titular de la fila 1: Precio loco' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByDisplayValue('Precio loco')).toBeTruthy();
+    const sent = suggestRowsMock.mock.calls.at(-1)![0] as {
+      prompt: string;
+      grid: { rows: Array<{ id: string; label: string }>; mapColumns: boolean };
+    };
+    expect(sent.prompt).toBe('Titular de la fila 1: Precio loco');
+    expect(sent.grid.mapColumns).toBe(false);
+    expect(sent.grid.rows.map((item) => item.label)).toEqual(['Newest row']);
+    // The bubble stays open with what was done and what could not be.
+    expect(within(dialog).getByText('Cambié el titular.')).toBeTruthy();
+    expect(within(dialog).getByText(/pictures are chosen in the grid/)).toBeTruthy();
+    // Applied, not proposed: there is nothing to keep, and the row is left selected.
+    expect(screen.queryAllByRole('region', { name: 'Proposed rows' })).toHaveLength(0);
+    const edited = screen.getByDisplayValue('Precio loco').closest('tr')!;
+    expect(within(edited).getByLabelText('Select row').getAttribute('aria-checked')).toBe('true');
+
+    // The answer carries its own Undo; ⌘Z from the toolbar puts it back the other way.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Undo this change' }));
+    await waitFor(() => expect(screen.queryByDisplayValue('Precio loco')).toBeNull());
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    fireEvent.keyDown(within(toolbar).getByRole('button', { name: 'Import' }), {
+      key: 'z',
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(await screen.findByDisplayValue('Precio loco')).toBeTruthy();
+  });
+
   test('Discard all takes the proposed rows back and leaves the set as it was', async () => {
     withSavedSets();
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
+    // With rows on the grid the button is the assistant; a brief for new rows is its second action.
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), { target: { value: 'Summer' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft new rows' }));
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     fireEvent.click(within(banner).getByRole('button', { name: 'Discard all' }));
     await waitFor(() => expect(screen.queryAllByDisplayValue('Drafted')).toHaveLength(0));
