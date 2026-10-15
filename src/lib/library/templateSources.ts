@@ -1,7 +1,6 @@
 'use client';
 
 import type {
-  ForgeLineageView,
   RenderWorkspace,
   TemplateFontPushResponse,
   TemplateAuthoringDocument,
@@ -78,6 +77,7 @@ import {
   templateRebindPreviewSchema,
   templateRevisionSchema,
   templateRevisionVariantsResponseSchema,
+  templateVariantDefaultsResponseSchema,
   templateVariantSchema,
   templateVariantsResponseSchema,
   templateSourceEventsResponseSchema,
@@ -621,16 +621,6 @@ export type TemplateRunRow = {
   application: string | null;
 };
 
-export async function fetchTemplateLineage(
-  brandId: string,
-  assetId: string,
-): Promise<ForgeLineageView> {
-  const response = await authorizedFetch(
-    `/api/ai-studio/templates/${assetId}/lineage?brandId=${encodeURIComponent(brandId)}`,
-  );
-  return unwrap<ForgeLineageView>(response, 'Template lineage');
-}
-
 export async function fetchTemplateRun(
   brandId: string,
   assetId: string,
@@ -1079,4 +1069,46 @@ export async function archiveTemplateRevisionVariant(
     ),
     'Archive template variant',
   );
+}
+
+/** Success may come with or without a body; only a refusal is read. */
+async function variantAction(path: string, init: RequestInit, what: string) {
+  const response = await authorizedFetch(path, init);
+  if (!response.ok) await unwrap(response, what);
+}
+
+export async function unarchiveTemplateRevisionVariant(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await variantAction(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/unarchive`,
+    { method: 'POST', body: JSON.stringify({ brandId }) },
+    'Restore template variant',
+  );
+}
+
+/** The variant each family opens on. Making the Original the default clears the pointer. */
+export async function setTemplateVariantDefault(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await variantAction(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/default`,
+    { method: 'PUT', body: JSON.stringify({ brandId }) },
+    'Make variant the default',
+  );
+}
+
+export async function fetchTemplateVariantDefaults(brandId: string) {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/variant-defaults?${new URLSearchParams({ brandId })}`,
+  );
+  // A Backend that predates defaults has no such route: every family opens on its Original.
+  if (response.status === 404) return [];
+  return templateVariantDefaultsResponseSchema.parse(
+    await unwrap(response, 'Template variant defaults'),
+  ).items;
 }

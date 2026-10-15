@@ -45,6 +45,7 @@ import {
 import { pluralize } from '@/lib/format/pluralize';
 import {
   fetchTemplateRevisionVariants,
+  fetchTemplateVariantDefaults,
   fetchTemplateVariants,
 } from '@/lib/library/templateSources';
 import { parseErrorSentence } from '@/lib/library/sceneTemplates';
@@ -385,11 +386,25 @@ export function TemplateGallery({
     queryFn: () => fetchTemplateRevisionVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
+  const { data: defaults } = useQuery({
+    queryKey: forgeQueryKeys.variantDefaults(brandId),
+    queryFn: () => fetchTemplateVariantDefaults(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+  });
   // The registry's template families, keyed by the original upload's asset id. Every other upload
   // in a family — a named variant, a later revision — is a card under that original, never a row.
   const families = new Map<string, TemplateRevisionVariant[]>();
   for (const variant of canonicalVariants ?? [])
     families.set(variant.templateId, [...(families.get(variant.templateId) ?? []), variant]);
+  // The variant a family opens on, when someone made one the default; else the Original.
+  const defaultOf = (familyId: string | null | undefined) => {
+    const variantId = defaults?.find((item) => item.templateId === familyId)?.variantId;
+    const variant = families.get(familyId ?? '')?.find((item) => item.variantId === variantId);
+    const head = variant?.revisions.find((item) => item.id === variant.publishedHeadRevisionId);
+    return variant && head && !variant.original && !variant.archivedAt
+      ? { variant, head, templateKey: head.publications[0]?.templateKey ?? null }
+      : null;
+  };
   const canonicalBySource = new Map(
     canonicalVariants?.flatMap((variant) =>
       variant.revisions.map((revision) => [revision.sourceAssetId, variant] as const),
@@ -659,9 +674,13 @@ export function TemplateGallery({
                         (branched ? family.length : 0) + published.length + listedOutputs.length;
                       const nested = subEntries > 0;
                       const open = nested && expanded.has(item.key);
-                      // A build standing in as the row renders under its own key, not its source's.
+                      const lead = item.kind === 'source' ? defaultOf(item.source.assetId) : null;
+                      // A build standing in as the row renders under its own key, not its source's;
+                      // a family with a default variant shows that variant's renders.
                       const primeKey =
-                        item.kind === 'shared' ? item.shared.templateKey : item.source.templateKey;
+                        item.kind === 'shared'
+                          ? item.shared.templateKey
+                          : (lead?.templateKey ?? item.source.templateKey);
                       return (
                         <Fragment key={item.key}>
                           <TableRow>
@@ -696,7 +715,9 @@ export function TemplateGallery({
                                         aria-label={`Open ${item.name}`}
                                         onClick={() =>
                                           item.kind === 'source'
-                                            ? onOpen(item.source.assetId)
+                                            ? onOpen(
+                                                lead?.head.sourceAssetId ?? item.source.assetId,
+                                              )
                                             : onOpenShared(item.shared)
                                         }
                                       />
@@ -877,6 +898,9 @@ export function TemplateGallery({
                                         >
                                           {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
                                         </Badge>
+                                        {variant.variantId === lead?.variant.variantId ? (
+                                          <Badge variant="violet">Default</Badge>
+                                        ) : null}
                                         {variant.tags.includes('brand_aligned') ? (
                                           <Badge variant="violet">Brand-aligned</Badge>
                                         ) : null}

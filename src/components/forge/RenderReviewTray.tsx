@@ -104,8 +104,6 @@ export type RenderReviewTrayProps = {
   bindingId: string | null;
   templateKey: string;
   contractHash: string;
-  /** The named head to render, or null for the template's live pointer. */
-  templateRef?: string | null;
   contract: ApiRenderTemplateContract;
   rows: RenderPreflightRow[];
   records: ApiRenderBatchRecord[];
@@ -209,7 +207,6 @@ export function RenderReviewTray({
   bindingId,
   templateKey,
   contractHash,
-  templateRef,
   contract,
   rows,
   records,
@@ -306,7 +303,6 @@ export function RenderReviewTray({
           ...(bindingId ? { bindingId } : {}),
           templateKey,
           contractHash,
-          ...(templateRef ? { templateRef } : {}),
           records: records.map(({ delivery: _delivery, ...record }) => record),
           ...(acceptFonts ? { acceptMissingFonts: true } : {}),
           ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
@@ -328,7 +324,6 @@ export function RenderReviewTray({
       bindingId,
       templateKey,
       contractHash,
-      templateRef,
       records,
       approvalDestinationIds,
       renderer,
@@ -443,7 +438,6 @@ export function RenderReviewTray({
         ...(bindingId ? { bindingId } : {}),
         templateKey,
         contractHash,
-        ...(templateRef ? { templateRef } : {}),
         records: indexes.flatMap((index) => {
           if (!records[index]) return [];
           const { delivery: _delivery, ...record } = records[index];

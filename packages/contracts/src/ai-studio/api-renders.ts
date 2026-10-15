@@ -1555,6 +1555,8 @@ export const apiRenderJobListQuerySchema = z
     templateKey: z.string().min(1).optional(),
     status: apiRenderJobSchema.shape.status.optional(),
     batchId: z.string().uuid().optional(),
+    /** Jobs pinned to this template variant (`templateRevision.variantId`), any revision of it. */
+    variantId: z.string().uuid().optional(),
   })
   .strict();
 export type ApiRenderJobListQuery = z.infer<typeof apiRenderJobListQuerySchema>;

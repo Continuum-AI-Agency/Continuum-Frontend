@@ -4,6 +4,7 @@ import {
   shortSha,
   templateVersionOf,
   templateVersionTitle,
+  variantLabel,
 } from '@/components/forge/templateVersion';
 
 const SHA = 'a1b2c3d4e5'.repeat(6) + 'f1b2';
@@ -89,5 +90,13 @@ describe('shortSha', () => {
   test('answers an em dash for nothing, never "undefined…"', () => {
     expect(shortSha(null)).toBe('—');
     expect(shortSha(undefined)).toBe('—');
+  });
+});
+
+describe('variantLabel', () => {
+  test('drops the tenant-scoped repo key and keeps the state', () => {
+    expect(variantLabel('inyogo/9:16/base')).toBe('9:16/base');
+    expect(variantLabel('232/story/tall@accepted')).toBe('story/tall@accepted');
+    expect(variantLabel('bare')).toBe('bare');
   });
 });
