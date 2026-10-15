@@ -113,6 +113,8 @@ function renderGallery(
     adopting = null,
     onOpen = () => undefined,
     onOpenShared = () => undefined,
+    loading = false,
+    loadingMore = false,
   }: {
     sources?: TemplateSource[];
     catalog?: TemplateVariant[];
@@ -122,6 +124,8 @@ function renderGallery(
     adopting?: string | null;
     onOpen?: (assetId: string, tab?: string, comp?: string) => void;
     onOpenShared?: (template: SharedTemplate) => void;
+    loading?: boolean;
+    loadingMore?: boolean;
   } = {},
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -133,6 +137,8 @@ function renderGallery(
         brandId={BRAND}
         brandName="StarCraft"
         sources={sources}
+        loading={loading}
+        loadingMore={loadingMore}
         shared={shared}
         adopting={adopting}
         onOpen={onOpen}
@@ -267,7 +273,7 @@ describe('TemplateGallery', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Needs attention/ }));
     expect(cardNames()).toEqual(['Winter sale']);
-    expect(screen.getByText('Needs input')).toBeTruthy();
+    expect(screen.getByText('Needs your input')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
     expect(cardNames()).toEqual(['Untitled template', 'Hero offer']);
@@ -701,9 +707,25 @@ describe('template families', () => {
         families: null,
       });
       expect(cardNames()).toEqual([]);
-      expect(screen.getByText('Reading templates…')).toBeTruthy();
+      expect(screen.getByRole('status', { name: 'Loading templates' })).toBeTruthy();
     } finally {
       registry.mockRestore();
     }
+  });
+
+  test('templates still on their way show as placeholder rows: none read yet, then after the ones that are', () => {
+    renderGallery(undefined, { sources: [], shared: [], loading: true });
+    expect(screen.getByRole('status', { name: 'Loading templates' })).toBeTruthy();
+    cleanup();
+
+    renderGallery(undefined, { loadingMore: true });
+    const rows = screen.getAllByRole('row');
+    expect(cardNames().length).toBeGreaterThan(0);
+    expect(
+      within(rows[rows.length - 2] as HTMLElement).getByRole('status', {
+        name: 'Loading more templates',
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('status', { name: 'Loading templates' })).toBeNull();
   });
 });

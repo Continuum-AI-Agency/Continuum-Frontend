@@ -157,7 +157,7 @@ export function RenderModePill({ test }: { test: boolean }) {
 }
 
 /**
- * Which renderer a job ran on, only when the Experimental Renderer was asked: it rendered the job
+ * Which renderer a job ran on, only when Continuum's New Renderer was asked: it rendered the job
  * itself, or handed it to After Effects and the reason it named rides on the pill. Nothing for an
  * ordinary After Effects job.
  */
@@ -169,12 +169,12 @@ export function RenderEnginePill({
   if (job.engineFallback)
     return (
       <Pill variant="muted" title={`Sent to After Effects: ${job.engineFallback}`}>
-        Experimental → After Effects
+        New Renderer → After Effects
       </Pill>
     );
   return job.engine === 'micro' ? (
-    <Pill variant="muted" title="Rendered by the Experimental Renderer on Google Cloud.">
-      Experimental
+    <Pill variant="muted" title="Rendered by Continuum's New Renderer.">
+      New Renderer
     </Pill>
   ) : null;
 }
@@ -633,7 +633,7 @@ export function RenderJobDetail({
                   </span>
                 ),
               },
-              // Never hidden: most jobs that ask for the Experimental Renderer fall back today.
+              // Never hidden: most jobs that ask for Continuum's New Renderer fall back today.
               ...(job.engineFallback
                 ? [
                     {
@@ -643,7 +643,7 @@ export function RenderJobDetail({
                         <span className="break-words">
                           After Effects{' '}
                           <span className="text-muted-foreground">
-                            · the Experimental Renderer handed it over: {job.engineFallback}
+                            · handed over by Continuum&apos;s New Renderer: {job.engineFallback}
                           </span>
                         </span>
                       ),

@@ -63,12 +63,12 @@ export const TEMPLATE_STATUS: Record<
     group: 'ready' | 'drafts' | 'attention';
   }
 > = {
-  reading: { label: 'Unpacking', tone: 'info', group: 'drafts' },
-  parsed: { label: 'Parsed', tone: 'info', group: 'drafts' },
-  building: { label: 'Building', tone: 'info', group: 'drafts' },
+  reading: { label: 'Opening', tone: 'info', group: 'drafts' },
+  parsed: { label: 'Ready to set up', tone: 'info', group: 'drafts' },
+  building: { label: 'Setting up', tone: 'info', group: 'drafts' },
   draft: { label: 'Draft', tone: 'warning', group: 'drafts' },
   ready: { label: 'Ready', tone: 'success', group: 'ready' },
-  needs_input: { label: 'Needs input', tone: 'warning', group: 'attention' },
+  needs_input: { label: 'Needs your input', tone: 'warning', group: 'attention' },
   failed: { label: 'Failed', tone: 'error', group: 'attention' },
 };
 

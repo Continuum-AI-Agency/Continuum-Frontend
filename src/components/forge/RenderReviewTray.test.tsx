@@ -601,12 +601,12 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(batchPreflightMock.mock.calls[0]?.[0]).not.toHaveProperty('final');
   }, 30_000);
 
-  test('After Effects by default: no review or render names a renderer, even after Experimental was picked and unpicked', async () => {
+  test('After Effects by default: no review or render names a renderer, even after the New Renderer was picked and unpicked', async () => {
     const { onFired } = renderTray(null);
     await press('Next: delivery');
     const afterEffects = screen.getByRole('radio', { name: 'After Effects' });
     expect(afterEffects.getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(screen.getByRole('radio', { name: 'Experimental Renderer' }));
+    fireEvent.click(screen.getByRole('radio', { name: "Continuum's New Renderer" }));
     fireEvent.click(afterEffects);
     await waitFor(() => expect(afterEffects.getAttribute('aria-checked')).toBe('true'));
     await press('Render 3 files');
@@ -615,13 +615,13 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(batchPreflightMock.mock.calls[1]?.[0]).not.toHaveProperty('renderer');
   }, 30_000);
 
-  test('the Experimental Renderer is signed into the render’s preflight and every review after it', async () => {
+  test('Continuum’s New Renderer is signed into the render’s preflight and every review after it', async () => {
     const { onFired, snapshot } = renderTray(null);
     await press('Next: delivery');
-    const experimental = screen.getByRole('radio', { name: 'Experimental Renderer' });
+    const experimental = screen.getByRole('radio', { name: "Continuum's New Renderer" });
     fireEvent.click(experimental);
     await waitFor(() => expect(experimental.getAttribute('aria-checked')).toBe('true'));
-    expect(screen.getByText(/anything else\s+goes to After Effects automatically/)).toBeTruthy();
+    expect(screen.getByText(/can't render goes to After Effects automatically/)).toBeTruthy();
     await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({

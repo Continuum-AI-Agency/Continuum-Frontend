@@ -52,6 +52,6 @@ describe('ForgeRunProgress', () => {
       <ForgeRunProgress run={{ ...FAILED, findings: [], error: { code: 'INTERNAL' } }} />,
     );
     expect(container.textContent).not.toContain('INTERNAL');
-    expect(screen.getByText('The run stopped on an error.').getAttribute('title')).toBe('INTERNAL');
+    expect(screen.getByText('Setup stopped on an error.').getAttribute('title')).toBe('INTERNAL');
   });
 });

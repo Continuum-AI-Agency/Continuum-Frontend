@@ -63,8 +63,8 @@ export function FontSubstitutions({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/5 p-2">
       <p className="text-muted-foreground">
-        Pick a face you already hold for each one missing, or add the real file. A substituted face
-        is what the render will install — the template card says so, and you can change it later.
+        For each missing font, pick one you already have or add the real file. Renders use your
+        pick. The template card shows it, and you can change it later.
       </p>
       <ul className="flex flex-col gap-1.5" aria-label="Missing typefaces">
         {rows.map((row) => (
@@ -73,7 +73,7 @@ export function FontSubstitutions({
               <span className="text-foreground">{row.family}</span>
               {row.candidates.length === 0 ? (
                 <span className="block text-2xs text-muted-foreground">
-                  Nothing we hold resembles it — this one needs the file.
+                  We don&apos;t have anything close. Please add this font file.
                 </span>
               ) : null}
             </span>
@@ -89,11 +89,11 @@ export function FontSubstitutions({
                 className="w-64"
                 aria-label={`Face to use for ${row.family}`}
               >
-                <SelectValue placeholder="Leave unresolved">
+                <SelectValue placeholder="Skip for now">
                   {(value: string) => {
-                    if (value === UNRESOLVED) return 'Leave unresolved';
+                    if (value === UNRESOLVED) return 'Skip for now';
                     const hit = row.candidates.find((option) => option.fontId === value);
-                    return hit ? `${hit.family} · ${hit.why}` : 'Leave unresolved';
+                    return hit ? `${hit.family} · ${hit.why}` : 'Skip for now';
                   }}
                 </SelectValue>
               </SelectTrigger>
@@ -103,7 +103,7 @@ export function FontSubstitutions({
                     {option.family} · {option.why}
                   </SelectItem>
                 ))}
-                <SelectItem value={UNRESOLVED}>Leave unresolved</SelectItem>
+                <SelectItem value={UNRESOLVED}>Skip for now</SelectItem>
               </SelectContent>
             </Select>
           </li>

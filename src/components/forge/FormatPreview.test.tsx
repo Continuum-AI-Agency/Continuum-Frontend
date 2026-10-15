@@ -98,7 +98,7 @@ describe('FormatPreview', () => {
     expect(badge()).toBe('Estimate · wireframe');
     expect(
       screen.getByText(
-        'Boxes measured from the template; type size, wrapping and brand fonts are guesses.',
+        'Positions come from your file; text size, line breaks and fonts are estimates.',
       ),
     ).toBeTruthy();
 

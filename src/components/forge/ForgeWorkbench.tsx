@@ -5,8 +5,8 @@ import {
   templateDisplayName,
   type WorkspaceTemplate,
 } from '@continuum/contracts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { experimental_streamedQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fileSha256,
   isForgeDesignFile,
@@ -44,9 +44,9 @@ import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
   discoverWorkspaceTemplates,
-  fetchTemplateSources,
   renameTemplateSource,
   setTemplateAdoption,
+  streamTemplateSources,
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -126,13 +126,28 @@ export function ForgeWorkbench({
   const [revision, setRevision] = useState<{ assetId: string; file: File } | null>(null);
   const queryClient = useQueryClient();
   const sourceKey = useMemo(() => forgeQueryKeys.templateSources(brandId), [brandId]);
+  // Cards roll in a page at a time; a refetch keeps the cards on screen until its list is whole.
   const sourceQuery = useQuery({
     queryKey: sourceKey,
-    queryFn: () => fetchTemplateSources(brandId),
+    queryFn: experimental_streamedQuery({
+      streamFn: () => streamTemplateSources(brandId),
+      reducer: (sources: TemplateSourceSummary[], page: TemplateSourceSummary[]) => [
+        ...sources,
+        ...page,
+      ],
+      initialValue: [],
+      refetchMode: 'replace',
+    }),
     staleTime: FORGE_STALE_MS.lists,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+  // Only the first read's later pages are "more on the way"; a refetch swaps in its list whole.
+  const firstReadDone = useRef(false);
+  if (sourceQuery.fetchStatus === 'idle' && sourceQuery.data !== undefined)
+    firstReadDone.current = true;
+  const loadingMoreSources =
+    !firstReadDone.current && sourceQuery.data !== undefined && sourceQuery.isFetching;
   const workspaceQuery = useQuery({
     queryKey: forgeQueryKeys.workspaceTemplates(brandId),
     queryFn: () => discoverWorkspaceTemplates(brandId),
@@ -412,12 +427,6 @@ export function ForgeWorkbench({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {sourceQuery.isPending ? (
-        <div aria-label="Loading your templates" className="flex flex-col gap-2" role="status">
-          <span aria-hidden className="h-4 w-40 animate-pulse rounded-md bg-muted/70" />
-          <span aria-hidden className="h-10 w-full animate-pulse rounded-md bg-muted/70" />
-        </div>
-      ) : null}
       {sourceQuery.isError ? (
         <Alert variant={sourceQuery.data !== undefined ? 'default' : 'destructive'}>
           <AlertTitle>
@@ -603,6 +612,8 @@ export function ForgeWorkbench({
           brandId={brandId}
           brandName={brandName}
           sources={sources}
+          loading={sourceQuery.isPending}
+          loadingMore={loadingMoreSources}
           shared={shared}
           adopting={adopting}
           onOpen={open}

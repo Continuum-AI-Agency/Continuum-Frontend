@@ -19,14 +19,14 @@ export type TemplateCheck = {
 };
 
 export const STATE_LABELS: Record<string, string> = {
-  created: 'Queued',
-  analyzing: 'Reading the project',
-  mapping: 'Matching slots to fields',
-  building: 'Building the spec',
-  validating: 'Checking it',
+  created: 'Waiting to start',
+  analyzing: 'Reading your file',
+  mapping: 'Connecting layers',
+  building: 'Setting up',
+  validating: 'Checking',
   draft_ready: 'Draft ready',
   needs_input: 'Needs your answer',
-  smoking: 'Test render',
+  smoking: 'Test rendering',
   review_ready: 'Ready to review',
   promoting: 'Publishing',
   published: 'Published',
@@ -45,15 +45,15 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 function parseCheck(input: TemplateChecksInput): TemplateCheck {
   const base = {
     id: 'parse' as const,
-    name: 'Parse',
-    what: 'Opens the After Effects file and lists its formats, editable layers and fonts.',
+    name: 'Read your file',
+    what: 'We open your After Effects file and find its formats, the text and images you can change, and its fonts.',
   };
   switch (input.parseState) {
     case 'parsed':
       return {
         ...base,
         state: 'pass',
-        result: `Read ${plural(input.variableCount, 'variable')} in ${plural(input.formatCount, 'format')}`,
+        result: `Found ${plural(input.variableCount, 'variable')} in ${plural(input.formatCount, 'format')}`,
       };
     case 'pending':
       return { ...base, state: 'todo', result: 'Not opened yet' };
@@ -61,10 +61,10 @@ function parseCheck(input: TemplateChecksInput): TemplateCheck {
       return {
         ...base,
         state: 'fail',
-        result: `Couldn't read this file: ${input.parseError ?? 'no reason was given'}`,
+        result: `We couldn't open this file: ${input.parseError ?? 'no reason was given'}`,
       };
     default:
-      return { ...base, state: 'skipped', result: "This file type isn't read" };
+      return { ...base, state: 'skipped', result: "We don't read this file type" };
   }
 }
 
@@ -72,17 +72,17 @@ function fontsCheck(input: TemplateChecksInput): TemplateCheck {
   const base = {
     id: 'fonts' as const,
     name: 'Fonts',
-    what: 'Checks the font repository holds every typeface the template uses — the brand\u2019s own uploads plus house faces. Renders are refused while one is neither held nor substituted.',
+    what: 'We check we have every font your template uses, from your brand\u2019s fonts and Continuum\u2019s shared library. Renders wait until each one is found or swapped.',
   };
   const { fontReadiness: readiness, fontCheckFailed } = input;
   if (input.parseState !== 'parsed' || (readiness && readiness.parseState !== 'parsed')) {
-    return { ...base, state: 'todo', result: 'Waits for the file to be read' };
+    return { ...base, state: 'todo', result: 'Waiting for your file to be read' };
   }
   if (fontCheckFailed)
-    return { ...base, state: 'warn', result: "Couldn't check the brand's fonts" };
-  if (!readiness) return { ...base, state: 'running', result: "Checking the brand's fonts" };
+    return { ...base, state: 'warn', result: "Couldn't check your fonts" };
+  if (!readiness) return { ...base, state: 'running', result: 'Checking your fonts…' };
   const total = readiness.fonts.length;
-  if (total === 0) return { ...base, state: 'pass', result: 'Uses no typefaces' };
+  if (total === 0) return { ...base, state: 'pass', result: 'No fonts used' };
   const ticks = readiness.fonts.map((font): CheckTick => (font.held ? 'pass' : 'fail'));
   const missing = readiness.fonts.filter((font) => !font.held).map((font) => font.family);
   return missing.length
@@ -90,16 +90,16 @@ function fontsCheck(input: TemplateChecksInput): TemplateCheck {
         ...base,
         state: 'fail',
         ticks,
-        result: `${missing.length} of ${total} not uploaded: ${missing.join(', ')}`,
+        result: `${missing.length} of ${total} missing: ${missing.join(', ')}`,
       }
-    : { ...base, state: 'pass', ticks, result: `All ${total} uploaded` };
+    : { ...base, state: 'pass', ticks, result: `All ${total} found` };
 }
 
 function buildCheck(input: TemplateChecksInput, state: string | null): TemplateCheck {
   const base = {
     id: 'build' as const,
-    name: 'Build',
-    what: 'Turns the file into a renderable template: works out its fields, builds its table, seeds a sample row, validates the spec.',
+    name: 'Set up',
+    what: 'We turn your file into a template you can fill in and render.',
   };
   const { run } = input;
   const phases = run?.progress?.phases ?? [];
@@ -117,21 +117,21 @@ function buildCheck(input: TemplateChecksInput, state: string | null): TemplateC
   const unbound = needs.filter((need) => need.kind !== 'asset').length;
   const findings = run?.findings?.length ?? 0;
   const chips: TemplateCheck['chips'] = [
-    ...(unbound ? [{ label: `${unbound} couldn't bind`, tone: 'warning' as const }] : []),
-    ...(findings ? [{ label: plural(findings, 'finding'), tone: 'muted' as const }] : []),
+    ...(unbound ? [{ label: `${unbound} not connected`, tone: 'warning' as const }] : []),
+    ...(findings ? [{ label: plural(findings, 'issue'), tone: 'muted' as const }] : []),
   ];
   const extras = { ...(ticks.length ? { ticks } : {}), ...(chips.length ? { chips } : {}) };
 
   if (!state) {
     return input.templateKey
-      ? { ...base, state: 'pass', result: 'Built', ...extras }
-      : { ...base, state: 'todo', result: 'Not built yet', ...extras };
+      ? { ...base, state: 'pass', result: 'Set up', ...extras }
+      : { ...base, state: 'todo', result: 'Not set up yet', ...extras };
   }
   if (state === 'failed') {
     return {
       ...base,
       state: 'fail',
-      result: run?.error?.message ?? 'The run stopped on an error.',
+      result: run?.error?.message ?? 'Setup stopped on an error.',
       action: 'resume',
       ...extras,
     };
@@ -144,38 +144,38 @@ function buildCheck(input: TemplateChecksInput, state: string | null): TemplateC
       state: 'warn',
       result: needs.length
         ? needs.every((need) => need.kind === 'asset')
-          ? `Pick a picture for ${plural(needs.length, 'media variable')}, then build again`
-          : `${plural(needs.length, 'slot')} nothing could bind`
+          ? `Pick an image for ${plural(needs.length, 'media variable')}, then set up again`
+          : `${plural(needs.length, 'layer')} we couldn't connect`
         : labelForState(state),
       action: 'resume',
       ...extras,
     };
   }
-  if (BUILT.has(state)) return { ...base, state: 'pass', result: 'Built', ...extras };
+  if (BUILT.has(state)) return { ...base, state: 'pass', result: 'Set up', ...extras };
   return { ...base, state: 'running', result: labelForState(state), ...extras };
 }
 
 function mappingCheck(input: TemplateChecksInput): TemplateCheck {
   const base = {
     id: 'mapping' as const,
-    name: 'Mapping',
-    what: 'Matches each editable After Effects layer to the Forge field that renders it.',
+    name: 'Connect layers',
+    what: 'We link every layer you can change in After Effects to a variable you fill in.',
   };
   if (input.parseState !== 'parsed' || (!input.run && !input.templateKey))
-    return { ...base, state: 'todo', result: 'Available after the build starts' };
+    return { ...base, state: 'todo', result: 'Available once setup starts' };
   if (input.mappingCheckFailed)
-    return { ...base, state: 'warn', result: "Couldn't read the mapping review" };
+    return { ...base, state: 'warn', result: "Couldn't load the layer check" };
   const review = input.mappingReview;
-  if (!review) return { ...base, state: 'running', result: 'Checking the field mapping…' };
+  if (!review) return { ...base, state: 'running', result: 'Checking layers…' };
   if (review.state === 'unavailable')
-    return { ...base, state: 'warn', result: 'Forge has not supplied field identities yet' };
+    return { ...base, state: 'warn', result: "Layer check isn't available yet" };
   const additional = review.fields.filter((field) => field.match === 'forge_only').length;
   if (review.state === 'needs_review')
-    return { ...base, state: 'fail', result: `${review.matchedSlots} of ${review.slotCount} layers mapped · review ${review.unmatchedSlots.length} unmatched` };
+    return { ...base, state: 'fail', result: `${review.matchedSlots} of ${review.slotCount} layers connected · ${review.unmatchedSlots.length} need review` };
   return {
     ...base,
     state: review.identityAvailable ? 'pass' : 'warn',
-    result: `${review.matchedSlots} of ${review.slotCount} layers mapped${additional ? ` · ${additional} Forge-only fields` : ''}${review.identityAvailable ? '' : ' by name only'}`,
+    result: `${review.matchedSlots} of ${review.slotCount} layers connected${additional ? ` · ${plural(additional, 'extra variable')}` : ''}${review.identityAvailable ? '' : ' (matched by name only)'}`,
   };
 }
 
@@ -183,15 +183,15 @@ function testRenderCheck(state: string | null): TemplateCheck {
   const base = {
     id: 'test' as const,
     name: 'Test render',
-    what: 'Renders one watermarked frame to prove each variable reaches its layer.',
+    what: 'We render one watermarked frame to make sure each variable shows up in the right place.',
   };
   if (state === 'smoking')
-    return { ...base, state: 'running', result: 'Rendering the test frame…' };
+    return { ...base, state: 'running', result: 'Rendering a test frame…' };
   if (state && TESTED.has(state)) return { ...base, state: 'pass', result: 'Test frame rendered' };
   return {
     ...base,
     state: 'todo',
-    result: 'Not run',
+    result: 'Not run yet',
     ...(state === 'draft_ready' ? { action: 'smoke' as const } : {}),
   };
 }
@@ -200,7 +200,7 @@ function publishCheck(input: TemplateChecksInput, state: string | null): Templat
   const base = {
     id: 'publish' as const,
     name: 'Publish',
-    what: 'Publishes the template, then checks its worker graph and media boxes.',
+    what: 'We make the template available to render, then double-check where your images land.',
   };
   if (input.templateKey) {
     const check = input.publishVerification;
@@ -210,21 +210,21 @@ function publishCheck(input: TemplateChecksInput, state: string | null): Templat
         state: check.state,
         result:
           check.issues[0] ??
-          `Published · worker graph and ${plural(check.media.length, 'media slot')} measured`,
+          `Published · ${plural(check.media.length, 'image spot')} checked`,
       };
     return input.publishCheckFailed
       ? {
           ...base,
           state: 'warn',
-          result: 'Published, but the worker graph and layout could not be checked',
+          result: "Published, but we couldn't double-check the layout",
         }
-      : { ...base, state: 'pass', result: 'Published · checking the worker graph and layout…' };
+      : { ...base, state: 'pass', result: 'Published · checking the layout…' };
   }
   if (state === 'promoting') return { ...base, state: 'running', result: 'Publishing…' };
   return {
     ...base,
     state: 'todo',
-    result: 'Not published',
+    result: 'Not published yet',
     ...(state === 'review_ready' ? { action: 'promote' as const } : {}),
   };
 }

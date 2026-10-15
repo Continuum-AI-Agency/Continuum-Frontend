@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -136,6 +137,28 @@ function compareItems(a: Item, b: Item, { key, dir }: Sort): number {
           ? TEMPLATE_STATUS[statusOf(a)].label.localeCompare(TEMPLATE_STATUS[statusOf(b)].label)
           : a.updatedAt.localeCompare(b.updatedAt);
   return (dir === 'asc' ? 1 : -1) * (order || a.name.localeCompare(b.name));
+}
+
+/** Placeholder rows shaped like the table's own, while templates are still arriving. */
+function SkeletonRows({ count, label }: { count: number; label: string }) {
+  return Array.from({ length: count }, (_, index) => (
+    <TableRow key={index}>
+      <TableCell className="py-2.5">
+        {index === 0 ? (
+          <span role="status" aria-label={label} className="sr-only">
+            {label}
+          </span>
+        ) : null}
+        <Skeleton className="h-4 w-48 bg-muted/70" />
+      </TableCell>
+      {['w-16', 'w-20', 'w-14', 'w-24'].map((width) => (
+        <TableCell key={width}>
+          <Skeleton className={cn('h-4 bg-muted/70', width)} />
+        </TableCell>
+      ))}
+      <TableCell />
+    </TableRow>
+  ));
 }
 
 function SortHead({
@@ -303,6 +326,8 @@ export function TemplateGallery({
   brandId,
   brandName,
   sources,
+  loading = false,
+  loadingMore = false,
   shared,
   adopting,
   onOpen,
@@ -317,6 +342,10 @@ export function TemplateGallery({
   brandId: string;
   brandName?: string;
   sources: TemplateSourceSummary[];
+  /** No templates read yet. */
+  loading?: boolean;
+  /** Some templates are here and more pages are on their way. */
+  loadingMore?: boolean;
   shared: SharedTemplate[];
   /** The `sharedTemplateId` of the shared template whose adoption is in flight. */
   adopting: string | null;
@@ -605,13 +634,7 @@ export function TemplateGallery({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {variantsPending ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
-                  Reading templates…
-                </TableCell>
-              </TableRow>
-            ) : null}
+            {loading || variantsPending ? <SkeletonRows count={6} label="Loading templates" /> : null}
             {['ready', 'drafts', 'attention'].map((group) => {
               const rows = visible.filter((item) => item.group === group);
               if (!rows.length) return null;
@@ -1034,6 +1057,9 @@ export function TemplateGallery({
                 </Fragment>
               );
             })}
+            {loadingMore && !variantsPending ? (
+              <SkeletonRows count={2} label="Loading more templates" />
+            ) : null}
           </TableBody>
         </Table>
       </div>

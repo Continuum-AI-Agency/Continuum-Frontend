@@ -958,7 +958,7 @@ describe('RenderJobsGrid', () => {
     expect(rowOf('Expired link').querySelector('img')).toBeNull();
   }, 30_000);
 
-  test('the Experimental Renderer marks its jobs, and a job it handed to After Effects says why', async () => {
+  test('Continuum’s New Renderer marks its jobs, and a job it handed to After Effects says why', async () => {
     const reason = 'text:raster:arithmetic-underived@Main/Headline';
     const rendered: ApiRenderJob = { ...MADRID, label: 'Rendered here', engine: 'micro' };
     const handedOver: ApiRenderJob = { ...ROMA, label: 'Handed over', engineFallback: reason };
@@ -970,17 +970,17 @@ describe('RenderJobsGrid', () => {
     await renderLedger([rendered, handedOver, farm], [TEMPLATE]);
     const rowOf = (label: string) => screen.getByText(label).closest('tr') as HTMLElement;
 
-    expect(within(rowOf('Rendered here')).getByText('Experimental')).toBeTruthy();
+    expect(within(rowOf('Rendered here')).getByText('New Renderer')).toBeTruthy();
     expect(
-      within(rowOf('Handed over')).getByText('Experimental → After Effects').getAttribute('title'),
+      within(rowOf('Handed over')).getByText('New Renderer → After Effects').getAttribute('title'),
     ).toBe(`Sent to After Effects: ${reason}`);
-    expect(within(rowOf('Farm only')).queryByText(/Experimental/)).toBeNull();
+    expect(within(rowOf('Farm only')).queryByText(/New Renderer/)).toBeNull();
 
     // The detail has room for the reason as words on the page, not only on hover.
     fireEvent.click(screen.getByText('Handed over'));
     expect(await screen.findByRole('heading', { name: 'Handed over' })).toBeTruthy();
     expect(screen.getByText('Renderer')).toBeTruthy();
-    expect(screen.getByText(`· the Experimental Renderer handed it over: ${reason}`)).toBeTruthy();
+    expect(screen.getByText(`· handed over by Continuum's New Renderer: ${reason}`)).toBeTruthy();
   }, 30_000);
 
   test('a comp delivered as MP4, MOV and MXF lists every file, previews the playable one, and downloads each', async () => {
