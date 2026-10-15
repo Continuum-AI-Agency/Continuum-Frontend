@@ -155,3 +155,62 @@ export const jainaDepthLabelSchema = z.object({
   about_budget: z.boolean().default(false),
 });
 export type JainaDepthLabel = z.infer<typeof jainaDepthLabelSchema>;
+
+/** The format the person asked for, if any (§3.2). It decides the shape, never the depth. */
+export const JAINA_PLAN_FORMATS = [
+  'none',
+  'list',
+  'steps',
+  'table',
+  'comparison',
+  'chart',
+  'short',
+] as const;
+
+/**
+ * The question plan the planner model returns (§3.2): what the question is and asks for, read
+ * from the last question together with the conversation. Flat on purpose: Gemini cannot FILL a
+ * union in a structured-output schema (harness playbook, trap catalog), so every field is a
+ * plain object, a string enum or an array of them.
+ */
+export const jainaQuestionPlanSchema = z.object({
+  class: jainaQuestionClassSchema,
+  asks: z.array(jainaAskSchema).min(1),
+  /** The entities the question names, at their level, as the person wrote them. */
+  entities: z.array(
+    z.object({ name: z.string().min(1), level: z.enum(['account', 'campaign', 'adset', 'ad']) }),
+  ),
+  /** The question is about budget: spend, pacing, or moving money between entities. */
+  about_budget: z.boolean(),
+  /** The window the question names, in the person's words ("last week", "septiembre"); null when it names none. */
+  window: z.string().nullable(),
+  /** Terms that need a definition before an answer can be exact: active, top, recent, underperforming. */
+  ambiguities: z.array(z.string()),
+  format: z.enum(JAINA_PLAN_FORMATS),
+  /** The language of the last question. */
+  language: z.enum(['es', 'en']),
+  /** Long when the answer must read several layers; Jaina says so before it starts (§5.6). */
+  expected_duration: z.enum(['short', 'long']),
+});
+export type JainaQuestionPlan = z.infer<typeof jainaQuestionPlanSchema>;
+
+/** The plan the runtime falls back to when the planner fails twice: the deepest reading (§3.2). */
+export const fallbackQuestionPlan = (language: 'es' | 'en'): JainaQuestionPlan => ({
+  class: 'diagnostic',
+  asks: ['cause'],
+  entities: [],
+  about_budget: false,
+  window: null,
+  ambiguities: [],
+  format: 'none',
+  language,
+  expected_duration: 'long',
+});
+
+/** The plan's conditions for the §3.3 table. */
+export const layerConditionsOf = (
+  plan: Pick<JainaQuestionPlan, 'entities' | 'about_budget'>,
+): LayerConditions => ({
+  namedLevels: [...new Set(plan.entities.flatMap((e) => (e.level === 'account' ? [] : [e.level])))],
+  aboutBudget: plan.about_budget,
+});
