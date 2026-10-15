@@ -2902,6 +2902,7 @@ export async function executeWorkflow(
           nodeId,
           roomId: workflowRoomId,
           brandId,
+          motionTarget: null,
         });
         updateNodeStatus(nodeId, 'awaiting');
         return false;
