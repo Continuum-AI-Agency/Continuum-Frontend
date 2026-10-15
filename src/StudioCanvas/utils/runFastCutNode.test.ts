@@ -11,7 +11,7 @@ import {
   type CanvasFastCutResponse,
   canvasFastCutResponseSchema,
 } from '@continuum/contracts';
-import { backendTimeoutPolicy, READ_TIMEOUT_MS, RENDER_TIMEOUT_MS } from '@/lib/api/timeout';
+import { READ_TIMEOUT_MS, RENDER_TIMEOUT_MS } from '@/lib/api/timeout';
 import { runFastCutNode } from './runFastCutNode';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
@@ -68,10 +68,9 @@ describe('runFastCutNode', () => {
     expect(sentOptions().schema).toBe(canvasFastCutResponseSchema);
   });
 
-  it("waits out a render on the client policy's render class, never a call-site number", async () => {
+  it('waits out a render on its own render bound, not the job default', async () => {
     await runFastCutNode({ brandProfileId: BRAND, roomId: ROOM, nodeId: 'cut-1' });
-    expect(sentOptions().timeoutMs).toBeUndefined();
-    expect(backendTimeoutPolicy(CANVAS_FAST_CUT_ROUTE, 'POST')).toBe(RENDER_TIMEOUT_MS);
+    expect(sentOptions().timeoutMs).toBe(RENDER_TIMEOUT_MS);
     expect(RENDER_TIMEOUT_MS).toBeGreaterThan(120_000);
     expect(RENDER_TIMEOUT_MS).toBeGreaterThan(READ_TIMEOUT_MS);
   });

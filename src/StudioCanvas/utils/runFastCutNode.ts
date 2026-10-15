@@ -12,6 +12,7 @@ import {
   canvasFastCutResponseSchema,
 } from '@continuum/contracts';
 import { http } from '@/lib/api/http';
+import { RENDER_TIMEOUT_MS } from '@/lib/api/timeout';
 
 export async function runFastCutNode(
   input: CanvasFastCutRequest,
@@ -22,7 +23,8 @@ export async function runFastCutNode(
     method: 'POST',
     body: canvasFastCutRequestSchema.parse(input),
     schema: canvasFastCutResponseSchema,
-    // The bound is the client policy's render class (lib/api/timeout.ts), chosen by this URL.
+    // Time-to-headers is the encode: the render's own bound, not the job default.
+    timeoutMs: RENDER_TIMEOUT_MS,
     signal,
   });
 }
