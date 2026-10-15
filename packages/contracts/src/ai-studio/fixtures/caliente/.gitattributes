@@ -1,0 +1,3 @@
+# The owner's exports, byte for byte: their line endings are part of what the importer reads.
+*.csv binary
+*.xlsx binary

@@ -1,0 +1,340 @@
+{
+ "source": "cuotas-fecha-10.xlsx — Card A / Card B tabs, read with Python's zipfile + ElementTree",
+ "cardA": [
+  {
+   "teams": [
+    "Alianza Atletico",
+    "Comerciantes Unidos"
+   ],
+   "values": {
+    "left_team": "Alianza Atletico",
+    "right_team": "Comerciantes Unidos",
+    "left_team_bet": "1.62",
+    "right_team_bet": "5.30",
+    "draw_bet": "3.80",
+    "left_team_box_color": "#d72828",
+    "left_team_text_color": "#ffffff",
+    "right_team_box_color": "#ffffff",
+    "right_team_text_color": "#000000",
+    "bet_amount": "100",
+    "win_amount": "162"
+   }
+  },
+  {
+   "teams": [
+    "Alianza Lima",
+    "ADT"
+   ],
+   "values": {
+    "left_team": "Alianza Lima",
+    "right_team": "ADT",
+    "left_team_bet": "1.27",
+    "right_team_bet": "11.00",
+    "draw_bet": "5.20",
+    "left_team_box_color": "#d72828",
+    "left_team_text_color": "#ffffff",
+    "right_team_box_color": "#ffffff",
+    "right_team_text_color": "#000000",
+    "bet_amount": "100",
+    "win_amount": "127"
+   }
+  },
+  {
+   "teams": [
+    "FC Cajamarca",
+    "Cusco FC"
+   ],
+   "values": {
+    "left_team": "FC Cajamarca",
+    "right_team": "Cusco FC",
+    "left_team_bet": "3.15",
+    "right_team_bet": "2.10",
+    "draw_bet": "3.65",
+    "left_team_box_color": "#ffffff",
+    "left_team_text_color": "#000000",
+    "right_team_box_color": "#d72828",
+    "right_team_text_color": "#ffffff",
+    "bet_amount": "100",
+    "win_amount": "210"
+   }
+  },
+  {
+   "teams": [
+    "Sporting Cristal",
+    "Atletico Grau"
+   ],
+   "values": {
+    "left_team": "Sporting Cristal",
+    "right_team": "Atletico Grau",
+    "left_team_bet": "1.37",
+    "right_team_bet": "8.70",
+    "draw_bet": "4.50",
+    "left_team_box_color": "#d72828",
+    "left_team_text_color": "#ffffff",
+    "right_team_box_color": "#ffffff",
+    "right_team_text_color": "#000000",
+    "bet_amount": "100",
+    "win_amount": "137"
+   }
+  },
+  {
+   "teams": [
+    "Deportivo Garcilaso",
+    "Universitario de Deportes"
+   ],
+   "values": {
+    "left_team": "Deportivo Garcilaso",
+    "right_team": "Universitario de Deportes",
+    "left_team_bet": "2.92",
+    "right_team_bet": "2.38",
+    "draw_bet": "3.25",
+    "left_team_box_color": "#ffffff",
+    "left_team_text_color": "#000000",
+    "right_team_box_color": "#d72828",
+    "right_team_text_color": "#ffffff",
+    "bet_amount": "100",
+    "win_amount": "238"
+   }
+  },
+  {
+   "teams": [
+    "FBC Melgar",
+    "Sports Boys"
+   ],
+   "values": {
+    "left_team": "FBC Melgar",
+    "right_team": "Sports Boys",
+    "left_team_bet": "1.40",
+    "right_team_bet": "8.10",
+    "draw_bet": "4.30",
+    "left_team_box_color": "#ffffff",
+    "left_team_text_color": "#000000",
+    "right_team_box_color": "#d72828",
+    "right_team_text_color": "#ffffff",
+    "bet_amount": "100",
+    "win_amount": "810"
+   }
+  },
+  {
+   "teams": [
+    "Sport Huancayo",
+    "UTC"
+   ],
+   "values": {
+    "left_team": "Sport Huancayo",
+    "right_team": "UTC",
+    "left_team_bet": "1.35",
+    "right_team_bet": "9.00",
+    "draw_bet": "4.60",
+    "left_team_box_color": "#ffffff",
+    "left_team_text_color": "#000000",
+    "right_team_box_color": "#d72828",
+    "right_team_text_color": "#ffffff",
+    "bet_amount": "100",
+    "win_amount": "900"
+   }
+  },
+  {
+   "teams": [
+    "Juan Pablo II",
+    "CD Moquegua"
+   ],
+   "values": {
+    "left_team": "Juan Pablo II",
+    "right_team": "CD Moquegua",
+    "left_team_bet": "1.55",
+    "right_team_bet": "6.20",
+    "draw_bet": "3.80",
+    "left_team_box_color": "#ffffff",
+    "left_team_text_color": "#000000",
+    "right_team_box_color": "#d72828",
+    "right_team_text_color": "#ffffff",
+    "bet_amount": "100",
+    "win_amount": "620"
+   }
+  },
+  {
+   "teams": [
+    "ADT",
+    "Cienciano"
+   ],
+   "values": {
+    "left_team": "ADT",
+    "right_team": "Cienciano",
+    "left_team_bet": "2.88",
+    "right_team_bet": "2.28",
+    "draw_bet": "3.50",
+    "left_team_box_color": "#ffffff",
+    "left_team_text_color": "#000000",
+    "right_team_box_color": "#d72828",
+    "right_team_text_color": "#ffffff",
+    "bet_amount": "100",
+    "win_amount": "228"
+   }
+  }
+ ],
+ "cardB": [
+  {
+   "teams": [
+    "Alianza Atletico",
+    "Comerciantes Unidos"
+   ],
+   "output": "Ambos",
+   "values": {
+    "template_field_7": "Alianza Atletico vs Comerciantes Unidos",
+    "template_field_2": "1.75",
+    "template_field_1": "1.90",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "190"
+   }
+  },
+  {
+   "teams": [
+    "Alianza Lima",
+    "ADT"
+   ],
+   "output": "Halftime",
+   "values": {
+    "template_field_7": "Alianza Lima vs ADT",
+    "template_field_2": "1.60",
+    "template_field_1": "2.25",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "225"
+   }
+  },
+  {
+   "teams": [
+    "FC Cajamarca",
+    "Cusco FC"
+   ],
+   "output": "Ambos",
+   "values": {
+    "template_field_7": "FC Cajamarca vs Cusco FC",
+    "template_field_2": "1.55",
+    "template_field_1": "2.30",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "230"
+   }
+  },
+  {
+   "teams": [
+    "Sporting Cristal",
+    "Atletico Grau"
+   ],
+   "output": "Halftime",
+   "values": {
+    "template_field_7": "Sporting Cristal vs Atletico Grau",
+    "template_field_2": "1.65",
+    "template_field_1": "2.15",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "215"
+   }
+  },
+  {
+   "teams": [
+    "Deportivo Garcilaso",
+    "Universitario de Deportes"
+   ],
+   "output": "Halftime",
+   "values": {
+    "template_field_7": "Deportivo Garcilaso vs Universitario de Deportes",
+    "template_field_2": "2.15",
+    "template_field_1": "1.65",
+    "template_field_4": "#d72828",
+    "template_field_5": "#ffffff",
+    "template_field_3": "#ffffff",
+    "template_field_6": "#000000",
+    "template_field_8": "100",
+    "template_field_9": "215"
+   }
+  },
+  {
+   "teams": [
+    "FBC Melgar",
+    "Sports Boys"
+   ],
+   "output": "Ambos",
+   "values": {
+    "template_field_7": "FBC Melgar vs Sports Boys",
+    "template_field_2": "1.95",
+    "template_field_1": "1.75",
+    "template_field_4": "#d72828",
+    "template_field_5": "#ffffff",
+    "template_field_3": "#ffffff",
+    "template_field_6": "#000000",
+    "template_field_8": "100",
+    "template_field_9": "195"
+   }
+  },
+  {
+   "teams": [
+    "Sport Huancayo",
+    "UTC"
+   ],
+   "output": "Ambos",
+   "values": {
+    "template_field_7": "Sport Huancayo vs UTC",
+    "template_field_2": "1.75",
+    "template_field_1": "1.90",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "190"
+   }
+  },
+  {
+   "teams": [
+    "Juan Pablo II",
+    "CD Moquegua"
+   ],
+   "output": "Ambos",
+   "values": {
+    "template_field_7": "Juan Pablo II vs CD Moquegua",
+    "template_field_2": "1.75",
+    "template_field_1": "1.90",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "190"
+   }
+  },
+  {
+   "teams": [
+    "ADT",
+    "Cienciano"
+   ],
+   "output": "Halftime",
+   "values": {
+    "template_field_7": "ADT vs Cienciano",
+    "template_field_2": "1.80",
+    "template_field_1": "2.00",
+    "template_field_4": "#ffffff",
+    "template_field_5": "#000000",
+    "template_field_3": "#d72828",
+    "template_field_6": "#ffffff",
+    "template_field_8": "100",
+    "template_field_9": "200"
+   }
+  }
+ ]
+}

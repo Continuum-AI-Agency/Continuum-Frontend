@@ -10,6 +10,7 @@ import {
   waitingCount,
 } from '@/components/forge/PendingApprovals';
 import { templateListQuery } from '@/components/forge/queryKeys';
+import { confirmForgeExit } from '@/components/forge/useForgeExitGuard';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -43,22 +44,24 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
   useEffect(() => {
     void queryClient.prefetchQuery(templateListQuery(brandId));
   }, [brandId, queryClient]);
-  const activate = (next: ForgeTab) => {
-    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
-    setTab(next);
+  const activate = (next: ForgeTab, after?: () => void) => {
+    void confirmForgeExit().then((allowed) => {
+      if (!allowed) return;
+      setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+      setTab(next);
+      after?.();
+    });
   };
   // The last "open this in Render" from anywhere on the page, until the grid takes it. Dropped
   // once taken: an intent kept around would replace whatever the person moved on to.
   const [renderIntent, setRenderIntent] = useState<ForgeRenderIntent | undefined>(undefined);
   const openRender = (intent: ForgeRenderIntent) => {
-    setRenderIntent(intent);
-    activate('render');
+    activate('render', () => setRenderIntent(intent));
   };
   // The way back: a template opened from the Render tab, held until the workbench takes it.
   const [templateIntent, setTemplateIntent] = useState<ForgeTemplateIntent | undefined>(undefined);
   const openTemplate = (intent: ForgeTemplateIntent) => {
-    setTemplateIntent(intent);
-    activate('templates');
+    activate('templates', () => setTemplateIntent(intent));
   };
   // The approval notification links to `/forge#approvals`. A hash never reaches the server, so the
   // ledger opens after mount.
@@ -67,7 +70,9 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     setVisited((current) => new Set(current).add('renders'));
     setTab('renders');
   }, []);
-  const waiting = waitingCount(useRenderApprovals(brandId).data);
+  const approvals = useRenderApprovals(brandId);
+  const waiting = waitingCount(approvals.data);
+  const approvalCountUnavailable = approvals.isError && waiting === undefined;
   return (
     // Bounded by the page: the strip stays put and each panel scrolls on its own.
     <Tabs
@@ -80,7 +85,11 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
         <TabsTrigger value="render">Render</TabsTrigger>
         <TabsTrigger value="renders">
           Render ledger
-          {waiting ? (
+          {approvalCountUnavailable ? (
+            <Badge variant="warning" className="ml-1.5" title="Approval count unavailable">
+              Approval count unavailable
+            </Badge>
+          ) : waiting ? (
             <Badge variant="warning" className="ml-1.5 tabular-nums">
               {waiting}
               <span className="sr-only"> waiting for approval</span>

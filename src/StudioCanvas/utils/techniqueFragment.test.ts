@@ -190,6 +190,7 @@ describe('suggestTechniqueKind', () => {
     expect(suggestTechniqueKind([node('a', 'nanoGen'), node('b', 'timelineEditor')])).toBe(
       'assembly',
     );
+    expect(suggestTechniqueKind([node('a', 'video'), node('b', 'fastCut')])).toBe('assembly');
     expect(suggestTechniqueKind([node('a', 'nanoGen'), node('b', 'organicPublish')])).toBe(
       'delivery',
     );

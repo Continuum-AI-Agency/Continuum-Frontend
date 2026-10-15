@@ -12,6 +12,7 @@
 // that just arrived. The version NUMBER stays tied to the stored position, so an
 // entry keeps its name when a newer one lands above it.
 
+import { elementReferenceAspectRatio, isElementProductCategory } from '@continuum/contracts';
 import { History, Loader2, Plus, RotateCw, Star, Upload, X } from 'lucide-react';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +50,7 @@ import {
 } from '@/lib/ai-studio/elements';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
+import { ElementBoard } from './ElementBoard';
 import type { ElementMemberUploader } from './ElementCreateForm';
 import { HeadlessElementReview } from './HeadlessElementReview';
 
@@ -58,6 +60,8 @@ const ELEMENT_GENERATION_COPY = 'One paid image call, usually 15–20 seconds.';
 /** A person's reference is the continuity sheet: three image calls, two of them in parallel.
  *  `elements:character-sheet:bench` timed 54.5 s and 64.9 s on the Easy Fit actresses (10-06). */
 const CHARACTER_SHEET_GENERATION_COPY = 'Three paid image calls, usually about two minutes.';
+/** A product's reference is the product continuity sheet: two image calls. */
+const PRODUCT_SHEET_GENERATION_COPY = 'Two paid image calls.';
 
 /**
  * Seconds actually elapsed since the generation started.
@@ -154,7 +158,8 @@ export function ElementDetail({
   const missingRights = needsRights && !rightsNote.trim();
   // The STORED category decides the sheet's framing: it is what the sheet was generated for.
   const isCharacter = isElementPersonCategory(element.category);
-  const sheetNoun = isCharacter ? 'character sheet' : 'reference sheet';
+  const isProduct = isElementProductCategory(element.category);
+  const sheetNoun = isCharacter ? 'character sheet' : isProduct ? 'product sheet' : 'reference sheet';
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
   // Newest first for reading; the version number stays the stored position.
@@ -202,16 +207,12 @@ export function ElementDetail({
         </Button>
       </div>
 
-      <HeadlessElementReview
-        brandId={brandId}
-        elementId={element.id}
-        updatedAt={element.updatedAt}
-      />
+      <HeadlessElementReview brandId={brandId} element={element} />
       <div className="flex flex-col gap-2">
         <div
           className={cn(
             'flex w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30',
-            isCharacter ? 'aspect-[3/4]' : 'aspect-video',
+            elementReferenceAspectRatio(element.category) === '3:4' ? 'aspect-[3/4]' : 'aspect-video',
           )}
         >
           {referenceUrl ? (
@@ -291,13 +292,17 @@ export function ElementDetail({
             ? `Generating sheet… ${elapsed}s`
             : isCharacter
               ? 'Generate character sheet'
-              : 'Generate candidate sheet'}
+              : isProduct
+                ? 'Generate product sheet — two paid image calls'
+                : 'Generate candidate sheet'}
         </Button>
         <p className="text-xs text-muted-foreground">
           {isGenerating
             ? isCharacter
               ? CHARACTER_SHEET_GENERATION_COPY
-              : ELEMENT_GENERATION_COPY
+              : isProduct
+                ? PRODUCT_SHEET_GENERATION_COPY
+                : ELEMENT_GENERATION_COPY
             : isCharacter && history.length === 0
               ? "The first sheet becomes this character's reference. Later ones wait for your confirmation."
               : 'A generated sheet is only a candidate. Nothing changes until you confirm it.'}
@@ -455,6 +460,8 @@ export function ElementDetail({
           }}
         />
       </div>
+
+      <ElementBoard element={element} brandId={brandId} />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">

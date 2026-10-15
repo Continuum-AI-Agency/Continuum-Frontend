@@ -129,7 +129,7 @@ async function OrganicContent({
   });
 
   const activePlatformKeys = platformAccounts
-    .filter((account) => account.connected && account.accountId)
+    .filter((account) => account.options.length > 0)
     .map((account) => account.platform);
 
   const platformAccountIds = platformAccounts.reduce<Record<string, string>>((acc, account) => {

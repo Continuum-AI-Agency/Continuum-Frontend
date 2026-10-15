@@ -52,6 +52,10 @@ function DropdownMenuGroup({ ...props }: MenuPrimitive.Group.Props) {
   return <MenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />;
 }
 
+// Base UI's GroupLabel reads MenuGroupContext and throws when it is absent, where
+// Radix rendered a plain label anywhere. Call sites written against Radix put the label
+// straight in the content (the Library Reformat menu, Airtable #403), so the label
+// carries its own Group, as ContextMenuLabel does.
 function DropdownMenuLabel({
   className,
   inset,
@@ -60,15 +64,17 @@ function DropdownMenuLabel({
   inset?: boolean;
 }) {
   return (
-    <MenuPrimitive.GroupLabel
-      data-slot="dropdown-menu-label"
-      data-inset={inset}
-      className={cn(
-        'px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7',
-        className,
-      )}
-      {...props}
-    />
+    <MenuPrimitive.Group>
+      <MenuPrimitive.GroupLabel
+        data-slot="dropdown-menu-label"
+        data-inset={inset}
+        className={cn(
+          'px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7',
+          className,
+        )}
+        {...props}
+      />
+    </MenuPrimitive.Group>
   );
 }
 

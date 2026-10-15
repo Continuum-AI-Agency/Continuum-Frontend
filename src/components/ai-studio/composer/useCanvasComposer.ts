@@ -343,6 +343,8 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
          * turn keeps what the user typed; only the wire carries the grounding.
          */
         grounding?: string;
+        /** Mentioned Elements' `/slug` styles — model-only like `grounding`, prepended. */
+        styleSlugs?: string[];
         /** The `<pasted_text>` block — model-only like `grounding`, but never trimmed. */
         pastedText?: string;
       },
@@ -389,6 +391,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
             prompt: appendElementGrounding(
               options?.pastedText ? `${prompt.trim()}\n\n${options.pastedText}` : prompt.trim(),
               options?.grounding ?? '',
+              options?.styleSlugs,
             ),
             ...(options?.thinking ? { thinking: true } : {}),
             ...(selectedNodeIds?.length ? { selectedNodeIds } : {}),

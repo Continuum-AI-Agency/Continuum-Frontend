@@ -3,25 +3,34 @@
 import {
   type HeadlessElementReviewState,
   headlessElementReviewStateSchema,
+  isElementProductCategory,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { signLibraryAsset } from '@/lib/ai-studio/elements';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  type ElementRecord,
+  elementsQueryKey,
+  signLibraryAsset,
+  useElementMutations,
+} from '@/lib/ai-studio/elements';
 import { http } from '@/lib/api/http';
 
 /** The same reusable Element seen in Canvas and Library, with its generation approvals. */
 export function HeadlessElementReview({
   brandId,
-  elementId,
-  updatedAt,
+  element,
 }: {
   brandId: string;
-  elementId: string;
-  updatedAt: string;
+  element: ElementRecord;
 }) {
+  const elementId = element.id;
   const client = useQueryClient();
+  const headlessQueryKey = ['headless-element', brandId, elementId];
   const state = useQuery({
-    queryKey: ['headless-element', brandId, elementId, updatedAt],
+    queryKey: [...headlessQueryKey, element.updatedAt],
     queryFn: () =>
       http.request<HeadlessElementReviewState>({
         path: `/api/headless/elements/state?brandId=${brandId}&elementId=${elementId}`,
@@ -58,25 +67,37 @@ export function HeadlessElementReview({
       }
     },
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ['headless-element', brandId, elementId] });
-      await client.invalidateQueries({ queryKey: ['elements'] });
+      await client.invalidateQueries({ queryKey: headlessQueryKey });
+      await client.invalidateQueries({ queryKey: elementsQueryKey(brandId) });
     },
   });
-  if (!revision) return null;
-  const ready = revision.approved && (revision.kind !== 'character' || pack?.approved);
+  const { promoteToHeadless: promote } = useElementMutations(brandId);
+  const [rightsNote, setRightsNote] = React.useState('');
+
+  const ready = Boolean(revision?.approved && (revision.kind !== 'character' || pack?.approved));
+  // A product's click IS the approval, so it replaces the approve button rather than
+  // sitting next to it. Offered once the state has answered, so an approved product
+  // never flashes the action.
+  const canPromote = isElementProductCategory(element.category) && !state.isLoading && !ready;
+  const needsRightsNote = !element.rightsNote?.trim();
+  if (!revision && !canPromote) return null;
   return (
     <div className="space-y-2 rounded-lg border p-3">
       <p className="text-sm font-medium">
-        Reusable generation {revision.kind === 'character' ? 'actress' : revision.kind}
+        {revision
+          ? `Reusable generation ${revision.kind === 'character' ? 'actress' : revision.kind}`
+          : 'Auto-ads'}
       </p>
       <p className="text-xs text-muted-foreground">
         {ready
           ? 'Approved for reuse. Finished ads still need their own approval.'
-          : 'Review this Element before it is reused in an ad.'}
+          : canPromote
+            ? 'Approve this product so the Optimizer’s auto-ads can feature it.'
+            : 'Review this Element before it is reused in an ad.'}
       </p>
-      {revision.kind === 'scene' ? (
+      {revision?.kind === 'scene' ? (
         <p className="text-xs">{revision.payload.setting}</p>
-      ) : revision.kind === 'product' ? (
+      ) : revision?.kind === 'product' ? (
         <p className="text-xs">{revision.payload.concept}</p>
       ) : null}
       {pack && preview.data ? (
@@ -86,7 +107,7 @@ export function HeadlessElementReview({
           className="w-full rounded object-contain"
         />
       ) : null}
-      {revision.kind === 'character' && !pack ? (
+      {revision?.kind === 'character' && !pack ? (
         <Button
           size="sm"
           variant="outline"
@@ -96,7 +117,7 @@ export function HeadlessElementReview({
           Generate actress reference
         </Button>
       ) : null}
-      {!ready && (revision.kind !== 'character' || pack) ? (
+      {revision && !ready && !canPromote && (revision.kind !== 'character' || pack) ? (
         <Button
           size="sm"
           disabled={action.isPending || (revision.kind === 'character' && !preview.data)}
@@ -104,6 +125,49 @@ export function HeadlessElementReview({
         >
           Approve {revision.kind === 'character' ? 'actress and reference' : 'Element'}
         </Button>
+      ) : null}
+      {canPromote ? (
+        <div className="flex flex-col gap-1.5">
+          {needsRightsNote ? (
+            <>
+              <Label htmlFor={`element-${elementId}-auto-ads-rights`}>
+                Rights basis for auto-ads
+              </Label>
+              <Input
+                id={`element-${elementId}-auto-ads-rights`}
+                value={rightsNote}
+                placeholder="e.g. own product photography"
+                onChange={(event) => setRightsNote(event.target.value)}
+              />
+            </>
+          ) : null}
+          <Button
+            size="sm"
+            className="self-start"
+            disabled={promote.isPending || (needsRightsNote && !rightsNote.trim())}
+            onClick={() =>
+              promote.mutate(
+                {
+                  elementId,
+                  ...(needsRightsNote ? { rightsNote: rightsNote.trim() } : {}),
+                },
+                { onSuccess: () => client.invalidateQueries({ queryKey: headlessQueryKey }) },
+              )
+            }
+          >
+            Use in auto-ads
+          </Button>
+        </div>
+      ) : null}
+      {promote.isSuccess ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          Approved for auto-ads (revision {promote.data.revision}).
+        </p>
+      ) : null}
+      {promote.error ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not approve for auto-ads: {promote.error.message}
+        </p>
       ) : null}
       {action.error ? (
         <p role="alert" className="text-xs text-destructive">

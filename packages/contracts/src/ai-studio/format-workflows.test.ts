@@ -2,9 +2,11 @@ import { describe, expect, it } from 'bun:test';
 import {
   compileCarouselSetWorkflow,
   compileControlledPairWorkflow,
+  compileFastCutWorkflow,
   compileMasterAndCropsWorkflow,
 } from './format-workflows';
 import { buildWorkflowGraph } from './workflow-builder';
+import { fastCutNodeDataSchema } from './workflow-graph';
 
 const promptEdgesInto = (
   connections: Array<{ from_ref: string; to_ref: string; role?: string }>,
@@ -188,5 +190,54 @@ describe('compileMasterAndCropsWorkflow', () => {
     const compiled = compileMasterAndCropsWorkflow({ ...recipe, cropAspectRatios: ['4:5'] });
     expect(promptEdgesInto(compiled.connections, 'crop:4-5:image')).toHaveLength(1);
     expect(promptEdgesInto(compiled.connections, 'master:image')).toHaveLength(1);
+  });
+});
+
+describe('compileFastCutWorkflow', () => {
+  const recipe = {
+    recipe: 'fast_cut' as const,
+    pacing: 'stutter' as const,
+    bars: 8,
+    elements: [{ elementId: 'el-product', styleSlugs: ['goldenhour'] }],
+    shots: [
+      { id: 'pour', prompt: 'the shake poured over ice, /moonlight', kind: 'video' as const },
+      { id: 'bottle', prompt: 'the bottle on a gym bench' },
+      { id: 'lift', prompt: 'a deadlift lockout, chalk in the air', kind: 'video' as const },
+    ],
+  };
+
+  it('leads every shot prompt with the Elements\' style tokens, so a shot\'s own slug comes later', () => {
+    const compiled = compileFastCutWorkflow(recipe);
+    const prompt = (ref: string) => {
+      const data = compiled.nodes.find((node) => node.ref === ref)?.data ?? {};
+      return String(data.positivePrompt ?? data.prompt);
+    };
+    expect(prompt('shot:pour')).toBe('/goldenhour the shake poured over ice, /moonlight');
+    expect(prompt('shot:bottle')).toBe('/goldenhour the bottle on a gym bench');
+    expect(compiled.nodes.find((node) => node.ref === 'shot:bottle')?.type).toBe('nanoGen');
+    expect(compiled.nodes.find((node) => node.ref === 'shot:pour')?.type).toBe('videoGen');
+  });
+
+  it('resolves through buildWorkflowGraph: Element → every shot → fastCut, and a bed slot', () => {
+    const compiled = compileFastCutWorkflow(recipe);
+    const { graph, errors } = buildWorkflowGraph(compiled.nodes, compiled.connections);
+    expect(errors).toEqual([]);
+    const cut = graph.nodes.find((node) => node.type === 'fastCut');
+    const element = graph.nodes.find((node) => node.type === 'element');
+    const bed = graph.nodes.find((node) => node.type === 'audio');
+    const into = (target: string | undefined, handle: string) =>
+      graph.edges.filter((edge) => edge.target === target && edge.targetHandle === handle);
+    expect(into(cut?.id, 'media-in')).toHaveLength(3);
+    expect(into(cut?.id, 'audio-in').map((edge) => edge.source)).toEqual([bed?.id]);
+    expect(graph.edges.filter((edge) => edge.source === element?.id)).toHaveLength(3);
+    expect(fastCutNodeDataSchema.parse(cut?.data)).toMatchObject({ pacing: 'stutter', bars: 8 });
+    expect(compiled.outputRefs).toEqual(['fastcut:montage']);
+  });
+
+  it('refuses a montage of one shot and duplicate shot ids', () => {
+    expect(() => compileFastCutWorkflow({ ...recipe, shots: [recipe.shots[1]] })).toThrow();
+    expect(() =>
+      compileFastCutWorkflow({ ...recipe, shots: [recipe.shots[1], recipe.shots[1]] }),
+    ).toThrow();
   });
 });

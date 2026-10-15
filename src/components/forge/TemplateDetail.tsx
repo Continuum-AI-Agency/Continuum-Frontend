@@ -53,6 +53,8 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
+import { TemplateAuthoringEditor } from '@/components/forge/TemplateAuthoringEditor';
+import { type LayerDraftChange } from '@/components/forge/layerDraft';
 import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
@@ -227,6 +229,8 @@ export function TemplateDetail({
   onRevisionTaken,
   initialTab,
   initialComp,
+  onDraftChange,
+  hyperframesRevisionId,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
@@ -244,6 +248,9 @@ export function TemplateDetail({
   /** A dropped file to upload as this template's next source revision: opens on that tab. */
   revisionFile?: File;
   onRevisionTaken?: () => void;
+  onDraftChange?: LayerDraftChange;
+  /** Private HyperFrames composition revision carried in from AI Studio. */
+  hyperframesRevisionId?: string;
 }) {
   const { assetId, templateKey } = source;
   const queryClient = useQueryClient();
@@ -305,6 +312,19 @@ export function TemplateDetail({
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
   const [tab, setTab] = useState(initialTab ?? (revisionFile ? 'source' : 'checks'));
+  const authorIdentity = `${assetId}:${source.versionId ?? ''}`;
+  const [mountedAuthorIdentity, setMountedAuthorIdentity] = useState<string | null>(() =>
+    initialTab === 'author' ? authorIdentity : null,
+  );
+  useEffect(() => {
+    if (!initialTab) return;
+    setTab(initialTab);
+    if (initialTab === 'author') setMountedAuthorIdentity(authorIdentity);
+  }, [authorIdentity, initialTab]);
+  const selectTab = (value: string) => {
+    setTab(value);
+    if (value === 'author') setMountedAuthorIdentity(authorIdentity);
+  };
   const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
@@ -1686,13 +1706,14 @@ export function TemplateDetail({
           ) : null}
         </div>
 
-        <Tabs value={tab} onValueChange={setTab} className="min-w-0 gap-0">
+        <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-0">
           <TabsList
             variant="line"
             className="h-auto min-h-9 w-full flex-wrap justify-start gap-x-3 gap-y-1 border-b px-[var(--card-pad)] py-2"
           >
             <TabsTrigger value="checks">Checks</TabsTrigger>
             <TabsTrigger value="layers">Edit layers</TabsTrigger>
+            <TabsTrigger value="author">Author</TabsTrigger>
             <TabsTrigger value="variants" className="flex-none px-0 text-xs">
               Variants {revisionCatalog?.length ? `(${revisionCatalog.length})` : ''}
             </TabsTrigger>
@@ -1804,6 +1825,25 @@ export function TemplateDetail({
               initialComp={initialComp}
               templateKey={templateKey}
             />
+          </TabsContent>
+          <TabsContent value="author" keepMounted className="p-[var(--card-pad)]">
+            {mountedAuthorIdentity === authorIdentity ? (
+              <TemplateAuthoringEditor
+                key={`${assetId}:${source.versionId}:author`}
+                brandId={brandId}
+                assetId={assetId}
+                versionId={source.versionId}
+                name={source.displayName ?? 'Template'}
+                parse={source.parse}
+                active={tab === 'author'}
+                onSaved={onChanged}
+                onOpenVariant={onOpenVariant ? (id) => onOpenVariant(id, 'variants') : undefined}
+                onOpenRender={onOpenRender}
+                templateKey={templateKey}
+                onDraftChange={onDraftChange}
+                hyperframesRevisionId={hyperframesRevisionId}
+              />
+            ) : null}
           </TabsContent>
           <TabsContent value="variables" keepMounted>
             <VariableEditor

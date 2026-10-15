@@ -69,6 +69,7 @@ describe('derived sets', () => {
       'action',
       'apiRender',
       'extendVideo',
+      'fastCut',
       'frameExtract',
       'hyperframesAgent',
       'layerEditor',
@@ -88,6 +89,7 @@ describe('derived sets', () => {
       'batch',
       'export',
       'extendVideo',
+      'fastCut',
       // omniGen / hyperframesAgent / frameExtract produced media and were executed, but
       // canvasRunRequests' copy left them out, so an MCP run summary never mentioned them.
       'frameExtract',
@@ -163,6 +165,24 @@ describe('generation signature recipes', () => {
     const tracked = STUDIO_NODE_TYPES.filter(
       (type: StudioNodeType) => studioNodeDefinition(type).signatureFields !== undefined,
     );
-    expect(sorted(tracked)).toEqual(['action', 'nanoGen', 'veoDirector', 'veoFast', 'videoGen']);
+    expect(sorted(tracked)).toEqual([
+      'action',
+      'fastCut',
+      'nanoGen',
+      'veoDirector',
+      'veoFast',
+      'videoGen',
+    ]);
+  });
+});
+
+describe('fastCut', () => {
+  it('is a runnable video node that makes media and is never a handoff', () => {
+    const definition = studioNodeDefinition('fastCut');
+    expect(definition).toMatchObject({ category: 'video', runnable: true, producesMedia: true });
+    expect(definition.sink).toBeUndefined();
+    expect(STUDIO_RUNNABLE_NODE_TYPES.has('fastCut')).toBe(true);
+    expect(STUDIO_MEDIA_NODE_TYPES.has('fastCut')).toBe(true);
+    expect(definition.signatureFields).toEqual(['pacing', 'rung', 'bars', 'transients']);
   });
 });

@@ -46,6 +46,15 @@ type DeriveInput = {
   platforms?: readonly OrganicPlatformKey[];
 };
 
+// Facebook and LinkedIn share their summary bucket with the platform's ad accounts, and an ad
+// account cannot receive a post. Only these asset types can — the same ones the Backend token
+// resolvers sign with. Pink Elephant, 2026-10-14: "Moisés Avendaño" (an ad account) sorted
+// ahead of the brand's Page and became the Facebook default.
+const POSTING_ASSET_TYPES: Partial<Record<OrganicPlatformKey, readonly string[]>> = {
+  facebook: ['meta_page'],
+  linkedin: ['linkedin_organization'],
+};
+
 export function deriveOrganicPlatformAccounts({
   integrationSummary,
   connections,
@@ -53,7 +62,10 @@ export function deriveOrganicPlatformAccounts({
 }: DeriveInput): OrganicPlatformAccounts[] {
   return platforms.map((platform) => {
     const connection = connections?.[platform];
-    const summaryAccounts = integrationSummary?.[platform as PlatformKey]?.accounts ?? [];
+    const postingTypes = POSTING_ASSET_TYPES[platform];
+    const summaryAccounts = (integrationSummary?.[platform as PlatformKey]?.accounts ?? []).filter(
+      (account) => !postingTypes || postingTypes.includes(account.type ?? ''),
+    );
     const options: OrganicAccountOption[] = summaryAccounts.map((account) => ({
       id: account.integrationAccountId,
       label: account.alias ?? account.name,
@@ -63,7 +75,9 @@ export function deriveOrganicPlatformAccounts({
       platform,
       label: organicPlatformLabel(platform),
       connected: Boolean(connection?.connected) || options.length > 0,
-      accountId: connection?.accountId ?? options[0]?.id ?? null,
+      // One account that can take the post, or the user picks. Never the first of several:
+      // the list is sorted by name, so "first" is whichever account happens to sort first.
+      accountId: options.length === 1 ? (options[0]?.id ?? null) : null,
       options,
     };
   });

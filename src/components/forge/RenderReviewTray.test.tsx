@@ -5,7 +5,7 @@
  * reads its defaults as one line, and Change offers the Library (always), the brand's Slack
  * destinations (with add-a-channel, and the not-connected / not-installed / unavailable states),
  * Meta and approval rooms. Without a Meta target Deliver renders from there — Proof or Final, and
- * each row's output — with ONE batch preflight carrying `slack`, `final` and each row's delivery,
+ * each row's output — with ONE batch preflight carrying `slack`, `final`, `renderer` and each row's delivery,
  * then the confirmed token, and Running follows the fired jobs. A Meta target adds Confirm, needs
  * an approval room first, carries the rooms and a replacing row narrowed to its one format — for a
  * template with no authored outputs, one of its parse comps by name — and the preflight's approver
@@ -601,6 +601,40 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(batchPreflightMock.mock.calls[0]?.[0]).not.toHaveProperty('final');
   }, 30_000);
 
+  test('After Effects by default: no review or render names a renderer, even after Experimental was picked and unpicked', async () => {
+    const { onFired } = renderTray(null);
+    await press('Next: delivery');
+    const afterEffects = screen.getByRole('radio', { name: 'After Effects' });
+    expect(afterEffects.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'Experimental Renderer' }));
+    fireEvent.click(afterEffects);
+    await waitFor(() => expect(afterEffects.getAttribute('aria-checked')).toBe('true'));
+    await press('Render 3 files');
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    expect(batchPreflightMock.mock.calls[0]?.[0]).not.toHaveProperty('renderer');
+    expect(batchPreflightMock.mock.calls[1]?.[0]).not.toHaveProperty('renderer');
+  }, 30_000);
+
+  test('the Experimental Renderer is signed into the render’s preflight and every review after it', async () => {
+    const { onFired, snapshot } = renderTray(null);
+    await press('Next: delivery');
+    const experimental = screen.getByRole('radio', { name: 'Experimental Renderer' });
+    fireEvent.click(experimental);
+    await waitFor(() => expect(experimental.getAttribute('aria-checked')).toBe('true'));
+    expect(screen.getByText(/anything else\s+goes to After Effects automatically/)).toBeTruthy();
+    await press('Render 3 files');
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({
+      renderer: 'experimental',
+      records: RECORDS,
+    });
+
+    // A fresh snapshot is reviewed with the renderer still chosen.
+    snapshot({ reviewKey: 2, stale: false });
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(3));
+    expect(batchPreflightMock.mock.calls[2]?.[0]).toMatchObject({ renderer: 'experimental' });
+  }, 30_000);
+
   test('Final is for an owner or admin: disabled with the reason, and the batch stays a Proof', async () => {
     const reason = 'Only a brand owner or admin can render a Final.';
     const { onFired } = renderTray(BINDING, { finalBlocked: reason });
@@ -634,7 +668,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     );
     expect(within(root!).getByText('Still image')).toBeTruthy();
     expect(within(root!).getByText('Template default')).toBeTruthy();
-    expect(within(spain!).getByText('25 fps · MP4 + MXF')).toBeTruthy();
+    // The MXF half goes on to name its audio and codec; this checks the row's own settings lead.
+    expect(within(spain!).getByText(/^25 fps · MP4 \+ MXF · /)).toBeTruthy();
     expect(within(spain!).queryAllByText('Template default')).toHaveLength(0);
   }, 30_000);
 

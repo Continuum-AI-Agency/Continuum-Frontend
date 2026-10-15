@@ -27,6 +27,7 @@ import {
   ELEMENT_CATEGORIES,
   elementCategorySchema,
   resolveElementRefs,
+  withElementStyleTokens,
 } from '@continuum/contracts';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
@@ -34,7 +35,6 @@ import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
 export const ELEMENTS_ROOT_KEY = 'canvas-context:elements';
 export const ELEMENT_CATEGORY_FOLDER_PREFIX = 'canvas-context:elements:';
 export const ELEMENT_MENTION_KEY_PREFIX = 'canvas-element:';
-
 
 /** What one mentioned Element contributes, read back off the reference it produced. */
 export interface ElementMentionGrounding {
@@ -46,6 +46,8 @@ export interface ElementMentionGrounding {
   mode: 'pinned' | 'fallback';
   /** Members the fallback ceiling left behind. Silent truncation reads as randomness. */
   droppedCount: number;
+  /** The Element's `/slug` style defaults, carried into the turn's prompt. */
+  styleSlugs: string[];
 }
 
 export const elementCategoryFolderKey = (category: ElementCategory): string =>
@@ -102,6 +104,7 @@ export function elementToCanvasMentionSuggestion(
         elementAssetIds: assetIds,
         elementMode: pinned ? 'pinned' : 'fallback',
         elementDropped: droppedCount,
+        elementStyleSlugs: element.styleSlugs ?? [],
       },
     },
   };
@@ -164,6 +167,9 @@ export function readElementMention(
     assetIds,
     mode: metadata.elementMode === 'pinned' ? 'pinned' : 'fallback',
     droppedCount: typeof metadata.elementDropped === 'number' ? metadata.elementDropped : 0,
+    styleSlugs: Array.isArray(metadata.elementStyleSlugs)
+      ? metadata.elementStyleSlugs.filter((value): value is string => typeof value === 'string')
+      : [],
   };
 }
 
@@ -174,6 +180,8 @@ export interface ExpandedElementMentions {
   grounding: string;
   /** What grounded this turn, for the composer's provenance chips. */
   elements: ElementMentionGrounding[];
+  /** Every mentioned Element's `/slug` styles, in mention order, once each. */
+  styleSlugs: string[];
 }
 
 /**
@@ -244,7 +252,8 @@ export function expandElementMentions(
     })
     .join('\n');
 
-  return { references: expanded, grounding, elements };
+  const styleSlugs = [...new Set(elements.flatMap((element) => element.styleSlugs))];
+  return { references: expanded, grounding, elements, styleSlugs };
 }
 
 /**
@@ -254,14 +263,23 @@ export function expandElementMentions(
  * label="…"`); nothing else tells it that image #3 is a person it must preserve.
  * Lines are dropped from the END when the block would push the prompt past the
  * schema's 4000-char ceiling — a rejected request grounds nothing at all.
+ *
+ * The Elements' style tokens go FIRST, so a `/slug` the user typed still wins; a prompt
+ * already at the ceiling keeps its own words and drops the defaults.
  */
-export function appendElementGrounding(prompt: string, grounding: string): string {
-  if (!grounding.trim()) return prompt;
+export function appendElementGrounding(
+  prompt: string,
+  grounding: string,
+  styleSlugs: readonly string[] = [],
+): string {
+  const styled = withElementStyleTokens(prompt, styleSlugs);
+  const base = styled.length <= CANVAS_COMPOSE_PROMPT_MAX_CHARS ? styled : prompt;
+  if (!grounding.trim()) return base;
   const lines = grounding.split('\n');
   while (lines.length > 0) {
     const block = `\n\n<elements>\n${lines.join('\n')}\n</elements>`;
-    if (prompt.length + block.length <= CANVAS_COMPOSE_PROMPT_MAX_CHARS) return `${prompt}${block}`;
+    if (base.length + block.length <= CANVAS_COMPOSE_PROMPT_MAX_CHARS) return `${base}${block}`;
     lines.pop();
   }
-  return prompt;
+  return base;
 }

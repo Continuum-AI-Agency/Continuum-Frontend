@@ -15,6 +15,7 @@ import type {
   BackendExtendVideoRequestPayload,
   StreamState,
 } from '@/lib/types/chatImage';
+import { useCanvasRuntime } from '../contexts/CanvasRuntimeContext';
 import type { ImageOutputItem, NodeOutput } from '../types/execution';
 import { parseDataUrl } from '../utils/dataUrl';
 import { generationErrorCopy } from '../utils/generationErrorCopy';
@@ -47,6 +48,9 @@ export function useWorkflowExecution() {
   const activeReadersRef = useRef<Map<string, ReadableStreamDefaultReader<Uint8Array>>>(new Map());
   const isCancelledRef = useRef(false);
   const { show } = useToast();
+  // A node the Backend renders from the SAVED room (fastCut) flushes the canvas first;
+  // absent outside a canvas workspace.
+  const flushSave = useCanvasRuntime()?.flushSave;
 
   const resolveInitUrl = useCallback((path: string) => {
     return resolveWorkflowInitUrl({
@@ -650,5 +654,6 @@ export function useWorkflowExecution() {
     registerController,
     releaseController,
     show,
+    flushSave,
   };
 }

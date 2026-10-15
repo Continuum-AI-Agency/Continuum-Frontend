@@ -59,6 +59,7 @@ export const STUDIO_CANVAS_NODE_TYPES = [
   'extendVideo',
   'hyperframesAgent',
   'timelineEditor',
+  'fastCut',
   'layerEditor',
   'plannerDraft',
   'organicPublish',
