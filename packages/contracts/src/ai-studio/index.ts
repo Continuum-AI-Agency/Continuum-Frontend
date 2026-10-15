@@ -39,6 +39,8 @@ export * from './motion-parent';
 export * from './motion-presets';
 export * from './motion-recipe';
 export * from './motion-styles';
+export * from './motion-timeline';
+export * from './motionmaxxing-recipes';
 export * from './node-registry';
 export * from './node-sizing';
 export * from './omni-gen';

@@ -22,6 +22,16 @@ import {
   textAnimationIdSchema,
   textTemplateIdSchema,
 } from './motion-presets';
+import {
+  getMotionInputSchema,
+  getMotionOutputSchema,
+  keyframeClipInputSchema,
+  keyframeClipOutputSchema,
+  retimeMotionInputSchema,
+  retimeMotionOutputSchema,
+  staggerClipsInputSchema,
+  staggerClipsOutputSchema,
+} from './motion-timeline';
 
 // ── Platform export presets ────────────────────────────────────────────────────────────
 
@@ -733,6 +743,46 @@ export const VIDEO_EDITOR_OPS = {
       })
       .strict(),
     output: committed({ keyframes: z.number().int().nonnegative() }),
+  },
+  get_motion: {
+    group: 'motion',
+    commits: false,
+    scope: 'project',
+    access: 'read',
+    description:
+      'Read the keyframes of the keyframed clips (or of clipIds), each in timeline seconds, with the clip start and length. Read it before keyframe_clip, stagger_clips or retime_motion.',
+    input: getMotionInputSchema.extend(projectRef),
+    output: getMotionOutputSchema,
+  },
+  keyframe_clip: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Write keyframes for one property of one clip: each key is { t (timeline seconds), v } — or { t, x, y } for transform.position, a normalized canvas point (0.5, 0.5 is the centre) — with an optional ease name, or bezier [x1, y1, x2, y2] for a custom curve. replace=true clears that property first; otherwise each key replaces only the key at its time. For a ready-made entrance or exit use animate_clip.',
+    input: keyframeClipInputSchema.extend(projectRef),
+    output: committed(keyframeClipOutputSchema.shape),
+  },
+  stagger_clips: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      '"Stagger these": move the selected clips so each starts eachSec after the previous, in the order given (the on-screen order of the selection; from=end or center reorders the offsets). Refuses clips on the main video track. One undo restores them.',
+    input: staggerClipsInputSchema.extend(projectRef),
+    output: committed(staggerClipsOutputSchema.shape),
+  },
+  retime_motion: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      '"Snappier", "slower", "bouncier": shift (shiftSec), rescale to durationSec, and/or re-ease the keyframes of the selected clips — every keyframed property, or one. The clips themselves do not move. Re-ease with an ease name, or bezier [x1, y1, x2, y2] for a custom curve.',
+    input: retimeMotionInputSchema.extend(projectRef),
+    output: committed(retimeMotionOutputSchema.shape),
   },
   add_transition: {
     group: 'motion',
