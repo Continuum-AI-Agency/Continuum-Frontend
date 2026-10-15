@@ -25,7 +25,7 @@ import {
   cutRungSchema,
   cutTransientKindSchema,
   DEFAULT_CUT_TRANSIENTS,
-} from '../headless-content/cutPlan';
+} from '../headless-content/cutEdit';
 import { elementStyleSlugsSchema, withElementStyleTokens } from '../media/element';
 import type { ConnectSpec, NodeSpec } from './workflow-builder';
 

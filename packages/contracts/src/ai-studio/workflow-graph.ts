@@ -5,7 +5,7 @@ import {
   cutRungSchema,
   cutTransientKindSchema,
   DEFAULT_CUT_TRANSIENTS,
-} from '../headless-content/cutPlan';
+} from '../headless-content/cutEdit';
 import { API_RENDER_MEDIA_LIST_MAX } from './api-renders';
 import { type BatchItemKind, batchItemType, MAX_BATCH_ITEMS } from './batch-node';
 import {
