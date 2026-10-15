@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, within } from '@testing-library/react';
+import type { PlatformCardsState } from '../useOptimizerData';
 import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
 import recordedGoogle from './platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
 import type { AccountPlatformMetricsState } from './platforms/useAccountPlatformMetrics';
@@ -104,9 +105,19 @@ const { buildTikTokOverview, TikTokSnapshotsEnvelopeSchema } = await import(
   './platforms/tiktokAdsOverviewModel'
 );
 
+// The brand's portfolio read, before any account filter, and one platform's cards. The Google
+// tab selects its rows from the brand read with the real selector, so what these tests prove
+// about which portfolios list is what the hook does.
+let brandRows: PortfolioListItem[] = [];
+let platformCardsState: PlatformCardsState = { status: 'ready', cards: [] };
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
+  useOptimizerPlatformPortfolios: (_brandId: string, platform: 'google_ads') => ({
+    data: realOptimizerData.portfoliosOnPlatform(brandRows, platform, adAccounts),
+    isPending: false,
+  }),
+  useOptimizerPlatformCards: () => platformCardsState,
   useOptimizerAdAccounts: () => ({
     data: adAccounts,
     isLoading: false,
@@ -128,10 +139,8 @@ mock.module('../useOptimizerData', () => ({
   useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
-const { OptimizerOverview, kindTileSub, autopilotTileSub, cardActionsOf } = await import(
-  './OptimizerOverview'
-);
-const { cardActionAvailability, cardActionLabel, cardWriteOf } = await import(
+const { OptimizerOverview, kindTileSub, autopilotTileSub } = await import('./OptimizerOverview');
+const { cardActionAvailability, cardActionLabel, cardActionsOf, cardWriteOf } = await import(
   './platformCards/platformCardActionModel'
 );
 const { AccountReadEnvelopeSchema } = await import('../useOptimizerData');
@@ -154,6 +163,8 @@ function portfolio(
     next_realloc_at: null,
     adset_count: 2,
     pending_recommendations: 0,
+    // What the contract defaults a row without `platforms` to (a server before 20261015130000).
+    platforms: [],
     ...overrides,
   };
 }
@@ -253,6 +264,7 @@ function mount(
   chromeInShell?: boolean,
 ) {
   const onOpenActions = mock(() => {});
+  const onOpenActivity = mock(() => {});
   const onSelect = mock((_id: string) => {});
   const onCreate = mock(() => {});
   const onPrefetch = mock((_id: string) => {});
@@ -264,13 +276,14 @@ function mount(
       currency="MXN"
       onCreatePortfolio={onCreate}
       onOpenActions={onOpenActions}
+      onOpenActivity={onOpenActivity}
       onPrefetchPortfolio={onPrefetch}
       onSelectPortfolio={onSelect}
       pendingCount={pendingCount}
       portfolios={portfolios}
     />,
   );
-  return { ...utils, onOpenActions, onSelect, onCreate, onPrefetch };
+  return { ...utils, onOpenActions, onOpenActivity, onSelect, onCreate, onPrefetch };
 }
 
 const follows = (a: Element, b: Element) =>
@@ -297,6 +310,8 @@ afterEach(() => {
   window.localStorage.clear();
   accountReadData = null;
   accountReadLoading = false;
+  brandRows = [];
+  platformCardsState = { status: 'ready', cards: [] };
   approvalMaps = { families: {}, insights: {} };
   efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
   cleanup();
@@ -685,6 +700,7 @@ describe('OptimizerOverview — the weekly report', () => {
         currency="MXN"
         onCreatePortfolio={() => {}}
         onOpenActions={() => {}}
+        onOpenActivity={() => {}}
         onSelectPortfolio={() => {}}
         pendingCount={0}
         portfolios={EASY_FIT}
@@ -754,6 +770,7 @@ describe('OptimizerOverview — platform cards from the bench document', () => {
         portfolioId: c.card_action?.portfolio_id,
         action: c.card_action?.action,
         recommendationId: c.card_action?.recommendation_id,
+        applyEnabled: c.card_action?.apply_enabled,
       });
     }
   });
@@ -1331,7 +1348,9 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     // Google's own read stands in full beneath it, over the producer's window.
     expect(getByTestId('google-headline').textContent).toStartWith('Google spent $55,205 MXN');
     expect(googleAsked.at(-1)?.[1]).toEqual({ since: '2026-09-21', until: '2026-09-27' });
-    expect(getByTestId('platform-reading-note').querySelector('button')?.textContent).toBe(
+    // The way in is the tab's own portfolio rows, which hold none yet.
+    expect(getByTestId('platform-reading-note').querySelector('button')).toBeNull();
+    expect(getByTestId('platform-portfolios-empty').querySelector('button')?.textContent).toBe(
       'Create a portfolio',
     );
   });
@@ -1458,5 +1477,279 @@ describe('OptimizerOverview — each row names its member platforms (feature 07)
     // Not deployed yet: the managed platform. Still reading: no guess.
     expect(rowChips(byId.get('mensajes') as Element)).toEqual(['meta']);
     expect(rowChips(byId.get('tours') as Element)).toEqual([]);
+  });
+});
+
+// G2 (google-ads plan): the Google tab gets the Meta tab's structure under its read — cards with
+// their controls, the links to Actions and Activity, the portfolio rows — of the brand's Google
+// portfolios, whichever ad account the page has selected (the mounts select Easy Fit's Meta one).
+describe('OptimizerOverview — the Google tab (G2)', () => {
+  const benchDocument = AccountReadEnvelopeSchema.parse(
+    JSON.parse(
+      readFileSync(
+        join(import.meta.dir, 'platformCards/__fixtures__/accountReadPlatformCards.json'),
+        'utf8',
+      ),
+    ),
+  );
+  const googleCards = (benchDocument?.read?.candidates ?? []).filter((c) => c.platform_card);
+  const cardOf = (variant: string) => {
+    const found = googleCards.find((c) => c.platform_card?.variant === variant);
+    if (!found) throw new Error(`the bench document has no ${variant} card`);
+    return found;
+  };
+  const BUDGET = cardOf('google_budget_limited');
+  const NEGATIVES = cardOf('google_negative_terms');
+  const switchedOff = (card: typeof BUDGET) => ({
+    ...card,
+    card_action: card.card_action ? { ...card.card_action, apply_enabled: false } : null,
+  });
+
+  // Easy Fit's Google-only portfolio sits on its Google customer; the mixed one on its Meta
+  // account. Both are Google's; the Meta-only one is not.
+  const GOOGLE_ONLY = portfolio({
+    id: '7a7a7a7a-0000-4000-8000-0000000000e3',
+    name: 'Google // Leads',
+    ad_account_id: '5251780631',
+    adset_count: 2,
+    platforms: ['google_ads'],
+  });
+  const MIXED = portfolio({
+    id: '7a7a7a7a-0000-4000-8000-0000000000e4',
+    name: 'Leads // Meta + Google',
+    ad_account_id: 'act_easyfit',
+    adset_count: 5,
+    platforms: ['meta', 'google_ads'],
+  });
+  const META_ROW = { ...MENSAJES, platforms: ['meta' as const] };
+
+  const onGoogleTab = () => {
+    grantGoogle();
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    efficiency = { series: [], pending: false, failed: 0, retryFailed };
+  };
+  const rowIds = (root: HTMLElement) =>
+    [...root.querySelectorAll('[data-testid="portfolio-row"]')].map((row) =>
+      row.getAttribute('data-portfolio-id'),
+    );
+  const rowById = (root: HTMLElement, id: string) =>
+    root.querySelector(`[data-portfolio-id="${id}"]`) as HTMLElement;
+  const chipsOf = (node: Element) =>
+    [...node.querySelectorAll('[data-testid="platform-chip"]')].map((chip) =>
+      chip.getAttribute('data-platform'),
+    );
+
+  it("lists the brand's Google portfolios, whichever Meta account is selected", () => {
+    onGoogleTab();
+    brandRows = [META_ROW, GOOGLE_ONLY, MIXED];
+    const { getByTestId, onSelect } = mount();
+    const rows = getByTestId('portfolio-rows');
+    expect(rowIds(rows).sort()).toEqual([GOOGLE_ONLY.id, MIXED.id].sort());
+    expect(chipsOf(rowById(rows, GOOGLE_ONLY.id))).toEqual(['google_ads']);
+    expect(chipsOf(rowById(rows, MIXED.id))).toEqual(['meta', 'google_ads']);
+    // A Google portfolio enrolls campaigns, never ad sets; a mixed one holds both.
+    const members = (id: string) =>
+      within(rowById(rows, id)).getByTestId('portfolio-row-members').textContent;
+    expect(members(GOOGLE_ONLY.id)).toBe('2 campaigns');
+    expect(members(MIXED.id)).toBe('5 members');
+    expect(rows.textContent).not.toContain('ad set');
+    fireEvent.click(within(rows).getByRole('button', { name: /^Google \/\/ Leads/ }));
+    expect(onSelect).toHaveBeenCalledWith(GOOGLE_ONLY.id);
+  });
+
+  // The parity bench's google.currency FAIL: Easy Fit's Google customer is granted with no
+  // currency in its asset row, so a row read from the account list printed "99.00" bare.
+  it("prints a Google row's money in its portfolio's currency, which the account list lacks", () => {
+    onGoogleTab();
+    const targetOf = () =>
+      mount()
+        .getByTestId('portfolio-rows')
+        .querySelector(`[data-figure="portfolio-row.${GOOGLE_ONLY.id}.target"]`);
+    brandRows = [{ ...GOOGLE_ONLY, cpa_target: 99, currency: 'MXN' }];
+    const target = targetOf();
+    expect(target?.getAttribute('data-figure-currency')).toBe('MXN');
+    expect(target?.textContent).toContain('MXN');
+    cleanup();
+    brandRows = [{ ...GOOGLE_ONLY, cpa_target: 99, currency: null }];
+    expect(targetOf()?.getAttribute('data-figure-currency')).toBe('none');
+  });
+
+  it("falls back to the brand's granted Google accounts when the server sends no platforms", () => {
+    onGoogleTab();
+    brandRows = [
+      portfolio({ id: 'on-google', name: 'Vivo 47 // Google', ad_account_id: '3710693645' }),
+      portfolio({ id: 'on-meta', name: 'Meta row', ad_account_id: 'act_easyfit' }),
+      portfolio({ id: 'not-granted', name: 'Elsewhere', ad_account_id: '9999999999' }),
+    ];
+    const { getByTestId } = mount();
+    const rows = getByTestId('portfolio-rows');
+    expect(rowIds(rows)).toEqual(['on-google']);
+    expect(chipsOf(rowById(rows, 'on-google'))).toEqual(['google_ads']);
+  });
+
+  it('renders a Google card with its own control, after the read and before the links and rows', () => {
+    onGoogleTab();
+    brandRows = [GOOGLE_ONLY];
+    platformCardsState = { status: 'ready', cards: [BUDGET] };
+    const { getByTestId, getAllByTestId } = mount();
+    const cards = getAllByTestId('account-card');
+    expect(cards).toHaveLength(1);
+    const card = cards[0] as HTMLElement;
+    expect(card.getAttribute('data-variant')).toBe('google_budget_limited');
+    expect(chipsOf(card)).toEqual(['google_ads']);
+    const write = cardWriteOf(cardActionsOf([BUDGET]).get(BUDGET.id));
+    if (!write) throw new Error('the budget card carries no write');
+    expect(within(card).getByTestId('platform-card-action').textContent).toBe(
+      cardActionLabel(write),
+    );
+    expect(within(card).queryByTestId('account-card-action')).toBeNull();
+    expect(within(card).getByTestId('account-card-portfolios').textContent).toBe('Google // Leads');
+    const order = [
+      getByTestId('google-tab'),
+      getByTestId('overview-recommendations'),
+      getByTestId('overview-links'),
+      getByTestId('portfolio-rows'),
+    ];
+    for (let i = 1; i < order.length; i += 1) {
+      expect(follows(order[i - 1] as Element, order[i] as Element)).toBe(true);
+    }
+  });
+
+  it("renders the control disabled, with the reason, when the portfolio's writes to Google are off", () => {
+    onGoogleTab();
+    brandRows = [GOOGLE_ONLY];
+    platformCardsState = {
+      status: 'ready',
+      cards: [switchedOff(BUDGET), switchedOff(NEGATIVES)],
+    };
+    const { getAllByTestId, queryAllByTestId } = mount();
+    expect(queryAllByTestId('platform-card-action')).toHaveLength(0);
+    expect(queryAllByTestId('platform-card-add-negatives')).toHaveLength(0);
+    const disabled = getAllByTestId('platform-card-action-unavailable');
+    expect(disabled).toHaveLength(2);
+    for (const control of disabled) {
+      expect(control.getAttribute('data-reason')).toBe('apply_disabled');
+      expect((within(control).getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+      expect(control.textContent).toContain(
+        'Writes to Google are switched off for this portfolio.',
+      );
+    }
+  });
+
+  it('links to Actions and Activity, on Google and on Meta', () => {
+    for (const tab of ['google_ads', 'meta'] as const) {
+      if (tab === 'google_ads') onGoogleTab();
+      else navigation.params = new URLSearchParams('tab=performance&platform=meta');
+      const { getByTestId, onOpenActions, onOpenActivity, unmount } = mount();
+      expect(getByTestId('overview-link-actions').textContent).toBe('Review in Actions');
+      expect(getByTestId('overview-link-activity').textContent).toBe('Activity');
+      fireEvent.click(getByTestId('overview-link-actions'));
+      fireEvent.click(getByTestId('overview-link-activity'));
+      expect(onOpenActions).toHaveBeenCalledTimes(1);
+      expect(onOpenActivity).toHaveBeenCalledTimes(1);
+      unmount();
+    }
+  });
+
+  it('says the cards could not be read when the read fails, never that there are none', () => {
+    onGoogleTab();
+    brandRows = [GOOGLE_ONLY];
+    platformCardsState = { status: 'error' };
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('platform-cards-error').textContent).toContain(
+      "Google's recommendations could not be read",
+    );
+    expect(queryByTestId('overview-recommendations')).toBeNull();
+    // The rest of the tab stands: the links and the rows.
+    expect(getByTestId('overview-links')).toBeTruthy();
+    expect(rowIds(getByTestId('portfolio-rows'))).toEqual([GOOGLE_ONLY.id]);
+  });
+
+  // Easy Fit's b9cebbcf read "no cycle yet" with dashes beside 218 real leads: the efficiency
+  // series sums Meta ad-set snapshots, which a Google portfolio never writes.
+  it("quotes a Google row's 7 days from its metrics read, in that read's currency", () => {
+    onGoogleTab();
+    const ran = { ...GOOGLE_ONLY, last_actual_cycle_at: '2026-09-28T06:49:48Z' };
+    brandRows = [ran];
+    memberStates = new Map<string, PortfolioMetricsState>([
+      [
+        ran.id,
+        { status: 'ready', metrics: portfolioMetricsFixture({ platforms: ['google_ads'] }) },
+      ],
+    ]);
+    const row = within(mount().getByTestId('portfolio-rows'));
+    const figure = (part: string) =>
+      row
+        .getAllByTestId('figure')
+        .find((node) => node.getAttribute('data-figure') === `portfolio-row.${ran.id}.${part}`);
+    expect(figure('results')?.getAttribute('data-figure-raw')).toBe('118');
+    expect(figure('spend')?.getAttribute('data-figure-raw')).toBe('4062');
+    expect(figure('spend')?.getAttribute('data-figure-currency')).toBe('MXN');
+    expect(row.getByTestId('portfolio-state-chip').textContent).not.toBe('no cycle yet');
+  });
+
+  // The visual bench's layout-shift FAIL (CLS 0.25 at 375): a skeleton that collapsed to
+  // nothing, and rows that painted before the read above them, both pushed the screen.
+  it('paints nothing under the read until the cards and the read above have settled', () => {
+    onGoogleTab();
+    brandRows = [GOOGLE_ONLY];
+    const below = (root: ReturnType<typeof mount>) =>
+      ['overview-recommendations-skeleton', 'overview-links', 'portfolio-rows'].filter((id) =>
+        root.queryByTestId(id),
+      );
+    platformCardsState = { status: 'loading' };
+    const cardsLoading = mount();
+    expect(below(cardsLoading)).toEqual([]);
+    cardsLoading.unmount();
+    platformCardsState = { status: 'ready', cards: [] };
+    googleState = { status: 'loading' };
+    const readLoading = mount();
+    expect(below(readLoading)).toEqual([]);
+    readLoading.unmount();
+    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    expect(below(mount())).toEqual(['overview-links', 'portfolio-rows']);
+  });
+
+  it('shows no card section for none or an older server', () => {
+    onGoogleTab();
+    for (const state of [
+      { status: 'ready', cards: [] },
+      { status: 'unavailable' },
+    ] as PlatformCardsState[]) {
+      platformCardsState = state;
+      const { queryByTestId, unmount } = mount();
+      expect(queryByTestId('overview-recommendations')).toBeNull();
+      expect(queryByTestId('overview-recommendations-skeleton')).toBeNull();
+      expect(queryByTestId('platform-cards-error')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('says no portfolio holds Google campaigns yet, with the way to create one', () => {
+    onGoogleTab();
+    brandRows = [META_ROW];
+    const { getByTestId, onCreate } = mount();
+    const empty = getByTestId('platform-portfolios-empty');
+    expect(empty.textContent).toContain('No portfolio holds Google campaigns yet.');
+    fireEvent.click(within(empty).getByRole('button', { name: 'Create a portfolio' }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an unconnected Google tab its empty state and nothing else', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    brandRows = [GOOGLE_ONLY];
+    platformCardsState = { status: 'ready', cards: [BUDGET] };
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('google-empty-no-connection')).toBeTruthy();
+    for (const absent of [
+      'overview-recommendations',
+      'overview-recommendations-skeleton',
+      'platform-cards-error',
+      'overview-links',
+      'portfolio-rows',
+    ]) {
+      expect(queryByTestId(absent)).toBeNull();
+    }
   });
 });

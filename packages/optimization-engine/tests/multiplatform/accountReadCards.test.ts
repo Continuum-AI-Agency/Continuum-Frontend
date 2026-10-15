@@ -1,10 +1,11 @@
-// The account read files every platform card under a catalogue detector, in SQL
-// (20261007130000_optimizer_account_read_platform_cards.sql). SQL cannot import the engine's
+// The account read files every platform card under a catalogue detector, in SQL (the latest
+// migration that defines the card builder — 20261015130000_optimizer_google_tab_reads.sql's
+// _platform_card_candidates since G2). SQL cannot import the engine's
 // rule list or the contract's detector enum, so this pins the two against the migration: a rule
 // added to the engine without an arm there would persist rows no screen ever shows.
 
 import { describe, expect, test } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { accountDetectorSchema, isGuardDetector } from '@continuum/contracts';
 import { PLATFORM_SIGNAL_RULES } from '../../src';
@@ -24,10 +25,18 @@ function findMigrationsDir(): string {
   throw new Error('supabase/migrations not found above ' + import.meta.dir);
 }
 
-const MIGRATION = join(
-  findMigrationsDir(),
-  '20261007130000_optimizer_account_read_platform_cards.sql',
-);
+/** The LATEST migration carrying the detector CASE: the one prod runs. Pinning a file name
+ *  went stale the day the builder moved (20261007130000 → 20261015130000). */
+const MIGRATION = (() => {
+  const dir = findMigrationsDir();
+  const definers = readdirSync(dir)
+    .filter((name) => name.endsWith('.sql'))
+    .sort()
+    .filter((name) => /end as detector/.test(readFileSync(join(dir, name), 'utf8')));
+  const latest = definers.at(-1);
+  if (!latest) throw new Error('no migration defines the platform card detector CASE');
+  return join(dir, latest);
+})();
 
 /** The `when '<rule>' then '<detector>'` arms of the CASE that ends `as detector`. */
 function detectorArms(sql: string): Map<string, string> {

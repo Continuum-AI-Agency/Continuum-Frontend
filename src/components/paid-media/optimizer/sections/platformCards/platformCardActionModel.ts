@@ -4,6 +4,7 @@
 // person approves is exactly what the service runs.
 
 import type {
+  AccountCandidate,
   ActionRevertResponse,
   ActionRevertResult,
   NativeLevel,
@@ -22,14 +23,45 @@ export type PlatformCardAction = {
   portfolioId: string;
   action: OptimizerAction;
   recommendationId?: string | null;
+  /** The portfolio's write switch for the card's account (card_action.apply_enabled). False:
+   *  the service refuses the write (apply_disabled). Absent from an older server: unknown. */
+  applyEnabled?: boolean;
 };
+
+/** Candidate id → the action its platform card hands a person, exactly as the read carries it
+ *  (`card_action`: the pending recommendation, its portfolio, the engine's action and the
+ *  portfolio's write switch). A card without one shows no control of its own. */
+export function cardActionsOf(
+  candidates: readonly AccountCandidate[],
+): ReadonlyMap<string, PlatformCardAction> {
+  const actions = new Map<string, PlatformCardAction>();
+  for (const candidate of candidates) {
+    const target = candidate.card_action;
+    if (!target) continue;
+    actions.set(candidate.id, {
+      portfolioId: target.portfolio_id,
+      action: target.action,
+      recommendationId: target.recommendation_id,
+      applyEnabled: target.apply_enabled,
+    });
+  }
+  return actions;
+}
+
+/** The recommendation a platform card stands for. optimizer_get_platform_cards ids each card
+ *  'platform_signal:<recommendation id>'; a card with an action also names it outright. */
+export function cardRecommendationId(candidate: AccountCandidate): string {
+  return (
+    candidate.card_action?.recommendation_id ?? candidate.id.replace(/^platform_signal:/, '')
+  );
+}
 
 /** A move between platforms has its own approval (crossPlatformMove); a card runs one write. */
 export type CardWrite = Exclude<OptimizerAction, { kind: 'budget_move' }>;
 
-/** 'ready': the control opens the approval flow. 'tiktok_not_connected': the control shows,
- *  disabled, and says why. 'none': the card offers no control of its own. */
-export type CardActionAvailability = 'ready' | 'tiktok_not_connected' | 'none';
+/** 'ready': the control opens the approval flow. 'tiktok_not_connected' and 'apply_disabled':
+ *  the control shows, disabled, and says why. 'none': the card offers no control of its own. */
+export type CardActionAvailability = 'ready' | 'tiktok_not_connected' | 'apply_disabled' | 'none';
 
 export function cardWriteOf(target: PlatformCardAction | null | undefined): CardWrite | null {
   if (target == null || target.action.kind === 'budget_move') return null;
@@ -44,11 +76,25 @@ export function cardActionAvailability(
   if (write == null || isReadOnly(card)) return 'none';
   // The service holds a Google applier only: a TikTok write has no connection to run through.
   if (write.ref.platform === 'tiktok_ads') return 'tiktok_not_connected';
-  return write.ref.platform === 'google_ads' ? 'ready' : 'none';
+  if (write.ref.platform !== 'google_ads') return 'none';
+  // Offering a write the service will refuse is a button that only ever fails.
+  return target?.applyEnabled === false ? 'apply_disabled' : 'ready';
 }
 
 export const TIKTOK_NOT_CONNECTED_NOTE =
   'TikTok is not connected for changes yet. Make this change in TikTok Ads Manager.';
+
+/** Why a disabled control is disabled, in one line. Null when the control is not disabled. */
+export function cardActionUnavailableNote(
+  availability: CardActionAvailability,
+  write: CardWrite,
+): string | null {
+  if (availability === 'tiktok_not_connected') return TIKTOK_NOT_CONNECTED_NOTE;
+  if (availability === 'apply_disabled') {
+    return `Writes to ${PLATFORM_NAMES[write.ref.platform]} are switched off for this portfolio.`;
+  }
+  return null;
+}
 
 const LEVEL_NOUN: Record<NativeLevel, string> = {
   campaign: 'campaign',

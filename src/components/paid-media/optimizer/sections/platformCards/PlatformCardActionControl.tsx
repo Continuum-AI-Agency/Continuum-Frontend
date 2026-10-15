@@ -4,7 +4,8 @@
 // feature 09). Opening it asks the platform first — a dry run through /apply/actions, Google's
 // validate_only — so the person reads Google's verdict before anything is written; confirming
 // sends the same action for real. A TikTok write shows the button disabled and says why: the
-// service has no TikTok connection to write through.
+// service has no TikTok connection to write through. So does a Google write whose portfolio has
+// writes to Google switched off: the service would refuse it (apply_disabled).
 //
 // A live write that lands can be undone the same way (optimizer-apply-action-revert): the dialog
 // switches to the undo, asks Google to check it first, and writes the recorded before back only
@@ -36,9 +37,9 @@ import {
   cardActionChange,
   cardActionLabel,
   cardActionTitle,
+  cardActionUnavailableNote,
   previewVerdict,
   resultVerdict,
-  TIKTOK_NOT_CONNECTED_NOTE,
   undoAuditIdOf,
   undoPreviewVerdict,
   undoRestoresText,
@@ -100,13 +101,26 @@ function Verdict({ verdict, testId }: { verdict: CardActionVerdict; testId: stri
   );
 }
 
-export function TikTokNotConnected({ write }: { write: CardWrite }) {
+/** The control a card cannot run: its button, disabled, and the one line that says why. */
+export function UnavailableAction({
+  write,
+  availability,
+}: {
+  write: CardWrite;
+  availability: 'tiktok_not_connected' | 'apply_disabled';
+}) {
   return (
-    <div className="space-y-1" data-testid="platform-card-action-unavailable">
+    <div
+      className="space-y-1"
+      data-reason={availability}
+      data-testid="platform-card-action-unavailable"
+    >
       <Button disabled size="sm" type="button" variant="secondary">
         {cardActionLabel(write)}
       </Button>
-      <p className="text-muted-foreground text-xs">{TIKTOK_NOT_CONNECTED_NOTE}</p>
+      <p className="text-muted-foreground text-xs">
+        {cardActionUnavailableNote(availability, write)}
+      </p>
     </div>
   );
 }

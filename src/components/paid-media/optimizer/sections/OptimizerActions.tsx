@@ -5,15 +5,21 @@
 // through the real write path of the portfolio's platform; approved fatigue renewals surface as tracked tasks. The
 // standing "ad-level is preview" banner is gone: ad-level rows now carry a per-row danger
 // tooltip inside the queue, so the limit shows exactly where it applies.
+//
+// The list is the selected account's portfolios plus the brand's on Google and TikTok (the page
+// shell merges them). Each portfolio's pending platform cards (optimizer_get_platform_cards)
+// ride into its group, where they render with their own control, as on the platform's tab.
 
-import type { PortfolioListItem, RenewalTask } from '@continuum/contracts';
+import type { AccountCandidate, PortfolioListItem, RenewalTask } from '@continuum/contracts';
 import { CheckCircle2Icon } from 'lucide-react';
+import { useMemo } from 'react';
 
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
 import { nextCycleLabel, soonestNextCycle } from '../format';
 import { hasPendingWork } from '../reportModel';
 import * as typeScale from '../typeScale';
+import { type PlatformCardsState, useOptimizerPlatformCards } from '../useOptimizerData';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { PlatformChips } from './platforms/PlatformChip';
 import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
@@ -27,6 +33,23 @@ type OptimizerActionsProps = {
   onBrowsePortfolios: () => void;
 };
 
+const NO_CARDS: AccountCandidate[] = [];
+
+/** Portfolio id → its pending platform cards, from every platform read that answered. A read
+ *  that has not (or failed) hands no cards, and its recommendations stay queue rows. */
+function cardsByPortfolio(states: readonly PlatformCardsState[]): Map<string, AccountCandidate[]> {
+  const byPortfolio = new Map<string, AccountCandidate[]>();
+  for (const state of states) {
+    if (state.status !== 'ready') continue;
+    for (const card of state.cards) {
+      for (const portfolioId of card.portfolio_ids) {
+        byPortfolio.set(portfolioId, [...(byPortfolio.get(portfolioId) ?? []), card]);
+      }
+    }
+  }
+  return byPortfolio;
+}
+
 export function OptimizerActions({
   brandId,
   adAccountId,
@@ -34,6 +57,12 @@ export function OptimizerActions({
   renewals,
   onBrowsePortfolios,
 }: OptimizerActionsProps) {
+  const googleCards = useOptimizerPlatformCards(brandId, 'google_ads');
+  const tiktokCards = useOptimizerPlatformCards(brandId, 'tiktok_ads');
+  const platformCards = useMemo(
+    () => cardsByPortfolio([googleCards, tiktokCards]),
+    [googleCards, tiktokCards],
+  );
   // Budget moves are cycle_items, not recommendations — a portfolio with money work and no
   // fired trigger belongs here just as much as one with a pause to approve.
   const portfoliosWithPending = portfolios.filter(hasPendingWork);
@@ -75,7 +104,14 @@ export function OptimizerActions({
           <OptimizerActionsPortfolioGroup
             brandId={brandId}
             adAccountId={adAccountId}
-            headerLead={<PlatformChips platforms={OPTIMIZER_PORTFOLIO_PLATFORMS} />}
+            headerLead={
+              <PlatformChips
+                platforms={
+                  portfolio.platforms.length > 0 ? portfolio.platforms : OPTIMIZER_PORTFOLIO_PLATFORMS
+                }
+              />
+            }
+            platformCards={platformCards.get(portfolio.id) ?? NO_CARDS}
             portfolio={portfolio}
           />
         </div>

@@ -13,8 +13,13 @@ import {
   readFigureNode,
   round2,
 } from './paid-parity.model';
-import { mintSessionBundleForEmail, type PlaywrightStorageState } from './support/auth';
-import { PROD_SUPABASE_URL } from './support/prodEnv';
+import {
+  mintSessionBundleForEmail,
+  type PlaywrightStorageState,
+  pinSessionBrand,
+  revokeBenchSession,
+} from './support/auth';
+import { benchBrowserChannel, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
 // paid:parity:e2e:bench — the screen agrees with the payload it fetched.
@@ -42,7 +47,12 @@ import { PROD_SUPABASE_URL } from './support/prodEnv';
 //
 // Surfaces: the Overview (headline, tiles, account cards, portfolio rows), the Portfolios
 // list, one portfolio page (news cards, recap sentence, four KPI
-// tiles, CPL timeline projection), the Actions queue.
+// tiles, CPL timeline projection), the Actions queue — and the Google tab (G2): the
+// producer's Google row (optimizer_get_account_platform_metrics), Google's own read by campaign
+// type (paid-media-metrics `account_overview` / `top_campaigns`), Google's cards
+// (optimizer_get_platform_cards) and the brand's Google portfolio rows (optimizer_list_portfolios
+// + each row's optimizer_get_portfolio_metrics d7). The Google pass runs on Easy Fit's Google row, whose
+// selected Meta account holds no portfolio, so it also proves the Overview LANDS on Google.
 //
 // Masked snapshots: after a surface's parity is green, a full-page screenshot with every
 // figure node masked is compared against e2e/__screenshots__/paid-parity/<surface>.png.
@@ -50,9 +60,11 @@ import { PROD_SUPABASE_URL } from './support/prodEnv';
 // Delete a baseline to re-establish it after a deliberate layout change.
 //
 // READ-ONLY. Nothing here approves, applies, converts, reverts, creates or archives; no
-// label of any of those buttons is targeted. The one write is the bench user's
-// ACTIVE-BRAND PREFERENCE row (the same row the in-app brand switcher writes), captured
-// before the run and restored after — the same discipline as optimizer:e2e:bench.
+// label of any of those buttons is targeted. The writes are the bench user's ACTIVE-BRAND
+// PREFERENCE row (the same row the in-app brand switcher writes), captured before the run and
+// restored after — the same discipline as optimizer:e2e:bench — and the bench session's own
+// brand pin (user_session_brands). The session is signed out when the worker ends, which
+// deletes the pin; both are graded as `cleanup.*` steps.
 //
 // Envelope: the last stdout line is the Recorder-shaped JSON `scripts/factory/bench.mjs`
 // reads (PASS/WARN/SKIP/FAIL per surface and per rule). Lane: the classifier files a
@@ -63,7 +75,7 @@ import { PROD_SUPABASE_URL } from './support/prodEnv';
 // Usage: cd Continuum-Frontend && bun run paid:parity:e2e:bench
 // ---------------------------------------------------------------------------
 
-test.use({ channel: 'chrome' });
+test.use(benchBrowserChannel());
 
 const { serviceRoleKey } = pinProdSupabase();
 
@@ -81,6 +93,10 @@ const OWNER_EMAIL = 'mercadotecniavivo@gmail.com';
 const EASY_FIT_BRAND_IDS = [PARITY_BRAND_ID] as const;
 /** Owns the live portfolios and their ad sets. */
 const PORTFOLIO_ACCOUNT_ID = '521903353286118';
+/** Easy Fit's row with the two Google portfolios (b9cebbcf, 5aaf5931) on Google 5251780631; its
+ *  Meta account holds none. Declared apart from PARITY_BRAND_ID so the Meta surfaces can be
+ *  pointed at whichever row owns the Meta portfolios without moving the Google pass. */
+const GOOGLE_PARITY_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 
 const STREAM_DAYS = 14;
 const DELIVERY_WINDOW_DAYS = 7;
@@ -459,6 +475,100 @@ function cycleItem(adsetId: string): Row | null {
   return null;
 }
 
+/* -- the Google tab's payloads (G2) ------------------------------------------------- */
+
+/** Inclusive days between two ISO dates: what a window total was summed over. */
+function spanDays(since: unknown, until: unknown): number | undefined {
+  const from = Date.parse(`${str(since)}T00:00:00Z`);
+  const to = Date.parse(`${str(until)}T00:00:00Z`);
+  return Number.isFinite(from) && Number.isFinite(to)
+    ? Math.round((to - from) / MS_PER_DAY) + 1
+    : undefined;
+}
+
+/** One platform's row of the producer, and the days its window spans. */
+function producerRow(platform: string) {
+  const metrics = obj(payload('optimizer_get_account_platform_metrics'));
+  const window = obj(metrics?.window);
+  return {
+    row: rows(metrics?.totals_by_platform).find((row) => row.platform === platform) ?? null,
+    days: spanDays(window?.since, window?.until),
+  };
+}
+
+/** One scope of Google's own read (paid-media-metrics, platform google-ads), and its span. */
+function googleRead(scope: 'account_overview' | 'top_campaigns') {
+  const json = obj(
+    payload('paid-media-metrics', (b) => b.platform === 'google-ads' && b.scope === scope),
+  );
+  const range = obj(json?.range);
+  return { json, days: spanDays(range?.since, range?.until) };
+}
+
+/** Google's channel type → the campaign group a tile names, restated from the tab's contract
+ *  (Search, Performance Max, YouTube/Demand Gen, …); null when the campaign carried none. */
+function googleGroupOf(channelType: string | null): string | null {
+  if (!channelType) return null;
+  if (channelType === 'SEARCH') return 'search';
+  if (channelType === 'PERFORMANCE_MAX') return 'pmax';
+  if (['VIDEO', 'DEMAND_GEN', 'DISCOVERY'].includes(channelType)) return 'video';
+  if (channelType === 'DISPLAY') return 'display';
+  if (channelType === 'SHOPPING') return 'shopping';
+  return 'other';
+}
+
+/** The groups the tab folds `top_campaigns` into, by the bench's own loop: the spending
+ *  campaigns, by type when every one carried a type, else one group per campaign. */
+function googleGroups(campaigns: Row | null): Map<string, { spend: number; conversions: number }> {
+  const spending = rows(campaigns?.rows).filter((row) => (num(obj(row.metrics)?.spend) ?? 0) > 0);
+  const typeOf = (row: Row) => googleGroupOf(str(obj(row.labels)?.channel_type));
+  const byType = spending.length > 0 && spending.every((row) => typeOf(row) != null);
+  const groups = new Map<string, { spend: number; conversions: number }>();
+  for (const row of spending) {
+    const key = byType ? (typeOf(row) as string) : `campaign:${str(row.id)}`;
+    const group = groups.get(key) ?? { spend: 0, conversions: 0 };
+    group.spend += num(obj(row.metrics)?.spend) ?? 0;
+    group.conversions += num(obj(row.metrics)?.conversions) ?? 0;
+    groups.set(key, group);
+  }
+  return groups;
+}
+
+/** The brand's Google portfolios as the tab lists them: by the row's own `platforms` once
+ *  20261015130000 ships, else by its account being one the brand granted on Google. */
+function googlePortfolios(): Row[] {
+  const granted = new Set(
+    rows(payload('list_brand_ad_accounts'))
+      .filter((account) => /google/.test(str(account.platform) ?? ''))
+      .map((account) => bareAccountId(str(account.account_id) ?? '')),
+  );
+  return rows(payload('optimizer_list_portfolios')).filter((portfolio) =>
+    Array.isArray(portfolio.platforms) && portfolio.platforms.length > 0
+      ? (portfolio.platforms as unknown[]).includes('google_ads')
+      : granted.has(bareAccountId(str(portfolio.ad_account_id) ?? '')),
+  );
+}
+
+/** The Google account's currency: the grant row's, else the one Google's read carried — the
+ *  order the tab itself reads them in (useGoogleAdsOverview). */
+function googleAccountCurrency(): { code: string; source: string } {
+  const listed = [
+    ...new Set(
+      rows(payload('list_brand_ad_accounts'))
+        .filter((account) => /google/.test(str(account.platform) ?? ''))
+        .map((account) => (str(account.currency) ?? '').trim().toUpperCase())
+        .filter((code) => /^[A-Z]{3}$/.test(code)),
+    ),
+  ];
+  if (listed.length === 1)
+    return { code: listed[0] as string, source: 'list_brand_ad_accounts.currency' };
+  const read = googleRead('account_overview').json;
+  const code = (str(read?.currency) ?? str(read?.currency_code) ?? '').trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code)
+    ? { code, source: 'paid-media-metrics account_overview.currency' }
+    : { code: 'none', source: 'neither the grant row nor Google’s read names one' };
+}
+
 const value = (path: string, v: number | null, daysSummed?: number): PayloadExpectation => ({
   kind: 'value',
   path,
@@ -469,12 +579,92 @@ const unmapped = (reason: string): PayloadExpectation => ({ kind: 'unmapped', re
 
 /** Context the resolver needs beyond the captures: which portfolio page is open. */
 let detailPortfolio: Row | null = null;
+/** The platform tab being graded, when it is not the managed (Meta) Overview. */
+let surfacePlatform: 'google_ads' | null = null;
 
 /** THE TABLE. `data-figure` key → the payload path it must equal. */
 function resolve(node: FigureNode): PayloadExpectation {
   const key = node.key;
   const portfolios = scopedPortfolios();
   const dailyTotal = portfolios.reduce((s, p) => s + (num(p.daily_total) ?? 0), 0);
+
+  // -- The Google tab: the producer's Google row ----------------------------------------
+  const producer =
+    /^(google_ads|tiktok_ads)\.(spend|tiles\.spend|tiles\.unclassified|tiles\.kind\.(.+))$/.exec(
+      key,
+    );
+  if (producer) {
+    const [, platform, part, kind] = producer;
+    const { row, days } = producerRow(platform as string);
+    if (!row) return unmapped(`no ${platform} row in optimizer_get_account_platform_metrics`);
+    const path = `optimizer_get_account_platform_metrics.totals_by_platform[${platform}]`;
+    if (kind) {
+      const result = rows(row.results_by_kind).find((r) => r.kind === kind) ?? null;
+      return value(`${path}.results_by_kind[${kind}].results`, num(result?.results), days);
+    }
+    if (part === 'tiles.unclassified')
+      return value(`${path}.unclassified_spend`, num(row.unclassified_spend), days);
+    // One spend figure only while the platform's accounts bill in one currency.
+    const codes = new Set(rows(row.accounts).map((account) => str(account.currency)));
+    const spend = row.currency == null && codes.size > 1 ? null : num(row.spend);
+    return value(`${path}.spend`, spend, days);
+  }
+
+  // -- The Google tab: Google's own read, by campaign type ---------------------------------
+  if (key.startsWith('google.')) {
+    const overview = googleRead('account_overview');
+    const campaigns = googleRead('top_campaigns');
+    const metrics = obj(overview.json?.metrics);
+    const overviewPath = 'paid-media-metrics[google-ads account_overview].metrics';
+    const campaignsPath = 'paid-media-metrics[google-ads top_campaigns].rows[spend > 0]';
+    if (key === 'google.spend' || key === 'google.tiles.spend')
+      return value(`${overviewPath}.spend`, num(metrics?.spend), overview.days);
+    if (key === 'google.tiles.clicks')
+      return value(`${overviewPath}.clicks`, num(metrics?.clicks), overview.days);
+    const groups = googleGroups(campaigns.json);
+    if (key === 'google.tiles.conversions') {
+      const total = [...groups.values()].reduce((sum, group) => sum + group.conversions, 0);
+      return value(`${campaignsPath}.conversions Σ`, campaigns.json ? total : null, campaigns.days);
+    }
+    const group = /^google\.(?:tiles\.group\.(.+)|group\.(.+)\.(conversions|cost))$/.exec(key);
+    if (group) {
+      const groupKey = (group[1] ?? group[2]) as string;
+      const folded = groups.get(groupKey);
+      if (!folded)
+        return unmapped(
+          `group ${groupKey} is not among the top_campaigns groups (${[...groups.keys()].join(', ') || 'none'})`,
+        );
+      const path = `${campaignsPath}[group ${groupKey}]`;
+      if (group[3] === 'cost')
+        return value(
+          `${path} spend Σ / conversions Σ`,
+          folded.conversions > 0 ? folded.spend / folded.conversions : null,
+          campaigns.days,
+        );
+      return value(`${path}.conversions Σ`, folded.conversions, campaigns.days);
+    }
+  }
+
+  // -- The Google tab: Google's cards (optimizer_get_platform_cards) -----------------------
+  const card = /^card\.([a-z0-9_]+)\.(figure|money|from|to)$/.exec(key);
+  if (card && surfacePlatform) {
+    const [, detector, part] = card;
+    const pool = rows(payload('optimizer_get_platform_cards')).filter(
+      (candidate) => candidate.detector === detector,
+    );
+    if (pool.length === 0)
+      return unmapped(`no ${detector} card in optimizer_get_platform_cards(${surfacePlatform})`);
+    const values = pool.map((candidate) =>
+      candidateFigure(candidate, part as 'figure' | 'money' | 'from' | 'to'),
+    );
+    const match = values.find(
+      (v) => v != null && node.raw != null && Math.abs(v - node.raw) < 0.005,
+    );
+    return value(
+      `optimizer_get_platform_cards[detector ${detector}].${part === 'money' ? 'impact_per_day' : 'headline'} (${pool.length} card(s))`,
+      match ?? values[0] ?? null,
+    );
+  }
 
   // -- Overview tiles --------------------------------------------------------------
   if (key === 'tiles.daily-budget') {
@@ -662,15 +852,64 @@ function resolve(node: FigureNode): PayloadExpectation {
 
   // -- Portfolio cards (Overview) and list rows (Portfolios) -----------------------
   const rowFigure =
-    /^(portfolio-row|portfolios)\.(archived\.)?([0-9a-f-]{36})\.(daily|target|lead\.figure|lead\.money|lead\.from|lead\.to|pacing\.figure)$/.exec(
+    /^(portfolio-row|portfolios)\.(archived\.)?([0-9a-f-]{36})\.(daily|target|cost|results|spend|lead\.figure|lead\.money|lead\.from|lead\.to|pacing\.figure)$/.exec(
       key,
     );
   if (rowFigure) {
     const [, , archived, id, part] = rowFigure;
     const source = archived ? rows(payload('optimizer_list_archived_portfolios')) : portfolios;
     const listName = archived ? 'optimizer_list_archived_portfolios' : 'optimizer_list_portfolios';
-    const portfolio = source.find((p) => p.id === id);
+    // A platform tab lists the brand's portfolios whichever account is selected (G2), so a row
+    // outside the pinned account is read from the brand-wide list.
+    const portfolio =
+      source.find((p) => p.id === id) ??
+      (archived ? undefined : rows(payload(listName)).find((p) => p.id === id));
     if (!portfolio) return unmapped(`portfolio ${id} not in ${listName}`);
+    // On a platform tab the row's 7-day window is its metrics read (the efficiency series sums
+    // Meta ad-set snapshots, which a Google portfolio never writes); the series otherwise, and
+    // wherever that read did not land.
+    const metrics =
+      surfacePlatform === 'google_ads'
+        ? obj(
+            payload(
+              'optimizer_get_portfolio_metrics',
+              (b) => b.p_portfolio_id === id && b.p_window === 'd7',
+            ),
+          )
+        : null;
+    if (metrics && (part === 'cost' || part === 'results' || part === 'spend')) {
+      // A portfolio no cycle has landed on has no window to quote, whatever the read sums.
+      if (!str(portfolio.last_actual_cycle_at))
+        return value(`${listName}[${id}].last_actual_cycle_at is null: no window`, null);
+      const path = `optimizer_get_portfolio_metrics[${id}].totals`;
+      const spend = num(obj(metrics.totals)?.spend);
+      const results = num(obj(metrics.totals)?.results);
+      const days = spanDays(obj(metrics.window)?.since, obj(metrics.window)?.until);
+      if (part === 'spend') return value(`${path}.spend`, spend, days);
+      if (part === 'results') return value(`${path}.results`, results, days);
+      const multiplier = metricFor(portfolio).denominatorMultiplier;
+      return value(
+        `${path}.spend / results × ${multiplier}`,
+        spend != null && results != null && results > 0 ? (spend / results) * multiplier : null,
+        days,
+      );
+    }
+    if (part === 'cost' || part === 'results' || part === 'spend') {
+      const series = payload('optimizer_get_cpa_series', (b) => b.p_portfolio_id === id);
+      if (series === undefined)
+        return unmapped(`the page fetched no optimizer_get_cpa_series for ${id}`);
+      const last = rows(series).at(-1);
+      const path = `optimizer_get_cpa_series[${id}][last]`;
+      const spend = num(last?.spend_d7);
+      const conv = num(last?.conv_d7);
+      if (part === 'spend') return value(`${path}.spend_d7`, spend);
+      if (part === 'results') return value(`${path}.conv_d7`, conv);
+      const multiplier = metricFor(portfolio).denominatorMultiplier;
+      return value(
+        `${path}.spend_d7 / conv_d7 × ${multiplier}`,
+        spend != null && conv != null && conv > 0 ? (spend / conv) * multiplier : null,
+      );
+    }
     if (part === 'daily')
       return value(`${listName}[${id}].daily_total`, num(portfolio.daily_total));
     // Under an account-wide pacing finding a row prints ITS OWN run's drift from plan:
@@ -905,7 +1144,10 @@ function resolve(node: FigureNode): PayloadExpectation {
 
 let storageState: PlaywrightStorageState;
 let benchUserId: string;
+let benchAccessToken: string;
 let originalActiveBrandId: string | null = null;
+/** The Meta surfaces' premise, read once per worker: the brand they render, or why none can. */
+let metaPremise: { brandId: string } | { drift: string } = { drift: 'not read yet' };
 let context: BrowserContext;
 let page: Page;
 
@@ -963,6 +1205,22 @@ async function selectBrand(brandId: string): Promise<void> {
   if (error) throw new Error(`[paid-parity] brand switch failed: ${error.message}`);
 }
 
+/** The brand the bench session renders: the account preference AND this session's own pin —
+ *  once a session has rendered, its pin (tier 1) outranks the preference, so a later surface
+ *  on another brand has to move the pin too. */
+async function pinBrand(brandId: string): Promise<void> {
+  await selectBrand(brandId);
+  await pinSessionBrand(benchAccessToken, brandId);
+}
+
+/** The Meta surfaces render the declared Easy Fit row that owns enrolled portfolios on the
+ *  pinned account; when none does, each Meta surface FAILS on the premise by name — the
+ *  Google pass, on its own brand, still runs. */
+async function useMetaBrand(): Promise<void> {
+  if ('drift' in metaPremise) throw new Error(metaPremise.drift);
+  await pinBrand(metaPremise.brandId);
+}
+
 /** Pins the ad account through the real picker and waits the optimizer out of its skeleton.
  *  The account is React state on the page shell, not a URL param, so it is re-pinned after
  *  every full navigation. */
@@ -1017,7 +1275,11 @@ async function collectFigures(): Promise<FigureNode[]> {
 
 /** Grade one surface: all five rules per node, the currency check, and the summary rows the
  *  envelope carries. Returns whether the surface is green (no FAIL). */
-function gradeSurface(surface: string, nodes: FigureNode[]): boolean {
+function gradeSurface(
+  surface: string,
+  nodes: FigureNode[],
+  accountCurrency: string = accountCurrencyOnRecord(),
+): boolean {
   if (nodes.length === 0) {
     record(`${surface}.figures`, 'SKIP', 'no figure nodes rendered on this surface');
     return false;
@@ -1047,7 +1309,6 @@ function gradeSurface(surface: string, nodes: FigureNode[]): boolean {
   const money = nodes.filter(
     (n) => n.unit === 'currency' || n.unit === 'per-period' || n.unit === 'per-month',
   );
-  const accountCurrency = accountCurrencyOnRecord();
   const foreign = money.filter((n) => n.currency !== accountCurrency);
   record(
     `${surface}.currency`,
@@ -1100,7 +1361,7 @@ async function snapshotSurface(surface: string, green: boolean): Promise<void> {
 const failuresOf = (surface: string) =>
   entries()
     .filter(
-      (e): e is Exclude<Entry, { note: string }> =>
+      (e): e is Extract<Entry, { step: string }> =>
         'step' in e && e.step.startsWith(`${surface}.`) && e.grade === 'FAIL',
     )
     .map((g) => `${g.step}: ${g.detail}`);
@@ -1110,11 +1371,14 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     const minted = await mintSessionBundleForEmail(OWNER_EMAIL);
     storageState = minted.state;
     benchUserId = minted.userId;
+    benchAccessToken = minted.accessToken;
     originalActiveBrandId = await readActiveBrandPreference();
-    const portfolioBrandId = await resolvePortfolioBrand();
-    await selectBrand(portfolioBrandId);
+    metaPremise = await resolvePortfolioBrand().then(
+      (brandId) => ({ brandId }),
+      (error: unknown) => ({ drift: error instanceof Error ? error.message : String(error) }),
+    );
     console.log(
-      `[paid-parity] active brand before: ${originalActiveBrandId ?? '(none)'} · pinned: ${portfolioBrandId}`,
+      `[paid-parity] active brand before: ${originalActiveBrandId ?? '(none)'} · Meta surfaces: ${'brandId' in metaPremise ? metaPremise.brandId : metaPremise.drift} · Google: ${GOOGLE_PARITY_BRAND_ID}`,
     );
 
     context = await browser.newContext({ storageState });
@@ -1155,12 +1419,31 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
   });
 
   test.afterAll(async () => {
-    if (originalActiveBrandId) await selectBrand(originalActiveBrandId);
-    await context?.close();
-    printBenchEnvelope();
+    try {
+      if (originalActiveBrandId) await selectBrand(originalActiveBrandId);
+      const latest = context
+        ? await context.storageState().catch(() => storageState)
+        : storageState;
+      await context?.close();
+      const cleanup = await revokeBenchSession(latest, benchAccessToken);
+      record(
+        `cleanup.session.${cleanup.sessionId}`,
+        cleanup.revoked && cleanup.pinsLeft === 0 ? 'PASS' : 'FAIL',
+        `${cleanup.detail}; ${cleanup.pinsLeft} session pin(s) left`,
+      );
+      const restored = await readActiveBrandPreference();
+      record(
+        'cleanup.active-brand',
+        restored === originalActiveBrandId ? 'PASS' : 'FAIL',
+        `preference ${restored ?? 'none'}, was ${originalActiveBrandId ?? 'none'}`,
+      );
+    } finally {
+      printBenchEnvelope();
+    }
   });
 
   test('overview — headline, tiles, cards, portfolio rows', async () => {
+    await useMetaBrand();
     await openSurface('overview');
     await expect(page.getByTestId('account-tiles')).toBeVisible({ timeout: 120_000 });
     await waitForCapture('optimizer_list_portfolios');
@@ -1189,6 +1472,7 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
   });
 
   test('portfolios — daily budget and lead figures per row', async () => {
+    await useMetaBrand();
     await openSurface('portfolios');
     await expect(page.getByRole('tab', { name: 'Portfolios' })).toBeVisible({ timeout: 120_000 });
     await waitForCapture('optimizer_list_portfolios');
@@ -1203,6 +1487,7 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
   });
 
   test('portfolio page — news cards, recap sentence, KPI tiles, CPL projection', async () => {
+    await useMetaBrand();
     // Self-contained: the list is read on this page load and the card is clicked from it, so
     // a worker restart after an earlier failure cannot leave this surface with nothing to open.
     await openSurface('portfolios');
@@ -1254,6 +1539,7 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
   });
 
   test('actions — now → proposed and at-stake per row', async () => {
+    await useMetaBrand();
     await openSurface('actions');
     await expect(page.getByRole('tab', { name: 'Actions' })).toBeVisible({ timeout: 120_000 });
     const empty = page.getByText('Nothing needs your decision');
@@ -1269,5 +1555,109 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     const green = gradeSurface('actions', nodes);
     await snapshotSurface('actions', green);
     expect(failuresOf('actions'), 'actions parity').toEqual([]);
+  });
+
+  test('google tab — the producer read, campaign types, cards, portfolio rows', async () => {
+    await pinBrand(GOOGLE_PARITY_BRAND_ID);
+    surfacePlatform = 'google_ads';
+    try {
+      // The landing: the Meta account the page selects holds no portfolio and the brand's
+      // portfolios are on Google, so the Overview opens on the Google tab by itself.
+      await openSurface('overview');
+      const googleTab = page.locator(
+        '[data-testid="optimizer-overview"][data-platform-tab="google_ads"]',
+      );
+      const landed = await googleTab
+        .waitFor({ state: 'visible', timeout: 60_000 })
+        .then(() => true)
+        .catch(() => false);
+      record(
+        'google.landing',
+        landed ? 'PASS' : 'FAIL',
+        landed
+          ? `Meta ${PORTFOLIO_ACCOUNT_ID} holds no portfolio → opened on ?platform=google_ads`
+          : `stayed on ${page.url()}`,
+      );
+      if (!landed) {
+        await page.goto('/scale?tab=performance&optimizerView=overview&platform=google_ads', {
+          waitUntil: 'domcontentloaded',
+        });
+        await pinAdAccount();
+        await expect(googleTab).toBeVisible({ timeout: 120_000 });
+      }
+
+      await waitForCapture('optimizer_get_account_platform_metrics');
+      await waitForCapture('list_brand_ad_accounts');
+      await waitForCapture('optimizer_list_portfolios');
+      await waitForCapture(
+        'paid-media-metrics',
+        (b) => b.platform === 'google-ads' && b.scope === 'account_overview',
+      );
+      await waitForCapture(
+        'paid-media-metrics',
+        (b) => b.platform === 'google-ads' && b.scope === 'top_campaigns',
+      );
+      const portfolios = googlePortfolios();
+      for (const portfolio of portfolios) {
+        await waitForCapture('optimizer_get_cpa_series', (b) => b.p_portfolio_id === portfolio.id);
+        await waitForCapture(
+          'optimizer_get_portfolio_metrics',
+          (b) => b.p_portfolio_id === portfolio.id && b.p_window === 'd7',
+        );
+      }
+      // The rows arrive last, after the cycles; the section then holds rows or its empty line.
+      await expect(page.getByTestId('portfolio-rows')).toBeVisible({ timeout: 120_000 });
+      await page.waitForTimeout(1_500);
+
+      // What the tab is made of, before 20261015130000 ships and after.
+      const cards = payload('optimizer_get_platform_cards');
+      const cardCount = await page.getByTestId('account-card').count();
+      if (obj(cards)?.code === 'PGRST202') {
+        record(
+          'google.cards',
+          'SKIP',
+          `optimizer_get_platform_cards is not deployed (PGRST202): no Google card section (${cardCount} card(s) on screen), as expected before 20261015130000`,
+        );
+      } else {
+        record(
+          'google.cards',
+          Array.isArray(cards) && cardCount === cards.length ? 'PASS' : 'FAIL',
+          Array.isArray(cards)
+            ? `${cardCount} card(s) on screen for ${cards.length} in optimizer_get_platform_cards`
+            : `optimizer_get_platform_cards answered ${JSON.stringify(cards)?.slice(0, 160) ?? 'nothing'}`,
+        );
+      }
+      const listCarriesPlatforms = rows(payload('optimizer_list_portfolios')).some((row) =>
+        Array.isArray(row.platforms),
+      );
+      const rowCount = await page.getByTestId('portfolio-row').count();
+      record(
+        'google.portfolio-rows',
+        rowCount === portfolios.length ? 'PASS' : 'FAIL',
+        `${rowCount} row(s) rendered for ${portfolios.length} Google portfolio(s) (${portfolios
+          .map((p) => str(p.id)?.slice(0, 8))
+          .join(
+            ', ',
+          )}) — ${listCarriesPlatforms ? 'by the list’s platforms' : 'through the granted-account fallback (the list carries no platforms yet)'}`,
+      );
+      const links = await page.getByTestId('overview-links').count();
+      record(
+        'google.links',
+        links === 1 ? 'PASS' : 'FAIL',
+        `${links} Actions/Activity link row(s)`,
+      );
+
+      const currency = googleAccountCurrency();
+      note(`google account currency: ${currency.code} (${currency.source})`);
+      const nodes = await collectFigures();
+      note(
+        `google figures: ${nodes.length} — ${[...new Set(nodes.map((n) => n.key.replace(/\.[0-9a-f-]{36}\./, '.<id>.')))].join(', ')}`,
+      );
+      const green = gradeSurface('google', nodes, currency.code);
+      await snapshotSurface('google', green);
+      expect(failuresOf('google'), 'google tab parity').toEqual([]);
+    } finally {
+      surfacePlatform = null;
+    }
   });
 });

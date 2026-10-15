@@ -234,9 +234,11 @@ export function percentAgainst(value: number | null, base: number | null): numbe
   return Math.round(((value - base) / base) * 100);
 }
 
-/** Conversions are fractional in Google (data-driven attribution splits them). */
+/** Conversions are fractional in Google (data-driven attribution splits them), but every
+ *  screen counts them whole, as the Overview's leads tile does; the raw value rides on the
+ *  figure node. */
 export function formatConversions(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /** "Sep 1 – Sep 30" from the read's own window. */

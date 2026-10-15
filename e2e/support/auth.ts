@@ -1,4 +1,4 @@
-import { createChunks, stringToBase64URL } from '@supabase/ssr';
+import { combineChunks, createChunks, stringFromBase64URL, stringToBase64URL } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase auth-mint helper for Playwright E2E.
@@ -194,6 +194,115 @@ export async function mintSessionBundleForEmail(email: string): Promise<MintedSe
   }
 
   return { state: buildStorageState(rawSessionJson), accessToken, userId };
+}
+
+/** A GoTrue access token's `sub` and `session_id` claims (required on every Supabase token). */
+export function sessionClaimsOf(accessToken: string): {
+  userId: string;
+  sessionId: string;
+  expiresAtMs: number;
+} {
+  const payload = accessToken.split('.')[1] ?? '';
+  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+    sub?: string;
+    session_id?: string;
+    exp?: number;
+  };
+  if (!claims.sub || !claims.session_id) {
+    throw new Error('[e2e/auth] access token carries no sub or session_id claim');
+  }
+  return {
+    userId: claims.sub,
+    sessionId: claims.session_id,
+    expiresAtMs: (claims.exp ?? 0) * 1000,
+  };
+}
+
+/**
+ * Pins the brand ONE session renders (brand_profiles.user_session_brands, tier 1 of
+ * resolve_active_brand_for_session), the row the app itself writes on a session's first render.
+ * Written with the service role so it works for the whole run: the bench's own access token
+ * expires after an hour while the browser keeps refreshing its copy of the same session.
+ */
+export async function pinSessionBrand(accessToken: string, brandId: string): Promise<void> {
+  const { userId, sessionId } = sessionClaimsOf(accessToken);
+  const admin = createAdminClient();
+  const { error } = await admin.schema('brand_profiles').from('user_session_brands').upsert(
+    {
+      user_id: userId,
+      session_id: sessionId,
+      active_brand_id: brandId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,session_id' },
+  );
+  if (error) throw new Error(`[e2e/auth] session brand pin failed: ${error.message}`);
+  const { data } = await admin
+    .schema('brand_profiles')
+    .from('user_session_brands')
+    .select('active_brand_id')
+    .eq('user_id', userId)
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  const pinned = (data as { active_brand_id?: string } | null)?.active_brand_id;
+  if (pinned !== brandId) {
+    throw new Error(
+      `[e2e/auth] session ${sessionId} renders ${pinned ?? 'nothing'}, not ${brandId}`,
+    );
+  }
+}
+
+/**
+ * Ends a bench's GoTrue session from the browser's LATEST cookies and proves it is gone.
+ *
+ * The browser refreshes the session as it goes (JWT lifetime 1h), so the token minted at the
+ * start may be dead by the end; the cookie carries the current pair, and an expired access
+ * token is traded for a fresh one first. `signOut(…, 'local')` deletes the auth.sessions row,
+ * which takes every user_session_brands pin of that session with it (FK cascade); the pins
+ * are deleted explicitly as well, then counted — the count is the proof.
+ */
+export async function revokeBenchSession(
+  state: PlaywrightStorageState,
+  fallbackAccessToken: string,
+): Promise<{ sessionId: string; revoked: boolean; pinsLeft: number; detail: string }> {
+  const admin = createAdminClient();
+  const cookie = await combineChunks(
+    SUPABASE_AUTH_COOKIE_NAME,
+    (name) => state.cookies.find((c) => c.name === name)?.value,
+  );
+  let session: { access_token?: string; refresh_token?: string } = {};
+  if (cookie) {
+    const raw = cookie.startsWith('base64-') ? stringFromBase64URL(cookie.slice(7)) : cookie;
+    session = JSON.parse(raw) as typeof session;
+  }
+  let accessToken = session.access_token ?? fallbackAccessToken;
+  const { userId, sessionId, expiresAtMs } = sessionClaimsOf(accessToken);
+  let detail = '';
+  if (expiresAtMs < Date.now() + 30_000 && session.refresh_token) {
+    const anon = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), resolveAnonKey(), {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data, error } = await anon.auth.refreshSession({
+      refresh_token: session.refresh_token,
+    });
+    if (data.session?.access_token) accessToken = data.session.access_token;
+    else detail = `refresh failed: ${error?.message ?? 'no session'}; `;
+  }
+  const { error } = await admin.auth.admin.signOut(accessToken, 'local');
+  detail += error ? `signOut: ${error.message}` : 'signOut(local) ok';
+  await admin
+    .schema('brand_profiles')
+    .from('user_session_brands')
+    .delete()
+    .eq('user_id', userId)
+    .eq('session_id', sessionId);
+  const { count } = await admin
+    .schema('brand_profiles')
+    .from('user_session_brands')
+    .select('session_id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('session_id', sessionId);
+  return { sessionId, revoked: !error, pinsLeft: count ?? -1, detail };
 }
 
 // The local GoTrue container shares a machine with Turbopack. A cold Next compile pegs the

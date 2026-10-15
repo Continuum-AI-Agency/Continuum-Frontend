@@ -1246,6 +1246,23 @@ export const PortfolioListItemSchema = z.object({
    *  members that has not cycled yet. `.catch(null)`: an unknown reason costs the row its
    *  reason, never the row. */
   withdrawn_reason: PortfolioWithdrawnReasonSchema.nullable().default(null).catch(null),
+  /** The platforms the portfolio's accounts are on (its own platform and every
+   *  portfolio_platforms row), Meta first. A platform tab lists a portfolio by these, never by
+   *  the one ad account the page has selected. Empty from a server before 20261015130000: the
+   *  reader then falls back to the portfolio's account. An unknown platform is dropped. */
+  platforms: z
+    .array(z.unknown())
+    .default([])
+    .catch([])
+    .transform((rows) =>
+      rows.flatMap((row) => {
+        const parsed = PlatformIdSchema.safeParse(row);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  /** The currency the row's figures are in, stamped on the portfolio at creation (20261015130000).
+   *  A Google account's asset row carries none, so the account list cannot supply it. */
+  currency: z.string().nullable().optional(),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
 

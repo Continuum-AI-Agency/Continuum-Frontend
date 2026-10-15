@@ -4,6 +4,7 @@ import {
   campaignTypeOf,
   completeDaysWindow,
   figureWindowOf,
+  formatConversions,
   type GoogleAccountOverview,
   type GoogleTopCampaigns,
   googleCurrencyOf,
@@ -102,6 +103,12 @@ describe('the small words', () => {
     expect(figureWindowOf(8)).toBe('d7');
     expect(figureWindowOf(30)).toBe('d30');
     expect(figureWindowOf(3)).toBe('none');
+  });
+
+  it('prints conversions as the whole count their figure node declares', () => {
+    expect(formatConversions(38.0651)).toBe('38');
+    expect(formatConversions(1869.5)).toBe('1,870');
+    expect(formatConversions(0)).toBe('0');
   });
 });
 

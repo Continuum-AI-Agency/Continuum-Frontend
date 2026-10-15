@@ -288,6 +288,11 @@ export async function auditVisual(
   // Hover and focus styles are not the page's resting state; a tab still under the mouse
   // after its click would read as highlighted for the wrong reason.
   await parkMouse(page, viewport);
+  // A new page's pointer starts at (0, 0), the collapsed sidebar's hover zone, and Chromium's
+  // hover update can expand it before the park. The panel collapses only after its 180 ms
+  // grace timer and a 0.3 s width spring (components/ui/sidebar.tsx); measured sooner, the
+  // still-open panel reads as covering every control under it.
+  await page.waitForTimeout(SIDEBAR_COLLAPSE_MS);
   await page
     .evaluate(() => {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -466,6 +471,9 @@ export async function auditVisual(
   return { context, violations, unexercised, stats };
 }
 
+/** The sidebar's hover-collapse grace (180 ms) plus its width spring (300 ms), with margin. */
+const SIDEBAR_COLLAPSE_MS = 550;
+
 /** Parks the pointer where nothing reacts to it: the middle of the right edge. The top-left
  *  corner is the collapsed sidebar's hover zone, and a sidebar expanded by the bench's own
  *  pointer would be measured as covering the page. */
@@ -532,7 +540,8 @@ export function paintedEdgeThief(
   ];
   for (const [x, y] of probes) {
     const owner = ownerAt(x, y);
-    if (owner !== null && owner !== 'self') return { by: owner, at: [Math.round(x), Math.round(y)] };
+    if (owner !== null && owner !== 'self')
+      return { by: owner, at: [Math.round(x), Math.round(y)] };
   }
   return null;
 }
@@ -956,7 +965,10 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
               ) {
                 step += 1;
               }
-              const past = topAt(cx + (horizontal ? step + 1 : 0), cy + (horizontal ? 0 : step + 1));
+              const past = topAt(
+                cx + (horizontal ? step + 1 : 0),
+                cy + (horizontal ? 0 : step + 1),
+              );
               stopsAt = past ? helpers.describe(past) : 'nothing (off screen)';
             }
             edgeStolen = helpers.paintedEdgeThief(painted, (x, y) => {
