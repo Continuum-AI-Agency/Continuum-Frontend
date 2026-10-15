@@ -362,3 +362,59 @@ export const sceneRenderResultSchema = z
   })
   .strict();
 export type SceneRenderResult = z.infer<typeof sceneRenderResultSchema>;
+
+// ─── Fill from the brand ───────────────────────────────────────────────────────────────
+
+/** What a person or an agent says about the product; everything else is read from the brand. */
+export const sceneFillBriefSchema = z
+  .object({
+    /** The packshot. Absent: the Library's best match for "product" is used. */
+    productImageAssetId: z.string().uuid().optional(),
+    headline: z.string().trim().min(1).max(200).optional(),
+    price: z.string().trim().min(1).max(40).optional(),
+    cta: z.string().trim().min(1).max(80).optional(),
+    text: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict();
+export type SceneFillBrief = z.infer<typeof sceneFillBriefSchema>;
+
+/**
+ * `POST /templates/:assetId/scene/fills` — fill a scene's marked fields from the brand (logo,
+ * palette, a product picture) and the brief, then render every output (or the named ones).
+ * `dryRun` answers the values and renders nothing.
+ */
+export const sceneFillRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    versionId: z.string().uuid(),
+    brief: sceneFillBriefSchema.default({}),
+    /** Output ids to render; absent renders every output the template has. */
+    outputs: z.array(z.string().min(1)).min(1).max(20).optional(),
+    dryRun: z.boolean().optional(),
+  })
+  .strict();
+export type SceneFillRequest = z.infer<typeof sceneFillRequestSchema>;
+
+export const sceneFillResultSchema = z
+  .object({
+    /** Field key → the value the fill chose. Keys the fill could not answer keep the file's own. */
+    values: sceneRenderRequestSchema.shape.values,
+    /** One job per output, in the template's output order. Empty on a dry run. */
+    jobs: z.array(z.object({ outputId: z.string().min(1), jobId: z.string().uuid() }).strict()),
+  })
+  .strict();
+export type SceneFillResult = z.infer<typeof sceneFillResultSchema>;
+
+/** One scene an agent may fill: a house scene or one of the brand's own Blender templates. */
+export const sceneCatalogEntrySchema = z
+  .object({
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid(),
+    name: z.string().nullable(),
+    house: z.boolean(),
+    outputs: z.array(blendOutputSchema.pick({ id: true, label: true, ratio: true, mediaType: true })),
+    /** The exposed field keys. A key spelled as a slot role is filled from the brand. */
+    keys: z.array(z.string().min(1)),
+  })
+  .strict();
+export type SceneCatalogEntry = z.infer<typeof sceneCatalogEntrySchema>;

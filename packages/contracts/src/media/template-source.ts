@@ -559,6 +559,12 @@ export const templateSourceSchema = z
     parsedAt: z.string().nullable().default(null),
     createdAt: z.string(),
     updatedAt: z.string().nullable().default(null),
+    /**
+     * A house scene: owned by the Continuum House brand and listed for every brand. `brandId`
+     * stays the owner's, which is why a house card cannot be renamed or removed by the brand
+     * looking at it.
+     */
+    house: z.boolean().default(false),
   })
   .strict();
 export type TemplateSource = z.infer<typeof templateSourceSchema>;
