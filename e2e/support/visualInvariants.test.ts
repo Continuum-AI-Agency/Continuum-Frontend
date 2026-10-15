@@ -33,6 +33,7 @@ import {
   paintedEdgeThief,
   rendersContent,
   TAP_TARGET_COARSE_PX,
+  textSpill,
 } from './visualInvariants';
 
 const rect = (x: number, y: number, width: number, height: number): Rect => ({
@@ -470,5 +471,28 @@ describe('a neighbour hit pad never wins a tap on a drawn edge', () => {
 
   test('a non-control on top is the centre rule, not a stolen edge', () => {
     expect(paintedEdgeThief(tab, () => null)).toBeNull();
+  });
+});
+
+describe('clipped text is measured on the text, not on the box', () => {
+  // A 31px chip, padding box from x=100 to x=131, with a 44px hit pad (::after) centred on it.
+  const padding = rect(100, 10, 31, 24);
+
+  test('a label that fits is not clipped even when a hit pad inflates scrollWidth', () => {
+    // "7d": the text runs 108..123; the pad's right overhang made scrollWidth 38 > 31.
+    expect(textSpill(rect(108, 14, 15, 16), padding, 'x')).toBe(0);
+  });
+
+  test('a label wider than its box spills by both overhangs', () => {
+    expect(textSpill(rect(97, 14, 40, 16), padding, 'x')).toBe(9);
+  });
+
+  test('vertical spill is measured on the y axis', () => {
+    expect(textSpill(rect(104, 12, 20, 30), padding, 'y')).toBe(8);
+    expect(textSpill(rect(104, 12, 20, 30), padding, 'x')).toBe(0);
+  });
+
+  test('an element with no rendered text never spills', () => {
+    expect(textSpill(null, padding, 'x')).toBe(0);
   });
 });
