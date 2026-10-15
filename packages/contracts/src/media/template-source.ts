@@ -10,10 +10,121 @@
 // no role, because it silently binds the wrong field. Slots come out typed and unlabelled.
 
 import { z } from 'zod';
+import { templateAuthoringKeyframesInventorySchema } from './template-authoring-keyframes';
 import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
 import { LIBRARY_PROJECT_FILE_MAX_BYTES } from './asset-formats';
 import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
+
+const maskSourceBoundsSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().positive(),
+  height: z.number().finite().positive(),
+}).strict();
+const maskSourceLocalToCompSchema = z.object({
+  matrix: z.tuple([z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite()]),
+  corners: z.tuple([
+    z.tuple([z.number().finite(), z.number().finite()]),
+    z.tuple([z.number().finite(), z.number().finite()]),
+    z.tuple([z.number().finite(), z.number().finite()]),
+    z.tuple([z.number().finite(), z.number().finite()]),
+  ]),
+  verifiedWithPyAep: z.literal(true),
+}).strict();
+export const templateLayerPositionSourceSchema = z.object({
+  kind: z.enum(['native-composition-default', 'explicit', 'keyframed', 'expression', 'separated', 'pending']),
+  value: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).nullable(),
+  reason: z.string().nullable(),
+}).strict();
+export const templateMaskSourceGeometrySchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('authored'),
+    coordinateSpace: z.literal('layer-source-pixels'),
+    sourceKind: z.literal('shape-path'),
+    draftNodeId: z.string().uuid(),
+    workspaceChecksum: z.string().regex(/^[a-f0-9]{64}$/i),
+    target: z.union([
+      z.object({ compId: z.number().int().positive(), artboardId: z.null() }).strict(),
+      z.object({ compId: z.null(), artboardId: z.string().uuid() }).strict(),
+    ]),
+    bounds: maskSourceBoundsSchema,
+    anchor: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+    position: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+    scale: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+    rotation: z.number().finite(),
+    localToComp: z.object({
+      matrix: z.tuple([z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite()]),
+      corners: z.tuple([
+        z.tuple([z.number().finite(), z.number().finite()]), z.tuple([z.number().finite(), z.number().finite()]),
+        z.tuple([z.number().finite(), z.number().finite()]), z.tuple([z.number().finite(), z.number().finite()]),
+      ]),
+    }).strict(),
+  }).strict(),
+  z.object({
+    status: z.literal('verified'),
+    coordinateSpace: z.literal('layer-source-pixels'),
+    sourceKind: z.enum(['shape-path', 'footage', 'solid', 'precomposition']),
+    sourceRef: z.object({ kind: z.enum(['native-path', 'footage-item', 'solid-item', 'composition-item']), id: z.number().int().nullable(), name: z.string().nullable() }).strict(),
+    bounds: maskSourceBoundsSchema,
+    anchor: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+    position: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+    scale: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+    rotation: z.number().finite(),
+    localToComp: maskSourceLocalToCompSchema,
+    measurement: z.string().min(1),
+    packageSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+    sourceAepSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+    compId: z.number().int().positive(),
+    layerUid: z.number().int().positive(),
+  }).strict(),
+  z.object({
+    status: z.literal('pending'),
+    reason: z.string().min(1),
+    packageSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+    sourceAepSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+    compId: z.number().int().positive(),
+    layerUid: z.number().int().positive(),
+  }).strict(),
+]);
+export type TemplateMaskSourceGeometry = z.infer<typeof templateMaskSourceGeometrySchema>;
+export type TemplateAuthoredMaskGeometry = Extract<TemplateMaskSourceGeometry, { status: 'authored' }>;
+
+/** Geometry is a writer expectation until compilation joins it to a Rust/Python readback. */
+export function authoredShapeMaskGeometry(input: {
+  draftNodeId: string;
+  workspaceChecksum: string;
+  target: TemplateAuthoredMaskGeometry['target'];
+  position: readonly [number, number];
+  size: readonly [number, number];
+  scale?: readonly [number, number];
+  rotation?: number;
+}): TemplateAuthoredMaskGeometry {
+  const [x, y] = input.position;
+  const [width, height] = input.size;
+  const bounds = { x: -width / 2, y: -height / 2, width, height };
+  const [sx, sy] = input.scale ?? [100, 100];
+  const rotation = input.rotation ?? 0;
+  const radians = rotation * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const a = cos * sx / 100;
+  const b = sin * sx / 100;
+  const c = -sin * sy / 100;
+  const d = cos * sy / 100;
+  const matrix: [number, number, number, number, number, number] = [a, b, c, d, x, y];
+  const point = (px: number, py: number): [number, number] => [a * px + c * py + x, b * px + d * py + y];
+  const corners: [[number, number], [number, number], [number, number], [number, number]] = [
+    point(bounds.x, bounds.y), point(bounds.x + width, bounds.y),
+    point(bounds.x + width, bounds.y + height), point(bounds.x, bounds.y + height),
+  ];
+  return {
+    status: 'authored', coordinateSpace: 'layer-source-pixels', sourceKind: 'shape-path',
+    draftNodeId: input.draftNodeId, workspaceChecksum: input.workspaceChecksum, target: input.target,
+    bounds, anchor: [0, 0, 0], position: [x, y, 0], scale: [sx, sy, 100], rotation,
+    localToComp: { matrix, corners },
+  };
+}
 
 /**
  * The largest project file the Forge can actually accept, in bytes — the ONE number.
@@ -210,6 +321,7 @@ export type TemplateSlot = z.infer<typeof templateSlotSchema>;
 
 export const templateCompSchema = z
   .object({
+    id: z.number().int().nullable().optional(),
     name: z.string(),
     width: z.number().int().positive(),
     height: z.number().int().positive(),
@@ -308,6 +420,71 @@ export const templateParseSchema = z
     filename: z.string().optional(),
     sizeBytes: z.number().int().nonnegative().optional(),
     checksum: z.string().optional(),
+    /** Hash of the extracted AEP bytes; checksum above remains the uploaded package hash. */
+    sourceAepChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    /** Rust-authoritative project graph with explicit Python measurement joins and diagnostics. */
+    structure: z.object({
+      authority: z.literal('aep2json-rust'),
+      sourceAepChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+      sourcePackageChecksum: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+      raw: z.record(z.string(), z.unknown()),
+      comps: z.array(z.object({
+        id: z.number().int().nullable(),
+        name: z.string().nullable(),
+        width: z.number().nullable(),
+        height: z.number().nullable(),
+        frameRate: z.number().nullable(),
+        durationSec: z.number().nullable(),
+        containedByCompIds: z.array(z.number().int()),
+        artboardReason: z.string().nullable().optional(),
+        pythonProjection: z.record(z.string(), z.unknown()).optional(),
+        clock: z.record(z.string(), z.unknown()),
+        essentialProperties: z.unknown().nullable(),
+        layers: z.array(z.object({
+          id: z.number().int().nullable(),
+          compId: z.number().int().nullable(),
+          index: z.number().int().nullable(),
+          name: z.string().nullable(),
+          sourceId: z.number().int().nullable(),
+          sourceCompositionId: z.number().int().nullable(),
+          nativeParentUid: z.number().int().nullable().optional(),
+          parentUidKnown: z.boolean().optional(),
+          parentHierarchyValid: z.boolean().optional(),
+          parentLayerUid: z.number().int().nullable().optional(),
+          trackMatteTypeRaw: z.number().int().nullable().optional(),
+          trackMatteLayerUid: z.number().int().nullable().optional(),
+          trackMatteUidKnown: z.boolean().optional(),
+          trackMatteLayerResolved: z.boolean().optional(),
+          trackMatteForUids: z.array(z.number().int().nullable()).optional(),
+          layerHeaderBytes: z.number().int().nonnegative().nullable().optional(),
+          timingReason: z.string().nullable().optional(),
+          keyframeReasons: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeReasons.optional(),
+          keyframeChannels: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeChannels.optional(),
+          positionSource: templateLayerPositionSourceSchema.optional(),
+          maskReason: z.string().nullable().optional(),
+          maskSourceGeometry: templateMaskSourceGeometrySchema.optional(),
+          groupingReason: z.string().nullable().optional(),
+          effectsEnabled: z.boolean().nullable(),
+          effects: z.array(z.unknown()),
+          expressions: z.unknown().nullable(),
+          raw: z.record(z.string(), z.unknown()),
+          measurement: z.record(z.string(), z.unknown()).nullable(),
+          measurements: z.array(z.record(z.string(), z.unknown())),
+        }).passthrough()),
+        raw: z.record(z.string(), z.unknown()),
+      }).passthrough()),
+      dependencies: z.array(z.record(z.string(), z.unknown())),
+      essentialProperties: z.array(z.record(z.string(), z.unknown())),
+      diagnostics: z.array(z.object({
+        code: z.string(),
+        feature: z.string(),
+        message: z.string(),
+        severity: z.enum(['info', 'warning', 'error']),
+        status: z.enum(['ready', 'warning', 'pending', 'blocked']),
+      }).passthrough()),
+      status: z.enum(['ready', 'warning', 'pending', 'blocked']),
+      python: z.record(z.string(), z.unknown()),
+    }).passthrough().optional(),
     /** Number of distinct AEP projects in the uploaded package. */
     projectCount: z.number().int().positive().optional(),
     comps: z.array(templateCompSchema).default([]),
@@ -630,7 +807,8 @@ export const templateFontStatusSchema = z
      * we do hold in its place — the chip must say so. A substitution that reads as a plain
      * `uploaded` is the 2026-09-15 failure with a green tick on it.
      */
-    via: z.enum(['direct', 'substitute']).optional(),
+    via: z.enum(['direct', 'substitute', 'package']).optional(),
+    issue: z.enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required']).optional(),
     /** The face standing in, when `via` is `substitute`. For the chip, never for resolution. */
     substitutedBy: z
       .object({

@@ -490,7 +490,7 @@ describe('TemplateLayerEditor', () => {
       new Error('Template revision variants: template_revision_source_missing'),
     );
     editor();
-    expect(await screen.findByText(/not registered as a template revision/)).toBeTruthy();
+    expect(await screen.findByText(/No Forge revision is registered for this exact asset version/)).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Layers' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });

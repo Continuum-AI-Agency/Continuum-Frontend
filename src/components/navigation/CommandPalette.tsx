@@ -25,6 +25,7 @@ import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
 import { brandStorageKeyRecentPages, migrateLegacyRecentPages } from '@/lib/storage-keys';
 import { useCommandPalette } from './CommandPaletteProvider';
+import { runAfterForgeExit } from './guardedNavigation';
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER, getContextualSuggestions } from './routes';
 
 const recentPagesSchema = z.array(
@@ -89,6 +90,12 @@ export function CommandPalette({
     fn();
   }
 
+  function leave(fn: () => void, recent?: RecentPage) {
+    // Release the palette focus trap before the draft's save/retry decision opens.
+    setOpen(false);
+    runAfterForgeExit(() => run(fn, recent));
+  }
+
   const footerItems = APP_NAVIGATION_FOOTER.filter((item) => !item.adminOnly || isAdmin);
   const visibleRecentPages = recentPages.filter(
     (page) => hasAutomationAccess || !page.href.startsWith('/automations'),
@@ -120,7 +127,7 @@ export function CommandPalette({
                   <CommandItem
                     key={page.href}
                     value={`recent ${page.label} ${page.href}`}
-                    onSelect={() => run(() => router.push(page.href))}
+                    onSelect={() => leave(() => router.push(page.href))}
                   >
                     <span className="text-muted-foreground font-mono text-xs">↩</span>
                     {page.label}
@@ -141,7 +148,7 @@ export function CommandPalette({
                       key={suggestion.href}
                       value={`suggested ${suggestion.label}`}
                       onSelect={() =>
-                        run(() => router.push(suggestion.href), {
+                        leave(() => router.push(suggestion.href), {
                           href: suggestion.href,
                           label: suggestion.label,
                         })
@@ -165,7 +172,7 @@ export function CommandPalette({
                   key={item.href}
                   value={item.label}
                   onSelect={() =>
-                    run(() => router.push(item.href), { href: item.href, label: item.label })
+                    leave(() => router.push(item.href), { href: item.href, label: item.label })
                   }
                 >
                   <Icon />
@@ -185,7 +192,7 @@ export function CommandPalette({
                     <CommandItem
                       key={brand.id}
                       value={`switch brand ${brand.name}`}
-                      onSelect={() => run(() => void selectBrand(brand.id))}
+                      onSelect={() => leave(() => void selectBrand(brand.id))}
                       disabled={isSwitching}
                     >
                       {brand.logoUrl ? (
@@ -220,7 +227,7 @@ export function CommandPalette({
                   key={item.href}
                   value={item.label}
                   onSelect={() =>
-                    run(() => router.push(item.href), { href: item.href, label: item.label })
+                    leave(() => router.push(item.href), { href: item.href, label: item.label })
                   }
                 >
                   <Icon />

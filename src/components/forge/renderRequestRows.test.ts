@@ -14,6 +14,7 @@ import {
   duplicateLabel,
   duplicateMappedVariable,
   effectiveEncode,
+  effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   emptyHistory,
@@ -35,6 +36,7 @@ import {
   recordsFromTable,
   renderedRatios,
   resetKey,
+  resolveRowInputs,
   restoreRows,
   reviewSignature,
   rowBreadcrumb,
@@ -970,6 +972,58 @@ describe('rows the AI proposed', () => {
     );
     // A kept row is not the AI's to take back.
     expect(discardProposed([kept], [kept.id])).toHaveLength(1);
+  });
+});
+
+describe('resolved input snapshots', () => {
+  test('resolves out-of-order descendants, explicit clears and media together without mutating inputs', () => {
+    const root: RequestRow = {
+      ...seedRow([]),
+      id: 'root',
+      values: { headline: 'Base', hero: { assetId: 'a', versionId: 'v' } },
+      media: { hero: { name: 'Picture', w: 100 } },
+    };
+    const child: RequestRow = {
+      ...seedRow([]),
+      id: 'child',
+      parentId: 'root',
+      clearedKeys: ['hero'],
+      values: { headline: 'Offer' },
+    };
+    const grandchild: RequestRow = {
+      ...seedRow([]),
+      id: 'grandchild',
+      parentId: 'child',
+      clearedKeys: ['headline'],
+      values: { price: 0, visible: false },
+    };
+    const rows = [grandchild, child, root];
+    const resolved = resolveRowInputs(rows);
+    expect(resolved.get('child')?.values).toEqual({ headline: 'Offer' });
+    expect(resolved.get('child')?.media).toEqual({});
+    expect(resolved.get('grandchild')?.values).toEqual({ price: 0, visible: false });
+    expect(resolved.get('root')?.media.hero?.w).toBe(100);
+    expect(resolved.get('child')?.row).toBe(child);
+    expect(root.values.headline).toBe('Base');
+    expect(root.media.hero?.name).toBe('Picture');
+  });
+
+  test('keeps the existing finite resolution for missing parents and malformed cycles', () => {
+    const a: RequestRow = { ...seedRow([]), id: 'a', parentId: 'b', values: { headline: 'A' } };
+    const b: RequestRow = { ...seedRow([]), id: 'b', parentId: 'a', values: { headline: 'B' } };
+    const orphan: RequestRow = {
+      ...seedRow([]),
+      id: 'orphan',
+      parentId: 'missing',
+      values: { headline: 'Own' },
+    };
+    const rows = [a, b, orphan];
+    const resolved = resolveRowInputs(rows);
+    for (const row of rows) {
+      expect(resolved.get(row.id)?.values).toEqual(effectiveValues(rows, row.id));
+      expect(resolved.get(row.id)?.media).toEqual(effectiveMedia(rows, row.id));
+    }
+    expect(resolved.get('orphan')?.values.headline).toBe('Own');
   });
 });
 

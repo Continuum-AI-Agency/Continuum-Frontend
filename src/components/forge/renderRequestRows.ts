@@ -341,6 +341,39 @@ export function effectiveMedia(rows: RequestRow[], id: string): Record<string, R
   return media;
 }
 
+export type ResolvedRowInputs = {
+  row: RequestRow;
+  values: Record<string, ApiRenderInputValue>;
+  media: Record<string, RequestRowMedia>;
+};
+
+/** Resolve inheritance once per row revision, rather than once for every visible cell. */
+export function resolveRowInputs(rows: readonly RequestRow[]): Map<string, ResolvedRowInputs> {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return new Map(
+    rows.map((row) => {
+      const chain: RequestRow[] = [];
+      const seen = new Set<string>();
+      for (let current: RequestRow | undefined = row; current && !seen.has(current.id); ) {
+        seen.add(current.id);
+        chain.unshift(current);
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+      }
+      const values: ResolvedRowInputs['values'] = {};
+      const media: ResolvedRowInputs['media'] = {};
+      for (const ancestor of chain) {
+        for (const key of ancestor.clearedKeys) {
+          delete values[key];
+          delete media[key];
+        }
+        Object.assign(values, ancestor.values);
+        Object.assign(media, ancestor.media);
+      }
+      return [row.id, { row, values, media }];
+    }),
+  );
+}
+
 export function effectiveEvidence(
   rows: RequestRow[],
   id: string,

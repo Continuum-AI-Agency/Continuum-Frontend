@@ -119,4 +119,21 @@ describe('CheckTable', () => {
     expect(screen.queryAllByRole('button', { name: 'Investigate' })).toHaveLength(0);
     expect(screen.getByRole('status').textContent).toBe('All checks passed');
   });
+
+  test('an exact preparation repair request opens and focuses its existing check row', async () => {
+    render(
+      <CheckTable
+        rows={[
+          rowOf('Parse'),
+          { ...rowOf('Fonts'), detail: <p>FoundrySans-Regular · not uploaded</p> },
+        ]}
+        focusRowRequest={{ name: 'Fonts', requestId: 1 }}
+      />,
+    );
+
+    const fonts = screen.getByRole('button', { name: 'Fonts details' });
+    await waitFor(() => expect(fonts.getAttribute('aria-expanded')).toBe('true'));
+    expect(document.activeElement).toBe(fonts);
+    expect(screen.getByText('FoundrySans-Regular · not uploaded')).toBeTruthy();
+  });
 });

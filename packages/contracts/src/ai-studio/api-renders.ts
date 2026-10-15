@@ -554,7 +554,8 @@ export const apiRenderTemplateFontSchema = z
      * `templateFontStatuses` its substitution map, a strict schema without them refuses the
      * whole contract and the template stops rendering rather than reporting a swap.
      */
-    via: z.enum(['direct', 'substitute']).optional(),
+    via: z.enum(['direct', 'substitute', 'package']).optional(),
+    issue: z.enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required']).optional(),
     substitutedBy: z
       .object({
         fontId: z.string().uuid(),

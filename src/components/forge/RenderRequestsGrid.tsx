@@ -137,6 +137,7 @@ import {
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
 import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -188,6 +189,14 @@ const RAIL_COLLAPSED_SIZE = '2.25rem';
 /** How long an edit settles before autosave writes it; how long after a failed save it retries. */
 const AUTOSAVE_MS = 1500;
 const AUTOSAVE_RETRY_MS = 5000;
+type CollectionLoad = {
+  phase: 'loading' | 'ready' | 'error';
+  error: string | null;
+  initialFailed: boolean;
+  hasData: boolean;
+  unassignedDraft: boolean;
+  refreshing: boolean;
+};
 
 /**
  * Whether saving the same rows again could succeed. A refusal (4xx) answers the same until
@@ -470,6 +479,14 @@ export function RenderRequestsGrid({
   };
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
+  const [inputSetLoad, setInputSetLoad] = useState<CollectionLoad>({
+    phase: 'loading', error: null, initialFailed: false, hasData: false,
+    unassignedDraft: false, refreshing: false,
+  });
+  const [renderSetLoad, setRenderSetLoad] = useState<CollectionLoad>({
+    phase: 'loading', error: null, initialFailed: false, hasData: false,
+    unassignedDraft: false, refreshing: false,
+  });
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
   /** What opening a set saved for an earlier template trimmed off; saving it makes that final. */
@@ -525,6 +542,11 @@ export function RenderRequestsGrid({
 
   const latestRows = useRef(rows);
   latestRows.current = rows;
+  const savedSignatureRef = useRef(savedSignature);
+  savedSignatureRef.current = savedSignature;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const loadGeneration = useRef(0);
   // The open set as the server last answered, read by saves that outlive the render that began them.
   const activeSetRef = useRef(activeSet);
   activeSetRef.current = activeSet;
@@ -721,22 +743,65 @@ export function RenderRequestsGrid({
       return;
     }
     let cancelled = false;
+    loadGeneration.current += 1;
+    setInputSetLoad({
+      phase: 'loading', error: null, initialFailed: false, hasData: false,
+      unassignedDraft: false, refreshing: false,
+    });
+    setRenderSetLoad({
+      phase: 'loading', error: null, initialFailed: false, hasData: false,
+      unassignedDraft: false, refreshing: false,
+    });
     const reads = templateLoadQueries(brandId, contractBindingId, templateKey);
     Promise.all([
       queryClient.fetchQuery(reads.contract),
-      queryClient.fetchQuery(reads.inputSets).catch(() => ({ items: [] })),
-      queryClient.fetchQuery(reads.renderSets).catch(() => ({ items: [] })),
+      queryClient
+        .fetchQuery(reads.inputSets)
+        .then((value) => ({ value, error: null as string | null }))
+        .catch((error: unknown) => ({
+          value: queryClient.getQueryData<Awaited<ReturnType<typeof apiRendersApi.listInputSets>>>(
+            reads.inputSets.queryKey,
+          ),
+          error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        })),
+      queryClient
+        .fetchQuery(reads.renderSets)
+        .then((value) => ({ value, error: null as string | null }))
+        .catch((error: unknown) => ({
+          value: queryClient.getQueryData<Awaited<ReturnType<typeof apiRendersApi.listRenderSets>>>(
+            reads.renderSets.queryKey,
+          ),
+          error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        })),
     ])
-      .then(([next, sets, savedSets]) => {
+      .then(([next, setsResult, savedSetsResult]) => {
         if (cancelled) return;
         setContract(next);
         setLayerSwitches(next.layerSwitchesNotAsked);
         setLinkedFields(next.linkedFields ?? []);
-        setInputSets(sets.items);
+        setInputSets(setsResult.value?.items ?? []);
+        setInputSetLoad({
+          phase: setsResult.error ? 'error' : 'ready',
+          error: setsResult.error,
+          initialFailed: Boolean(setsResult.error),
+          hasData: setsResult.value !== undefined,
+          unassignedDraft: false,
+          refreshing: false,
+        });
         // A set belongs to the environment it was saved in; one from another would refuse to render.
         const binding = bindingRef.current;
-        const inBinding = savedSets.items.filter((set) => !binding || set.bindingId === binding);
+        const inBinding = (savedSetsResult.value?.items ?? []).filter(
+          (set) => !binding || set.bindingId === binding,
+        );
         setRenderSets(inBinding);
+        setRenderSetLoad({
+          phase: savedSetsResult.error ? 'error' : 'ready',
+          error: savedSetsResult.error,
+          initialFailed: Boolean(savedSetsResult.error),
+          hasData: savedSetsResult.value !== undefined,
+          unassignedDraft: false,
+          refreshing: false,
+        });
         const draft = readDrafts(draftStorageKey(brandId, templateKey));
         const saved =
           inBinding.find((set) => set.id === selection.renderSetId) ?? inBinding[0] ?? null;
@@ -757,11 +822,86 @@ export function RenderRequestsGrid({
       .catch((error: unknown) => {
         if (cancelled) return;
         toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+        setInputSetLoad({
+          phase: 'error', error: 'Input sets could not be loaded.', initialFailed: true,
+          hasData: false, unassignedDraft: false, refreshing: false,
+        });
+        setRenderSetLoad({
+          phase: 'error', error: 'Saved render sets could not be loaded.', initialFailed: true,
+          hasData: false, unassignedDraft: false, refreshing: false,
+        });
       });
     return () => {
       cancelled = true;
     };
   }, [brandId, selection, templateKey, contractBindingId, queryClient, showRows, openSet]);
+
+  const retryInputSets = async () => {
+    if (!contract) return;
+    const reads = templateLoadQueries(brandId, contractBindingId, contract.template.key);
+    const generation = loadGeneration.current;
+    const requestedSelection = selection;
+    const isCurrent = () =>
+      generation === loadGeneration.current && selectionRef.current === requestedSelection;
+    setInputSetLoad((current) => ({ ...current, refreshing: true }));
+    try {
+      const result = await queryClient.fetchQuery({ ...reads.inputSets, staleTime: 0 });
+      if (!isCurrent()) return;
+      setInputSets(result.items);
+      setInputSetLoad((current) => ({
+        ...current, phase: 'ready', error: null, initialFailed: false, hasData: true,
+        refreshing: false,
+      }));
+    } catch (error) {
+      if (!isCurrent()) return;
+      setInputSetLoad((current) => ({
+        ...current,
+        phase: 'error',
+        error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        refreshing: false,
+      }));
+    }
+  };
+
+  const retryRenderSets = async () => {
+    if (!contract) return;
+    const reads = templateLoadQueries(brandId, contractBindingId, contract.template.key);
+    const forContract = contract;
+    const generation = loadGeneration.current;
+    const requestedSelection = selection;
+    const isCurrent = () =>
+      generation === loadGeneration.current && selectionRef.current === requestedSelection;
+    setRenderSetLoad((current) => ({ ...current, refreshing: true }));
+    try {
+      const result = await queryClient.fetchQuery({ ...reads.renderSets, staleTime: 0 });
+      if (!isCurrent()) return;
+      const binding = bindingRef.current;
+      const inBinding = result.items.filter((set) => !binding || set.bindingId === binding);
+      const wanted =
+        inBinding.find((set) => set.id === selection.renderSetId) ?? inBinding[0] ?? null;
+      const unassignedDraft =
+        activeSetRef.current === null &&
+        inBinding.length > 0 &&
+        signatureOf(latestRows.current, forContract) !== savedSignatureRef.current;
+      setRenderSets(inBinding);
+      setRenderSetLoad((current) => ({
+        ...current, phase: 'ready', error: null, initialFailed: false, hasData: true,
+        refreshing: false, unassignedDraft,
+      }));
+      if (activeSetRef.current === null) {
+        if (unassignedDraft) setActiveSet(null);
+        else if (wanted) openSet(wanted, forContract);
+      }
+    } catch (error) {
+      if (!isCurrent()) return;
+      setRenderSetLoad((current) => ({
+        ...current,
+        phase: 'error',
+        error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        refreshing: false,
+      }));
+    }
+  };
 
   // --- row edits ---------------------------------------------------------------------------
   // biome-ignore lint/correctness/useExhaustiveDependencies: `record` reads refs only.
@@ -1531,6 +1671,7 @@ export function RenderRequestsGrid({
     !contract ||
     !bindingId ||
     rows.length === 0 ||
+    (!activeSet && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft)) ||
     review !== null ||
     conflict !== null ||
     updateRequired;
@@ -1713,6 +1854,11 @@ export function RenderRequestsGrid({
     if (inFlight.current) await inFlight.current;
     const submitted = latestRows.current;
     const set = activeSetRef.current;
+    if (!set && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft)) {
+      if (announce)
+        toast.error('Saved render sets are unavailable. Retry the list or create a named set.');
+      return null;
+    }
     if (proposedIds(submitted).size === submitted.length) return set;
     const run = (async () => {
       setSaveState({ phase: 'saving' });
@@ -1830,6 +1976,23 @@ export function RenderRequestsGrid({
 
   const saveNow = async () => {
     if (busy || !bindingId || rows.length === 0) return;
+    if (!activeSet && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft) && contract) {
+      setNameRequest({
+        title: 'Save render set',
+        description: renderSetLoad.initialFailed
+          ? 'Saved sets could not be checked. Give this set a name to save your rows.'
+          : 'Your edited rows are not assigned to a saved set. Name them here or choose a set.',
+        initialName: 'New set',
+        confirmLabel: 'Save set',
+        onConfirm: async (name) => {
+          const created = await createSet(name, latestRows.current, {
+            revisionRef: templateRevision ?? undefined,
+          });
+          if (created) setNameRequest(null);
+        },
+      });
+      return;
+    }
     setBusy('saving');
     try {
       await saveRenderSet();
@@ -2443,6 +2606,57 @@ export function RenderRequestsGrid({
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={openReview}
       />
+      {contract && inputSetLoad.phase === 'error' ? (
+        <Alert variant="destructive" className="shrink-0 py-2">
+          <AlertTitle>Input sets could not be loaded</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              {inputSetLoad.hasData
+                ? 'Showing the last loaded input sets.'
+                : 'The input set list is unknown; an empty result has not been assumed.'}
+            </span>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={inputSetLoad.refreshing}
+              onClick={() => void retryInputSets()}
+            >
+              {inputSetLoad.refreshing ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {contract && renderSetLoad.phase === 'error' ? (
+        <Alert variant="destructive" className="shrink-0 py-2">
+          <AlertTitle>Saved render sets could not be loaded</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              {renderSetLoad.hasData
+                ? 'Showing the last loaded sets. Your rows are preserved while you retry.'
+                : 'Saved sets are unknown. Your rows are preserved; use New set to save with a name.'}
+            </span>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={renderSetLoad.refreshing}
+              onClick={() => void retryRenderSets()}
+            >
+              {renderSetLoad.refreshing ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {contract && renderSetLoad.phase === 'ready' && renderSetLoad.unassignedDraft ? (
+        <Alert className="shrink-0 py-2">
+          <AlertTitle>Your edited rows are not assigned to a saved set</AlertTitle>
+          <AlertDescription>
+            Choose an existing set, or use Save to create a named set. Your rows will stay here
+            until you choose.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {problem ? <p className="text-xs text-destructive">{problem}</p> : null}
       {updateRequired && activeSet ? (
         <section
@@ -2621,9 +2835,14 @@ export function RenderRequestsGrid({
                     }
                     onSwitch={loadRenderSet}
                     onNew={async (name) => {
-                      const seeded = seededRows(contract);
-                      const created = await createSet(name, seeded);
-                      if (created) showRows(seeded, seeded, contract);
+                      const rowsToSave =
+                        renderSetLoad.initialFailed || renderSetLoad.unassignedDraft
+                          ? latestRows.current
+                          : seededRows(contract);
+                      const created = await createSet(name, rowsToSave, {
+                        revisionRef: templateRevision ?? undefined,
+                      });
+                      if (created) showRows(rowsToSave, rowsToSave, contract);
                     }}
                     onRename={(set, name) => updateSetDetails(set, { name })}
                     onDescribe={(set, description) => updateSetDetails(set, { description })}

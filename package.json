@@ -146,7 +146,8 @@
     "videoeditor:audio:render:bench": "node scripts/video-editor-audio-render-bench.mjs",
     "videoeditor:first-cut:finish:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-first-cut-finish.spec.ts --workers=1",
     "videoeditor:record:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-record.spec.ts --workers=1",
-    "videoeditor:combos:e2e:bench": "VIDEO_EDITOR_COMBOS=1 playwright test --config=playwright.browser-render.config.ts e2e/video-editor-combos.spec.ts --workers=1"
+    "videoeditor:combos:e2e:bench": "VIDEO_EDITOR_COMBOS=1 playwright test --config=playwright.browser-render.config.ts e2e/video-editor-combos.spec.ts --workers=1",
+    "forge:template-editor:e2e:bench": "bun --no-env-file e2e/forge-template-editor.bench.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.109",

@@ -1,14 +1,19 @@
-// A link into Forge from elsewhere — the Library's provenance panel — that opens a template, one of
-// its render sets and a row in it: `/forge?template=&set=&row=&rerender=1`. Written and read here
-// only, so the two ends cannot drift.
+// Links into Forge from the Library or AI Studio. Query names are kept here so the two ends cannot
+// drift: `/forge?template=&set=&row=&rerender=1` or `/forge?hfRevision=&brand=`.
 
 export type ForgeDeepLink = {
   /** The template's source asset id. */
-  templateAssetId: string;
+  templateAssetId: string | null;
   renderSetId: string | null;
   rowId: string | null;
   /** Select the row, ready for Render — never render it without the person confirming. */
   rerender: boolean;
+  /** Latest private Hyperframes composition revision to attach after choosing a source. */
+  hyperframesRevisionId: string | null;
+  /** Active brand at handoff time; Forge refuses to carry it across a brand switch. */
+  brandId: string | null;
+  /** Open the attached private authoring workspace when a link names its tab. */
+  tab?: 'author';
 };
 
 export function forgeDeepLinkHref(link: {
@@ -16,26 +21,37 @@ export function forgeDeepLinkHref(link: {
   renderSetId: string | null;
   rowId: string | null;
   rerender?: boolean;
+  hyperframesRevisionId?: string | null;
+  brandId?: string | null;
+  tab?: 'author';
 }): string {
   const params = new URLSearchParams();
   if (link.templateAssetId) params.set('template', link.templateAssetId);
   if (link.renderSetId) params.set('set', link.renderSetId);
   if (link.rowId) params.set('row', link.rowId);
   if (link.rerender) params.set('rerender', '1');
+  if (link.hyperframesRevisionId) params.set('hfRevision', link.hyperframesRevisionId);
+  if (link.brandId) params.set('brand', link.brandId);
+  if (link.tab === 'author' || link.hyperframesRevisionId) params.set('tab', 'author');
   const query = params.toString();
   return query ? `/forge?${query}` : '/forge';
 }
 
-/** Null without a template: a set or row means nothing until its template is known. */
+/** Null without a template or Hyperframes revision: a set or row needs its template. */
 export function readForgeDeepLink(search: string): ForgeDeepLink | null {
   const params = new URLSearchParams(search);
   const templateAssetId = params.get('template');
-  if (!templateAssetId) return null;
+  const hyperframesRevisionId = params.get('hfRevision');
+  if (!templateAssetId && !hyperframesRevisionId) return null;
   const renderSetId = params.get('set');
+  const tab = params.get('tab') === 'author' || hyperframesRevisionId ? 'author' : undefined;
   return {
-    templateAssetId,
+    templateAssetId: templateAssetId || null,
     renderSetId,
-    rowId: renderSetId ? params.get('row') : null,
+    rowId: templateAssetId && renderSetId ? params.get('row') : null,
     rerender: params.get('rerender') === '1',
+    hyperframesRevisionId: hyperframesRevisionId || null,
+    brandId: params.get('brand') || null,
+    ...(tab ? { tab } : {}),
   };
 }

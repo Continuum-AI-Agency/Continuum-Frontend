@@ -37,19 +37,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
   discoverWorkspaceTemplates,
   fetchTemplateSources,
-  loadWorkspaceTemplates,
   renameTemplateSource,
   setTemplateAdoption,
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplateImports';
+import { useForgeExitGuard } from './useForgeExitGuard';
 
 // Forge — bring your own After Effects project.
 //
@@ -104,6 +106,7 @@ export function ForgeWorkbench({
   /** The workbench has taken `templateIntent`; the shell drops it so a remount never replays it. */
   onTemplateIntentConsumed?: () => void;
 }) {
+  const exitGuard = useForgeExitGuard();
   const [selected, setSelected] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<string | undefined>();
   // The composition to land on in Edit layers — an output row's Edit names its own.
@@ -132,15 +135,17 @@ export function ForgeWorkbench({
   });
   const workspaceQuery = useQuery({
     queryKey: forgeQueryKeys.workspaceTemplates(brandId),
-    queryFn: () => loadWorkspaceTemplates(brandId),
+    queryFn: () => discoverWorkspaceTemplates(brandId),
     staleTime: FORGE_STALE_MS.lists,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+  const discoveredItems = workspaceQuery.data?.items ?? [];
+  const workspaceFailures = workspaceQuery.data?.failures ?? [];
   const rawSources = sourceQuery.data ?? [];
   const { shared, buildNames } = useMemo(
-    () => splitWorkspaceTemplates(workspaceQuery.data ?? [], rawSources),
-    [rawSources, workspaceQuery.data],
+    () => splitWorkspaceTemplates(discoveredItems, rawSources),
+    [discoveredItems, rawSources],
   );
   // A title wins; the build name stands in only where nobody has typed one.
   const sources = useMemo(
@@ -152,15 +157,6 @@ export function ForgeWorkbench({
       ),
     [buildNames, rawSources],
   );
-  useEffect(() => {
-    if (sourceQuery.error)
-      toast.error(
-        sourceQuery.error instanceof Error
-          ? sourceQuery.error.message
-          : 'Could not list your templates',
-      );
-  }, [sourceQuery.error]);
-
   const refreshSources = useCallback(
     () => queryClient.invalidateQueries({ queryKey: sourceKey, exact: true }),
     [queryClient, sourceKey],
@@ -314,22 +310,34 @@ export function ForgeWorkbench({
   // shell reads `#approvals`, and taken once: the template opens here, and its set opens in Render
   // once the template's key is known.
   const [deepLink, setDeepLink] = useState<ForgeDeepLink | null>(null);
+  const [authoringHandoff, setAuthoringHandoff] = useState<{ revisionId: string; error: string | null } | null>(null);
   useEffect(() => {
     const link = readForgeDeepLink(window.location.search);
     if (!link) return;
     setSelected(link.templateAssetId);
+    if (link.hyperframesRevisionId) {
+      setAuthoringHandoff({
+        revisionId: link.hyperframesRevisionId,
+        error: link.brandId && link.brandId !== brandId
+          ? 'This composition was opened for a different brand. Switch to that brand and open the handoff again.'
+          : null,
+      });
+    }
+    if (link.templateAssetId && link.tab) setDetailTab(link.tab);
     if (link.renderSetId) setDeepLink(link);
   }, []);
 
   const morph = useTemplateMorphSwap();
   const open = (assetId: string | null, tab?: string, comp?: string) =>
-    morph(() => {
-      setDetailTab(tab);
-      setDetailComp(comp);
-      setSelected(assetId);
-    });
+    exitGuard.runGuarded(() =>
+      morph(() => {
+        setDetailTab(tab);
+        setDetailComp(comp);
+        setSelected(assetId);
+      }),
+    );
   const openShared = (template: SharedTemplate | null) =>
-    morph(() => setSelectedShared(template ? sharedTemplateId(template) : null));
+    exitGuard.runGuarded(() => morph(() => setSelectedShared(template ? sharedTemplateId(template) : null)));
 
   // An intent is an event, taken once and handed back, the way the Render grid takes its own.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event.
@@ -404,6 +412,102 @@ export function ForgeWorkbench({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
+      {sourceQuery.isPending ? (
+        <div aria-label="Loading your templates" className="flex flex-col gap-2" role="status">
+          <span aria-hidden className="h-4 w-40 animate-pulse rounded-md bg-muted/70" />
+          <span aria-hidden className="h-10 w-full animate-pulse rounded-md bg-muted/70" />
+        </div>
+      ) : null}
+      {sourceQuery.isError ? (
+        <Alert variant={sourceQuery.data !== undefined ? 'default' : 'destructive'}>
+          <AlertTitle>
+            {sourceQuery.data !== undefined
+              ? 'Your templates could not be refreshed'
+              : 'Your templates are unavailable'}
+          </AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              {sourceQuery.data !== undefined
+                ? 'Showing the last available list. Refresh to check for changes.'
+                : 'Your uploaded templates could not be loaded. Shared templates may still be available.'}
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={() => void sourceQuery.refetch()} disabled={sourceQuery.isFetching}>
+              {sourceQuery.isFetching ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {workspaceQuery.isPending ? (
+        <div aria-label="Loading shared templates" className="flex flex-col gap-2" role="status">
+          <span aria-hidden className="h-4 w-40 animate-pulse rounded-md bg-muted/70" />
+          <span aria-hidden className="h-10 w-full animate-pulse rounded-md bg-muted/70" />
+        </div>
+      ) : null}
+      {authoringHandoff ? (
+        <Alert variant={authoringHandoff.error ? 'destructive' : 'default'}>
+          <AlertTitle>
+            {authoringHandoff.error
+              ? 'HyperFrames handoff paused'
+              : current
+                ? `Source selected · ${sourceDisplayName(current)}`
+                : 'Choose a Forge source'}
+          </AlertTitle>
+          <AlertDescription>
+            {authoringHandoff.error ??
+              (current
+                ? 'This composition is queued for this source’s private Layers workspace. Forge will keep it private while verifying the workspace package path.'
+                : 'Choose one of your existing After Effects templates below. The composition stays private while Forge verifies the workspace package path for that source version.')}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {workspaceQuery.isError ? (
+        <Alert variant={workspaceQuery.data ? 'default' : 'destructive'}>
+          <AlertTitle>
+            {workspaceQuery.data
+              ? 'Shared catalog could not be refreshed'
+              : 'Shared catalog unavailable'}
+          </AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              {workspaceQuery.data
+                ? workspaceFailures.length > 0
+                  ? 'Showing the last available partial catalog. Some workspaces may be missing.'
+                  : 'Showing the last available catalog. Refresh to check for changes.'
+                : 'Your uploaded templates are still available. The shared catalog could not be loaded.'}
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={() => void workspaceQuery.refetch()} disabled={workspaceQuery.isFetching}>
+              {workspaceQuery.isFetching ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {!workspaceQuery.isPending && !workspaceQuery.isError && workspaceFailures.length > 0 ? (
+        <Alert variant={discoveredItems.length > 0 ? 'default' : 'destructive'}>
+          <AlertTitle>
+            {discoveredItems.length > 0
+              ? 'Some shared workspaces could not be checked'
+              : 'Shared catalog unavailable'}
+          </AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              {discoveredItems.length > 0
+                ? 'Showing templates from workspaces we could read. Other shared templates may be missing.'
+                : 'No shared templates can be confirmed until the workspace catalog loads. Your uploaded templates remain available.'}
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={() => void workspaceQuery.refetch()} disabled={workspaceQuery.isFetching}>
+              {workspaceQuery.isFetching ? 'Retrying…' : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {!workspaceQuery.isPending && !workspaceQuery.isError && workspaceFailures.length === 0 && discoveredItems.length === 0 ? (
+        <Empty className="h-auto w-full rounded-lg border border-dashed py-3" data-testid="shared-catalog-empty">
+          <EmptyHeader>
+            <EmptyTitle>No shared templates</EmptyTitle>
+            <EmptyDescription>No shared templates are available to this brand yet.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : null}
       {uploads.length ? (
         <div className="flex flex-col gap-1.5">
           <UploadStrip
@@ -420,6 +524,8 @@ export function ForgeWorkbench({
           ))}
         </div>
       ) : null}
+
+      {authoringHandoff?.error ? <p role="alert" className="text-xs text-destructive">{authoringHandoff.error}</p> : null}
 
       <DesignTemplateImports
         imports={imports}
@@ -449,19 +555,25 @@ export function ForgeWorkbench({
           initialTab={detailTab}
           initialComp={detailComp}
           onBack={() => open(null)}
+          onDraftChange={exitGuard.onDraftChange}
+          hyperframesRevisionId={authoringHandoff?.error ? undefined : authoringHandoff?.revisionId}
           onOpenVariant={async (assetId, tab) => {
             await refreshTemplate();
             open(assetId, tab);
           }}
           onRename={(title) => void rename(current.assetId, title)}
-          onDeleteVariant={(variant) => {
-            setRemovalReturn(variant.rootAssetId);
-            setRemoving(variant.source);
-          }}
-          onRemove={() => {
-            setRemovalReturn(null);
-            setRemoving(current);
-          }}
+          onDeleteVariant={(variant) =>
+            exitGuard.runGuarded(() => {
+              setRemovalReturn(variant.rootAssetId);
+              setRemoving(variant.source);
+            })
+          }
+          onRemove={() =>
+            exitGuard.runGuarded(() => {
+              setRemovalReturn(null);
+              setRemoving(current);
+            })
+          }
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
@@ -507,6 +619,8 @@ export function ForgeWorkbench({
           }
         />
       )}
+
+      {exitGuard.dialog}
 
       <AlertDialog open={asking !== undefined} onOpenChange={(next) => !next && answer(null)}>
         <AlertDialogContent>
