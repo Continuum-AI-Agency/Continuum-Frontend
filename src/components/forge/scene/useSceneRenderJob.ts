@@ -15,11 +15,19 @@ import {
 
 const POLL_MS = 2_000;
 
-export type SceneRenderStart = Pick<SceneRenderRequest, 'versionId' | 'outputId' | 'values'>;
+export type SceneRenderStart = Pick<
+  SceneRenderRequest,
+  'versionId' | 'outputId' | 'values' | 'overrides'
+>;
+type SceneMediaType = NonNullable<SceneRenderStart['overrides']>['mediaType'];
 
 export function useSceneRenderJob(brandId: string, assetId: string) {
   const queryClient = useQueryClient();
-  const [started, setStarted] = useState<{ jobId: string; outputId: string } | null>(null);
+  const [started, setStarted] = useState<{
+    jobId: string;
+    outputId: string;
+    mediaType: SceneMediaType;
+  } | null>(null);
   const jobId = started?.jobId ?? null;
   const refreshHistory = () =>
     queryClient.invalidateQueries({ queryKey: forgeQueryKeys.sceneRenders(brandId, assetId) });
@@ -34,7 +42,11 @@ export function useSceneRenderJob(brandId: string, assetId: string) {
         requestId: crypto.randomUUID(),
       }),
     onSuccess: ({ jobId: accepted }, render) => {
-      setStarted({ jobId: accepted, outputId: render.outputId });
+      setStarted({
+        jobId: accepted,
+        outputId: render.outputId,
+        mediaType: render.overrides?.mediaType,
+      });
       void refreshHistory();
     },
   });
@@ -58,6 +70,8 @@ export function useSceneRenderJob(brandId: string, assetId: string) {
     starting: start.isPending,
     job: job.data ?? null,
     jobOutputId: started?.outputId ?? null,
+    /** What the job was asked to make; the output's parsed type is only a hint. */
+    jobMediaType: started?.mediaType ?? null,
     error: start.error ?? job.error ?? null,
   };
 }

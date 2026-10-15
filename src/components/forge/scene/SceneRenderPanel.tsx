@@ -102,11 +102,14 @@ function SceneRenderRow({
   render,
   outputs,
   at,
+  mediaType,
 }: {
   brandId: string;
   render: SceneRenderStatus & { outputId?: string };
   outputs: readonly BlendOutput[];
   at?: string;
+  /** What the job was asked to make, when known; otherwise the output's parsed type. */
+  mediaType?: BlendOutput['mediaType'] | null;
 }) {
   const output = outputs.find((candidate) => candidate.id === render.outputId);
   const label = output?.label ?? render.outputId ?? 'Render';
@@ -130,7 +133,7 @@ function SceneRenderRow({
               key={pin.versionId}
               brandId={brandId}
               pin={pin}
-              mediaType={output?.mediaType ?? 'image'}
+              mediaType={mediaType ?? output?.mediaType ?? 'image'}
               label={label}
             />
           ))
@@ -182,6 +185,7 @@ export function SceneRenderHistory({
           render={render}
           outputs={outputs}
           at={render.createdAt}
+          mediaType={render.mediaType}
         />
       ))}
     </ul>
@@ -194,6 +198,7 @@ export function SceneRenderPanel({
   outputs,
   job,
   jobOutputId,
+  jobMediaType = null,
   error,
 }: {
   brandId: string;
@@ -202,6 +207,7 @@ export function SceneRenderPanel({
   /** The render this editor started, while it runs and once it ends. */
   job: SceneRenderStatus | null;
   jobOutputId: string | null;
+  jobMediaType?: BlendOutput['mediaType'] | null;
   error: unknown;
 }) {
   return (
@@ -221,6 +227,7 @@ export function SceneRenderPanel({
               brandId={brandId}
               render={{ ...job, outputId: jobOutputId ?? undefined }}
               outputs={outputs}
+              mediaType={jobMediaType}
             />
           </ul>
         </section>

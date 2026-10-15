@@ -25,6 +25,7 @@ import {
   sendTemplateToForge,
   type TemplateFontReadiness,
 } from '@/lib/library/templateSources';
+import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import { cn } from '@/lib/utils';
 
 // The Templates section: the same rows the Library already holds, shown as what they ARE
@@ -170,7 +171,9 @@ function TemplateCard({
       ) : (
         <p className="text-xs text-muted-foreground">
           {source.parseState === 'failed'
-            ? (source.parseError ?? 'This file could not be read.')
+            ? source.parseError
+              ? parseErrorSentence(source.parseError)
+              : 'This file could not be read.'
             : 'Uploaded and queued for unpacking. Ratios, slots, and fonts appear here when it finishes.'}
         </p>
       )}
