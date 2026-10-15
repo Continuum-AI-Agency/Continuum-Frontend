@@ -82,7 +82,9 @@ export function FindingEvidence({
   resultLabel: string;
 }) {
   return (
-    <details className="group/evidence">
+    // On touch the disclosure's 44px hit area reached the "Explain with Jaina" link 4px above
+    // it; the px margin keeps the two presses apart.
+    <details className="group/evidence pointer-coarse:mt-[10px]">
       <summary className={cn('w-fit', TEXT_DISCLOSURE)}>
         <span className="group-open/evidence:hidden">Show the evidence</span>
         <span className="hidden group-open/evidence:inline">Hide the evidence</span>
