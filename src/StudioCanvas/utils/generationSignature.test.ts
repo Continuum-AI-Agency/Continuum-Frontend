@@ -270,13 +270,14 @@ describe('sig2 recipes are the registry recipes', () => {
     }
   });
 
-  it('tracks exactly the four types the registry gives signatureFields', () => {
+  it('tracks exactly the types the registry gives signatureFields', () => {
     // The guard against quietly signature-tracking a Canvas V3 type: staleness for an
     // action or a batch is a different question (see nodeHasUsableOutput in the
     // executor), and answering it here by accident would reuse a stale action output.
     const tracked = STUDIO_NODE_TYPES.filter((type) => isSignatureTracked(type));
     expect([...tracked].sort()).toEqual([
       'action',
+      'fastCut',
       'nanoGen',
       'veoDirector',
       'veoFast',

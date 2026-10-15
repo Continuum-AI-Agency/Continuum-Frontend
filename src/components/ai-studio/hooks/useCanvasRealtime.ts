@@ -136,6 +136,10 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const lastRemoteEdgeIdsRef = useRef<Set<string>>(new Set());
   const pendingSaveRef = useRef<boolean>(false);
   const saveInFlightRef = useRef<boolean>(false);
+  // Callers that asked for a save while one was in flight: they wait for the follow-up save
+  // that carries their state, so a caller that saves before asking the server to read the
+  // room (a fast cut, a timeline render) is never answered from the previous revision.
+  const pendingSaveWaitersRef = useRef<Array<() => void>>([]);
   const pendingBroadcastPayloadRef = useRef<CanvasUpdatePayload | null>(null);
   const loadedRoomKeyRef = useRef<string | null>(null);
   const initialStore = useStudioStore.getState();
@@ -708,9 +712,13 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
 
   const saveCanvasToDatabase = useCallback(async () => {
     if (!brandProfileId || !roomId) return;
-    if (!hasLoadedInitialDataRef.current || saveInFlightRef.current) {
+    if (!hasLoadedInitialDataRef.current) {
       pendingSaveRef.current = true;
       return;
+    }
+    if (saveInFlightRef.current) {
+      pendingSaveRef.current = true;
+      return new Promise<void>((resolve) => pendingSaveWaitersRef.current.push(resolve));
     }
 
     saveInFlightRef.current = true;
@@ -853,10 +861,16 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     } finally {
       saveInFlightRef.current = false;
       setIsSaving(false);
+      // Taken here, so a waiter is always settled by the save it queued behind: after the
+      // follow-up when one is still owed, at once when a room switch dropped it.
+      const waiters = pendingSaveWaitersRef.current.splice(0);
+      const settle = () => {
+        for (const resolve of waiters) resolve();
+      };
       if (pendingSaveRef.current) {
         pendingSaveRef.current = false;
-        void saveCanvasToDatabase();
-      }
+        void saveCanvasToDatabase().finally(settle);
+      } else settle();
     }
   }, [brandProfileId, roomId, supabase, status, user?.id]);
 

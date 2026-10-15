@@ -2255,12 +2255,12 @@ describe('executeWorkflow', () => {
 describe('collectPublisherHandoffs', () => {
   it('reports a publisher sink fed by the run scope as a handoff', () => {
     const nodes: StudioNode[] = [
-      { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
-      { id: 'pub', position: { x: 0, y: 0 }, data: { format: 'image' }, type: 'plannerDraft' },
+      { id: 'draft', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
+      { id: 'pub', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    const edges: Edge[] = [{ id: 'e1', source: 'gen', target: 'pub', targetHandle: 'image-in' }];
+    const edges: Edge[] = [{ id: 'e1', source: 'draft', sourceHandle: 'draft', target: 'pub', targetHandle: 'draft-in' }];
 
-    const handoffs = collectPublisherHandoffs(nodes, edges, ['gen']);
+    const handoffs = collectPublisherHandoffs(nodes, edges, ['draft']);
     expect(handoffs).toEqual([
       { nodeId: 'pub', kind: 'organic', state: 'handoff — deliver via studio_deliver' },
     ]);
@@ -2278,20 +2278,20 @@ describe('collectPublisherHandoffs', () => {
   it('ignores a publisher not reachable from the run scope', () => {
     const nodes: StudioNode[] = [
       { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
-      { id: 'orphan', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
+      { id: 'orphan', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
     // No edge from gen → orphan, so a run of `gen` never feeds it.
     expect(collectPublisherHandoffs(nodes, [], ['gen'])).toEqual([]);
   });
 
-  it('returns every publisher when no scope is given', () => {
+  it('returns publisher sinks without treating the runnable Planner draft as one', () => {
     const nodes: StudioNode[] = [
       { id: 'a', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
       { id: 'b', position: { x: 0, y: 0 }, data: {}, type: 'paidPublisher' },
       { id: 'c', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
       { id: 'd', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    expect(collectPublisherHandoffs(nodes, [])).toHaveLength(3);
+    expect(collectPublisherHandoffs(nodes, []).map((handoff) => handoff.nodeId)).toEqual(['b', 'd']);
   });
 });
 

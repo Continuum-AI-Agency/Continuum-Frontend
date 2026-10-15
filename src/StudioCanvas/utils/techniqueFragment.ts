@@ -196,7 +196,12 @@ export function inferTechniquePorts(
 }
 
 const PUBLISHER_TYPES = new Set<string>(['organicPublish', 'paidPublisher', 'plannerDraft']);
-const ASSEMBLY_TYPES = new Set<string>(['timelineEditor', 'layerEditor', 'hyperframesAgent']);
+const ASSEMBLY_TYPES = new Set<string>([
+  'timelineEditor',
+  'fastCut',
+  'layerEditor',
+  'hyperframesAgent',
+]);
 
 /**
  * Seeds the dialog's kind field. The human picks — this only saves them a click

@@ -41,6 +41,7 @@ const OUTPUT_NODE_TYPES = new Set([
   'extendVideo',
   'hyperframesAgent',
   'timelineEditor',
+  'fastCut',
 ]);
 
 type NodeData = Record<string, unknown>;
@@ -77,7 +78,8 @@ export function isVideoNode(node: { type?: string; data?: NodeData }): boolean {
     node.type === 'veoFast' ||
     node.type === 'omniGen' ||
     node.type === 'extendVideo' ||
-    node.type === 'hyperframesAgent'
+    node.type === 'hyperframesAgent' ||
+    node.type === 'fastCut'
   );
 }
 
