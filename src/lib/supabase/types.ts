@@ -18451,6 +18451,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -18480,6 +18481,7 @@ export type Database = {
           kind: string
           lease_expires_at?: string | null
           lease_token?: string | null
+          operation_name?: string | null
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
@@ -18509,6 +18511,7 @@ export type Database = {
           kind?: string
           lease_expires_at?: string | null
           lease_token?: string | null
+          operation_name?: string | null
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
@@ -22687,6 +22690,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22766,6 +22770,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22929,6 +22934,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22971,6 +22977,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23057,6 +23064,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23100,6 +23108,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23143,6 +23152,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23186,6 +23196,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23338,6 +23349,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23383,6 +23395,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23427,6 +23440,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23474,6 +23488,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
