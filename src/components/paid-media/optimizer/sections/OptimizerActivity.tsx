@@ -39,7 +39,9 @@ function Segmented<TValue extends string | number>({
   onChange: (value: TValue) => void;
 }) {
   return (
-    <fieldset className="inline-flex shrink-0 gap-0.5 rounded-lg border-0 bg-muted/60 p-0.5">
+    // A segmented row like ToggleGroup's: `hit-area-row` caps each segment's pad at half the
+    // gap it shares, so neighbouring segments never take each other's presses (globals.css).
+    <fieldset className="hit-area-row inline-flex shrink-0 gap-0.5 rounded-lg border-0 bg-muted/60 p-0.5 [--hit-area-gap:calc(var(--spacing)*0.5)]">
       <legend className="sr-only">{legend}</legend>
       {options.map((option) => (
         <button

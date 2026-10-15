@@ -1943,7 +1943,9 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="hit-area inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+      // On touch its 44px hit area reached up into the input it fills; the px margin keeps
+      // the two apart.
+      className="hit-area inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted pointer-coarse:mt-[14px]"
     >
       {label}
       <span aria-hidden="true" className="rounded border border-border/70 bg-background px-1">

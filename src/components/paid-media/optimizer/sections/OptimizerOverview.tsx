@@ -672,7 +672,8 @@ export function OptimizerOverview({
         <section className="space-y-2" data-testid="portfolio-rows">
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
-            <div className="flex items-center gap-1.5">
+            {/* On touch the direction button's 44px hit area would reach the last sort chip. */}
+            <div className="flex items-center gap-1.5 pointer-coarse:gap-[12px]">
               <ToggleGroup
                 aria-label="Sort portfolios by"
                 className="flex-wrap"
