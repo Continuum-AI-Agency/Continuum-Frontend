@@ -1987,7 +1987,8 @@ export function CampaignAdSetWorkspace({
               <div className="truncate text-sm font-semibold">Explorer</div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {/* The px gap on touch keeps each control's 44px hit area off its neighbours. */}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 pointer-coarse:gap-[12px]">
               {toolbarSlot}
               <div
                 data-tour-id="paid-adset-toggle"
@@ -2269,7 +2270,10 @@ export function CampaignAdSetWorkspace({
                       className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
                       aria-label="Search campaigns and indexes"
                     />
-                    <div data-tour-id="paid-campaign-selector" className="flex items-center gap-1">
+                    <div
+                      data-tour-id="paid-campaign-selector"
+                      className="flex items-center gap-1 pointer-coarse:flex-wrap pointer-coarse:gap-[12px]"
+                    >
                       <Button
                         size="xs"
                         variant={railEntityFilter === 'all' ? 'secondary' : 'ghost'}

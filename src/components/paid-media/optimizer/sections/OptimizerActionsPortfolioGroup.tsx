@@ -2023,11 +2023,14 @@ function QueueRowView({
             <RowImpact currency={currency} row={row} />
           </div>
 
-          <div className="flex items-center justify-end gap-1">
+          {/* Under a coarse pointer each control's hit area is 44px: the px gap (and the taller
+              buttons and chevron) keep the chevron's from reaching Approve's drawn edge, so a
+              press meant for one never lands on the other. Desktop keeps the tight row. */}
+          <div className="flex items-center justify-end gap-1 pointer-coarse:gap-[12px]">
             {dismissable ? (
               <Button
                 aria-label={`Dismiss ${selectionLabel(row).replace(/^Select /, '')}`}
-                className="h-7 px-2.5 text-xs"
+                className="h-7 px-2.5 text-xs pointer-coarse:h-8"
                 disabled={writesBlocked || busyDecision}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -2043,7 +2046,7 @@ function QueueRowView({
             {selectable ? (
               <Button
                 aria-label={`Approve ${selectionLabel(row).replace(/^Select /, '')}`}
-                className="h-7 px-3 text-xs"
+                className="h-7 px-3 text-xs pointer-coarse:h-8"
                 disabled={writesBlocked || busyDecision}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -2059,7 +2062,7 @@ function QueueRowView({
             <button
               aria-expanded={expanded}
               aria-label={expanded ? 'Hide detail' : 'Show detail'}
-              className="hit-area rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              className="hit-area rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground pointer-coarse:p-2"
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleExpand();
