@@ -27,7 +27,8 @@ export default defineConfig({
   reporter: 'list',
   timeout: 300_000,
   expect: { timeout: 60_000 },
-  use: { baseURL, trace: 'retain-on-failure', video: 'off' },
+  // A click that cannot land fails by name in 30s instead of waiting out the test.
+  use: { baseURL, trace: 'retain-on-failure', video: 'off', actionTimeout: 30_000 },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...benchBrowserChannel() } }],
   webServer: {
     command: 'bun run dev',

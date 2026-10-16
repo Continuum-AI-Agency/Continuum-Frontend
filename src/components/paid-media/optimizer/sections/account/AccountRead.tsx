@@ -178,6 +178,8 @@ function RecommendationCard({
       )}
       data-detector={candidate.detector}
       data-lead={lead ? 'true' : 'false'}
+      // The recommendation a platform card writes for, so Activity and a bench can name it.
+      data-recommendation-id={cardAction?.recommendationId}
       data-variant={platformCard?.variant ?? 'generic'}
       data-testid="account-card"
     >

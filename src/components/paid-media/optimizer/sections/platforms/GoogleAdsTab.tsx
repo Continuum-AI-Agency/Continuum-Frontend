@@ -355,8 +355,9 @@ export function GoogleAdsTab({
   brandId: string;
   /** 'breakdown' when the multi-platform frame already leads the tab. */
   mode?: 'full' | 'breakdown';
-  /** The producer's window, so this read states the same dates as the frame above it. */
-  window?: GoogleReadWindow | null;
+  /** The producer's window, so this read states the same dates as the frame above it; null
+   *  when it has none; 'pending' while it is still answering (nothing is read yet). */
+  window?: GoogleReadWindow | null | 'pending';
   readingNote?: boolean;
   /** What sits under the read; held until the read settles, so the read never pushes it. */
   children?: ReactNode;

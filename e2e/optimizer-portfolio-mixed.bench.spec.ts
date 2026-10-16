@@ -254,7 +254,12 @@ async function uiCheck(step: string, run: () => Promise<string | undefined>): Pr
   try {
     grade(step, 'PASS', await run());
   } catch (error) {
-    grade(step, 'FAIL', firstLine(error));
+    // Playwright's reason for an action that never landed sits in its call log, not the first
+    // line: keep the line that names what blocked it.
+    const why = /[^\n]*(intercepts pointer events|not enabled|not visible|not stable)[^\n]*/.exec(
+      error instanceof Error ? error.message : '',
+    )?.[0];
+    grade(step, 'FAIL', why ? `${firstLine(error)} — ${why.trim()}` : firstLine(error));
   }
 }
 
@@ -282,8 +287,13 @@ test.describe('Optimizer — a mixed Meta + Google portfolio, end to end', () =>
   });
 
   test.afterAll(async () => {
+    // Unreached after a graded failure is a skip; unreached with NO graded failure means
+    // something threw outside every check, and the run must not read green.
+    const stoppedSilently = counts.fail === 0;
     for (const step of EVERY_CHECK) {
-      if (!graded.has(step)) grade(step, 'SKIP', 'not reached: an earlier step failed');
+      if (graded.has(step)) continue;
+      if (stoppedSilently) grade(step, 'FAIL', 'not reached: the run stopped outside a check');
+      else grade(step, 'SKIP', 'not reached: an earlier step failed');
     }
     await context?.close().catch(() => undefined);
     try {
@@ -431,6 +441,9 @@ test.describe('Optimizer — a mixed Meta + Google portfolio, end to end', () =>
 
   test('the Manage tab: allowed actions, attribution, roster', async ({ browser }) => {
     test.skip(!portfolioId || !premise, 'nothing to open');
+    // Longer than the sum of its own waits, so a slow check fails by name instead of the test
+    // being cut off mid-check (which closes the page under the next one).
+    test.setTimeout(10 * 60_000);
     const id = portfolioId as string;
     const p = premise as Premise;
     const s = session as MintedSession;
@@ -456,116 +469,135 @@ test.describe('Optimizer — a mixed Meta + Google portfolio, end to end', () =>
       viewport: { width: 1440, height: 1000 },
     });
     const page = await context.newPage();
-    await openManage(page, id);
-    const google = page.locator(
-      '[data-testid="platform-actions"] fieldset[data-platform="google_ads"]',
-    );
-
-    await uiCheck(UI_ACTIONS, async () => {
-      await expect(google).toBeVisible();
-      const states = await google
-        .locator('[data-slot="checkbox"]')
-        .evaluateAll((boxes) => boxes.map((box) => box.getAttribute('aria-checked')));
-      if (states.join() !== 'true,true,false,false,false')
-        throw new Error(`boxes ${states.join()}`);
-      const meta = await page
-        .locator('[data-testid="platform-actions"] [data-platform="meta"]')
-        .count();
-      if (meta !== 0) throw new Error('a Meta row is offered');
-      return 'Pause or enable, Change budgets ticked; bid targets, negatives, keywords not';
-    });
-
-    await uiCheck(UI_SAVE, async () => {
-      await google.getByText('Add negative keywords').click();
-      await google.getByRole('button', { name: 'Save' }).click();
-      let stored: { platform: string; allowed_actions: string[] | null }[] = [];
-      await expect
-        .poll(
-          async () => {
-            stored = await rpc('optimizer_get_portfolio_platform_actions', { p_portfolio_id: id });
-            return stored.find((a) => a.platform === 'google_ads')?.allowed_actions?.join() ?? '';
-          },
-          { timeout: 30_000 },
-        )
-        .toBe('add_negatives,set_budget,set_status');
-      const meta = stored.find((a) => a.platform === 'meta')?.allowed_actions?.join();
-      if (meta !== metaActionsBefore)
-        throw new Error(`Meta changed: ${metaActionsBefore} → ${meta}`);
-      const [audit] = await managementSql<{ new_value: string; changed_by: string | null }>(`
-        select new_value, changed_by::text as changed_by from optimizer.portfolio_audits
-         where portfolio_id = '${id}' and field = 'allowed_actions:google_ads'
-         order by changed_at desc limit 1`);
-      if (audit?.changed_by !== userId) throw new Error(`audit ${JSON.stringify(audit)}`);
-      await expect(google.getByRole('button', { name: 'Save' })).toBeDisabled();
-      return `stored ${JSON.stringify(stored)}; audited ${audit.new_value} by the member`;
-    });
-
-    await uiCheck(UI_ATTRIBUTION, async () => {
-      const cards = page.locator('[data-testid="attribution-card"]');
-      await expect(cards.first()).toBeVisible();
-      const inUse = await cards.evaluateAll((all) =>
-        all
-          .filter((c) => c.getAttribute('data-in-use') === 'true')
-          .map((c) => c.getAttribute('data-kind')),
+    // A throw outside a check (navigation, a dead dev server) fails every screen check it left
+    // ungraded, by name — never a skip, and the archive test still runs.
+    try {
+      await openManage(page, id);
+      const google = page.locator(
+        '[data-testid="platform-actions"] fieldset[data-platform="google_ads"]',
       );
-      if (inUse.join() !== 'platform') throw new Error(`in use: ${inUse.join() || 'none'}`);
-      await expect(page.getByTestId('ga4-unavailable')).toBeVisible();
-      return 'platform in use; GA4 "isn\'t available yet"; Sheet offers "Connect a sheet"';
-    });
 
-    // Before 20261015204209 ships, the members read does not exist: the Google group is then a
-    // list only, and the two Google-roster checks are skipped by name, never passed.
-    const { error: membersError } = await member.rpc('optimizer_list_portfolio_members', {
-      p_portfolio_id: id,
-    });
-    const membersDeployed = membersError?.code !== 'PGRST202';
-    const NOT_DEPLOYED =
-      'optimizer_list_portfolio_members is not deployed (PGRST202): ships in 20261015204209';
-    const roster = page.locator(`#manage-roster-${id}`);
-    const campaignRow = roster
-      .locator('[data-testid="picker-google-campaign"]')
-      .filter({ hasText: p.campaign.name });
-    const campaignBox = campaignRow.locator('[data-slot="checkbox"]');
-    await uiCheck(UI_ROSTER, async () => {
-      // The Meta tree is virtualized over the account's ~1,500 ad sets; its tally is the read.
-      await expect(roster.getByText(/\b1 selected\b/)).toBeVisible({ timeout: 120_000 });
-      if (!membersDeployed) return `Meta tree: 1 selected; Google unchecked — ${NOT_DEPLOYED}`;
-      await expect(campaignRow).toHaveAttribute('data-held', 'true', { timeout: 120_000 });
-      await expect(campaignBox).toHaveAttribute('aria-checked', 'true');
-      return `Meta tree: 1 selected; Google: "${p.campaign.name}" held and ticked`;
-    });
-
-    if (!membersDeployed) grade(UI_MEMBERS, 'SKIP', NOT_DEPLOYED);
-    else
-      await uiCheck(UI_MEMBERS, async () => {
-        const save = roster.getByRole('button', { name: 'Save Google campaigns' });
-        const held = async () =>
-          (
-            await rpc<{ entity_id: string }[]>('optimizer_list_portfolio_members', {
-              p_portfolio_id: id,
-            })
-          )
-            .map((m) => m.entity_id)
-            .join();
-        await campaignRow.getByText(p.campaign.name).click();
-        await expect(roster.getByText('−1 to remove')).toBeVisible();
-        await save.click();
-        await expect.poll(held, { timeout: 30_000 }).toBe('');
-        await expect(campaignBox).toHaveAttribute('aria-checked', 'false', { timeout: 30_000 });
-        await campaignRow.getByText(p.campaign.name).click();
-        await expect(roster.getByText('+1 to add')).toBeVisible();
-        await save.click();
-        await expect.poll(held, { timeout: 30_000 }).toBe(p.campaign.id);
-        await expect(campaignRow).toHaveAttribute('data-held', 'true', { timeout: 30_000 });
-        return `released ${p.campaign.id}, read back none; re-added, read back ${p.campaign.id}`;
+      await uiCheck(UI_ACTIONS, async () => {
+        await expect(google).toBeVisible();
+        const states = await google
+          .locator('[data-slot="checkbox"]')
+          .evaluateAll((boxes) => boxes.map((box) => box.getAttribute('aria-checked')));
+        if (states.join() !== 'true,true,false,false,false')
+          throw new Error(`boxes ${states.join()}`);
+        const meta = await page
+          .locator('[data-testid="platform-actions"] [data-platform="meta"]')
+          .count();
+        if (meta !== 0) throw new Error('a Meta row is offered');
+        return 'Pause or enable, Change budgets ticked; bid targets, negatives, keywords not';
       });
 
-    mkdirSync(SHOTS_DIR, { recursive: true });
-    await page
-      .locator('[data-testid="platform-actions"]')
-      .screenshot({ path: resolve(SHOTS_DIR, 'allowed-actions.png') })
-      .catch(() => undefined);
-    await page.screenshot({ path: resolve(SHOTS_DIR, 'manage.png'), fullPage: true });
+      await uiCheck(UI_SAVE, async () => {
+        await google.getByText('Add negative keywords').click();
+        await google.getByRole('button', { name: 'Save' }).click();
+        let stored: { platform: string; allowed_actions: string[] | null }[] = [];
+        await expect
+          .poll(
+            async () => {
+              stored = await rpc('optimizer_get_portfolio_platform_actions', {
+                p_portfolio_id: id,
+              });
+              return stored.find((a) => a.platform === 'google_ads')?.allowed_actions?.join() ?? '';
+            },
+            { timeout: 30_000 },
+          )
+          .toBe('add_negatives,set_budget,set_status');
+        const meta = stored.find((a) => a.platform === 'meta')?.allowed_actions?.join();
+        if (meta !== metaActionsBefore)
+          throw new Error(`Meta changed: ${metaActionsBefore} → ${meta}`);
+        const [audit] = await managementSql<{ new_value: string; changed_by: string | null }>(`
+          select new_value, changed_by::text as changed_by from optimizer.portfolio_audits
+           where portfolio_id = '${id}' and field = 'allowed_actions:google_ads'
+           order by changed_at desc limit 1`);
+        if (audit?.changed_by !== userId) throw new Error(`audit ${JSON.stringify(audit)}`);
+        await expect(google.getByRole('button', { name: 'Save' })).toBeDisabled();
+        return `stored ${JSON.stringify(stored)}; audited ${audit.new_value} by the member`;
+      });
+
+      await uiCheck(UI_ATTRIBUTION, async () => {
+        const cards = page.locator('[data-testid="attribution-card"]');
+        await expect(cards.first()).toBeVisible();
+        const inUse = await cards.evaluateAll((all) =>
+          all
+            .filter((c) => c.getAttribute('data-in-use') === 'true')
+            .map((c) => c.getAttribute('data-kind')),
+        );
+        if (inUse.join() !== 'platform') throw new Error(`in use: ${inUse.join() || 'none'}`);
+        await expect(page.getByTestId('ga4-unavailable')).toBeVisible();
+        return 'platform in use; GA4 "isn\'t available yet"; Sheet offers "Connect a sheet"';
+      });
+
+      // Before 20261015204209 ships, the members read does not exist: the Google group is then a
+      // list only, and the two Google-roster checks are skipped by name, never passed.
+      const { error: membersError } = await member.rpc('optimizer_list_portfolio_members', {
+        p_portfolio_id: id,
+      });
+      const membersDeployed = membersError?.code !== 'PGRST202';
+      const NOT_DEPLOYED =
+        'optimizer_list_portfolio_members is not deployed (PGRST202): ships in 20261015204209';
+      const roster = page.locator(`#manage-roster-${id}`);
+      const campaignRow = roster
+        .locator('[data-testid="picker-google-campaign"]')
+        .filter({ hasText: p.campaign.name });
+      const campaignBox = campaignRow.locator('[data-slot="checkbox"]');
+      await uiCheck(UI_ROSTER, async () => {
+        // The Meta tree is virtualized over the account's ~1,500 ad sets; its tally is the read.
+        await expect(roster.getByText(/\b1 selected\b/)).toBeVisible({ timeout: 120_000 });
+        if (!membersDeployed) return `Meta tree: 1 selected; Google unchecked — ${NOT_DEPLOYED}`;
+        await expect(campaignRow).toHaveAttribute('data-held', 'true', { timeout: 120_000 });
+        await expect(campaignBox).toHaveAttribute('aria-checked', 'true');
+        return `Meta tree: 1 selected; Google: "${p.campaign.name}" held and ticked`;
+      });
+
+      if (!membersDeployed) grade(UI_MEMBERS, 'SKIP', NOT_DEPLOYED);
+      else
+        await uiCheck(UI_MEMBERS, async () => {
+          const save = roster.getByRole('button', { name: 'Save Google campaigns' });
+          const held = async () =>
+            (
+              await rpc<{ entity_id: string }[]>('optimizer_list_portfolio_members', {
+                p_portfolio_id: id,
+              })
+            )
+              .map((m) => m.entity_id)
+              .join();
+          await campaignRow.scrollIntoViewIfNeeded();
+          mkdirSync(SHOTS_DIR, { recursive: true });
+          await roster
+            .locator('[data-testid="picker-platform-group"]')
+            .screenshot({ path: resolve(SHOTS_DIR, 'google-members.png') })
+            .catch(() => undefined);
+          await campaignRow.getByText(p.campaign.name).click();
+          await expect(roster.getByText('−1 to remove')).toBeVisible();
+          await save.click();
+          await expect.poll(held, { timeout: 30_000 }).toBe('');
+          await expect(campaignBox).toHaveAttribute('aria-checked', 'false', { timeout: 30_000 });
+          await campaignRow.scrollIntoViewIfNeeded();
+          await campaignRow.getByText(p.campaign.name).click();
+          await expect(roster.getByText('+1 to add')).toBeVisible();
+          await save.click();
+          await expect.poll(held, { timeout: 30_000 }).toBe(p.campaign.id);
+          await expect(campaignRow).toHaveAttribute('data-held', 'true', { timeout: 30_000 });
+          return `released ${p.campaign.id}, read back none; re-added, read back ${p.campaign.id}`;
+        });
+
+      mkdirSync(SHOTS_DIR, { recursive: true });
+      await page
+        .locator('[data-testid="platform-actions"]')
+        .screenshot({ path: resolve(SHOTS_DIR, 'allowed-actions.png') })
+        .catch(() => undefined);
+      await page.screenshot({ path: resolve(SHOTS_DIR, 'manage.png'), fullPage: true });
+    } catch (error) {
+      for (const step of [UI_ACTIONS, UI_SAVE, UI_ATTRIBUTION, UI_ROSTER, UI_MEMBERS]) {
+        if (!graded.has(step)) grade(step, 'FAIL', firstLine(error));
+      }
+      mkdirSync(SHOTS_DIR, { recursive: true });
+      await page.screenshot({ path: resolve(SHOTS_DIR, 'failed.png') }).catch(() => undefined);
+    }
   });
 
   test('archive', async () => {

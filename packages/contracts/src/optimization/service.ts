@@ -2251,7 +2251,18 @@ export type OptimizerActionFamily = z.infer<typeof OptimizerActionFamilySchema>;
 /** The specific operation inside a family. Enumerated rather than left open because
  *  optimizer_list_actions emits these as hardcoded SQL literals — they cannot drift without
  *  a migration, unlike the table columns behind them. */
-export const OptimizerActionOpSchema = z.enum(['budget', 'status', 'setting', 'decision']);
+export const OptimizerActionOpSchema = z.enum([
+  'budget',
+  'status',
+  'setting',
+  'decision',
+  // A platform write's own kinds (Google, 20261016120000): a bid target, negative keywords, a
+  // keyword. Their before/after are the audit's prior/target ({field, value}; {absent} →
+  // {negatives}; {absent} → {keyword}).
+  'bid',
+  'negatives',
+  'keyword',
+]);
 export type OptimizerActionOp = z.infer<typeof OptimizerActionOpSchema>;
 
 /** One row of the unified optimizer action feed (public.optimizer_list_actions) — every

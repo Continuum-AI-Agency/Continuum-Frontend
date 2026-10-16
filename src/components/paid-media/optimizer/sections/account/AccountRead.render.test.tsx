@@ -574,6 +574,32 @@ describe('AccountRead — a card with an executable action', () => {
     ]);
   });
 
+  it('names the recommendation a platform card writes for on the card itself', () => {
+    const REC = '7e7e7e7e-0000-4000-8000-00000000c4c4';
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ id: 'google:budget', platform_card: GOOGLE_BUDGET_LIMITED })]}
+        cardActions={
+          new Map([
+            [
+              'google:budget',
+              {
+                portfolioId: PORTFOLIO_ID,
+                action: RAISE_GOOGLE_BUDGET,
+                recommendationId: REC,
+              },
+            ],
+          ])
+        }
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    expect(getByTestId('account-card').getAttribute('data-recommendation-id')).toBe(REC);
+  });
+
   it('shows a TikTok action disabled, saying TikTok is not connected', () => {
     const { getByTestId, queryByTestId } = render(
       <AccountRead

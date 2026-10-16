@@ -101,6 +101,9 @@ export function platformCurrencyRefusal(
   return null;
 }
 
+/** A Google campaign known from the members read: its id, name and catalog channel type. */
+export type PickerMember = { id: string; name: string | null; channelType: string | null };
+
 export type PickerCampaignNode = {
   id: string;
   name: string;
@@ -130,20 +133,25 @@ export function buildGooglePickerGroup(input: {
   adGroups: readonly GoogleAdGroupRow[];
   /** The campaigns the portfolio holds. One the spend ranking does not list (paused, no spend
    *  in its window) is still shown, from the member's own name and catalog type. */
-  held?: readonly { id: string; name: string | null; channelType: string | null }[];
+  held?: readonly PickerMember[];
+  /** Campaigns this view showed as held earlier: one just let go stays listed, unticked, so it
+   *  can be taken back without a reload even when the ranking does not list it. */
+  known?: readonly PickerMember[];
 }): PlatformPickerGroup {
   const heldIds = new Set((input.held ?? []).map((member) => member.id));
   const listed = new Set(input.campaigns.map((campaign) => campaign.id));
+  const unlisted = new Map<string, PickerMember>();
+  for (const member of [...(input.known ?? []), ...(input.held ?? [])]) {
+    if (!listed.has(member.id)) unlisted.set(member.id, member);
+  }
   const rows: GoogleCampaignRow[] = [
     ...input.campaigns,
-    ...(input.held ?? [])
-      .filter((member) => !listed.has(member.id))
-      .map((member) => ({
-        id: member.id,
-        name: member.name ?? member.id,
-        channelType: member.channelType,
-        spend: 0,
-      })),
+    ...[...unlisted.values()].map((member) => ({
+      id: member.id,
+      name: member.name ?? member.id,
+      channelType: member.channelType,
+      spend: 0,
+    })),
   ];
   const childrenByCampaign = new Map<string, { id: string; name: string }[]>();
   for (const group of input.adGroups) {

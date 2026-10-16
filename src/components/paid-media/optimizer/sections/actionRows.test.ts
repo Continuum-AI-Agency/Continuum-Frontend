@@ -103,6 +103,66 @@ describe('actorLabel', () => {
   });
 });
 
+describe("readActionChange reads a Google write's own kinds (G4, optimizer_list_actions)", () => {
+  it('prints a tCPA from micros and a tROAS as a percent', () => {
+    const cpa = readActionChange(
+      action({
+        op: 'bid',
+        before: { field: 'target_cpa_micros', value: 20_000_000 },
+        after: { field: 'target_cpa_micros', value: 21_000_000 },
+      }),
+    );
+    expect(cpa).toEqual({
+      label: 'Bid target (tCPA)',
+      unit: 'text',
+      before: '20.00',
+      after: '21.00',
+    });
+    const roas = readActionChange(
+      action({
+        op: 'bid',
+        before: { field: 'target_roas', value: 3.5 },
+        after: { field: 'target_roas', value: 4 },
+      }),
+    );
+    expect(roas).toMatchObject({ label: 'Bid target (tROAS)', before: '350%', after: '400%' });
+  });
+
+  it('names the negative keywords and the keyword added, with their match type', () => {
+    const negatives = readActionChange(
+      action({
+        op: 'negatives',
+        before: { absent: [{ text: 'gym near me', matchType: 'EXACT' }] },
+        after: {
+          negatives: [
+            { text: 'gym near me', matchType: 'EXACT' },
+            { text: 'free gym', matchType: 'PHRASE' },
+          ],
+          scope: 'campaign',
+        },
+      }),
+    );
+    expect(negatives).toEqual({
+      label: 'Negative keywords',
+      unit: 'text',
+      before: null,
+      after: '"gym near me" (exact), "free gym" (phrase)',
+    });
+    const keyword = readActionChange(
+      action({ op: 'keyword', after: { keyword: { text: 'gimnasio', matchType: 'PHRASE' } } }),
+    );
+    expect(keyword).toMatchObject({ label: 'Keyword', after: '"gimnasio" (phrase)' });
+  });
+
+  it("reads a Google status in Google's own words", () => {
+    expect(
+      readActionChange(
+        action({ op: 'status', before: { status: 'active' }, after: { status: 'paused' } }),
+      ),
+    ).toMatchObject({ before: 'active', after: 'paused' });
+  });
+});
+
 describe('actionPlatform', () => {
   it('reads the row platform, and Meta when it is absent or unknown', () => {
     expect(actionPlatform(action({ platform: 'google_ads' }))).toBe('google_ads');

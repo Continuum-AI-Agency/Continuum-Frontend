@@ -210,6 +210,26 @@ describe('platformPickerModel', () => {
     expect(group.campaigns[0]?.name).toBe('VIVO 47-EKATAR');
   });
 
+  it("takes the account's currency from the ranking answer when the account row has none", () => {
+    const bare = { ...VIVO47, currency: null };
+    const inventory = parseGoogleInventory(
+      bare,
+      { ...vivo47.top_campaigns, currency: 'mxn' },
+      AD_GROUPS,
+    );
+    expect(inventory?.account.currency).toBe('MXN');
+    const group = buildGooglePickerGroup({
+      account: inventory?.account ?? bare,
+      portfolioCurrency: 'MXN',
+      campaigns: inventory?.campaigns ?? [],
+      adGroups: inventory?.adGroups ?? [],
+    });
+    expect(group.refusal).toBeNull();
+    expect(
+      parseGoogleInventory(bare, vivo47.top_campaigns, AD_GROUPS)?.account.currency,
+    ).toBeNull();
+  });
+
   it('refuses to parse a ranking answer it does not know', () => {
     expect(parseGoogleInventory(VIVO47, { rows: 'x' }, AD_GROUPS)).toBeNull();
   });
@@ -280,6 +300,26 @@ describe('the Google group in Manage: what the portfolio holds, saved on its own
       add: [{ id: 'pmax-1', name: 'PMax · Sedes' }],
       remove: ['20775796216'],
     });
+  });
+
+  it('keeps a campaign it let go on the list, unticked, so it can be taken back', () => {
+    const held = [member('999', 'Paused · Pasarela', 'SEARCH')];
+    const view = (members: ReturnType<typeof member>[]) => (
+      <MultiPlatformPickerView
+        google={{ status: 'ready', inventory: vivo47Inventory() }}
+        members={{ status: 'ready', members }}
+        metaAccount="act_521903353286118"
+        portfolioCurrency="MXN"
+        save={async () => undefined}
+      >
+        <div />
+      </MultiPlatformPickerView>
+    );
+    const { rerender } = render(view(held));
+    expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('true');
+    rerender(view([]));
+    expect(row('Paused · Pasarela')?.dataset.held).toBe('false');
+    expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('false');
   });
 
   it("shows the database's refusal when a save is refused", async () => {

@@ -987,12 +987,14 @@ function PlatformTab({
    *  read landing above it never pushes it down. */
   children?: ReactNode;
 }) {
-  // One window on the tab: the producer's when it answered, else the same 7 complete days
-  // ending yesterday the producer would read.
+  // One window on the tab: the producer's when it answered, nothing while it is answering, else
+  // the same 7 complete days ending yesterday the producer would read.
   const window =
     metrics.status === 'ready'
       ? { since: metrics.metrics.window.since, until: metrics.metrics.window.until }
-      : null;
+      : metrics.status === 'loading'
+        ? ('pending' as const)
+        : null;
   const fallback =
     platform === 'google_ads' ? (
       <GoogleAdsTab brandId={brandId} window={window}>

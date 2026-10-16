@@ -377,3 +377,99 @@ function UndoBody({ state }: { state: UndoState }) {
     </>
   );
 }
+
+/**
+ * Undo for a platform write already in Activity (an apply_audits row, G4): the same check-first
+ * flow as the card's own Undo — optimizer-apply-action-revert with dryRun, then the write on
+ * confirm — for a row the person did not just make on this screen. Meta rows keep their own
+ * revert dialog (RevertApplyDialog → optimizer-apply-revert); that edge answers 409 for others.
+ */
+export function PlatformUndoControl({
+  portfolioId,
+  auditId,
+  title,
+  currency,
+}: {
+  portfolioId: string;
+  auditId: string;
+  /** What was written, for the dialog title: "Daily budget", "Negative keywords"… */
+  title: string;
+  currency: string | null;
+}) {
+  const revert = useRevertOptimizerAction();
+  const [open, setOpen] = useState(false);
+  const [undo, setUndo] = useState<UndoState>(UNDO_START);
+
+  const send = (dryRun: boolean): Promise<ActionRevertResponse | null> =>
+    revert.mutateAsync({ portfolio_id: portfolioId, audit_id: auditId, dryRun });
+
+  const check = async () => {
+    setUndo(UNDO_START);
+    try {
+      const response = await send(true);
+      setUndo({
+        ...UNDO_START,
+        phase: 'checked',
+        preview: undoPreviewVerdict(response),
+        canConfirm: response?.result.status === 'would_revert',
+        restores: response
+          ? undoRestoresText(response.result.restores, response.result.kind, currency)
+          : null,
+      });
+    } catch {
+      setUndo({ ...UNDO_START, phase: 'checked', preview: UNREACHABLE });
+    }
+  };
+
+  const confirm = async () => {
+    setUndo((state) => ({ ...state, phase: 'applying' }));
+    let verdict: CardActionVerdict;
+    try {
+      verdict = undoResultVerdict(await send(false));
+    } catch {
+      verdict = UNREACHABLE;
+    }
+    setUndo((state) => ({ ...state, phase: 'done', result: verdict }));
+  };
+
+  return (
+    <AlertDialog
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) void check();
+      }}
+      open={open}
+    >
+      <AlertDialogTrigger
+        render={
+          <Button data-testid="activity-platform-undo" size="sm" type="button" variant="outline" />
+        }
+      >
+        Undo
+      </AlertDialogTrigger>
+      <AlertDialogContent data-testid="activity-platform-undo-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Undo: {title}</AlertDialogTitle>
+          <AlertDialogDescription>
+            We ask the platform to check the undo first. Nothing is written until you confirm.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <UndoBody state={undo} />
+        <AlertDialogFooter>
+          <AlertDialogCancel>{undo.phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
+          {undo.phase === 'done' ? null : (
+            <Button
+              data-testid="activity-platform-undo-confirm"
+              disabled={!undo.canConfirm || undo.phase !== 'checked'}
+              onClick={() => void confirm()}
+              size="sm"
+              type="button"
+            >
+              Confirm undo
+            </Button>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

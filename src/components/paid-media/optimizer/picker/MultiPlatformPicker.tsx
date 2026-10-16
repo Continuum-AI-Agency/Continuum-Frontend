@@ -11,7 +11,7 @@
 // optimizer_unenroll_entity. Until the members read answers, the group is a list only.
 
 import { Loader2 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ import {
   buildGooglePickerGroup,
   CHILD_KIND_LABELS,
   type PickerCampaignNode,
+  type PickerMember,
   type PlatformPickerGroup,
 } from './platformPickerModel';
 import {
@@ -249,7 +250,25 @@ export function MultiPlatformPickerView({
   metaAccount: string;
   children: ReactNode;
 }) {
+  // Every campaign shown as held during this visit, so one just let go stays on the list.
+  const known = useRef(new Map<string, PickerMember>());
   if (google.status === 'none') return <>{children}</>;
+  const held: PickerMember[] =
+    google.status === 'ready' && members.status === 'ready'
+      ? members.members
+          .filter(
+            (member) =>
+              member.platform === 'google_ads' &&
+              member.level === 'campaign' &&
+              member.accountId === google.inventory.account.account_id.replace(/\D/g, ''),
+          )
+          .map((member) => ({
+            id: member.entityId,
+            name: member.name,
+            channelType: member.channelType,
+          }))
+      : [];
+  for (const member of held) known.current.set(member.id, member);
   return (
     <div className="space-y-3" data-testid="multiplatform-picker">
       <div className="space-y-1.5">
@@ -273,21 +292,8 @@ export function MultiPlatformPickerView({
             portfolioCurrency,
             campaigns: google.inventory.campaigns,
             adGroups: google.inventory.adGroups,
-            held:
-              members.status === 'ready'
-                ? members.members
-                    .filter(
-                      (member) =>
-                        member.platform === 'google_ads' &&
-                        member.level === 'campaign' &&
-                        member.accountId === google.inventory.account.account_id.replace(/\D/g, ''),
-                    )
-                    .map((member) => ({
-                      id: member.entityId,
-                      name: member.name,
-                      channelType: member.channelType,
-                    }))
-                : [],
+            held,
+            known: [...known.current.values()],
           })}
           // Remount when the held set changes, so the boxes re-seed from what was saved.
           key={
