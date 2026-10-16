@@ -2256,7 +2256,7 @@ export const OptimizerActionOpSchema = z.enum([
   'status',
   'setting',
   'decision',
-  // A platform write's own kinds (Google, 20261016120000): a bid target, negative keywords, a
+  // A platform write's own kinds (Google, 20261016172613): a bid target, negative keywords, a
   // keyword. Their before/after are the audit's prior/target ({field, value}; {absent} →
   // {negatives}; {absent} → {keyword}).
   'bid',
