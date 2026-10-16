@@ -1263,6 +1263,11 @@ export const PortfolioListItemSchema = z.object({
   /** The currency the row's figures are in, stamped on the portfolio at creation (20261015160023).
    *  A Google account's asset row carries none, so the account list cannot supply it. */
   currency: z.string().nullable().optional(),
+  /** Whether the Optimizer may write each platform's budgets in this portfolio
+   *  (portfolio_platforms.apply_enabled, false when any of that platform's accounts is off;
+   *  20261017090000). A platform with no row is absent: Meta then applies as it always has, and
+   *  any other platform has no write path. `{}` from an older server. */
+  platform_writes: z.record(z.string(), z.boolean()).default({}).catch({}),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
 

@@ -64,6 +64,7 @@ import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { figureProps, formatCurrency } from '../format';
+import { itemWritable, proposalsOnlyNote } from '../platformWrites';
 import {
   actionRoute,
   applyModeExplainer,
@@ -82,20 +83,20 @@ import {
   useApplyApproved,
   useAudienceProposalMutations,
   useConvertCbo,
+  useCurrentMoves,
   useFlashCreativeMutations,
   useOptimizerAccountSnapshots,
   useOptimizerActions,
   useOptimizerAdsetAds,
   useOptimizerAudienceProposals,
-  useCurrentMoves,
   useOptimizerCreativeSwapJobs,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
   useOptimizerPerformance,
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
-import { AccountRead } from './account/AccountRead';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
+import { AccountRead } from './account/AccountRead';
 import {
   type AudienceActionHandlers,
   audienceCardView,
@@ -269,6 +270,9 @@ export function buildActionQueue(
   report: ParsedCycleRunReport | null,
   nameById?: Map<string, string> | null,
   carried: readonly RecommendationRow[] = [],
+  /** Whether a budget move's platform may be written here (platformWrites.ts): a move nobody
+   *  may write stays a proposal on the chart and never becomes an Approve row. */
+  writable: (item: CycleItemRow) => boolean = () => true,
 ): QueueRow[] {
   if (!report && carried.length === 0) return [];
   const rows: QueueRow[] = [];
@@ -280,7 +284,7 @@ export function buildActionQueue(
     // not yet written (recommend mode) is actionable. Applied/failed/skipped rows live in Logs.
     const actionable =
       status === 'held' || status === 'approved_pending' || (status == null && changed);
-    if (!actionable) continue;
+    if (!actionable || !writable(item)) continue;
     rows.push({
       key: `budget:${item.adset_id}`,
       route: 'budget',
@@ -680,9 +684,11 @@ export function OptimizerActionsPortfolioGroup({
         report && { ...report, latest_items: moves.current, recommendations: queueRecs },
         nameById,
         carriedRecs,
+        (item) => itemWritable(portfolio, item),
       ),
-    [report, moves.current, nameById, carriedRecs, queueRecs],
+    [report, moves.current, nameById, carriedRecs, queueRecs, portfolio],
   );
+  const proposalsOnly = proposalsOnlyNote(portfolio, moves.current);
   const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
   const [decidingMove, setDecidingMove] = React.useState<string | null>(null);
   const decideMove = (rec: RecommendationRow, status: 'approved' | 'rejected') => {
@@ -1213,6 +1219,12 @@ export function OptimizerActionsPortfolioGroup({
 
       {writesBlocked ? (
         <p className="text-warning text-xs">{applyModeExplainer(portfolio.apply_mode)}</p>
+      ) : null}
+
+      {proposalsOnly ? (
+        <p className="text-muted-foreground text-xs" data-testid="queue-proposals-only">
+          {proposalsOnly}
+        </p>
       ) : null}
 
       {executeNote ? (
