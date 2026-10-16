@@ -397,7 +397,9 @@ export function OptimizerTab({
           otherPlatformCount: googlePortfolios.length + tiktokPortfolios.length,
         })
       : null;
-  if (emptyState === 'other-account') {
+  // The notice's own New portfolio control asks for the create view, so the notice must not
+  // outrank it.
+  if (emptyState === 'other-account' && view !== 'create') {
     if (browsingAllAccounts) {
       return (
         <section className="grid h-full min-h-0 animate-in grid-rows-[auto_minmax(0,1fr)] overflow-hidden fade-in-0 duration-200 motion-reduce:animate-none">
