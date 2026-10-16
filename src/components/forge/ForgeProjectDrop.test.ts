@@ -54,6 +54,8 @@ describe('partitionForgeProjectFiles', () => {
       file('Invitados.PSD'),
       file('travel.ai'),
       file('spot.blend'),
+      file('example.HTML'),
+      file('scene.htm'),
     ]);
 
     expect(result.accepted.map((item) => item.name)).toEqual([
@@ -66,6 +68,8 @@ describe('partitionForgeProjectFiles', () => {
       'travel.ai',
       // A Blender scene uploads like an .aep; the forge reads its fields.
       'spot.blend',
+      'example.HTML',
+      'scene.htm',
     ]);
     expect(result.fonts.map((item) => item.name)).toEqual([
       '2f0cf1733d838e005b2ef333cfea82b6.ttf',

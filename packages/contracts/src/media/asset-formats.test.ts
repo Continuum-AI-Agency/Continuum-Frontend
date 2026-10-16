@@ -266,10 +266,10 @@ describe('accept anything', () => {
 });
 
 describe('ZIP contents decide the family', () => {
-  it('finds an After Effects Collect Files export', () => {
+  it('selects Adobe packages and refuses mixed Adobe/HTML entry points', () => {
     expect(
       classifyZipEntries(['Spot/', 'Spot/Spot.aep', 'Spot/(Footage)/a.mov', 'Spot/index.html']),
-    ).toBe('aep_package');
+    ).toBe('ambiguous');
     expect(classifyZipEntries(['scene.AEPX'])).toBe('aep_package');
   });
 
@@ -290,8 +290,8 @@ describe('ZIP contents decide the family', () => {
   });
 
   it('calls anything else an archive', () => {
-    expect(classifyZipEntries(['a/index.html', 'b/index.html'])).toBe('archive');
-    expect(classifyZipEntries(['docs/deep/index.html', 'docs/other.txt'])).toBe('archive');
+    expect(classifyZipEntries(['a/index.html', 'b/index.html'])).toBe('ambiguous');
+    expect(classifyZipEntries(['docs/deep/index.html', 'docs/other.txt'])).toBe('html_bundle');
     expect(classifyZipEntries(['__MACOSX/._scene.aep', 'photo.jpg'])).toBe('archive');
     expect(classifyZipEntries([])).toBe('archive');
   });
@@ -328,11 +328,29 @@ describe('libraryUploadRefusal (decided before any byte is sent)', () => {
       libraryUploadRefusal({ fileName: 'huge.mov', sizeBytes: LIBRARY_UPLOAD_MAX_BYTES + 1 }),
     ).toBe('huge.mov is 500 MB — uploads are capped at 500 MB right now.');
     expect(
-      libraryUploadRefusal({ fileName: 'comp.aep', sizeBytes: LIBRARY_PROJECT_FILE_MAX_BYTES + MB }),
+      libraryUploadRefusal({
+        fileName: 'comp.aep',
+        sizeBytes: LIBRARY_PROJECT_FILE_MAX_BYTES + MB,
+      }),
     ).toBe('comp.aep is 251 MB — After Effects projects and packages must be 250 MB or smaller.');
     expect(libraryUploadRefusal({ fileName: 'pkg.zip', sizeBytes: 300 * MB })).toContain(
       'must be 250 MB',
     );
     expect(libraryUploadRefusal({ fileName: 'comp.aep', sizeBytes: 250 * MB })).toBeNull();
   });
+});
+
+it('routes standalone HTML to native Hyperframes and recognizes .aet packages', () => {
+  expect(
+    classifyLibraryFile({ fileName: 'example.HTML', mimeType: 'application/octet-stream' }),
+  ).toMatchObject({ accepted: true, family: 'hyperframes' });
+  expect(classifyZipEntries(['Scene.aet'])).toBe('aep_package');
+  expect(classifyZipEntries(['example.html', 'assets/logo.png'])).toBe('html_bundle');
+  expect(classifyZipEntries(['index.html', 'index.htm'])).toBe('ambiguous');
+});
+
+it('refuses unsafe archive paths before selecting any parser', () => {
+  expect(classifyZipEntries(['../project.aep'])).toBe('ambiguous');
+  expect(classifyZipEntries(['/index.html'])).toBe('ambiguous');
+  expect(classifyZipEntries(['._project.aep', 'notes.txt'])).toBe('archive');
 });

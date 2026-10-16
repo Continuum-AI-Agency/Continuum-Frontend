@@ -15,6 +15,7 @@ export type LibraryFormatFamily =
   /** A Blender scene: a Forge template source, parsed by the forge's `blend-library`. */
   | 'blender'
   | 'html_bundle'
+  | 'hyperframes'
   /** Anything no other family claims: stored, versioned, shared and downloaded, never drawn. */
   | 'generic';
 
@@ -283,6 +284,13 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     originalKind: 'file',
     previewStrategy: 'companion',
   },
+  {
+    family: 'hyperframes',
+    extensions: ['html', 'htm'],
+    mimeTypes: ['text/html'],
+    originalKind: 'file',
+    previewStrategy: 'none',
+  },
   AFTER_EFFECTS_PACKAGE_FORMAT,
   {
     // Accepted by the Library so a designer can drop a template and the faces it needs in one
@@ -386,6 +394,7 @@ const PROJECT_FILE_FAMILIES: readonly LibraryFormatFamily[] = [
   'after_effects',
   'after_effects_package',
   'blender',
+  'hyperframes',
 ];
 
 function megabytes(bytes: number): string {
@@ -474,7 +483,7 @@ export function isPlayableSidecarPreview(input: {
  * - `html_bundle`: an `index.html` at the root, or under one wrapping folder.
  * - `archive`: anything else — stored as a generic file.
  */
-export type ZipContentKind = 'aep_package' | 'html_bundle' | 'archive';
+export type ZipContentKind = 'aep_package' | 'html_bundle' | 'archive' | 'ambiguous';
 
 export const LIBRARY_ZIP_FORMATS: Readonly<Record<ZipContentKind, LibraryFormatDefinition>> = {
   aep_package: AFTER_EFFECTS_PACKAGE_FORMAT,
@@ -486,11 +495,15 @@ export const LIBRARY_ZIP_FORMATS: Readonly<Record<ZipContentKind, LibraryFormatD
     previewStrategy: 'html_sandbox',
   },
   archive: LIBRARY_GENERIC_FORMAT,
+  ambiguous: LIBRARY_GENERIC_FORMAT,
 };
 
 function isZipNoise(name: string): boolean {
   return (
-    name.startsWith('__MACOSX/') || name.endsWith('/') || name.split('/').pop() === '.DS_Store'
+    name.startsWith('__MACOSX/') ||
+    name.endsWith('/') ||
+    name.split('/').pop()?.startsWith('._') ||
+    name.split('/').pop() === '.DS_Store'
   );
 }
 
@@ -500,12 +513,18 @@ export function htmlBundleEntryPoint(entryNames: readonly string[]): string | nu
     .map((name) => name.replaceAll('\\', '/'))
     .filter((name) => !isZipNoise(name));
   const isIndex = (path: string) => /^index\.html?$/i.test(path);
-  const atRoot = names.find(isIndex);
-  if (atRoot) return atRoot;
+  const atRoot = names.filter(isIndex);
+  if (atRoot.length === 1) return atRoot[0];
+  if (atRoot.length > 1) return null;
   const [first] = names;
   const wrapper = first?.includes('/') ? first.slice(0, first.indexOf('/') + 1) : null;
-  if (!wrapper || !names.every((name) => name.startsWith(wrapper))) return null;
-  return names.find((name) => isIndex(name.slice(wrapper.length))) ?? null;
+  if (wrapper && names.every((name) => name.startsWith(wrapper))) {
+    const wrapped = names.filter((name) => isIndex(name.slice(wrapper.length)));
+    if (wrapped.length === 1) return wrapped[0];
+    if (wrapped.length > 1) return null;
+  }
+  const html = names.filter((name) => /\.html?$/i.test(name));
+  return html.length === 1 ? html[0] : null;
 }
 
 /**
@@ -559,8 +578,28 @@ export function htmlBundleRendition(input: {
 }
 
 export function classifyZipEntries(entryNames: readonly string[]): ZipContentKind {
-  if (entryNames.some((name) => /\.aepx?$/i.test(name) && !isZipNoise(name))) return 'aep_package';
-  return htmlBundleEntryPoint(entryNames) ? 'html_bundle' : 'archive';
+  const names = entryNames
+    .map((name) => name.replaceAll('\\', '/'))
+    .filter((name) => !isZipNoise(name));
+  if (
+    names.some(
+      (name) =>
+        name.startsWith('/') ||
+        name.includes('\0') ||
+        name
+          .split('/')
+          .some((part) => !part || part === '.' || part === '..' || part.includes(':')),
+    )
+  )
+    return 'ambiguous';
+  const ae = names.some(
+    (name) => /\.(aep|aepx|aet)$/i.test(name) && !/adobe after effects auto-save/i.test(name),
+  );
+  const html = htmlBundleEntryPoint(names);
+  if (ae && html) return 'ambiguous';
+  if (ae) return 'aep_package';
+  if (html) return 'html_bundle';
+  return names.some((name) => /\.html?$/i.test(name)) ? 'ambiguous' : 'archive';
 }
 
 const STORED_IMAGE_PREVIEW_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif']);

@@ -94,3 +94,5 @@ export * from './template-authoring-created-motion';
 export * from './template-package-fonts';
 
 export * from './template-layer-edits';
+
+export * from './hyperframes';

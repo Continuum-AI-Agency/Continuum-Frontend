@@ -10,6 +10,7 @@
 // no role, because it silently binds the wrong field. Slots come out typed and unlabelled.
 
 import { z } from 'zod';
+import { hyperframesStructureSchema } from './hyperframes';
 import { templateAuthoringKeyframesInventorySchema } from './template-authoring-keyframes';
 import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
@@ -168,6 +169,7 @@ export const templateSourceFamilySchema = z.enum([
   'figma',
   'photoshop',
   'blender',
+  'hyperframes',
 ]);
 export type TemplateSourceFamily = z.infer<typeof templateSourceFamilySchema>;
 
@@ -416,6 +418,8 @@ export const templateParseSchema = z
   .object({
     parser: z.string().min(1),
     sourceFamily: templateSourceFamilySchema,
+    native: hyperframesStructureSchema.optional(),
+    bundle: z.object({ entry: z.string(), fileCount: z.number().int().nonnegative() }).optional(),
     appVersion: z.string().nullable().default(null),
     filename: z.string().optional(),
     sizeBytes: z.number().int().nonnegative().optional(),
@@ -932,6 +936,8 @@ export const TEMPLATE_SOURCE_FAMILIES_FROM_LIBRARY_FORMAT: Record<string, Templa
   after_effects: 'after_effects',
   after_effects_package: 'after_effects_package',
   blender: 'blender',
+  hyperframes: 'hyperframes',
+  html_bundle: 'hyperframes',
 };
 
 /**

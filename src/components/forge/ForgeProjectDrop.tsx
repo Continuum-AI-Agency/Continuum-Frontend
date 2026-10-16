@@ -12,7 +12,7 @@ import {
 } from '@/lib/library/folderUpload';
 import { cn } from '@/lib/utils';
 
-export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.psd,.ai,.blend,.ttf,.otf';
+export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.html,.htm,.psd,.ai,.blend,.ttf,.otf';
 
 /** Layered Photoshop and Illustrator files the Forge turns into a template: every layer comes in,
  * text stays live. */
@@ -86,7 +86,18 @@ export function partitionForgeProjectFiles(files: File[]): {
     (result, file) => {
       const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
       // A .blend uploads like an .aep: the Library registers it and the forge parses it.
-      if (['.aep', '.aepx', '.aet', '.zip', '.blend', ...FORGE_DESIGN_EXTENSIONS].includes(extension))
+      if (
+        [
+          '.aep',
+          '.aepx',
+          '.aet',
+          '.zip',
+          '.html',
+          '.htm',
+          '.blend',
+          ...FORGE_DESIGN_EXTENSIONS,
+        ].includes(extension)
+      )
         result.accepted.push(file);
       else if (['.ttf', '.otf'].includes(extension)) result.fonts.push(file);
       else result.rejected.push(file);
