@@ -165,7 +165,7 @@ let memberAccessToken: string;
 let originalActiveBrandId: string | null = null;
 let moneyEventsBefore = 0;
 let browse: BrowsePremise;
-let ledgerCta: { mensajes: string; creative: string };
+type LedgerCtaPremise = { brandId: string; mensajes: string; creative: string };
 
 /** The `sub` claim of a real GoTrue access token — the bench user's id, read from the
  *  token the auth server actually issued rather than looked up by email. */
@@ -405,6 +405,7 @@ type PortfolioListRow = {
   apply_mode: string | null;
   budget_granularity: string | null;
   daily_total: number | null;
+  platforms?: string[] | null;
 };
 
 const bareAccountId = (id: string | null | undefined) => (id ?? '').replace(/^act_/, '');
@@ -454,7 +455,13 @@ async function resolveBrowsePremise(): Promise<BrowsePremise> {
         'no portfolios'
       }`,
     );
-    const owning = new Set(portfolios.map((p) => bareAccountId(p.ad_account_id)));
+    // The account picker lists Meta accounts; a Google portfolio is reached through the
+    // Google tab, so only Meta portfolios can stand on the picker path this premise drives.
+    const owning = new Set(
+      portfolios
+        .filter((p) => (p.platforms ?? ['meta']).includes('meta'))
+        .map((p) => bareAccountId(p.ad_account_id)),
+    );
     const empty = accounts.find(
       (row) => row.platform === 'meta_ads' && !owning.has(bareAccountId(row.account_id)),
     );
@@ -489,15 +496,34 @@ type StatusReport = {
 } | null;
 type AskedRows = { rows?: Array<{ handoff?: { proposal_id?: string | null } | null }> } | null;
 
-/** The ledger brand's two CTA premises, from the reads the portfolio page makes: the
- *  per-portfolio report (optimizer-status) and its asked-for rows
- *  (optimizer_get_adhoc_suggestions). */
-async function resolveLedgerCtaPremise(): Promise<{ mensajes: string; creative: string }> {
+/** The brands that have owned the Meta portfolios with live CTAs. Easy Fit's archived on
+ *  2026-10-14 and the agency brand kept Conversaciones, so the premise is searched, not pinned. */
+const LEDGER_CTA_BRAND_CANDIDATES = [EASYFIT_LEDGER_BRAND_ID, AGENCY_BRAND_ID];
+
+/** The two CTA premises, from the reads the portfolio page makes: the per-portfolio report
+ *  (optimizer-status) and its asked-for rows (optimizer_get_adhoc_suggestions). Resolved
+ *  inside the one test that needs it, so its drift cannot stop the rest of the bench. */
+async function resolveLedgerCtaPremise(): Promise<LedgerCtaPremise> {
+  const seen: string[] = [];
+  for (const brandId of LEDGER_CTA_BRAND_CANDIDATES) {
+    const found = await findLedgerCtaPortfolios(brandId, seen);
+    if (found) return { brandId, ...found };
+  }
+  throw new Error(
+    'PREMISE DRIFT: no watched brand holds a portfolio whose asked-for row opened an audience ' +
+      'proposal and one whose card opens a pending creative recommendation. ' +
+      `Read: ${seen.join(' | ')}`,
+  );
+}
+
+async function findLedgerCtaPortfolios(
+  brandId: string,
+  seen: string[],
+): Promise<{ mensajes: string; creative: string } | null> {
   const client = memberClient();
   let mensajes: string | null = null;
   let creative: string | null = null;
-  const seen: string[] = [];
-  for (const portfolio of await listPortfolios(EASYFIT_LEDGER_BRAND_ID)) {
+  for (const portfolio of await listPortfolios(brandId)) {
     const [{ data: report }, { data: asked }] = await Promise.all([
       client.functions.invoke('optimizer-status', { body: { portfolio_id: portfolio.id } }),
       client.rpc('optimizer_get_adhoc_suggestions', { p_portfolio_id: portfolio.id }),
@@ -519,14 +545,7 @@ async function resolveLedgerCtaPremise(): Promise<{ mensajes: string; creative: 
     if (opensProposal && !mensajes) mensajes = portfolio.name;
     if (opensCreative && !creative) creative = portfolio.name;
   }
-  if (!mensajes || !creative) {
-    throw new Error(
-      'PREMISE DRIFT: the ledger brand needs a portfolio whose asked-for row opened an audience ' +
-        'proposal and one whose card opens a pending creative recommendation. ' +
-        `Read: ${seen.join(' | ')}`,
-    );
-  }
-  return { mensajes, creative };
+  return mensajes && creative ? { mensajes, creative } : null;
 }
 
 /** The onboarding surface's heading (OptimizerOnboarding). It used to read "Set up the
@@ -573,11 +592,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
     console.log(`[optimizer-bench] active brand before: ${originalActiveBrandId ?? '(none)'}`);
 
     browse = await resolveBrowsePremise();
-    ledgerCta = await resolveLedgerCtaPremise();
     console.log(
       `[optimizer-bench] browse premise: brand ${browse.brandId} account ${browse.accountId} (${browse.accountLabel}), enrolled "${browse.enrolled.name}", sibling "${browse.sibling.name}", empty account ${browse.emptyAccountId}`,
     );
-    console.log(`[optimizer-bench] ledger CTA premise: ${JSON.stringify(ledgerCta)}`);
   });
 
   test.afterAll(async () => {
@@ -1099,7 +1116,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test("portfolio CTAs — an asked-for row wears its proposal's state and opens the proposal inline, a news card's button lands on an expanded queue row, and the Jaina panel sits under the name line", async ({
     browser,
   }) => {
-    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const ledgerCta = await resolveLedgerCtaPremise();
+    console.log(`[optimizer-bench] ledger CTA premise: ${JSON.stringify(ledgerCta)}`);
+    await selectBrand(ledgerCta.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
