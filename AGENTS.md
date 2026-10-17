@@ -31,7 +31,7 @@ This document outlines the architectural and code quality rules specific to the 
 Frontend response interpreters that parse Backend agent outputs (NDJSON stream frames, agent output objects, HTTP envelopes) must import their types and Zod schemas from `@continuum/contracts`. The Backend emits frames defined in the same package, so a `safeParse` against the imported schema is the boundary check.
 
 * **Where it lives:** `packages/contracts/src/streaming/<domain>.ts` for stream frames; `packages/contracts/src/<domain>/` for HTTP request/response.
-* **How to import:** `import { organicStreamFrameSchema, type OrganicStreamFrame } from '@continuum/contracts'` — root entry only (kept consistent with Backend, which can't use subpath imports under `moduleResolution: "node"`).
+* **How to import:** `import { organicStreamFrameSchema, type OrganicStreamFrame } from '@continuum/contracts'` — root entry only (kept consistent with Backend).
 * **Pattern:** see `src/components/organic/agent/streamEventParser.ts` — it imports `organicStreamFrameSchema`, runs `safeParse` against incoming frames, and uses the inferred type for compile-time linkage with the Backend emit side.
 * **Forbidden:** hand-rolling a TypeScript stream-event union in `src/lib/<domain>/stream.ts` or `src/components/<domain>/streamEventParser.ts` when the Backend has its own parallel hand-rolled union. New event types are added in `packages/contracts/` first, then the interpreter switch-case imports the literal type.
 * **Jaina note:** the heavy Zod schemas in `src/lib/jaina/schemas.ts` (3000+ lines) are scheduled for migration into `packages/contracts/src/streaming/jaina.ts` in a follow-up PR; for now, the cross-side type linkage is via the `JainaStreamEvent` type alias in contracts.
