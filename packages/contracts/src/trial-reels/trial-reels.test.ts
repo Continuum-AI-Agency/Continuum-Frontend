@@ -10,6 +10,10 @@ import {
   trialDimensionsSchema,
   trialFenceSchema,
   trialStandingSchema,
+  type PostTrial,
+  compareTrials,
+  trialNextStepOf,
+  trialStatusOf,
 } from './index';
 
 const fence = {
@@ -181,5 +185,51 @@ describe('trial reels Goal template', () => {
 
   it('does not require budget authorization — organic discovery is free', () => {
     expect(template?.readiness.requiresBudgetAuthorization).toBe(false);
+  });
+});
+
+describe('trial posts', () => {
+  const verdict = (kind: 'winner' | 'loser' | 'unmeasured', hookRate: number | null) => ({
+    verdict: kind,
+    reason: 'measured',
+    hookRate,
+    medianHookRate: hookRate == null ? null : 30,
+    engagementRate: null,
+    medianEngagementRate: null,
+    reach: 500,
+    baselineReels: 8,
+    measuredAt: '2026-10-16T11:00:00.000Z',
+  });
+  const trial = (v: ReturnType<typeof verdict> | null, graduationStrategy: PostTrial['graduationStrategy'] = 'MANUAL'): PostTrial => ({
+    graduationStrategy,
+    verdict: v,
+  });
+
+  it('reads a trial with no verdict yet as measuring', () => {
+    expect(trialStatusOf(trial(null))).toBe('measuring');
+    expect(trialStatusOf(trial(verdict('loser', 20)))).toBe('loser');
+  });
+
+  it('asks a person to graduate a MANUAL winner, and only that', () => {
+    expect(trialNextStepOf(trial(verdict('winner', 40)))).toBe('graduate_in_app');
+    expect(trialNextStepOf(trial(verdict('winner', 40), 'SS_PERFORMANCE'))).toBeNull();
+    expect(trialNextStepOf(trial(verdict('loser', 20)))).toBeNull();
+  });
+
+  it('lists winners first, then measuring, losers, unmeasured — higher hook lift first within each', () => {
+    const lane = [
+      trial(verdict('unmeasured', null)),
+      trial(verdict('loser', 25)),
+      trial(null),
+      trial(verdict('winner', 36)),
+      trial(verdict('winner', 45)),
+    ].sort(compareTrials);
+    expect(lane.map((t) => [trialStatusOf(t), t.verdict?.hookRate ?? null])).toEqual([
+      ['winner', 45],
+      ['winner', 36],
+      ['measuring', null],
+      ['loser', 25],
+      ['unmeasured', null],
+    ]);
   });
 });
