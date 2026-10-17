@@ -33,16 +33,22 @@ const VIEW = {
   outputs: parse.outputs,
   externals: [],
 };
-const source = (parseState: string, parseError: string | null = null): TemplateSourceSummary =>
+const HOUSE_BRAND = '33333333-3333-4333-8333-333333333333';
+const source = (
+  parseState: string,
+  parseError: string | null = null,
+  house = false,
+): TemplateSourceSummary =>
   templateSourceSummarySchema.parse({
     assetId: ASSET,
-    brandId: BRAND,
+    brandId: house ? HOUSE_BRAND : BRAND,
     versionId: VERSION,
     family: 'blender',
     parseState,
     parseError,
     displayName: 'Summer Scene',
     createdAt: '2026-10-14T00:00:00Z',
+    house,
   });
 
 const fetchSceneTemplate = mock(async () => VIEW);
@@ -107,13 +113,14 @@ afterAll(() => {
 function mount(
   summary: string | TemplateSourceSummary = 'parsed',
   handlers: { onBack?: () => void; onRename?: (title: string) => void; onRemove?: () => void } = {},
+  house = false,
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <SceneTemplateDetail
         brandId={BRAND}
-        source={typeof summary === 'string' ? source(summary) : summary}
+        source={typeof summary === 'string' ? source(summary, null, house) : summary}
         onBack={handlers.onBack ?? (() => {})}
         onRename={handlers.onRename ?? (() => {})}
         onRemove={handlers.onRemove ?? (() => {})}
@@ -146,6 +153,16 @@ describe('SceneTemplateDetail', () => {
     expect(onRename.mock.calls).toEqual([['Winter Scene']]);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  test('a house scene is labelled, and offers neither rename nor remove', async () => {
+    mount('parsed', {}, true);
+    expect(screen.getByText('House scene')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Summer Scene' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Rename Summer Scene' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    // Still renders from the brand looking at it: the editor opens and the scene reads.
+    expect(await screen.findByRole('link', { name: 'Open editor' })).toBeTruthy();
   });
 
   test("shows the picked output's last final render and asks for no draft", async () => {

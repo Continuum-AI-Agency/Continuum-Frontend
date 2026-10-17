@@ -27,6 +27,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Pill } from '@/components/kibo-ui/pill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -397,6 +398,15 @@ export function CalendarDraftCard({
                             isStreaming && 'animate-pulse',
                           )}
                         />
+                        {draft.mediaSuggestion?.renderedWith && (
+                          <Pill
+                            variant="outline"
+                            className="px-1.5 py-0 text-3xs"
+                            title={`Rendered with ${draft.mediaSuggestion.renderedWith.templateName}`}
+                          >
+                            Rendered with {draft.mediaSuggestion.renderedWith.templateName}
+                          </Pill>
+                        )}
                       </div>
                     </div>
 

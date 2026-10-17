@@ -130,6 +130,13 @@ export type OrganicCalendarDraft = {
     blueprintReady?: boolean | null;
     /** Exact persisted storyboard revision required for final-media approval. */
     previewRevision?: string | null;
+    /** The Forge template the media was painted from, when it was (renderDraftThroughTemplate). */
+    renderedWith?: {
+      templateKey: string;
+      templateName: string;
+      renderJobId: string;
+      bindingId: string;
+    } | null;
     /** Locked casting/product references reviewed before UGC scene generation. */
     ugc?: OrganicUgcSpec | null;
     audioConcept?: {

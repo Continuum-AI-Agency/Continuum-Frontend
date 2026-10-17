@@ -11,7 +11,7 @@ import { groupSceneFields, SCENE_GROUP_TITLES } from '@/components/forge/scene/S
 import { ScenePreviewStage } from '@/components/forge/scene/ScenePreviewStage';
 import { SceneRenderHistory, SceneSignedMedia } from '@/components/forge/scene/SceneRenderPanel';
 import { useScenePreview } from '@/components/forge/scene/useScenePreview';
-import { InlineRename } from '@/components/forge/TemplateCard';
+import { HouseScenePill, InlineRename } from '@/components/forge/TemplateCard';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   blendParseProblem,
@@ -99,24 +99,30 @@ export function SceneTemplateDetail({
             Templates
           </Button>
           <h2 className="min-w-0 text-base font-semibold">
-            <InlineRename value={name} onRename={onRename} />
+            {source.house ? name : <InlineRename value={name} onRename={onRename} />}
           </h2>
+          {source.house ? <HouseScenePill /> : null}
           <p className="truncate text-xs text-muted-foreground">
             Blender scene
             {view.data ? ` · ${view.data.fields.length} fields · ${outputs.length} outputs` : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <OpenInLibrary brandId={brandId} assetId={assetId} />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-destructive"
-            onClick={onRemove}
-          >
-            <Trash2 className="size-3.5" aria-hidden /> Remove
-          </Button>
+          {/* A house scene belongs to the house brand: nothing here to rename, remove or open. */}
+          {source.house ? null : (
+            <>
+              <OpenInLibrary brandId={brandId} assetId={assetId} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-destructive"
+                onClick={onRemove}
+              >
+                <Trash2 className="size-3.5" aria-hidden /> Remove
+              </Button>
+            </>
+          )}
           {view.data ? (
             <Link
               href={sceneEditorHref(assetId)}
