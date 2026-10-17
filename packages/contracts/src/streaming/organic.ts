@@ -615,6 +615,9 @@ export const angleEvidenceSourceEnum = z.enum([
   // joined to what they actually did. Every other source here measures the account
   // or the market; this one measures US.
   'publishedPostAttribution',
+  // Our Instagram trial reels and their nightly verdicts (hook rate vs the brand's
+  // ordinary reels). A trial reached non-followers only, so it is its own source.
+  'trialLedger',
 ]);
 export type AngleEvidenceSource = z.infer<typeof angleEvidenceSourceEnum>;
 
@@ -633,6 +636,9 @@ export const angleEvidenceItemSchema = z.object({
     // brand's own median. The only evidence kind that closes the loop on our own
     // recommendations rather than reporting the account at large.
     'own_post_result',
+    // A trial reel WE published and its verdict against the brand's ordinary reels:
+    // an opener tested on non-followers, never a number to set beside ordinary reach.
+    'trial_result',
   ]),
   refId: z.string().nullable().describe('trendId / mediaId / competitor handle'),
   label: z.string().describe('Human-readable, e.g. "Trend: cold brew hacks"'),

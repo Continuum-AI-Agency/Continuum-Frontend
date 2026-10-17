@@ -2,6 +2,7 @@ import {
   metricComparisonSchema,
   organicMetricsSchema,
   organicPostBreakdownPointSchema,
+  postTrialSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 
@@ -246,6 +247,9 @@ export const organicPostSchema = z.object({
   // key here — it's a unique-viewer count and can't be validly summed across
   // days, so it stays lifetime-only with no comparison badge.
   comparison: z.record(z.string(), metricComparisonSchema).nullable().optional(),
+  // Set on an Instagram post that went out as a trial reel. A trial that fails to parse is listed
+  // as an ordinary post rather than taking the whole gallery down.
+  trial: postTrialSchema.optional().catch(undefined),
 });
 
 export type OrganicPost = z.infer<typeof organicPostSchema>;

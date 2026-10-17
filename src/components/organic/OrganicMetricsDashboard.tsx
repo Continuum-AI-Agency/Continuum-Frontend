@@ -52,8 +52,15 @@ import type {
   IntegrationErrorCode,
   OrganicMetricId,
   OrganicMetricPlatform,
+  PostTrial,
+  TrialStatus,
 } from '@continuum/contracts';
-import { kpiConfigForPlatform, organicMetricPlatformSchema } from '@continuum/contracts';
+import {
+  kpiConfigForPlatform,
+  organicMetricPlatformSchema,
+  trialNextStepOf,
+  trialStatusOf,
+} from '@continuum/contracts';
 import { Download, Flag, RotateCw, Send } from 'lucide-react';
 import { BrandTrendsHeaderModule } from '@/components/brand-insights/BrandTrendsHeaderModule';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
@@ -104,6 +111,7 @@ import {
   postWindowRange,
   resolveReportViewState,
   sortPosts,
+  splitTrialPosts,
   summarizeYoutubeTypeMetrics,
   trendLineShape,
   windowEndingOn,
@@ -579,6 +587,7 @@ function PostGalleryCard({
           {carousel ? (
             <Pill variant="muted">{(post.carouselMedia?.length ?? 0) || 1} slides</Pill>
           ) : null}
+          {post.trial ? <Pill variant="violet">Trial</Pill> : null}
         </div>
         {post.isBoosted ? (
           <Pill className="absolute right-2 top-2" variant="warning">
@@ -598,11 +607,49 @@ function PostGalleryCard({
         ) : (
           <MetricStrip items={postFaceMetrics(post)} />
         )}
+        {post.trial ? <TrialVerdictLine trial={post.trial} /> : null}
         <span className="mt-1 block text-2xs text-muted-foreground">
           {formatDateTime(post.timestamp)}
         </span>
       </div>
     </motion.button>
+  );
+}
+
+const TRIAL_STATUS_PILL: Record<
+  TrialStatus,
+  { label: string; variant: 'success' | 'teal' | 'muted' }
+> = {
+  winner: { label: 'Winner', variant: 'success' },
+  measuring: { label: 'Measuring', variant: 'teal' },
+  loser: { label: 'Missed', variant: 'muted' },
+  unmeasured: { label: 'Too little data', variant: 'muted' },
+};
+
+/** A trial is judged against the account's ordinary reels on hook rate, never on raw reach. */
+function TrialVerdictLine({ trial }: { trial: PostTrial }) {
+  const status = trialStatusOf(trial);
+  const { label, variant } = TRIAL_STATUS_PILL[status];
+  const verdict = trial.verdict;
+  return (
+    <div className="mt-1.5 space-y-1" title={verdict?.reason}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Pill variant={variant}>{label}</Pill>
+        {verdict?.hookRate != null && verdict.medianHookRate != null ? (
+          <span className="text-2xs tabular-nums text-muted-foreground">
+            Hook {verdict.hookRate.toFixed(1)}% vs {verdict.medianHookRate.toFixed(1)}% median
+          </span>
+        ) : status === 'measuring' ? (
+          <span className="text-2xs text-muted-foreground">Judged 3 days after posting</span>
+        ) : null}
+      </div>
+      {verdict ? <span className="sr-only">{verdict.reason}</span> : null}
+      {trialNextStepOf(trial) === 'graduate_in_app' ? (
+        <span className="block text-2xs text-foreground text-pretty">
+          Share it to followers in the Instagram app.
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -1475,6 +1522,7 @@ function Dashboard({
   const [selectedPostMetric, setSelectedPostMetric] = React.useState<PostMetricKey>('views');
   const [drilldownWindow, setDrilldownWindow] = React.useState<DrilldownWindow>('7d');
   const [postSortKey, setPostSortKey] = React.useState<PostSortKey>('recent');
+  const [postLane, setPostLane] = React.useState<'posts' | 'trials'>('posts');
   const [showPostFlags, setShowPostFlags] = React.useState(true);
   // Hover quick-look is suppressed for the selected post: the side snapshot panel
   // is the same numbers in a persistent surface, and having both open at once is
@@ -1592,6 +1640,14 @@ function Dashboard({
     const posts = data.posts ?? [];
     return platform === 'youtube' ? filterPostsByYoutubeType(posts, youtubePostType) : posts;
   }, [data.posts, platform, youtubePostType]);
+  // Trial reels reached non-followers only: they get their own lane, never the ordinary sorts.
+  const { ordinary: ordinaryPosts, trials: trialPosts } = React.useMemo(
+    () => splitTrialPosts(visiblePosts),
+    [visiblePosts],
+  );
+  const postLaneShown = trialPosts.length > 0 ? postLane : 'posts';
+  const galleryPosts =
+    postLaneShown === 'trials' ? trialPosts : sortPosts(ordinaryPosts, postSortKey);
   // Post-activity markers for the account drilldown chart — every platform that
   // returns posts with publish timestamps. Filtered to days present on the chart axis.
   const accountActivityDays = showPostFlags
@@ -1957,27 +2013,51 @@ function Dashboard({
                   >
                     <motion.div layout className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
-                        <span className="text-xs text-muted-foreground text-pretty">
-                          Posts load newest first and go deeper as you scroll.
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Sort</span>
-                          <Select
-                            value={postSortKey}
-                            onValueChange={(v) => setPostSortKey(v as PostSortKey)}
-                          >
-                            <SelectTrigger size="sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="recent">Recent</SelectItem>
-                              <SelectItem value="hookRate">Hook Rate</SelectItem>
-                              <SelectItem value="views">Views</SelectItem>
-                              <SelectItem value="reach">Reach</SelectItem>
-                              <SelectItem value="engagement">Engagement</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {trialPosts.length > 0 ? (
+                            <Tabs
+                              value={postLaneShown}
+                              onValueChange={(value) => setPostLane(value as 'posts' | 'trials')}
+                              className="w-auto gap-0"
+                            >
+                              <TabsList className="inline-flex h-8 w-auto rounded-lg border border-border bg-muted/20 p-0.5">
+                                <TabsTrigger value="posts" className="px-3 text-xs">
+                                  Posts
+                                </TabsTrigger>
+                                <TabsTrigger value="trials" className="px-3 text-xs">
+                                  Trials ({trialPosts.length})
+                                </TabsTrigger>
+                              </TabsList>
+                            </Tabs>
+                          ) : null}
+                          <span className="text-xs text-muted-foreground text-pretty">
+                            {postLaneShown === 'trials'
+                              ? 'Trial reels reached non-followers only, so they are ranked by their verdict against your ordinary reels.'
+                              : ordinaryPosts.length === 0
+                                ? 'Every post in this window went out as a trial reel. Open Trials.'
+                                : 'Posts load newest first and go deeper as you scroll.'}
+                          </span>
                         </div>
+                        {postLaneShown === 'posts' ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Sort</span>
+                            <Select
+                              value={postSortKey}
+                              onValueChange={(v) => setPostSortKey(v as PostSortKey)}
+                            >
+                              <SelectTrigger size="sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="recent">Recent</SelectItem>
+                                <SelectItem value="hookRate">Hook Rate</SelectItem>
+                                <SelectItem value="views">Views</SelectItem>
+                                <SelectItem value="reach">Reach</SelectItem>
+                                <SelectItem value="engagement">Engagement</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="mx-auto w-full px-1">
                         <div
@@ -1986,7 +2066,7 @@ function Dashboard({
                             '[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]',
                           )}
                         >
-                          {sortPosts(visiblePosts, postSortKey).map((post) => {
+                          {galleryPosts.map((post) => {
                             // Quick-look uses the store-hydrated detail (richer
                             // metrics + breakdowns) so it fills in after a fetch.
                             // Detail media fields are also preferred because they

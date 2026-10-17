@@ -1,3 +1,4 @@
+import { compareTrials, type PostTrial } from '@continuum/contracts';
 import type {
   MetricComparison,
   OrganicPost,
@@ -53,6 +54,24 @@ export function sortPosts(posts: OrganicPost[], key: PostSortKey): OrganicPost[]
         return 0;
     }
   });
+}
+
+export type TrialPost = OrganicPost & { trial: PostTrial };
+
+const isTrialPost = (post: OrganicPost): post is TrialPost => post.trial != null;
+
+/**
+ * A trial reel reached non-followers only, so it is never ranked beside an ordinary post: the
+ * gallery lists trials in a lane of their own, ordered by verdict (winners first, then the higher
+ * hook rate against the account's ordinary reels).
+ */
+export function splitTrialPosts(posts: OrganicPost[]): {
+  ordinary: OrganicPost[];
+  trials: TrialPost[];
+} {
+  const ordinary = posts.filter((post) => !isTrialPost(post));
+  const trials = posts.filter(isTrialPost).sort((a, b) => compareTrials(a.trial, b.trial));
+  return { ordinary, trials };
 }
 
 // YouTube post-type filter for the gallery: Shorts, regular videos, or both.
