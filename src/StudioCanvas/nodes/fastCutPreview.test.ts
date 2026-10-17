@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { CUT_RUNGS_SEC } from '@continuum/contracts';
+import { CUT_RUNGS_SEC, MAX_COLLAGE_TILES } from '@continuum/contracts';
 import { type FastCutPreview, fastCutPreview, fastCutSettings } from './fastCutPreview';
 
 const ok = (preview: FastCutPreview) => {
@@ -23,6 +23,7 @@ describe('fastCutSettings', () => {
       rung: undefined,
       bars: 4,
       transients: ['punch', 'rgb-shift'],
+      layout: 'cut',
     });
   });
 
@@ -36,7 +37,7 @@ describe('fastCutSettings', () => {
         generatedVideoUrl: 'https://cdn.test/cut.mp4',
         isExecuting: false,
       }),
-    ).toEqual({ pacing: 'steady', rung: 0.2, bars: 8, transients: ['shake'] });
+    ).toEqual({ pacing: 'steady', rung: 0.2, bars: 8, transients: ['shake'], layout: 'cut' });
   });
 
   it('reads unreadable settings as the defaults rather than throwing', () => {
@@ -92,6 +93,14 @@ describe('fastCutPreview', () => {
     expect(cutsAt(preview, 0.2)).toBeGreaterThan(0);
     expect(cutsAt(preview, 0.05)).toBe(0);
     expect(ok(preview).fps).toBe(30);
+  });
+
+  it('previews a collage within its tile cap: a 0.05 s steady cut is planned on a rung that fits', () => {
+    const settings = { ...fastCutSettings({ pacing: 'steady', rung: 0.05, bars: 8 }) };
+    expect(ok(fastCutPreview(settings)).totalCuts).toBeGreaterThan(MAX_COLLAGE_TILES);
+    const collage = ok(fastCutPreview({ ...settings, layout: 'collage' }));
+    expect(collage.totalCuts).toBeLessThanOrEqual(MAX_COLLAGE_TILES);
+    expect(usedRungs(fastCutPreview({ ...settings, layout: 'collage' }))).toEqual([0.2]);
   });
 
   it("returns the planner's refusal instead of throwing", () => {

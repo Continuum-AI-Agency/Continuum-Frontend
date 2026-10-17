@@ -3,6 +3,7 @@ import { actionDef, actionInputPort, actionOutputModality, isActionId } from './
 import {
   cutPacingSchema,
   cutRungSchema,
+  cutLayoutSchema,
   cutTransientKindSchema,
   DEFAULT_CUT_TRANSIENTS,
 } from '../headless-content/cutEdit';
@@ -768,6 +769,8 @@ export const fastCutNodeDataSchema = z.object({
   rung: cutRungSchema.optional(),
   bars: z.number().int().min(2).max(16).default(4),
   transients: z.array(cutTransientKindSchema).max(4).default([...DEFAULT_CUT_TRANSIENTS]),
+  /** `collage`: the cuts pile up as tiles on one canvas instead of each filling the frame. */
+  layout: cutLayoutSchema.default('cut'),
   durationSec: z.number().positive().optional(),
   /** The master tier renders 1080×1920 only. */
   aspectRatio: z.literal('9:16').default('9:16'),

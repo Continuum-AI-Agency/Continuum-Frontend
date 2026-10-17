@@ -1632,12 +1632,13 @@ describe('fastCut', () => {
     ).toBe(true);
   });
 
-  it('is born a portrait build over four bars with the default transients', () => {
+  it('is born a portrait build over four bars with the default transients, each cut filling the frame', () => {
     const { data } = createNodeData('fastCut');
     expect(fastCutNodeDataSchema.parse(data)).toEqual({
       pacing: 'build',
       bars: 4,
       transients: ['punch', 'rgb-shift'],
+      layout: 'cut',
       aspectRatio: '9:16',
     });
   });

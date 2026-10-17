@@ -28,6 +28,17 @@ export type CutTransientKind = z.infer<typeof cutTransientKindSchema>;
  */
 export const DEFAULT_CUT_TRANSIENTS: readonly CutTransientKind[] = ['punch', 'rgb-shift'];
 
+/** How a montage draws its cuts: each filling the frame, or as tiles piling onto one canvas. */
+export const cutLayoutSchema = z.enum(['cut', 'collage']);
+export type CutLayout = z.infer<typeof cutLayoutSchema>;
+/**
+ * The most tiles a collage holds; Render refuses more (montage.ts mirrors it). 16 bars of 1 s cuts at
+ * 70 BPM is 55, so the planner can always fit an edit's longest montage under it.
+ */
+export const MAX_COLLAGE_TILES = 64;
+/** A collage tile's arrival colour when the composition names no accent: the recap-reel amber. */
+export const DEFAULT_COLLAGE_ACCENT = '#FFB84D';
+
 /** What a composition asks for. The planner decides the cuts. */
 export const headlessEditSchema = z
   .object({
@@ -43,6 +54,12 @@ export const headlessEditSchema = z
       .array(cutTransientKindSchema)
       .max(4)
       .default([...DEFAULT_CUT_TRANSIENTS]),
+    /**
+     * `collage`: each cut lands as a tile in its own section of one canvas that keeps the earlier
+     * ones, arriving in the brand accent and settling to black and white until the wall is full (the
+     * photo-wall open of an event recap). Absent is `cut`: each cut fills the frame.
+     */
+    layout: cutLayoutSchema.optional(),
     /** A generated bed at this tempo; null uses the composition's `audioBed`. */
     music: z
       .object({
