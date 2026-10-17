@@ -1334,32 +1334,115 @@ body {
 
 /* WCAG 2.2 AA 2.5.8: a control's HIT box is at least 24 x 24 CSS px on a fine pointer and
    44 x 44 on a coarse one, without growing the painted box. The transparent pseudo-element is
-   centred on the control and only ever extends it (`max(100%, ...)`), the same move the
-   Checkbox and Switch primitives make with `after:-inset-*`. The root font size is 14.5px on
-   most of the ladder, so every `h-6` / `size-6` control paints at 21.75px and needs this.
-   Uses `::after`; a control whose `::after` is spoken for (TabsTrigger's underline) writes the
+   centred on the control and only ever extends it (`max(100%, ...)`). The root font size is
+   14.5px on most of the ladder, so every `h-6` / `size-6` control paints at 21.75px and needs
+   this; `h-7` paints at 22.75px once the root drops to 13px on short viewports. Uses `::after`;
+   a control whose `::after` is spoken for (TabsTrigger's underline) uses `hit-area-before`, the
    same box on `::before`. `opacity: 0` paints nothing it would not paint anyway and keeps the
    box out of any computed-style read of what makes a control LOOK different from its siblings
-   (an active tab's indicator); hit testing ignores opacity. */
+   (an active tab's indicator); hit testing ignores opacity.
+
+   The floor is px, never rem: a rem pad shrinks with the root font. `--hit-area-min-w` widens
+   it for one control (Checkbox, Radio and Switch: 32px, so one sitting at a horizontally
+   scrolled table's clipped edge keeps 24px of what is left).
+
+   Neighbours. Two pads that overlap hand a tap on the shared strip to whichever control paints
+   later, and a pad that reaches into a neighbour's drawn box steals presses on what is drawn as
+   the neighbour. So a row of controls (`hit-area-row` / `hit-area-column` on the container,
+   which TabsList, ToggleGroup and ButtonGroup carry) caps each child's growth along the row at
+   the gap it shares (`--hit-area-gap`, 0 when the controls touch): no more than half the gap
+   per side. The two ends of a horizontal row are anchored to their inner edge and grow outward
+   only, so a pair of 21.75px icon tabs still reaches 24px without either pad crossing the
+   seam. A row's children keep the 24px floor under a coarse pointer too (`--hit-area-coarse`):
+   a 44px pad is wider than a segment's neighbours are far, and across the row it would reach
+   into the controls stacked above and below. 24px is the AA floor on every pointer. */
 @utility hit-area {
   position: relative;
+  --hit-area-floor: 24px;
+
+  @media (pointer: coarse) {
+    --hit-area-floor: var(--hit-area-coarse, 44px);
+  }
 
   &::after {
     content: "";
     position: absolute;
     top: 50%;
-    left: 50%;
-    width: max(100%, 24px);
-    height: max(100%, 24px);
-    transform: translate(-50%, -50%);
+    left: var(--hit-area-left, 50%);
+    right: var(--hit-area-right, auto);
+    width: max(
+      100%,
+      min(
+        max(var(--hit-area-floor), var(--hit-area-min-w, 0px)),
+        calc(100% + var(--hit-area-gap-x, 100vw))
+      )
+    );
+    height: max(
+      100%,
+      min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh)))
+    );
+    transform: translate(var(--hit-area-tx, -50%), -50%);
     opacity: 0;
   }
+}
+
+/* `hit-area` on `::before`, for a control whose `::after` already paints (TabsTrigger). */
+@utility hit-area-before {
+  position: relative;
+  --hit-area-floor: 24px;
 
   @media (pointer: coarse) {
-    &::after {
-      width: max(100%, 44px);
-      height: max(100%, 44px);
-    }
+    --hit-area-floor: var(--hit-area-coarse, 44px);
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: var(--hit-area-left, 50%);
+    right: var(--hit-area-right, auto);
+    width: max(
+      100%,
+      min(
+        max(var(--hit-area-floor), var(--hit-area-min-w, 0px)),
+        calc(100% + var(--hit-area-gap-x, 100vw))
+      )
+    );
+    height: max(
+      100%,
+      min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh)))
+    );
+    transform: translate(var(--hit-area-tx, -50%), -50%);
+    opacity: 0;
+  }
+}
+
+/* A horizontal row of hit-area controls `--hit-area-gap` apart (default 0: touching). */
+@utility hit-area-row {
+  & > * {
+    --hit-area-gap-x: var(--hit-area-gap, 0px);
+    --hit-area-coarse: 24px;
+  }
+
+  & > :first-child:not(:last-child) {
+    --hit-area-gap-x: 100vw;
+    --hit-area-left: auto;
+    --hit-area-right: 0px;
+    --hit-area-tx: 0px;
+  }
+
+  & > :last-child:not(:first-child) {
+    --hit-area-gap-x: 100vw;
+    --hit-area-left: 0px;
+    --hit-area-tx: 0px;
+  }
+}
+
+/* A vertical stack of hit-area controls `--hit-area-gap` apart: growth along it is capped. */
+@utility hit-area-column {
+  & > * {
+    --hit-area-gap-y: var(--hit-area-gap, 0px);
+    --hit-area-coarse: 24px;
   }
 }
 

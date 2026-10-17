@@ -16,7 +16,7 @@
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { ArrowRightIcon, ChevronLeftIcon, FileTextIcon, LayersIcon, PlusIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -58,6 +58,7 @@ import {
 import {
   useAdAccountCurrency,
   useOptimizerAdAccounts,
+  useOptimizerPlatformPortfolios,
   useOptimizerPortfolios,
   useOptimizerRenewals,
   usePrefetchPortfolioDetail,
@@ -76,8 +77,21 @@ type OptimizerTabProps = {
 
 /** The Actions badge must count what the Actions tab actually renders — recommendations
  *  AND budget moves. Counting recs alone under-reported every money-only cycle. */
-function totalPending(portfolios: PortfolioListItem[]): number {
+function totalPending(portfolios: readonly PortfolioListItem[]): number {
   return portfolios.reduce((sum, portfolio) => sum + pendingWorkCount(portfolio), 0);
+}
+
+/** The selected account's portfolios, then the brand's on Google and TikTok that no Meta
+ *  account view holds, each once. */
+function withPlatformPortfolios(
+  selected: readonly PortfolioListItem[],
+  ...platformLists: (readonly PortfolioListItem[])[]
+): PortfolioListItem[] {
+  const byId = new Map(selected.map((portfolio) => [portfolio.id, portfolio]));
+  for (const portfolio of platformLists.flat()) {
+    if (!byId.has(portfolio.id)) byId.set(portfolio.id, portfolio);
+  }
+  return [...byId.values()];
 }
 
 function OptimizerSkeleton() {
@@ -272,9 +286,32 @@ export function OptimizerTab({
   const warmActionsQueue = useWarmActionsQueue(brandId);
   const connected = useConnectedPlatforms(brandId, adAccountId);
 
+  const googlePortfolios = useOptimizerPlatformPortfolios(brandId, 'google_ads').data;
+  const tiktokPortfolios = useOptimizerPlatformPortfolios(brandId, 'tiktok_ads').data;
+
   const portfolios = portfoliosQuery.data;
   const pendingCount = totalPending(portfolios);
   const renewalCount = renewalsQuery.data.length;
+  // Actions is the brand's queue for this account AND every Google or TikTok portfolio, so its
+  // badge counts the same list the tab renders.
+  const actionPortfolios = useMemo(
+    () => withPlatformPortfolios(portfolios, googlePortfolios, tiktokPortfolios),
+    [portfolios, googlePortfolios, tiktokPortfolios],
+  );
+  const actionsPending = totalPending(actionPortfolios);
+  const landingPlatform: AdPlatform | null =
+    googlePortfolios.length > 0 ? 'google_ads' : tiktokPortfolios.length > 0 ? 'tiktok_ads' : null;
+
+  // A selected account with no portfolio of its own, on a brand whose portfolios are on Google
+  // or TikTok (Easy Fit), opens on that platform's tab — once, so a person who then picks Meta
+  // or All stays there.
+  const landedOnPlatform = useRef(false);
+  const accountIsEmpty = portfoliosQuery.hasAnswer && portfolios.length === 0;
+  useEffect(() => {
+    if (landedOnPlatform.current || !accountIsEmpty || landingPlatform == null) return;
+    landedOnPlatform.current = true;
+    if (rendersManagedOverview(platformTab)) setPlatform(landingPlatform);
+  }, [accountIsEmpty, landingPlatform, platformTab, setPlatform]);
 
   // Only reachable when the selected account has NO portfolios — the tabbed view (and its
   // own scope toggle) never renders in that state, so the notice hands off to here instead.
@@ -351,13 +388,16 @@ export function OptimizerTab({
   // An empty list is TWO different facts. When the brand owns portfolios that this ad
   // account view filtered out, saying "set up the optimizer" hides real work — name the
   // owning account instead and offer the switch.
-  if (
-    portfolios.length === 0 &&
-    resolveEmptyPortfolioState({
-      brandPortfolioCount: portfoliosQuery.brandPortfolioCount,
-      otherAccountIds: portfoliosQuery.otherAccountIds,
-    }) === 'other-account'
-  ) {
+  // A brand whose portfolios are on another platform is neither: the tabbed view below opens.
+  const emptyState =
+    portfolios.length === 0
+      ? resolveEmptyPortfolioState({
+          brandPortfolioCount: portfoliosQuery.brandPortfolioCount,
+          otherAccountIds: portfoliosQuery.otherAccountIds,
+          otherPlatformCount: googlePortfolios.length + tiktokPortfolios.length,
+        })
+      : null;
+  if (emptyState === 'other-account') {
     if (browsingAllAccounts) {
       return (
         <section className="grid h-full min-h-0 animate-in grid-rows-[auto_minmax(0,1fr)] overflow-hidden fade-in-0 duration-200 motion-reduce:animate-none">
@@ -406,7 +446,7 @@ export function OptimizerTab({
     );
   }
 
-  if (portfolios.length === 0) {
+  if (emptyState === 'onboarding') {
     return (
       <section className="grid h-full min-h-0 animate-in overflow-hidden fade-in-0 duration-200 motion-reduce:animate-none">
         <OptimizerOnboarding
@@ -438,9 +478,17 @@ export function OptimizerTab({
 
   // A portfolio opened for full-screen detail replaces the tab body with its own
   // command-center workspace (hero timeline + drill-ins). Guarded by find() so a
-  // stale id (e.g. after an account switch) falls back to the tabbed view.
+  // stale id (e.g. after an account switch) falls back to the tabbed view. A portfolio on no
+  // Meta account (Google-only, opened from the Google tab) is in no account's view, so it is
+  // found in the brand's list; it cannot go stale on a Meta account switch.
   const detailPortfolio = portfolioId
-    ? portfolios.find((portfolio) => portfolio.id === portfolioId)
+    ? (portfolios.find((portfolio) => portfolio.id === portfolioId) ??
+      portfoliosQuery.brandPortfolios.find(
+        (portfolio) =>
+          portfolio.id === portfolioId &&
+          portfolio.platforms.length > 0 &&
+          !portfolio.platforms.includes('meta'),
+      ))
     : undefined;
   if (detailPortfolio) {
     // One shrinkable column: a grid item's min-width is its content's by default, so without
@@ -494,13 +542,13 @@ export function OptimizerTab({
             <TabsTrigger
               value="actions"
               className={subTab}
-              onMouseEnter={() => warmActionsQueue(portfolios)}
-              onFocus={() => warmActionsQueue(portfolios)}
+              onMouseEnter={() => warmActionsQueue(actionPortfolios)}
+              onFocus={() => warmActionsQueue(actionPortfolios)}
             >
               Actions
-              {pendingCount + renewalCount > 0 ? (
+              {actionsPending + renewalCount > 0 ? (
                 <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-2xs font-semibold text-primary-foreground tabular-nums">
-                  {pendingCount + renewalCount}
+                  {actionsPending + renewalCount}
                 </span>
               ) : null}
             </TabsTrigger>
@@ -553,6 +601,7 @@ export function OptimizerTab({
           pendingCount={pendingCount}
           currency={currency}
           onOpenActions={() => setView('actions')}
+          onOpenActivity={() => setView('logs')}
           onSelectPortfolio={handleSelectPortfolio}
           onCreatePortfolio={openCreate}
           onPrefetchPortfolio={prefetchPortfolioDetail}
@@ -586,7 +635,7 @@ export function OptimizerTab({
         <OptimizerActions
           brandId={brandId}
           adAccountId={adAccountId}
-          portfolios={portfolios}
+          portfolios={actionPortfolios}
           renewals={renewalsQuery.data}
           onBrowsePortfolios={() => setView('portfolios')}
         />

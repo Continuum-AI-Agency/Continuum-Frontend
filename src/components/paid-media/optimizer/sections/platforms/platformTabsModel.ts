@@ -53,11 +53,6 @@ export function parsePlatformTab(raw: string | null): PlatformTab {
  */
 export const OPTIMIZER_MANAGED_PLATFORM: AdPlatform = 'meta';
 
-/** The platforms a portfolio holds. PortfolioListItem carries no `platforms` yet, and every
- *  portfolio the engine runs is on OPTIMIZER_MANAGED_PLATFORM. When the list item gains
- *  `platforms[]` (derived from its members), read it there and delete this. */
-export const OPTIMIZER_PORTFOLIO_PLATFORMS: readonly AdPlatform[] = [OPTIMIZER_MANAGED_PLATFORM];
-
 /** Meta, Google, TikTok — whatever order the platforms came in, each once. */
 export function orderPlatforms(platforms: Iterable<AdPlatform>): AdPlatform[] {
   const held = new Set(platforms);
@@ -68,6 +63,14 @@ export function orderPlatforms(platforms: Iterable<AdPlatform>): AdPlatform[] {
  *  of the canonical platform ids, or null when it names none of them. */
 export function readAdPlatform(raw: unknown): AdPlatform | null {
   return AD_PLATFORMS.find((platform) => platform === raw) ?? null;
+}
+
+/** The platforms a portfolio holds, from the list's `platforms` (its active members,
+ *  20261015160023), in Meta, Google, TikTok order. A list from before that migration names
+ *  none, and every portfolio then was on OPTIMIZER_MANAGED_PLATFORM. */
+export function portfolioPlatforms(platforms: readonly unknown[] | null | undefined): AdPlatform[] {
+  const held = orderPlatforms((platforms ?? []).flatMap((raw) => readAdPlatform(raw) ?? []));
+  return held.length > 0 ? held : [OPTIMIZER_MANAGED_PLATFORM];
 }
 
 /** list_brand_ad_accounts spells Meta `meta_ads` and Google `google_ads`; it has no TikTok row. */

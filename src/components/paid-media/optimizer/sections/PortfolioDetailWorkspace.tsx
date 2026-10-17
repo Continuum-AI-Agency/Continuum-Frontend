@@ -58,9 +58,11 @@ import {
 import { DateRangeControl } from '../components/DateRangeControl';
 import { TEXT_DISCLOSURE } from '../components/disclosure';
 import { costCiLegend, kpiColumns } from '../kpiColumns';
+import { itemWritable } from '../platformWrites';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   DEFAULT_CPA_SERIES_LIMIT,
+  useCurrentMoves,
   useHeroBriefWatch,
   useOptimizerAccountSnapshots,
   useOptimizerAdAngles,
@@ -106,7 +108,7 @@ import {
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
-import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import { isStale, pacingStaleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -179,6 +181,12 @@ export function PortfolioDetailWorkspace({
   const report = parseReport(performanceQuery.data);
   const items = report?.latest_items ?? [];
   const latestRun = report?.latest_run ?? null;
+  // The moves a person may still act on. A withdrawn cycle (the list read says it no longer
+  // stands) or a move whose ad set left this portfolio is shown as history, never offered:
+  // the Apply gate, the decision count and the hero's budget candidate read `currentReport`.
+  const moves = useCurrentMoves(portfolio, brandId, adAccountId, items);
+  const currentReport =
+    report && moves.current !== items ? { ...report, latest_items: moves.current } : report;
   // A scored cycle that raised nothing is a legitimate outcome, not a blank page.
   // When a run landed but produced zero recommendations, explain why off the same
   // account snapshots the engine scores (frozen kpi_mismatch, too-young account,
@@ -202,11 +210,18 @@ export function PortfolioDetailWorkspace({
   // Offer the manual apply only when there are actual moves and the portfolio is in
   // recommend mode (observe hard-halts Meta writes; autopilot applies automatically).
   // runId pins the apply to this run.
-  const reallocation = splitReallocation(items);
+  const reallocation = splitReallocation(moves.current);
   // ONE definition of "moved" — this used to be derived here as gaining+losing while the
   // card counted distinct ids, so the Apply gate and the copy could disagree.
   const movedCount = reallocation.movedCount;
-  const canApplyReallocation = portfolio.apply_mode === 'recommend' && movedCount > 0;
+  // …and only when every moved entity's platform may be written here: a Google move with
+  // Google writes off is a proposal, and the service would refuse the apply (platformWrites.ts).
+  const canApplyReallocation =
+    portfolio.apply_mode === 'recommend' &&
+    movedCount > 0 &&
+    moves.current.every(
+      (item) => Math.abs(item.change_abs ?? 0) < 1 || itemWritable(portfolio, item),
+    );
   // Observe is only worth interrupting for once the engine has actually produced
   // moves it is being prevented from making. Before that it is just the mode.
   const isObserveWithMoves = portfolio.apply_mode === 'observe' && movedCount > 0;
@@ -300,7 +315,7 @@ export function PortfolioDetailWorkspace({
     target: targetDisplay,
   });
   const heroView = buildHeroView({
-    report,
+    report: currentReport,
     recap,
     flightPacing,
     metric,
@@ -324,7 +339,7 @@ export function PortfolioDetailWorkspace({
   // cards use.
   const headline = buildPortfolioHeadline({
     view: heroView,
-    report,
+    report: currentReport,
     portfolio,
     metric,
     currency: currency ?? null,
@@ -605,7 +620,7 @@ export function PortfolioDetailWorkspace({
           }
           onRun={() => run.mutate(portfolio.id)}
           onSecondary={onSecondary}
-          platforms={OPTIMIZER_PORTFOLIO_PLATFORMS}
+          platforms={portfolioPlatforms(portfolio.platforms)}
           running={run.isPending}
           secondaryPending={setPaused.isPending}
           tabs={
@@ -965,6 +980,8 @@ export function PortfolioDetailWorkspace({
                 nameById={adsetNameById}
                 snapshotById={snapshotById}
                 target={targetDisplay}
+                withdrawn={moves.line}
+                withdrawnNotes={moves.notes}
               />
               <details className="group">
                 <summary className="hit-area cursor-pointer text-xs text-muted-foreground hover:text-foreground">

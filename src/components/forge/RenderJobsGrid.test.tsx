@@ -958,6 +958,31 @@ describe('RenderJobsGrid', () => {
     expect(rowOf('Expired link').querySelector('img')).toBeNull();
   }, 30_000);
 
+  test('the Experimental Renderer marks its jobs, and a job it handed to After Effects says why', async () => {
+    const reason = 'text:raster:arithmetic-underived@Main/Headline';
+    const rendered: ApiRenderJob = { ...MADRID, label: 'Rendered here', engine: 'micro' };
+    const handedOver: ApiRenderJob = { ...ROMA, label: 'Handed over', engineFallback: reason };
+    const farm: ApiRenderJob = {
+      ...ROMA,
+      id: '11111111-1111-4111-8111-111111111141',
+      label: 'Farm only',
+    };
+    await renderLedger([rendered, handedOver, farm], [TEMPLATE]);
+    const rowOf = (label: string) => screen.getByText(label).closest('tr') as HTMLElement;
+
+    expect(within(rowOf('Rendered here')).getByText('Experimental')).toBeTruthy();
+    expect(
+      within(rowOf('Handed over')).getByText('Experimental → After Effects').getAttribute('title'),
+    ).toBe(`Sent to After Effects: ${reason}`);
+    expect(within(rowOf('Farm only')).queryByText(/Experimental/)).toBeNull();
+
+    // The detail has room for the reason as words on the page, not only on hover.
+    fireEvent.click(screen.getByText('Handed over'));
+    expect(await screen.findByRole('heading', { name: 'Handed over' })).toBeTruthy();
+    expect(screen.getByText('Renderer')).toBeTruthy();
+    expect(screen.getByText(`· the Experimental Renderer handed it over: ${reason}`)).toBeTruthy();
+  }, 30_000);
+
   test('a comp delivered as MP4, MOV and MXF lists every file, previews the playable one, and downloads each', async () => {
     const clip = (fileName: string, mimeType: string) => ({
       id: `hash-${fileName}`,

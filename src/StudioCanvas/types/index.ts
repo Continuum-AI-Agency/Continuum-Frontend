@@ -17,6 +17,7 @@ import type {
   DesignSection,
   EditorProductionSummary,
   ElementUseIntent,
+  FastCutNodeData as ContractFastCutNodeData,
   ImageGeneratorModel,
   ImageSize,
   ShaderStackV1,
@@ -418,6 +419,26 @@ export interface TimelineInputSource {
   durationSec?: number;
 }
 
+/**
+ * Fast Cut: its settings are contracts' `fastCutNodeDataSchema` (a node saved before a key
+ * existed may lack it); the rest is what a server render filed onto the node.
+ */
+export type FastCutNodeData = BaseNodeData &
+  Partial<ContractFastCutNodeData> & {
+    generatedVideo?: string;
+    generatedVideoUrl?: string;
+    generatedVideoStoragePath?: string;
+    generatedVideoBucket?: string;
+    assetId?: string;
+    assetVersionId?: string;
+    renderOutputAssetId?: string;
+    renderOutputAssetVersionId?: string;
+    masterAssetId?: string | null;
+    fastCutFps?: 30 | 60;
+    fastCutCuts?: number;
+    fastCutBpm?: number;
+  };
+
 export interface TimelineEditorNodeData extends BaseNodeData {
   /** Durable brand-shared production project bound to this Canvas node. */
   videoProjectId?: string;
@@ -798,6 +819,8 @@ export interface ElementNodeData extends BaseNodeData {
   motionUrl?: string;
   assetId?: string;
   referenceType?: ImageReferenceType;
+  /** The Element's `/slug` style defaults, refreshed with its sources before every run. */
+  styleSlugs?: string[];
 }
 
 /** One section of the brand design system, emitted as a reference. */
@@ -911,6 +934,7 @@ export type StudioNodeData =
   | OmniGenNodeData
   | ExtendVideoNodeData
   | TimelineEditorNodeData
+  | FastCutNodeData
   | PlannerDraftNodeData
   | OrganicPublishNodeData
   | PublisherNodeData

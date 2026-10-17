@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, CircleMinus } from 'lucide-react';
-import { type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
@@ -115,17 +115,28 @@ export function CheckTable({
   label = 'Checks',
   action,
   className,
+  focusRowRequest,
 }: {
   rows: CheckRow[];
   label?: string;
   /** The next thing to do about what the footer counts. Defaults to opening the first problem. */
   action?: ReactNode;
   className?: string;
+  /** Open and focus a named row when a related repair action points here. */
+  focusRowRequest?: { name: string; requestId: number } | null;
 }) {
   // Open rows by name, held here rather than in each row, so a detail that disappears while its
   // data reloads comes back open, and the footer can open the row it points at.
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
+  useEffect(() => {
+    if (!focusRowRequest || focusRowRequest.requestId <= 0) return;
+    const row = rows.find((candidate) => candidate.name === focusRowRequest.name);
+    if (!row?.detail) return;
+    setOpen((current) => ({ ...current, [row.name]: true }));
+    triggers.current[row.name]?.focus();
+    triggers.current[row.name]?.scrollIntoView?.({ block: 'nearest' });
+  }, [focusRowRequest?.name, focusRowRequest?.requestId, rows]);
   const summary = checkSummary(rows);
   const failing = rows.some((row) => row.state === 'fail');
   const warning = rows.some((row) => row.state === 'warn');

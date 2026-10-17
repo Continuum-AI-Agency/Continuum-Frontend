@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { pinProdSupabase } from './e2e/paid-parity.env';
+import { benchBrowserChannel } from './e2e/support/prodEnv';
 
 // Dedicated harness for `paid:parity:e2e:bench` — does each Performance+ screen render the
 // figures it was handed? See e2e/paid-parity.bench.spec.ts for what is graded.
@@ -53,7 +54,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'off',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...benchBrowserChannel() } }],
   webServer: {
     command: 'bun run dev',
     env: {

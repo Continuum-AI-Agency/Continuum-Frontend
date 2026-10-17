@@ -63,7 +63,6 @@ export type HyperframesRenderResult = {
 };
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
-
 const throwIfAborted = (signal?: AbortSignal): void => {
   if (signal?.aborted) throw new DOMException('HyperFrames render aborted', 'AbortError');
 };

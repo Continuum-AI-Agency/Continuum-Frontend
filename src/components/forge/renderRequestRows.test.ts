@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
 import {
   addSibling,
+  applyAssistOps,
   applyFormats,
   applyValue,
   autoMapHeaders,
@@ -14,6 +15,7 @@ import {
   duplicateLabel,
   duplicateMappedVariable,
   effectiveEncode,
+  effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   emptyHistory,
@@ -35,6 +37,7 @@ import {
   recordsFromTable,
   renderedRatios,
   resetKey,
+  resolveRowInputs,
   restoreRows,
   reviewSignature,
   rowBreadcrumb,
@@ -973,6 +976,58 @@ describe('rows the AI proposed', () => {
   });
 });
 
+describe('resolved input snapshots', () => {
+  test('resolves out-of-order descendants, explicit clears and media together without mutating inputs', () => {
+    const root: RequestRow = {
+      ...seedRow([]),
+      id: 'root',
+      values: { headline: 'Base', hero: { assetId: 'a', versionId: 'v' } },
+      media: { hero: { name: 'Picture', w: 100 } },
+    };
+    const child: RequestRow = {
+      ...seedRow([]),
+      id: 'child',
+      parentId: 'root',
+      clearedKeys: ['hero'],
+      values: { headline: 'Offer' },
+    };
+    const grandchild: RequestRow = {
+      ...seedRow([]),
+      id: 'grandchild',
+      parentId: 'child',
+      clearedKeys: ['headline'],
+      values: { price: 0, visible: false },
+    };
+    const rows = [grandchild, child, root];
+    const resolved = resolveRowInputs(rows);
+    expect(resolved.get('child')?.values).toEqual({ headline: 'Offer' });
+    expect(resolved.get('child')?.media).toEqual({});
+    expect(resolved.get('grandchild')?.values).toEqual({ price: 0, visible: false });
+    expect(resolved.get('root')?.media.hero?.w).toBe(100);
+    expect(resolved.get('child')?.row).toBe(child);
+    expect(root.values.headline).toBe('Base');
+    expect(root.media.hero?.name).toBe('Picture');
+  });
+
+  test('keeps the existing finite resolution for missing parents and malformed cycles', () => {
+    const a: RequestRow = { ...seedRow([]), id: 'a', parentId: 'b', values: { headline: 'A' } };
+    const b: RequestRow = { ...seedRow([]), id: 'b', parentId: 'a', values: { headline: 'B' } };
+    const orphan: RequestRow = {
+      ...seedRow([]),
+      id: 'orphan',
+      parentId: 'missing',
+      values: { headline: 'Own' },
+    };
+    const rows = [a, b, orphan];
+    const resolved = resolveRowInputs(rows);
+    for (const row of rows) {
+      expect(resolved.get(row.id)?.values).toEqual(effectiveValues(rows, row.id));
+      expect(resolved.get(row.id)?.media).toEqual(effectiveMedia(rows, row.id));
+    }
+    expect(resolved.get('orphan')?.values.headline).toBe('Own');
+  });
+});
+
 describe('merging two saves of one set', () => {
   const row = (id: string, label: string, parentId: string | null = null) => ({
     id: `00000000-0000-4000-8000-00000000000${id}`,
@@ -1073,5 +1128,105 @@ describe('a draft from the AI', () => {
     });
     expect(rows[1]).toMatchObject({ proposed: true, parentId: root, outputIds: [] });
     expect(toRenderSetRows(rows, ['square', 'story'])).toEqual([]);
+  });
+});
+
+describe('applyAssistOps', () => {
+  const root = (id: string, label: string, values: RequestRow['values'] = {}): RequestRow => ({
+    ...seedRow([], label),
+    id,
+    values,
+    check: { state: 'ready', fit: null, test: true, guardrails: [] },
+  });
+  const A = '11111111-1111-4111-8111-111111111111';
+  const B = '22222222-2222-4222-8222-222222222222';
+  const C = '33333333-3333-4333-8333-333333333333';
+  const rows = () => [
+    root(A, 'Melgar', { odds: '1.75' }),
+    root(B, 'Cristal'),
+    { ...root(C, 'Cristal · B'), parentId: B },
+  ];
+
+  test('sets, formats and renames touch only the named rows and re-check them and their variations', () => {
+    const before = rows();
+    const {
+      rows: after,
+      added,
+      selected,
+    } = applyAssistOps(
+      before,
+      [
+        { op: 'set', rowIds: [B], key: 'odds', value: '2.20' },
+        { op: 'set_outputs', rowIds: [A], outputIds: ['halftime'] },
+        { op: 'rename', rowId: A, label: 'FBC Melgar' },
+      ],
+      ['btts', 'halftime'],
+    );
+    expect(after[0]).toMatchObject({
+      label: 'FBC Melgar',
+      outputIds: ['halftime'],
+      check: { state: 'idle' },
+    });
+    expect(after[1]).toMatchObject({ values: { odds: '2.20' }, check: { state: 'idle' } });
+    expect(after[2]?.check.state).toBe('idle');
+    expect(added).toEqual([]);
+    expect(selected).toBeNull();
+  });
+
+  test('new rows get ids, nest under refs or existing rows, render every format at the root', () => {
+    const {
+      rows: after,
+      added,
+      selected,
+    } = applyAssistOps(
+      rows(),
+      [
+        {
+          op: 'add_rows',
+          rows: [
+            {
+              ref: 'n1',
+              parentRef: null,
+              label: 'Huancayo',
+              overrides: { odds: '1.90' },
+              outputIds: [],
+            },
+            {
+              ref: 'n2',
+              parentRef: 'n1',
+              label: 'Huancayo · B',
+              overrides: { odds: '2.00' },
+              outputIds: [],
+            },
+            { ref: 'n3', parentRef: A, label: 'Melgar · B', overrides: {}, outputIds: ['btts'] },
+          ],
+        },
+      ],
+      ['btts', 'halftime'],
+    );
+    expect(added).toHaveLength(3);
+    const [n1, n2, n3] = added.map((id) => after.find((row) => row.id === id)!);
+    expect(n1).toMatchObject({
+      parentId: null,
+      outputIds: ['btts', 'halftime'],
+      values: { odds: '1.90' },
+    });
+    expect(n2).toMatchObject({ parentId: n1!.id, outputIds: [] });
+    expect(n3).toMatchObject({ parentId: A, outputIds: ['btts'] });
+    expect(n1?.proposed).toBeUndefined();
+    expect(selected).toEqual(added);
+  });
+
+  test('a delete takes variations with it; a select names what stays selected', () => {
+    const { rows: after, selected } = applyAssistOps(
+      rows(),
+      [
+        { op: 'delete_rows', rowIds: [B] },
+        { op: 'select', rowIds: [A, C] },
+      ],
+      [],
+    );
+    expect(after.map((row) => row.id)).toEqual([A]);
+    expect(selected).toEqual([A]);
   });
 });

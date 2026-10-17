@@ -12,7 +12,7 @@ import * as typeScale from '../../typeScale';
 import { PlatformChip, PlatformIcon } from '../platforms/PlatformChip';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { NegativeTermsReview } from '../searchActions/NegativeTermsReview';
-import { PlatformCardActionControl, TikTokNotConnected } from './PlatformCardActionControl';
+import { PlatformCardActionControl, UnavailableAction } from './PlatformCardActionControl';
 import {
   cardActionAvailability,
   cardWriteOf,
@@ -56,12 +56,14 @@ function cardCurrency(card: PlatformCard): string | null {
 }
 
 /** The card's own action control: the approval flow for a Google write, a disabled button that
- *  says why for a TikTok one, nothing on a read-only card or without an action. */
+ *  says why for a TikTok one or one whose writes are switched off, nothing on a read-only card
+ *  or without an action. */
 function CardAction({ card, target }: { card: PlatformCard; target?: PlatformCardAction }) {
   const write = cardWriteOf(target);
   const availability = cardActionAvailability(card, target);
   if (write == null || target == null || availability === 'none') return null;
-  if (availability === 'tiktok_not_connected') return <TikTokNotConnected write={write} />;
+  if (availability !== 'ready')
+    return <UnavailableAction availability={availability} write={write} />;
   return (
     <PlatformCardActionControl
       currency={cardCurrency(card)}
@@ -173,12 +175,17 @@ function NegativeTermsEvidence({
   const [chosen, setChosen] = useState<string[] | null>(null);
   const every = card.terms.map((row) => row.term);
   const write = cardWriteOf(action);
-  const approvable =
-    action != null &&
-    write?.kind === 'add_negatives' &&
-    cardActionAvailability(card, action) === 'ready';
+  const availability = cardActionAvailability(card, action);
+  const negatives = write?.kind === 'add_negatives' ? write : null;
+  const approvable = action != null && negatives != null && availability === 'ready';
+  // Switched off, the terms go nowhere: the caller's own add would reach the same refusal.
+  const switchedOff = negatives != null && availability === 'apply_disabled';
   // With the engine's action, the card approves it here; without, it hands the caller the terms.
-  const add: AddNegatives | undefined = approvable ? (terms) => setChosen(terms) : onAddNegatives;
+  const add: AddNegatives | undefined = approvable
+    ? (terms) => setChosen(terms)
+    : switchedOff
+      ? undefined
+      : onAddNegatives;
   return (
     <div className="space-y-2">
       <table className="w-full text-sm" data-testid="platform-card-terms">
@@ -261,6 +268,7 @@ function NegativeTermsEvidence({
           </Button>
         </div>
       ) : null}
+      {switchedOff ? <UnavailableAction availability="apply_disabled" write={negatives} /> : null}
     </div>
   );
 }

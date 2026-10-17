@@ -226,8 +226,8 @@ mock.module('@/lib/library/templateSources', () => ({
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge,
   advanceTemplateForgeRun,
-  // The History and Source revision panels render for real, from these. Mocking the panels
-  // themselves would replace them for LineagePanel.test too: a multi-file Bun run shares mocks.
+  // The Versions and Source revision panels render for real, from these. Mocking the panels
+  // themselves would replace them for their own tests too: a multi-file Bun run shares mocks.
   fetchTemplateLineage: async () => ({
     connected: false,
     known: false,
@@ -282,6 +282,15 @@ mock.module('@/components/forge/useForgeRun', () => ({
     loading: false,
     refresh: async () => undefined,
   }),
+}));
+
+mock.module('@/components/forge/TemplateAuthoringEditor', () => ({
+  TemplateAuthoringEditor: (props: { brandId: string; assetId: string; versionId: string | null }) => (
+    <div
+      data-testid="authoring-source"
+      data-source-key={`${props.brandId}:${props.assetId}:${props.versionId ?? ''}`}
+    />
+  ),
 }));
 mock.module('@/lib/library/versions', () => ({
   listAssetVersions: async () => [],
@@ -388,6 +397,21 @@ function renderDetail(
 }
 
 describe('TemplateDetail', () => {
+  test('Author stays attached to the open immutable source and beta revision tabs remain available', async () => {
+    renderDetail();
+    const tabs = screen.getByRole('tablist');
+    expect(within(tabs).getByRole('tab', { name: 'Edit layers', exact: true })).toBeTruthy();
+    expect(within(tabs).getByRole('tab', { name: /Variants/ })).toBeTruthy();
+    const authorTab = within(tabs).getByRole('tab', { name: 'Author', exact: true });
+
+    fireEvent.click(authorTab);
+
+    const authoringSource = await screen.findByTestId('authoring-source');
+    expect(authoringSource.getAttribute('data-source-key')).toBe(
+      `${BRAND}:${ASSET}:${SOURCE.versionId}`,
+    );
+  });
+
   test('layer editing is beside Checks in the preview inspector', async () => {
     renderDetail();
     const edit = await screen.findByRole('tab', { name: 'Edit layers', exact: true });
@@ -750,7 +774,7 @@ describe('TemplateDetail', () => {
     renderDetail();
     const field = (await screen.findByLabelText('Headline default')) as HTMLInputElement;
     fireEvent.change(field, { target: { value: 'Unsaved copy' } });
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Variants/ }));
     fireEvent.click(screen.getByRole('tab', { name: 'Variables' }));
     expect((screen.getByLabelText('Headline default') as HTMLInputElement).value).toBe(
       'Unsaved copy',

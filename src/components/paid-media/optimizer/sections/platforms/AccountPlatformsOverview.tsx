@@ -236,14 +236,12 @@ export function PlatformMetricsSection({
   metrics,
   platform,
   liveBelow = false,
-  onCreatePortfolio,
 }: {
   metrics: AccountPlatformMetrics;
   platform: AdPlatform;
   /** The platform's own live read renders under this section: when the Optimizer has not read
    *  the platform, the section says that the figures below are that read. */
   liveBelow?: boolean;
-  onCreatePortfolio?: () => void;
 }) {
   const row = platformTotals(metrics, platform);
   if (!row?.connected) return null;
@@ -259,11 +257,7 @@ export function PlatformMetricsSection({
         data-source="account-platform-metrics"
         data-testid={`platform-metrics-${platform}`}
       >
-        <PlatformReadingNote
-          onCreatePortfolio={onCreatePortfolio}
-          platform={platform}
-          where="below"
-        />
+        <PlatformReadingNote platform={platform} where="below" />
       </section>
     );
   }

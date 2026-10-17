@@ -5,24 +5,47 @@ import type { ReactNode } from 'react';
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import type { PlatformCardsState } from '../useOptimizerData';
 
 // The populated branch mounts per-portfolio groups that each open their own
 // React Query reads. This suite is about the CAUGHT-UP branch, so those are
 // stubbed to keep the test to one concern.
 mock.module('./OptimizerActionsPortfolioGroup', () => ({
-  // The group draws the lead it is handed at the head of its own header line.
-  OptimizerActionsPortfolioGroup: ({ headerLead }: { headerLead?: ReactNode }) => (
+  // The group draws the lead it is handed at the head of its own header line, and says which
+  // platform cards it was handed.
+  OptimizerActionsPortfolioGroup: ({
+    headerLead,
+    platformCards = [],
+  }: {
+    headerLead?: ReactNode;
+    platformCards?: readonly { id: string }[];
+  }) => (
     <>
       {headerLead}
-      <div data-testid="portfolio-group" />
+      <div
+        data-cards={platformCards.map((card) => card.id).join(',')}
+        data-testid="portfolio-group"
+      />
     </>
   ),
 }));
 
+// Each platform's card read, by platform. Spread the real module: mock.module is per process.
+let cardStates: Record<string, PlatformCardsState> = {};
+const realOptimizerData = await import('../useOptimizerData');
+mock.module('../useOptimizerData', () => ({
+  ...realOptimizerData,
+  useOptimizerPlatformCards: (_brandId: string, platform: string) =>
+    cardStates[platform] ?? { status: 'loading' },
+}));
+
 const { OptimizerActions } = await import('./OptimizerActions');
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  cardStates = {};
+});
 
 const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
   ({
@@ -40,6 +63,7 @@ const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
     adset_count: 6,
     pending_recommendations: 0,
     pending_budget_moves: 0,
+    platforms: [],
     ...over,
   }) as PortfolioListItem;
 
@@ -163,5 +187,53 @@ describe('OptimizerActions — platform chips', () => {
   it('shows no chip when nothing is waiting', () => {
     renderActions([portfolio()]);
     expect(screen.queryByTestId('platform-chip')).toBeNull();
+  });
+});
+
+// G2: Actions lists the brand's Google portfolios beside the selected account's (the shell
+// merges them), so each group names its own platforms and gets its own platform cards.
+describe("OptimizerActions — a Google portfolio's queue", () => {
+  const card = (id: string, portfolioId: string) =>
+    ({ id: `platform_signal:${id}`, portfolio_ids: [portfolioId] }) as unknown as AccountCandidate;
+
+  it('names a Google portfolio by its own platform, not Meta', () => {
+    renderActions([
+      portfolio({ id: 'meta', pending_recommendations: 1, platforms: ['meta'] }),
+      portfolio({
+        id: 'google',
+        ad_account_id: '5251780631',
+        pending_recommendations: 2,
+        platforms: ['google_ads'],
+      }),
+    ]);
+    const chips = screen
+      .getAllByTestId('actions-portfolio')
+      .map((group) =>
+        [...group.querySelectorAll('[data-testid="platform-chip"]')].map((chip) =>
+          chip.getAttribute('data-platform'),
+        ),
+      );
+    expect(chips).toEqual([['meta'], ['google_ads']]);
+  });
+
+  it("hands each group exactly its own portfolio's pending cards, from every platform read", () => {
+    cardStates = {
+      google_ads: { status: 'ready', cards: [card('g1', 'google'), card('g2', 'other')] },
+      tiktok_ads: { status: 'ready', cards: [card('t1', 'google')] },
+    };
+    renderActions([
+      portfolio({ id: 'google', pending_recommendations: 2, platforms: ['google_ads'] }),
+      portfolio({ id: 'meta', pending_recommendations: 1, platforms: ['meta'] }),
+    ]);
+    const handed = screen
+      .getAllByTestId('portfolio-group')
+      .map((group) => group.getAttribute('data-cards'));
+    expect(handed).toEqual(['platform_signal:g1,platform_signal:t1', '']);
+  });
+
+  it('hands no cards while a read is pending or failed, so its recommendations stay rows', () => {
+    cardStates = { google_ads: { status: 'error' }, tiktok_ads: { status: 'loading' } };
+    renderActions([portfolio({ id: 'google', pending_recommendations: 2 })]);
+    expect(screen.getByTestId('portfolio-group').getAttribute('data-cards')).toBe('');
   });
 });

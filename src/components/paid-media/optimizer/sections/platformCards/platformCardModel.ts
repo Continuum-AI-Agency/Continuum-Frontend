@@ -308,16 +308,20 @@ export function scheduledLabel(iso: string, timezone: string | null): string {
   const date = new Date(iso);
   const zone = timezone ?? 'UTC';
   try {
-    const text = new Intl.DateTimeFormat('en-GB', {
+    // Assembled from parts: ICU builds disagree on en-GB's punctuation ("Thu, 1 Oct, 00:00"
+    // vs "Thu 1 Oct, 00:00"), and the label must read the same on every runtime.
+    const parts = new Intl.DateTimeFormat('en-GB', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false,
+      hourCycle: 'h23',
       timeZone: zone,
-    }).format(date);
-    return `${text} (${zone})`;
+    }).formatToParts(date);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value ?? '';
+    return `${part('weekday')}, ${part('day')} ${part('month')} at ${part('hour')}:${part('minute')} (${zone})`;
   } catch {
     return `${date.toISOString().slice(0, 16).replace('T', ' ')} (UTC)`;
   }

@@ -11,6 +11,8 @@ import {
   combineBatches,
   DESIGN_REF_IMAGE_OUTPUT_HANDLE,
   DESIGN_REF_TEXT_OUTPUT_HANDLE,
+  FAST_CUT_AUDIO_INPUT_HANDLE,
+  FAST_CUT_MEDIA_INPUT_HANDLE,
   isActionId,
   LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
@@ -26,6 +28,7 @@ import {
   TIMELINE_MEDIA_INPUT_HANDLE,
   VIDEO_REFERENCE_VIDEO_HANDLE,
   variationIndexFromHandle,
+  withElementStyleTokens,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { buildCanvasRunResult, type RunNode } from '@/components/ai-studio/canvasRunRequests';
@@ -45,6 +48,7 @@ import type { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
   ElementNodeData,
+  FastCutNodeData,
   FrameExtractNodeData,
   GeneratedImageVariation,
   HyperframesAgentNodeData,
@@ -65,6 +69,7 @@ import {
   collectionSourcesFor,
   runGenerationFanOut,
 } from './batch/generationFanout';
+import { effectiveBrandBookPieces } from './brandEnforcement';
 import {
   buildEnrichPayload,
   buildExtendVideoPayload,
@@ -80,7 +85,6 @@ import {
   startCanvasRunTelemetry,
 } from './canvasRunTelemetry';
 import { compositeImages } from './compositeImages';
-import { effectiveBrandBookPieces } from './brandEnforcement';
 import { blobToBase64, buildDataUrl, parseDataUrl } from './dataUrl';
 import {
   exportKindForSources,
@@ -92,6 +96,7 @@ import { extractVideoFrame } from './extractVideoFrame';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
 import { readNodeAssetRef } from './nodeAssetRef';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
+import { runFastCutNode } from './runFastCutNode';
 import { startHyperframesAgentNode } from './startHyperframesAgent';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
 
@@ -168,10 +173,30 @@ async function refreshElementSources(nodes: StudioNode[], brandId?: string): Pro
         assetId,
         previewUrl: useIntent === 'motion' ? undefined : url,
         motionUrl: useIntent === 'motion' ? url : undefined,
+        styleSlugs: element.styleSlugs ?? [],
       });
     }),
   );
 }
+
+/**
+ * The `/slug` style defaults of every Element wired into `nodeId`, in wire order, once each.
+ * Prepended to the generator's prompt, so a slug the user typed there still wins.
+ */
+export const elementStyleSlugsFor = (
+  nodeId: string,
+  nodes: readonly StudioNode[],
+  edges: readonly Edge[],
+): string[] => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const slugs = edges
+    .filter((edge) => edge.target === nodeId)
+    .flatMap((edge) => {
+      const source = nodeById.get(edge.source);
+      return source?.type === 'element' ? ((source.data as ElementNodeData).styleSlugs ?? []) : [];
+    });
+  return [...new Set(slugs)];
+};
 
 /**
  * Publisher sinks that sit downstream of the nodes a run would execute — the ones
@@ -345,6 +370,7 @@ const resolveVideoInput = (
       sourceNode?.type === 'omniGen' ||
       sourceNode?.type === 'extendVideo' ||
       sourceNode?.type === 'timelineEditor' ||
+      sourceNode?.type === 'fastCut' ||
       // An action or a router that emitted video persisted it to the same
       // `generatedVideo*` fields every other video producer uses. Both re-run on every
       // pass today, so the live path reads `resolvedOutputs` above — this is the
@@ -1104,6 +1130,37 @@ const getNodeReadiness = (
       awaiting: true,
       reason: 'Awaiting manual edit — open the Video Editor and render',
     };
+  }
+
+  // Fast Cut renders server-side from the saved room; this only refuses a run the server
+  // would refuse, with the reason said on the canvas instead of after a round trip.
+  if (node.type === 'fastCut') {
+    const poolEdges = incomingEdges.filter(
+      (edge) => edge.targetHandle === FAST_CUT_MEDIA_INPUT_HANDLE,
+    );
+    if (poolEdges.length === 0) {
+      return { ready: false, reason: 'Connect clips or stills to the Fast Cut footage pool' };
+    }
+    if (!incomingEdges.some((edge) => edge.targetHandle === FAST_CUT_AUDIO_INPUT_HANDLE)) {
+      return { ready: false, reason: 'Connect one music bed (an Audio node) to Fast Cut' };
+    }
+    for (const edge of poolEdges) {
+      const resolvable =
+        resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }) ||
+        resolveImageInput(edge, resolvedOutputs, nodeById);
+      if (!resolvable) {
+        return {
+          ready: false,
+          blockedNodeId: edge.source,
+          reason: unresolvedInputReason(
+            FAST_CUT_MEDIA_INPUT_HANDLE,
+            nodeById.get(edge.source),
+            resolvedOutputs,
+          ),
+        };
+      }
+    }
+    return { ready: true };
   }
 
   if (node.type === 'hyperframesAgent') {
@@ -2032,6 +2089,7 @@ export async function executeWorkflow(
         node.type === 'extendVideo' ||
         node.type === 'hyperframesAgent' ||
         node.type === 'timelineEditor' ||
+        node.type === 'fastCut' ||
         reusableActionModality === 'video'
       ) {
         const genVideo =
@@ -2521,7 +2579,7 @@ export async function executeWorkflow(
         const result = await controls.executeOmniTurn(nodeId, {
           brandId,
           turn,
-          prompt,
+          prompt: withElementStyleTokens(prompt, elementStyleSlugsFor(nodeId, nodes, edges)),
           aspectRatio,
           resolution,
           references: references.length > 0 ? references : undefined,
@@ -2908,6 +2966,55 @@ export async function executeWorkflow(
         return false;
       }
 
+      if (node.type === 'fastCut') {
+        if (!workflowRoomId) {
+          updateNodeStatus(nodeId, 'failed', 'AI Studio workspace is unavailable');
+          return false;
+        }
+        const controller = controls.registerController(nodeId);
+        try {
+          // The server reads this node and its wires off the SAVED room, so the room must
+          // hold what is on screen before it is asked.
+          await controls.flushSave?.();
+          const cut = await runFastCutNode(
+            { brandProfileId: brandId, roomId: workflowRoomId, nodeId },
+            controller.signal,
+          );
+          setNodeOutput(nodeId, {
+            type: 'video',
+            url: cut.signedUrl,
+            mimeType: 'video/mp4',
+            storagePath: cut.storagePath,
+            storageBucket: cut.bucket,
+            assetId: cut.assetId,
+            ...(cut.assetVersionId ? { assetVersionId: cut.assetVersionId } : {}),
+          });
+          // The same keys the server filed, so this tab's next save agrees with the room
+          // instead of writing back a node that never rendered.
+          const filed: Partial<FastCutNodeData> = {
+            assetId: cut.assetId,
+            assetVersionId: cut.assetVersionId ?? undefined,
+            masterAssetId: cut.masterAssetId,
+            durationSec: cut.durationSec,
+            fastCutFps: cut.fps,
+            fastCutCuts: cut.cuts,
+            fastCutBpm: cut.bpm,
+          };
+          useStudioStore.getState().updateNodeData(nodeId, filed);
+          updateNodeStatus(nodeId, 'completed');
+          return true;
+        } catch (error) {
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            error instanceof Error ? error.message : 'The fast cut could not be rendered',
+          );
+          return false;
+        } finally {
+          controls.releaseController(nodeId, controller);
+        }
+      }
+
       // ── Canvas V3 runtime ───────────────────────────────────────────────────
       // All four sit ABOVE the generator fallthrough below; anything that reaches it
       // without a payload dies on "Missing required inputs or prompt".
@@ -3149,6 +3256,7 @@ export async function executeWorkflow(
       // anything that reaches it without a payload dies on "Missing required inputs".
       const batchSources = collectionSourcesFor(nodeId, edges, resolvedOutputs, nodeById);
       const isVideoGenerator = isVideoGeneratorNodeType(node.type);
+      const elementStyleSlugs = elementStyleSlugsFor(nodeId, nodes, edges);
       if (batchSources && (node.type === 'nanoGen' || isVideoGenerator)) {
         const plan = batchGenerationPlan(batchSources);
         if (!plan) {
@@ -3174,7 +3282,12 @@ export async function executeWorkflow(
             const built = isVideoGenerator
               ? buildVeoPayload(target, perItem, nodes, edges, brandId)
               : buildNanoGenPayload(target, perItem, nodes, edges, brandId);
-            return built ? toBackendPayload(built) : null;
+            return built
+              ? toBackendPayload({
+                  ...built,
+                  prompt: withElementStyleTokens(built.prompt, elementStyleSlugs),
+                })
+              : null;
           },
           executeGeneration: async (executionId, itemPayload) => {
             const result = await executeGeneration(executionId, itemPayload);
@@ -3227,7 +3340,10 @@ export async function executeWorkflow(
         return false;
       }
 
-      const backendPayload = toBackendPayload(payload);
+      const backendPayload = toBackendPayload({
+        ...payload,
+        prompt: withElementStyleTokens(payload.prompt, elementStyleSlugs),
+      });
       const result = await executeGeneration(nodeId, backendPayload, (preview) => {
         if (preview.type !== 'image') return;
         const rawBase64 = preview.base64 ?? '';

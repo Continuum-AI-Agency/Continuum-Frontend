@@ -3,7 +3,7 @@
 // (mirrors AdminUserList.test.tsx / OrganicWorkspaceTabs.test.tsx; the focused
 // agent-validate runner does not apply this preload, so run it in the batch).
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 
 // Mutable route + navigation spy, controlled per test.
 let pathnameState = '/scale';
@@ -115,11 +115,13 @@ describe('CommandPalette contextual suggestions', () => {
     expect(container.textContent).not.toContain('Ask Jaina');
   });
 
-  it("navigates to a suggestion's deep link when selected", () => {
+  it("navigates to a suggestion's deep link when selected", async () => {
     pathnameState = '/scale';
     const { container } = render(<CommandPalette />);
 
-    fireEvent.click(buttonByText(container, 'Ask Jaina'));
+    await act(async () => {
+      fireEvent.click(buttonByText(container, 'Ask Jaina'));
+    });
 
     expect(pushMock).toHaveBeenCalledWith('/scale?tab=jaina');
   });

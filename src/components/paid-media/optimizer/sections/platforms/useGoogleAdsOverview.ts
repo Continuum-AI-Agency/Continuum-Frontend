@@ -98,22 +98,25 @@ async function fetchHasGoogleLogin(): Promise<boolean> {
 
 /**
  * `window` is the producer's own window when the tab has it, so the header and the split by
- * campaign type state the same dates; without it, the same 7 complete days ending yesterday.
+ * campaign type state the same dates; null when the producer has none, which reads the same 7
+ * complete days ending yesterday; 'pending' while the producer is still answering, which reads
+ * nothing yet — a read on the fallback first would be thrown away (and, between UTC midnight
+ * and the account's, cover a day the account has not finished).
  */
 export function useGoogleAdsOverview(
   brandId: string,
-  window?: GoogleReadWindow | null,
+  window: GoogleReadWindow | null | 'pending' = null,
 ): GoogleAdsOverviewState {
   const accounts = useOptimizerAdAccounts(brandId);
   const granted = accountsOn(accounts.data, 'google_ads')[0] ?? null;
   const customerId = granted?.account_id ?? null;
   const fallbackWindow = completeDaysWindow(7);
-  const range = window ?? fallbackWindow;
+  const range = window === 'pending' ? fallbackWindow : (window ?? fallbackWindow);
 
   const overview = useQuery({
     queryKey: googleAdsQueryKeys.overview(brandId, customerId ?? 'none', range),
     queryFn: () => fetchGoogleAdsOverview(brandId, customerId as string, range),
-    enabled: Boolean(brandId && customerId),
+    enabled: Boolean(brandId && customerId) && window !== 'pending',
     staleTime: FIVE_MINUTES,
     retry: 1,
   });

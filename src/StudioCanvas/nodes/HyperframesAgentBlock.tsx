@@ -36,6 +36,7 @@ import { appendDictation, DictationButton } from '@/components/dictation/Dictati
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
+import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { useElements } from '@/lib/ai-studio/elements';
 import {
@@ -755,6 +756,22 @@ export function HyperframesAgentBlock({
                 <p className="font-medium text-foreground">Craft {review.data.craftScore}/10</p>
               ) : null}
             </div>
+          ) : null}
+
+          {revision && runtime?.brandProfileId ? (
+            <a
+              href={forgeDeepLinkHref({
+                templateAssetId: null,
+                renderSetId: null,
+                rowId: null,
+                hyperframesRevisionId: revision.data.revisionId,
+                brandId: runtime.brandProfileId,
+              })}
+              className="inline-flex min-h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              data-testid="hyperframes-edit-in-forge"
+            >
+              Edit composition in Forge
+            </a>
           ) : null}
 
           {quality ? (

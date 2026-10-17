@@ -47,6 +47,7 @@ import {
   fetchTemplateRevisionVariants,
   fetchTemplateVariants,
 } from '@/lib/library/templateSources';
+import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -740,7 +741,7 @@ export function TemplateGallery({
                                           <dd>{source.parse?.missingFootage?.length ?? '—'}</dd>
                                         </dl>
                                         {source.parseError ? (
-                                          <p className="text-destructive">{source.parseError}</p>
+                                          <p className="text-destructive">{parseErrorSentence(source.parseError)}</p>
                                         ) : null}
                                         <Button
                                           size="sm"

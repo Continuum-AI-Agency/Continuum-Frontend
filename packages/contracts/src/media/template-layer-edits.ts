@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { templateRevisionLayerEditSchema } from './template-revisions';
+import { templateAuthoringKeyframesInventorySchema } from './template-authoring-keyframes';
+import { templateLayerOrderSchema, templateRevisionLayerEditSchema } from './template-revisions';
 import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 
 export const templateLayerEditSchema = templateRevisionLayerEditSchema;
@@ -15,11 +16,14 @@ export const templateLayerPreviewRequestSchema = z
     expectedVersionId: z.string().uuid(),
     compId: z.number().int().positive().optional(),
     edits: z.array(templateLayerEditSchema).max(64),
+    orders: z.array(templateLayerOrderSchema).max(16).default([]),
   })
   .strict()
   .refine(
-    (r) => new Set(r.edits.map((e) => e.layerId)).size === r.edits.length,
-    'A layer may appear only once',
+    (r) =>
+      new Set(r.edits.map((e) => `${e.compId}:${e.layerId}`)).size === r.edits.length &&
+      new Set(r.orders.map((order) => order.compId)).size === r.orders.length,
+    'A layer or composition may appear only once',
   );
 export type TemplateLayerPreviewRequest = z.infer<typeof templateLayerPreviewRequestSchema>;
 
@@ -29,6 +33,7 @@ export const saveTemplateLayerVariantRequestSchema = z
     expectedVersionId: z.string().uuid(),
     compId: z.number().int().positive().optional(),
     edits: z.array(templateLayerEditSchema).max(64),
+    orders: z.array(templateLayerOrderSchema).max(16).default([]),
     name: renameTemplateSourceRequestSchema.shape.title,
     exposures: z
       .array(z.object({ slotKey: templateSlotSchema.shape.key, exposed: z.boolean() }).strict())
@@ -37,9 +42,10 @@ export const saveTemplateLayerVariantRequestSchema = z
   .strict()
   .refine(
     (r) =>
-      new Set(r.edits.map((e) => e.layerId)).size === r.edits.length &&
+      new Set(r.edits.map((e) => `${e.compId}:${e.layerId}`)).size === r.edits.length &&
+      new Set(r.orders.map((order) => order.compId)).size === r.orders.length &&
       new Set(r.exposures.map((e) => e.slotKey)).size === r.exposures.length,
-    'Duplicate layer or field',
+    'Duplicate layer, composition or field',
   );
 export type SaveTemplateLayerVariantRequest = z.infer<typeof saveTemplateLayerVariantRequestSchema>;
 
@@ -56,6 +62,7 @@ export const templateEditableLayerSchema = z
     text: z.string().nullable(),
     font: z.string().nullable(),
     fontSize: z.number().finite().nullable(),
+    fontReason: z.string().nullable().optional(),
     designLayerId: z.number().int().nullable().optional(),
     artboardId: z.number().int().nullable().optional(),
     x: z.number().finite().nullable().optional(),
@@ -63,6 +70,11 @@ export const templateEditableLayerSchema = z
     width: z.number().finite().nullable().optional(),
     height: z.number().finite().nullable().optional(),
     geometryReason: z.string().nullable().optional(),
+    groupingReason: z.string().nullable().optional(),
+    timingReason: z.string().nullable().optional(),
+    keyframeReasons: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeReasons.optional(),
+    keyframeChannels: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeChannels.optional(),
+    maskReason: z.string().nullable().optional(),
     slotKeys: z.array(z.string()),
     visibilitySlotKeys: z.array(z.string()),
     /** Stack position in its comp; 0 is the top (AE's layer 1). */
@@ -140,13 +152,34 @@ export const templateLayerPackageResponseSchema = templateLayerPreviewResponseSc
 export const templateLayerVariantResponseSchema = z
   .object({
     assetId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
     parseState: z.string(),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict();
 export type TemplateLayerVariantResponse = z.infer<typeof templateLayerVariantResponseSchema>;
+
+/** Golden is the original upload; a variant records the source it was forked from. */
+export const templateLineageSchema = z
+  .object({
+    role: z.enum(['golden', 'variant']),
+    parent: z.object({ assetId: z.string().uuid(), name: z.string() }).strict().nullable(),
+  })
+  .strict();
+export type TemplateLineage = z.infer<typeof templateLineageSchema>;
+
+/** The layer list with its source lineage and import kind. */
+export const templateLayerInventoryResponseSchema = templateLayerInventorySchema
+  .extend({
+    lineage: templateLineageSchema,
+    designImport: z.boolean(),
+  })
+  .strict();
+export type TemplateLayerInventoryResponse = z.infer<typeof templateLayerInventoryResponseSchema>;
 export const templateLayerVariantsResponseSchema = z
   .object({
     variants: z.array(z.object({ assetId: z.string().uuid(), name: z.string() }).strict()),
   })
   .strict();
+
+export type TemplateLayerVariantsResponse = z.infer<typeof templateLayerVariantsResponseSchema>;

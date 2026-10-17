@@ -8,32 +8,58 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { RenderApproval } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { LayerDraftState } from './layerDraft';
 import { forgeQueryKeys } from './queryKeys';
-import type { ForgeRenderIntent, ForgeTemplateIntent } from './RenderRequestsGrid';
+import type { ForgeRenderIntent } from './RenderRequestsGrid';
+import { useForgeExitGuard } from './useForgeExitGuard';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
+const fetchApprovals = mock(async (_brandId: string) => [] as RenderApproval[]);
+
+mock.module('@/lib/library/renderApprovals', () => ({
+  fetchRenderApprovals: fetchApprovals,
+  decideRenderApproval: async () => {
+    throw new Error('not used in ForgeTabs tests');
+  },
+}));
 
 let gridMounts = 0;
 
 mock.module('@/components/forge/ForgeWorkbench', () => ({
-  ForgeWorkbench: ({
-    onOpenRender,
-    templateIntent,
-  }: {
-    onOpenRender?: (intent: ForgeRenderIntent) => void;
-    templateIntent?: ForgeTemplateIntent;
-  }) => (
-    <>
-      <button
-        type="button"
-        onClick={() => onOpenRender?.({ templateKey: '133', renderSetId: 'set-1' })}
-      >
-        Open in Render
-      </button>
-      <p data-testid="template-intent">{JSON.stringify(templateIntent ?? null)}</p>
-    </>
-  ),
+  ForgeWorkbench: ({ onOpenRender }: { onOpenRender?: (intent: ForgeRenderIntent) => void }) => {
+    const guard = useForgeExitGuard();
+    const [dirty, setDirty] = useState(false);
+    const draft: LayerDraftState = {
+      dirty,
+      busy: false,
+      saveLabel: 'Save as a new variant',
+      save: async () => {
+        setDirty(false);
+        guard.onDraftChange(null);
+        return true;
+      },
+      discard: () => {
+        setDirty(false);
+        guard.onDraftChange(null);
+      },
+    };
+    useEffect(() => guard.onDraftChange(dirty ? draft : null), [dirty]);
+    return (
+      <>
+        <button type="button" onClick={() => setDirty(true)}>
+          Dirty draft
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenRender?.({ templateKey: '133', renderSetId: 'set-1' })}
+        >
+          Open in Render
+        </button>
+        {guard.dialog}
+      </>
+    );
+  },
 }));
 mock.module('@/components/forge/RenderRequestsGrid', () => ({
   RenderRequestsGrid: ({
@@ -112,9 +138,9 @@ const waiting: RenderApproval = {
 };
 
 /** The approvals list is seeded fresh, so the tabs read it without a request. */
-const renderTabs = (approvals: RenderApproval[] = []) => {
+const renderTabs = (approvals: RenderApproval[] | null = []) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(forgeQueryKeys.approvals(BRAND), approvals);
+  if (approvals !== null) client.setQueryData(forgeQueryKeys.approvals(BRAND), approvals);
   return render(
     <QueryClientProvider client={client}>
       <ForgeTabs brandId={BRAND} />
@@ -123,6 +149,8 @@ const renderTabs = (approvals: RenderApproval[] = []) => {
 };
 
 const intentOnGrid = () => JSON.parse(screen.getByTestId('render-grid').textContent ?? 'null');
+const selectedTab = () =>
+  document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim();
 
 describe('ForgeTabs', () => {
   test('shows all three tabs without mounting inactive grids', () => {
@@ -136,12 +164,23 @@ describe('ForgeTabs', () => {
     expect(gridMounts).toBe(0);
   });
 
+  test('shows unavailable instead of a zero count when the initial approval list fails', async () => {
+    fetchApprovals.mockImplementationOnce(async () => {
+      throw new Error('offline');
+    });
+    renderTabs(null);
+
+    const ledger = await screen.findByRole('tab', { name: /approval count unavailable/i });
+    expect(ledger.textContent).not.toMatch(/\b0\b/);
+    expect(screen.getByTitle(/approval count unavailable/i)).toBeTruthy();
+  });
+
   test('openRender switches to the Render tab and hands the grid its intent, once', async () => {
     renderTabs();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open in Render' }));
 
-    expect(screen.getByRole('tab', { name: 'Render' }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(selectedTab()).toBe('Render'));
     await screen.findByTestId('render-grid');
     expect(intentOnGrid()).toEqual({ templateKey: '133', renderSetId: 'set-1' });
 
@@ -149,19 +188,15 @@ describe('ForgeTabs', () => {
     expect(intentOnGrid()).toBeNull();
   }, 30_000);
 
-  test('Template settings on the Render tab lands on Templates with that template', async () => {
+  test('an open-in-Render intent waits for the layer draft save', async () => {
     renderTabs();
-    fireEvent.click(await screen.findByRole('tab', { name: 'Render' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Template settings' }));
-
-    expect(screen.getByRole('tab', { name: 'Templates' }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
-    expect(JSON.parse(screen.getByTestId('template-intent').textContent ?? 'null')).toEqual({
-      assetId: 'asset-1',
-      tab: 'layers',
-    });
-  }, 30_000);
+    fireEvent.click(screen.getByRole('button', { name: 'Dirty draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Render' }));
+    expect(selectedTab()).toBe('Templates');
+    fireEvent.click(await screen.findByRole('button', { name: 'Save as a new variant' }));
+    await waitFor(() => expect(selectedTab()).toBe('Render'));
+    expect(intentOnGrid()).toEqual({ templateKey: '133', renderSetId: 'set-1' });
+  });
 
   test('the Render grid stays mounted across a tab round trip', async () => {
     renderTabs();
@@ -174,15 +209,23 @@ describe('ForgeTabs', () => {
     expect(gridMounts).toBe(1);
   }, 30_000);
 
+  test('an outer tab change waits for the current Forge draft guard', async () => {
+    renderTabs();
+    fireEvent.click(screen.getByRole('button', { name: 'Dirty draft' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Render' }));
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+    expect(selectedTab()).toBe('Templates');
+    fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+    await waitFor(() => expect(selectedTab()).toBe('Templates'));
+  });
+
   test('a fired batch opens the Render ledger', async () => {
     renderTabs();
     fireEvent.click(await screen.findByRole('tab', { name: 'Render' }));
     await screen.findByTestId('render-grid');
     fireEvent.click(screen.getByRole('button', { name: 'Fire batch' }));
 
-    expect(screen.getByRole('tab', { name: 'Render ledger' }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
+    await waitFor(() => expect(selectedTab()).toBe('Render ledger'));
   }, 30_000);
 
   test('approvals live on the ledger, and its tab counts what waits', async () => {

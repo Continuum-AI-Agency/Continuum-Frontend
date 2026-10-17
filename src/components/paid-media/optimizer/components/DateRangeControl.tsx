@@ -29,7 +29,9 @@ export function DateRangeControl({ value, onChange, hasFlight, className }: Date
   const custom = value.kind === 'custom' ? { from: value.from, to: value.to } : null;
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+    // The px gap on touch keeps the Custom field's 44px hit area off the presets' drawn edges,
+    // across the row and, once it wraps under them, between the lines.
+    <div className={cn('flex flex-wrap items-center gap-1.5 pointer-coarse:gap-[12px]', className)}>
       <ToggleGroup
         aria-label="Reporting range"
         onValueChange={(next) => {

@@ -5,6 +5,7 @@ import {
   templateFamilyForLibraryFormat,
   templateFontPushResponseSchema,
   templateFontStatuses,
+  templateMaskSourceGeometrySchema,
   templateParseFontFamilies,
   templateParseRatios,
   templateParseSchema,
@@ -313,6 +314,21 @@ describe('templateFontPushResponseSchema', () => {
         workspace: 'private-workspace',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('templateMaskSourceGeometrySchema', () => {
+  it('accepts signed path-local bounds only with an exact pin and verified affine', () => {
+    const geometry = {
+      status: 'verified', coordinateSpace: 'layer-source-pixels', sourceKind: 'shape-path',
+      sourceRef: { kind: 'native-path', id: null, name: 'Path 1' },
+      bounds: { x: -243.27, y: -4, width: 80, height: 90 }, anchor: [0, 0, 0],
+      position: [540, 960, 0], scale: [100, 100, 100], rotation: 0,
+      localToComp: { matrix: [1, 0, 0, 1, 540, 960], corners: [[-243.27, -4], [-163.27, -4], [-163.27, 86], [-243.27, 86]], verifiedWithPyAep: true },
+      measurement: 'py-aep-native', packageSha256: 'a'.repeat(64), sourceAepSha256: 'b'.repeat(64), compId: 4, layerUid: 91,
+    };
+    expect(templateMaskSourceGeometrySchema.parse(geometry)).toEqual(geometry);
+    expect(() => templateMaskSourceGeometrySchema.parse({ ...geometry, localToComp: { ...geometry.localToComp, verifiedWithPyAep: false } })).toThrow();
   });
 });
 

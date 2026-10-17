@@ -117,12 +117,31 @@ mock.module('./platformCaps/usePortfolioPlatformCaps', () => ({
   useSetPortfolioPlatformCap: () => ({ mutateAsync: setPlatformCapMutateAsync, isPending: false }),
 }));
 
+// The allowed actions read optimizer_get_portfolio_platform_actions; same spread-the-real rule.
+const realPlatformActions = await import('./platformActions/usePortfolioPlatformActions');
+mock.module('./platformActions/usePortfolioPlatformActions', () => ({
+  ...realPlatformActions,
+  usePortfolioPlatformActions: () => ({
+    status: 'ready',
+    platforms: [{ platform: 'google_ads', allowed: ['set_budget', 'set_status'], accounts: 1 }],
+  }),
+  useSetPortfolioPlatformActions: () => ({ mutateAsync: async () => [], isPending: false }),
+}));
+
 // The picker's Google half reads paid-media-metrics; this suite is about the Meta form, so the
 // brand has no Google account here (the Google group has its own suite under picker/).
 const realGoogleInventory = await import('../picker/useGooglePickerInventory');
 mock.module('../picker/useGooglePickerInventory', () => ({
   ...realGoogleInventory,
   useGooglePickerInventory: () => ({ status: 'none' }),
+}));
+
+// The members read backs the Google group, which this suite never shows (no Google account).
+const realMembers = await import('../picker/usePortfolioPlatformMembers');
+mock.module('../picker/usePortfolioPlatformMembers', () => ({
+  ...realMembers,
+  usePortfolioMembers: () => ({ status: 'ready', members: [] }),
+  useSaveGoogleMembers: () => ({ mutateAsync: async () => undefined, isPending: false }),
 }));
 
 // The picker is a heavy virtualized tree; stub it so this suite is only about the config form.
@@ -724,3 +743,19 @@ function saveButtonFor(field: HTMLInputElement): HTMLButtonElement {
   const row = field.parentElement as HTMLElement;
   return within(row).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
 }
+
+describe('allowed actions per platform', () => {
+  it('shows for a portfolio that holds a Google campaign, with its kinds', () => {
+    renderPanel({ platforms: ['google_ads', 'meta'] });
+    expect(screen.getByText('Allowed actions per platform')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Google actions' })).toBeTruthy();
+  });
+
+  it('stays out of a portfolio on Meta alone, and out of one whose list names no platform', () => {
+    renderPanel({ platforms: ['meta'] });
+    expect(screen.queryByText('Allowed actions per platform')).toBeNull();
+    cleanup();
+    renderPanel();
+    expect(screen.queryByText('Allowed actions per platform')).toBeNull();
+  });
+});

@@ -55,6 +55,22 @@ describe('template edit boundary', () => {
         exposures: [{ slotKey: 'text__label', exposed: 'false' }],
       }).success,
     ).toBe(false);
+    expect(
+      saveTemplateLayerVariantRequestSchema.safeParse({ ...save, saveTo: 'this_variant' })
+        .success,
+    ).toBe(false);
+  });
+  test('previews accept a single composition order and reject duplicate order targets', () => {
+    const order = { compId: 63, layerIds: [114, 116, 71] };
+    expect(templateLayerPreviewRequestSchema.parse({ ...base, edits: [] }).orders).toEqual([]);
+    expect(
+      templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [], orders: [order] }).success,
+    ).toBe(true);
+    for (const orders of [[{ ...order, layerIds: [114, 114] }], [order, order]]) {
+      expect(
+        templateLayerPreviewRequestSchema.safeParse({ ...base, edits: [], orders }).success,
+      ).toBe(false);
+    }
   });
   test('transforms are static pairs and numbers within AE ranges', () => {
     const at = { compId: 63, layerId: 114 };
@@ -97,8 +113,14 @@ describe('template edit boundary', () => {
       text: null,
       font: null,
       fontSize: null,
+      fontReason: 'Font metadata was not available.',
+      designLayerId: null,
+      artboardId: 10,
       x: 960,
       y: 540,
+      groupingReason: null,
+      timingReason: null,
+      maskReason: null,
       slotKeys: [],
       visibilitySlotKeys: [],
       index: 0,

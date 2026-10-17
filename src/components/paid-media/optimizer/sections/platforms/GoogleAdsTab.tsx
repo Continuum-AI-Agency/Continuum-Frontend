@@ -3,12 +3,13 @@
 // The Overview's Google tab (MP2, docs/optimizer-multiplatform/frontend.html §2): Google's own
 // screen, read live for the brand's granted Google Ads customer. A sentence with figures, the
 // window it covers, then four to six tiles by campaign type — each naming its entity, its figure
-// and what the figure is compared with. No chart and no full-width bar. The Optimizer does not
-// manage Google yet, so there are no recommendation cards here and the tab says so instead of
-// showing an empty section.
+// and what the figure is compared with. No chart and no full-width bar. Google's
+// recommendation cards and portfolio rows render under this read (OptimizerOverview's
+// PlatformPortfolioSections), not here: this is Google's own read of the account.
 //
 // When the read cannot happen, the empty state names the reason and the one thing that fixes it.
 
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
@@ -214,12 +215,10 @@ function EmptyState({
 export function GoogleAdsTabView({
   state,
   readingNote = true,
-  onCreatePortfolio,
 }: {
   state: GoogleAdsOverviewState;
   /** False when the frame above already said what these figures are. */
   readingNote?: boolean;
-  onCreatePortfolio?: () => void;
 }) {
   switch (state.status) {
     case 'loading':
@@ -286,13 +285,7 @@ export function GoogleAdsTabView({
             </div>
           </section>
           <Tiles currency={currency} overview={overview} />
-          {readingNote ? (
-            <PlatformReadingNote
-              onCreatePortfolio={onCreatePortfolio}
-              platform="google_ads"
-              where="above"
-            />
-          ) : null}
+          {readingNote ? <PlatformReadingNote platform="google_ads" where="above" /> : null}
         </div>
       );
     }
@@ -357,24 +350,27 @@ export function GoogleAdsTab({
   mode = 'full',
   window = null,
   readingNote = true,
-  onCreatePortfolio,
+  children,
 }: {
   brandId: string;
   /** 'breakdown' when the multi-platform frame already leads the tab. */
   mode?: 'full' | 'breakdown';
-  /** The producer's window, so this read states the same dates as the frame above it. */
-  window?: GoogleReadWindow | null;
+  /** The producer's window, so this read states the same dates as the frame above it; null
+   *  when it has none; 'pending' while it is still answering (nothing is read yet). */
+  window?: GoogleReadWindow | null | 'pending';
   readingNote?: boolean;
-  onCreatePortfolio?: () => void;
+  /** What sits under the read; held until the read settles, so the read never pushes it. */
+  children?: ReactNode;
 }) {
   const state = useGoogleAdsOverview(brandId, window);
-  return mode === 'breakdown' ? (
-    <GoogleCampaignTypeBreakdown state={state} />
-  ) : (
-    <GoogleAdsTabView
-      onCreatePortfolio={onCreatePortfolio}
-      readingNote={readingNote}
-      state={state}
-    />
+  return (
+    <>
+      {mode === 'breakdown' ? (
+        <GoogleCampaignTypeBreakdown state={state} />
+      ) : (
+        <GoogleAdsTabView readingNote={readingNote} state={state} />
+      )}
+      {state.status === 'loading' ? null : children}
+    </>
   );
 }

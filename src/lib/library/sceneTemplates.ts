@@ -108,6 +108,41 @@ export function sceneProblem(error: unknown): { code: string | null; message: st
   return { code, message: detail ?? error.message };
 }
 
+const REOPEN_IN_BLENDER = 'Open it in a current Blender, save it, and upload it again.';
+
+/** The forge's refusal codes (`blend-library` `Refusal`); it reads Blender 2.80 to 5.2. */
+const BLEND_REFUSALS = new Map([
+  [
+    'too_old',
+    'Saved in Blender 2.79 or older. Open it in Blender 2.80 or newer, save it, and upload it again.',
+  ],
+  [
+    'too_new',
+    'Saved in a newer Blender than Forge reads yet (5.2). Save it from Blender 5.2 or older and upload it again.',
+  ],
+  ['big_endian', `Saved by an old 32-bit or big-endian build of Blender. ${REOPEN_IN_BLENDER}`],
+  ['pointer_32bit', `Saved by an old 32-bit or big-endian build of Blender. ${REOPEN_IN_BLENDER}`],
+  ['not_blend', "This isn't a Blender file."],
+  ['too_large', 'This .blend is too large to read.'],
+  ['malformed', 'This .blend is damaged or incomplete. Save it again in Blender and re-upload.'],
+]);
+
+/**
+ * Why a .blend did not parse, for a person. The stored error ends with the forge's code
+ * ("ATV_Buggy.blend is not a readable Blender file: too_old"); an unknown one is shown as it is.
+ */
+export function blendParseProblem(parseError: string | null): string {
+  if (!parseError) return 'This .blend could not be read.';
+  const code = /([a-z0-9_]+)\s*$/.exec(parseError)?.[1] ?? '';
+  return BLEND_REFUSALS.get(code) ?? `This .blend could not be read: ${parseError}`;
+}
+
+/** Any family's parse error: a Blender refusal reads as its sentence, anything else as written. */
+export function parseErrorSentence(parseError: string): string {
+  const code = /readable Blender file: ([a-z0-9_]+)\s*$/.exec(parseError)?.[1];
+  return (code && BLEND_REFUSALS.get(code)) || parseError;
+}
+
 /** A render's stored error is a code only: `scene_render_failed` reads "Scene render failed". */
 export function sceneErrorSentence(code: string): string {
   const words = code.replaceAll('_', ' ').trim();

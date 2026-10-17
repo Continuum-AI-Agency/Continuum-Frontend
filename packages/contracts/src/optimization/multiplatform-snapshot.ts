@@ -23,13 +23,17 @@ export const ConversionActionCountSchema = z.object({
   value: z.number().nonnegative().optional(),
   /** Google conversion_action.category / Meta action_type family, verbatim. */
   category: z.string().optional(),
-  /** Google window rollups: the action's name and the verdict of the ONE counting rule
-   *  (supabase/functions/paid-media-metrics/google/conversion-rule.ts) — whether it is in
-   *  the campaign's goals, whether it counted toward its KPI bucket, and if not, why.
-   *  Absent on platforms and reads that do not judge actions. */
+  /** Google window rollups and daily rows: the action's name and the verdict of the ONE
+   *  counting rule (supabase/functions/paid-media-metrics/google/conversion-rule.ts) — whether
+   *  it is in the campaign's goals, whether it counted, the KPI bucket it counted toward
+   *  (counted only), and if not, why. The metrics RPCs sum entity_daily by `counted` + `bucket`
+   *  and never re-derive the rule. Absent on platforms and reads that do not judge actions. */
   name: z.string().optional(),
   inGoals: z.boolean().optional(),
   counted: z.boolean().optional(),
+  bucket: z
+    .enum(['purchases', 'addToCarts', 'leads', 'signups', 'landingPageViews', 'appInstalls'])
+    .optional(),
   excludedReason: z.enum(['no_bucket', 'not_in_goals', 'ga4_engagement_event']).optional(),
 });
 

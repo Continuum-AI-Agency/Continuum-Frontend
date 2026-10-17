@@ -1,6 +1,7 @@
 /**
- * A Blender template's sheet: it names the template and links to the Library and the editor,
- * draws the picked output at the file's own values (a draft with no changes, `scope: 'all'`),
+ * A Blender template's sheet: it names the template (renamable, removable) and links to the
+ * Library and the editor, shows the picked output's last final render — or, before there is one,
+ * a draft at the file's own values (no changes, `scope: 'all'`) —
  * summarises the fields by inspector group, lists recent renders with their files, and waits on
  * the parse instead of asking for a scene the forge has not read yet.
  */
@@ -32,13 +33,14 @@ const VIEW = {
   outputs: parse.outputs,
   externals: [],
 };
-const source = (parseState: string): TemplateSourceSummary =>
+const source = (parseState: string, parseError: string | null = null): TemplateSourceSummary =>
   templateSourceSummarySchema.parse({
     assetId: ASSET,
     brandId: BRAND,
     versionId: VERSION,
     family: 'blender',
     parseState,
+    parseError,
     displayName: 'Summer Scene',
     createdAt: '2026-10-14T00:00:00Z',
   });
@@ -61,6 +63,7 @@ const listSceneRenders = mock(async () => ({
       outputs: [{ assetId: OUT_ASSET, versionId: OUT_VERSION }],
       outputId: 'Main/CamWide',
       createdAt: new Date().toISOString(),
+      mediaType: 'image',
     },
     {
       jobId: FAILED,
@@ -69,6 +72,7 @@ const listSceneRenders = mock(async () => ({
       outputs: [],
       outputId: 'Main/CamWide',
       createdAt: new Date().toISOString(),
+      mediaType: 'image',
     },
   ],
 }));
@@ -100,11 +104,20 @@ afterAll(() => {
   mock.module('@/lib/ai-studio/elements', () => realElements);
 });
 
-function mount(parseState = 'parsed', onBack = () => {}) {
+function mount(
+  summary: string | TemplateSourceSummary = 'parsed',
+  handlers: { onBack?: () => void; onRename?: (title: string) => void; onRemove?: () => void } = {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <SceneTemplateDetail brandId={BRAND} source={source(parseState)} onBack={onBack} />
+      <SceneTemplateDetail
+        brandId={BRAND}
+        source={typeof summary === 'string' ? source(summary) : summary}
+        onBack={handlers.onBack ?? (() => {})}
+        onRename={handlers.onRename ?? (() => {})}
+        onRemove={handlers.onRemove ?? (() => {})}
+      />
     </QueryClientProvider>,
   );
 }
@@ -112,7 +125,7 @@ function mount(parseState = 'parsed', onBack = () => {}) {
 describe('SceneTemplateDetail', () => {
   test('header: name, Back, the Library and the editor', async () => {
     const onBack = mock(() => {});
-    mount('parsed', onBack);
+    mount('parsed', { onBack });
     expect(screen.getByRole('heading', { level: 2, name: 'Summer Scene' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open in Library/ })).toBeTruthy();
     const editor = await screen.findByRole('link', { name: 'Open editor' });
@@ -122,22 +135,44 @@ describe('SceneTemplateDetail', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  test('draws the first output at the file values, one chip per output', async () => {
+  test('renames through the title and removes through the workbench', async () => {
+    const onRename = mock((_title: string) => {});
+    const onRemove = mock(() => {});
+    mount('parsed', { onRename, onRemove });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Summer Scene' }));
+    const input = screen.getByRole('textbox', { name: 'Rename Summer Scene' });
+    fireEvent.change(input, { target: { value: 'Winter Scene' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRename.mock.calls).toEqual([['Winter Scene']]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  test("shows the picked output's last final render and asks for no draft", async () => {
     mount();
+    const stage = await screen.findByRole('group', { name: 'Scene preview' });
+    const finished = (await within(stage).findByAltText(
+      'Render of Main · CamWide · 640×360',
+    )) as HTMLImageElement;
+    expect(finished.src).toBe('https://signed.test/render.png');
+    expect(within(stage).getByText(/^Rendered · /)).toBeTruthy();
+    const chips = within(screen.getByRole('group', { name: 'Format' })).getAllByRole('button');
+    expect(chips).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(requestScenePreview).not.toHaveBeenCalled();
+  });
+
+  test('an output with no final render draws a draft at the file values', async () => {
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Motion · CamWide · 320×180' }));
     const image = (await screen.findByAltText(/^Draft preview of /, undefined, {
       timeout: 3_000,
     })) as HTMLImageElement;
     expect(image.src).toBe('https://storage.test/defaults.png');
-    expect(requestScenePreview.mock.calls[0]?.[1]).toEqual({
-      brandId: BRAND,
-      scope: 'all',
-      versionId: VERSION,
-      outputId: 'Main/CamWide',
-      values: {},
-    });
+    expect(requestScenePreview.mock.calls.map((call) => call[1])).toEqual([
+      { brandId: BRAND, scope: 'all', versionId: VERSION, outputId: 'Motion/CamWide', values: {} },
+    ]);
     expect(screen.getByText('Draft · 640×360 · cached')).toBeTruthy();
-    const chips = within(screen.getByRole('group', { name: 'Format' })).getAllByRole('button');
-    expect(chips).toHaveLength(2);
   });
 
   test('summarises the fields by group', async () => {
@@ -145,6 +180,29 @@ describe('SceneTemplateDetail', () => {
     const fields = await screen.findByRole('region', { name: 'Fields' });
     for (const line of ['Content · 3', 'Objects · 2', 'Camera · 1', 'Lights · 1'])
       expect(within(fields).getByText(line)).toBeTruthy();
+  });
+
+  test('names the first 12 fields of a group and counts the rest', async () => {
+    const headline = parse.fields.find((field) => field.key === 'headline')!;
+    const texts = Array.from({ length: 15 }, (_, n) => ({
+      ...headline,
+      key: `text_${n}`,
+      name: `Text ${n}`,
+    }));
+    fetchSceneTemplate.mockImplementationOnce(async () => ({ ...VIEW, fields: texts }));
+    mount();
+    const fields = await screen.findByRole('region', { name: 'Fields' });
+    await within(fields).findByText('Content · 15');
+    const names = Array.from({ length: 12 }, (_, n) => `Text ${n}`).join(', ');
+    expect(within(fields).getByText(`${names} and 3 more`)).toBeTruthy();
+  });
+
+  test('a .blend the forge refused says why, in words', () => {
+    mount(source('failed', 'ATV_Buggy.blend is not a readable Blender file: too_old'));
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Saved in Blender 2.79 or older. Open it in Blender 2.80 or newer, save it, and upload it again.',
+    );
+    expect(fetchSceneTemplate).not.toHaveBeenCalled();
   });
 
   test('lists recent renders with their files and readable failures', async () => {

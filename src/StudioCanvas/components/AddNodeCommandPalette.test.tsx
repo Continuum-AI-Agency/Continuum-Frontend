@@ -317,7 +317,7 @@ describe('AddNodeCommandPalette', () => {
         'Planner Draft',
         'Post to Platform',
         'Paid Ad',
-        'API Render',
+        'Forge Render',
       ]);
       fireEvent.click(
         implementation.querySelector('[data-slot="context-menu-item"]') as HTMLElement,

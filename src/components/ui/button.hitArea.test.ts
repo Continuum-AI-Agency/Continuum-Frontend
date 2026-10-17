@@ -9,15 +9,10 @@ import { buttonVariants } from './button';
 // The redesign's constraint: the target grows INVISIBLY — the painted box, the glyph and the
 // Portfolios / Campaigns row heights stay exactly as drawn. The pointer target is the `hit-area`
 // pseudo-element (24px floor, 44px under a coarse pointer), which the L1V detector now grades.
+// The utility itself, and every other primitive that carries it, is pinned in
+// hitArea.primitives.test.tsx.
 
 const globals = readFileSync(join(import.meta.dir, '../../app/globals.css'), 'utf8');
-
-function utilityBlock(name: string): string {
-  const start = globals.indexOf(`@utility ${name} {`);
-  expect(start, `globals.css declares @utility ${name}`).toBeGreaterThan(-1);
-  const end = globals.indexOf('\n}\n', start);
-  return globals.slice(start, end);
-}
 
 describe('shared small button hit box', () => {
   it('gives xs and icon-xs the invisible hit area', () => {
@@ -34,14 +29,5 @@ describe('shared small button hit box', () => {
     }
     expect(globals).not.toContain('@utility hit-area-block');
     expect(globals).not.toContain('@utility hit-area-inline');
-  });
-
-  it('pads the pointer target on a transparent pseudo-element: 24px floor, 44px when coarse', () => {
-    const hitArea = utilityBlock('hit-area');
-    expect(hitArea).toContain('&::after');
-    expect(hitArea).toContain('opacity: 0');
-    expect(hitArea).toContain('max(100%, 24px)');
-    expect(hitArea).toContain('pointer: coarse');
-    expect(hitArea).toContain('max(100%, 44px)');
   });
 });

@@ -2,6 +2,10 @@ import {
   type HyperframesAgentTurnRequest,
   type HyperframesMotionCommitRequest,
   type HyperframesMotionCommitResponse,
+  type HyperframesAepAuthoringRequest,
+  type HyperframesAepAuthoringResponse,
+  hyperframesAepAuthoringRequestSchema,
+  hyperframesAepAuthoringResponseSchema,
   type HyperframesAgentTurnResponse,
   type HyperframesStoryAngle,
   type HyperframesStoryboard,
@@ -105,6 +109,32 @@ export function commitHyperframesMotion(
     method: 'POST',
     body: commit,
     schema: hyperframesMotionCommitResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export function failHyperframesRun(
+  runId: string,
+  message: string,
+): Promise<{ ok: boolean }> {
+  return http.request({
+    path: `${base(runId)}/fail`,
+    method: 'POST',
+    body: { message },
+    schema: z.object({ ok: z.boolean() }),
+    cache: 'no-store',
+  });
+}
+
+export function stageHyperframesRevisionForForge(
+  revisionId: string,
+  body: HyperframesAepAuthoringRequest,
+): Promise<HyperframesAepAuthoringResponse> {
+  return http.request({
+    path: `${base()}/revisions/${encodeURIComponent(revisionId)}/aep/authoring`,
+    method: 'POST',
+    body: hyperframesAepAuthoringRequestSchema.parse(body),
+    schema: hyperframesAepAuthoringResponseSchema,
     cache: 'no-store',
   });
 }

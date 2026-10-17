@@ -13,7 +13,11 @@
  *               changes, and its pixels show the swatch moved and recoloured (red where it moved
  *               to, the world colour where it was);
  *   5. FINAL    Render final runs to `completed`, the file shows with its Library link, and after a
- *               reload the history lists it as completed.
+ *               reload the history lists it as completed;
+ *   6. SHEET    the editor's way back opens the template's Forge sheet, which shows that final render
+ *               (no draft is drawn just to look); a rename there survives a reload, and Remove takes
+ *               the template out of the brand — the app's soft delete, because opening the sheet
+ *               wrote its baseline revision and revisions are immutable.
  *
  * Cleanup deletes exactly what this run made — the uploaded template, its render jobs and their
  * Library outputs, every storage object behind them and the drafts cached under the template —
@@ -22,15 +26,22 @@
  * Run: `bun run forge:scene:ui:bench` (Frontend). `--dry-run` checks the fixture and the plan with
  * no network and no env; `--headed` to watch.
  */
-import { type ChildProcess, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { type BlendParse, blendParseSchema } from '@continuum/contracts';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import type { Page } from 'playwright';
 import { z } from 'zod';
 import { createBenchRecorder } from './support/benchRecorder';
+import {
+  cleanupMade,
+  forwardProductionEnv,
+  type SceneBenchMade,
+  startApp,
+  uploadAsBrowserDrop,
+  waitForParse,
+} from './support/sceneBench';
 
 const BENCH = 'forge:scene:ui:bench';
 const USAGE = `${BENCH} — the Blender scene editor end to end on the committed .blend.
@@ -181,66 +192,6 @@ function loadPlan(): Plan | null {
 
 // ── Live helpers ─────────────────────────────────────────────────────────────────────────────
 
-/** Values only production's env carries; nothing else of it reaches the bench processes. */
-function forwardProductionEnv(keys: string[]) {
-  const file = path.join(BACKEND_DIR, '.env.production');
-  if (!existsSync(file)) return;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const found = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (found && keys.includes(found[1]!) && !process.env[found[1]!])
-      process.env[found[1]!] = found[2]!.trim().replace(/^["']|["']$/g, '');
-  }
-}
-
-async function answers(url: string): Promise<boolean> {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5_000), redirect: 'manual' });
-    return response.status < 500;
-  } catch {
-    return false;
-  }
-}
-
-function killGroup(child: ChildProcess) {
-  try {
-    if (child.pid) process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    // Already gone.
-  }
-}
-
-async function startApp(backendUrl: string): Promise<() => void> {
-  if (await answers(APP)) throw new Error(`${APP} already answers; set FORGE_SCENE_APP_PORT`);
-  const child = spawn('bun', ['run', 'dev'], {
-    cwd: FRONTEND_DIR,
-    detached: true,
-    env: {
-      ...process.env,
-      PORT: String(APP_PORT),
-      NEXT_DIST_DIR: '.next/forge-scene-bench',
-      NEXT_PUBLIC_API_URL: backendUrl,
-      API_URL: backendUrl,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const tail: string[] = [];
-  child.stdout?.on('data', (chunk: Buffer) => tail.push(chunk.toString()));
-  child.stderr?.on('data', (chunk: Buffer) => tail.push(chunk.toString()));
-  for (const deadline = Date.now() + PAGE_TIMEOUT_MS; Date.now() < deadline; ) {
-    if (await answers(`${APP}/login`)) return () => killGroup(child);
-    if (child.exitCode !== null) break;
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-  }
-  killGroup(child);
-  throw new Error(`the Next app never came up on ${APP}\n${tail.slice(-20).join('')}`);
-}
-
-const ticketSchema = z.object({
-  bucket: z.string().min(1),
-  path: z.string().min(1),
-  token: z.string().min(1),
-  assetId: z.string().uuid(),
-});
 const draftSchema = z.object({ url: z.string().url(), width: z.number(), height: z.number() });
 const previewBodySchema = z.object({
   outputId: z.string(),
@@ -282,13 +233,6 @@ async function probeInPage(page: Page, png: Buffer, points: Array<[number, numbe
   );
 }
 
-async function removeFlatPrefix(admin: SupabaseClient, bucket: string, prefix: string) {
-  const { data } = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
-  const paths = (data ?? []).filter((entry) => entry.id).map((entry) => `${prefix}/${entry.name}`);
-  if (paths.length) await admin.storage.from(bucket).remove(paths);
-  return paths.length;
-}
-
 // ── Live run ─────────────────────────────────────────────────────────────────────────────────
 
 async function live(plan: Plan) {
@@ -304,7 +248,7 @@ async function live(plan: Plan) {
   process.env.PLAYWRIGHT_BASE_URL = APP;
   process.env.ORGANIC_JOB_WORKER_ENABLED = 'false';
   process.env.BACKGROUND_WORKERS_ENABLED = 'false';
-  forwardProductionEnv([
+  forwardProductionEnv(BACKEND_DIR, [
     'TEMPLATE_FORGE_URL',
     'TEMPLATE_FORGE_TOKEN',
     'CONTINUUM_SCENE_SERVICE_URL',
@@ -325,9 +269,12 @@ async function live(plan: Plan) {
   });
   const media = () => admin.schema('media');
   const runId = randomUUID().slice(0, 8);
-  /** Everything this run created, by id. Cleanup touches nothing else. */
-  const made = { assets: new Set<string>(), jobs: new Set<string>(), objects: new Set<string>() };
-  let templateAssetId: string | null = null;
+  const made: SceneBenchMade = {
+    templates: new Set(),
+    assets: new Set(),
+    jobs: new Set(),
+    objects: new Set(),
+  };
 
   let backend: Awaited<ReturnType<typeof localBackend.startLocalBackend>> | null = null;
   let stopApp: (() => void) | null = null;
@@ -360,86 +307,27 @@ async function live(plan: Plan) {
     });
 
     // ── 2. Upload, as a browser drop does ─────────────────────────────────────────────────────
-    const libraryUpload = async (body: Record<string, unknown>) => {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/library-upload`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${session.accessToken}`,
-          apikey: publishableKey,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(120_000),
-      });
-      const text = await response.text();
-      if (!response.ok)
-        throw new Error(
-          `library-upload ${String(body.action)} ${response.status}: ${text.slice(0, 300)}`,
-        );
-      return JSON.parse(text) as unknown;
-    };
-    const fileName = `bench-forge-scene-${runId}.blend`;
-    const ticket = ticketSchema.parse(
-      await libraryUpload({
-        action: 'sign_upload',
-        brandId: BRAND_ID,
-        fileName,
-        mimeType: 'application/octet-stream',
-        sizeBytes: plan.bytes.byteLength,
-      }),
-    );
-    made.assets.add(ticket.assetId);
-    made.objects.add(`${ticket.bucket}::${ticket.path}`);
-    templateAssetId = ticket.assetId;
-    const put = await admin.storage
-      .from(ticket.bucket)
-      .uploadToSignedUrl(ticket.path, ticket.token, plan.bytes, {
-        contentType: 'application/octet-stream',
-      });
-    if (put.error) throw new Error(`storage PUT: ${put.error.message}`);
-    await libraryUpload({
-      action: 'register',
+    const ticket = await uploadAsBrowserDrop({
+      supabaseUrl: SUPABASE_URL,
+      publishableKey,
+      accessToken: session.accessToken,
+      admin,
       brandId: BRAND_ID,
-      assetId: ticket.assetId,
-      bucket: ticket.bucket,
-      storagePath: ticket.path,
-      fileName,
-      mimeType: 'application/octet-stream',
-      sizeBytes: plan.bytes.byteLength,
+      fileName: `bench-forge-scene-${runId}.blend`,
+      bytes: plan.bytes,
       checksum: FIXTURE_SHA256,
+      made,
     });
-    // Register asks the deployed Backend to parse; if that has not landed in 45 s, the bench's own
-    // Backend parses it through the same internal route.
-    const parseState = async () =>
-      ((
-        await media()
-          .from('template_sources')
-          .select('family,parse_state')
-          .eq('asset_id', ticket.assetId)
-          .maybeSingle()
-      ).data as { family: string; parse_state: string } | null) ?? null;
-    let row = await parseState();
-    for (let tries = 0; tries < 45 && row?.parse_state !== 'parsed'; tries++) {
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
-      row = await parseState();
-    }
-    if (row?.parse_state !== 'parsed') {
-      const secret =
+    const row = await waitForParse({
+      admin,
+      assetId: ticket.assetId,
+      brandId: BRAND_ID,
+      backendUrl: backend.url,
+      parseSecret:
         readBackendEnv('INTERNAL_TEMPLATE_PARSE_SECRET') ??
-        process.env.INTERNAL_TEMPLATE_PARSE_SECRET;
-      note(
-        `deployed parse did not land (state ${row?.parse_state ?? 'no row'}); parsing on the bench Backend`,
-      );
-      const response = await fetch(`${backend.url}/api/ai-studio/templates/parse`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${secret ?? ''}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ brandId: BRAND_ID, assetId: ticket.assetId }),
-        signal: AbortSignal.timeout(180_000),
-      });
-      if (!response.ok)
-        note(`bench parse answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
-      row = await parseState();
-    }
+        process.env.INTERNAL_TEMPLATE_PARSE_SECRET,
+      note,
+    });
     check(
       'the uploaded .blend is a parsed blender template',
       row?.family === 'blender' && row.parse_state === 'parsed',
@@ -448,7 +336,14 @@ async function live(plan: Plan) {
     if (row?.parse_state !== 'parsed') return;
 
     // ── 3. The editor ─────────────────────────────────────────────────────────────────────────
-    stopApp = await startApp(backend.url);
+    stopApp = await startApp({
+      frontendDir: FRONTEND_DIR,
+      port: APP_PORT,
+      distDir: '.next/forge-scene-bench',
+      backendUrl: backend.url,
+      portEnv: 'FORGE_SCENE_APP_PORT',
+      timeoutMs: PAGE_TIMEOUT_MS,
+    });
     note(`bench-owned Backend ${backend.url} (workers off) · app ${APP} · brand ${BRAND_ID}`);
     browser = await chromium.launch({ headless: !argv.includes('--headed') });
     const context = await browser.newContext({
@@ -520,6 +415,13 @@ async function live(plan: Plan) {
       .click();
     await page.getByRole('textbox', { name: 'Hex colour' }).fill(RED);
     await page.keyboard.press('Escape');
+    // Objects start closed, and so does each object: open the section, then the Swatch.
+    const fieldsPane = page.getByRole('complementary', { name: 'Fields' });
+    await fieldsPane.getByRole('button', { name: /^Objects/ }).click();
+    await fieldsPane
+      .getByRole('region', { name: 'Objects' })
+      .getByRole('button', { name: 'Swatch', exact: true })
+      .click();
     const swatchX = page.getByLabel('Swatch location X', { exact: true });
     await swatchX.fill(String(SWATCH_X));
     await swatchX.press('Tab');
@@ -623,6 +525,69 @@ async function live(plan: Plan) {
       top.includes('Completed'),
       top.slice(0, 120),
     );
+
+    // ── 6. The template's sheet ───────────────────────────────────────────────────────────────
+    const draftsBefore = drafts.length;
+    await page.getByRole('link', { name: 'Template', exact: true }).click();
+    const stage = page.getByRole('group', { name: 'Scene preview' });
+    const shown = stage.locator('img[alt^="Render of"]');
+    const shownWidth = await shown
+      .waitFor({ timeout: PAGE_TIMEOUT_MS })
+      .then(() =>
+        shown.evaluate((node) =>
+          (node as HTMLImageElement).decode().then(() => (node as HTMLImageElement).naturalWidth),
+        ),
+      )
+      .catch(() => 0);
+    const badge = shownWidth ? ((await stage.getByText(/^Rendered · /).textContent()) ?? '') : '';
+    check(
+      "the template's sheet shows the last final render",
+      shownWidth > 0 && badge.startsWith('Rendered'),
+      `${shownWidth} px · ${badge || 'no rendered badge'}`,
+    );
+    await page.waitForTimeout(2_000);
+    check(
+      'opening the sheet draws no draft',
+      drafts.length === draftsBefore,
+      `${drafts.length - draftsBefore} draft request(s)`,
+    );
+    await page.screenshot({ path: path.join(SHOTS, 'template-sheet.png'), fullPage: true });
+
+    const renamed = `Bench scene ${runId}`;
+    await page.getByRole('button', { name: /^Rename / }).click();
+    const nameInput = page.getByRole('textbox', { name: /^Rename / });
+    await nameInput.fill(renamed);
+    await nameInput.press('Enter');
+    const sheetHeading = page.getByRole('heading', { level: 2 }).filter({ hasText: renamed });
+    await sheetHeading.waitFor({ timeout: 30_000 }).catch(() => undefined);
+    await page.goto(`${APP}/forge?template=${ticket.assetId}`, { waitUntil: 'domcontentloaded' });
+    const kept = await sheetHeading
+      .waitFor({ timeout: PAGE_TIMEOUT_MS })
+      .then(() => true)
+      .catch(() => false);
+    check('a rename on the sheet survives a reload', kept, kept ? renamed : 'the old name is back');
+
+    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await page.getByRole('button', { name: 'Remove from brand' }).click();
+    let removal = 'still live after 30 s';
+    for (let tries = 0; tries < 30; tries++) {
+      const { data } = await media()
+        .from('assets')
+        .select('deleted_at')
+        .eq('id', ticket.assetId)
+        .maybeSingle();
+      const row = data as { deleted_at: string | null } | null;
+      if (!row || row.deleted_at) {
+        removal = row ? 'soft-deleted' : 'row deleted';
+        break;
+      }
+      await page.waitForTimeout(1_000);
+    }
+    check(
+      'Remove on the sheet takes the template out of the brand',
+      !removal.startsWith('still live'),
+      removal,
+    );
     note(`screenshots: ${SHOTS}`);
   } catch (error) {
     failed = true;
@@ -639,72 +604,13 @@ async function live(plan: Plan) {
     await backend?.stop().catch(() => undefined);
 
     // ── Cleanup: tracked ids only ─────────────────────────────────────────────────────────────
-    if (templateAssetId) {
-      // Every scene job names its template, and this template is this run's own upload — so this
-      // also finds a job the API saved but answered without an id, and every output it wrote.
-      const { data: jobs } = await media()
-        .from('client_render_jobs')
-        .select('id, result_asset_refs')
-        .eq('kind', 'scene_render')
-        .eq('brand_id', BRAND_ID)
-        .eq('source_id', `blend:${templateAssetId}`);
-      for (const job of (jobs ?? []) as Array<{
-        id: string;
-        result_asset_refs: Array<{ assetId: string }> | null;
-      }>) {
-        made.jobs.add(job.id);
-        for (const ref of job.result_asset_refs ?? []) made.assets.add(ref.assetId);
-      }
-    }
-    const ids = [...made.assets];
-    // Only this brand's rows: an id is never deleted on the strength of where it was read.
-    const { data: owned } = ids.length
-      ? await media().from('assets').select('id').in('id', ids).eq('brand_id', BRAND_ID)
-      : { data: [] };
-    const assets = ((owned ?? []) as Array<{ id: string }>).map((asset) => asset.id);
-    if (assets.length) {
-      const { data: versions } = await media()
-        .from('asset_versions')
-        .select('bucket, storage_path')
-        .in('asset_id', assets);
-      for (const v of (versions ?? []) as Array<{ bucket: string; storage_path: string }>)
-        made.objects.add(`${v.bucket}::${v.storage_path}`);
-    }
-    if (made.jobs.size)
-      await media()
-        .from('client_render_jobs')
-        .delete()
-        .in('id', [...made.jobs]);
-    if (assets.length) await media().from('template_source_events').delete().in('asset_id', assets);
-    for (const id of assets) {
-      // One row at a time: a multi-row delete deadlocks (40P01) against fresh-asset writers.
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        const del = await media().from('assets').delete().eq('id', id).eq('brand_id', BRAND_ID);
-        if (!del.error || del.error.code !== '40P01') break;
-        await new Promise((resolve) => setTimeout(resolve, 1_000 * attempt));
-      }
-    }
-    for (const entry of made.objects) {
-      const [bucket, objectPath] = entry.split('::') as [string, string];
-      await admin.storage.from(bucket).remove([objectPath]);
-    }
-    let previews = 0;
-    if (templateAssetId)
-      previews = await removeFlatPrefix(
-        admin,
-        RENDER_BUCKET,
-        `${BRAND_ID}/scene-previews/${templateAssetId}`,
-      );
-    for (const jobId of made.jobs)
-      await removeFlatPrefix(admin, RENDER_BUCKET, `${BRAND_ID}/scene-renders/${jobId}`);
-    const left = assets.length
-      ? ((await media().from('assets').select('id').in('id', assets)).data?.length ?? 0)
-      : 0;
-    check(
-      'cleanup leaves nothing behind',
-      left === 0,
-      `${assets.length} asset(s), ${made.jobs.size} job(s), ${made.objects.size} object(s), ${previews} draft(s) removed · ${left} left`,
-    );
+    const cleanup = await cleanupMade({
+      admin,
+      brandId: BRAND_ID,
+      renderBucket: RENDER_BUCKET,
+      made,
+    });
+    check('cleanup leaves nothing behind', cleanup.left === 0, cleanup.detail);
     await admin.auth.admin.signOut(session.accessToken, 'local').catch(() => undefined);
   }
 }

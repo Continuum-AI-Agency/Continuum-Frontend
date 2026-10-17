@@ -385,6 +385,10 @@ function OrganicCalendarWorkspaceInner({
   const selectedAccountIds = useCalendarStore(
     useShallow((state) => state.accountContext.accountIds),
   );
+  // Until the switcher seeds, the server's defaults — which name an account only where the brand
+  // has exactly one that can take the post. Every draft this planner writes is stamped from here.
+  const draftAccountIds =
+    Object.keys(selectedAccountIds).length > 0 ? selectedAccountIds : platformAccountIds;
 
   const { refetch: refetchCalendarDrafts, isHydrated: isCalendarHydrated } =
     useCalendarDraftPersistence({
@@ -392,8 +396,7 @@ function OrganicCalendarWorkspaceInner({
       calendarDays,
       setCalendarDays,
       updateDraftById,
-      platformAccountIds:
-        Object.keys(selectedAccountIds).length > 0 ? selectedAccountIds : platformAccountIds,
+      platformAccountIds: draftAccountIds,
     });
 
   // Server-authoritative freshness: subscribe to Realtime draft writes for this
@@ -568,17 +571,15 @@ function OrganicCalendarWorkspaceInner({
         weekStart,
         weekDays: visibleWeekDays,
         activePlatforms,
-        accountIds:
-          Object.keys(selectedAccountIds).length > 0 ? selectedAccountIds : platformAccountIds,
+        accountIds: draftAccountIds,
         selectedTrendIds,
       }),
     );
   }, [
     activePlatforms,
     brandProfileId,
-    platformAccountIds,
+    draftAccountIds,
     proposeCalendarPlan,
-    selectedAccountIds,
     selectedTrendIds,
     visibleWeekDays,
     weekStart,
@@ -778,7 +779,7 @@ function OrganicCalendarWorkspaceInner({
   const { activeDragDraft, handleDragStart, handleDragEnd, handleNativeDrop } = useCalendarDnD(
     calendarDays,
     drafts,
-    platformAccountIds,
+    draftAccountIds,
     selectedIds,
     { reschedule, rescheduleMany },
   );
@@ -838,7 +839,7 @@ function OrganicCalendarWorkspaceInner({
       const isManual = context?.mode === 'manual';
       const status = context?.status ?? 'draft';
       const trendTag = context?.trendId;
-      const targetAccountId = platformAccountIds[selectedPlatform as OrganicPlatformKey];
+      const targetAccountId = draftAccountIds[selectedPlatform as OrganicPlatformKey];
 
       const draftId =
         typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -875,7 +876,7 @@ function OrganicCalendarWorkspaceInner({
       handleSelect(draftId, false);
       return draftId;
     },
-    [activePlatforms, addDraft, calendarDays, defaultCreateDayId, handleSelect, platformAccountIds],
+    [activePlatforms, addDraft, calendarDays, defaultCreateDayId, handleSelect, draftAccountIds],
   );
 
   // "Create with AI" composer (direction + tagged creatives + trends → durable job).
@@ -1623,7 +1624,7 @@ function OrganicCalendarWorkspaceInner({
                     platform={aiComposer.platform}
                     scheduledAt={aiComposer.scheduledAt}
                     trends={resolvedTrends}
-                    platformAccountIds={platformAccountIds}
+                    platformAccountIds={draftAccountIds}
                     initialTrendIds={aiComposer.seedTrendIds}
                     onCreated={handleOneShotCreated}
                   />

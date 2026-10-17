@@ -1,4 +1,5 @@
-// A person Element's reference: a character continuity sheet.
+// A person Element's reference: a character continuity sheet. A product or object Element's
+// reference: the product continuity sheet (PRODUCT_SHEET_GRIDS, two grids), built the same way.
 //
 // One page per actor — profile, turnaround, face details, expressions, poses, costume and
 // palette — the way a production hands every department the same person. The model draws
@@ -11,12 +12,22 @@
 // slicer snaps each cut to the nearest real seam rather than trusting the arithmetic alone.
 
 import type { SheetLayout } from '../creative/contact-sheet-grid';
+import type { ElementMemberRole } from './element';
+
+/** The faces a product's printing sits on. */
+export type PrintedFace = 'front' | 'back' | 'side' | 'top' | 'packaging';
 
 export interface ContinuityCell {
   role: string;
   caption: string;
   /** What the cell shows, as the generation prompt states it. */
   view: string;
+  /**
+   * A product cell whose view shows printing. It is asked for with its printing only when an
+   * attached reference shows that face; otherwise it is `blankView` (default `view`) with every
+   * surface blank — a model told to copy printing it has never seen writes gibberish (council r0).
+   */
+  printed?: { face: PrintedFace; blankView?: string };
 }
 
 /** The composite ratios the three grids are generated at. */
@@ -174,6 +185,181 @@ export const CONTINUITY_PALETTE = [
 ] as const satisfies readonly { role: ContinuitySheetRole; label: string }[];
 
 /**
+ * A product or object Element's sheet: a turnaround and a macro detail grid. The in-hand cell is
+ * also the scale reference. Square cells, so both grids are 3 × 2 at 3:2.
+ */
+export const PRODUCT_SHEET_GRIDS = {
+  turnaround: {
+    layout: layoutOf(3, 2, '3:2'),
+    cellAspect: [1, 1],
+    imageSize: '4K',
+    shot: 'product photograph with the whole product — closure, label edges and wordmark included — inside the rectangle, and a clear band of plain backdrop, at least a tenth of the rectangle, on every side',
+    cells: [
+      {
+        role: 'front',
+        caption: 'FRONT',
+        view: 'the product from the front, label and wordmark centred and squarely facing the camera',
+        printed: { face: 'front', blankView: 'the product from the front' },
+      },
+      {
+        role: 'back',
+        caption: 'BACK',
+        view: 'the product from directly behind',
+        printed: { face: 'back' },
+      },
+      {
+        role: 'side',
+        caption: 'SIDE',
+        view: 'the product in strict side view',
+        printed: {
+          face: 'side',
+          blankView: 'the product in strict side view, only its silhouette, colours and materials',
+        },
+      },
+      {
+        role: 'three_quarter',
+        caption: 'THREE-QUARTER',
+        view: 'the product turned 45 degrees from the camera',
+        printed: { face: 'front' },
+      },
+      {
+        role: 'top',
+        caption: 'TOP',
+        view: 'the product from directly above',
+        printed: {
+          face: 'top',
+          blankView: 'the product from directly above, only its silhouette, colours and materials',
+        },
+      },
+      {
+        role: 'in_hand',
+        caption: 'IN HAND',
+        view: 'the product held in one adult hand at its true size, the hand cropped at the wrist',
+        printed: { face: 'front' },
+      },
+    ],
+  },
+  details: {
+    layout: layoutOf(3, 2, '3:2'),
+    cellAspect: [1, 1],
+    imageSize: '2K',
+    shot: 'close-up photograph with the whole detail inside the rectangle and a margin of surface or backdrop around it — no label edge, letter or logo cut by the frame',
+    cells: [
+      {
+        role: 'label_front',
+        caption: 'LABEL FRONT',
+        // r1 drew a whole bottle here: the cell is a crop of the label, never the product.
+        view: 'a tight close-up of the front label alone, straight on, cropped to the label and not the whole product: the label fills most of the rectangle, with all four of its edges and the whole wordmark inside a margin of at least a twentieth of the rectangle',
+        printed: {
+          face: 'front',
+          blankView:
+            'a tight close-up of the front label area alone, straight on, cropped to the label and not the whole product',
+        },
+      },
+      {
+        role: 'label_back',
+        caption: 'LABEL BACK',
+        view: 'the whole back label, straight on, all four edges inside the rectangle',
+        printed: { face: 'back', blankView: 'the back of the product, straight on' },
+      },
+      { role: 'closure', caption: 'CLOSURE', view: 'the cap, lid, clasp or closure' },
+      {
+        role: 'material',
+        caption: 'MATERIAL',
+        // r1 cropped the wordmark ("XE BEAUT") into this macro: it is the bare surface, never print.
+        view: 'a macro of a plain, unprinted patch of the surface material, its texture and finish, away from every label, logo and wordmark, with no letters, no numbers and no text anywhere in the rectangle',
+      },
+      {
+        role: 'logo_mark',
+        caption: 'LOGO',
+        view: 'the whole logo mark and its wordmark as printed on the product, centred, with a margin around them',
+        printed: { face: 'front', blankView: 'the product surface where its logo would sit' },
+      },
+      {
+        role: 'packaging',
+        caption: 'PACKAGING',
+        view: 'the whole outer packaging or box, every edge inside the rectangle',
+        printed: {
+          face: 'packaging',
+          blankView:
+            "plain outer packaging in the product's own colours, every edge inside the rectangle",
+        },
+      },
+    ],
+  },
+} as const satisfies Record<string, ContinuityGrid>;
+
+export type ProductSheetGridName = keyof typeof PRODUCT_SHEET_GRIDS;
+export type ProductSheetRole =
+  (typeof PRODUCT_SHEET_GRIDS)[ProductSheetGridName]['cells'][number]['role'];
+
+/**
+ * Which member roles show which face's printing. A member with no role is a photograph of the
+ * product as uploaded — its front.
+ */
+export const PRINTED_FACE_SHOWN_BY: Record<PrintedFace, readonly (ElementMemberRole | null)[]> = {
+  front: [null, 'identity', 'front', 'three_quarter', 'label', 'in_hand'],
+  back: ['back'],
+  side: ['side'],
+  top: ['top'],
+  packaging: ['packaging'],
+};
+
+/** The faces whose printing the attached references show, by their roles. */
+export function printedFacesShown(
+  roles: readonly (ElementMemberRole | null | undefined)[],
+): PrintedFace[] {
+  return (Object.keys(PRINTED_FACE_SHOWN_BY) as PrintedFace[]).filter((face) =>
+    roles.some((role) => PRINTED_FACE_SHOWN_BY[face].includes(role ?? null)),
+  );
+}
+
+/** Appended to a printed cell no reference shows. */
+export const BLANK_SURFACE = 'every surface clean and blank: no letters, no numbers, no text';
+
+/** Who the grid photographs, what must hold across the cells, and the rule for text. */
+export interface ContinuitySubject {
+  noun: string;
+  continuity: string;
+  textRule: string;
+}
+
+export const PERSON_SHEET_SUBJECT: ContinuitySubject = {
+  noun: 'the SAME one adult person, for a character continuity sheet',
+  continuity:
+    'The same one person: identical face, hair, skin tone, body proportions, marks, wardrobe, footwear and accessories.',
+  textRule:
+    'Do not render any text, labels, numbers, letters, logos or watermarks anywhere in the image.',
+};
+
+/** The reference photograph's silhouette, as measured by the Backend. */
+export interface ProductSilhouette {
+  /** Height over width of the product as photographed. */
+  heightToWidth: number;
+}
+
+/**
+ * A product's own printing is part of its identity, so it is copied from a reference, never
+ * invented — and nothing else may be written, because the sheet's words are composed afterwards
+ * by code. The silhouette is pinned to the reference: lower cells drifted in proportion (r0),
+ * and a lipstick's bullet tip changed shape from cell to cell (r1), so the tip and shoulder are
+ * named and the measured height:width is stated when the reference could be measured.
+ */
+export function productSheetSubject(silhouette?: ProductSilhouette | null): ContinuitySubject {
+  const ratio = silhouette
+    ? ` (height : width ≈ ${silhouette.heightToWidth.toFixed(1)} : 1 as photographed)`
+    : '';
+  return {
+    noun: 'the SAME one product, for a product continuity sheet',
+    continuity: `The same one product with an identical silhouette in every rectangle: the reference's height-to-width proportions${ratio}; the exact shape of its tip, top edge, shoulder, neck and closure — the same bevel angle, curve and height in every view, turned with the product and never redrawn; and identical colours, materials, finish, closure, label artwork and logo.`,
+    textRule:
+      'Copy printed artwork, label text and logos only where a reference image shows them, exactly as shown. Never invent letters, numbers, barcodes or copy: a surface no reference shows stays clean and blank, and nothing else is written.',
+  };
+}
+
+export const PRODUCT_SHEET_SUBJECT: ContinuitySubject = productSheetSubject();
+
+/**
  * The prompt for one grid.
  *
  * `references` is one line per attached image, in attachment order — the provider sends
@@ -183,8 +369,21 @@ export const CONTINUITY_PALETTE = [
  */
 export function buildContinuityGridPrompt(
   grid: ContinuityGrid,
-  input: { references: readonly string[]; guidelines?: string | null },
+  input: {
+    references: readonly string[];
+    guidelines?: string | null;
+    /** Defaults to the person, whose prompt is pinned byte for byte. */
+    subject?: ContinuitySubject;
+    /** The printed faces the attached references show; a printed cell of any other is blank. */
+    printedFaces?: readonly PrintedFace[];
+  },
 ): string {
+  const subject = input.subject ?? PERSON_SHEET_SUBJECT;
+  const shown = new Set(input.printedFaces ?? []);
+  const viewOf = (cell: ContinuityCell) =>
+    !cell.printed || shown.has(cell.printed.face)
+      ? cell.view
+      : `${cell.printed.blankView ?? cell.view}, ${BLANK_SURFACE}`;
   const { columns, rows, cellCount } = grid.layout;
   const [cellWidth, cellHeight] = grid.cellAspect;
   const orientation =
@@ -192,22 +391,22 @@ export function buildContinuityGridPrompt(
   const manifest = input.references.map((line, index) => `- Image ${index + 1}: ${line}`);
   const cells = grid.cells.map(
     (cell, index) =>
-      `Row ${Math.floor(index / columns) + 1}, column ${(index % columns) + 1}: ${cell.view}.`,
+      `Row ${Math.floor(index / columns) + 1}, column ${(index % columns) + 1}: ${viewOf(cell)}.`,
   );
   const guidelines = input.guidelines?.trim();
 
   return [
     ...(manifest.length ? [...manifest, ''] : []),
-    `Produce a single image laid out as a strict ${columns}x${rows} grid of ${cellCount} separate ${orientation} studio photographs of the SAME one adult person, for a character continuity sheet.`,
+    `Produce a single image laid out as a strict ${columns}x${rows} grid of ${cellCount} separate ${orientation} studio photographs of ${subject.noun}.`,
     'LAYOUT RULES (these override everything below):',
     `- Divide the frame into ${columns} equal columns and ${rows} equal rows with straight lines; every rectangle is exactly the same size.`,
     '- The photographs meet edge to edge. No gutters, borders, margins, frames, drop shadows, rounded corners or captions.',
     `- Each rectangle holds one complete ${grid.shot}.`,
     '- No subject, limb, hair, prop or shadow may cross a dividing line.',
-    '- Do not render any text, labels, numbers, letters, logos or watermarks anywhere in the image.',
+    `- ${subject.textRule}`,
     '',
     'CONTINUITY ACROSS EVERY RECTANGLE (this is the point of the sheet):',
-    '- The same one person: identical face, hair, skin tone, body proportions, marks, wardrobe, footwear and accessories.',
+    `- ${subject.continuity}`,
     '- The same seamless light-grey studio backdrop and the same soft, even studio light in every rectangle.',
     '',
     ...cells,

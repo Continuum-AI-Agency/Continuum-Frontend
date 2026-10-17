@@ -14,6 +14,8 @@ export * from './jaina-answer-shape';
 export * from './jaina-ask-shape';
 export * from './jaina-dashboard';
 export * from './jaina-dashboard-spec';
+export * from './jaina-depth-rubric';
+export * from './jaina-question-plan';
 export * from './jaina-report';
 export * from './jaina-scaffold';
 export * from './jaina-templates';
