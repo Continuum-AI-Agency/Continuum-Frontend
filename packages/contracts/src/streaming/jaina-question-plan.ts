@@ -186,6 +186,16 @@ export const jainaQuestionPlanSchema = z.object({
   window: z.string().nullable(),
   /** Terms that need a definition before an answer can be exact: active, top, recent, underperforming. */
   ambiguities: z.array(z.string()),
+  ambiguity_decisions: z
+    .array(
+      z.object({
+        term: z.string(),
+        impact: z.enum(['answer_changing', 'minor']),
+        used: z.string(),
+        alternatives: z.array(z.string()).min(1).max(3),
+      }),
+    )
+    .optional(),
   format: z.enum(JAINA_PLAN_FORMATS),
   /** The language of the last question. */
   language: z.enum(['es', 'en']),

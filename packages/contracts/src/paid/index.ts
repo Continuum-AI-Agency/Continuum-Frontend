@@ -4,6 +4,8 @@ export * from './audience-groups';
 export * from './conversions-api';
 // Google Ads API v25 wire shapes: the pinned version and the GoogleAdsFailure decoder.
 export * from './google-ads';
+// Google Ads change history (change_event) as the edge's change_history scope returns it.
+export * from './google-change-history';
 export * from './hierarchy';
 export * from './insight-model';
 export * from './jaina-export';

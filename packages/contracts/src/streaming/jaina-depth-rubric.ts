@@ -14,7 +14,7 @@ import {
  *
  *   1. every `asks` item is answered            — judged by a reader
  *   2. every hypothesis a why opens is closed   — judged, diagnostic and optimization only
- *   3. every mandated layer was read            — from the turn's ok tool results
+ *   3. every mandated layer was read            — scoped receipt proof in Phase 2
  *   4. every action is fully specified          — from the actions block rows
  *
  * Each part is a fraction in [0, 1]; a part that does not apply is null and the score is the
@@ -24,13 +24,66 @@ import {
  */
 
 /**
- * The Jaina reads that evidence each layer of the §3.3 table: a layer counts as read when at
- * least one of its tools returned ok. Only tools the strategist can call are listed (the
+ * Candidate sources for each layer of the §3.3 table. Phase 2 validates actual read scope,
+ * windows and datasets before supplying scoped proof; a successful name is insufficient. Only tools the strategist can call are listed (the
  * registry in `Jaina/src/tools/tools.ts` plus the Optimizer core band): a name nobody can call
- * would make a layer unreadable by construction. `change_history` has no read yet (Meta's
- * ad-account activity log is not wired), so a plan that mandates it reports it unread.
+ * would make a layer unreadable by construction. `change_history` is read from the platforms'
+ * own logs — Meta's ad-account activity log, Google's change_event (jaina-prism Phase 2); the
+ * Optimizer's applied actions are provenance beside them, never a substitute for either.
  */
 export const LAYER_TOOLS: Record<JainaLayer, readonly string[]> = {
+  account_totals: [
+    'get_key_metrics',
+    'get_ad_account_insights',
+    'get_meta_overview_summary',
+    'get_google_ads_overview',
+  ],
+  campaign_scoreboard: [
+    'get_campaigns',
+    'get_campaign_batch_analysis',
+    'get_key_metrics',
+    'get_top_google_campaigns',
+  ],
+  top_movers: [
+    'get_campaign_daily_trends',
+    'get_trend_metrics_summary',
+    'get_top_google_campaigns',
+  ],
+  adset_audience: ['get_ad_sets', 'get_top_adsets', 'get_top_google_ad_groups'],
+  placement_device_geo: [
+    'get_breakdown_insights_summary',
+    'get_audience_demographics',
+    'get_google_breakdown_insights',
+  ],
+  creative_tier: [
+    'get_ads',
+    'get_top_ads',
+    'get_top_ads_batch',
+    'get_paid_creative_intel',
+    'get_ad_creative_details',
+    'get_ad_creative_details_batch',
+    'get_live_creative_audience_matrix',
+    'get_top_google_ads',
+  ],
+  waste: [
+    'get_ad_sets',
+    'get_top_adsets',
+    'get_ads',
+    'get_top_ads',
+    'get_top_ads_batch',
+    'get_top_google_ad_groups',
+    'get_top_google_ads',
+  ],
+  // A daily-pool preview has no flight; only actual persisted pacing can evidence this layer.
+  pacing: ['get_optimizer_performance'],
+  change_history: ['get_meta_change_history', 'get_google_change_history'],
+  // Repeated as-of observations, not a single daily snapshot or an attribution horizon.
+  conversion_settling: ['get_conversion_settling'],
+};
+
+/** Frozen Phase 1 measurement for recorded-baseline comparison only. It is deliberately
+ * separate from the current read surface; Phase 2 never falls back to this map. */
+const LEGACY_LAYER_TOOLS: Record<JainaLayer, readonly string[]> = {
   account_totals: ['get_key_metrics', 'get_ad_account_insights', 'get_meta_overview_summary'],
   campaign_scoreboard: ['get_campaigns'],
   top_movers: ['get_campaign_daily_trends', 'get_trend_metrics_summary'],
@@ -48,7 +101,7 @@ export const LAYER_TOOLS: Record<JainaLayer, readonly string[]> = {
   // Waste is zero results above the spend threshold, read off the ad set and ad rows.
   waste: ['get_ad_sets', 'get_top_adsets', 'get_ads', 'get_top_ads', 'get_top_ads_batch'],
   pacing: ['preview_optimizer_cycle', 'get_optimizer_performance'],
-  change_history: [],
+  change_history: ['get_meta_change_history', 'get_google_change_history'],
   // Settling needs the last days one by one: are recent conversions still arriving?
   conversion_settling: ['get_campaign_daily_trends'],
 };
@@ -58,12 +111,31 @@ export const toolsForLayers = (layers: readonly JainaLayer[]): string[] => [
   ...new Set(layers.flatMap((layer) => LAYER_TOOLS[layer])),
 ];
 
-/** The layers among `layers` that `okToolNames` evidence. */
+/** Counts are produced by the trusted runtime/evaluator after validating each required read. */
+export interface ScopedLayerProof {
+  layer: JainaLayer;
+  required_reads: number;
+  satisfied_reads: number;
+}
+export type DepthLayerMethod = 'phase2_scoped_receipts' | 'legacy_tool_names';
+
+/** Supplying scoped proof, including [], prevents any fallback to tool names. */
 export const layersReadBy = (
   layers: readonly JainaLayer[],
   okToolNames: ReadonlySet<string>,
+  scopedLayerProof?: readonly ScopedLayerProof[],
 ): JainaLayer[] =>
-  layers.filter((layer) => LAYER_TOOLS[layer].some((tool) => okToolNames.has(tool)));
+  scopedLayerProof === undefined
+    ? layers.filter((layer) => LEGACY_LAYER_TOOLS[layer].some((tool) => okToolNames.has(tool)))
+    : layers.filter((layer) => {
+        const proof = scopedLayerProof.filter((entry) => entry.layer === layer);
+        return (
+          proof.length === 1 &&
+          Number.isSafeInteger(proof[0]!.required_reads) &&
+          proof[0]!.required_reads > 0 &&
+          proof[0]!.satisfied_reads === proof[0]!.required_reads
+        );
+      });
 
 /** What a reader says about the two parts only a reader can see. Flat, string enums only. */
 export const depthJudgementSchema = z.object({
@@ -78,6 +150,7 @@ export const depthJudgementSchema = z.object({
 export type DepthJudgement = z.infer<typeof depthJudgementSchema>;
 
 export interface DepthVerdict {
+  layer_method: DepthLayerMethod;
   mandated: JainaLayer[];
   read: JainaLayer[];
   missing: JainaLayer[];
@@ -129,6 +202,7 @@ const TERMINAL = new Set(['confirmed', 'rejected', 'waived']);
 export const depthVerdictOf = (input: {
   label: JainaDepthLabel;
   okToolNames: ReadonlySet<string>;
+  scopedLayerProof?: readonly ScopedLayerProof[];
   blocks: readonly unknown[];
   judgement: DepthJudgement | null;
 }): DepthVerdict => {
@@ -137,7 +211,7 @@ export const depthVerdictOf = (input: {
     namedLevels: label.named_levels,
     aboutBudget: label.about_budget,
   });
-  const read = layersReadBy(mandated, input.okToolNames);
+  const read = layersReadBy(mandated, input.okToolNames, input.scopedLayerProof);
   const missing = mandated.filter((layer) => !read.includes(layer));
 
   const rows = actionRowsOf(input.blocks);
@@ -165,6 +239,8 @@ export const depthVerdictOf = (input: {
   const parts = { asks, hypotheses, layers: fraction(read.length, mandated.length), actions };
   const applicable = Object.values(parts).filter((part): part is number => part !== null);
   return {
+    layer_method:
+      input.scopedLayerProof === undefined ? 'legacy_tool_names' : 'phase2_scoped_receipts',
     mandated,
     read,
     missing,
@@ -185,12 +261,13 @@ export const describeDepth = (verdict: DepthVerdict): string => {
   const { asks, hypotheses, layers, actions } = verdict.parts;
   return (
     `depth ${pct(verdict.score)} · asks ${pct(asks)} · hypotheses ${pct(hypotheses)} · ` +
-    `layers ${pct(layers)}${verdict.missing.length ? ` (unread: ${verdict.missing.join(', ')})` : ''} · ` +
+    `layers ${pct(layers)} [${verdict.layer_method}]${verdict.missing.length ? ` (unread: ${verdict.missing.join(', ')})` : ''} · ` +
     `actions ${pct(actions)}${verdict.actions.unspecified.length ? ` (${verdict.actions.unspecified[0]})` : ''}`
   );
 };
 
 export interface DepthSummary {
+  layer_methods: Partial<Record<DepthLayerMethod, number>>;
   graded: number;
   mean: number | null;
   byClass: Partial<Record<JainaDepthLabel['class'], { graded: number; mean: number }>>;
@@ -201,7 +278,15 @@ export const depthSummaryOf = (
   runs: ReadonlyArray<{ label: JainaDepthLabel | undefined; depth: DepthVerdict | null }>,
 ): DepthSummary => {
   const scored = runs.flatMap((run) =>
-    run.label && run.depth?.score != null ? [{ cls: run.label.class, score: run.depth.score }] : [],
+    run.label && run.depth?.score != null
+      ? [
+          {
+            cls: run.label.class,
+            score: run.depth.score,
+            method: run.depth.layer_method ?? ('legacy_tool_names' as DepthLayerMethod),
+          },
+        ]
+      : [],
   );
   const mean = (scores: number[]): number => scores.reduce((sum, s) => sum + s, 0) / scores.length;
   const byClass: DepthSummary['byClass'] = {};
@@ -209,7 +294,10 @@ export const depthSummaryOf = (
     const scores = scored.filter((s) => s.cls === cls).map((s) => s.score);
     byClass[cls] = { graded: scores.length, mean: mean(scores) };
   }
+  const layerMethods: DepthSummary['layer_methods'] = {};
+  for (const row of scored) layerMethods[row.method] = (layerMethods[row.method] ?? 0) + 1;
   return {
+    layer_methods: layerMethods,
     graded: scored.length,
     mean: scored.length ? mean(scored.map((s) => s.score)) : null,
     byClass,
@@ -221,5 +309,8 @@ export const describeDepthSummary = (summary: DepthSummary): string => {
   const classes = Object.entries(summary.byClass)
     .map(([cls, s]) => `${cls} ${pct(s.mean)} (${s.graded})`)
     .join(' · ');
-  return `depth ${pct(summary.mean)} over ${summary.graded} task(s) · ${classes}`;
+  const methods = Object.entries(summary.layer_methods ?? {})
+    .map(([method, count]) => `${method} (${count})`)
+    .join(', ');
+  return `depth ${pct(summary.mean)} over ${summary.graded} task(s) · ${classes}${methods ? ` · layer measurement: ${methods}` : ''}`;
 };

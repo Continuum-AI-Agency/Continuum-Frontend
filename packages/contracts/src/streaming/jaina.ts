@@ -101,6 +101,7 @@ export type JainaObjectiveUpdatedEventData = z.infer<typeof jainaObjectiveUpdate
 // ---------------------------------------------------------------------------
 
 export type JainaForwardableType =
+  | 'response.analysis.progress'
   | 'state.delta'
   | 'response.plan.delta'
   | 'hitl.paused'
@@ -169,6 +170,7 @@ export type JainaResponseType =
   | 'response.plan.decision'
   | 'response.run.created'
   | 'response.heartbeat'
+  | 'response.analysis.progress'
   | 'response.checkpoint_report'
   | 'response.checkpoint_report.delta'
   | 'response.checkpoint_report.error'
