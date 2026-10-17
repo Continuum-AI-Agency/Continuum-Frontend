@@ -348,6 +348,13 @@ function SourceRow({
               'Could not save the mapping.',
             )
           }
+          onLoadLastSample={async () => {
+            await queryClient.refetchQueries({ queryKey: capiQueryKeys.sources(brandId) });
+            const fresh = queryClient
+              .getQueryData<CapiSource[]>(capiQueryKeys.sources(brandId))
+              ?.find((row) => row.id === source.id);
+            return fresh?.lastSample ?? null;
+          }}
         />
       ) : null}
     </div>
@@ -365,17 +372,25 @@ function parseSample(text: string): { ok: true; value: unknown } | { ok: false }
   }
 }
 
+const sampleJson = (value: unknown): string => JSON.stringify(value, null, 2);
+
 export function FieldMapEditor({
   source,
   readOnly,
   onSave,
+  onLoadLastSample,
 }: {
   source: CapiSource;
   readOnly: boolean;
   onSave: (fieldMap: CapiFieldMap) => Promise<void>;
+  /** Re-reads the source; resolves to what its URL last received (redacted), or null. */
+  onLoadLastSample: () => Promise<unknown>;
 }) {
   const sampleId = useId();
-  const [sampleText, setSampleText] = useState('');
+  const [sampleText, setSampleText] = useState(() =>
+    source.lastSample ? sampleJson(source.lastSample) : '',
+  );
+  const [nothingReceived, setNothingReceived] = useState(false);
   const [fieldMap, setFieldMap] = useState<CapiFieldMap>(source.fieldMap);
   const [saving, setSaving] = useState(false);
   const sample = parseSample(sampleText);
@@ -397,6 +412,12 @@ export function FieldMapEditor({
       )
     : null;
 
+  const loadLastSample = async () => {
+    const lastSample = await onLoadLastSample();
+    setNothingReceived(lastSample === null);
+    if (lastSample !== null) setSampleText(sampleJson(lastSample));
+  };
+
   const setField = (field: CapiMappableField, path: string) =>
     setFieldMap((current) => {
       const { [field]: _removed, ...rest } = current;
@@ -408,11 +429,23 @@ export function FieldMapEditor({
       <p className="text-xs text-muted-foreground">
         An empty map means the sender posts Continuum&rsquo;s native format (
         <span className="font-mono">{'{ events: [...] }'}</span>). Map fields when the sender has
-        its own shape: paste one of its payloads, then pick where each field lives. Add{' '}
+        its own shape: send one test from it to this URL and load it here (values arrive redacted),
+        or paste one of its payloads, then pick where each field lives. Add{' '}
         <span className="font-mono">?test=1</span> to the URL to send a mapped payload as a test.
       </p>
       <div className="space-y-1.5">
-        <Label htmlFor={sampleId}>Sample payload (JSON)</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor={sampleId}>Sample payload (JSON)</Label>
+          <Button size="sm" variant="outline" type="button" onClick={() => void loadLastSample()}>
+            Load last received payload
+          </Button>
+        </div>
+        {nothingReceived ? (
+          <p className="text-xs text-muted-foreground">
+            Nothing has arrived yet. Send a test from HubSpot (or your tool) to this URL, then load
+            it.
+          </p>
+        ) : null}
         <Textarea
           id={sampleId}
           rows={6}
