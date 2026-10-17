@@ -99,6 +99,17 @@ describe('FastCutNode', () => {
     expect(screen.getByTestId('fast-cut-pacing-hint').textContent).toContain('until the drop');
   });
 
+  it('switches between a cut and a collage and writes the layout to the node', () => {
+    renderNode();
+    expect(pressed('Cut')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collage' }));
+
+    expect(nodeData().layout).toBe('collage');
+    expect(pressed('Collage')).toBe(true);
+    expect(screen.getByTestId('fast-cut-layout-hint').textContent).toContain('tile');
+  });
+
   it('shows the rung control only for steady and stutter', () => {
     renderNode();
     expect(screen.queryByLabelText('Rung')).toBeNull();

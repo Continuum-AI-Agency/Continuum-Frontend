@@ -5,8 +5,10 @@
 
 import {
   CUT_RUNGS_SEC,
+  type CutLayout,
   type CutPacing,
   type CutTransientKind,
+  cutLayoutSchema,
   cutPacingSchema,
   cutTransientKindSchema,
   FAST_CUT_AUDIO_INPUT_HANDLE,
@@ -73,6 +75,13 @@ const PACING_HINTS: Record<CutPacing, string> = {
   'drop-hit': 'Long cuts until the drop, then a punch and 0.2 s cuts.',
 };
 
+const LAYOUT_LABELS: Record<CutLayout, string> = { cut: 'Cut', collage: 'Collage' };
+
+const LAYOUT_HINTS: Record<CutLayout, string> = {
+  cut: 'Each cut fills the frame.',
+  collage: 'Each cut lands as a tile on one canvas, piling up until the wall is full.',
+};
+
 const TRANSIENT_LABELS: Record<CutTransientKind, string> = {
   flash: 'Flash',
   punch: 'Punch',
@@ -96,10 +105,10 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
   const patch = useNodeConfigPatch();
   const edges = useEdges();
 
-  const { pacing, rung, bars, transients } = data;
+  const { pacing, rung, bars, transients, layout } = data;
   const settings = useMemo(
-    () => fastCutSettings({ pacing, rung, bars, transients }),
-    [pacing, rung, bars, transients],
+    () => fastCutSettings({ pacing, rung, bars, transients, layout }),
+    [pacing, rung, bars, transients, layout],
   );
   const preview = useMemo(() => fastCutPreview(settings), [settings]);
   const write = (change: Partial<FastCutNodeData>) => patch(id, 'fastCut', change);
@@ -244,6 +253,28 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                   </ToggleGroup>
                   <p className="text-muted-foreground" data-testid="fast-cut-pacing-hint">
                     {PACING_HINTS[settings.pacing]}
+                  </p>
+
+                  <ToggleGroup
+                    aria-label="Layout"
+                    variant="outline"
+                    size="sm"
+                    spacing={0}
+                    value={settings.layout}
+                    onValueChange={(value) => {
+                      const next = cutLayoutSchema.safeParse(value);
+                      if (next.success) write({ layout: next.data });
+                    }}
+                    className="nodrag grid w-full grid-cols-2"
+                  >
+                    {cutLayoutSchema.options.map((option) => (
+                      <ToggleGroupItem key={option} value={option} className="h-6 text-2xs">
+                        {LAYOUT_LABELS[option]}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                  <p className="text-muted-foreground" data-testid="fast-cut-layout-hint">
+                    {LAYOUT_HINTS[settings.layout]}
                   </p>
 
                   <div className="flex items-center gap-3">
