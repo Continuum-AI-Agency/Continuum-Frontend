@@ -1,5 +1,3 @@
-import { type VersionResponse, versionResponseSchema } from '@/lib/schemas/version';
-
 export const LOCAL_DEV_SHA = 'local-dev';
 
 type CommitEnv = {
@@ -29,10 +27,13 @@ export function isVersionMismatch({
   return clientSha !== serverSha;
 }
 
+export type VersionResponse = { sha: string };
+
+// A hand check, not zod: this runs in the root layout, and zod would ride every page's first load.
 export function parseVersionResponse(payload: unknown): VersionResponse {
-  const parsed = versionResponseSchema.safeParse(payload);
-  if (!parsed.success) {
+  const sha = (payload as { sha?: unknown } | null)?.sha;
+  if (typeof sha !== 'string' || !sha) {
     throw new Error('Invalid version response from server.');
   }
-  return parsed.data;
+  return { sha };
 }

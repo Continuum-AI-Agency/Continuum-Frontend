@@ -253,6 +253,12 @@ function settledRow(
     // `empty` is an answer: we looked and had nothing. `failed` is not, and the two must not
     // wear the same sentence — the reason a model timed out is not a fact about the account.
     const looked = row.status === 'empty';
+    // Every enrolled ad set is paused: an audience or creative suggestion builds from a
+    // delivering one, so the Backend's sentence (what to do about it) is the whole answer.
+    const unbuildable =
+      looked && row.error?.code === 'no_delivering_adset' && typeof row.error.message === 'string'
+        ? row.error.message
+        : null;
     return {
       id: `asked:${row.id}`,
       suggestionId: row.id,
@@ -261,14 +267,16 @@ function settledRow(
       module,
       category: copy.label,
       tier: 'low',
-      tierLabel: looked ? 'Nothing to change' : 'Could not read',
+      tierLabel: unbuildable ? 'Nothing to build' : looked ? 'Nothing to change' : 'Could not read',
       title: looked
         ? `${copy.label} — nothing worth changing right now`
         : `${copy.label} — the read did not finish`,
       reason: null,
-      basis: looked
-        ? 'Looked across the enrolled ad sets and found nothing this category can improve today.'
-        : 'Ask again in a moment.',
+      basis:
+        unbuildable ??
+        (looked
+          ? 'Looked across the enrolled ad sets and found nothing this category can improve today.'
+          : 'Ask again in a moment.'),
       isHero: false,
       origin: 'asked',
       steps: [],

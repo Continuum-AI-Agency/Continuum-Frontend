@@ -1,11 +1,19 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { type TemplateRevisionVariant, templateVariantSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { forgeQueryKeys } from './queryKeys';
 import { VariantsPanel } from './VariantsPanel';
 
 afterEach(cleanup);
+const seed = (
+  client: QueryClient,
+  items: TemplateRevisionVariant[],
+  defaults: Array<{ templateId: string; variantId: string }> = [],
+) => {
+  client.setQueryData([...forgeQueryKeys.revisionVariants(brandId, grandchild), 'history'], items);
+  client.setQueryData(forgeQueryKeys.variantDefaults(brandId), defaults);
+};
 const brandId = '22222222-2222-4222-8222-222222222222';
 const root = '33333333-3333-4333-8333-333333333333';
 const child = '44444444-4444-4444-8444-444444444444';
@@ -59,6 +67,7 @@ const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
     draftHeadRevisionId: item.assetId,
     publishedHeadRevisionId: index === 1 ? item.assetId : null,
     archivedAt: null,
+    tags: [],
     sourceKind,
     revisions: [
       {
@@ -70,7 +79,7 @@ const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
         sourceAssetId: item.assetId,
         sourceVersionId: versionId,
         checksum: 'a'.repeat(64),
-        edits: { layers: [], slots: [] },
+        edits: { layers: [], slots: [], orders: [] },
         source: item.source,
         publications:
           index === 1
@@ -89,7 +98,7 @@ const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
 test('named variants retain draft and published revisions and render the exact publication', () => {
   const items = registry('illustrator');
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), items);
+  seed(client, items);
   const onInspect = mock(() => undefined);
   const onRender = mock(() => undefined);
   render(
@@ -116,13 +125,13 @@ test('named variants retain draft and published revisions and render the exact p
     bindingId: brandId,
     templateRevision: { templateId: root, variantId: child, revisionId: child },
   });
-  fireEvent.click(screen.getAllByRole('button', { name: 'Inspect draft' })[0]!);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Open to publish' })[0]!);
   expect(onInspect).toHaveBeenCalledWith(root);
 });
 
 const renderPanel = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), registry(sourceKind));
+  seed(client, registry(sourceKind));
   const onEditLayers = mock(() => undefined);
   render(
     <QueryClientProvider client={client}>
@@ -169,7 +178,7 @@ test('a revision whose outputs run different files lists each output with its fi
     ],
   };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(forgeQueryKeys.revisionVariants(brandId, grandchild), items);
+  seed(client, items);
   render(
     <QueryClientProvider client={client}>
       <VariantsPanel brandId={brandId} assetId={grandchild} expectedVersionId={versionId} />
@@ -179,4 +188,101 @@ test('a revision whose outputs run different files lists each output with its fi
   expect(files.textContent).toContain('Halftime · worker file 11');
   expect(files.textContent).toContain('Ambos Equipos Anotan · worker file 12');
   expect(screen.queryByRole('list', { name: 'Original source files' })).toBeNull();
+});
+
+test('a variant made by Apply my design system wears its Brand-aligned tag', () => {
+  const items = registry('after_effects');
+  items[2] = { ...items[2]!, tags: ['brand_aligned'] };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  seed(client, items);
+  render(
+    <QueryClientProvider client={client}>
+      <VariantsPanel brandId={brandId} assetId={grandchild} expectedVersionId={versionId} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getAllByText('Brand-aligned')).toHaveLength(1);
+  expect(screen.getByText('Brand-aligned').closest('li')?.textContent).toContain('Blue copy');
+});
+
+// Blue copy branched from Blue, not from the Original: a grandchild, drawn under its parent.
+const family = () => {
+  const items = registry('after_effects');
+  items[2] = {
+    ...items[2]!,
+    parentRevisionId: child,
+    revisions: [{ ...items[2]!.revisions[0]!, parentRevisionId: child }],
+  };
+  return items;
+};
+const renderFamily = (
+  items: TemplateRevisionVariant[],
+  defaults: Array<{ templateId: string; variantId: string }> = [],
+) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  seed(client, items, defaults);
+  const onBranch = mock(() => undefined);
+  render(
+    <QueryClientProvider client={client}>
+      <VariantsPanel
+        brandId={brandId}
+        assetId={grandchild}
+        expectedVersionId={versionId}
+        onInspect={() => undefined}
+        onBranch={onBranch}
+        onRender={() => undefined}
+      />
+    </QueryClientProvider>,
+  );
+  return onBranch;
+};
+
+test('a variant of a variant hangs under its parent and says where it came from', () => {
+  renderFamily(family());
+  const underBlue = screen.getByRole('list', { name: 'Variants of Blue' });
+  expect(underBlue.textContent).toContain('Blue copy');
+  expect(underBlue.textContent).toContain('From Blue · Revision 1');
+  expect(screen.getByRole('list', { name: 'Variants of Original' }).textContent).toContain(
+    'From Original · Revision 1',
+  );
+});
+
+test('Branch from here opens the variant head for Edit layers', () => {
+  const onBranch = renderFamily(family());
+  const blue = screen.getByText('Blue').closest('[data-variant]') as HTMLElement;
+  fireEvent.click(within(blue).getByRole('button', { name: 'Branch from here' }));
+  expect(onBranch).toHaveBeenCalledWith(child);
+});
+
+test('the Original is the default until a published variant is made the default', () => {
+  renderFamily(family());
+  const node = (name: string) => screen.getByText(name).closest('[data-variant]') as HTMLElement;
+  expect(within(node('Original')).getByText('Default')).toBeTruthy();
+  expect(within(node('Blue')).getByRole('button', { name: 'Make default' })).toBeTruthy();
+  // A draft cannot be what a family opens on.
+  expect(within(node('Blue copy')).queryByRole('button', { name: 'Make default' })).toBeNull();
+  cleanup();
+  renderFamily(family(), [{ templateId: root, variantId: child }]);
+  expect(within(node('Blue')).getByText('Default')).toBeTruthy();
+  expect(within(node('Original')).getByRole('button', { name: 'Make default' })).toBeTruthy();
+});
+
+test('an archived variant stays in the family, dimmed, and can be restored', () => {
+  const items = family();
+  items[1] = { ...items[1]!, archivedAt: '2026-10-10T00:00:00Z' };
+  renderFamily(items);
+  const blue = screen.getByText('Blue').closest('[data-variant]') as HTMLElement;
+  expect(within(blue).getByText('Archived')).toBeTruthy();
+  expect(within(blue).getByRole('button', { name: 'Restore' })).toBeTruthy();
+  expect(within(blue).queryByRole('button', { name: /^Render / })).toBeNull();
+});
+
+test('the graph view lists every revision as a button, newest first', () => {
+  renderFamily(family());
+  fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
+  const revisions = screen.getByRole('list', { name: 'Template revisions' });
+  expect(
+    within(revisions)
+      .getAllByRole('button')
+      .map((button) => button.textContent),
+  ).toEqual(['Original · Revision 1', 'Blue · Revision 1', 'Blue copy · Revision 1']);
 });

@@ -10,10 +10,11 @@
 // captions); those two are the scale too, and the tokens below are what a component reaches
 // for when it names the role rather than the size.
 //
-// Figures lead at 1.15, not 1: the mono face's content area is ~1.14em, so a `leading-none`
+// Figures lead at 1.2, not 1: the mono face's content area is ~1.14em, so a `leading-none`
 // figure inside a `truncate` (overflow hidden) node clips its own glyph box by a pixel or two
 // top and bottom — 25px of glyphs in a 22px line — which every overflow probe reads as a
-// clipped figure. 1.15 is the smallest leading that holds the glyph box at 22, 32 and 44px.
+// clipped figure. 1.15 held the box by a fraction of a pixel at 22, 32 and 44px; 1.2 holds it
+// with a pixel to spare on every step of the root-size ladder (typeScale.test.ts pins it).
 
 /** Uppercase section and tile label — 12px, spaced. Weight and colour stay with the site. */
 export const label = 'text-xs uppercase tracking-wide';
@@ -31,11 +32,11 @@ export const caption = 'text-xs';
 export const headline = 'text-[21px] font-semibold leading-snug tracking-tight';
 
 /** The number in a tile — 22px mono, one size in every tile. */
-export const figureTile = 'font-mono font-semibold text-[22px] tabular-nums leading-[1.15]';
+export const figureTile = 'font-mono font-semibold text-[22px] tabular-nums leading-[1.2]';
 
 /** The one protagonist number of an inline figure row (the Overview's spend) — 32px mono.
  *  Larger than a tile, smaller than a portfolio's anchor; one per row. */
-export const figureHero = 'font-mono font-semibold text-[32px] tabular-nums leading-[1.15]';
+export const figureHero = 'font-mono font-semibold text-[32px] tabular-nums leading-[1.2]';
 
 /** The figure a headline leads with — 21px mono. */
 export const figureHeadline = 'font-mono font-semibold text-[21px] tabular-nums leading-tight';
@@ -45,4 +46,4 @@ export const figureLead = 'font-mono font-semibold text-[21px] tabular-nums lead
 
 /** The one number a portfolio module is anchored on — its cost per result, 44px mono. The
  *  only figure allowed above a headline's size, and there is one per module. */
-export const figureAnchor = 'font-mono font-semibold text-[44px] tabular-nums leading-[1.15]';
+export const figureAnchor = 'font-mono font-semibold text-[44px] tabular-nums leading-[1.2]';

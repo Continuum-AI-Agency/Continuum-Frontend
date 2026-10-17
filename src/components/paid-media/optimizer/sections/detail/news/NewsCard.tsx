@@ -12,6 +12,7 @@
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { TEXT_DISCLOSURE } from '../../../components/disclosure';
 import type { HeroCta } from '../heroModel';
 import { CardBand } from './CardBand';
 import { FINDING_ROW } from './cardShape';
@@ -81,8 +82,10 @@ export function FindingEvidence({
   resultLabel: string;
 }) {
   return (
-    <details className="group/evidence">
-      <summary className="w-fit cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+    // On touch the disclosure's 44px hit area reached the "Explain with Jaina" link 4px above
+    // it; the px margin keeps the two presses apart.
+    <details className="group/evidence pointer-coarse:mt-[10px]">
+      <summary className={cn('w-fit', TEXT_DISCLOSURE)}>
         <span className="group-open/evidence:hidden">Show the evidence</span>
         <span className="hidden group-open/evidence:inline">Hide the evidence</span>
       </summary>
@@ -142,7 +145,7 @@ export function NewsCard({
             ·
           </span>
           <a
-            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+            className="hit-area inline-flex items-center gap-1 underline-offset-4 hover:underline"
             href={explainHref}
           >
             Explain with Jaina <ExternalLinkIcon aria-hidden className="size-3" />

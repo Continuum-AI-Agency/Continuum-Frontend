@@ -74,7 +74,7 @@ function DetailList({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
     <details className="mt-1">
-      <summary className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
+      <summary className="hit-area cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
         {lines.length} listed
       </summary>
       <ul className="mt-1 space-y-0.5">

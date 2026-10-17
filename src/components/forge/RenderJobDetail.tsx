@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CalendarClock,
   CircleDot,
+  Cpu,
   Download,
   ExternalLink,
   FileDigit,
@@ -153,6 +154,29 @@ export function RenderModePill({ test }: { test: boolean }) {
       Final
     </Pill>
   );
+}
+
+/**
+ * Which renderer a job ran on, only when the Experimental Renderer was asked: it rendered the job
+ * itself, or handed it to After Effects and the reason it named rides on the pill. Nothing for an
+ * ordinary After Effects job.
+ */
+export function RenderEnginePill({
+  job,
+}: {
+  job: Partial<Pick<ApiRenderJob, 'engine' | 'engineFallback'>>;
+}) {
+  if (job.engineFallback)
+    return (
+      <Pill variant="muted" title={`Sent to After Effects: ${job.engineFallback}`}>
+        Experimental → After Effects
+      </Pill>
+    );
+  return job.engine === 'micro' ? (
+    <Pill variant="muted" title="Rendered by the Experimental Renderer on Google Cloud.">
+      Experimental
+    </Pill>
+  ) : null;
 }
 
 /** "Rev 2 · Sep 10", the short digest when the revision was not read back, else "Unrecorded". */
@@ -605,9 +629,27 @@ export function RenderJobDetail({
                       ? ` ${job.progressPct}%`
                       : ''}
                     <RenderModePill test={job.test} />
+                    <RenderEnginePill job={job} />
                   </span>
                 ),
               },
+              // Never hidden: most jobs that ask for the Experimental Renderer fall back today.
+              ...(job.engineFallback
+                ? [
+                    {
+                      icon: Cpu,
+                      label: 'Renderer',
+                      value: (
+                        <span className="break-words">
+                          After Effects{' '}
+                          <span className="text-muted-foreground">
+                            · the Experimental Renderer handed it over: {job.engineFallback}
+                          </span>
+                        </span>
+                      ),
+                    },
+                  ]
+                : []),
               {
                 icon: CalendarClock,
                 label: 'Requested',
@@ -624,7 +666,7 @@ export function RenderJobDetail({
               { icon: Layers, label: 'Set', value: setName },
               {
                 icon: FileDigit,
-                label: 'Template version',
+                label: 'Variant · revision',
                 value: <TemplateVersion job={job} />,
               },
               {

@@ -23,6 +23,7 @@ import {
   cardActionChange,
   cardActionLabel,
   cardActionTitle,
+  cardActionUnavailableNote,
   cardWriteOf,
   previewVerdict,
   resultVerdict,
@@ -54,6 +55,25 @@ describe('cardActionAvailability', () => {
     ).toBe('tiktok_not_connected');
   });
 
+  it("disables a Google write when the portfolio's write switch is off, and only then", () => {
+    const action = write(RAISE_GOOGLE_BUDGET);
+    expect(
+      cardActionAvailability(GOOGLE_BUDGET_LIMITED, { ...target(action), applyEnabled: false }),
+    ).toBe('apply_disabled');
+    expect(
+      cardActionAvailability(GOOGLE_BUDGET_LIMITED, { ...target(action), applyEnabled: true }),
+    ).toBe('ready');
+    // An older server sends no switch: today's behaviour holds.
+    expect(cardActionAvailability(GOOGLE_BUDGET_LIMITED, target(action))).toBe('ready');
+    // Off or not, a TikTok write still says TikTok is not connected.
+    expect(
+      cardActionAvailability(TIKTOK_BUDGET_BELOW_LEARNING, {
+        ...target(write(PAUSE_TIKTOK_AD_GROUP)),
+        applyEnabled: false,
+      }),
+    ).toBe('tiktok_not_connected');
+  });
+
   it('offers nothing on a read-only card, even when an action rides along', () => {
     for (const card of [GOOGLE_VIDEO, GOOGLE_DELIVERY_ONE_CAMPAIGN, TIKTOK_ATTRIBUTION_WINDOW]) {
       expect(cardActionAvailability(card, target(write(PAUSE_GOOGLE_CAMPAIGN)))).toBe('none');
@@ -72,6 +92,20 @@ describe('cardActionAvailability', () => {
     };
     expect(cardWriteOf(move)).toBeNull();
     expect(cardActionAvailability(GOOGLE_BUDGET_LIMITED, move)).toBe('none');
+  });
+});
+
+describe('cardActionUnavailableNote', () => {
+  it('says in one line why a disabled control is disabled, and nothing for one that is not', () => {
+    const google = write(RAISE_GOOGLE_BUDGET);
+    expect(cardActionUnavailableNote('apply_disabled', google)).toBe(
+      'Writes to Google are switched off for this portfolio.',
+    );
+    expect(cardActionUnavailableNote('tiktok_not_connected', write(PAUSE_TIKTOK_AD_GROUP))).toBe(
+      'TikTok is not connected for changes yet. Make this change in TikTok Ads Manager.',
+    );
+    expect(cardActionUnavailableNote('ready', google)).toBeNull();
+    expect(cardActionUnavailableNote('none', google)).toBeNull();
   });
 });
 
@@ -112,9 +146,9 @@ describe('cardActionTitle', () => {
 describe('cardActionChange', () => {
   it("states the change in the action's own figures", () => {
     expect(cardActionChange(write(RAISE_GOOGLE_BUDGET), 'MXN')).toBe(
-      '1,179.00 MXN/day → 1,473.75 MXN/day',
+      '$1,179.00 MXN/day → $1,473.75 MXN/day',
     );
-    expect(cardActionChange(write(LOWER_GOOGLE_TCPA), 'MXN')).toBe('35.00 MXN → 32.00 MXN');
+    expect(cardActionChange(write(LOWER_GOOGLE_TCPA), 'MXN')).toBe('$35.00 MXN → $32.00 MXN');
     expect(cardActionChange(write(PAUSE_GOOGLE_CAMPAIGN), null)).toStartWith('Active → paused.');
     expect(cardActionChange(write(ADD_GOOGLE_NEGATIVES), null)).toBe(
       '"free gym" (exact), "gym jobs" (exact), "gym near me cheap" (exact)',
@@ -154,7 +188,7 @@ describe('previewVerdict', () => {
     );
     expect(verdict.tone).toBe('refused');
     expect(verdict.text).toBe(
-      'Google refused it in its check: the budget is under Google\'s daily minimum; the lowest it accepts is 400.00 MXN/day; Google says: "Budget below minimum.". Nothing was written.',
+      'Google refused it in its check: the budget is under Google\'s daily minimum; the lowest it accepts is $400.00 MXN/day; Google says: "Budget below minimum.". Nothing was written.',
     );
     expect(verdict.text).not.toContain('req-1');
   });
@@ -260,6 +294,12 @@ describe('previewVerdict on a bid target past the per-cycle bound', () => {
       "Google's auto-apply recommendations are on for this account, so we do not write to it. Nothing was written.",
     );
   });
+
+  it('words the portfolio write switch being off', () => {
+    expect(
+      resultVerdict(answer({ status: 'refused', reason: 'apply_disabled' }, false), null).text,
+    ).toBe('Writes to this platform are switched off for this portfolio. Nothing was written.');
+  });
 });
 
 const AUDIT_ID = '0f0f0f0f-0000-4000-8000-000000000001';
@@ -307,7 +347,7 @@ describe('undoAuditIdOf', () => {
 describe('undoRestoresText', () => {
   it('says the money it puts back', () => {
     expect(undoRestoresText({ minor: 117_900, currency: 'MXN' }, 'set_budget', null)).toBe(
-      'Back to 1,179.00 MXN',
+      'Back to $1,179.00 MXN',
     );
   });
 
@@ -318,7 +358,7 @@ describe('undoRestoresText', () => {
   it("names Google's bid setting, in currency units, never as the portfolio's goal", () => {
     expect(
       undoRestoresText({ field: 'target_cpa_micros', value: 35_000_000 }, 'set_bid_target', 'MXN'),
-    ).toBe('Google Ads bid target back to 35.00 MXN');
+    ).toBe('Google Ads bid target back to $35.00 MXN');
     expect(undoRestoresText({ field: 'target_roas', value: 3.5 }, 'set_bid_target', null)).toBe(
       'Google Ads target ROAS (bid setting) back to 350%',
     );

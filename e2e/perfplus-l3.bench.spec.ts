@@ -238,6 +238,7 @@ async function collectFigures(page: Page): Promise<FigureNode[]> {
           'data-figure-currency': el.getAttribute('data-figure-currency'),
           'data-figure-window': el.getAttribute('data-figure-window'),
           'data-figure-unit': el.getAttribute('data-figure-unit'),
+          'data-figure-code': el.getAttribute('data-figure-code'),
         },
         text: el.textContent ?? '',
       })),
@@ -485,10 +486,13 @@ function resolveOptimizer(node: FigureNode, portfolioId: string | null): Expect 
         );
       // The share node carries percent points (the formatter contract, format.ts `percent`:
       // raw already in display units — PP-L3-share-figure-node-raw-is-a-fraction), so the
-      // payload figure is the ratio × 100.
+      // payload figure is the ratio × 100. Its basis is the ONE compared kind (the header says
+      // "Share of leads"; PP-L3-overview-meta-share-100-where-results-say-89), so the
+      // denominator is the payload's results_by_kind[kind].results — not every kind's results.
+      const kindTotal = num(kinds.find((k) => str(k.kind) === byResults?.kind)?.results) ?? 0;
       return value(
-        `results share of ${platform} (percent points)`,
-        allResults > 0 ? (results / allResults) * 100 : null,
+        `results_by_kind[${byResults?.kind}].platforms[${platform}].results / results_by_kind[${byResults?.kind}].results (percent points; all kinds together would be ${allResults > 0 ? Math.round((results / allResults) * 1000) / 10 : '—'}%)`,
+        kindTotal > 0 ? (results / kindTotal) * 100 : null,
       );
     }
   }
@@ -548,6 +552,17 @@ function resolveOptimizer(node: FigureNode, portfolioId: string | null): Expect 
       `optimizer_list_portfolios[${daily[1].slice(0, 8)}].daily_total`,
       num(list.find((p) => p.id === daily[1])?.daily_total),
     );
+  // Under an account-wide pacing finding each row prints ITS OWN run's drift from plan:
+  // |pacingRatio − 1| in percent points, from the optimizer-status read for that portfolio.
+  const pacingRow = /^portfolios\.([0-9a-f-]+)\.pacing\.figure$/.exec(key);
+  if (pacingRow) {
+    const status = obj(payload('optimizer-status', (b) => b.portfolio_id === pacingRow[1])?.json);
+    const ratio = num(obj(obj(status?.latest_run)?.pacing)?.pacingRatio);
+    return value(
+      `optimizer-status[${pacingRow[1].slice(0, 8)}].latest_run.pacing.pacingRatio − 1, in points`,
+      ratio === null ? null : Math.abs(Math.round((ratio - 1) * 100)),
+    );
+  }
   const lead = /^portfolios\.([0-9a-f-]+)\.lead\.(figure|money)$/.exec(key);
   if (lead) {
     const read = obj(obj(payload('optimizer_get_account_read')?.json)?.read);
@@ -834,7 +849,7 @@ async function optimizerSurfaces(context: BrowserContext): Promise<void> {
   await gradeBareNumbers('Optimizer/Portfolios', page);
   const byPortfolio = new Map<string, string[]>();
   for (const n of nodes) {
-    const m = /^portfolios\.([0-9a-f-]+)\.lead\.(figure|money)$/.exec(n.key);
+    const m = /^portfolios\.([0-9a-f-]+)\.(?:lead|pacing)\.(figure|money)$/.exec(n.key);
     if (m) byPortfolio.set(m[1], [...(byPortfolio.get(m[1]) ?? []), `${m[2]}=${n.text.trim()}`]);
   }
   const leadRows = [...byPortfolio.entries()];

@@ -1,11 +1,12 @@
-import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { mintSessionBundleForEmail, type PlaywrightStorageState } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import { attachL1, expectDefinedState } from './support/l1Invariants';
 import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
+import { auditCopy } from './support/tiktokCopyAudit';
 
 // ---------------------------------------------------------------------------
 // perfplus:tiktok:honesty:ui:bench — the screen half of P2.7 (docs/perfplus-campaign/
@@ -699,55 +700,6 @@ async function auditOrganicTrendsTikTok(context: BrowserContext): Promise<void> 
 // ---------------------------------------------------------------------------
 // Copy audit — user-visible strings that sell TikTok Ads while it is unconnected
 // ---------------------------------------------------------------------------
-
-const SRC_DIR = resolve(__dirname, '../src');
-/** Out of the audit by path, with the reason: tests and fixtures; API routes and schemas (not
- *  copy); the TikTok tab's own connected-only render, the platform cards and the cross-platform
- *  move (they exist only for a connected advertiser) and the entity noun table behind them. */
-const SKIP_PATH =
-  /\.(test|bench|stories)\.|__tests__|__fixtures__|\/app\/api\/|\/lib\/api\/|\/lib\/schemas\/|platforms\/(?:TikTokAdsTab|useTikTokAdsOverview|tiktokAdsOverviewModel)\.|platformCards\/|crossPlatformMove\/|optimizer\/entityNoun\.ts/;
-const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/;
-/** A string literal or JSX text that names TikTok. */
-const USER_VISIBLE = /['"`][^'"`\n]*TikTok[^'"`\n]*['"`]|>[^<{]*TikTok|TikTok[^<{]*</;
-const ADS_COPY =
-  /ad accounts?|campaign-level|Spark Ads?|ad groups?|\bCPA\b|cost per result|\bspend|\bAds\b|advertiser|pixel|learning|TikTok Marketing|writes alike/i;
-/** Copy that says, in the same line, that TikTok Ads is not there. */
-const HONEST_COPY =
-  /isn'?t connected|not connected|not built|no connector|not supported|coming soon|once a .*connected|could not be loaded|Ads Manager/i;
-/** The one affordance frontend.html §2 asks for: a WARN row, not a FAIL. */
-const DESIGNED_COPY = /Connect TikTok Ads/;
-
-type CopyHit = { file: string; line: number; text: string; severity: 'FAIL' | 'WARN' };
-
-function walk(dir: string, out: string[]): void {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) walk(full, out);
-    else if (/\.(ts|tsx)$/.test(entry)) out.push(full);
-  }
-}
-
-export function auditCopy(srcDir = SRC_DIR): CopyHit[] {
-  const files: string[] = [];
-  walk(srcDir, files);
-  const hits: CopyHit[] = [];
-  for (const file of files) {
-    const rel = relative(srcDir, file);
-    if (SKIP_PATH.test(`/${rel}`)) continue;
-    const lines = readFileSync(file, 'utf8').split('\n');
-    lines.forEach((line, index) => {
-      if (!/TikTok/.test(line) || COMMENT_LINE.test(line)) return;
-      if (!USER_VISIBLE.test(line) || !ADS_COPY.test(line) || HONEST_COPY.test(line)) return;
-      hits.push({
-        file: `src/${rel}`,
-        line: index + 1,
-        text: line.trim().slice(0, 200),
-        severity: DESIGNED_COPY.test(line) ? 'WARN' : 'FAIL',
-      });
-    });
-  }
-  return hits.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
-}
 
 function auditCopyStep(): void {
   const surface = 'Copy audit';

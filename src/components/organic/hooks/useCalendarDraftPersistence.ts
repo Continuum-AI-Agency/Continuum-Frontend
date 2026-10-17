@@ -19,6 +19,7 @@ import {
   collapseDraftGroups,
   mapPersistedRowToCalendarEntry,
   mergeUnsavedLocalDrafts,
+  newRowCopyPatch,
   type PersistedOrganicDraftRow,
   resolvePersistedRowDayId,
 } from '@/lib/organic/calendar-draft-persistence';
@@ -26,6 +27,7 @@ import { getVisibleMonthRange } from '@/lib/organic/calendar-posts';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useDraftFieldPersistence } from './useDraftFieldEditor';
 
 type CalendarEntry = {
   dayId: string;
@@ -63,24 +65,66 @@ function parseDayBoundary(dayId: string): Date {
   return new Date(`${dayId}T12:00:00`);
 }
 
-function serializeEntries(entries: CalendarEntry[]): string {
-  const normalized = entries
-    .map(({ dayId, draft }) => ({
-      id: draft.id,
-      dayId,
-      status: draft.status,
-      title: draft.title,
-      summary: draft.summary,
-      captionPreview: draft.captionPreview,
-      platforms: draft.platforms,
-      timeLabel: draft.timeLabel,
-      mediaCount: draft.mediaCount,
-      generationError: draft.generationError ?? null,
-      instagram_post_id: draft.instagram_post_id ?? null,
-    }))
-    .sort((a, b) => `${a.dayId}:${a.id}`.localeCompare(`${b.dayId}:${b.id}`));
+// The drafts the browser autosave owns: manually-authored, settled, on a real day.
+// Everything the generation pipeline produces (agent posts, grid/trend seeds,
+// "Generate with AI" placeholders — origin 'agent' or undefined) is server-owned
+// and persisted by the backend with a canonical client_key. A positive allowlist
+// (origin === 'manual') is the fix for duplicate posts: the old denylist
+// (origin !== 'agent') let undefined-origin generation drafts slip through and
+// get inserted a second time alongside the backend's own row. Same-clientKey
+// entries (a store-level duplicate) collapse so each logical draft is written once.
+function selectPersistableEntries(calendarDays: OrganicCalendarDay[]): CalendarEntry[] {
+  const seenClientKeys = new Set<string>();
+  return (
+    calendarDays
+      // The unscheduled sentinel is not a real date; its drafts are server-owned
+      // and must never be written back with a bogus scheduled_date.
+      .filter((day) => day.id !== UNSCHEDULED_DAY_ID)
+      .flatMap((day) =>
+        day.slots
+          .filter((draft) => draft.status !== 'streaming')
+          .filter((draft) => draft.origin === 'manual')
+          .map((draft) => ({ dayId: day.id, draft })),
+      )
+      .filter((entry) => {
+        const key = entry.draft.clientKey ?? entry.draft.id;
+        if (seenClientKeys.has(key)) return false;
+        seenClientKeys.add(key);
+        return true;
+      })
+  );
+}
 
-  return JSON.stringify(normalized);
+function entryKey({ draft }: CalendarEntry): string {
+  return draft.clientKey ?? draft.id;
+}
+
+function serializeEntry({ dayId, draft }: CalendarEntry): string {
+  return JSON.stringify({
+    id: draft.id,
+    dayId,
+    status: draft.status,
+    title: draft.title,
+    summary: draft.summary,
+    captionPreview: draft.captionPreview,
+    platforms: draft.platforms,
+    timeLabel: draft.timeLabel,
+    mediaCount: draft.mediaCount,
+    generationError: draft.generationError ?? null,
+    instagram_post_id: draft.instagram_post_id ?? null,
+  });
+}
+
+// The synced state, one serialized form per logical draft, so a change is
+// attributable to the draft that changed and only that draft is written.
+type SyncedIndex = ReadonlyMap<string, string>;
+
+function indexEntries(entries: CalendarEntry[]): SyncedIndex {
+  return new Map(entries.map((entry) => [entryKey(entry), serializeEntry(entry)]));
+}
+
+function selectChangedEntries(entries: CalendarEntry[], synced: SyncedIndex): CalendarEntry[] {
+  return entries.filter((entry) => synced.get(entryKey(entry)) !== serializeEntry(entry));
 }
 
 export function useCalendarDraftPersistence({
@@ -96,9 +140,10 @@ export function useCalendarDraftPersistence({
   // to finish before acting, instead of racing it.
   const [isHydrated, setIsHydrated] = React.useState(false);
   const knownBackendIdsRef = React.useRef<Set<string>>(new Set());
-  const lastSyncedSignatureRef = React.useRef<string>('');
+  const lastSyncedRef = React.useRef<SyncedIndex>(new Map());
   const syncInFlightRef = React.useRef(false);
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
+  const { persistDraftFields } = useDraftFieldPersistence();
   // Live view of the current grid so a refetch can preserve in-flight local drafts
   // (manual constructions not yet autosaved) instead of clobbering them.
   const calendarDaysRef = React.useRef(calendarDays);
@@ -167,6 +212,13 @@ export function useCalendarDraftPersistence({
       day.slots.push(entry.draft);
     }
 
+    // What the server holds IS the synced state. Baselining the signature here is
+    // what keeps hydration (and every later reconcile) from writing the unchanged
+    // rows straight back: the autosave only fires for a draft that differs from
+    // this set, never for the act of loading it. Without this the first effect
+    // after hydration compared the grid against an empty signature and PATCHed
+    // every manual draft on every planner mount.
+    lastSyncedRef.current = indexEntries(selectPersistableEntries(days));
     // Non-destructive reconcile: keep never-persisted local drafts that the server
     // hasn't echoed yet, so a refetch racing a fresh manual construction can't wipe it.
     setCalendarDays(mergeUnsavedLocalDrafts(days, calendarDaysRef.current));
@@ -179,7 +231,7 @@ export function useCalendarDraftPersistence({
     const key = brandProfileId;
     hydratedKeyRef.current = null;
     setIsHydrated(false);
-    lastSyncedSignatureRef.current = '';
+    lastSyncedRef.current = new Map();
     knownBackendIdsRef.current = new Set();
 
     const load = async () => {
@@ -200,34 +252,9 @@ export function useCalendarDraftPersistence({
     if (!brandProfileId) return;
     if (hydratedKeyRef.current !== brandProfileId) return;
 
-    const rawPersistableEntries = calendarDays
-      // The unscheduled sentinel is not a real date; its drafts are server-owned
-      // and must never be written back with a bogus scheduled_date.
-      .filter((day) => day.id !== UNSCHEDULED_DAY_ID)
-      .flatMap((day) =>
-        day.slots
-          .filter((draft) => draft.status !== 'streaming')
-          // The browser autosave owns ONLY manually-authored drafts. Everything the
-          // generation pipeline produces (agent posts, grid/trend seeds, "Generate
-          // with AI" placeholders — all origin 'agent' or undefined) is server-owned
-          // and persisted by the backend with a canonical client_key. A positive
-          // allowlist (origin === 'manual') is the fix for duplicate posts: the old
-          // denylist (origin !== 'agent') let undefined-origin generation drafts slip
-          // through and get inserted a second time alongside the backend's own row.
-          .filter((draft) => draft.origin === 'manual')
-          .map((draft) => ({ dayId: day.id, draft })),
-      );
-    // Collapse any same-clientKey entries (a store-level duplicate) so each logical
-    // draft is written exactly once per tick.
-    const seenClientKeys = new Set<string>();
-    const persistableEntries = rawPersistableEntries.filter((entry) => {
-      const key = entry.draft.clientKey ?? entry.draft.id;
-      if (seenClientKeys.has(key)) return false;
-      seenClientKeys.add(key);
-      return true;
-    });
-    const signature = serializeEntries(persistableEntries);
-    if (signature === lastSyncedSignatureRef.current) return;
+    const persistableEntries = selectPersistableEntries(calendarDays);
+    const changedEntries = selectChangedEntries(persistableEntries, lastSyncedRef.current);
+    if (changedEntries.length === 0) return;
 
     const timer = setTimeout(() => {
       if (syncInFlightRef.current) return;
@@ -248,7 +275,7 @@ export function useCalendarDraftPersistence({
           // agent-created drafts came back on the next fetch. Deletion is now
           // exclusively the explicit `pendingServerDeletes` queue that user-initiated
           // deletes populate and the sibling effect below drains.
-          for (const entry of persistableEntries) {
+          for (const entry of changedEntries) {
             const payload = buildPersistedDraftPayload({
               brandId: brandProfileId,
               weekStartId: weekStartIdForDay(entry.dayId),
@@ -286,6 +313,19 @@ export function useCalendarDraftPersistence({
                 ...draft,
                 backendDraftId: created.id,
               }));
+              // Read the live grid, not `entry`: a keystroke that landed while the insert
+              // was in flight is only there, and its own PATCH was skipped for want of a row.
+              const latest =
+                calendarDaysRef.current
+                  .flatMap((day) => day.slots)
+                  .find((draft) => draft.id === entry.draft.id) ?? entry.draft;
+              const copyPatch = newRowCopyPatch(latest);
+              if (copyPatch) {
+                await persistDraftFields(
+                  { id: latest.id, backendDraftId: created.id, updatedAt: null },
+                  copyPatch,
+                );
+              }
               continue;
             }
 
@@ -308,7 +348,7 @@ export function useCalendarDraftPersistence({
             }
           }
 
-          lastSyncedSignatureRef.current = signature;
+          lastSyncedRef.current = indexEntries(persistableEntries);
           await refetch();
         } finally {
           syncInFlightRef.current = false;
@@ -319,7 +359,15 @@ export function useCalendarDraftPersistence({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById]);
+  }, [
+    brandProfileId,
+    calendarDays,
+    persistDraftFields,
+    platformAccountIds,
+    refetch,
+    supabase,
+    updateDraftById,
+  ]);
 
   // Drain user-initiated draft deletions to the server. This is the ONLY path that
   // deletes: an explicit, user-initiated, confirmed delete. It is brand-scoped

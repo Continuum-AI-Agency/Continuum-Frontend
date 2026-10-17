@@ -25,10 +25,15 @@ import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 
 type Props = {
   brandId: string;
   accountId?: string;
+  /** The account record's currency (what the Optimizer knows); the payload's own label wins.
+   *  Unknown prints a bare figure, never `$` (PP-L3-home-paid-prints-dollar-signs-no-currency). */
+  accountCurrency?: string | null;
   onAccountChange?: (id: string) => void;
   selectedMetric?: PaidPerformanceMetricKey;
   onSelectedMetricChange?: (metric: PaidPerformanceMetricKey) => void;
@@ -120,11 +125,30 @@ export function deriveMetricTrendValue(
   return 0;
 }
 
-function formatValue(value: number, type: 'currency' | 'number' | 'percent') {
-  if (type === 'currency')
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+function formatValue(
+  value: number,
+  type: 'currency' | 'number' | 'percent',
+  currency: string | null,
+) {
+  if (type === 'currency') return formatCurrency(value, currency);
   if (type === 'percent') return `${value.toFixed(2)}%`;
-  return new Intl.NumberFormat().format(value);
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+/** Whole-number metrics print as counts and are stamped as such; ROAS is a 'number' card that
+ *  prints to two decimals and is left unstamped, the way CTR is. */
+const COUNT_METRICS: ReadonlySet<MetricKey> = new Set([
+  'impressions',
+  'clicks',
+  'gaSessions',
+  'gaConversions',
+]);
+
+/** A short axis tick: `$1.2k` only when the money is USD; a bare `1.2k` otherwise — never a
+ *  `$` the account did not earn. */
+function axisMoney(value: number, currency: string | null): string {
+  const body = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+  return currency === 'USD' ? `$${body}` : body;
 }
 
 function formatPercent(value?: number) {
@@ -302,6 +326,7 @@ function PaidReportingLoadingSkeleton({
 export function PaidMediaReportingWidget({
   brandId,
   accountId,
+  accountCurrency = null,
   onAccountChange,
   selectedMetric,
   onSelectedMetricChange,
@@ -453,7 +478,7 @@ export function PaidMediaReportingWidget({
             platform,
             accountId: selectedAdAccount,
             campaignId,
-            range: { preset: 'last_7d' },
+            range: lastCompleteDays(7),
           }),
         });
 
@@ -673,6 +698,7 @@ export function PaidMediaReportingWidget({
           ) : state.status === 'success' ? (
             viewMode === 'overview' ? (
               <MetricsPanel
+                accountCurrency={accountCurrency}
                 data={state.data}
                 expandedMetric={expandedMetric}
                 onMetricSelect={handleMetricSelect}
@@ -693,14 +719,18 @@ export function PaidMediaReportingWidget({
 // test disproportionately heavy for what it renders.
 export function MetricsPanel({
   data,
+  accountCurrency = null,
   expandedMetric,
   onMetricSelect,
 }: {
   data: PaidMetricsResponse;
+  accountCurrency?: string | null;
   expandedMetric: MetricKey;
   onMetricSelect: (key: MetricKey) => void;
 }) {
   const { metrics, comparison, range, trends } = data;
+  // The payload's own currency label first, the account record's second, bare when neither.
+  const currency = data.currency ?? accountCurrency ?? null;
 
   const metricCards: MetricCard[] = [
     { key: 'spend', label: 'Spend', value: metrics.spend, format: 'currency' },
@@ -789,8 +819,13 @@ export function MetricsPanel({
                       <div
                         className="w-full truncate font-semibold leading-tight tabular-nums"
                         style={{ fontSize: '0.8rem' }}
+                        {...(item.format === 'currency'
+                          ? figureProps(`home.widget.${item.key}`, item.value, currency, 'd7')
+                          : COUNT_METRICS.has(item.key)
+                            ? figureProps(`home.widget.${item.key}`, item.value, null, 'd7', 'count')
+                            : {})}
                       >
-                        {formatValue(item.value, item.format)}
+                        {formatValue(item.value, item.format, currency)}
                       </div>
                       {formattedDelta ? (
                         <span
@@ -848,7 +883,7 @@ export function MetricsPanel({
                       if (typeof value !== 'number') return String(value);
                       if (expandedKey === 'ctr' || expandedKey === 'roas') return value.toFixed(1);
                       if (expandedKey === 'spend' || expandedKey === 'cpc') {
-                        return `$${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`;
+                        return axisMoney(value, currency);
                       }
                       return value >= 1000 ? (value / 1000).toFixed(1) + 'k' : String(value);
                     }}

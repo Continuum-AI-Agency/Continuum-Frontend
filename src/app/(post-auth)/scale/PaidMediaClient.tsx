@@ -10,6 +10,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Sparkles,
+  Target,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
@@ -68,6 +69,7 @@ const PAID_MEDIA_TABS = [
   'dashboard',
   'performance',
   'campaigns',
+  'conversions',
   'jaina',
   'creative-insights',
 ] as const;
@@ -81,8 +83,12 @@ function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
 
 // The module tabs answer to the bar's width (`scale-bar`, see ScaleHeaderBar): narrow, each is
 // its mark with the name kept for assistive tech, so the segmented control never clips; with
-// room, the name replaces the mark. The marks match the sidebar's (Gauge, Bot).
-const SCALE_TAB_CLASS = 'px-1.5 text-xs @[26rem]/scale-bar:px-3';
+// room, the name replaces the mark. The marks match the sidebar's (Gauge, Bot). An inactive
+// module reads in the muted ink: the primitive's text-foreground/65 measures 4.4:1 on the bar's
+// muted fill, the ink 5.6:1 (PP-L1V-muted-caption-contrast-4.41).
+// `min-h-[24px]` in px, not `min-h-6`: the root font size steps down to 13px on narrow screens, so
+// rem-sized triggers measured 22px — under the 24px target floor.
+const SCALE_TAB_CLASS = 'min-h-[24px] px-1.5 text-xs text-muted-foreground @[26rem]/scale-bar:px-3';
 const SCALE_TAB_ICON_CLASS = 'size-3.5 @[26rem]/scale-bar:hidden';
 const SCALE_TAB_LABEL_CLASS = 'sr-only @[26rem]/scale-bar:not-sr-only';
 
@@ -168,6 +174,17 @@ const OptimizerTab = dynamic(
 const CampaignsTab = dynamic(
   () => import('@/components/paid-media/campaigns/CampaignsTab').then((mod) => mod.CampaignsTab),
   { ssr: false, loading: () => <CampaignsTabSkeleton /> },
+);
+
+// Meta only: the brand's Conversions API — pixel, one-off and CSV sends, webhook sources from the
+// client's own tools, and the delivery log. Per brand, not per portfolio, so it is its own tab
+// rather than an Optimizer sub-view (the Optimizer shows onboarding until a portfolio exists).
+const ConversionsApiSection = dynamic(
+  () =>
+    import('@/components/paid-media/conversions/ConversionsApiSection').then(
+      (mod) => mod.ConversionsApiSection,
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-lg" /> },
 );
 
 type PaidMediaClientPageProps = {
@@ -713,7 +730,7 @@ export default function PaidMediaClientPage({
                 <span className="sr-only @[44rem]/scale-bar:not-sr-only">Creative Insights</span>
               </button>
             ) : null}
-            <TabsList className="h-8 shrink-0">
+            <TabsList className="h-8 min-h-[30px] shrink-0">
               <TabsTrigger
                 value="performance"
                 className={SCALE_TAB_CLASS}
@@ -744,6 +761,21 @@ export default function PaidMediaClientPage({
                 >
                   <Megaphone aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
                   <span className={SCALE_TAB_LABEL_CLASS}>Campaigns</span>
+                </TabsTrigger>
+              ) : null}
+              {platform === 'meta' ? (
+                <TabsTrigger
+                  value="conversions"
+                  className={SCALE_TAB_CLASS}
+                  onMouseEnter={() => {
+                    void import('@/components/paid-media/conversions/ConversionsApiSection');
+                  }}
+                  onFocus={() => {
+                    void import('@/components/paid-media/conversions/ConversionsApiSection');
+                  }}
+                >
+                  <Target aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
+                  <span className={SCALE_TAB_LABEL_CLASS}>Conversions</span>
                 </TabsTrigger>
               ) : null}
               <TabsTrigger
@@ -971,6 +1003,19 @@ export default function PaidMediaClientPage({
               </AnimatePresence>
             </div>
           </JainaBrandScopeProvider>
+        </TabsContent>
+
+        <TabsContent
+          value="conversions"
+          className="box-border min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-4"
+        >
+          {selectedAdAccount ? (
+            <div className="mx-auto w-full max-w-4xl">
+              <ConversionsApiSection key={brandProfileId} brandId={brandProfileId} />
+            </div>
+          ) : (
+            renderBlockedState()
+          )}
         </TabsContent>
 
         <TabsContent

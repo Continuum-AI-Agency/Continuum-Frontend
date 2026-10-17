@@ -1,0 +1,13 @@
+{
+  "output": {
+    "contentType": "image/png",
+    "bytes": 182044,
+    "width": 640,
+    "height": 360,
+    "frames": 1,
+    "durationSec": null
+  },
+  "blenderVersion": "5.2.2",
+  "timings": { "download": 412, "patch": 3, "render": 9120, "encode": 0, "upload": 220, "total": 9761 },
+  "warnings": []
+}

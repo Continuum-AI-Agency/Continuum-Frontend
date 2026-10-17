@@ -257,4 +257,22 @@ describe('ElementNode', () => {
 
     expect(await screen.findByText('Character')).toBeTruthy();
   });
+
+  it('shows the live Element’s style slugs as read-only chips over the stale node copy', async () => {
+    requestMock.mockResolvedValue({
+      elements: [
+        buildElement({
+          members: [{ assetId: 'm', position: 0 }],
+          styleSlugs: ['film-grain', 'golden-hour'],
+        }),
+      ],
+    } as never);
+
+    renderNode({ elementId: 'element-1', styleSlugs: ['stale-slug'] });
+
+    expect(await screen.findByText('/film-grain')).toBeTruthy();
+    expect(screen.getByText('/golden-hour')).toBeTruthy();
+    expect(screen.queryByText('/stale-slug')).toBeNull();
+    expect(screen.getByTestId('element-node-styles').querySelector('button')).toBeNull();
+  });
 });

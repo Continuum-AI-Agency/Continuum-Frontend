@@ -16,6 +16,7 @@ import {
   Undo2Icon,
 } from 'lucide-react';
 import type * as React from 'react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { HeroFigure } from '../components/HeroFigure';
 import { formatCurrency, formatPercent } from '../format';
@@ -32,6 +33,7 @@ import {
   revertState,
 } from './actionRows';
 import { formatWhen, ReceiptToken } from './feedChrome';
+import { PlatformUndoControl } from './platformCards/PlatformCardActionControl';
 import { PlatformChip } from './platforms/PlatformChip';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
@@ -172,6 +174,24 @@ export function ActionRevertControl({
   currency: string | null;
 }) {
   const revert = revertState(row);
+  // The dialog that is undoing this row stays mounted until it is closed: the feed re-reads the
+  // row as reverted as soon as the undo lands, and swapping in the badge then unmounted the
+  // open dialog before its result showed (G4 live run 2).
+  const [undoOpen, setUndoOpen] = useState(false);
+  const undoable = revert.kind === 'available' || (undoOpen && row.portfolio_id != null);
+  if (undoable && actionPlatform(row) !== 'meta') {
+    // A platform write (Google, TikTok) undoes through optimizer-apply-action-revert, which
+    // reads the audit's own prior; the Meta dialog's edge refuses every other platform.
+    return (
+      <PlatformUndoControl
+        auditId={row.id}
+        currency={currency}
+        onOpenChange={setUndoOpen}
+        portfolioId={row.portfolio_id as string}
+        title={readActionChange(row).label}
+      />
+    );
+  }
   if (revert.kind === 'available') {
     return (
       <RevertApplyDialog

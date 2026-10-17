@@ -16,6 +16,12 @@ import * as React from 'react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import {
+  type FigureProps,
+  type FigureWindow,
+  figureProps,
+  formatCurrency,
+} from '@/components/paid-media/optimizer/format';
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
@@ -73,6 +79,7 @@ import type { ActionLog } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
 import type { AdSet } from './AdSetTable';
 import { mapActionLogsToTimelineMarkers } from './actionMarkers';
+import { campaignsSplit } from './campaignsSplit';
 import { CreativeGallery } from './creatives/CreativeGallery';
 import { CreativeRotationSheet } from './creatives/CreativeRotationSheet';
 import {
@@ -96,7 +103,7 @@ import type { PaidMetricsComparison, PaidMetricsTrendPoint } from './Performance
 import { type PaidMediaTimeRange, resolveTimeRangeWindow, toMetricsRange } from './timeRange';
 
 type TimelineResolution = 'daily' | 'hourly';
-type MetricKey = 'spend' | 'roas' | 'ctr' | 'cpc' | 'cpa' | 'impressions' | 'clicks';
+export type MetricKey = 'spend' | 'roas' | 'ctr' | 'cpc' | 'cpa' | 'impressions' | 'clicks';
 type ViewMode = 'campaigns' | 'adsets';
 type Scope = { type: 'campaign'; id: string } | { type: 'index'; id: string };
 type CampaignSearchFilter = 'all' | 'active' | 'paused';
@@ -174,6 +181,8 @@ type CampaignAdSetWorkspaceProps = {
   onEditCampaignIndex?: (indexId: string) => void;
   onDeleteCampaignIndex?: (indexId: string) => void;
   toolbarSlot?: React.ReactNode;
+  /** The ad account's ISO currency; null prints money as bare figures, never as dollars. */
+  currency?: string | null;
 };
 
 const METRICS: MetricKey[] = ['spend', 'roas', 'ctr', 'cpc', 'cpa', 'impressions', 'clicks'];
@@ -204,14 +213,6 @@ const RAIL_HEIGHT_CLASS = 'h-full';
 const RAIL_SCROLL_HEIGHT_CLASS = 'h-full';
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, 'all'];
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
@@ -225,11 +226,73 @@ function formatDeltaPercent(value: number): string {
   return `${sign}${value.toFixed(1)}%`;
 }
 
-function formatMetric(metric: MetricKey, value: number): string {
-  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa') return formatCurrency(value);
+const MONEY_METRICS: ReadonlySet<MetricKey> = new Set(['spend', 'cpc', 'cpa']);
+const COUNT_METRICS: ReadonlySet<MetricKey> = new Set(['impressions', 'clicks']);
+
+/** A metric as the cards print it. Money follows the product's one money rule
+ *  (optimizer/format.formatCurrency): the account's code, and a bare figure when the code is
+ *  unknown — a peso account never reads as dollars. */
+export function formatMetric(
+  metric: MetricKey,
+  value: number,
+  currency: string | null | undefined,
+): string {
+  if (MONEY_METRICS.has(metric)) return formatCurrency(value, currency);
   if (metric === 'roas') return value.toFixed(2);
   if (metric === 'ctr') return formatPercent(value);
   return formatNumber(value);
+}
+
+const WINDOW_BY_DAY_COUNT: Readonly<Record<number, FigureWindow>> = {
+  1: 'd1',
+  3: 'd3',
+  7: 'd7',
+  14: 'd14',
+  30: 'd30',
+};
+
+/** The provenance stamp for the node that prints `formatMetric(metric, value, currency)`, so
+ *  the L3 bench can grade it against the payload. ROAS and CTR print to decimals the figure
+ *  contract has no unit for and stay unstamped rather than stamped wrong. */
+export function metricFigure(
+  scope: string,
+  metric: MetricKey,
+  value: number,
+  currency: string | null | undefined,
+  dayCount: number,
+): FigureProps | Record<string, never> {
+  const isMoney = MONEY_METRICS.has(metric);
+  if (!isMoney && !COUNT_METRICS.has(metric)) return {};
+  return figureProps(
+    `${scope}.${metric}`,
+    value,
+    isMoney ? currency : null,
+    WINDOW_BY_DAY_COUNT[dayCount] ?? 'none',
+    isMoney ? 'currency' : 'count',
+  );
+}
+
+/** One metric as the cards and rails print it, stamped with the figure it prints. */
+function MetricValue({
+  className,
+  scope,
+  metric,
+  value,
+  currency,
+  dayCount,
+}: {
+  className: string;
+  scope: string;
+  metric: MetricKey;
+  value: number;
+  currency: string | null | undefined;
+  dayCount: number;
+}) {
+  return (
+    <span className={className} {...metricFigure(scope, metric, value, currency, dayCount)}>
+      {formatMetric(metric, value, currency)}
+    </span>
+  );
 }
 
 function labelForMetric(metric: MetricKey): string {
@@ -635,6 +698,7 @@ export function CampaignAdSetWorkspace({
   onEditCampaignIndex,
   onDeleteCampaignIndex,
   toolbarSlot,
+  currency = null,
 }: CampaignAdSetWorkspaceProps) {
   const [viewMode, setViewMode] = React.useState<ViewMode>('campaigns');
   const [campaignQuery, setCampaignQuery] = React.useState('');
@@ -1923,7 +1987,8 @@ export function CampaignAdSetWorkspace({
               <div className="truncate text-sm font-semibold">Explorer</div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {/* The px gap on touch keeps each control's 44px hit area off its neighbours. */}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 pointer-coarse:gap-[12px]">
               {toolbarSlot}
               <div
                 data-tour-id="paid-adset-toggle"
@@ -2015,8 +2080,8 @@ export function CampaignAdSetWorkspace({
 
         <CardContent className="flex-1 min-h-0 p-0">
           {viewMode === 'campaigns' ? (
-            <ResizablePanelGroup orientation="horizontal" className="h-full min-h-0 gap-1.5 p-1.5">
-              <ResizablePanel defaultSize={75} minSize={55} className="min-w-0">
+            <ResizablePanelGroup {...campaignsSplit.group} className="h-full min-h-0 gap-1.5 p-1.5">
+              <ResizablePanel {...campaignsSplit.chart} className="min-w-0">
                 <div className="flex h-full min-h-0 flex-col rounded-md border border-border/70 bg-card p-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
@@ -2042,9 +2107,14 @@ export function CampaignAdSetWorkspace({
                             <span className="text-xs font-medium text-muted-foreground">
                               {card.label}
                             </span>
-                            <span className="text-xs font-semibold">
-                              {formatMetric(card.metric, card.value)}
-                            </span>
+                            <MetricValue
+                              className="text-xs font-semibold"
+                              scope="dashboard.campaigns"
+                              metric={card.metric}
+                              value={card.value}
+                              currency={currency}
+                              dayCount={timeWindow.dayCount}
+                            />
                           </div>
                           <div className="mt-1 flex items-center justify-between gap-2">
                             <MetricCardDelta metric={card.metric} changePct={card.changePct} />
@@ -2186,11 +2256,8 @@ export function CampaignAdSetWorkspace({
               <ResizableHandle withHandle className="mx-0.5 bg-transparent" />
 
               <ResizablePanel
+                {...campaignsSplit.rail}
                 panelRef={railPanelRef}
-                defaultSize={25}
-                minSize={14}
-                collapsible
-                collapsedSize={0}
                 onResize={handleRailPanelResize}
                 className="min-w-0"
               >
@@ -2203,7 +2270,10 @@ export function CampaignAdSetWorkspace({
                       className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
                       aria-label="Search campaigns and indexes"
                     />
-                    <div data-tour-id="paid-campaign-selector" className="flex items-center gap-1">
+                    <div
+                      data-tour-id="paid-campaign-selector"
+                      className="flex items-center gap-1 pointer-coarse:flex-wrap pointer-coarse:gap-[12px]"
+                    >
                       <Button
                         size="xs"
                         variant={railEntityFilter === 'all' ? 'secondary' : 'ghost'}
@@ -2311,12 +2381,14 @@ export function CampaignAdSetWorkspace({
                                         {entry.index.name}
                                       </span>
                                     </span>
-                                    <span className="text-sidebar-foreground/65">
-                                      {formatMetric(
-                                        campaignMetric,
-                                        entry.aggregate.metrics[campaignMetric] ?? 0,
-                                      )}
-                                    </span>
+                                    <MetricValue
+                                      className="text-sidebar-foreground/65"
+                                      scope="dashboard.campaign-rail"
+                                      metric={campaignMetric}
+                                      value={entry.aggregate.metrics[campaignMetric] ?? 0}
+                                      currency={currency}
+                                      dayCount={timeWindow.dayCount}
+                                    />
                                   </CommandItem>
                                 );
                               })}
@@ -2361,12 +2433,14 @@ export function CampaignAdSetWorkspace({
                                       />
                                       <span className="truncate">{campaign.name}</span>
                                     </span>
-                                    <span className="text-sidebar-foreground/65">
-                                      {formatMetric(
-                                        campaignMetric,
-                                        campaign.metrics?.[campaignMetric] ?? 0,
-                                      )}
-                                    </span>
+                                    <MetricValue
+                                      className="text-sidebar-foreground/65"
+                                      scope="dashboard.campaign-rail"
+                                      metric={campaignMetric}
+                                      value={campaign.metrics?.[campaignMetric] ?? 0}
+                                      currency={currency}
+                                      dayCount={timeWindow.dayCount}
+                                    />
                                   </CommandItem>
                                 );
                               })}
@@ -2427,12 +2501,16 @@ export function CampaignAdSetWorkspace({
                                                   <span className="truncate font-medium">
                                                     {entry.index.name}
                                                   </span>
-                                                  <span className="text-sidebar-foreground/65">
-                                                    {formatMetric(
-                                                      campaignMetric,
-                                                      entry.aggregate.metrics[campaignMetric] ?? 0,
-                                                    )}
-                                                  </span>
+                                                  <MetricValue
+                                                    className="text-sidebar-foreground/65"
+                                                    scope="dashboard.campaign-rail"
+                                                    metric={campaignMetric}
+                                                    value={
+                                                      entry.aggregate.metrics[campaignMetric] ?? 0
+                                                    }
+                                                    currency={currency}
+                                                    dayCount={timeWindow.dayCount}
+                                                  />
                                                 </button>
                                               }
                                             />
@@ -2513,12 +2591,16 @@ export function CampaignAdSetWorkspace({
                                                         {campaign.name}
                                                       </span>
                                                     </span>
-                                                    <span className="text-sidebar-foreground/65">
-                                                      {formatMetric(
-                                                        campaignMetric,
-                                                        campaign.metrics?.[campaignMetric] ?? 0,
-                                                      )}
-                                                    </span>
+                                                    <MetricValue
+                                                      className="text-sidebar-foreground/65"
+                                                      scope="dashboard.campaign-rail"
+                                                      metric={campaignMetric}
+                                                      value={
+                                                        campaign.metrics?.[campaignMetric] ?? 0
+                                                      }
+                                                      currency={currency}
+                                                      dayCount={timeWindow.dayCount}
+                                                    />
                                                     <button
                                                       type="button"
                                                       title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
@@ -2598,12 +2680,14 @@ export function CampaignAdSetWorkspace({
                                               />
                                               <span className="truncate">{campaign.name}</span>
                                             </span>
-                                            <span className="text-sidebar-foreground/65">
-                                              {formatMetric(
-                                                campaignMetric,
-                                                campaign.metrics?.[campaignMetric] ?? 0,
-                                              )}
-                                            </span>
+                                            <MetricValue
+                                              className="text-sidebar-foreground/65"
+                                              scope="dashboard.campaign-rail"
+                                              metric={campaignMetric}
+                                              value={campaign.metrics?.[campaignMetric] ?? 0}
+                                              currency={currency}
+                                              dayCount={timeWindow.dayCount}
+                                            />
                                             <button
                                               type="button"
                                               title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
@@ -2656,12 +2740,14 @@ export function CampaignAdSetWorkspace({
                                     )}
                                   >
                                     <span className="truncate font-medium">{entry.index.name}</span>
-                                    <span className="text-sidebar-foreground/65">
-                                      {formatMetric(
-                                        campaignMetric,
-                                        entry.aggregate.metrics[campaignMetric] ?? 0,
-                                      )}
-                                    </span>
+                                    <MetricValue
+                                      className="text-sidebar-foreground/65"
+                                      scope="dashboard.campaign-rail"
+                                      metric={campaignMetric}
+                                      value={entry.aggregate.metrics[campaignMetric] ?? 0}
+                                      currency={currency}
+                                      dayCount={timeWindow.dayCount}
+                                    />
                                   </button>
                                 </SidebarMenuItem>
                               );
@@ -2710,12 +2796,14 @@ export function CampaignAdSetWorkspace({
                                       />
                                       <span className="truncate">{campaign.name}</span>
                                     </span>
-                                    <span className="text-sidebar-foreground/65">
-                                      {formatMetric(
-                                        campaignMetric,
-                                        campaign.metrics?.[campaignMetric] ?? 0,
-                                      )}
-                                    </span>
+                                    <MetricValue
+                                      className="text-sidebar-foreground/65"
+                                      scope="dashboard.campaign-rail"
+                                      metric={campaignMetric}
+                                      value={campaign.metrics?.[campaignMetric] ?? 0}
+                                      currency={currency}
+                                      dayCount={timeWindow.dayCount}
+                                    />
                                     <button
                                       type="button"
                                       title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
@@ -2797,9 +2885,14 @@ export function CampaignAdSetWorkspace({
                               <span className="text-xs font-medium text-muted-foreground">
                                 {card.label}
                               </span>
-                              <span className="text-xs font-semibold">
-                                {formatMetric(card.metric, card.value)}
-                              </span>
+                              <MetricValue
+                                className="text-xs font-semibold"
+                                scope="dashboard.adsets"
+                                metric={card.metric}
+                                value={card.value}
+                                currency={currency}
+                                dayCount={timeWindow.dayCount}
+                              />
                             </div>
                             <div className="mt-1 flex items-center justify-between gap-2">
                               <MetricCardDelta metric={card.metric} changePct={card.changePct} />
@@ -3055,9 +3148,14 @@ export function CampaignAdSetWorkspace({
                                             : item.label}
                                         </span>
                                       </span>
-                                      <span className="text-xs text-sidebar-foreground/65">
-                                        {formatMetric(adSetMetric, item.value)}
-                                      </span>
+                                      <MetricValue
+                                        className="text-xs text-sidebar-foreground/65"
+                                        scope="dashboard.adset-rail"
+                                        metric={adSetMetric}
+                                        value={item.value}
+                                        currency={currency}
+                                        dayCount={timeWindow.dayCount}
+                                      />
                                     </button>
                                   </SidebarMenuItem>
                                 );
@@ -3134,12 +3232,14 @@ export function CampaignAdSetWorkspace({
                                           {adSet.campaignName}
                                         </span>
                                       </span>
-                                      <span className="text-xs text-sidebar-foreground/65">
-                                        {formatMetric(
-                                          adSetMetric,
-                                          adSet.metrics?.[adSetMetric] ?? 0,
-                                        )}
-                                      </span>
+                                      <MetricValue
+                                        className="text-xs text-sidebar-foreground/65"
+                                        scope="dashboard.adset-rail"
+                                        metric={adSetMetric}
+                                        value={adSet.metrics?.[adSetMetric] ?? 0}
+                                        currency={currency}
+                                        dayCount={timeWindow.dayCount}
+                                      />
                                     </button>
                                   </SidebarMenuItem>
                                 );
@@ -3183,7 +3283,7 @@ export function CampaignAdSetWorkspace({
                       selectionLimit={3}
                       onToggleSelect={toggleAdSelection}
                       activeMetric={adSetMetric}
-                      formatMetric={formatMetric}
+                      formatMetric={(metric, value) => formatMetric(metric, value, currency)}
                       labelForMetric={labelForMetric}
                       logs={actionLogs}
                       onOpenDetail={setOpenCreativeDetail}

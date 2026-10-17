@@ -20,7 +20,7 @@
 // brand owns, and an account read is per ACCOUNT — a line there would mean one read per account
 // group to decorate a list whose entire job is to get you into a portfolio.
 
-import type { AccountCandidate, PacingStamp, PortfolioListItem } from '@continuum/contracts';
+import type { AccountCandidate, CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { ACCOUNT_DETECTOR_META, clipLine } from '@continuum/contracts';
 import { ChevronRight, Plus, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -33,6 +33,7 @@ import {
   figureProps,
   formatCurrency,
   formatHeadline,
+  formatPercent,
   humanize,
   portfolioLevelLabel,
 } from '../format';
@@ -50,6 +51,8 @@ import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
 import {
   CostVsTargetCell,
   FigureCell,
+  memberCountLabel,
+  memberNoun,
   PendingCell,
   PortfolioRow,
   PortfolioRowName,
@@ -59,7 +62,9 @@ import {
   StalenessNote,
   StatusCell,
 } from './PortfolioRowCard';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
+import { pacingSideLabel, portfolioPacingLine } from './portfolioPacingLine';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
  *  every portfolio the brand owns, grouped by account. */
@@ -86,7 +91,7 @@ const TABLE_LABELS = [
   'Portfolio',
   'Cost vs target',
   'Per day',
-  'Ad sets',
+  'Members',
   'Pending',
   'Status',
 ] as const;
@@ -130,6 +135,33 @@ function LeadLine({
   );
 }
 
+/** The pacing verdict of THIS portfolio's latest run, in the account finding's own words: the
+ *  reading, its drift from plan, and the result the portfolio buys. */
+function PacingLine({
+  line,
+  figureKey,
+}: {
+  line: ReturnType<typeof portfolioPacingLine> & object;
+  figureKey: string;
+}) {
+  return (
+    <p
+      className="mt-0.5 truncate text-muted-foreground text-xs"
+      data-detector="account_pacing"
+      data-testid="portfolio-lead"
+    >
+      {line.label} ·{' '}
+      <span
+        className="font-mono text-foreground tabular-nums"
+        {...figureProps(`${figureKey}.figure`, line.pct, null, 'none', 'percent')}
+      >
+        {formatPercent(line.pct)}
+      </span>{' '}
+      {pacingSideLabel(line)} · {line.noun}
+    </p>
+  );
+}
+
 function PortfolioTableRow({
   portfolio,
   currency,
@@ -142,8 +174,9 @@ function PortfolioTableRow({
   portfolio: PortfolioListItem;
   currency?: string | null;
   window: PortfolioWindow | null;
-  /** The latest run's pacing block, when read; the row labels a verdict about an earlier flight. */
-  pacing?: PacingStamp | null;
+  /** The latest run's pacing block, when read: the row labels a verdict about an earlier flight,
+   *  and under an account-wide pacing finding it is the verdict the row prints as its own. */
+  pacing?: CycleRunPacing | null;
   onOpenDetail: (portfolioId: string) => void;
   onPrefetch?: () => void;
   /** Today's best finding inside this portfolio. Absent, the line under the name says what the
@@ -151,6 +184,9 @@ function PortfolioTableRow({
   lead?: AccountCandidate | null;
 }) {
   const figureKey = (name: string) => `portfolios.${portfolio.id}.${name}`;
+  // The account's pacing finding is about every flight at once; the row speaks for its own.
+  const ownPacing = lead?.detector === 'account_pacing';
+  const pacingLine = ownPacing ? portfolioPacingLine(portfolio, pacing) : null;
   return (
     <PortfolioRow
       aria-label={`Open ${portfolio.name}`}
@@ -171,7 +207,7 @@ function PortfolioTableRow({
             text={formatCurrency(portfolio.daily_total, currency)}
           />
           <FigureCell
-            narrowSuffix={portfolio.adset_count === 1 ? ' ad set' : ' ad sets'}
+            narrowSuffix={` ${memberNoun(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}`}
             raw={portfolio.adset_count}
             text={String(portfolio.adset_count)}
             unit="count"
@@ -202,7 +238,9 @@ function PortfolioTableRow({
             }
             name={portfolio.name}
           />
-          {lead ? (
+          {pacingLine ? (
+            <PacingLine figureKey={figureKey('pacing')} line={pacingLine} />
+          ) : lead && !ownPacing ? (
             <LeadLine candidate={lead} currency={currency} figureKey={figureKey('lead')} />
           ) : (
             <p className="mt-0.5 truncate text-muted-foreground text-xs">
@@ -253,8 +291,9 @@ function ArchivedPortfolios({
               <div className="min-w-0">
                 <p className="truncate font-medium text-sm">{portfolio.name}</p>
                 <p className="text-xs tabular-nums">
-                  {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
-                  {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+                  {humanize(portfolio.objective)} ·{' '}
+                  {memberCountLabel(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}{' '}
+                  ·{' '}
                   <span
                     {...figureProps(
                       `portfolios.archived.${portfolio.id}.daily`,

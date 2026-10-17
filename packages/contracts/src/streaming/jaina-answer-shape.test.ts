@@ -319,8 +319,43 @@ describe('answerShapeOf — non-template answers', () => {
         'justification_no_relation',
         'sentence_figure_unjustified',
         'sentence_direction_contradicts',
+        'format_requested_not_delivered',
       ].sort(),
     );
+  });
+
+  it('holds a short ask to its sentence: no justification floor, no relation rule', () => {
+    const report = {
+      executive_summary: 'We spent 1,200 MXN yesterday, 8% under the day before.',
+      blocks: [{ block_id: 'scope', category: 'data_scope', dates: 'x', source: 'api' }],
+    };
+    const codes = (query: string) =>
+      answerShapeOf(report, { query }).map((violation) => violation.code);
+    expect(codes('What did we spend yesterday?')).toContain('justification_missing');
+    expect(codes('Rápido, en una línea: ¿cuánto gastamos ayer?')).toEqual([]);
+  });
+
+  it('names a requested format the answer does not carry, only when the ask is given', () => {
+    const report = {
+      executive_summary: 'Spend was 1,200 MXN over the last 7 days.',
+      blocks: [{ block_id: 'scope', category: 'data_scope', dates: 'x', source: 'api' }],
+    };
+    const codes = (ask?: { query: string }) =>
+      answerShapeOf(report, ask).map((violation) => violation.code);
+    expect(codes()).not.toContain('format_requested_not_delivered');
+    expect(codes({ query: 'What did we spend last week?' })).not.toContain(
+      'format_requested_not_delivered',
+    );
+    expect(codes({ query: 'Put spend by campaign in a table' })).toContain(
+      'format_requested_not_delivered',
+    );
+    const withTable = {
+      ...report,
+      blocks: [...report.blocks, { block_id: 't', category: 'data_table', rows: [{ a: 1 }] }],
+    };
+    expect(
+      answerShapeOf(withTable, { query: 'Put spend by campaign in a table' }).map((v) => v.code),
+    ).not.toContain('format_requested_not_delivered');
   });
 });
 
@@ -428,7 +463,7 @@ describe('answerShapeOf — template answers', () => {
     const texts = answerTextsOf(templated(rankingBlock({}), 'Placeholder. Two. Three.'));
     expect(texts.template).toBe(true);
     expect(texts.executive).toBe(
-      'A es la que mejor rinde: 249 MXN por compra, contra 300 MXN de la cuenta.',
+      'A es la que mejor rinde: $249 MXN por compra, contra $300 MXN de la cuenta.',
     );
     expect(codesOf(templated(rankingBlock({}), 'Analysis complete.'))).toEqual([]);
   });
@@ -445,14 +480,19 @@ describe('answerShapeOf — template answers', () => {
         badge_figure_id: 'cpr_1',
         text: 'De {cpr_2} a {cpr_1} por compra.',
       },
-      { id: 'effect', title: 'Gastar más', badge_figure_id: 'cpr_avg', text: 'Gastar más: {cpr_avg}.' },
+      {
+        id: 'effect',
+        title: 'Gastar más',
+        badge_figure_id: 'cpr_avg',
+        text: 'Gastar más: {cpr_avg}.',
+      },
     ];
     const texts = answerTextsOf(templated(block));
     expect(texts.justification).toContain(
-      'AV CAMACHO // MENSAJES // AGOSTO 2026: De 356 MXN a 249 MXN por compra.',
+      'AV CAMACHO // MENSAJES // AGOSTO 2026: De $356 MXN a $249 MXN por compra.',
     );
     // A text that already opens with its title is not given it twice.
-    expect(texts.justification).toContain('Gastar más: 300 MXN.');
+    expect(texts.justification).toContain('Gastar más: $300 MXN.');
   });
 
   it('a two-sentence template sentence is flagged', () => {

@@ -50,6 +50,15 @@ describe('InsightDataTable', () => {
     expect(renderedOrder()).toEqual(['Charlie', 'Alpha', 'Bravo']); // asc: 10, 30, 50
   });
 
+  it('gives a sortable header an invisible 24px hit area, the header row as drawn', () => {
+    // PP-L1V tap-target: the sort button paints at its 15px text line; `hit-area` grows only the
+    // pointer target (a transparent ::after), never the h-7 header row.
+    render(<InsightDataTable rows={rows} columns={columns} getRowId={(row) => row.id} />);
+    const sort = screen.getByRole('button', { name: /Reach/ });
+    expect(sort.className.split(' ')).toContain('hit-area');
+    expect(sort.className).not.toMatch(/\b(min-h|h|py|p)-/);
+  });
+
   it('reveals expanded content only for the clicked row', () => {
     render(
       <InsightDataTable

@@ -166,8 +166,7 @@ export function TemplateLayerEditor({
     item.revisions.some((revision) => pins(revision, assetId, versionId)),
   );
   const revision = variant?.revisions.find((item) => pins(item, assetId, versionId));
-  // An upload the registry never took in — its file version has no recorded checksum — has no
-  // revision to edit from, and waiting will not change that.
+  // The registry must contain this exact source version before the editor can safely derive edits.
   const unregistered =
     (catalog.isSuccess && !revision) ||
     /template_revision_source_missing/.test(String(catalog.error ?? ''));
@@ -485,8 +484,9 @@ export function TemplateLayerEditor({
 
       {unregistered ? (
         <p className="p-3 text-xs text-muted-foreground">
-          This upload is not registered as a template revision — its file has no recorded checksum —
-          so its layers cannot be edited here. Upload the file again to edit them.
+          No Forge revision is registered for this exact asset version, so its editable source and
+          checksum have not been verified. Re-import this source version or upload the file again,
+          then reopen Layers to edit it.
         </p>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)_20rem]">

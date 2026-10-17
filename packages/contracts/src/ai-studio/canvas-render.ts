@@ -10,6 +10,37 @@ export const CANVAS_RENDER_CONTINUATION_RENEW_ROUTE =
 export const CANVAS_RENDER_CONTINUATION_FINISH_ROUTE =
   '/api/ai-studio/canvas/renders/continuation/finish';
 
+/**
+ * The browser's door to the server's fastCut render: the SAME function a server canvas run
+ * dispatches (`headless/fastCutNode.ts`), reading the node and its wires off the saved room and
+ * filing the montage back onto it.
+ */
+export const CANVAS_FAST_CUT_ROUTE = '/api/ai-studio/canvas/fast-cut';
+
+export const canvasFastCutRequestSchema = z
+  .object({
+    brandProfileId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    nodeId: z.string().min(1),
+  })
+  .strict();
+export type CanvasFastCutRequest = z.infer<typeof canvasFastCutRequestSchema>;
+
+/** What was filed onto the node: the registered delivery copy, its master and the cut. */
+export const canvasFastCutResponseSchema = z.object({
+  assetId: z.string().uuid(),
+  assetVersionId: z.string().min(1).nullable(),
+  bucket: z.string().min(1),
+  storagePath: z.string().min(1),
+  signedUrl: z.string().url(),
+  masterAssetId: z.string().uuid().nullable(),
+  durationSec: z.number().positive(),
+  fps: z.union([z.literal(30), z.literal(60)]),
+  cuts: z.number().int().positive(),
+  bpm: z.number().positive(),
+});
+export type CanvasFastCutResponse = z.infer<typeof canvasFastCutResponseSchema>;
+
 const renderOriginSchema = z.object({
   jobId: z.string().uuid(),
   brandProfileId: z.string().uuid(),

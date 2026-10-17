@@ -21,7 +21,7 @@ import { ArrowRightIcon, ChevronDownIcon, PencilRulerIcon, SparklesIcon } from '
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonText } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { deriveEfficiency, formatCpa, formatCurrency, humanize } from '../../format';
 import * as typeScale from '../../typeScale';
@@ -215,6 +215,53 @@ function SuggestionCard({
   );
 }
 
+/** One suggestion row while the suggestions load: the SuggestionCard's lines, as borderless
+ *  bars sized by representative words, so the list is already the height it is about to be.
+ *  The two rows used to be 7rem bordered boxes; the list that replaced them was 2.6x taller and
+ *  moved everything under it (the Overview's empty-state layout shift). */
+function SuggestionCardSkeleton() {
+  return (
+    <article
+      aria-hidden="true"
+      className="flex flex-col gap-2.5 py-4"
+      data-testid="suggestion-skeleton"
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <SkeletonText className="font-semibold text-sm tracking-tight">Purchases</SkeletonText>
+        <SkeletonText className="rounded-full border border-transparent px-2 py-0.5 font-medium text-xs">
+          Purchase
+        </SkeletonText>
+        <SkeletonText className="rounded-full border border-transparent px-2 py-0.5 font-medium text-xs">
+          Balanced
+        </SkeletonText>
+      </div>
+      <div className="flex flex-wrap gap-x-8 gap-y-2">
+        {['Ad sets', 'Per day', 'CPA'].map((label) => (
+          <div className="flex flex-col" key={label}>
+            <SkeletonText className={typeScale.label}>{label}</SkeletonText>
+            <SkeletonText className="font-mono font-semibold text-base">$000 MXN</SkeletonText>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1">
+        <div className="h-3" />
+        <p className="text-xs">
+          <SkeletonText wrap>
+            Cost per result spreads from $000 MXN to $000 MXN across 0 ad sets.
+          </SkeletonText>
+        </p>
+      </div>
+      <p className="text-xs">
+        <SkeletonText wrap>Why this group: 0 ad sets grouped by the same objective.</SkeletonText>
+      </p>
+      <div className="flex items-center justify-between gap-2">
+        <SkeletonText className="h-7 px-2 text-xs leading-7">Explore ad sets</SkeletonText>
+        <SkeletonText className="h-7 px-3 text-xs leading-7">Use this</SkeletonText>
+      </div>
+    </article>
+  );
+}
+
 type StepStartProps = {
   suggestions: PortfolioSuggestion[];
   isLoading: boolean;
@@ -263,25 +310,34 @@ export function StepStart({
           <SparklesIcon aria-hidden className="size-4 text-primary-ink" />
           <h4 className="font-semibold text-sm tracking-tight">Start from a suggestion</h4>
           {suggestions.length > 0 ? (
-            <span className="text-muted-foreground text-xs">
+            <span className="text-muted-foreground text-xs" data-testid="suggestions-subtitle">
               grouped from this account&rsquo;s active ad sets
             </span>
+          ) : isLoading ? (
+            <SkeletonText className="text-xs" data-testid="suggestions-subtitle" wrap>
+              grouped from this account&rsquo;s active ad sets
+            </SkeletonText>
           ) : null}
         </div>
 
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-28 rounded-lg" />
-            <Skeleton className="h-28 rounded-lg" />
-          </div>
-        ) : isError ? (
+        {/* One list for both states, so the rows that land replace their placeholders in place
+            and the scratch row below them stays the same node. */}
+        {isError && !isLoading ? (
           <p className="py-2 text-warning text-xs">
             Suggestions are unavailable — the optimizer service is offline. You can still build a
             portfolio from scratch.
           </p>
         ) : (
-          <div className="divide-y divide-border/60 border-border/60 border-b">
-            {suggestions.length === 0 ? (
+          <div
+            className="divide-y divide-border/60 border-border/60 border-b"
+            data-testid="suggestion-list"
+          >
+            {isLoading ? (
+              <>
+                <SuggestionCardSkeleton />
+                <SuggestionCardSkeleton />
+              </>
+            ) : suggestions.length === 0 ? (
               <p className="py-3 text-muted-foreground text-xs">{emptyMessage}</p>
             ) : null}
             {suggestions.map((suggestion) => (

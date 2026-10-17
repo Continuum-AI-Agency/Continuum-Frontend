@@ -167,12 +167,12 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
   it('prints the title the Backend stamped, and the verb it chose', () => {
     const { container } = view([stamped]);
     expect(container.querySelector('h3')?.textContent).toBe(
-      'ITESO // AGOSTO - RTG: 101 MXN por lead, 2.9× la referencia de 35 MXN',
+      'ITESO // AGOSTO - RTG: $101 MXN por lead, 2.9× la referencia de 35 MXN',
     );
     // The figures sit in mono at the claim's own weight; the entity's name is left as written.
     const figures = [...(container.querySelector('h3')?.querySelectorAll('.font-mono') ?? [])];
     expect(figures.map((node) => node.textContent)).toEqual(['101 MXN', '2.9×', '35 MXN']);
-    expect(container.textContent).toContain('Restaurar la entrega');
+    expect(container.textContent).toContain('Restore delivery');
     // The figure lives in the title; no second lead figure under it.
     expect(container.querySelector('[data-headline]')).toBeNull();
   });
@@ -190,7 +190,7 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
 
   it('keeps the money as the support line under a title', () => {
     const { container } = view([reallocation]);
-    expect(container.textContent).toContain('$66.67/day · $2,000/mo');
+    expect(container.textContent).toContain('$66.67 USD/day · $2,000 USD/mo');
     expect(container.textContent).toContain('leads');
   });
 
@@ -199,7 +199,7 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
     expect(container.querySelector('h3')?.textContent).toBe(ACCOUNT_DETECTOR_META.dead_tail.label);
     expect(container.querySelector('[data-headline="money_fallback"]')).toBeTruthy();
     expect(container.textContent).toContain('$102');
-    expect(container.textContent).toContain('$3,060/mo');
+    expect(container.textContent).toContain('$3,060 USD/mo');
   });
 
   it('prints the body under the title', () => {
@@ -229,7 +229,7 @@ describe('AccountRead — the button says the verb', () => {
     const { getByTestId } = view([only], { onOpenPortfolio });
     const button = getByTestId('account-card-action');
     expect(button.textContent).toBe(actionLabel(accountCandidateAction(only, 'USD')));
-    expect(button.textContent).toContain('Pausar');
+    expect(button.textContent).toContain('Pause');
     fireEvent.click(button);
     expect(onOpenPortfolio).toHaveBeenCalledWith('p1');
   });
@@ -253,7 +253,7 @@ describe('AccountRead — the way into Jaina', () => {
     const href = getByTestId('account-card-jaina').getAttribute('href') ?? '';
     expect(href.startsWith('/scale?tab=jaina&prompt=')).toBe(true);
     const prompt = decodeURIComponent(href.slice('/scale?tab=jaina&prompt='.length));
-    expect(prompt).toContain('ITESO // AGOSTO - RTG: 101 MXN por lead');
+    expect(prompt).toContain('ITESO // AGOSTO - RTG: $101 MXN por lead');
     expect(prompt).toContain('FORMULARIOS // TODOS');
     expect(getByTestId('account-card-jaina').textContent).toContain('Ask Jaina');
   });
@@ -572,6 +572,32 @@ describe('AccountRead — a card with an executable action', () => {
     expect(sentActions).toEqual([
       { portfolio_id: PORTFOLIO_ID, actions: [RAISE_GOOGLE_BUDGET], dryRun: true },
     ]);
+  });
+
+  it('names the recommendation a platform card writes for on the card itself', () => {
+    const REC = '7e7e7e7e-0000-4000-8000-00000000c4c4';
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ id: 'google:budget', platform_card: GOOGLE_BUDGET_LIMITED })]}
+        cardActions={
+          new Map([
+            [
+              'google:budget',
+              {
+                portfolioId: PORTFOLIO_ID,
+                action: RAISE_GOOGLE_BUDGET,
+                recommendationId: REC,
+              },
+            ],
+          ])
+        }
+        currency="MXN"
+        dailySpend={1000}
+        onOpenPortfolio={() => {}}
+        portfolioNames={portfolioNames}
+      />,
+    );
+    expect(getByTestId('account-card').getAttribute('data-recommendation-id')).toBe(REC);
   });
 
   it('shows a TikTok action disabled, saying TikTok is not connected', () => {

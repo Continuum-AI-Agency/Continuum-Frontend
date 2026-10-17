@@ -129,6 +129,8 @@ function rules(r: PlatformSignalsEvaluation): string[] {
   return r.recommendations.map((x) => x.rule);
 }
 
+const DOLLAR_WITHOUT_CODE = /\$\d[\d,]*(?:\.\d+)?(?![\d.,]| [A-Z]{3}\b)/;
+
 /** What every evaluation must hold, whatever it found. */
 function assertWellFormed(r: PlatformSignalsEvaluation): void {
   const keys = new Set<string>();
@@ -136,7 +138,8 @@ function assertWellFormed(r: PlatformSignalsEvaluation): void {
     expect(PlatformCardSchema.safeParse(rec.platform_card).success).toBe(true);
     if (rec.action) expect(OptimizerActionSchema.safeParse(rec.action).success).toBe(true);
     expect(rec.needsApproval).toBe(true);
-    expect(rec.reason).not.toContain('$');
+    // M1: a "$" is only the symbol before a figure whose ISO code follows it.
+    expect(rec.reason).not.toMatch(DOLLAR_WITHOUT_CODE);
     const key = `${rec.rule}|${rec.entity.id}|${rec.subject_key}`;
     expect(keys.has(key)).toBe(false);
     keys.add(key);
@@ -185,7 +188,10 @@ describe('G05 negative terms', () => {
       scope: 'campaign',
       terms: [{ text: 'gym barato', matchType: 'EXACT' }],
     });
-    expect(rec.reason).toContain('100.01 MXN');
+    // 100.01 over a 100 target: the cents show on both sides, never "$100 MXN ... $100 MXN target".
+    expect(rec.reason).toContain('"gym barato" ($100.01 MXN)');
+    expect(rec.reason).toContain('cost more than the $100.00 MXN target');
+    expect(rec.reason).not.toContain('$100 MXN');
   });
 
   test('a converting term, an ADDED term and an active keyword are never negatives', () => {
@@ -297,9 +303,9 @@ describe('G07 Google Ads target CPA (bid setting), serving the portfolio CPA goa
     expect(card.variant === 'google_bid_target' && card.current_target).toBe(400);
     expect(card.variant === 'google_bid_target' && card.proposed_target).toBe(360);
     expect(card.variant === 'google_bid_target' && card.portfolio_goal).toBe(250);
-    expect(rec!.reason).toContain('over the portfolio CPA goal of 250.00 MXN');
-    expect(rec!.reason).toContain('Google Ads target CPA (bid setting) of 400.00 MXN');
-    expect(rec!.reason).toContain('lower the Google Ads bid target 10% to 360.00 MXN');
+    expect(rec!.reason).toContain('over the portfolio CPA goal of $250 MXN');
+    expect(rec!.reason).toContain('Google Ads target CPA (bid setting) of $400 MXN');
+    expect(rec!.reason).toContain('lower the Google Ads bid target 10% to $360 MXN');
     expect(rec!.reason).not.toContain('440');
   });
 
@@ -312,7 +318,7 @@ describe('G07 Google Ads target CPA (bid setting), serving the portfolio CPA goa
       target: 110_000_000,
     });
     expect(raise.recommendations[0]!.reason).toBe(
-      'Campaign c1 pays 150.00 MXN per conversion over 14 days, 25% under the portfolio CPA goal of 200.00 MXN, and loses 31.0% of impressions to rank. Its Google Ads target CPA (bid setting) is 100.00 MXN: raise the Google Ads bid target 10% to 110.00 MXN, still under the portfolio goal.',
+      'Campaign c1 pays $150 MXN per conversion over 14 days, 25% under the portfolio CPA goal of $200 MXN, and loses 31.0% of impressions to rank. Its Google Ads target CPA (bid setting) is $100 MXN: raise the Google Ads bid target 10% to $110 MXN, still under the portfolio goal.',
     );
     expect(rules(run(campaign('c1', { spend: 1500, leads: 10, rankLost: 0.3 })))).toEqual([]);
     expect(rules(run(campaign('c1', { spend: 1600, leads: 10, rankLost: 0.5 })))).toEqual([]);
@@ -324,7 +330,7 @@ describe('G07 Google Ads target CPA (bid setting), serving the portfolio CPA goa
     });
     expect(rules(near)).toEqual([]);
     expect(g07Abstentions(near)[0]).toContain(
-      'raising its Google Ads target CPA (bid setting) 10% to 209.00 MXN would put it above the portfolio CPA goal of 200.00 MXN',
+      'raising its Google Ads target CPA (bid setting) 10% to $209 MXN would put it above the portfolio CPA goal of $200 MXN',
     );
     const above = run(campaign('c1', { spend: 1000, leads: 10, rankLost: 0.5 }), {
       target_cpa: 250,
@@ -339,7 +345,7 @@ describe('G07 Google Ads target CPA (bid setting), serving the portfolio CPA goa
     expect(card.variant === 'google_bid_target' && card.proposed_target).toBe(90);
     expect(card.variant === 'google_bid_target' && card.portfolio_goal).toBe(200);
     expect(lower.recommendations[0]!.reason).toContain(
-      'over the portfolio CPA goal of 200.00 MXN (1.35×)',
+      'over the portfolio CPA goal of $200 MXN (1.35×)',
     );
     expect(rules(run(campaign('c1', { spend: 2600, leads: 10 })))).toEqual([]);
     expect(rules(run(campaign('c1', { spend: 2600, leads: 10 }), { target_cpa: 200 }))).toEqual([]);
@@ -918,7 +924,7 @@ describe('G12 Google delivery issue', () => {
       account_wide: true,
     });
     expect(rec.reason).toContain('3 campaigns');
-    expect(rec.reason).toContain('2200.00 MXN/day');
+    expect(rec.reason).toContain('$2,200 MXN/day');
   });
 
   test('one dark campaign beside one that serves → a card for that campaign only', () => {

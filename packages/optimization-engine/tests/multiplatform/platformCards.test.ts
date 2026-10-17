@@ -16,12 +16,12 @@ const mxn = (amount: number) => ({ amount, currency: 'MXN' });
 
 /** The bytes G03 wrote before feature 14, captured from the unchanged rule. */
 const PINNED = {
-  none: '{"outcome":"refusal","rule":"G03","entityId":"20775796216","refusal":"missing_cpa_target","reason":"VIVO 47-EKATAR loses 28% of impressions to budget, but each result costs 772.98 MXN. Set a target cost per result in MXN and I\'ll tell you whether more budget is worth it."}',
-  usd: '{"outcome":"refusal","rule":"G03","entityId":"20775796216","refusal":"missing_cpa_target","reason":"VIVO 47-EKATAR loses 28% of impressions to budget, but each result costs 772.98 MXN. Set a target cost per result in MXN and I\'ll tell you whether more budget is worth it."}',
+  none: '{"outcome":"refusal","rule":"G03","entityId":"20775796216","refusal":"missing_cpa_target","reason":"VIVO 47-EKATAR loses 28% of impressions to budget, but each result costs $773 MXN. Set a target cost per result in MXN and I\'ll tell you whether more budget is worth it."}',
+  usd: '{"outcome":"refusal","rule":"G03","entityId":"20775796216","refusal":"missing_cpa_target","reason":"VIVO 47-EKATAR loses 28% of impressions to budget, but each result costs $773 MXN. Set a target cost per result in MXN and I\'ll tell you whether more budget is worth it."}',
   mxn900:
-    '{"outcome":"proposal","rule":"G03","entityId":"20775796216","from":1179,"to":1473.75,"currency":"MXN","costPerResult":772.9756571888496,"budgetLostImpressionShare":0.2802764224591953,"needsApproval":true,"reason":"VIVO 47-EKATAR loses 28% of impressions to budget with results at 772.98 MXN, 14% under target. Raise to 1473.75 MXN/day."}',
+    '{"outcome":"proposal","rule":"G03","entityId":"20775796216","from":1179,"to":1473.75,"currency":"MXN","costPerResult":772.9756571888496,"budgetLostImpressionShare":0.2802764224591953,"needsApproval":true,"reason":"VIVO 47-EKATAR loses 28% of impressions to budget with results at $773 MXN, 14% under target. Raise to $1,474 MXN/day."}',
   mxn700:
-    '{"outcome":"refusal","rule":"G03","entityId":"20775796216","refusal":"above_target","reason":"VIVO 47-EKATAR loses 28% of impressions to budget at 772.98 MXN per result, above the 700.00 MXN target."}',
+    '{"outcome":"refusal","rule":"G03","entityId":"20775796216","refusal":"above_target","reason":"VIVO 47-EKATAR loses 28% of impressions to budget at $773 MXN per result, above the $700 MXN target."}',
 };
 
 function withoutProjection(r: G03Result): string {
@@ -49,6 +49,13 @@ describe('G03 projection (feature 14)', () => {
     // A refusal never gains the field at all.
     expect('projection' in runs.none).toBe(false);
     expect('projection' in runs.mxn700).toBe(false);
+  });
+
+  test('a cost just over the target never reads as equal to it', () => {
+    // 772.98 per result against a 772.50 target: both round to $773 at the digit rule.
+    const r = g03BudgetLimitedRaise(ekatar, { ...base, ...history, cpaTarget: mxn(772.5) });
+    expect(r.outcome).toBe('refusal');
+    expect(r.reason).toContain('at $772.98 MXN per result, above the $772.50 MXN target.');
   });
 
   test('a proposal projects now, low and high from the d7 window', () => {

@@ -95,6 +95,9 @@ export const VIDEO_GENERATOR_SIGNATURE_FIELDS = [
 /** An action result is reusable until its selected operation or validated knobs change. */
 export const ACTION_SIGNATURE_FIELDS = ['actionId', 'config'] as const;
 
+/** A fast cut is reusable until its cut changes; its footage and bed are its wiring. */
+export const FAST_CUT_SIGNATURE_FIELDS = ['pacing', 'rung', 'bars', 'transients'] as const;
+
 export const STUDIO_NODE_REGISTRY = {
   // ── text ───────────────────────────────────────────────────────────────────
   string: {
@@ -235,6 +238,17 @@ export const STUDIO_NODE_REGISTRY = {
       'Video Editor — the real timeline. Wire clips into its `media-in` pool, then place them as timeline items',
     runnable: true,
     producesMedia: true,
+  },
+  fastCut: {
+    label: 'Fast Cut',
+    description: 'Beat-cut your clips and stills to a music bed, 1 s down to 0.05 s',
+    category: 'video',
+    provider: 'continuum',
+    purpose:
+      'beat-cut montage — wire clips and stills (or Elements) into its `media-in` pool and ONE music bed into `audio-in`; it measures the bed\'s beat grid and cuts the footage on it at a pacing preset (steady, build, stutter, drop-hit), down to 0.05 s cuts. Renders a 1080×1920 master and registers the delivery copy',
+    runnable: true,
+    producesMedia: true,
+    signatureFields: FAST_CUT_SIGNATURE_FIELDS,
   },
   hyperframesAgent: {
     label: 'HyperFrames Agent',

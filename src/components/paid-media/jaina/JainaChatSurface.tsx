@@ -102,7 +102,7 @@ import type {
   AgentMentionReference,
   AgentMentionSuggestion,
 } from '@/lib/agent-references';
-import { isSessionStreaming, selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
+import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
 import { loadFailureMessage } from '@/lib/api/loadFailure';
 import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
@@ -114,7 +114,7 @@ import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
 } from '@/lib/campaign-canvas/payload';
-import { cancelJainaRun, clearJainaMemory } from '@/lib/jaina/chatControls';
+import { cancelJainaRun, clearJainaMemory, stopJainaSession } from '@/lib/jaina/chatControls';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
   createConversationSessionResponseSchema,
@@ -1842,13 +1842,9 @@ export function JainaChatSurface({
       } catch (error) {
         if (cancelled) return;
         console.error('[jaina] conversation history failed', error);
-        const message = loadFailureMessage('conversations', error);
-        setHistoryError(message);
-        show({
-          title: 'History unavailable',
-          description: message,
-          variant: 'error',
-        });
+        // Said once, where it happened: the sidebar names the failure and offers Retry. A toast
+        // repeating it sat over the composer's controls for its whole life.
+        setHistoryError(loadFailureMessage('conversations', error));
         // History failing is no reason to drop a question the reader already asked: the queued
         // turn drains into the session this surface mounted with once loading ends.
         setShaderState('visible');
@@ -1872,7 +1868,6 @@ export function JainaChatSurface({
     setConversationSessionsWithCache,
     setEarlierCursor,
     showConversation,
-    show,
     historyAttempt,
   ]);
 
@@ -2334,14 +2329,12 @@ export function JainaChatSurface({
   );
 
   // Stop the run on screen even when this reader doesn't own it — the detached run you returned
-  // to. Resolve its id from the store when the local reader isn't the owner.
+  // to — and every run the store still binds to this session, so nothing reads in flight after.
   const handleStop = React.useCallback(() => {
-    const ownedRunId = liveChatMessage?.runId;
-    const detachedRunId = selectRunForSession(sessionId)(useAgentRunStore.getState())?.run.runId;
     // Detach this reader AND end the run. `stop()` alone would leave the turn executing, which
     // is right on navigation and wrong when a reader presses Stop.
     stopChat();
-    void cancelJainaRun(ownedRunId ?? detachedRunId);
+    void stopJainaSession({ sessionId, ownedRunId: liveChatMessage?.runId });
   }, [liveChatMessage?.runId, sessionId, stopChat]);
 
   const handleDeleteConversation = React.useCallback(

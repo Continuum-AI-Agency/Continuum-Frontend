@@ -15,6 +15,10 @@ const metricComparisonSchema = z.object({
 // and Meta/Google diverge. Require only the three headline KPIs; everything else
 // is optional and passthrough.
 const paidAccountOverviewSchema = z.object({
+  // The account's own currency and timezone, labelled by the edge (daily-scope response).
+  // Null when the edge could not read the profile: a null currency never prints as a label.
+  currency: z.string().nullable().optional(),
+  timezone: z.string().nullable().optional(),
   metrics: z.object({
     spend: z.number(),
     roas: z.number(),

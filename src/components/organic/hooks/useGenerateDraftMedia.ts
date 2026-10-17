@@ -30,6 +30,8 @@ export type MediaGenerationDraftTarget = {
   backendDraftId: string;
   format: string;
   previewRevision: string;
+  /** Re-paint the draft's copy into this Forge template instead of generating pixels. */
+  templateKey?: string;
 };
 
 export type DraftExpandTarget = {
@@ -586,9 +588,10 @@ async function realizeImages(
     headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify({
       brandId,
-      approvals: targets.map(({ backendDraftId, previewRevision }) => ({
+      approvals: targets.map(({ backendDraftId, previewRevision, templateKey }) => ({
         draftId: backendDraftId,
         previewRevision,
+        ...(templateKey ? { templateKey } : {}),
       })),
     }),
     signal: controller.signal,

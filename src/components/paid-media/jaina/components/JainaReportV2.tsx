@@ -17,7 +17,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
-import { http } from '@/lib/api/http';
+import {
+  acknowledgeReportDelivery,
+  type ReportDeliveryKind,
+  type ReportDeliveryStatus,
+} from '@/lib/jaina/reportDelivery';
 import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { answerLanguage } from '../answerLanguage';
@@ -225,15 +229,8 @@ export function JainaReportV2({
   // Names, never ids: every entity the report's own blocks put a name to, for the titles.
   const entityNames = useMemo(() => entityNamesOf(report.blocks), [report.blocks]);
   const acknowledgeDelivery = useCallback(
-    async (kind: 'live_render' | 'hydration_replay' | 'pdf', status: 'success' | 'fallback') => {
-      if (!runId) return;
-      await http
-        .request({
-          path: `/api/agents/jaina/chat/runs/${encodeURIComponent(runId)}/delivery`,
-          method: 'POST',
-          body: { kind, status, report_id: `${runId}:checkpoint_report` },
-        })
-        .catch(() => undefined);
+    async (kind: ReportDeliveryKind, status: ReportDeliveryStatus) => {
+      await acknowledgeReportDelivery(runId, kind, status);
     },
     [runId],
   );

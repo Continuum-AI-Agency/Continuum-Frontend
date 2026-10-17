@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { makeKey, migrateLegacyKey } from '@/lib/storage/brandScopedStorage';
 
 // ─── Static keys ───────────────────────────────────────────────────────────────
@@ -36,24 +35,3 @@ export function storageKeyBrandInsights(brandId: string): string {
 export function storageKeyOrganicPlan(brandProfileId: string): string {
   return `continuum.organic.plan:${brandProfileId}`;
 }
-
-// ─── Re-export AI Studio keys from existing source of truth ───────────────────
-export {
-  AI_STUDIO_CONTEXT_STORAGE_PREFIX,
-  AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
-  AI_STUDIO_PENDING_APPLY_PREFIX,
-  AI_STUDIO_SESSION_HISTORY_PREFIX,
-  buildAiStudioStorageKey,
-  buildPendingApplyStorageKey,
-  buildSessionHistoryStorageKey,
-} from '@/lib/organic/ai-studio-bridge';
-
-// ─── Zod schemas for validated reads ──────────────────────────────────────────
-export const recentPageSchema = z.object({
-  href: z.string().min(1),
-  label: z.string().min(1),
-});
-export const recentPagesSchema = z.array(recentPageSchema);
-export type RecentPage = z.infer<typeof recentPageSchema>;
-
-export const brandInsightsTimestampSchema = z.number().min(1);

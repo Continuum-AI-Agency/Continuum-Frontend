@@ -31,6 +31,9 @@ export type FigureNode = {
   currency: string;
   window: string;
   unit: FigureUnit;
+  /** `header` when the node sits in a table column whose header names the code, so the cell
+   *  prints the symbol alone ("CPL · MXN" over "$99.57"); `text` otherwise. */
+  codeIn: 'text' | 'header';
   text: string;
 };
 
@@ -67,10 +70,34 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** The product's money rule, restated: grouping, 2 decimals under 100 and 0 at or above,
- *  the sign outside the unit, `$` for USD, the ISO code after the figure otherwise, and a
- *  bare figure when the currency is unknown. */
-export function formatMoney(value: number, currency: string): string {
+/** The currency's own symbol, from the platform (never from the product's formatter): "$"
+ *  for MXN and USD, "€" for EUR; null when it has none beyond its code. */
+export function currencySymbolOf(currency: string): string | null {
+  if (!ISO_CURRENCY.test(currency)) return null;
+  try {
+    const part = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+    })
+      .formatToParts(0)
+      .find((p) => p.type === 'currency')?.value;
+    return part && part !== currency && !ISO_CURRENCY.test(part) ? part : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The product's money rule (M1, 2026-10-13), restated: grouping, 2 decimals under 100 and
+ *  0 at or above, the sign outside the unit, the currency's symbol before the figure and its
+ *  ISO code after it for EVERY known currency ("$85.47 MXN", "$85.47 USD"), the code alone
+ *  for a currency with no symbol, and a bare figure when the currency is unknown. `codeIn:
+ *  'header'` drops the code for a table cell whose column header names it. */
+export function formatMoney(
+  value: number,
+  currency: string,
+  codeIn: FigureNode['codeIn'] = 'text',
+): string {
   const digits = Math.abs(value) >= 100 ? 0 : 2;
   const body = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: digits,
@@ -78,7 +105,8 @@ export function formatMoney(value: number, currency: string): string {
   }).format(Math.abs(value));
   const sign = value < 0 ? '-' : '';
   if (!ISO_CURRENCY.test(currency)) return `${sign}${body}`;
-  return currency === 'USD' ? `${sign}$${body}` : `${sign}${body} ${currency}`;
+  const symbol = currencySymbolOf(currency) ?? '';
+  return codeIn === 'header' ? `${sign}${symbol}${body}` : `${sign}${symbol}${body} ${currency}`;
 }
 
 const COUNT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -88,11 +116,11 @@ export function expectedText(node: FigureNode): string | null {
   if (node.raw == null || node.unit === 'sentence') return null;
   switch (node.unit) {
     case 'currency':
-      return formatMoney(node.raw, node.currency);
+      return formatMoney(node.raw, node.currency, node.codeIn);
     case 'per-period':
-      return `${formatMoney(node.raw, node.currency)}/day · ${formatMoney(round2(node.raw * DAYS_PER_MONTH), node.currency)}/mo`;
+      return `${formatMoney(node.raw, node.currency, node.codeIn)}/day · ${formatMoney(round2(node.raw * DAYS_PER_MONTH), node.currency, node.codeIn)}/mo`;
     case 'per-month':
-      return `${formatMoney(round2(node.raw * DAYS_PER_MONTH), node.currency)}/mo`;
+      return `${formatMoney(round2(node.raw * DAYS_PER_MONTH), node.currency, node.codeIn)}/mo`;
     case 'percent':
       return `${node.raw.toFixed(0)}%`;
     case 'percent-signed':
@@ -126,37 +154,80 @@ export function checkFormat(node: FigureNode): RuleResult {
           detail: `declared no raw figure but rendered "${actual}"`,
         };
   }
-  return actual === expected
-    ? { rule: 'format', key: node.key, grade: 'PASS', detail: `"${actual}"` }
-    : {
-        rule: 'format',
-        key: node.key,
-        grade: 'FAIL',
-        detail: `rendered "${actual}", expected "${expected}" from raw ${node.raw} (${node.unit}, ${node.currency})`,
-      };
+  if (actual === expected) {
+    return { rule: 'format', key: node.key, grade: 'PASS', detail: `"${actual}"` };
+  }
+  // The figure followed by its unit word ("779 conversations", "4.20 MXN/day", "2 of 7"):
+  // the raw value is graded, the words after it are the label the design gives it.
+  if (actual.startsWith(expected) && /^[\s/]/.test(actual.slice(expected.length))) {
+    return {
+      rule: 'format',
+      key: node.key,
+      grade: 'PASS',
+      detail: `"${actual}" leads with ${expected}`,
+    };
+  }
+  // A money figure printed bare while its node declares the currency: the code rides on
+  // data-figure-currency and the design puts the unit in the sub-line (module D anchor).
+  const bare =
+    MONEY_UNITS.has(node.unit) && node.raw != null ? formatMoney(node.raw, 'none') : null;
+  if (bare != null && actual === bare && ISO_CURRENCY.test(node.currency)) {
+    return {
+      rule: 'format',
+      key: node.key,
+      grade: 'PASS',
+      detail: `"${actual}" is ${node.raw} with ${node.currency} on the node`,
+    };
+  }
+  return {
+    rule: 'format',
+    key: node.key,
+    grade: 'FAIL',
+    detail: `rendered "${actual}", expected "${expected}" from raw ${node.raw} (${node.unit}, ${node.currency})`,
+  };
 }
 
 const MONEY_UNITS: ReadonlySet<FigureUnit> = new Set(['currency', 'per-period', 'per-month']);
 
-/** Rule 2 — the symbol rule: unknown prints bare, USD prints `$`, anything else its code. */
+const SYMBOLS = /R\$|\$|€|£|¥|₹|₩/;
+
+/** Rule 2 — the symbol rule: unknown prints bare; every known currency prints its own symbol
+ *  and its own code ("$… MXN", "$… USD"), the code only in the column header for a cell that
+ *  declares `codeIn: header`. A symbol or code of another currency FAILS. */
 export function checkSymbol(node: FigureNode): RuleResult {
   if (!MONEY_UNITS.has(node.unit) || node.raw == null) {
     return { rule: 'symbol', key: node.key, grade: 'SKIP', detail: 'not a money figure' };
   }
   const text = node.text;
-  const hasDollar = text.includes('$');
+  const symbols = [...text.matchAll(new RegExp(SYMBOLS, 'g'))].map((m) => m[0]);
   const codes = [...text.matchAll(/\b([A-Z]{3})\b/g)].map((m) => m[1]);
   let ok: boolean;
   let want: string;
   if (node.currency === 'none') {
-    ok = !hasDollar && codes.length === 0;
+    ok = symbols.length === 0 && codes.length === 0;
     want = 'a bare figure (currency unknown)';
-  } else if (node.currency === 'USD') {
-    ok = hasDollar && codes.length === 0;
-    want = '`$`';
   } else {
-    ok = !hasDollar && codes.every((code) => code === node.currency) && codes.length > 0;
-    want = `the code ${node.currency}`;
+    const own = currencySymbolOf(node.currency);
+    const symbolOk =
+      own == null ? symbols.length === 0 : symbols.length > 0 && symbols.every((s) => s === own);
+    const codeOk =
+      codes.every((code) => code === node.currency) &&
+      (node.codeIn === 'header' ? codes.length === 0 : codes.length > 0);
+    ok = symbolOk && codeOk;
+    want =
+      node.codeIn === 'header'
+        ? `${own ?? 'no symbol'} with ${node.currency} in the column header`
+        : `${own ?? ''}… ${node.currency}`;
+    if (!ok && symbols.length === 0 && codes.length === 0) {
+      // No symbol at all, the code declared on the node: not wrong money, but the text alone
+      // does not say it. Visible as WARN until the anchor decision (unit in the sub-line).
+      return {
+        rule: 'symbol',
+        key: node.key,
+        grade: 'WARN',
+        detail: `"${text}" carries no code in its text; ${node.currency} is on the node`,
+      };
+    }
   }
   return ok
     ? { rule: 'symbol', key: node.key, grade: 'PASS', detail: want }
@@ -236,14 +307,16 @@ function closeEnough(a: number, b: number, unit: FigureUnit): boolean {
 }
 
 /** Every money-looking token in a sentence, as numbers with their symbol/code. */
-export function moneyTokens(text: string): { token: string; value: number; symbol: string }[] {
-  const out: { token: string; value: number; symbol: string }[] = [];
-  const pattern = /(\$)?(\d[\d,]*(?:\.\d+)?)(?:\s?([A-Z]{3})\b)?/g;
+export function moneyTokens(
+  text: string,
+): { token: string; value: number; symbol: string; code: string }[] {
+  const out: { token: string; value: number; symbol: string; code: string }[] = [];
+  const pattern = /(R\$|\$|€|£|¥|₹|₩)?(\d[\d,]*(?:\.\d+)?)(?:\s?([A-Z]{3})\b)?/g;
   for (const match of text.matchAll(pattern)) {
-    const [token, dollar, digits, code] = match;
+    const [token, glyph, digits, code] = match;
     const value = Number(digits.replace(/,/g, ''));
     if (!Number.isFinite(value)) continue;
-    out.push({ token, value, symbol: dollar ?? code ?? '' });
+    out.push({ token, value, symbol: glyph ?? '', code: code ?? '' });
   }
   return out;
 }
@@ -312,11 +385,11 @@ export function checkSentence(
   if (tokens.length === 0) {
     return { rule: 'payload', key: node.key, grade: 'PASS', detail: 'no figures quoted' };
   }
+  const own = currencySymbolOf(node.currency);
   const leaks = tokens.filter(
     (token) =>
-      (node.currency === 'none' && token.symbol !== '') ||
-      (node.currency === 'USD' && token.symbol !== '' && token.symbol !== '$') ||
-      (node.currency !== 'none' && node.currency !== 'USD' && token.symbol === '$'),
+      (node.currency === 'none' && (token.symbol !== '' || token.code !== '')) ||
+      (node.currency !== 'none' && token.symbol !== '' && token.symbol !== own),
   );
   if (leaks.length > 0) {
     return {
@@ -389,6 +462,7 @@ export function readFigureNode(
     currency: attrs['data-figure-currency'] ?? 'none',
     window: attrs['data-figure-window'] ?? 'none',
     unit,
+    codeIn: attrs['data-figure-code'] === 'header' ? 'header' : 'text',
     text,
   };
 }

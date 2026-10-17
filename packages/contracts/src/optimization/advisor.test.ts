@@ -44,6 +44,7 @@ const base = {
   mode: 'balanced',
   typedDailyTotal: null,
   typedTarget: null,
+  currency: 'USD',
 } as const;
 
 const codes = (issues: { code: SetupAdviceIssueCode }[]) => issues.map((i) => i.code);
@@ -128,9 +129,9 @@ describe('adviseSetup · the rules that change the outcome', () => {
       typedTarget: null,
     });
     const issue = find(advice, 'target_defaulted');
-    expect(issue?.message).toContain(`$${ENGINE_DEFAULT_CPA_TARGET} default`);
+    expect(issue?.message).toContain(`$${ENGINE_DEFAULT_CPA_TARGET}.00 USD default`);
     expect(issue?.message).toContain('proposed for pause');
-    expect(issue?.message).toContain('Suggested: $25');
+    expect(issue?.message).toContain('Suggested: $25.00 USD');
   });
 
   test('target_defaulted disappears once a target is set', () => {
@@ -165,7 +166,7 @@ describe('adviseSetup · the rules that change the outcome', () => {
     });
     const issue = find(advice, 'no_conversions');
     expect(issue?.adsetIds).toEqual(['burner']);
-    expect(issue?.message).toContain('already spent past the $25 target');
+    expect(issue?.message).toContain('already spent past the $25.00 USD target');
     expect(issue?.message).toContain('propose a pause');
   });
 
@@ -176,7 +177,7 @@ describe('adviseSetup · the rules that change the outcome', () => {
       snapshots: [purchaser('good', 100, 4), purchaser('burner', 80, 0)],
     });
     expect(find(advice, 'no_conversions')?.message).toContain(
-      `already spent past the $${ENGINE_DEFAULT_CPA_TARGET} target`,
+      `already spent past the $${ENGINE_DEFAULT_CPA_TARGET}.00 USD target`,
     );
   });
 
@@ -216,8 +217,8 @@ describe('adviseSetup · the rules that change the outcome', () => {
       typedDailyTotal: 700,
     });
     const issue = find(advice, 'budget_below_current');
-    expect(issue?.message).toContain('$700');
-    expect(issue?.message).toContain('$1000/day');
+    expect(issue?.message).toContain('$700 USD');
+    expect(issue?.message).toContain('$1,000 USD/day');
     expect(issue?.message).toContain('30% of their delivery');
   });
 
@@ -237,7 +238,7 @@ describe('adviseSetup · the rules that change the outcome', () => {
       snapshots: [purchaser('a', 200, 8), purchaser('b', 100, 2)],
       typedTarget: 10,
     });
-    expect(find(advice, 'target_below_best')?.message).toContain('best: $25');
+    expect(find(advice, 'target_below_best')?.message).toContain('best: $25.00 USD');
   });
 
   test('single_adset: nothing to reallocate against', () => {

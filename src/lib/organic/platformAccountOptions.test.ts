@@ -33,7 +33,15 @@ const summary: Partial<BrandIntegrationSummary> = {
       account({ integrationAccountId: 'ig-second', name: 'Second IG' }),
     ],
   },
-  linkedin: { accounts: [account({ integrationAccountId: 'li-page', name: 'Company page' })] },
+  linkedin: {
+    accounts: [
+      account({
+        integrationAccountId: 'li-page',
+        name: 'Company page',
+        type: 'linkedin_organization',
+      }),
+    ],
+  },
   facebook: { accounts: [] },
 };
 
@@ -55,7 +63,8 @@ describe('deriveOrganicPlatformAccounts', () => {
     expect(rows.find((row) => row.platform === 'facebook')?.connected).toBe(false);
   });
 
-  it('honours a personally connected platform that has no assigned accounts', () => {
+  // A personal link is not a brand assignment, so it names nothing to post to.
+  it('honours a personally connected platform without inventing an account for it', () => {
     const rows = deriveOrganicPlatformAccounts({
       integrationSummary: summary,
       connections: { facebook: { connected: true, accountId: 'fb-personal' } },
@@ -63,15 +72,43 @@ describe('deriveOrganicPlatformAccounts', () => {
     const facebook = rows.find((row) => row.platform === 'facebook');
 
     expect(facebook?.connected).toBe(true);
-    expect(facebook?.accountId).toBe('fb-personal');
+    expect(facebook?.accountId).toBeNull();
     expect(facebook?.options).toEqual([]);
   });
 
-  it('defaults to the first assigned account when onboarding named none', () => {
+  it('names a default only when exactly one account can take the post', () => {
     const rows = deriveOrganicPlatformAccounts({ integrationSummary: summary });
 
-    expect(rows.find((row) => row.platform === 'instagram')?.accountId).toBe('ig-main');
+    expect(rows.find((row) => row.platform === 'linkedin')?.accountId).toBe('li-page');
+    // Two Instagram profiles is a choice; the first by name is not an answer.
+    expect(rows.find((row) => row.platform === 'instagram')?.accountId).toBeNull();
     expect(rows.find((row) => row.platform === 'facebook')?.accountId).toBeNull();
+  });
+
+  it('never offers an ad account as a place to post', () => {
+    const rows = deriveOrganicPlatformAccounts({
+      integrationSummary: {
+        facebook: {
+          accounts: [
+            // Sorts first by name, as it did for Pink Elephant.
+            account({ integrationAccountId: 'fb-ads', name: 'Avendaño', type: 'meta_ad_account' }),
+            account({ integrationAccountId: 'fb-page', name: 'Brand Page', type: 'meta_page' }),
+          ],
+        },
+        linkedin: {
+          accounts: [
+            account({ integrationAccountId: 'li-ads', name: 'Ads', type: 'linkedin_ad_account' }),
+          ],
+        },
+      },
+    });
+    const facebook = rows.find((row) => row.platform === 'facebook');
+    const linkedin = rows.find((row) => row.platform === 'linkedin');
+
+    expect(facebook?.options).toEqual([{ id: 'fb-page', label: 'Brand Page' }]);
+    expect(facebook?.accountId).toBe('fb-page');
+    expect(linkedin?.options).toEqual([]);
+    expect(linkedin?.connected).toBe(false);
   });
 
   // The planner page resolves a publish account id per platform from this list. It stopped at

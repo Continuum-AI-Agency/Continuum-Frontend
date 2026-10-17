@@ -56,9 +56,10 @@ export const DIMENSION_LABEL: Record<CreativeWinRateRow['dimension'], string> = 
 };
 
 export const VERDICT_STYLE: Record<PaidCreativeVerdict['verdict'], string> = {
-  kill: 'bg-destructive/10 text-destructive',
-  scale: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  iterate: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  // The ink of each hue on its own 10% tint: the fill colours read 2.9-3.3:1 there.
+  kill: 'bg-destructive/10 text-destructive-ink',
+  scale: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  iterate: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
   watch: 'bg-muted text-muted-foreground',
 };
 

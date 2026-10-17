@@ -45,9 +45,7 @@ const pct = (share: number) => `${Math.round(share * 100)}%`;
 
 export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
   const money = (value: number) =>
-    block.currency_code
-      ? formatValue(value, 'currency', { currency: block.currency_code })
-      : formatValue(value, 'number');
+    formatValue(value, 'currency', { currency: block.currency_code ?? undefined });
   const spentShare = block.budget > 0 ? Math.min(1, block.spent / block.budget) : 0;
 
   return (

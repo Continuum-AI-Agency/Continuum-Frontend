@@ -16,6 +16,7 @@
 // surface exists to show: a run that is not moving, is not finished, and is waiting for a person.
 
 import { z } from 'zod';
+import { readableLayerName } from './template-name';
 
 /**
  * One phase of the seven, in work order: analyze · derive · provision · seed · load · build ·
@@ -149,6 +150,90 @@ export const templateForgeRunSchema = z
   .strict();
 export type TemplateForgeRun = z.infer<typeof templateForgeRunSchema>;
 
+// ── Mapping needs, grouped into the questions a person (or the autopilot) answers ──────────────
+//
+// A multi-ratio template authors each field once per ratio comp, so the forge asks the same
+// question once per comp — 43 lines for a 5-comp package that has 9 fields. They are grouped by
+// the slot they name, and one answer is sent for every comp that asked it. Shared by the Forge
+// page's question list and the Backend autopilot so both take the same answer from the same needs.
+
+/** The answer that keeps a layer as the file drew it. The forge refuses it for a media port. */
+export const KEEP_AS_DESIGNED = '__keep';
+
+export interface MappingQuestion {
+  key: string;
+  label: string;
+  reason?: string;
+  needs: TemplateForgeNeed[];
+  /** Ranked by the forge; `score` > 0 means the name itself said something. */
+  options: Array<{ fieldPath: string; label: string; score: number }>;
+}
+
+/** Mapping needs grouped by the slot they name; asset needs are the Variables tab's to answer. */
+export function groupMappingNeeds(needs: readonly TemplateForgeNeed[]): MappingQuestion[] {
+  const groups = new Map<string, MappingQuestion>();
+  for (const need of needs) {
+    if (need.kind !== 'mapping') continue;
+    const label = readableLayerName(need.slot?.label ?? need.id);
+    const key = `${label}\u0000${need.slot?.type ?? ''}`;
+    const group = groups.get(key);
+    if (group) {
+      group.needs.push(need);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      label,
+      ...(need.reason ? { reason: need.reason } : {}),
+      needs: [need],
+      options: (need.options ?? []).flatMap((option) =>
+        typeof option.fieldPath === 'string'
+          ? [
+              {
+                fieldPath: option.fieldPath,
+                label: typeof option.label === 'string' ? option.label : option.fieldPath,
+                score: typeof option.score === 'number' ? option.score : 0,
+              },
+            ]
+          : [],
+      ),
+    });
+  }
+  return [...groups.values()];
+}
+
+/**
+ * The answer to start from: the top option only when its NAME matched and nothing tied it.
+ * A tie ordered alphabetically is not an answer, so those start unanswered.
+ */
+export function suggestedAnswer(question: MappingQuestion): string | undefined {
+  const [top, second] = question.options;
+  if (!top) return KEEP_AS_DESIGNED;
+  return top.score > 0 && (!second || second.score < top.score) ? top.fieldPath : undefined;
+}
+
+/** The forge's decisions body: one entry per comp that asked, keyed by comp. */
+export function decisionsFor(
+  questions: readonly MappingQuestion[],
+  answers: Readonly<Record<string, string>>,
+): { mappings: Record<string, Array<Record<string, string>>> } {
+  const mappings: Record<string, Array<Record<string, string>>> = {};
+  for (const question of questions) {
+    const answer = answers[question.key];
+    if (!answer) continue;
+    for (const need of question.needs) {
+      const slotStableKey = need.slot?.stableKey;
+      if (!slotStableKey) continue;
+      const entry: Record<string, string> =
+        answer === KEEP_AS_DESIGNED
+          ? { slotStableKey, action: 'leaveStatic', reason: 'kept as designed by a person' }
+          : { slotStableKey, fieldPath: answer };
+      (mappings[need.comp ?? ''] ??= []).push(entry);
+    }
+  }
+  return { mappings };
+}
+
 /**
  * Is this run still worth polling?
  *
@@ -156,10 +241,7 @@ export type TemplateForgeRun = z.infer<typeof templateForgeRunSchema>;
  * decision clears `needs_input`, a draft moves `draft_ready` on), and the poller must stop for
  * those rather than spin. It is the caller who restarts polling after acting.
  */
-export function templateForgeRunIsMoving(run: {
-  done: boolean;
-  state: string;
-}): boolean {
+export function templateForgeRunIsMoving(run: { done: boolean; state: string }): boolean {
   return !run.done && run.state !== 'failed';
 }
 

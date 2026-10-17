@@ -288,10 +288,10 @@ function scenario01Input(over: Partial<{ tiktok: CrossPlatformLeg; meta: CrossPl
     'e01: the remainders are assigned by largest fraction then id, and stated in the reason',
     p.rounding.donor.remainderMinor === 1 &&
       p.rounding.donor.assignedTo.join() === '7000000000000000201' &&
-      p.reason.includes('Rounding: 0.01 MXN of the decrease went to EF | Leads | Broad MX.') &&
+      p.reason.includes('Rounding: $0.01 MXN of the decrease went to EF | Leads | Broad MX.') &&
       (p.rounding.receiver.remainderMinor === 0 ||
         p.reason.includes(
-          `Rounding: ${(p.rounding.receiver.remainderMinor / 100).toFixed(2)} MXN of the increase`,
+          `Rounding: $${(p.rounding.receiver.remainderMinor / 100).toFixed(2)} MXN of the increase`,
         )),
     `donor ${JSON.stringify(p.rounding.donor)}, receiver ${JSON.stringify(p.rounding.receiver)}`,
   );
@@ -608,7 +608,7 @@ function scenario01Input(over: Partial<{ tiktok: CrossPlatformLeg; meta: CrossPl
     'e07 (A): no target → G03 abstains by name, quoting the cost, instead of losing to the currency-less default 50',
     a.outcome === 'refusal' &&
       a.refusal === 'missing_cpa_target' &&
-      a.reason.includes('772.98 MXN') &&
+      a.reason.includes('$773 MXN') &&
       a.reason.includes('28%'),
     a.reason,
   );

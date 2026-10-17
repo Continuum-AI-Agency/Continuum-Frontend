@@ -12,6 +12,7 @@ import * as React from 'react';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Button } from '@/components/ui/button';
+import { SkeletonText } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -239,6 +240,8 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
         <div className="flex items-center gap-2">
           {page && allRows.length > 0 ? (
             <StatusFilter counts={counts} value={filter} onChange={setFilter} />
+          ) : state === 'loading' ? (
+            <StatusFilterSkeleton />
           ) : null}
           <Button
             type="button"
@@ -534,6 +537,24 @@ function BudgetCell({ budget, currency }: { budget: BudgetDisplay; currency: str
 }
 
 /** Active · Paused · Archived toggle on and off together; All turns every one on. */
+/** The filter's row while the first page loads, word for word its width: on a phone the filter
+ *  wraps the header to a second line, and arriving late it pushed the whole table down. */
+function StatusFilterSkeleton() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex items-center gap-0.5"
+      data-testid="scale-campaigns-filter-skeleton"
+    >
+      {['Active 0', 'Paused 000', 'Archived 00', 'All 000'].map((words) => (
+        <span className="px-2 py-0.5 text-xs" key={words}>
+          <SkeletonText>{words}</SkeletonText>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function StatusFilter({
   counts,
   value,
@@ -552,7 +573,7 @@ function StatusFilter({
   };
   const item = (pressed: boolean) =>
     cn(
-      'rounded-md px-2 py-0.5 text-xs transition-colors motion-reduce:transition-none',
+      'hit-area rounded-md px-2 py-0.5 text-xs transition-colors motion-reduce:transition-none',
       pressed ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
     );
   const total = counts.active + counts.paused + counts.archived;

@@ -17,7 +17,7 @@ import {
 
 describe('formatCurrency', () => {
   it('formats a USD figure at or above 100 whole', () => {
-    expect(formatCurrency(4200, 'USD')).toBe('$4,200');
+    expect(formatCurrency(4200, 'USD')).toBe('$4,200 USD');
   });
   it('returns a dash for null/NaN/non-finite', () => {
     expect(formatCurrency(null, 'USD')).toBe('—');
@@ -35,9 +35,9 @@ describe('formatCurrency', () => {
       expect(formatCurrency(4200, '')).toBe('4,200');
       expect(formatCurrency(4200, 'not-a-code')).toBe('4,200');
     });
-    it('appends the ISO code for a currency that is not dollars', () => {
-      expect(formatCurrency(324, 'MXN')).toBe('324 MXN');
-      expect(formatCurrency(4200, 'jpy')).toBe('4,200 JPY');
+    it('prints the symbol before and the ISO code after for every known currency (M1)', () => {
+      expect(formatCurrency(324, 'MXN')).toBe('$324 MXN');
+      expect(formatCurrency(4200, 'jpy')).toBe('¥4,200 JPY');
     });
   });
 
@@ -46,18 +46,18 @@ describe('formatCurrency', () => {
   // beside the card's "$25.54/day" for one number.
   describe('the digit rule is the compiled card\u2019s', () => {
     it('keeps cents under 100 and drops them at 100 and above', () => {
-      expect(formatCurrency(25.540000000000003, 'USD')).toBe('$25.54');
-      expect(formatCurrency(99.999, 'USD')).toBe('$100.00');
-      expect(formatCurrency(100, 'USD')).toBe('$100');
-      expect(formatCurrency(766.2, 'USD')).toBe('$766');
+      expect(formatCurrency(25.540000000000003, 'USD')).toBe('$25.54 USD');
+      expect(formatCurrency(99.999, 'USD')).toBe('$100.00 USD');
+      expect(formatCurrency(100, 'USD')).toBe('$100 USD');
+      expect(formatCurrency(766.2, 'USD')).toBe('$766 USD');
     });
     it('carries the rule through to a bare and a coded figure', () => {
       expect(formatCurrency(25.54, null)).toBe('25.54');
-      expect(formatCurrency(25.54, 'MXN')).toBe('25.54 MXN');
+      expect(formatCurrency(25.54, 'MXN')).toBe('$25.54 MXN');
     });
     it('keeps the sign outside the unit', () => {
-      expect(formatCurrency(-25.54, 'USD')).toBe('-$25.54');
-      expect(formatCurrency(-4200, 'MXN')).toBe('-4,200 MXN');
+      expect(formatCurrency(-25.54, 'USD')).toBe('-$25.54 USD');
+      expect(formatCurrency(-4200, 'MXN')).toBe('-$4,200 MXN');
       expect(formatCurrency(-4200, null)).toBe('-4,200');
     });
   });
@@ -67,8 +67,9 @@ describe('currencySymbol', () => {
   it('returns the currency prefix for an input adornment', () => {
     expect(currencySymbol('USD')).toBe('$');
   });
-  it('uses the ISO code for a non-dollar account, the spelling the figures use', () => {
-    expect(currencySymbol('MXN')).toBe('MXN');
+  it('uses the currency\u2019s own symbol, the one the figures lead with', () => {
+    expect(currencySymbol('MXN')).toBe('$');
+    expect(currencySymbol('EUR')).toBe('€');
   });
   it('returns nothing at all for a missing code', () => {
     expect(currencySymbol(null)).toBe('');
@@ -78,7 +79,7 @@ describe('currencySymbol', () => {
 
 describe('currencyFieldSuffix', () => {
   it('parenthesises a known unit', () => {
-    expect(currencyFieldSuffix('USD')).toBe(' ($)');
+    expect(currencyFieldSuffix('USD')).toBe(' (USD)');
     expect(currencyFieldSuffix('MXN')).toBe(' (MXN)');
   });
   it('leaves a label alone when the account carries no code', () => {
@@ -88,7 +89,7 @@ describe('currencyFieldSuffix', () => {
 
 describe('formatCpa', () => {
   it('prints a sub-100 cost to the cent rather than rounding it away', () => {
-    expect(formatCpa(28.6, 'USD')).toBe('$28.60');
+    expect(formatCpa(28.6, 'USD')).toBe('$28.60 USD');
   });
   it('honours an unknown currency', () => {
     expect(formatCpa(28.6, null)).toBe('28.60');
@@ -188,11 +189,11 @@ describe('soonestNextCycle', () => {
 
 describe('the impact vocabulary', () => {
   it('says a daily figure in the two periods a person thinks in', () => {
-    expect(formatPerPeriod(96, 'USD')).toBe('$96.00/day · $2,880/mo');
+    expect(formatPerPeriod(96, 'USD')).toBe('$96.00 USD/day · $2,880 USD/mo');
   });
 
   it('honours the ad account\u2019s own currency on both halves', () => {
-    expect(formatPerPeriod(100, 'EUR')).toBe('100 EUR/day · 3,000 EUR/mo');
+    expect(formatPerPeriod(100, 'EUR')).toBe('€100 EUR/day · €3,000 EUR/mo');
   });
 
   // The pair used to read "$26/day · $766/mo": `perPeriod` passes the day through unrounded
@@ -200,7 +201,7 @@ describe('the impact vocabulary', () => {
   // reader who multiplied got 780. The day is not rounded to fix it — six render sites share
   // `perPeriod` with the compiled card, which prints $25.54 correctly.
   it('states a day and a month that multiply', () => {
-    expect(formatPerPeriod(25.54, 'USD')).toBe('$25.54/day · $766/mo');
+    expect(formatPerPeriod(25.54, 'USD')).toBe('$25.54 USD/day · $766 USD/mo');
     expect(formatPerPeriod(25.54, null)).toBe('25.54/day · 766/mo');
   });
 
@@ -244,7 +245,7 @@ describe('the impact vocabulary', () => {
         },
         'USD',
       ),
-    ).toEqual({ figure: '$96.00', label: 'a day buying nothing' });
+    ).toEqual({ figure: '$96.00 USD', label: 'a day buying nothing' });
 
     expect(
       formatHeadline(

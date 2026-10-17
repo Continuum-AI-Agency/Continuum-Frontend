@@ -419,9 +419,9 @@ describe('PaidScaffoldCard', () => {
     renderCard({}, { rows: READY_ROWS, plan: PLAN, contentHash: HASH });
     const cell = (key: string) => screen.getByTestId(`scaffold-summary-${key}`).textContent;
     expect(cell('objective')).toContain('Sales');
-    expect(cell('budget')).toContain('$91.99/day');
+    expect(cell('budget')).toContain('$91.99 USD/day');
     expect(cell('expected')).toContain('≈ 4.5/day');
-    expect(cell('expected')).toContain('$20.66 CPA');
+    expect(cell('expected')).toContain('$20.66 USD CPA');
     expect(cell('audiences')).toContain('1');
     expect(cell('creatives')).toContain('2 of 2');
     expect(cell('optimizer')).toContain('Recommend · autopilot off');

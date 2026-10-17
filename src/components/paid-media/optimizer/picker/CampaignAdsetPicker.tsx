@@ -238,22 +238,24 @@ const AdsetRow = memo(function AdsetRow({
             ) : null}
           </span>
 
-          {/* The reason is always VISIBLE, never tooltip-only — line-clamped so the row height
-              stays exact, with the full text on hover. */}
+          {/* The reason is always VISIBLE, never tooltip-only — one line, ellipsized so the row
+              height stays exact, with the full text on hover. `truncate`, not `line-clamp-1`:
+              the clamp hides the overflow with no text-overflow, which reads as clipped text. */}
           {!row.eligible && row.reason ? (
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="mt-0.5 line-clamp-1 block text-xs text-warning">
-                    {row.reason}
-                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-warning">{row.reason}</span>
                 }
               />
               <TooltipContent className="max-w-xs">{row.reason}</TooltipContent>
             </Tooltip>
           ) : null}
           {row.eligible && row.mismatch ? (
-            <span className="mt-0.5 line-clamp-1 block text-xs text-warning">
+            <span
+              className="mt-0.5 block truncate text-xs text-warning"
+              title={`Buys ${row.kpiField} — the optimizer freezes it and never moves its budget.`}
+            >
               Buys {row.kpiField} — the optimizer freezes it and never moves its budget.
             </span>
           ) : null}
@@ -263,9 +265,14 @@ const AdsetRow = memo(function AdsetRow({
               that dead end is shown here rather than found the hard way. */}
           {row.enrolledIn ? (
             <span
-              className={`mt-0.5 line-clamp-1 block text-xs ${
+              className={`mt-0.5 block truncate text-xs ${
                 row.enrolledIn.canRelease ? 'text-muted-foreground' : 'text-warning'
               }`}
+              title={
+                row.enrolledIn.canRelease
+                  ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
+                  : 'Another brand’s portfolio holds this. You need edit access there to move it.'
+              }
             >
               {row.enrolledIn.canRelease
                 ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
@@ -298,7 +305,9 @@ const AdsetRow = memo(function AdsetRow({
                 <button
                   type="button"
                   aria-label={`Show ads in ${row.name}`}
-                  className="hit-area rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  // A painted 24px box, in px (rem steps down with the root font size): the
+                  // virtualizer's scroll box clips a pseudo-element hit pad at the table's edge.
+                  className="inline-flex size-[24px] items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <ImageIcon className="size-3.5" aria-hidden="true" />
                 </button>

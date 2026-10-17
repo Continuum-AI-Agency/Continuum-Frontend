@@ -17,10 +17,18 @@ mock.module('motion/react', () => ({
   useReducedMotion: () => true,
 }));
 
+mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
+  useAdAccountCurrency: () => 'MXN',
+}));
+
 mock.module('./CampaignAdSetWorkspace', () => ({
-  CampaignAdSetWorkspace: ({ toolbarSlot }: { toolbarSlot?: React.ReactNode }) => (
-    <div>{toolbarSlot}</div>
-  ),
+  CampaignAdSetWorkspace: ({
+    toolbarSlot,
+    currency,
+  }: {
+    toolbarSlot?: React.ReactNode;
+    currency?: string | null;
+  }) => <div data-workspace-currency={currency ?? 'none'}>{toolbarSlot}</div>,
 }));
 
 for (const modulePath of [
@@ -81,5 +89,24 @@ describe('PaidMediaDashboard campaign recovery', () => {
 
     await waitFor(() => expect(loadCampaignPerformance).toHaveBeenCalledTimes(2));
     expect(loadCampaignPerformance.mock.calls[1][1]).toEqual({ force: true });
+  });
+
+  it("hands the workspace the ad account's currency so money never defaults to dollars", async () => {
+    const { container } = render(
+      <PaidMediaDashboard
+        brandId="brand-1"
+        adAccountId="act_12345"
+        platform="meta"
+        onPlatformChange={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        container
+          .querySelector('[data-workspace-currency]')
+          ?.getAttribute('data-workspace-currency'),
+      ).toBe('MXN');
+    });
   });
 });

@@ -24,12 +24,7 @@ import type {
 } from '@continuum/contracts';
 import { heroMinImpact, heroThresholdMet, rankCandidates } from '@continuum/contracts';
 import type { KpiTileState } from '../../components/KpiTile';
-import {
-  type FigureUnit,
-  type FigureWindow,
-  formatCurrency,
-  normalizeCurrency,
-} from '../../format';
+import { type FigureUnit, type FigureWindow, formatCurrency } from '../../format';
 import { spendState, windowState } from '../account/overviewModel';
 import type { BeforeAfter } from './beforeAfterModel';
 import type { HeroMismatch, HeroSetting } from './heroHeaderModel';
@@ -688,13 +683,13 @@ export type AnchorWindow = {
 };
 
 export type PortfolioAnchor = {
-  /** The cost per result, bare ("45.69"), or "—" with nothing bought. */
+  /** The cost per result in M1 spelling ("$45.69 MXN"), or "—" with nothing bought. */
   value: string;
   figure: Omit<HeadlineFigure, 'text'>;
   /** ok at or under the target, warn just over it (see ANCHOR_WARN_PCT), bad plainly over it,
    *  none without a target or without a cost. */
   state: 'ok' | 'warn' | 'bad' | 'none';
-  /** "MXN per lead" */
+  /** "per lead" — the code rides on the figure itself. */
   unit: string;
   /** "target 35.00" / "no target" — the target, clickable into Manage. */
   target: string;
@@ -736,7 +731,6 @@ export function anchorOf(args: {
   const cost = growth.cost_per_result;
   const target = growth.target != null && growth.target > 0 ? growth.target : null;
   const pct = vsTargetPct(cost, target);
-  const code = normalizeCurrency(currency);
   const windows: AnchorWindow[] = [];
   for (const which of ['after', 'before'] as const) {
     const totals = args.beforeAfter?.[which];
@@ -745,14 +739,14 @@ export function anchorOf(args: {
       which,
       label: totals.short,
       cost: totals.cost,
-      text: totals.cost == null ? `no ${words.many}` : formatCurrency(totals.cost, null),
+      text: totals.cost == null ? `no ${words.many}` : formatCurrency(totals.cost, currency),
     });
   }
   return {
-    value: cost == null ? '—' : formatCurrency(cost, null),
+    value: cost == null ? '—' : formatCurrency(cost, currency),
     figure: { key: 'anchor.cost', raw: cost, currency, window: growth.window, unit: 'currency' },
     state: anchorState(pct),
-    unit: code ? `${code} per ${words.one}` : `per ${words.one}`,
+    unit: `per ${words.one}`,
     target: target == null ? 'no target' : `target ${formatCurrency(target, null)}`,
     vsTarget:
       pct == null ? null : pct === 0 ? 'on target' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`,

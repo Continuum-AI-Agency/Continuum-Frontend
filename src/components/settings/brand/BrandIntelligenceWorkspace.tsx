@@ -30,6 +30,15 @@ import { BrandDnaPanel, BrandReadinessPanel, BrandSourcesPanel } from './BrandBo
 
 const queryKey = (brandId: string) => ['brand-intelligence', brandId] as const;
 
+/** The score figure's colour by band: the ink of the hue in light (the pale tints read 1.2-1.7:1
+ *  on the light card), the pale tint the card was drawn for in dark. */
+export function scoreBandColor(band: BrandIntelligenceScore['band']): string {
+  if (band === 'strong') return 'text-emerald-700 dark:text-emerald-400';
+  if (band === 'developing') return 'text-amber-800 dark:text-amber-300';
+  if (band === 'limited') return 'text-rose-700 dark:text-rose-300';
+  return 'text-muted-foreground';
+}
+
 function ScoreCard({
   score,
   icon: Icon,
@@ -37,14 +46,7 @@ function ScoreCard({
   score: BrandIntelligenceScore;
   icon: typeof Activity;
 }) {
-  const color =
-    score.band === 'strong'
-      ? 'text-emerald-400'
-      : score.band === 'developing'
-        ? 'text-amber-300'
-        : score.band === 'limited'
-          ? 'text-rose-300'
-          : 'text-muted-foreground';
+  const color = scoreBandColor(score.band);
   return (
     <Card className="border-white/10 bg-black/20">
       <CardHeader className="gap-3 pb-3">

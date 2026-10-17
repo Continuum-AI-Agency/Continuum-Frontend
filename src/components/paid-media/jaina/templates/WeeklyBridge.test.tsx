@@ -130,7 +130,7 @@ describe('WeeklyBridge justification', () => {
     expect(rows).toHaveLength(4);
     expect(rows.map((row) => row.hasAttribute('open'))).toEqual([true, false, false, false]);
     expect(rows[0]?.querySelector('p')?.textContent).toBe(
-      'De 120 a 164 conversaciones (44 más): 52 por gastar más (4,170 MXN → 5,990 MXN) y 8 menos por pagar más por conversación (34.75 MXN → 36.52 MXN).',
+      'De 120 a 164 conversaciones (44 más): 52 por gastar más ($4,170 MXN → $5,990 MXN) y 8 menos por pagar más por conversación ($34.75 MXN → $36.52 MXN).',
     );
     expectFigureParity(container);
   });

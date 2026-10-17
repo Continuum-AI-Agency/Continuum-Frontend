@@ -143,7 +143,11 @@ export function AllPlatformsTiles({
 }) {
   const window = figureWindowOfMetrics(metrics);
   const currency = oneCurrency(metrics);
-  const total = currency != null ? (metrics.spend_by_currency[0]?.spend ?? null) : null;
+  // One spend row is one figure, whether or not the producer named its currency: the stamp
+  // carries the raw spend the tile prints, and `none` when the code is unknown. Only several
+  // currencies have no single total.
+  const total =
+    metrics.spend_by_currency.length === 1 ? (metrics.spend_by_currency[0]?.spend ?? null) : null;
   const kinds = rankedKinds(metrics).slice(0, MAX_KIND_TILES);
   const connected = connectedTotals(metrics).length;
   const showPlatforms = 3 + kinds.length < MIN_TILES;
@@ -160,7 +164,7 @@ export function AllPlatformsTiles({
             ? metrics.spend_by_currency
                 .map((row) => formatCurrency(row.spend, row.currency))
                 .join(' · ')
-            : formatCurrency(total ?? metrics.spend_by_currency[0]?.spend ?? 0, currency)
+            : formatCurrency(total, currency)
         }
         variant="inline"
       />
@@ -232,14 +236,12 @@ export function PlatformMetricsSection({
   metrics,
   platform,
   liveBelow = false,
-  onCreatePortfolio,
 }: {
   metrics: AccountPlatformMetrics;
   platform: AdPlatform;
   /** The platform's own live read renders under this section: when the Optimizer has not read
    *  the platform, the section says that the figures below are that read. */
   liveBelow?: boolean;
-  onCreatePortfolio?: () => void;
 }) {
   const row = platformTotals(metrics, platform);
   if (!row?.connected) return null;
@@ -255,11 +257,7 @@ export function PlatformMetricsSection({
         data-source="account-platform-metrics"
         data-testid={`platform-metrics-${platform}`}
       >
-        <PlatformReadingNote
-          onCreatePortfolio={onCreatePortfolio}
-          platform={platform}
-          where="below"
-        />
+        <PlatformReadingNote platform={platform} where="below" />
       </section>
     );
   }

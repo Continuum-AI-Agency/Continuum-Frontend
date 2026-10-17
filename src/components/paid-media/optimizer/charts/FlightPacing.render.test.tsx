@@ -35,9 +35,9 @@ describe('FlightPacing', () => {
     expect(bars[1].getAttribute('aria-valuenow')).toBe('27');
     expect(container.textContent).toContain('Underpacing');
     expect(container.textContent).toContain('Day 11 of 30');
-    expect(container.textContent).toContain('$800 of $3,000');
+    expect(container.textContent).toContain('$800 USD of $3,000 USD');
     expect(container.textContent).toContain('At this pace');
-    expect(container.textContent).toContain('$110/day');
+    expect(container.textContent).toContain('$110 USD/day');
   });
 
   it('says when the figure is estimated from spend rather than the engine', () => {
@@ -97,6 +97,6 @@ describe('FlightPacing', () => {
       />,
     );
     expect(ended.container.textContent).toMatch(/Ended Aug 31/);
-    expect(ended.container.textContent).toContain('$900 of $1,000');
+    expect(ended.container.textContent).toContain('$900 USD of $1,000 USD');
   });
 });

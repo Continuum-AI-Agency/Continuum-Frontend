@@ -77,7 +77,9 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
                 <div className="flex flex-wrap items-center gap-x-2 pt-0.5">
                   <Button
                     className={cn(
-                      'h-8 px-0 font-medium text-xs',
+                      // `min-w-[24px]`: "Ask" is 22px of text and a link button has no padding;
+                      // px, because rem steps down with the root font size.
+                      'h-8 min-w-[24px] justify-start px-0 font-medium text-xs',
                       // A ~5s breath while the worker is reading. No sheen.
                       working && 'animate-[pulse_5s_ease-in-out_infinite]',
                     )}

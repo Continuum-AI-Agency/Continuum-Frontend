@@ -1059,13 +1059,13 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
   it('walks an answer template: every figure as printed, then the rendered sentence and sections', () => {
     const cells = cellsOfBlocks([templateBlock]);
     expect(cells.map((cell) => [cell.where, cell.format, cell.value])).toEqual([
-      ['answer_template_explained_ranking.figures[0]', 'currency', '32.19 MXN'],
+      ['answer_template_explained_ranking.figures[0]', 'currency', '$32.19 MXN'],
       ['answer_template_explained_ranking.figures[1]', 'percent', '12.1%'],
       ['answer_template_explained_ranking.figures[2]', 'number', '449'],
       [
         'answer_template_explained_ranking.executive.sentence',
         'text',
-        'SEDE C rinde mejor: 32.19 MXN, 12.1% más barato.',
+        'SEDE C rinde mejor: $32.19 MXN, 12.1% más barato.',
       ],
       [
         'answer_template_explained_ranking.justification.sections[0].text',
@@ -1075,7 +1075,7 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
       [
         'answer_template_explained_ranking.justification.sections[0].items[0].text',
         'text',
-        'Consigue 32.19 MXN.',
+        'Consigue $32.19 MXN.',
       ],
     ]);
     expect(cells[0]?.label).toBe('label cpr_1');

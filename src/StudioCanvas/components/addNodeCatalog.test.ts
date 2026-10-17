@@ -211,6 +211,10 @@ describe('addNodeCatalog', () => {
 
   it('puts hyperframesAgent under Video and the handoffs under Action', () => {
     expect(typesIn('video')).toContain('hyperframesAgent');
+    expect(groupRows('video').find((row) => row.type === 'fastCut')).toMatchObject({
+      label: 'Fast Cut',
+      tag: 'Continuum',
+    });
     for (const type of [
       'frameExtract',
       'plannerDraft',

@@ -13,12 +13,13 @@ import type { ClientRenderJob } from '@continuum/contracts';
  */
 
 /**
- * `media.client_render_jobs` is shared with the MediaStream url_ingest worker, which the
- * inbox hard-filters server-side (`ClientRenderJobStore.listInbox`) and which heartbeats
- * on its own service lease. Without this, every ingest tick reads as a job we have never
- * seen and refreshes every operator's browser.
+ * `media.client_render_jobs` is shared with the service lanes — the MediaStream url_ingest
+ * worker, server reels and the Experimental Renderer's forge_micro leases — which the inbox
+ * hard-filters server-side (`ClientRenderJobStore.listInbox`) and which run on their own
+ * service leases. Without this, every service tick reads as a job we have never seen and
+ * refreshes every operator's browser.
  */
-const SERVICE_ONLY_KINDS = new Set(['url_ingest']);
+const SERVICE_ONLY_KINDS = new Set(['url_ingest', 'server_reel', 'forge_micro']);
 
 const stringField = (row: Record<string, unknown>, field: string): string | null => {
   const value = row[field];

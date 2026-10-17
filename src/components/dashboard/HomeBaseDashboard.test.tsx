@@ -53,6 +53,19 @@ describe('HomeBaseDashboard', () => {
     expect(screen.getByRole('navigation', { name: 'Dashboard view options' })).toBeTruthy();
   });
 
+  it('grows each view button to a 24px target invisibly — the h-6 segment stays as drawn', () => {
+    // PP-L1V tap-target: the segments paint at h-6 (21.75px on the 14.5px root ladder).
+    render(<HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />);
+    const nav = screen.getByRole('navigation', { name: 'Dashboard view options' });
+    const buttons = Array.from(nav.querySelectorAll('button'));
+    expect(buttons.length).toBeGreaterThan(1);
+    for (const button of buttons) {
+      const classes = button.className.split(' ');
+      expect(classes).toContain('hit-area');
+      expect(classes).toContain('h-6');
+    }
+  });
+
   it('renders the organic view with its title and active slot', () => {
     const { container } = render(
       <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />,
@@ -92,6 +105,12 @@ describe('HomeBaseDashboard', () => {
     expect(container.textContent).toContain(
       'Social performance, audience insights, and trend signals.',
     );
+    // The caption at 80% opacity measured 3.9:1 on the page (PP-L1V-muted-caption-contrast-4.41).
+    const caption = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.includes('Social performance'),
+    );
+    expect(caption?.className).toContain('text-muted-foreground');
+    expect(caption?.className).not.toContain('text-muted-foreground/');
   });
 
   it('replaces empty modules with the first-run setup when no account is connected', () => {
@@ -148,7 +167,9 @@ describe('HomeBaseDashboard overview view', () => {
     render(<HomeBaseDashboard activeView="overview" activeViewSlot={<div>Overview slot</div>} />);
     const buttons = screen.getAllByRole('button').map((button) => button.textContent);
     expect(buttons[0]).toBe('Overview');
-    expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     expect(screen.getByText('Your account this week')).toBeTruthy();
   });
 });

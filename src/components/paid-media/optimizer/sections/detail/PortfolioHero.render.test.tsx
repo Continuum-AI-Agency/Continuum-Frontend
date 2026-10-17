@@ -746,6 +746,23 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     );
   });
 
+  it('no line holding a setting chip hides its vertical overflow, so the chip keeps its 24px hit area', () => {
+    // PP-L1V tap-target + clipped-text: the spend tile's "plan 110" chip sat in a `truncate`
+    // line (overflow: hidden). The clip cut the chip's invisible hit area to the 16px line and
+    // the clipped ::after read as clipped text. The line clips only sideways (overflow-x: clip).
+    const { container } = wholeHero('prueba');
+    const chips = [...container.querySelectorAll('[data-testid="header-chip"]')];
+    expect(chips.length).toBeGreaterThan(0);
+    for (const chip of chips) {
+      expect(chip.className.split(' ')).toContain('hit-area');
+      for (let node = chip.parentElement; node && node !== container; node = node.parentElement) {
+        expect(node.className.toString()).not.toMatch(
+          /(^|\s)(truncate|overflow-hidden|overflow-y-hidden|overflow-y-clip|overflow-clip)(\s|$)/,
+        );
+      }
+    }
+  });
+
   it('every setting stays one click from Manage, beside the figure it governs; "Run now" runs', () => {
     const edits: HeroSetting[] = [];
     const runs: number[] = [];

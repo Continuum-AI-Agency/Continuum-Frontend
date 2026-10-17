@@ -32,7 +32,7 @@ describe('NegativeTermsReview', () => {
     expect(getAllByTestId('negative-terms-review-checkbox')).toHaveLength(3);
     expect(getByTestId('negative-terms-review-confirm').textContent).toBe('Add 3 negatives');
     expect(getByTestId('negative-terms-review-spend').textContent).toBe(
-      'The chosen terms spent 478 MXN in 14 days.',
+      'The chosen terms spent $478 MXN in 14 days.',
     );
   });
 
@@ -42,7 +42,7 @@ describe('NegativeTermsReview', () => {
     fireEvent.click(rows[0] as HTMLElement);
     expect(getByTestId('negative-terms-review-confirm').textContent).toBe('Add 2 negatives');
     expect(getByTestId('negative-terms-review-spend').textContent).toBe(
-      'The chosen terms spent 264 MXN in 14 days.',
+      'The chosen terms spent $264 MXN in 14 days.',
     );
     fireEvent.click(getByTestId('negative-terms-review-confirm'));
     expect(confirmed).toEqual([['gym jobs', 'gym near me cheap']]);

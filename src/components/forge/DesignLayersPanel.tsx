@@ -140,6 +140,10 @@ export function DesignLayersPanel({
     fetchDesignLayers(brandId, assetId)
       .then((read) => {
         if (cancelled) return;
+        if (!read) {
+          setRefusal('This exact template version is not a registered design import.');
+          return;
+        }
         setLayers(read);
         setDraft(read.arrangements);
       })

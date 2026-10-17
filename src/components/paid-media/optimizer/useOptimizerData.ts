@@ -1,6 +1,7 @@
 'use client';
 import type {
   CreativeOutputManifest,
+  CycleItemRow,
   OptimizerAction,
   PlatformId,
   PortfolioConfig,
@@ -13,6 +14,7 @@ import type {
 // data from a previous workspace.
 
 import {
+  type AccountCandidate,
   type AccountEnrollment,
   AccountEnrollmentSchema,
   type ActionFamily,
@@ -115,6 +117,9 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
 import { recommendationInsightKey } from './insightKey';
 import { hasPendingWork } from './reportModel';
+import { isMissingRpcError, MissingRpcError } from './sections/platforms/multiplatformRead';
+import { accountsOn } from './sections/platforms/platformTabsModel';
+import { type CurrentMoves, currentMoves } from './sections/portfolioStaleness';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
 // The optimizer RPCs/edge functions are not yet in the generated Supabase types
@@ -195,6 +200,8 @@ export const optimizerQueryKeys = {
     ['optimizer', 'efficiency-series', portfolioId, limit] as const,
   accountRead: (brandId: string, adAccountId: string) =>
     ['optimizer', 'account-read', brandId, adAccountId] as const,
+  platformCards: (brandId: string, platform: PlatformId) =>
+    ['optimizer', 'platform-cards', brandId, platform] as const,
   spendByObjective: (brandId: string, days: number) =>
     ['optimizer', 'spend-by-objective', brandId, days] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
@@ -332,6 +339,25 @@ function scopeToAccount(
     otherAccountIds,
     droppedRowCount: dropped,
   };
+}
+
+/** The brand's portfolios on one platform, whichever ad account the page has selected. A row
+ *  lists its platforms from 20261015160023 on; a row without them (an older server) is on the
+ *  platform when its own account is one the brand has granted on that platform, and comes back
+ *  saying so, so every reader of the list can name its platform. */
+export function portfoliosOnPlatform(
+  rows: readonly PortfolioListItem[],
+  platform: PlatformId,
+  accounts: readonly AdAccount[],
+): PortfolioListItem[] {
+  const granted = new Set(
+    accountsOn(accounts, platform).map((account) => bareAccountId(account.account_id)),
+  );
+  return rows.flatMap((row) => {
+    if (row.platforms.length > 0) return row.platforms.includes(platform) ? [row] : [];
+    const onPlatform = row.ad_account_id != null && granted.has(bareAccountId(row.ad_account_id));
+    return onPlatform ? [{ ...row, platforms: [platform] }] : [];
+  });
 }
 
 type BrandPortfolios = { rows: PortfolioListItem[]; dropped: number };
@@ -529,16 +555,20 @@ async function fetchAdsetInventory(brandId: string, accountId: string, forceRefr
 /** The active ad sets currently enrolled in a portfolio (id + name) — reads the
  *  enrolled roster so the manage panel can pre-select the picker and diff on save.
  *  Names are stored at enroll time, so this shows enrolled ad sets even when they
- *  fall outside the current snapshot window. */
+ *  fall outside the current snapshot window.
+ *
+ *  Fails closed: one unreadable row makes the whole read an error, never a shorter or empty
+ *  roster. A member missing from it would read as "left this portfolio" — its moves withdrawn
+ *  (useCurrentMoves) and the manage panel diffing a save against ad sets it never saw. */
 async function fetchEnrolledAdsets(portfolioId: string): Promise<PortfolioAdset[]> {
   const { data, error } = await getClient().rpc('optimizer_list_portfolio_adsets', {
     p_portfolio_id: portfolioId,
   });
   if (error) throw new Error('optimizer_list_portfolio_adsets unreachable');
-  return z
-    .array(PortfolioAdsetSchema)
-    .catch([])
-    .parse(data ?? []);
+  const roster = z.array(PortfolioAdsetSchema).safeParse(data ?? []);
+  if (!roster.success)
+    throw new Error('optimizer_list_portfolio_adsets returned an unreadable roster');
+  return roster.data;
 }
 
 /** Archived portfolios for the "Archived" view (optimizer_list_portfolios hides
@@ -1218,6 +1248,18 @@ function useOptimizerRead<T>({
   return { ...query, data: query.data ?? empty };
 }
 
+/** The one brand read every portfolio view selects from. */
+function brandPortfoliosQuery(brandId: string) {
+  return {
+    queryKey: optimizerQueryKeys.portfolios(brandId),
+    queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: retryUnlessTimeout(1),
+  };
+}
+
 /** The selected account's portfolios. `data` stays the PortfolioListItem[] every
  *  consumer already renders; the scope counts ride alongside so the surface can tell
  *  "this brand has no portfolios" (onboarding) apart from "they are all on another ad
@@ -1233,15 +1275,7 @@ export function useOptimizerPortfolios(brandId: string, adAccountId: string | nu
     (brand: BrandPortfolios) => scopeToAccount(brand.rows, adAccountId, brand.dropped),
     [adAccountId],
   );
-  const query = useQuery({
-    queryKey: optimizerQueryKeys.portfolios(brandId),
-    queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
-    select,
-    enabled: Boolean(brandId),
-    staleTime: FIVE_MINUTES,
-    gcTime: THIRTY_MINUTES,
-    retry: retryUnlessTimeout(1),
-  });
+  const query = useQuery({ ...brandPortfoliosQuery(brandId), select });
   const scope = query.data ?? EMPTY_PORTFOLIO_SCOPE;
 
   return {
@@ -1263,6 +1297,77 @@ export function useOptimizerAdAccounts(brandId: string) {
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
   });
+}
+
+const EMPTY_PORTFOLIOS: PortfolioListItem[] = [];
+
+/** One platform's portfolios for that platform's tab: brand-wide, from the same cached read as
+ *  useOptimizerPortfolios, never narrowed to the ad account the page has selected (a Meta
+ *  account by default, which hid every Google-only portfolio). */
+export function useOptimizerPlatformPortfolios(brandId: string, platform: PlatformId) {
+  const accounts = useOptimizerAdAccounts(brandId).data;
+  const select = useCallback(
+    (brand: BrandPortfolios) => portfoliosOnPlatform(brand.rows, platform, accounts),
+    [platform, accounts],
+  );
+  const query = useQuery({ ...brandPortfoliosQuery(brandId), select });
+  return { ...query, data: query.data ?? EMPTY_PORTFOLIOS };
+}
+
+const PLATFORM_CARDS_RPC = 'optimizer_get_platform_cards';
+
+/** Still reading; the RPC is not deployed yet (20261015160023 ships separately, never retried);
+ *  the read failed or came back in a shape the contract refuses; ready. */
+export type PlatformCardsState =
+  | { status: 'loading' }
+  | { status: 'unavailable' }
+  | { status: 'error' }
+  | { status: 'ready'; cards: AccountCandidate[] };
+
+async function fetchPlatformCards(
+  brandId: string,
+  platform: PlatformId,
+): Promise<AccountCandidate[]> {
+  const { data, error } = await getClient().rpc(PLATFORM_CARDS_RPC, {
+    p_brand_id: brandId,
+    p_platform: platform,
+  });
+  if (error) {
+    if (isMissingRpcError(error)) throw new MissingRpcError(PLATFORM_CARDS_RPC);
+    throw new Error(`${PLATFORM_CARDS_RPC} failed: ${rpcErrorText(error)}`);
+  }
+  // Whole-list parse, unlike the account read's per-row tolerance: one card the contract
+  // refuses makes the list an error, never a shorter list that reads as "nothing to decide".
+  const parsed = z.array(accountCandidateSchema).safeParse(data);
+  if (!parsed.success) {
+    console.error(`${PLATFORM_CARDS_RPC} returned cards that do not match accountCandidateSchema`, {
+      issues: parsed.error.issues,
+    });
+    throw new Error(`${PLATFORM_CARDS_RPC} returned cards that no longer match the contract`);
+  }
+  return parsed.data;
+}
+
+/** One platform's pending cards across the brand's portfolios (optimizer_get_platform_cards). */
+export function useOptimizerPlatformCards(
+  brandId: string,
+  platform: PlatformId,
+): PlatformCardsState {
+  const query = useQuery({
+    queryKey: optimizerQueryKeys.platformCards(brandId, platform),
+    queryFn: () => withReadTimeout(fetchPlatformCards(brandId, platform)),
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+    retry: (failures, error) => !(error instanceof MissingRpcError) && failures < 1,
+  });
+  // One state object per answer, so a reader's memo keyed on it holds between renders.
+  const { isError, error, data } = query;
+  return useMemo((): PlatformCardsState => {
+    if (isError) {
+      return error instanceof MissingRpcError ? { status: 'unavailable' } : { status: 'error' };
+    }
+    return data ? { status: 'ready', cards: data } : { status: 'loading' };
+  }, [isError, error, data]);
 }
 
 /** Resolve the display currency for a specific ad account. Null when the account row carries
@@ -2228,6 +2333,34 @@ export function useOptimizerAccountEnrollments(brandId: string | null, accountId
     enabled: Boolean(brandId && accountId),
     staleTime: FIVE_MINUTES,
   });
+}
+
+/**
+ * The latest cycle's moves this portfolio can still make, and why the rest are withdrawn
+ * (see currentMoves). The membership map is read only when a move's ad set has left the
+ * roster, to name where it went; until then no second read is paid for.
+ */
+export function useCurrentMoves(
+  portfolio: PortfolioListItem,
+  brandId: string,
+  adAccountId: string,
+  items: CycleItemRow[],
+): CurrentMoves {
+  const enrolled = useOptimizerEnrolledAdsets(portfolio.id);
+  const rosterIds = useMemo(
+    () => (enrolled.isSuccess ? new Set(enrolled.data.map((row) => row.adset_id)) : null),
+    [enrolled.isSuccess, enrolled.data],
+  );
+  const unnamed = useMemo(
+    () => currentMoves(items, portfolio, rosterIds),
+    [items, portfolio, rosterIds],
+  );
+  const leftRoster = unnamed.notes.size > 0;
+  const enrollments = useOptimizerAccountEnrollments(leftRoster ? brandId : null, adAccountId);
+  return useMemo(
+    () => (leftRoster ? currentMoves(items, portfolio, rosterIds, enrollments.data) : unnamed),
+    [leftRoster, items, portfolio, rosterIds, enrollments.data, unnamed],
+  );
 }
 
 export function useOptimizerAdsetCreativeWinrates(

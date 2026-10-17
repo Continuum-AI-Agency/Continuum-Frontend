@@ -206,7 +206,11 @@
     ".next/organic-x-metrics-e2e/types/**/*.ts",
     ".next/organic-x-metrics-e2e/dev/types/**/*.ts",
     ".next/auth-magic-link-e2e/types/**/*.ts",
-    ".next/auth-magic-link-e2e/dev/types/**/*.ts"
+    ".next/auth-magic-link-e2e/dev/types/**/*.ts",
+    ".next/forge-scene-bench/types/**/*.ts",
+    ".next/forge-scene-bench/dev/types/**/*.ts",
+    ".next/forge-scene-real-bench/types/**/*.ts",
+    ".next/forge-scene-real-bench/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

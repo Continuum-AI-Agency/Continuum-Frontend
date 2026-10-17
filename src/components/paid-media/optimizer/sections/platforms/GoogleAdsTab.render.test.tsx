@@ -37,7 +37,7 @@ describe('GoogleAdsTabView — from a recorded real response', () => {
       <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview }} />,
     );
     expect(getByTestId('google-headline').textContent).toBe(
-      'Google spent 55,205 MXN: Search bought 34 conversions at 1,315 MXN and Display bought 88 conversions at 119 MXN.',
+      'Google spent $55,205 MXN: Search bought 34 conversions at $1,315 MXN and Display bought 88 conversions at $119 MXN.',
     );
     expect(getByTestId('google-subline').textContent).toBe(
       'Sep 1 – Sep 30·Vivo 47 (3710693645)·attribution: what Google reports',
@@ -52,21 +52,21 @@ describe('GoogleAdsTabView — from a recorded real response', () => {
     expect(tiles.length).toBeGreaterThanOrEqual(4);
     expect(tiles.length).toBeLessThanOrEqual(6);
     expect(tiles.map(tileText)).toEqual([
-      { label: 'Spend', value: '55,205 MXN', sub: 'no prior period to compare' },
+      { label: 'Spend', value: '$55,205 MXN', sub: 'no prior period to compare' },
       {
         label: 'Conversions',
         value: '122',
-        sub: '453 MXN each · as Google attributes them',
+        sub: '$453 MXN each · as Google attributes them',
       },
       {
         label: 'Search · 3 campaigns',
         value: '34 conv.',
-        sub: "1,315 MXN each · 190% above Google's 453 MXN · 81% of spend",
+        sub: "$1,315 MXN each · 190% above Google's $453 MXN · 81% of spend",
       },
       {
         label: 'Display · 4 campaigns',
         value: '88 conv.',
-        sub: "119 MXN each · 74% below Google's 453 MXN · 19% of spend",
+        sub: "$119 MXN each · 74% below Google's $453 MXN · 19% of spend",
       },
     ]);
   });
@@ -175,23 +175,17 @@ describe('GoogleAdsTabView — currency and what the Optimizer reads', () => {
     expect(getByTestId('google-tiles').textContent).toContain('453 MXN each');
   });
 
-  it("names what the figures are and when the Optimizer's own reading starts, with the way in", () => {
-    let created = 0;
+  it("names what the figures are and when the Optimizer's own reading starts", () => {
     const { getByTestId, queryByTestId } = render(
-      <GoogleAdsTabView
-        onCreatePortfolio={() => {
-          created += 1;
-        }}
-        state={{ status: 'ready', account: VIVO_47, overview }}
-      />,
+      <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview }} />,
     );
     expect(queryByTestId('google-not-managed')).toBeNull();
     const note = getByTestId('platform-reading-note');
-    expect(note.textContent).toContain(
+    expect(note.textContent).toBe(
       "These figures come straight from Google. The Optimizer's own reading of Google starts once a portfolio holds Google campaigns.",
     );
-    note.querySelector('button')?.click();
-    expect(created).toBe(1);
+    // The way in is the tab's portfolio rows (OptimizerOverview), not a second button here.
+    expect(note.querySelector('button')).toBeNull();
   });
 
   it('leaves the note out when the frame above already said it', () => {

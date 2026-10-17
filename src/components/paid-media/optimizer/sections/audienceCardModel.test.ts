@@ -223,7 +223,14 @@ describe('audience card model — a full proposal', () => {
     // Easy Fit's ALEIRA ad sets target 4 km around the gym (geo_locations.places), which the
     // shared summary skips — the card said "Anywhere" on 2026-09-29.
     const aroundTheGym = {
-      places: [{ key: '420172691413376', name: 'Vivo 47 Easy Fit Plaza Aleira', radius: 4, distance_unit: 'kilometer' }],
+      places: [
+        {
+          key: '420172691413376',
+          name: 'Vivo 47 Easy Fit Plaza Aleira',
+          radius: 4,
+          distance_unit: 'kilometer',
+        },
+      ],
       location_types: ['home', 'recent'],
     };
     const comparison = audienceComparison(
@@ -382,7 +389,7 @@ describe('audience card model — a full proposal', () => {
       { label: 'New ad set', value: 'ITESO // AGOSTO // 2 - LKL · compradores · 2026-09-28' },
       { label: 'Starts', value: 'Paused, next to "ITESO // AGOSTO // 2 - LKL"; both keep running' },
       { label: 'Campaign', value: 'Tours' },
-      { label: 'Budget', value: '62.00 MXN/day · between 20.00 MXN and 120 MXN' },
+      { label: 'Budget', value: '$62.00 MXN/day · between $20.00 MXN and $120 MXN' },
     ]);
     expect(implementationLines(planWith({ mode: 'replace' }), null)[1]?.value).toBe(
       'Paused, next to "ITESO // AGOSTO // 2 - LKL"; the current one pauses once the new one is live',

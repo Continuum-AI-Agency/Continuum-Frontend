@@ -3,20 +3,20 @@ import { formatValue, resolveMetricDisplayFormat } from './formatValue';
 
 describe('formatValue', () => {
   test('currency formats with dollar sign when the code says dollars', () => {
-    expect(formatValue(12450, 'currency', { currency: 'USD' })).toBe('$12,450.00');
+    expect(formatValue(12450, 'currency', { currency: 'USD' })).toBe('$12,450 USD');
   });
 
   test('currency respects custom currency code', () => {
-    expect(formatValue(1000, 'currency', { currency: 'EUR' })).toBe('€1,000.00');
-    expect(formatValue(1000, 'currency', { currency: 'mxn' })).toBe('MX$1,000.00');
+    expect(formatValue(1000, 'currency', { currency: 'EUR' })).toBe('€1,000 EUR');
+    expect(formatValue(1000, 'currency', { currency: 'mxn' })).toBe('$1,000 MXN');
   });
 
   // A dataset whose account carries no currency reaches here with no code. Printing "$1,000"
   // for a Mexican account is the defect; the blocks above already say it this way.
   test('an absent or malformed currency code prints the figure, not dollars', () => {
-    expect(formatValue(12450, 'currency')).toBe('12,450 (currency unknown)');
-    expect(formatValue(12450, 'currency', { currency: '' })).toBe('12,450 (currency unknown)');
-    expect(formatValue(1000, 'currency', { currency: 'per day' })).toBe('1,000 (currency unknown)');
+    expect(formatValue(12450, 'currency')).toBe('12,450');
+    expect(formatValue(12450, 'currency', { currency: '' })).toBe('12,450');
+    expect(formatValue(1000, 'currency', { currency: 'per day' })).toBe('1,000');
   });
 
   test('percent formats values >= 1 as already-percentage', () => {
@@ -53,7 +53,7 @@ describe('formatValue', () => {
   });
 
   test('numeric string with format parses and formats', () => {
-    expect(formatValue('12450', 'currency', { currency: 'USD' })).toBe('$12,450.00');
+    expect(formatValue('12450', 'currency', { currency: 'USD' })).toBe('$12,450 USD');
   });
 
   test('NaN input returns string representation', () => {

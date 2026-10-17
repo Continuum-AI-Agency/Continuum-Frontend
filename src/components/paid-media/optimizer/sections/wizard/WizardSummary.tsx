@@ -152,6 +152,7 @@ export function WizardSummary({
         <SetupAdvisor
           advice={advice}
           brandId={brandId}
+          currency={currency}
           disabled={disabled}
           onChangeSelection={onChangeSelection}
           onUseBudget={onUseBudget}

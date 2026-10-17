@@ -7,6 +7,7 @@ import {
   collapseDraftGroups,
   isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
+  newRowCopyPatch,
   normalizePersistedStatus,
   resolvePersistedRowDayId,
   type PersistedOrganicDraftRow,
@@ -815,5 +816,28 @@ describe('field-edit read derivations', () => {
       days(),
     );
     expect(mapped?.draft.timeLabel).toBe('1:00 PM');
+  });
+});
+
+describe('newRowCopyPatch', () => {
+  it('carries a caption typed before the row existed to the field-edit route', () => {
+    expect(newRowCopyPatch(makeDraft({ captionPreview: 'La resiliencia operativa…' }))).toEqual({
+      caption: 'La resiliencia operativa…',
+    });
+  });
+
+  it('carries hashtags beside the caption, since the publisher appends them', () => {
+    const hashtags = { high: ['#ITSM'], medium: [], low: [] };
+    expect(newRowCopyPatch(makeDraft({ captionPreview: 'Copy', hashtags }))).toEqual({
+      caption: 'Copy',
+      hashtags,
+    });
+  });
+
+  it('sends nothing for a draft with no copy yet', () => {
+    expect(newRowCopyPatch(makeDraft({ captionPreview: '   ' }))).toBeNull();
+    expect(
+      newRowCopyPatch(makeDraft({ captionPreview: '', hashtags: { high: [], low: [] } })),
+    ).toBeNull();
   });
 });

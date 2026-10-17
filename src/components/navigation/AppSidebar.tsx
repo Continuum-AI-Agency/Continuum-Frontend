@@ -1,8 +1,8 @@
 'use client';
 
 import type { ProductCode } from '@continuum/contracts';
-import { ChevronRight, Lock, LogOut, Moon, Search, Sun } from 'lucide-react';
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
+import { ChevronRight, Lock, LogOut, Search } from 'lucide-react';
+import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ComponentProps } from 'react';
@@ -56,6 +56,7 @@ import {
   isRouteActive,
 } from './routes';
 import { SidebarBillingWidget, sidebarOpensTopUp } from './SidebarBillingWidget';
+import { ThemeToggleGlyph, ThemeToggleText } from './ThemeToggleGlyph';
 
 type NavBadgeTone = NonNullable<NonNullable<AppNavigationItem['badge']>['tone']>;
 
@@ -634,28 +635,9 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                   onClick={toggle}
                   className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
                 >
-                  <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      <motion.span
-                        key={appearance}
-                        initial={reduce ? false : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
-                        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                        exit={
-                          reduce ? { opacity: 0 } : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }
-                        }
-                        transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-                        className="absolute inset-0 inline-flex items-center justify-center"
-                      >
-                        {appearance === 'dark' ? (
-                          <Sun className="!h-[18px] !w-[18px] stroke-[1.8]" />
-                        ) : (
-                          <Moon className="!h-[18px] !w-[18px] stroke-[1.8]" />
-                        )}
-                      </motion.span>
-                    </AnimatePresence>
-                  </span>
+                  <ThemeToggleGlyph appearance={appearance} reduce={reduce} />
                   <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                    {appearance === 'dark' ? 'Light mode' : 'Dark mode'}
+                    <ThemeToggleText appearance={appearance} />
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

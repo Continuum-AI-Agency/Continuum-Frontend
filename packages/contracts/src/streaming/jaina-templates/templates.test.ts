@@ -66,9 +66,9 @@ const rankingPayload = (overrides: Partial<AnswerTemplatePayload> = {}): AnswerT
 
 describe('formatFigure', () => {
   it('prints money by the one money rule', () => {
-    expect(formatFigure(figure('m', 248.734))).toBe('249 MXN');
-    expect(formatFigure(figure('m', 14426.29))).toBe('14,426 MXN');
-    expect(formatFigure(figure('m', 25.5, 'money', 'USD'))).toBe('$25.50');
+    expect(formatFigure(figure('m', 248.734))).toBe('$249 MXN');
+    expect(formatFigure(figure('m', 14426.29))).toBe('$14,426 MXN');
+    expect(formatFigure(figure('m', 25.5, 'money', 'USD'))).toBe('$25.50 USD');
     // An unknown currency is a bare figure, never dollars.
     expect(formatFigure(figure('m', 25.5, 'money', null))).toBe('25.50');
   });
@@ -101,7 +101,7 @@ describe('figure refs', () => {
 
   it('renders refs through the formatter', () => {
     expect(renderFigureRefs('Cuesta {cpr_1} con {n} compras.', figures)).toEqual({
-      text: 'Cuesta 249 MXN con 58 compras.',
+      text: 'Cuesta $249 MXN con 58 compras.',
       unresolved: [],
     });
   });
@@ -124,7 +124,7 @@ describe('figure refs', () => {
     ]);
     const [, first] = segments;
     expect(first.kind === 'figure' && first.figure.id).toBe('cpr_1');
-    expect(first.kind === 'figure' && first.text).toBe('249 MXN');
+    expect(first.kind === 'figure' && first.text).toBe('$249 MXN');
   });
 });
 

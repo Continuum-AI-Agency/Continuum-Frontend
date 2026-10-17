@@ -18,8 +18,14 @@ import type { CreativeOutputManifest } from '@continuum/contracts';
 // Approve is optimistic (a spinner while in flight, rolled back on error); an APPLIED state
 // is never assumed from a mutation — it is read back from the drain's per-item results and
 // the refetch the mutations trigger.
+//
+// A platform_signal recommendation (Google, TikTok) the platform-cards read returned renders as
+// its platform card, with the card's own control (the validate_only preview, then the write),
+// never as a queue row: as a row it took the fatigue route, whose Approve only flips the status
+// and runs no write. Without that read it stays a row, so nothing pending disappears.
 
 import {
+  type AccountCandidate,
   type AdSetSnapshot,
   type AdsetAd,
   type AudienceProposalRow,
@@ -50,7 +56,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
@@ -59,6 +64,7 @@ import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { figureProps, formatCurrency } from '../format';
+import { itemWritable, proposalsOnlyNote } from '../platformWrites';
 import {
   actionRoute,
   applyModeExplainer,
@@ -77,6 +83,7 @@ import {
   useApplyApproved,
   useAudienceProposalMutations,
   useConvertCbo,
+  useCurrentMoves,
   useFlashCreativeMutations,
   useOptimizerAccountSnapshots,
   useOptimizerActions,
@@ -89,6 +96,7 @@ import {
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
+import { AccountRead } from './account/AccountRead';
 import {
   type AudienceActionHandlers,
   audienceCardView,
@@ -112,7 +120,9 @@ import { type ImplementTarget, implementTargets, predecessorAdIn } from './flash
 import { KindTag, type KindTone, kindTone, kindWord } from './kindTag';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { cardActionsOf, cardRecommendationId } from './platformCards/platformCardActionModel';
 import { isStale, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
+import { QueueTraySkeleton } from './QueueTraySkeleton';
 import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
@@ -260,6 +270,9 @@ export function buildActionQueue(
   report: ParsedCycleRunReport | null,
   nameById?: Map<string, string> | null,
   carried: readonly RecommendationRow[] = [],
+  /** Whether a budget move's platform may be written here (platformWrites.ts): a move nobody
+   *  may write stays a proposal on the chart and never becomes an Approve row. */
+  writable: (item: CycleItemRow) => boolean = () => true,
 ): QueueRow[] {
   if (!report && carried.length === 0) return [];
   const rows: QueueRow[] = [];
@@ -271,7 +284,7 @@ export function buildActionQueue(
     // not yet written (recommend mode) is actionable. Applied/failed/skipped rows live in Logs.
     const actionable =
       status === 'held' || status === 'approved_pending' || (status == null && changed);
-    if (!actionable) continue;
+    if (!actionable || !writable(item)) continue;
     rows.push({
       key: `budget:${item.adset_id}`,
       route: 'budget',
@@ -478,7 +491,13 @@ type OptimizerActionsPortfolioGroupProps = {
   /** What leads the header line before the portfolio's name — the Actions tab puts the
    *  portfolio's platform chips there; the portfolio page, which already names them, nothing. */
   headerLead?: React.ReactNode;
+  /** This portfolio's pending platform cards (optimizer_get_platform_cards). Each replaces its
+   *  recommendation's queue row and counts in the header like one. */
+  platformCards?: readonly AccountCandidate[];
 };
+
+const NO_PLATFORM_CARDS: readonly AccountCandidate[] = [];
+const NO_PORTFOLIO_NAMES: ReadonlyMap<string, string> = new Map();
 
 /**
  * The audience card's actions, wired once to the brand's proposal mutations and the CBO
@@ -585,6 +604,7 @@ export function OptimizerActionsPortfolioGroup({
   askedRecommendationIds,
   focusMissingDelayMs = FOCUS_MISSING_DELAY_MS,
   headerLead = null,
+  platformCards = NO_PLATFORM_CARDS,
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
@@ -628,6 +648,16 @@ export function OptimizerActionsPortfolioGroup({
   const [confirm, setConfirm] = React.useState<null | 'budget' | 'pause'>(null);
 
   const report = parseReport(performanceQuery.data);
+  const cardActions = React.useMemo(() => cardActionsOf(platformCards), [platformCards]);
+  // The recommendations still decided as rows: every one the cards above do not stand for.
+  const queueRecs = React.useMemo(() => {
+    const shownAsCards = new Set(platformCards.map(cardRecommendationId));
+    return (report?.recommendations ?? []).filter((rec) => !shownAsCards.has(rec.id));
+  }, [platformCards, report?.recommendations]);
+  // A withdrawn cycle's moves, and a move whose ad set left this portfolio, are never queue
+  // work: the budget rows come from the moves that still stand, so the rows agree with the
+  // list read's pending_budget_moves. The story below still shows them, as history.
+  const moves = useCurrentMoves(portfolio, brandId, adAccountId, report?.latest_items ?? []);
   const nameById = React.useMemo(
     () => new Map(enrolledQuery.data.map((row) => [row.adset_id, row.adset_name ?? ''])),
     [enrolledQuery.data],
@@ -649,9 +679,16 @@ export function OptimizerActionsPortfolioGroup({
     return out;
   }, [askedRecommendationIds, audienceProposalsQuery.data, nameById, report?.recommendations]);
   const rows = React.useMemo(
-    () => buildActionQueue(report, nameById, carriedRecs),
-    [report, nameById, carriedRecs],
+    () =>
+      buildActionQueue(
+        report && { ...report, latest_items: moves.current, recommendations: queueRecs },
+        nameById,
+        carriedRecs,
+        (item) => itemWritable(portfolio, item),
+      ),
+    [report, moves.current, nameById, carriedRecs, queueRecs, portfolio],
   );
+  const proposalsOnly = proposalsOnlyNote(portfolio, moves.current);
   const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
   const [decidingMove, setDecidingMove] = React.useState<string | null>(null);
   const decideMove = (rec: RecommendationRow, status: 'approved' | 'rejected') => {
@@ -719,10 +756,7 @@ export function OptimizerActionsPortfolioGroup({
     isStale(portfolio),
   );
   const unwell = staleLine(portfolio) !== null || rosterLine(portfolio) !== null;
-  const summary = React.useMemo(
-    () => queueSummary(report?.recommendations ?? []),
-    [report?.recommendations],
-  );
+  const summary = React.useMemo(() => queueSummary(queueRecs), [queueRecs]);
   // Observe hard-halts every Meta write; approving/executing is disabled and the reason shown.
   const writesBlocked = portfolio.apply_mode === 'observe';
 
@@ -791,7 +825,9 @@ export function OptimizerActionsPortfolioGroup({
   const [generatingIds, setGeneratingIds] = React.useState<ReadonlySet<string>>(new Set());
   const [generateNotes, setGenerateNotes] = React.useState<ReadonlyMap<string, string>>(new Map());
   const [implementingKey, setImplementingKey] = React.useState<string | null>(null);
-  const currency = useAdAccountCurrency(brandId, adAccountId);
+  // The portfolio's own account names its money: a Google portfolio listed beside the selected
+  // Meta account is in its Google customer's currency.
+  const currency = useAdAccountCurrency(brandId, portfolio.ad_account_id ?? adAccountId);
   const noteFor = React.useCallback((recId: string, note: string | null) => {
     setGenerateNotes((prev) => {
       const next = new Map(prev);
@@ -943,7 +979,7 @@ export function OptimizerActionsPortfolioGroup({
       ? null
       : selectedBudgetRows.reduce((sum, row) => sum + (row.item.change_abs ?? 0), 0);
 
-  if (performanceQuery.isLoading) return <Skeleton className="h-28 rounded-lg" />;
+  if (performanceQuery.isLoading) return <QueueTraySkeleton portfolio={portfolio} />;
   // A failed read used to fall through to rows.length === 0 and return null, so the whole
   // group disappeared from a queue that had just counted this portfolio as having work.
   // Name it instead — the count and the list must never disagree in silence.
@@ -956,7 +992,7 @@ export function OptimizerActionsPortfolioGroup({
       />
     );
   }
-  if (rows.length === 0 && moveRows.length === 0) return null;
+  if (rows.length === 0 && moveRows.length === 0 && platformCards.length === 0) return null;
 
   const clearTransient = () => {
     setSelected(new Set());
@@ -1097,7 +1133,8 @@ export function OptimizerActionsPortfolioGroup({
 
   const busyApprove = requestApplyItems.isPending || setStatuses.isPending || setStatus.isPending;
 
-  const waitingCount = (selectableVisible.length || rows.length) + moveRows.length;
+  const waitingCount =
+    (selectableVisible.length || rows.length) + moveRows.length + platformCards.length;
   const sentence = queueSentence(waitingCount, summary, currency);
 
   return (
@@ -1184,6 +1221,12 @@ export function OptimizerActionsPortfolioGroup({
         <p className="text-warning text-xs">{applyModeExplainer(portfolio.apply_mode)}</p>
       ) : null}
 
+      {proposalsOnly ? (
+        <p className="text-muted-foreground text-xs" data-testid="queue-proposals-only">
+          {proposalsOnly}
+        </p>
+      ) : null}
+
       {executeNote ? (
         <p className="text-muted-foreground text-xs" role="status">
           {executeNote}
@@ -1192,7 +1235,7 @@ export function OptimizerActionsPortfolioGroup({
 
       {/* Why the money is moving, before the list of moves: every ad set's cost per result
           against the target beside its budget going from now to proposed. */}
-      {hasBudgetRows && report ? (
+      {(hasBudgetRows || moves.line || moves.notes.size > 0) && report ? (
         <ReallocationStory
           className="border-border/60 border-t pt-3"
           currency={currency}
@@ -1202,6 +1245,8 @@ export function OptimizerActionsPortfolioGroup({
           nameById={transferNameById}
           snapshotById={snapshotById}
           target={targetDisplay}
+          withdrawn={moves.line}
+          withdrawnNotes={moves.notes}
         />
       ) : null}
 
@@ -1230,6 +1275,17 @@ export function OptimizerActionsPortfolioGroup({
             />
           ))}
         </ul>
+      ) : null}
+      {platformCards.length > 0 ? (
+        <div data-testid="queue-platform-cards">
+          <AccountRead
+            candidates={[...platformCards]}
+            cardActions={cardActions}
+            currency={currency}
+            dailySpend={portfolio.daily_total}
+            portfolioNames={NO_PORTFOLIO_NAMES}
+          />
+        </div>
       ) : null}
       <ul className="divide-y divide-border/60 border-border/60 border-y" data-testid="queue-rows">
         {visibleRows.map((row, index) => (
@@ -1979,11 +2035,14 @@ function QueueRowView({
             <RowImpact currency={currency} row={row} />
           </div>
 
-          <div className="flex items-center justify-end gap-1">
+          {/* Under a coarse pointer each control's hit area is 44px: the px gap (and the taller
+              buttons and chevron) keep the chevron's from reaching Approve's drawn edge, so a
+              press meant for one never lands on the other. Desktop keeps the tight row. */}
+          <div className="flex items-center justify-end gap-1 pointer-coarse:gap-[12px]">
             {dismissable ? (
               <Button
                 aria-label={`Dismiss ${selectionLabel(row).replace(/^Select /, '')}`}
-                className="h-7 px-2.5 text-xs"
+                className="h-7 px-2.5 text-xs pointer-coarse:h-8"
                 disabled={writesBlocked || busyDecision}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -1999,7 +2058,7 @@ function QueueRowView({
             {selectable ? (
               <Button
                 aria-label={`Approve ${selectionLabel(row).replace(/^Select /, '')}`}
-                className="h-7 px-3 text-xs"
+                className="h-7 px-3 text-xs pointer-coarse:h-8"
                 disabled={writesBlocked || busyDecision}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -2015,7 +2074,7 @@ function QueueRowView({
             <button
               aria-expanded={expanded}
               aria-label={expanded ? 'Hide detail' : 'Show detail'}
-              className="hit-area rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              className="hit-area rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground pointer-coarse:p-2"
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleExpand();

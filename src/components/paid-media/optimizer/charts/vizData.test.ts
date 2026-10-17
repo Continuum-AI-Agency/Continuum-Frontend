@@ -266,6 +266,14 @@ describe('buildCpaHeroPoints', () => {
     expect(points[0].events).toEqual([]);
   });
 
+  it('keeps the unrounded cost beside the rounded chart value, for the figure it prints', () => {
+    const [point] = buildCpaHeroPoints([
+      { ...cpaSeriesTrend[0], spend_d7: 1_091.854, conv_d7: 23 },
+    ]);
+    expect(point?.cpa).toBe(47);
+    expect(point?.cpaExact).toBeCloseTo(47.4719, 4);
+  });
+
   it('uses the supplied multiplier when an objective is priced as CPM', () => {
     const [point] = buildCpaHeroPoints([cpaSeriesTrend[0]], {}, 1_000);
     expect(point?.cpa).toBe(40_000); // $800 / 20 impressions × 1,000

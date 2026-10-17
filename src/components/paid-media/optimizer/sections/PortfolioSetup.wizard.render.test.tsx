@@ -151,7 +151,7 @@ describe('PortfolioSetup — the four-step wizard', () => {
     const text = document.body.textContent ?? '';
     expect(text).toContain('Leads · Efficiency');
     expect(text).toContain('Why this group:');
-    expect(text).toContain('Cost per result spreads from $30.00 to $75.00');
+    expect(text).toContain('Cost per result spreads from $30.00 USD to $75.00 USD');
     expect(screen.getByRole('button', { name: /Start from scratch/ })).toBeDefined();
   });
 
@@ -175,7 +175,7 @@ describe('PortfolioSetup — the four-step wizard', () => {
 
     // Plan: the name is seeded, the daily budget matches the selection, Recommend is on.
     expect((screen.getByLabelText(/^Name$/) as HTMLInputElement).value).toBe('Leads · Efficiency');
-    expect(document.body.textContent).toContain('Blank matches the selection: $1,600/day');
+    expect(document.body.textContent).toContain('Blank matches the selection: $1,600 USD/day');
     expect(screen.getByRole('button', { name: /^Recommend/ }).getAttribute('aria-pressed')).toBe(
       'true',
     );
@@ -262,8 +262,8 @@ describe('PortfolioSetup — the four-step wizard', () => {
     next();
     fireEvent.click(screen.getByRole('button', { name: 'Next 30 days' }));
     fireEvent.click(screen.getByRole('button', { name: 'Per month' }));
-    fireEvent.change(screen.getByLabelText(/^Budget \(\$\)/), { target: { value: '60000' } });
-    expect(document.body.textContent).toContain('= $60,000 for the flight · ≈ $2,000/day');
+    fireEvent.change(screen.getByLabelText(/^Budget \(USD\)/), { target: { value: '60000' } });
+    expect(document.body.textContent).toContain('= $60,000 USD for the flight · ≈ $2,000 USD/day');
     fireEvent.click(screen.getByRole('button', { name: /Create & enroll/ }));
     await flush();
     const request = createMutateAsync.mock.calls[0]?.[0] as unknown as {

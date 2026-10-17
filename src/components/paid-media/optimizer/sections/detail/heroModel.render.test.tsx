@@ -89,8 +89,8 @@ describe('the FORMULARIOS lead card, rendered from the real body', () => {
     expect(text).not.toContain('buying nothing');
     const band = lead?.querySelector('[data-testid="news-band"]');
     expect(band?.getAttribute('data-visual')).toBe('cost_vs_reference');
-    expect(band?.textContent).toContain('$75.65 / lead · this ad set');
-    expect(band?.textContent).toContain('$28.86 · the reference');
+    expect(band?.textContent).toContain('$75.65 USD / lead · this ad set');
+    expect(band?.textContent).toContain('$28.86 USD · the reference');
     expect(band?.textContent).toContain('2.5× line · $72.14');
   });
 
@@ -101,7 +101,7 @@ describe('the FORMULARIOS lead card, rendered from the real body', () => {
     );
     const band = dead?.querySelector('[data-testid="news-band"]');
     expect(band?.getAttribute('data-visual')).toBe('spend_blocks');
-    expect(band?.textContent).toContain('$340 = 9.7 leads at target');
+    expect(band?.textContent).toContain('$340 USD = 9.7 leads at target');
     expect(band?.textContent).toContain('0 leads');
   });
 });

@@ -51,10 +51,12 @@ describe('shouldRefreshForRow', () => {
     expect(shouldRefreshForRow(ingest, [held()], true)).toBe(false);
   });
 
-  it('refreshes for a service kind the browser cannot run but the inbox still lists', () => {
-    expect(shouldRefreshForRow(row({ id: OTHER_ID, kind: 'server_reel' }), [held()], false)).toBe(
-      true,
-    );
+  // The inbox now filters every service lane server-side, server reels and the Experimental
+  // Renderer's leases included, so their ticks are as silent as an ingest's.
+  it.each(['server_reel', 'forge_micro'])('never refreshes for a %s row', (kind) => {
+    const service = row({ id: OTHER_ID, kind });
+    expect(shouldRefreshForRow(service, [held()], false)).toBe(false);
+    expect(shouldRefreshForRow(service, [held()], true)).toBe(false);
   });
 
   // Erring toward the read: a payload we cannot reason about costs one GET; treating it as

@@ -11,7 +11,8 @@
 // behaviour leaving the page must have, or a turn dies mid-sentence because someone navigated.
 // `cancelJainaRun` ends the run itself and records it as cancelled.
 
-import { useAgentRunStore } from '@/lib/agents/runStore';
+import { isTerminalAgentRunStatus } from '@continuum/contracts';
+import { selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 
 /**
@@ -39,6 +40,28 @@ export async function cancelJainaRun(runId: string | undefined): Promise<void> {
   } catch {
     // Best-effort: the row may already be terminal (a 409), which is the same end state.
   }
+}
+
+/**
+ * What Stop does: end every run that keeps this session reading as in flight.
+ *
+ * The surface's streaming state is the session's binding in the run store, not the reader it
+ * owns. Cancelling only the owned run left a different run bound to the session — one the
+ * reader returned to, or one the store rebound to — reading live, so the Stop control and the
+ * in-flight state outlived the stream (PP-L1-jaina-stop-leaves-surface-loading). A bound run
+ * that already ended is left as it ended.
+ */
+export async function stopJainaSession(params: {
+  sessionId: string;
+  ownedRunId: string | undefined;
+}): Promise<void> {
+  const bound = selectRunForSession(params.sessionId)(useAgentRunStore.getState());
+  const boundLiveRunId =
+    bound && !isTerminalAgentRunStatus(bound.run.status) ? bound.run.runId : undefined;
+  const runIds = new Set(
+    [params.ownedRunId, boundLiveRunId].filter((id): id is string => Boolean(id)),
+  );
+  await Promise.all([...runIds].map((runId) => cancelJainaRun(runId)));
 }
 
 export async function clearJainaMemory(adAccountId: string): Promise<void> {

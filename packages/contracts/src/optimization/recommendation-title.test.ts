@@ -1,7 +1,7 @@
 // The title vocabulary, and the account candidates' titles composed from it.
 //
 // Two things are pinned here. The renderer: one figure, one unit, one comparator, printed the
-// way a person writes them, with ISO codes and never a "$". And the account side of the
+// way a person writes them, money by the one M1 rule (symbol before, ISO code after). And the account side of the
 // rule: every detector in the catalogue has its Spanish, a candidate that holds a headline
 // figure gets a title composed from that figure and its `from → to` pair or its money, and a
 // candidate that holds none gets no title rather than an invented one.
@@ -15,11 +15,11 @@ import {
   accountDetectorSchema,
   withCandidateTitle,
 } from './account-strategy';
+import { formatMoney } from './money';
 import {
   ACTION_VERB_LABEL,
   actionLabel,
   actionVerbSchema,
-  formatMoneyCode,
   recommendationActionOf,
   recommendationTitleOf,
   recommendationTitleSchema,
@@ -39,19 +39,19 @@ const candidate = (over: Partial<AccountCandidate>): AccountCandidate =>
   });
 
 describe('money in a title', () => {
-  it('prints the ISO code after the figure, never a symbol, and bare when the currency is unknown', () => {
-    expect(formatMoneyCode(25.54, 'USD')).toBe('25.54 USD');
-    expect(formatMoneyCode(324, 'mxn')).toBe('324 MXN');
-    expect(formatMoneyCode(324, null)).toBe('324');
-    expect(formatMoneyCode(-25.54, 'MXN')).toBe('-25.54 MXN');
-    expect(formatMoneyCode(null, 'MXN')).toBe('—');
+  it('prints the symbol before the figure and the ISO code after it, and bare when the currency is unknown', () => {
+    expect(formatMoney(25.54, 'USD')).toBe('$25.54 USD');
+    expect(formatMoney(324, 'mxn')).toBe('$324 MXN');
+    expect(formatMoney(324, null)).toBe('324');
+    expect(formatMoney(-25.54, 'MXN')).toBe('-$25.54 MXN');
+    expect(formatMoney(null, 'MXN')).toBe('—');
   });
 
   it('glues a percentage, prices a money unit, and leaves a count its words', () => {
     expect(titleFigure({ figure: 12, unit: '%' })).toBe('12%');
     expect(titleFigure({ figure: 0.5, unit: '% de CTR en 3 días' })).toBe('0.5% de CTR en 3 días');
-    expect(titleFigure({ figure: 101, unit: 'MXN por lead' })).toBe('101 MXN por lead');
-    expect(titleFigure({ figure: 48.8, unit: 'MXN' })).toBe('48.80 MXN');
+    expect(titleFigure({ figure: 101, unit: 'MXN por lead' })).toBe('$101 MXN por lead');
+    expect(titleFigure({ figure: 48.8, unit: 'MXN' })).toBe('$48.80 MXN');
     expect(titleFigure({ figure: 3.2, unit: 'veces por persona' })).toBe('3.2 veces por persona');
     expect(titleFigure({ figure: 298, unit: '' })).toBe('298');
   });
@@ -61,15 +61,34 @@ describe('money in a title', () => {
       entity: 'ITESO // AGOSTO - RTG',
       figure: 101,
       unit: 'MXN por lead',
-      comparator: '2.9× el objetivo de 35.00 MXN',
+      comparator: '2.9× el objetivo de $35.00 MXN',
       window: 'd14',
     });
     expect(titleText(title)).toBe(
-      'ITESO // AGOSTO - RTG: 101 MXN por lead, 2.9× el objetivo de 35.00 MXN',
+      'ITESO // AGOSTO - RTG: $101 MXN por lead, 2.9× el objetivo de $35.00 MXN',
     );
     expect(titleCarriesVerb(titleText(title))).toBe(false);
     expect(titleCarriesVerb('Stop 48.8 MXN/day going to ITESO')).toBe(true);
     expect(titleCarriesVerb('Pausar ITESO')).toBe(true);
+  });
+
+  it('prints the figure with the decimals that tell it from its reference, and rounded when they match', () => {
+    const title = recommendationTitleSchema.parse({
+      entity: 'A',
+      figure: 100.01,
+      unit: 'MXN',
+      comparator: `en 14 días y 0 leads, más que el objetivo de ${formatMoney(100, 'MXN', { distinguishFrom: 100.01 })}`,
+      reference: 100,
+      window: 'd14',
+    });
+    expect(titleText(title)).toBe(
+      'A: $100.01 MXN, en 14 días y 0 leads, más que el objetivo de $100.00 MXN',
+    );
+    expect(titleFigure({ figure: 1473.75, unit: 'MXN por lead', reference: 1474 })).toBe(
+      '$1,473.75 MXN por lead',
+    );
+    expect(titleFigure({ figure: 298, unit: 'MXN', reference: 298 })).toBe('$298 MXN');
+    expect(titleFigure({ figure: 298, unit: 'MXN', reference: 100 })).toBe('$298 MXN');
   });
 
   it('sizes the button by the day, by a from → to, or says the verb alone', () => {
@@ -78,14 +97,14 @@ describe('money in a title', () => {
         verb: 'pause',
         sizing: { perDay: 48.8, from: null, to: null, currency: 'MXN' },
       }),
-    ).toBe('Pausar · 48.80 MXN/día');
+    ).toBe('Pause · $48.80 MXN/day');
     expect(
       actionLabel({
         verb: 'settings',
         sizing: { perDay: null, from: 400, to: 360, currency: 'MXN' },
       }),
-    ).toBe('Ajustar la configuración · 400 → 360 MXN');
-    expect(actionLabel({ verb: 'variate_creative', sizing: null })).toBe('Hacer variantes');
+    ).toBe('Adjust the settings · $400 MXN → $360 MXN');
+    expect(actionLabel({ verb: 'variate_creative', sizing: null })).toBe('Make variants');
     for (const verb of actionVerbSchema.options) expect(ACTION_VERB_LABEL[verb]).not.toContain('$');
   });
 
@@ -138,11 +157,11 @@ describe('the account candidates’ titles', () => {
     });
     const title = accountCandidateTitle(transfer, 'MXN');
     expect(title && titleText(title)).toBe(
-      'Leads MX: 33% más barato por resultado, 90.00 MXN por resultado en el origen frente a 60.00 MXN en el destino',
+      'Leads MX: 33% más barato por resultado, $90.00 MXN por resultado en el origen frente a $60.00 MXN en el destino',
     );
     expect(title?.window).toBe('d14');
     expect(actionLabel(accountCandidateAction(transfer, 'MXN'))).toBe(
-      'Mover presupuesto · 14.00 MXN/día',
+      'Move budget · $14.00 MXN/day',
     );
   });
 
@@ -160,10 +179,10 @@ describe('the account candidates’ titles', () => {
     });
     const title = accountCandidateTitle(dead, 'MXN');
     expect(title && titleText(title)).toBe(
-      'ALEIRA // AGOSTO - LKL: 96.00 MXN por día sin resultados, 96.00 MXN por día recuperables',
+      'ALEIRA // AGOSTO - LKL: $96.00 MXN por día sin resultados, $96.00 MXN por día recuperables',
     );
     expect(title?.window).toBe('d7'); // a daily detector, no window declared
-    expect(actionLabel(accountCandidateAction(dead, 'MXN'))).toBe('Pausar · 96.00 MXN/día');
+    expect(actionLabel(accountCandidateAction(dead, 'MXN'))).toBe('Pause · $96.00 MXN/day');
   });
 
   it('states an auction move as the CPM then and now: "The auction moved, not the ad" is the second line', () => {
@@ -183,12 +202,12 @@ describe('the account candidates’ titles', () => {
     });
     const title = accountCandidateTitle(auction, 'MXN');
     expect(title && titleText(title)).toBe(
-      'Cuenta: 24% más por cada mil impresiones, 53.60 MXN de CPM antes frente a 66.62 MXN ahora',
+      'Cuenta: 24% más por cada mil impresiones, $53.60 MXN de CPM antes frente a $66.62 MXN ahora',
     );
     expect(title?.window).toBe('d7');
   });
 
-  it('prints bare figures for an account with no recorded currency, and no "$" for a USD one', () => {
+  it('prints bare figures for an account with no recorded currency, and "$" with the code for a USD one', () => {
     const dead = candidate({
       headline: {
         kind: 'avoided',
@@ -205,9 +224,13 @@ describe('the account candidates’ titles', () => {
     );
     const dollars = accountCandidateTitle(dead, 'USD');
     expect(dollars && titleText(dollars)).toBe(
-      'Cuenta: 96.00 USD por día sin resultados, 96.00 USD por día recuperables',
+      'Cuenta: $96.00 USD por día sin resultados, $96.00 USD por día recuperables',
     );
-    expect(titleText(dollars as NonNullable<typeof dollars>)).not.toContain('$');
+    // A "$" never stands alone: every one is followed by a figure and then the code.
+    expect(titleText(dollars as NonNullable<typeof dollars>)).not.toMatch(
+      /\$[\d.,]+(?![\d.,]| USD)/,
+    );
+    expect(bare && titleText(bare)).not.toContain('$');
   });
 
   it('invents no title for a candidate that declared no headline, but still names the action', () => {

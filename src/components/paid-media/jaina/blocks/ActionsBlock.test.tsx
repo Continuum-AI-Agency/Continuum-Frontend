@@ -76,10 +76,10 @@ describe('ActionsBlock', () => {
     const figure = container.querySelector('[data-testid="actions-figure"]');
     // The currency comes from the evidence unit; a three-letter code is a currency and
     // nothing else in this block is allowed to decide that.
-    expect(figure?.textContent).toContain('$88.40');
+    expect(figure?.textContent).toContain('$88.40 USD');
     expect(figure?.textContent).toContain('cost_per_purchase · L14D');
     // Never appended to the figure — that is how a screen ships "$88.40 USD".
-    expect(figure?.querySelector('span')?.textContent).toBe('$88.40');
+    expect(figure?.querySelector('span')?.textContent).toBe('$88.40 USD');
   });
 
   it('prints a non-currency unit’s value as a plain number', () => {

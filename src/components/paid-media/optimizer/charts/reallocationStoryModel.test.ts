@@ -106,9 +106,9 @@ describe('buildReallocationStory', () => {
     expect(story.blendedBefore).toBeCloseTo(200 / 12, 6);
     expect(story.blendedAfter).toBeCloseTo(200 / 15.2, 6);
     expect(story.summary).toMatch(
-      /^Moving \$40\.00\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)\./,
+      /^Moving \$40\.00 USD\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)\./,
     );
-    expect(story.summary).toMatch(/Blended CPL improves from \$16\.67 to \$13\.16/);
+    expect(story.summary).toMatch(/Blended CPL improves from \$16\.67 USD to \$13\.16 USD/);
   });
 
   // The story sentence used to build its own Intl formatter defaulting to USD, so an account

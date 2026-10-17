@@ -28,6 +28,7 @@ import {
   type ElementRecord,
   type ElementUseIntent,
   elementRecordSchema,
+  elementSourceAssetId,
   type GenerateElementReferenceResponse,
   generateElementReferenceResponseSchema,
   type ImportElementCatalogRequest,
@@ -37,6 +38,8 @@ import {
   type LibraryImageRef,
   type ListElementsResponse,
   listElementsResponseSchema,
+  type PromoteElementToHeadlessResponse,
+  promoteElementToHeadlessResponseSchema,
   resolveElementRefs,
   type UpdateElementRequest,
 } from '@continuum/contracts';
@@ -52,6 +55,7 @@ export {
   ELEMENT_MEMBER_LIMIT,
   ELEMENT_PERSON_FALLBACK_LIMIT,
   ELEMENT_USE_INTENTS,
+  elementSourceAssetId,
   isElementPersonCategory,
 };
 
@@ -198,6 +202,25 @@ export function restoreElement(
     .then((response) => response.element);
 }
 
+/**
+ * The user's click IS the approval: a product/object Element becomes an approved headless
+ * product revision the Optimizer's auto-ads can cast. `rightsNote` is required by the
+ * Backend only when the Element has none of its own.
+ */
+export function promoteElementToHeadless(
+  brandId: string,
+  elementId: string,
+  rightsNote?: string,
+): Promise<PromoteElementToHeadlessResponse> {
+  return http.request<PromoteElementToHeadlessResponse>({
+    path: `${elementRoute(elementId)}/headless`,
+    method: 'POST',
+    body: { brandId, ...(rightsNote ? { rightsNote } : {}) },
+    schema: promoteElementToHeadlessResponseSchema,
+    cache: 'no-store',
+  });
+}
+
 export const elementsQueryKey = (brandId: string | undefined) => ['ai-studio', 'elements', brandId];
 
 export function useElements(brandId: string | undefined) {
@@ -264,6 +287,11 @@ export function useElementMutations(brandId: string | undefined) {
           vars.revisionIndex,
           vars.expectedUpdatedAt,
         ),
+      onSuccess: invalidate,
+    }),
+    promoteToHeadless: useMutation({
+      mutationFn: (vars: { elementId: string; rightsNote?: string }) =>
+        promoteElementToHeadless(brandId as string, vars.elementId, vars.rightsNote),
       onSuccess: invalidate,
     }),
   };
@@ -366,14 +394,6 @@ export function elementReferenceTypeForUse(
 ): ImageReferenceType {
   if (intent === 'palette') return 'color';
   return intent === 'subject' ? elementReferenceTypeFor(category) : 'default';
-}
-
-export function elementSourceAssetId(
-  element: ElementRecord,
-  intent: ElementUseIntent,
-): string | undefined {
-  if (intent === 'motion') return element.motionAssetId ?? undefined;
-  return resolveElementRefs(element)[0]?.asset_id;
 }
 
 export function elementRequiresRightsNote(category: ElementCategory): boolean {

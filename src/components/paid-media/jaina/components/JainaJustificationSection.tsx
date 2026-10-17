@@ -1,4 +1,4 @@
-import { sectionOfBlockCategory } from '@continuum/contracts';
+import { sectionOfBlock } from '@continuum/contracts';
 import { Fragment, type ReactNode, useId } from 'react';
 import type { CheckpointBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
@@ -18,13 +18,14 @@ export type PartitionedReportBlocks = {
  *
  * A stable filter, never a sort: each section keeps the backend's reading order
  * (`selectBlocksForPresentation`), so the `data_scope` frame still opens the
- * justification it frames.
+ * justification it frames. The one block marked `answer_format` (the table, steps or
+ * comparison the question asked for) is the answer whatever its category.
  */
 export function partitionReportBlocks(blocks: CheckpointBlockV2[]): PartitionedReportBlocks {
   const answer: CheckpointBlockV2[] = [];
   const justification: CheckpointBlockV2[] = [];
   for (const block of blocks) {
-    if (sectionOfBlockCategory(block.category) === 'answer') answer.push(block);
+    if (sectionOfBlock(block) === 'answer') answer.push(block);
     else justification.push(block);
   }
   return { answer, justification };
@@ -40,12 +41,15 @@ export function partitionReportBlocks(blocks: CheckpointBlockV2[]): PartitionedR
 export type AnswerStratum = 'answer' | 'why' | 'action';
 
 export function stratumOfBlock(block: CheckpointBlockV2): AnswerStratum {
+  // The format the question asked for IS the answer, under the sentence with no label over it.
+  if (block.answer_format === true) return 'answer';
   switch (block.category) {
     case 'answer_template':
     case 'data_scope':
     case 'metric_grid':
       return 'answer';
     case 'actions':
+    case 'steps':
       return 'action';
     case 'narrative':
       return narrativeThreeOf(block) ? 'answer' : 'why';

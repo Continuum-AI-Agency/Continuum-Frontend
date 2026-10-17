@@ -179,7 +179,7 @@ export function InsightDataTable<T>({
                       type="button"
                       onClick={() => setSort((prev) => nextSort(prev, column.id))}
                       className={cn(
-                        'inline-flex items-center gap-1 transition-colors hover:text-foreground',
+                        'hit-area inline-flex items-center gap-1 transition-colors hover:text-foreground',
                         column.align === 'right' && 'flex-row-reverse',
                         active && 'text-foreground',
                       )}

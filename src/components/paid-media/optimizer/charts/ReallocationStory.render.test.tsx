@@ -57,7 +57,7 @@ describe('ReallocationStory', () => {
     );
     const text = container.textContent ?? '';
     expect(text).toMatch(
-      /Moving \$40\.00\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)/,
+      /Moving \$40\.00 USD\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)/,
     );
     const rows = getAllByRole('listitem');
     expect(rows).toHaveLength(2);
@@ -98,6 +98,28 @@ describe('ReallocationStory', () => {
     expect(getAllByRole('listitem')).toHaveLength(5);
     fireEvent.click(getByRole('button', { name: /show 7 more/i }));
     expect(getAllByRole('listitem')).toHaveLength(12);
+  });
+
+  it('shows a withdrawn proposal as history and names a move whose ad set left', () => {
+    const { getByTestId, getAllByTestId, queryAllByRole } = render(
+      <ReallocationStory
+        items={items}
+        metric={lead}
+        nameById={nameById}
+        target={30}
+        withdrawn="Last proposal, Oct 12 — withdrawn: no cycle has run since"
+        withdrawnNotes={new Map([['pricey', 'now in Conversaciones Whatsapp']])}
+      />,
+    );
+    expect(getByTestId('reallocation-withdrawn').textContent).toBe(
+      'Last proposal, Oct 12 — withdrawn: no cycle has run since',
+    );
+    const notes = getAllByTestId('reallocation-row-withdrawn');
+    expect(notes.map((note) => note.textContent)).toEqual([
+      'Withdrawn — now in Conversaciones Whatsapp',
+    ]);
+    // Read-only: the story never carries an approve or apply control.
+    expect(queryAllByRole('button').map((b) => b.textContent)).not.toContain('Approve');
   });
 
   it('says plainly when nothing moved', () => {

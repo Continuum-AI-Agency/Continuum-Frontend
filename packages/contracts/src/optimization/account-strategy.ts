@@ -20,12 +20,11 @@ import type { OptimizationObjective } from './engine-contracts';
 // side erases, so there is no runtime cycle — the same arrangement account-chart already uses.
 // Keep the direction: a value import both ways would deadlock module init.
 import { insightStateSchema } from './insight-approval';
-import { normalizeCurrencyCode } from './money';
+import { formatMoney, normalizeCurrencyCode } from './money';
 import { OptimizerActionSchema } from './action';
 import { PlatformCardSchema } from './platform-card';
 import {
   type ActionVerb,
-  formatMoneyCode,
   type RecommendationAction,
   type RecommendationTitle,
   recommendationActionSchema,
@@ -490,6 +489,11 @@ export const accountCandidateSchema = z.object({
       recommendation_id: z.string().uuid(),
       portfolio_id: z.string().uuid(),
       action: OptimizerActionSchema,
+      /** The write switch of the card's account in its portfolio as it stands now
+       *  (portfolio_platforms.apply_enabled, which optimizer_reserve_action enforces). False:
+       *  the control shows itself switched off instead of offering a write the service refuses.
+       *  Absent from a server before 20261015160023. */
+      apply_enabled: z.boolean().optional(),
     })
     .nullable()
     .optional(),
@@ -760,7 +764,7 @@ const IMPACT_CLASS_TITLE: Record<ImpactClass, string> = {
 
 /** One side of a `from → to`, in the detector's declared side unit. */
 function titleSide(kind: TitleSidesKind, value: number, currency: string | null): string {
-  if (kind === 'money') return formatMoneyCode(value, currency);
+  if (kind === 'money') return formatMoney(value, currency);
   if (kind === 'percent') return `${value}%`;
   return value.toLocaleString('en-US');
 }
@@ -815,7 +819,7 @@ export function accountCandidateTitle(
       ? squeeze(
           `${titleSide(words.sides, headline.from, code)} ${words.a} frente a ${titleSide(words.sides, headline.to, code)} ${words.b}`,
         )
-      : `${formatMoneyCode(candidate.impact_per_day, code)} por día ${IMPACT_CLASS_TITLE[candidate.impact_class]}`;
+      : `${formatMoney(candidate.impact_per_day, code)} por día ${IMPACT_CLASS_TITLE[candidate.impact_class]}`;
   return {
     entity: titleEntity(candidate.evidence),
     figure: headline.value,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { AccountEnrollment, CycleItemRow, PortfolioListItem } from '@continuum/contracts';
 import {
+  currentMoves,
   isStale,
   pacingStaleLine,
   rosterLine,
@@ -8,6 +9,7 @@ import {
   staleCount,
   staleLine,
   underManagement,
+  withdrawnLine,
 } from './portfolioStaleness';
 
 function portfolio(over: Partial<PortfolioListItem> & { name: string }): PortfolioListItem {
@@ -196,5 +198,80 @@ describe('pacingStaleLine', () => {
     });
     expect(line?.text).toBe('pacing stale');
     expect(line?.title).toContain('no complete flight');
+  });
+});
+
+describe('withdrawnLine / currentMoves', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+  const AT = '2026-10-12T12:00:00Z';
+  const move = (adset_id: string, platform?: string): CycleItemRow =>
+    ({ adset_id, current_budget: 100, final_budget: 120, change_abs: 20, platform }) as CycleItemRow;
+  const items = [move('a'), move('b'), move('g', 'google_ads')];
+
+  it('says the proposal is withdrawn, with its day and the reason in words', () => {
+    const at = { last_cycle_current: false, last_actual_cycle_at: AT } as const;
+    expect(withdrawnLine({ ...at, withdrawn_reason: 'no_members' })).toBe(
+      'Last proposal, Oct 12 — withdrawn: nothing is enrolled any more',
+    );
+    expect(withdrawnLine({ ...at, withdrawn_reason: 'roster_absent' })).toBe(
+      'Last proposal, Oct 12 — withdrawn: its whole roster has left the ad account',
+    );
+    expect(withdrawnLine({ ...at, withdrawn_reason: 'missed_cycles' })).toBe(
+      'Last proposal, Oct 12 — withdrawn: no cycle has run since',
+    );
+  });
+
+  it('says nothing while current, before a first cycle, or on a read without the field', () => {
+    expect(withdrawnLine({ last_cycle_current: true, last_actual_cycle_at: AT })).toBeNull();
+    expect(withdrawnLine({ last_cycle_current: false, last_actual_cycle_at: null })).toBeNull();
+    expect(withdrawnLine({ last_actual_cycle_at: AT })).toBeNull();
+  });
+
+  it('a withdrawn cycle leaves no move to act on', () => {
+    const split = currentMoves(
+      items,
+      { id: ID, last_cycle_current: false, withdrawn_reason: 'missed_cycles', last_actual_cycle_at: AT },
+      new Set(['a', 'b']),
+    );
+    expect(split.line).toContain('withdrawn');
+    expect(split.current).toEqual([]);
+  });
+
+  it('withdraws a Meta move whose ad set left the roster, naming the holder when it can', () => {
+    const holders = [
+      { adset_id: 'b', portfolio_id: '99999999-9999-4999-8999-999999999999', portfolio_name: 'Conversaciones Whatsapp' },
+    ] as AccountEnrollment[];
+    const portfolio = { id: ID, last_cycle_current: true, last_actual_cycle_at: AT };
+    const named = currentMoves(items, portfolio, new Set(['a']), holders);
+    expect(named.line).toBeNull();
+    expect(named.notes.get('b')).toBe('now in Conversaciones Whatsapp');
+    // A Google move is never judged against the Meta-only roster read.
+    expect(named.current.map((item) => item.adset_id)).toEqual(['a', 'g']);
+    expect(currentMoves(items, portfolio, new Set(['a'])).notes.get('b')).toBe(
+      'no longer in this portfolio',
+    );
+  });
+
+  it('withdraws every move the database voided, so no raise is offered without its cut', () => {
+    const voided = (adset_id: string, apply_error: string): CycleItemRow =>
+      ({ ...move(adset_id), apply_status: 'skipped', apply_error }) as CycleItemRow;
+    const run = [
+      voided('a', 'voided: adset_moved'),
+      voided('b', 'voided: roster_changed'),
+      move('c'),
+      voided('d', 'already at target'),
+    ];
+    const split = currentMoves(run, { id: ID, last_cycle_current: true }, null);
+    expect(split.notes.get('a')).toBe('its ad set moved to another portfolio');
+    expect(split.notes.get('b')).toBe("this portfolio's ad sets changed since it was proposed");
+    // An apply's own no-op skip is not a withdrawal: it gets no "Withdrawn" label.
+    expect(split.notes.has('d')).toBe(false);
+    expect(split.current.map((item) => item.adset_id)).toEqual(['c', 'd']);
+  });
+
+  it('withdraws nothing while the roster is unknown', () => {
+    const split = currentMoves(items, { id: ID, last_cycle_current: true }, null);
+    expect(split.notes.size).toBe(0);
+    expect(split.current).toBe(items);
   });
 });

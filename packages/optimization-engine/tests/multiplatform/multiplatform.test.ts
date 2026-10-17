@@ -391,7 +391,7 @@ describe('crossPlatformMove (G27)', () => {
       ['m2', 12.51],
     ]);
     expect(decreaseMinor(r)).toBe(increaseMinor(r));
-    expect(r.reason).toContain('Rounding: 0.02 MXN of the decrease went to t1, t2.');
+    expect(r.reason).toContain('Rounding: $0.02 MXN of the decrease went to t1, t2.');
   });
 
   test('dark, learning and frozen entities sit out on BOTH sides; throttled and learning-limited only receive nothing', () => {

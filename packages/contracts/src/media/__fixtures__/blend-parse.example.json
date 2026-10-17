@@ -1,0 +1,161 @@
+{
+  "parser": "blend-library@1.1.0",
+  "sourceFamily": "blender",
+  "appVersion": "5.2",
+  "filename": "forge-template.blend",
+  "sizeBytes": 412345,
+  "checksum": "0f343b0931126a20f133d67c2b018a3b5d3c8f1e6b3a1d6f0e2c4b7a9d8e1f20",
+  "comps": [],
+  "ratios": [
+    {
+      "ratio": "16:9",
+      "width": 640,
+      "height": 360,
+      "comps": [
+        "Main/CamWide"
+      ]
+    },
+    {
+      "ratio": "9:16",
+      "width": 360,
+      "height": 640,
+      "comps": [
+        "Tall/CamTall"
+      ]
+    }
+  ],
+  "slots": [],
+  "fonts": [],
+  "fields": [
+    {
+      "key": "headline",
+      "name": "Title · text",
+      "kind": "text",
+      "target": {
+        "idCode": "OB",
+        "idName": "Title",
+        "path": "text.body"
+      },
+      "default": "Summer Sale",
+      "exposed": true,
+      "origin": "marked"
+    },
+    {
+      "key": "logo.image",
+      "name": "Logo · image",
+      "kind": "image",
+      "target": {
+        "idCode": "IM",
+        "idName": "Logo",
+        "path": "image.file"
+      },
+      "default": null,
+      "exposed": true,
+      "origin": "discovered"
+    },
+    {
+      "key": "brand_colour",
+      "name": "Swatch · Emission · Color",
+      "kind": "color",
+      "target": {
+        "idCode": "MA",
+        "idName": "Swatch",
+        "path": "socket",
+        "node": "Emission",
+        "socket": "Color"
+      },
+      "default": "#1A73E8",
+      "exposed": true,
+      "origin": "marked"
+    },
+    {
+      "key": "hide_badge",
+      "name": "Badge · hide in render",
+      "kind": "boolean",
+      "target": {
+        "idCode": "OB",
+        "idName": "Badge",
+        "path": "hide_render"
+      },
+      "default": false,
+      "exposed": true,
+      "origin": "marked"
+    },
+    {
+      "key": "key.energy",
+      "name": "Key · energy",
+      "kind": "number",
+      "target": {
+        "idCode": "LA",
+        "idName": "Key",
+        "path": "light.energy"
+      },
+      "default": 1000,
+      "exposed": false,
+      "origin": "discovered"
+    },
+    {
+      "key": "swatch.location",
+      "name": "Swatch · location",
+      "kind": "vector3",
+      "target": {
+        "idCode": "OB",
+        "idName": "Swatch",
+        "path": "transform.location"
+      },
+      "default": [
+        -5,
+        0,
+        -2
+      ],
+      "exposed": false,
+      "origin": "discovered"
+    },
+    {
+      "key": "camwide.ortho_scale",
+      "name": "CamWide · ortho scale",
+      "kind": "number",
+      "target": {
+        "idCode": "OB",
+        "idName": "CamWide",
+        "path": "camera.ortho_scale"
+      },
+      "default": 16,
+      "exposed": false,
+      "origin": "discovered"
+    }
+  ],
+  "outputs": [
+    {
+      "id": "Main/CamWide",
+      "label": "Main · CamWide · 640×360",
+      "scene": "Main",
+      "camera": "CamWide",
+      "width": 640,
+      "height": 360,
+      "ratio": "16:9",
+      "mediaType": "image",
+      "frameStart": 1,
+      "frameEnd": 1,
+      "fps": 24,
+      "engine": "CYCLES",
+      "samples": 16
+    },
+    {
+      "id": "Motion/CamWide",
+      "label": "Motion · CamWide · 320×180",
+      "scene": "Motion",
+      "camera": "CamWide",
+      "width": 320,
+      "height": 180,
+      "ratio": "16:9",
+      "mediaType": "video",
+      "frameStart": 1,
+      "frameEnd": 12,
+      "fps": 12,
+      "engine": "CYCLES",
+      "samples": 16
+    }
+  ],
+  "externals": []
+}

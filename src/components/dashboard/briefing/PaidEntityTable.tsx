@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type {
   PaidEntityKpi,
   PaidEntityLevel,
@@ -24,6 +25,8 @@ import {
   type PaidLeaderboardRow,
 } from '@/lib/paid-media/paid-leaderboard-rows';
 import { fetchPaidRanking } from '@/lib/paid-media/paid-ranking.client';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
+import { figureProps } from '@/components/paid-media/optimizer/format';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 import { InsightActionsDropdown, InsightContextActions } from './insightActions';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from './panelLayout';
@@ -36,7 +39,6 @@ const LEVEL_LABELS: Record<PaidEntityLevel, string> = {
   account: 'Account',
 };
 
-const RANGE = { preset: 'last_7d' } as const;
 // Fetched once, ranked server-side by ROAS; re-sorting by other KPIs happens in
 // place over this pool, so a modest set gives the selector room to work.
 const FETCH_LIMIT = 8;
@@ -51,6 +53,9 @@ type State =
 type PaidEntityTableProps = {
   brandId: string;
   adAccountId: string | null;
+  /** The account record's currency (what the Optimizer knows). The ranking payload carries
+   *  none, so this is what its money prints in; unknown prints bare, never `$`. */
+  accountCurrency?: string | null;
   scope: PaidRankingScope;
   title: string;
   emptyMessage: string;
@@ -58,9 +63,26 @@ type PaidEntityTableProps = {
 
 type PaidDisplayRow = PaidRankedEntity & { displayRank: number };
 
-function kpiCell(entity: PaidRankedEntity, kpi: PaidEntityKpi): string {
+/** One KPI as text with its provenance: money in the account currency and counts carry the
+ *  raw figure, currency and window on the node (PP-L3-dashboard-and-home-have-no-data-figure-
+ *  nodes); a percent or a multiplier prints to its decimals and is not stamped. */
+function kpiCell(
+  entity: PaidRankedEntity,
+  kpi: PaidEntityKpi,
+  scope: PaidRankingScope,
+  currency: string | null,
+): ReactNode {
   const value = metricForKpi(entity, kpi);
-  return typeof value === 'number' ? formatKpiValue(value, kpiUnit(kpi)) : '—';
+  if (typeof value !== 'number') return '—';
+  const unit = kpiUnit(kpi);
+  const text = formatKpiValue(value, unit, currency);
+  const figureUnit = unit === 'currency' ? 'currency' : unit === 'number' ? 'count' : null;
+  if (!figureUnit) return text;
+  return (
+    <span {...figureProps(`home.${scope}.${entity.id}.${kpi}`, value, currency, 'd7', figureUnit)}>
+      {text}
+    </span>
+  );
 }
 
 // One ranked paid surface (campaigns or ad sets) as a dense, sortable data
@@ -69,6 +91,7 @@ function kpiCell(entity: PaidRankedEntity, kpi: PaidEntityKpi): string {
 export function PaidEntityTable({
   brandId,
   adAccountId,
+  accountCurrency = null,
   scope,
   title,
   emptyMessage,
@@ -92,7 +115,7 @@ export function PaidEntityTable({
         kpi: 'roas',
         direction: 'top',
         limit: FETCH_LIMIT,
-        range: RANGE,
+        range: lastCompleteDays(7),
       }),
       getLatestInsights({ brandId, adAccountId, limit: 20 }).catch(
         () => [] as PersistedCampaignInsight[],
@@ -118,9 +141,10 @@ export function PaidEntityTable({
       entities: state.entities,
       insights: state.insights,
       scope,
+      currency: accountCurrency,
     });
     return new Map(built.map((row) => [row.id, row]));
-  }, [state, scope]);
+  }, [state, scope, accountCurrency]);
 
   // Re-rank the already-fetched pool by the selected KPI, in place.
   const rows = useMemo<PaidDisplayRow[]>(() => {
@@ -175,17 +199,17 @@ export function PaidEntityTable({
         align: 'right',
         sortValue: (row) => metricForKpi(row, paidKpi) ?? Number.NEGATIVE_INFINITY,
         cellClassName: 'text-foreground',
-        cell: (row) => kpiCell(row, paidKpi),
+        cell: (row) => kpiCell(row, paidKpi, scope, accountCurrency),
       },
       ...contextKpis.map<InsightColumn<PaidDisplayRow>>((kpi) => ({
         id: kpi,
         header: kpiLabel(kpi),
         align: 'right',
         sortValue: (row) => metricForKpi(row, kpi) ?? Number.NEGATIVE_INFINITY,
-        cell: (row) => kpiCell(row, kpi),
+        cell: (row) => kpiCell(row, kpi, scope, accountCurrency),
       })),
     ];
-  }, [scope, paidKpi, leaderboardById]);
+  }, [scope, paidKpi, leaderboardById, accountCurrency]);
 
   return (
     <InsightDataTable
@@ -206,10 +230,10 @@ export function PaidEntityTable({
             <p className="text-foreground">{leaderboardById.get(row.id)?.insightLine}</p>
           ) : null}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono tabular-nums text-muted-foreground sm:grid-cols-4">
-            <Stat label="Conv" value={kpiCell(row, 'conversions')} />
-            <Stat label="Conv value" value={kpiCell(row, 'conversions_value')} />
-            <Stat label="CPC" value={kpiCell(row, 'cpc')} />
-            <Stat label="CPM" value={kpiCell(row, 'cpm')} />
+            <Stat label="Conv" value={kpiCell(row, 'conversions', scope, accountCurrency)} />
+            <Stat label="Conv value" value={kpiCell(row, 'conversions_value', scope, accountCurrency)} />
+            <Stat label="CPC" value={kpiCell(row, 'cpc', scope, accountCurrency)} />
+            <Stat label="CPM" value={kpiCell(row, 'cpm', scope, accountCurrency)} />
           </dl>
         </div>
       )}
@@ -217,7 +241,7 @@ export function PaidEntityTable({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex flex-col">
       <dt className="text-2xs uppercase tracking-wide text-muted-foreground/70">{label}</dt>

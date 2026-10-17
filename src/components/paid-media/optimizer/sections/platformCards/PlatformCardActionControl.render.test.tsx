@@ -94,7 +94,7 @@ describe('a Google write on a platform card', () => {
       'Change the campaign budget of "VIVO 47-EKATAR" on Google',
     );
     expect(within(dialog).getByTestId('platform-card-action-change').textContent).toBe(
-      '1,179.00 MXN/day → 1,473.75 MXN/day',
+      '$1,179.00 MXN/day → $1,473.75 MXN/day',
     );
     const preview = await within(dialog).findByTestId('platform-card-action-preview');
     expect(preview.textContent).toContain('validate_only ok');
@@ -224,6 +224,59 @@ describe('a TikTok write', () => {
   });
 });
 
+describe('a Google write whose portfolio has writes to Google switched off', () => {
+  const switchedOff = (action: unknown) => ({ ...target(action), applyEnabled: false });
+
+  it('shows the control disabled with the reason, and sends nothing', () => {
+    render(
+      <PlatformCardBody
+        action={switchedOff(actions.RAISE_GOOGLE_BUDGET)}
+        card={fixtures.GOOGLE_BUDGET_LIMITED}
+      />,
+    );
+    const unavailable = screen.getByTestId('platform-card-action-unavailable');
+    expect(unavailable.getAttribute('data-reason')).toBe('apply_disabled');
+    const button = within(unavailable).getByRole('button') as HTMLButtonElement;
+    expect(button.textContent).toBe('Apply new budget');
+    expect(button.disabled).toBe(true);
+    expect(unavailable.textContent).toContain(
+      'Writes to Google are switched off for this portfolio.',
+    );
+    expect(screen.queryByTestId('platform-card-action')).toBeNull();
+    fireEvent.click(button);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('offers the negatives card no add and no choosing, only the disabled control', () => {
+    render(
+      <PlatformCardBody
+        action={switchedOff(actions.ADD_GOOGLE_NEGATIVES)}
+        card={fixtures.GOOGLE_NEGATIVE_TERMS}
+        onAddNegatives={() => {
+          throw new Error('a switched-off card must not hand its terms on');
+        }}
+      />,
+    );
+    expect(screen.queryByTestId('platform-card-action')).toBeNull();
+    expect(screen.queryByTestId('platform-card-add-negatives')).toBeNull();
+    expect(screen.queryByTestId('platform-card-choose-terms')).toBeNull();
+    const unavailable = screen.getByTestId('platform-card-action-unavailable');
+    expect((within(unavailable).getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+    expect(unavailable.textContent).toContain('Add 3 negatives');
+  });
+
+  it('keeps the approval flow when the switch is on', () => {
+    render(
+      <PlatformCardBody
+        action={{ ...target(actions.RAISE_GOOGLE_BUDGET), applyEnabled: true }}
+        card={fixtures.GOOGLE_BUDGET_LIMITED}
+      />,
+    );
+    expect(screen.getByTestId('platform-card-action').textContent).toBe('Apply new budget');
+    expect(screen.queryByTestId('platform-card-action-unavailable')).toBeNull();
+  });
+});
+
 describe('a read-only card', () => {
   it('has no control even when an action rides along', () => {
     for (const card of [
@@ -276,7 +329,7 @@ describe('undoing an applied Google write', () => {
       'Google checked the undo (validate_only ok). Nothing changes until you confirm.',
     );
     expect(within(undoDialog).getByTestId('platform-card-undo-restores').textContent).toBe(
-      'Back to 1,179.00 MXN',
+      'Back to $1,179.00 MXN',
     );
     expect(undoSent).toEqual([
       { portfolio_id: actions.PORTFOLIO_ID, audit_id: AUDIT_ID, dryRun: true },

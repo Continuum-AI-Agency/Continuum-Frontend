@@ -12,6 +12,8 @@ export const forgeQueryKeys = {
   templateVariants: (brandId: string) => ['forge', brandId, 'template-variants'] as const,
   revisionVariants: (brandId: string, assetId: string) =>
     ['forge', brandId, 'revision-variants', assetId] as const,
+  /** The variant each template family opens on, for the whole brand. */
+  variantDefaults: (brandId: string) => ['forge', brandId, 'variant-defaults'] as const,
   templateSources: (brandId: string) => ['forge', brandId, 'template-sources'] as const,
   templateVariables: (brandId: string, assetId: string, versionId: string) =>
     ['forge', brandId, 'template-variables', assetId, versionId] as const,
@@ -42,7 +44,6 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'render-sets', templateKey ?? 'all'] as const,
   runs: (brandId: string) => ['forge', brandId, 'runs'] as const,
   run: (brandId: string, assetId: string) => ['forge', brandId, 'runs', assetId] as const,
-  lineage: (brandId: string, assetId: string) => ['forge', brandId, 'lineage', assetId] as const,
   mappingReview: (brandId: string, assetId: string, versionId: string, state: string | null) =>
     ['forge', brandId, 'mapping-review', assetId, versionId, state] as const,
   renderJobs: (brandId: string) => ['forge', brandId, 'render-jobs'] as const,
@@ -99,6 +100,16 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'library-state', assetIds.join(',')] as const,
   mediaAsset: (brandId: string, assetId: string) =>
     ['forge', brandId, 'media-assets', assetId] as const,
+  /** A Blender template as the editor reads it: fields, outputs, the version a render pins. */
+  sceneTemplate: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'scene-template', assetId] as const,
+  /** One draft of one output with one set of values; `request` is part of the key. */
+  scenePreview: (brandId: string, assetId: string, request: unknown) =>
+    ['forge', brandId, 'scene-preview', assetId, request] as const,
+  sceneRenders: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'scene-renders', assetId] as const,
+  sceneRender: (brandId: string, assetId: string, jobId: string) =>
+    ['forge', brandId, 'scene-renders', assetId, jobId] as const,
 } as const;
 
 /** Everything this brand may render, from every binding, as one list. The Forge page reads it on

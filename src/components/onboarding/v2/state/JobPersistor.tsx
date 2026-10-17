@@ -1,5 +1,6 @@
 'use client';
 
+import { onboardingSourceResponseSchema } from '@continuum/contracts';
 import { useEffect, useReducer, useRef } from 'react';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
@@ -11,6 +12,8 @@ import { type JobKey, useBackgroundJobs } from './BackgroundJobsProvider';
 
 function parseScrape(data: unknown): ScrapeResult | null {
   if (data == null) return null;
+  const source = onboardingSourceResponseSchema.safeParse(data);
+  if (source.success) return source.data.kind === 'web' ? source.data.scrape : null;
   const parsed = scrapeSchema.safeParse(data);
   return parsed.success ? (parsed.data as ScrapeResult) : null;
 }
@@ -19,38 +22,58 @@ export function JobPersistor() {
   const { jobs } = useBackgroundJobs();
   const { brandId, state, updateState } = useOnboarding();
   const currentBrandName = state.brand.name;
-  const persisted = useRef<Set<JobKey>>(new Set());
+  const persisted = useRef<Map<JobKey, unknown>>(new Map());
   const persisting = useRef<Set<JobKey>>(new Set());
   const logoInternalized = useRef<Set<string>>(new Set());
   const logoInternalizing = useRef<Set<string>>(new Set());
+  const currentScrape = useRef(jobs.scrape);
+  currentScrape.current = jobs.scrape;
   const [retryVersion, scheduleRetry] = useReducer((version: number) => version + 1, 0);
 
   useEffect(() => {
     (Object.keys(jobs) as JobKey[]).forEach((key) => {
       if (
         jobs[key].status !== 'done' ||
-        persisted.current.has(key) ||
+        persisted.current.get(key) === jobs[key].data ||
         persisting.current.has(key)
       ) {
         return;
       }
-      const patch = patchFor(key, jobs[key].data, currentBrandName);
+      const data = jobs[key].data;
+      if (
+        key === 'agentPreview' &&
+        state.intake &&
+        (!data ||
+          typeof data !== 'object' ||
+          !('inputKey' in data) ||
+          data.inputKey !== state.previewRequest?.inputKey)
+      )
+        return;
+      const patch = patchFor(key, data, currentBrandName);
       if (!patch) return;
       persisting.current.add(key);
       void updateState(patch)
         .then(() => {
-          persisted.current.add(key);
+          persisted.current.set(key, data);
+          persisting.current.delete(key);
+          scheduleRetry();
         })
         .catch(() => {
-          window.setTimeout(scheduleRetry, 1_000);
-        })
-        .finally(() => {
           persisting.current.delete(key);
+          window.setTimeout(scheduleRetry, 1_000);
         });
 
       if (key === 'scrape') {
         const scrape = parseScrape(jobs[key].data);
-        const logoUrl = scrape?.logoUrl;
+        const source = onboardingSourceResponseSchema.safeParse(data);
+        const logoUrl =
+          scrape?.logoUrl ??
+          (source.success && source.data.kind === 'instagram'
+            ? (source.data.instagram_profile.profile_picture_url ??
+              source.data.instagram_profile.og_image)
+            : source.success && source.data.kind === 'facebook'
+              ? source.data.facebook_profile.image_url
+              : null);
         if (
           logoUrl &&
           /^https?:\/\//i.test(logoUrl) &&
@@ -60,6 +83,8 @@ export function JobPersistor() {
           logoInternalizing.current.add(logoUrl);
           void internalizeLogo(brandId, logoUrl)
             .then(async (storagePath) => {
+              if (currentScrape.current.status !== 'done' || currentScrape.current.data !== data)
+                return;
               if (storagePath) {
                 await updateState({ brand: { logoPath: storagePath } });
               }
@@ -74,7 +99,15 @@ export function JobPersistor() {
         }
       }
     });
-  }, [jobs, brandId, currentBrandName, retryVersion, updateState]);
+  }, [
+    jobs,
+    brandId,
+    currentBrandName,
+    retryVersion,
+    updateState,
+    state.intake,
+    state.previewRequest,
+  ]);
 
   return null;
 }
@@ -115,7 +148,15 @@ function patchFor(
 ): OnboardingPatch | null {
   if (key === 'scrape') {
     const scrape = parseScrape(data);
-    return scrape ? scrapeToBrandPatch(scrape, fallbackName) : null;
+    if (scrape) return scrapeToBrandPatch(scrape, fallbackName);
+    const source = onboardingSourceResponseSchema.safeParse(data);
+    if (!source.success || source.data.kind === 'web') return null;
+    const logo =
+      source.data.kind === 'instagram'
+        ? (source.data.instagram_profile.profile_picture_url ??
+          source.data.instagram_profile.og_image)
+        : source.data.facebook_profile.image_url;
+    return { brand: { ...(logo ? { logoPath: logo } : {}) } };
   }
   if (key === 'agentPreview') {
     const raw = data as AgentPreviewBuckets | { buckets: AgentPreviewBuckets } | null;

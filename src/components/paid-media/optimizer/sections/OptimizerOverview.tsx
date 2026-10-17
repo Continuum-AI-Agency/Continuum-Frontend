@@ -24,8 +24,17 @@
 // groups). Until that RPC is deployed every tab says so plainly, and "All" falls back to today's
 // Meta O1. Under its tiles "All" may show the platforms side by side (MP3), which a viewer can
 // hide; each portfolio row carries one chip per platform it holds members on.
+//
+// Google's tab then takes the Meta tab's structure under its read (G2, google-ads plan): its
+// recommendation cards with their controls, the links to Actions and Activity, and its
+// portfolio rows — the same components, fed the brand's Google portfolios and cards whichever
+// ad account the page has selected.
 
-import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import type {
+  CycleRunPacing,
+  EfficiencySeriesPoint,
+  PortfolioListItem,
+} from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
 import {
   ArrowDownIcon,
@@ -35,11 +44,12 @@ import {
   PlusIcon,
   SparklesIcon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ComponentProps, type ReactNode, useMemo, useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
+import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
 import { KpiDelta, KpiRow, KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
@@ -49,6 +59,8 @@ import {
   useAccountApprovals,
   useOptimizerAccountRead,
   useOptimizerAdAccounts,
+  useOptimizerPlatformCards,
+  useOptimizerPlatformPortfolios,
   useOptimizerPortfolioEfficiency,
   useOptimizerPortfolioPacing,
   useRequestAccountRead,
@@ -65,6 +77,7 @@ import {
   latestCycle,
   type PortfolioWindow,
   portfolioWindow,
+  portfolioWindowFromMetrics,
   type ResultKind,
   type RowSortDir,
   type RowSortKey,
@@ -79,8 +92,16 @@ import {
 } from './account/overviewModel';
 import { JainaEntryChips } from './JainaEntryChips';
 import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
+import {
+  AccountReadFreshnessSkeleton,
+  HeadlineSkeleton,
+  OverviewTilesSkeleton,
+  PlatformComparisonSkeleton,
+  RecommendationsSkeleton,
+  SublineFactsSkeleton,
+} from './OverviewSkeletons';
 import { PortfolioRowCard } from './PortfolioRowCard';
-import type { PlatformCardAction } from './platformCards/platformCardActionModel';
+import { cardActionsOf } from './platformCards/platformCardActionModel';
 import {
   AllPlatformsHeadline,
   AllPlatformsSubline,
@@ -88,6 +109,7 @@ import {
   PlatformMetricsSection,
 } from './platforms/AccountPlatformsOverview';
 import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
+import { readComparisonHidden } from './platforms/comparisonPreference';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
 import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
 import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
@@ -96,6 +118,7 @@ import {
   type AdPlatform,
   connectedPlatforms,
   OPTIMIZER_MANAGED_PLATFORM,
+  PLATFORM_NAMES,
   rendersManagedOverview,
 } from './platforms/platformTabsModel';
 import { memberPlatforms, usePortfolioMemberStates } from './platforms/portfolioPlatforms';
@@ -117,6 +140,8 @@ type OptimizerOverviewProps = {
   pendingCount: number;
   currency?: string | null;
   onOpenActions: () => void;
+  /** Opens the Activity view, where every write the optimizer made is logged. */
+  onOpenActivity: () => void;
   onSelectPortfolio: (portfolioId: string) => void;
   onCreatePortfolio: () => void;
   onPrefetchPortfolio?: (portfolioId: string) => void;
@@ -191,27 +216,21 @@ export function autopilotTileSub(summary: ReturnType<typeof autopilotSummary>): 
   return `${summary.recommending.length} recommend, do not apply`;
 }
 
-/** Candidate id → the action its platform card hands a person, exactly as the read carries it
- *  (`card_action`: the pending recommendation, its portfolio and the engine's action). A card
- *  without one shows no control of its own. */
-export function cardActionsOf(
-  candidates: readonly AccountCandidate[],
-): ReadonlyMap<string, PlatformCardAction> {
-  const actions = new Map<string, PlatformCardAction>();
-  for (const candidate of candidates) {
-    const target = candidate.card_action;
-    if (!target) continue;
-    actions.set(candidate.id, {
-      portfolioId: target.portfolio_id,
-      action: target.action,
-      recommendationId: target.recommendation_id,
-    });
-  }
-  return actions;
-}
-
 function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** Each portfolio's 7-day window from its own efficiency series, by id. */
+function portfolioWindows(
+  portfolios: readonly PortfolioListItem[],
+  series: readonly (readonly EfficiencySeriesPoint[])[],
+): Map<string, PortfolioWindow> {
+  const byId = new Map<string, PortfolioWindow>();
+  portfolios.forEach((portfolio, index) => {
+    const window = portfolioWindow(portfolio, series[index] ?? []);
+    if (window) byId.set(portfolio.id, window);
+  });
+  return byId;
 }
 
 export function OptimizerOverview({
@@ -221,13 +240,12 @@ export function OptimizerOverview({
   pendingCount,
   currency,
   onOpenActions,
+  onOpenActivity,
   onSelectPortfolio,
   onCreatePortfolio,
   onPrefetchPortfolio,
   chromeInShell = false,
 }: OptimizerOverviewProps) {
-  const [sortKey, setSortKey] = useState<RowSortKey>('distance');
-  const [sortDir, setSortDir] = useState<RowSortDir>('asc');
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
   const pacingById = useOptimizerPortfolioPacing(portfolios);
@@ -255,14 +273,10 @@ export function OptimizerOverview({
     };
   }, [adAccounts.data, adAccountId, platformMetrics]);
 
-  const windows = useMemo(() => {
-    const byId = new Map<string, PortfolioWindow>();
-    portfolios.forEach((portfolio, index) => {
-      const window = portfolioWindow(portfolio, efficiency.series[index] ?? []);
-      if (window) byId.set(portfolio.id, window);
-    });
-    return byId;
-  }, [portfolios, efficiency.series]);
+  const windows = useMemo(
+    () => portfolioWindows(portfolios, efficiency.series),
+    [portfolios, efficiency.series],
+  );
   const names = useMemo(
     () => new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name])),
     [portfolios],
@@ -280,7 +294,6 @@ export function OptimizerOverview({
     (portfolio) => pendingWorkCount(portfolio) > 0,
   ).length;
   const window = windowLabel(latestCycle(windows));
-  const sorted = sortPortfolioRows(portfolios, windows, sortKey, sortDir);
 
   const read = accountRead.data?.read ?? null;
   // The stored read is a nightly snapshot, so the state baked into it is last night's. Apply
@@ -320,7 +333,10 @@ export function OptimizerOverview({
   }, [platformTab, portfolios, windows, adAccountId]);
   // "All" spans every platform, so its questions carry none; a platform's tab carries its own.
   const jainaPlatform = platformTab === 'all' ? null : platformTab;
-  const jainaBand = (
+  // An unconnected tab is its empty state and nothing else: a question that deep-links to a
+  // TikTok Ads prompt implies ads data the account does not have.
+  const tabConnected = platformTab === 'all' || connected[platformTab];
+  const jainaBand = !tabConnected ? null : (
     <div className="rounded-lg bg-primary/5 px-3 py-2">
       <JainaEntryChips
         entries={jainaEntries}
@@ -343,12 +359,19 @@ export function OptimizerOverview({
       <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
         {tabs}
         {jainaBand}
-        <PlatformTab
-          brandId={brandId}
-          metrics={platformMetrics}
-          onCreatePortfolio={onCreatePortfolio}
-          platform={platformTab}
-        />
+        <PlatformTab brandId={brandId} metrics={platformMetrics} platform={platformTab}>
+          {platformTab === 'google_ads' && tabConnected ? (
+            <PlatformPortfolioSections
+              brandId={brandId}
+              onCreatePortfolio={onCreatePortfolio}
+              onOpenActions={onOpenActions}
+              onOpenActivity={onOpenActivity}
+              onPrefetchPortfolio={onPrefetchPortfolio}
+              onSelectPortfolio={onSelectPortfolio}
+              platform={platformTab}
+            />
+          ) : null}
+        </PlatformTab>
       </div>
     );
   }
@@ -356,6 +379,10 @@ export function OptimizerOverview({
   // "All" reads the producer; "Meta" is today's O1 whatever the producer says.
   const allFrame = platformTab === 'all' ? platformMetrics : null;
   const multiplatform = allFrame?.status === 'ready' ? allFrame.metrics : null;
+  // While the producer reads, its blocks are held open at their own size (OverviewSkeletons):
+  // inserting them when the read lands pushed the portfolio rows down the page.
+  const producerLoading = allFrame?.status === 'loading';
+  const connectedCount = Object.values(connected).filter(Boolean).length;
 
   return (
     <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
@@ -415,14 +442,11 @@ export function OptimizerOverview({
       <section className="space-y-1.5 px-1" data-testid="overview-hero">
         {multiplatform ? (
           <AllPlatformsHeadline metrics={multiplatform} pendingCount={pendingCount} />
-        ) : allFrame?.status === 'loading' ? (
-          <p
-            className={`${typeScale.headline} text-muted-foreground`}
-            data-pending="true"
-            data-testid="overview-headline"
-          >
-            Reading the account across platforms…
-          </p>
+        ) : producerLoading ? (
+          <HeadlineSkeleton
+            label="Reading the account across platforms…"
+            platforms={connectedCount}
+          />
         ) : efficiency.failed > 0 && !efficiency.pending ? (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
@@ -473,10 +497,12 @@ export function OptimizerOverview({
         >
           {multiplatform ? (
             <AllPlatformsSubline metrics={multiplatform} />
+          ) : producerLoading ? (
+            <SublineFactsSkeleton platforms={connectedCount} />
           ) : window ? (
             <span data-testid="overview-window">{window}</span>
           ) : null}
-          {multiplatform || window ? <span aria-hidden="true">·</span> : null}
+          {multiplatform || producerLoading || window ? <span aria-hidden="true">·</span> : null}
           <span data-testid="book-line">
             {portfolios.length} {portfolioNoun} · {book.managed}{' '}
             {book.managed === 1 ? 'ad set' : 'ad sets'}
@@ -494,6 +520,11 @@ export function OptimizerOverview({
                 utcDay={accountRead.data.utc_day}
               />
             </>
+          ) : accountRead.isLoading ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <AccountReadFreshnessSkeleton />
+            </>
           ) : null}
         </div>
       </section>
@@ -510,7 +541,21 @@ export function OptimizerOverview({
           onOpenActions={onOpenActions}
           pendingCount={pendingCount}
         />
-      ) : allFrame?.status === 'loading' ? null : (
+      ) : producerLoading ? (
+        <>
+          <OverviewTilesSkeleton
+            cells={5}
+            platforms={connectedCount}
+            withAction={pendingCount > 0}
+          />
+          {connectedCount >= 2 ? (
+            <PlatformComparisonSkeleton
+              hidden={readComparisonHidden()}
+              platforms={connectedCount}
+            />
+          ) : null}
+        </>
+      ) : (
         <KpiRow testId="account-tiles">
           <KpiTile
             emphasis="hero"
@@ -608,30 +653,130 @@ export function OptimizerOverview({
 
       {/* 5 — the recommendation cards, in impact order, the lead marked. */}
       {shown ? (
-        <section className="space-y-2" data-testid="overview-recommendations">
-          <h2
-            className={`${typeScale.label} flex items-center gap-1.5 px-1 font-semibold text-muted-foreground`}
-          >
-            <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
-            What Jaina recommends
-          </h2>
-          <AccountRead
-            candidates={[...shown.candidates, ...shown.guards]}
-            cardActions={cardActions}
-            currency={shown.currency ?? currency ?? null}
-            dailySpend={shown.scale_per_day ?? dailyTotal}
-            onOpenPortfolio={onSelectPortfolio}
-            platform={OPTIMIZER_MANAGED_PLATFORM}
-            portfolioNames={names}
-          />
-        </section>
+        <Recommendations
+          candidates={[...shown.candidates, ...shown.guards]}
+          cardActions={cardActions}
+          currency={shown.currency ?? currency ?? null}
+          dailySpend={shown.scale_per_day ?? dailyTotal}
+          onOpenPortfolio={onSelectPortfolio}
+          platform={OPTIMIZER_MANAGED_PLATFORM}
+          portfolioNames={names}
+        />
+      ) : accountRead.isLoading ? (
+        <RecommendationsSkeleton />
       ) : null}
 
-      {/* 6 — the portfolios, one line each, sortable by distance to target. */}
-      <section className="space-y-2" data-testid="portfolio-rows">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
-          <div className="flex items-center gap-1.5">
+      <OverviewLinks onOpenActions={onOpenActions} onOpenActivity={onOpenActivity} />
+
+      {/* 6 — the portfolios, one line each, sortable by distance to target. Held back until
+       *  the account read and the cycles have landed: the cards above open to as many as four
+       *  (no placeholder can know how many) and the cycles re-sort the rows, so rows painted
+       *  earlier were pushed and reordered on every load (768 CLS 0.065 + 2 × 0.019). Arriving
+       *  last, at the bottom, they move nothing. */}
+      {accountRead.isLoading || efficiency.pending ? null : (
+        <PortfolioRows
+          empty={<p className="text-xs text-muted-foreground">No portfolios yet.</p>}
+          onPrefetchPortfolio={onPrefetchPortfolio}
+          onSelectPortfolio={onSelectPortfolio}
+          pacingById={pacingById}
+          portfolios={portfolios}
+          rowCurrency={() => currency}
+          rowPlatforms={(portfolio) =>
+            memberPlatforms(memberStates.get(portfolio.id), OPTIMIZER_MANAGED_PLATFORM)
+          }
+          windows={windows}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The recommendation cards under their heading, as every tab with cards shows them. */
+function Recommendations(props: ComponentProps<typeof AccountRead>) {
+  return (
+    <section className="space-y-2" data-testid="overview-recommendations">
+      <h2
+        className={`${typeScale.label} flex items-center gap-1.5 px-1 font-semibold text-muted-foreground`}
+      >
+        <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
+        What Jaina recommends
+      </h2>
+      <AccountRead {...props} />
+    </section>
+  );
+}
+
+/** Where the cards' decisions go next: the Actions queue to approve them, Activity to see what
+ *  was written. */
+function OverviewLinks({
+  onOpenActions,
+  onOpenActivity,
+}: {
+  onOpenActions: () => void;
+  onOpenActivity: () => void;
+}) {
+  const link =
+    'hit-area inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline';
+  return (
+    <nav
+      aria-label="Optimizer views"
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs"
+      data-testid="overview-links"
+    >
+      <button
+        className={link}
+        data-testid="overview-link-actions"
+        onClick={onOpenActions}
+        type="button"
+      >
+        Review in Actions
+        <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+      </button>
+      <button
+        className={link}
+        data-testid="overview-link-activity"
+        onClick={onOpenActivity}
+        type="button"
+      >
+        Activity
+        <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+      </button>
+    </nav>
+  );
+}
+
+/** The portfolios, one line each, sortable by distance to target, as every tab with portfolios
+ *  lists them. */
+function PortfolioRows({
+  portfolios,
+  windows,
+  pacingById,
+  rowPlatforms,
+  rowCurrency,
+  onSelectPortfolio,
+  onPrefetchPortfolio,
+  empty,
+}: {
+  portfolios: readonly PortfolioListItem[];
+  windows: ReadonlyMap<string, PortfolioWindow>;
+  pacingById: ReadonlyMap<string, CycleRunPacing | null>;
+  rowPlatforms: (portfolio: PortfolioListItem) => AdPlatform[];
+  rowCurrency: (portfolio: PortfolioListItem) => string | null | undefined;
+  onSelectPortfolio: (portfolioId: string) => void;
+  onPrefetchPortfolio?: (portfolioId: string) => void;
+  /** What the section says when there is no portfolio to list. */
+  empty: ReactNode;
+}) {
+  const [sortKey, setSortKey] = useState<RowSortKey>('distance');
+  const [sortDir, setSortDir] = useState<RowSortDir>('asc');
+  const sorted = sortPortfolioRows(portfolios, windows, sortKey, sortDir);
+  return (
+    <section className="space-y-2" data-testid="portfolio-rows">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
+        {sorted.length === 0 ? null : (
+          // On touch the direction button's 44px hit area would reach the last sort chip.
+          <div className="flex items-center gap-1.5 pointer-coarse:gap-[12px]">
             <ToggleGroup
               aria-label="Sort portfolios by"
               className="flex-wrap"
@@ -671,30 +816,157 @@ export function OptimizerOverview({
               )}
             </Button>
           </div>
-        </div>
-        <div className="space-y-1.5">
-          {sorted.map((portfolio) => (
-            <PortfolioRowCard
-              currency={currency}
-              key={portfolio.id}
-              onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
-              onSelect={() => onSelectPortfolio(portfolio.id)}
-              platform={OPTIMIZER_MANAGED_PLATFORM}
-              platforms={memberPlatforms(
-                memberStates.get(portfolio.id),
-                OPTIMIZER_MANAGED_PLATFORM,
-              )}
-              pacing={pacingById.get(portfolio.id) ?? null}
-              portfolio={portfolio}
-              window={windows.get(portfolio.id) ?? null}
-            />
-          ))}
-          {sorted.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No portfolios yet.</p>
-          ) : null}
-        </div>
-      </section>
-    </div>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        {sorted.map((portfolio) => (
+          <PortfolioRowCard
+            currency={rowCurrency(portfolio)}
+            key={portfolio.id}
+            onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
+            onSelect={() => onSelectPortfolio(portfolio.id)}
+            pacing={pacingById.get(portfolio.id) ?? null}
+            platforms={rowPlatforms(portfolio)}
+            portfolio={portfolio}
+            window={windows.get(portfolio.id) ?? null}
+          />
+        ))}
+        {sorted.length === 0 ? empty : null}
+      </div>
+    </section>
+  );
+}
+
+/** The one currency a set of codes agrees on, or null when they carry none or several. */
+function oneCurrency(codes: readonly (string | null | undefined)[]): string | null {
+  const distinct = new Set(codes.filter(Boolean));
+  return distinct.size === 1 ? ([...distinct][0] ?? null) : null;
+}
+
+/**
+ * A platform tab's Optimizer half, under the platform's read: its pending cards with their
+ * controls (optimizer_get_platform_cards), the links to Actions and Activity, and its portfolio
+ * rows — every one of the brand's portfolios on the platform, not only those of the selected ad
+ * account. A failed card read says so; it never reads as "nothing to decide".
+ */
+function PlatformPortfolioSections({
+  brandId,
+  platform,
+  onOpenActions,
+  onOpenActivity,
+  onSelectPortfolio,
+  onCreatePortfolio,
+  onPrefetchPortfolio,
+}: {
+  brandId: string;
+  platform: Exclude<AdPlatform, 'meta'>;
+  onOpenActions: () => void;
+  onOpenActivity: () => void;
+  onSelectPortfolio: (portfolioId: string) => void;
+  onCreatePortfolio: () => void;
+  onPrefetchPortfolio?: (portfolioId: string) => void;
+}) {
+  const portfoliosQuery = useOptimizerPlatformPortfolios(brandId, platform);
+  const portfolios = portfoliosQuery.data;
+  const cards = useOptimizerPlatformCards(brandId, platform);
+  const accounts = useOptimizerAdAccounts(brandId).data;
+  const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
+  const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
+  const pacingById = useOptimizerPortfolioPacing(portfolios);
+  // A row's window and currency come from its metrics read first: the efficiency series sums
+  // Meta ad-set snapshots, which a Google portfolio never writes ("no cycle yet" beside 218
+  // leads). The series stands in while that read is missing or failed.
+  const metricsById = usePortfolioMemberStates(portfolioIds);
+  const metricsOf = (portfolio: PortfolioListItem) => {
+    const state = metricsById.get(portfolio.id);
+    return state?.status === 'ready' ? state.metrics : null;
+  };
+  const windows = portfolioWindows(portfolios, efficiency.series);
+  for (const portfolio of portfolios) {
+    const metrics = metricsOf(portfolio);
+    const window = metrics ? portfolioWindowFromMetrics(portfolio, metrics) : null;
+    if (window) windows.set(portfolio.id, window);
+  }
+  const names = useMemo(
+    () => new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name])),
+    [portfolios],
+  );
+  const cardActions = useMemo(
+    () => cardActionsOf(cards.status === 'ready' ? cards.cards : []),
+    [cards],
+  );
+  const name = PLATFORM_NAMES[platform];
+  // A row's figures are in its portfolio's currency (a Google account's asset row carries
+  // none); the cards, spread over the platform's portfolios, in theirs when they share one.
+  const rowCurrency = (portfolio: PortfolioListItem) =>
+    portfolio.currency ??
+    metricsOf(portfolio)?.currency ??
+    accounts.find(
+      (account) =>
+        portfolio.ad_account_id != null &&
+        bareAccountId(account.account_id) === bareAccountId(portfolio.ad_account_id),
+    )?.currency ??
+    null;
+  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+
+  // One paint once every read below has settled: a skeleton that collapses to nothing, or
+  // rows that land before the cards, pushed what was already on screen (CLS 0.25 at 375).
+  const metricsPending = portfolioIds.some((id) => metricsById.get(id)?.status === 'loading');
+  if (
+    cards.status === 'loading' ||
+    portfoliosQuery.isPending ||
+    efficiency.pending ||
+    metricsPending
+  )
+    return null;
+
+  return (
+    <>
+      {cards.status === 'error' ? (
+        <p
+          className="px-1 text-muted-foreground text-xs"
+          data-testid="platform-cards-error"
+          role="status"
+        >
+          {name}'s recommendations could not be read, so this page cannot say which wait for a
+          decision.
+        </p>
+      ) : cards.status === 'ready' && cards.cards.length > 0 ? (
+        <Recommendations
+          candidates={cards.cards}
+          cardActions={cardActions}
+          currency={oneCurrency(portfolios.map(rowCurrency))}
+          dailySpend={dailyTotal}
+          onOpenPortfolio={onSelectPortfolio}
+          platform={platform}
+          portfolioNames={names}
+        />
+      ) : null}
+
+      <OverviewLinks onOpenActions={onOpenActions} onOpenActivity={onOpenActivity} />
+
+      <PortfolioRows
+        empty={
+          <p className="text-xs text-muted-foreground" data-testid="platform-portfolios-empty">
+            No portfolio holds {name} campaigns yet.{' '}
+            <button
+              className="text-primary-ink hover:underline"
+              onClick={onCreatePortfolio}
+              type="button"
+            >
+              Create a portfolio
+            </button>
+          </p>
+        }
+        onPrefetchPortfolio={onPrefetchPortfolio}
+        onSelectPortfolio={onSelectPortfolio}
+        pacingById={pacingById}
+        portfolios={portfolios}
+        rowCurrency={rowCurrency}
+        rowPlatforms={(portfolio) => portfolio.platforms}
+        windows={windows}
+      />
+    </>
   );
 }
 
@@ -706,22 +978,28 @@ function PlatformTab({
   brandId,
   metrics,
   platform,
-  onCreatePortfolio,
+  children,
 }: {
   brandId: string;
   metrics: AccountPlatformMetricsState;
   platform: Exclude<AdPlatform, 'meta'>;
-  onCreatePortfolio: () => void;
+  /** The tab's Optimizer half: it paints under the read once the read has settled, so the
+   *  read landing above it never pushes it down. */
+  children?: ReactNode;
 }) {
-  // One window on the tab: the producer's when it answered, else the same 7 complete days
-  // ending yesterday the producer would read.
+  // One window on the tab: the producer's when it answered, nothing while it is answering, else
+  // the same 7 complete days ending yesterday the producer would read.
   const window =
     metrics.status === 'ready'
       ? { since: metrics.metrics.window.since, until: metrics.metrics.window.until }
-      : null;
+      : metrics.status === 'loading'
+        ? ('pending' as const)
+        : null;
   const fallback =
     platform === 'google_ads' ? (
-      <GoogleAdsTab brandId={brandId} onCreatePortfolio={onCreatePortfolio} window={window} />
+      <GoogleAdsTab brandId={brandId} window={window}>
+        {metrics.status === 'loading' ? null : children}
+      </GoogleAdsTab>
     ) : (
       <TikTokAdsTab advertiserId={null} brandId={brandId} />
     );
@@ -747,7 +1025,6 @@ function PlatformTab({
         <PlatformMetricsSection
           liveBelow={googleUnread}
           metrics={metrics.metrics}
-          onCreatePortfolio={onCreatePortfolio}
           platform={platform}
         />
         {platform === 'google_ads' ? (
@@ -756,7 +1033,9 @@ function PlatformTab({
             mode={googleUnread ? 'full' : 'breakdown'}
             readingNote={false}
             window={window}
-          />
+          >
+            {children}
+          </GoogleAdsTab>
         ) : (
           <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
         )}

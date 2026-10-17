@@ -218,6 +218,7 @@ export function CanvasComposer({
           references: [...grounded.references, ...workflowReferences],
           thinking,
           ...(grounded.grounding ? { grounding: grounded.grounding } : {}),
+          ...(grounded.styleSlugs.length ? { styleSlugs: grounded.styleSlugs } : {}),
           pastedText: buildInlineTextContextBlock(attachmentContext.inlineTexts),
         });
       }}

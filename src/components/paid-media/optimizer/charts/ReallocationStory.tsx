@@ -219,6 +219,11 @@ type ReallocationStoryProps = {
   /** Rows shown before "show all"; held rows always count last. */
   collapsedRows?: number;
   className?: string;
+  /** "Last proposal, Oct 12 — withdrawn: …" once the cycle no longer stands: the moves are
+   *  then history, said above them. */
+  withdrawn?: string | null;
+  /** adset_id → why that one move is withdrawn ("now in …"). */
+  withdrawnNotes?: ReadonlyMap<string, string> | null;
 };
 
 export function ReallocationStory({
@@ -231,6 +236,8 @@ export function ReallocationStory({
   defaultLookback = 7,
   collapsedRows = 8,
   className,
+  withdrawn = null,
+  withdrawnNotes = null,
 }: ReallocationStoryProps) {
   const [lookback, setLookback] = useState<StoryLookback>(defaultLookback);
   const [showAll, setShowAll] = useState(false);
@@ -248,6 +255,14 @@ export function ReallocationStory({
 
   return (
     <div className={cn('space-y-3', className)}>
+      {withdrawn ? (
+        <p
+          className="rounded-lg bg-muted/40 px-3 py-2 font-medium text-muted-foreground text-xs"
+          data-testid="reallocation-withdrawn"
+        >
+          {withdrawn}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="min-w-0 flex-1 text-sm text-foreground leading-relaxed">
           <SummaryWithFigures text={story.summary} />
@@ -266,40 +281,58 @@ export function ReallocationStory({
         <span>Daily budget · now → proposed</span>
       </div>
 
-      <ul className="divide-y divide-border/60 border-border/60 border-y">
-        {rows.map((row) => (
-          <li
-            className="grid grid-cols-1 gap-x-4 gap-y-2 px-1 py-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] sm:items-center"
-            key={row.adsetId}
-          >
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate font-semibold text-sm" title={row.name}>
-                  {row.name}
-                </span>
-                {row.standing !== 'unknown' && !row.held ? (
-                  <span className={cn('shrink-0 text-xs', STANDING_TEXT[row.standing])}>
-                    {row.standing === 'below' ? 'Below target' : 'Above target'}
+      <ul
+        className={cn(
+          'divide-y divide-border/60 border-border/60 border-y',
+          withdrawn && 'opacity-60',
+        )}
+      >
+        {rows.map((row) => {
+          const withdrawnNote = withdrawnNotes?.get(row.adsetId) ?? null;
+          return (
+            <li
+              className={cn(
+                'grid grid-cols-1 gap-x-4 gap-y-2 px-1 py-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] sm:items-center',
+                withdrawnNote && 'opacity-60',
+              )}
+              key={row.adsetId}
+            >
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate font-semibold text-sm" title={row.name}>
+                    {row.name}
                   </span>
+                  {withdrawnNote ? (
+                    <span
+                      className="shrink-0 text-muted-foreground text-xs"
+                      data-testid="reallocation-row-withdrawn"
+                    >
+                      Withdrawn — {withdrawnNote}
+                    </span>
+                  ) : row.standing !== 'unknown' && !row.held ? (
+                    <span className={cn('shrink-0 text-xs', STANDING_TEXT[row.standing])}>
+                      {row.standing === 'below' ? 'Below target' : 'Above target'}
+                    </span>
+                  ) : null}
+                  <DeliveryPill state={row.deliveryState} />
+                </div>
+                {row.reason ? (
+                  <p className="mt-1 line-clamp-2 text-muted-foreground text-xs" title={row.reason}>
+                    {row.reason}
+                  </p>
                 ) : null}
-                <DeliveryPill state={row.deliveryState} />
               </div>
-              {row.reason ? (
-                <p className="mt-1 line-clamp-2 text-muted-foreground text-xs" title={row.reason}>
-                  {row.reason}
-                </p>
-              ) : null}
-            </div>
-            <CostCell
-              costMax={story.costMax}
-              currency={currency}
-              metric={metric}
-              row={row}
-              target={story.target}
-            />
-            <BudgetCell budgetMax={story.budgetMax} currency={currency} row={row} />
-          </li>
-        ))}
+              <CostCell
+                costMax={story.costMax}
+                currency={currency}
+                metric={metric}
+                row={row}
+                target={story.target}
+              />
+              <BudgetCell budgetMax={story.budgetMax} currency={currency} row={row} />
+            </li>
+          );
+        })}
       </ul>
 
       {hidden > 0 || showAll ? (

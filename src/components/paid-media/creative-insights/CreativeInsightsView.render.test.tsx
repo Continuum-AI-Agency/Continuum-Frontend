@@ -275,9 +275,9 @@ describe('CreativeInsightsView', () => {
     const scale = within(ads).getByTestId('verdict-column-scale');
     expect(scale.textContent).toContain('Testimonial Ana');
     expect(scale.textContent).toContain('Proof by someone like you');
-    expect(scale.textContent).toContain('58.20 MXN');
-    expect(scale.textContent).not.toContain('$');
-    expect(within(ads).getByTestId('verdict-column-kill').textContent).toContain('142 MXN');
+    expect(scale.textContent).toContain('$58.20 MXN');
+    expect(scale.textContent).not.toContain('USD');
+    expect(within(ads).getByTestId('verdict-column-kill').textContent).toContain('$142 MXN');
     expect(within(ads).getByTestId('verdict-column-iterate').textContent).toContain(
       'None right now.',
     );

@@ -58,9 +58,9 @@ export function useDraftFieldPersistence() {
       target: PersistTarget,
       patch: PlannerDraftFieldPatch,
     ): Promise<DraftFieldPersistResult> => {
-      // A draft with no server row yet is inserted by the autosave, which carries the
-      // local snapshot with it — there is nothing to PATCH, and reporting a failure
-      // here would be a lie.
+      // A draft with no server row yet is inserted by the autosave, which replays its
+      // copy through this route once the row exists (`newRowCopyPatch`) — there is
+      // nothing to PATCH yet, and reporting a failure here would be a lie.
       if (!target.backendDraftId) return { ok: true, updatedAt: null };
 
       const parsed = plannerDraftFieldPatchSchema.safeParse({

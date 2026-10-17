@@ -415,6 +415,21 @@ export const organicStoryboardPreviewSchema = z
   })
   .strict();
 
+/**
+ * The Forge template a draft's media was painted from. Written by the organic template render
+ * beside the attached assets, so the card can say "Rendered with Speaker card" and a re-render
+ * knows which template to repaint. Absent on generated and user-supplied media.
+ */
+export const organicRenderedWithSchema = z
+  .object({
+    templateKey: z.string().min(1),
+    templateName: z.string().min(1),
+    renderJobId: z.string().uuid(),
+    bindingId: z.string().uuid(),
+  })
+  .strict();
+export type OrganicRenderedWith = z.infer<typeof organicRenderedWithSchema>;
+
 export const organicMediaSuggestionSchema = z
   .object({
     provider: z.string().optional(),
@@ -487,6 +502,7 @@ export const organicMediaSuggestionSchema = z
     // durable bucket+storagePath references so the no-media draft re-displays them
     // (re-signed) after a reload. Review-only; NOT the final publishingAssets.
     storyboard: z.array(organicStoryboardPreviewSchema).optional(),
+    renderedWith: organicRenderedWithSchema.optional(),
   })
   .strict();
 

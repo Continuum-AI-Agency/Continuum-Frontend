@@ -136,7 +136,7 @@ export function AdsetAngleStanding({ rows, currency, emptyMessage }: AdsetAngleS
       ) : null}
       {thin.length > 0 ? (
         <details className="group text-xs" data-testid="angle-standing-thin">
-          <summary className="cursor-pointer list-none text-muted-foreground hover:text-foreground">
+          <summary className="hit-area cursor-pointer list-none text-muted-foreground hover:text-foreground">
             {thin.length} ad {thin.length === 1 ? 'set needs' : 'sets need'} a second variant before
             an angle can be called
             <span className="group-open:hidden"> · show</span>

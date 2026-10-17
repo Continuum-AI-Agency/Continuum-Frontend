@@ -44,6 +44,25 @@ describe('buildPlatformComparison', () => {
     expect(google?.shareOfResults).toBeCloseTo(118 / 214, 6);
   });
 
+  // PP-L3-overview-meta-share-100-where-results-say-89: the share column is a share of ONE
+  // result kind, and its denominator is the payload's own total for that kind — never a sum the
+  // screen recomputes over the columns it happens to show.
+  it('takes the share denominator from the payload’s results_by_kind total for the compared kind', () => {
+    const frame = buildMetrics([META_TOTALS, GOOGLE_TOTALS, TIKTOK_TOTALS]);
+    const leads = frame.results_by_kind.find((kind) => kind.kind === 'leads');
+    if (!leads) throw new Error('fixture has no leads row');
+    const widened = {
+      ...frame,
+      results_by_kind: frame.results_by_kind.map((kind) =>
+        kind.kind === 'leads' ? { ...kind, results: 250 } : kind,
+      ),
+    };
+    const row = buildPlatformComparison(widened);
+    expect(row?.shareOf).toBe('leads');
+    expect(row?.columns[0]?.shareOfResults).toBeCloseTo(78 / 250, 6);
+    expect(row?.columns[1]?.shareOfResults).toBeCloseTo(118 / 250, 6);
+  });
+
   it('names the cheapest platform, and marks only its column', () => {
     const row = comparison();
     expect(row.cheapest?.platform).toBe('google_ads');
@@ -51,7 +70,7 @@ describe('buildPlatformComparison', () => {
       'google_ads',
     ]);
     expect(cheapestSentence(row)).toBe(
-      'Google buys leads cheapest: 31.40 MXN per lead, against 41.30 MXN on Meta and 53.00 MXN on TikTok.',
+      'Google buys leads cheapest: $31.40 MXN per lead, against $41.30 MXN on Meta and $53.00 MXN on TikTok.',
     );
   });
 

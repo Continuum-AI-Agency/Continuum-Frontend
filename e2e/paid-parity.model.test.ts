@@ -29,6 +29,7 @@ const node = (overrides: Partial<FigureNode>): FigureNode => ({
   currency: 'none',
   window: 'none',
   unit: 'currency',
+  codeIn: 'text',
   text: '2,000',
   ...overrides,
 });
@@ -51,12 +52,17 @@ describe('formatMoney — the symbol and digit rules, restated', () => {
     expect(formatMoney(324, 'none')).toBe('324');
     expect(formatMoney(25.54, 'none')).toBe('25.54');
   });
-  it('prints $ for USD and the code after the figure otherwise', () => {
-    expect(formatMoney(25.54, 'USD')).toBe('$25.54');
-    expect(formatMoney(2000, 'MXN')).toBe('2,000 MXN');
+  it('prints the symbol before and the code after for every known currency (M1)', () => {
+    expect(formatMoney(25.54, 'USD')).toBe('$25.54 USD');
+    expect(formatMoney(2000, 'MXN')).toBe('$2,000 MXN');
+    expect(formatMoney(85.47, 'EUR')).toBe('€85.47 EUR');
+    expect(formatMoney(85.47, 'CHF')).toBe('85.47 CHF');
+  });
+  it('drops the code for a cell whose column header names it', () => {
+    expect(formatMoney(99.57, 'MXN', 'header')).toBe('$99.57');
   });
   it('keeps the sign outside the unit', () => {
-    expect(formatMoney(-25.54, 'USD')).toBe('-$25.54');
+    expect(formatMoney(-25.54, 'USD')).toBe('-$25.54 USD');
   });
 });
 
@@ -75,6 +81,20 @@ describe('rule 1 — format', () => {
     expect(expectedText(node({ unit: 'percent-signed', raw: -8 }))).toBe('-8%');
     expect(expectedText(node({ unit: 'count', raw: 1234 }))).toBe('1,234');
   });
+  it('grades the figure and lets the design label it ("779 conversations", "2 of 7", "4.20 MXN/day")', () => {
+    expect(checkFormat(node({ unit: 'count', raw: 779, text: '779 conversations' })).grade).toBe(
+      'PASS',
+    );
+    expect(checkFormat(node({ unit: 'count', raw: 2, text: '2 of 7' })).grade).toBe('PASS');
+    expect(checkFormat(node({ raw: 4.197, currency: 'MXN', text: '$4.20 MXN/day' })).grade).toBe(
+      'PASS',
+    );
+    expect(checkFormat(node({ unit: 'count', raw: 2, text: '27 of 70' })).grade).toBe('FAIL');
+  });
+  it('passes a bare money figure whose node declares the currency, and never a wrong one', () => {
+    expect(checkFormat(node({ raw: 48.83, currency: 'MXN', text: '48.83' })).grade).toBe('PASS');
+    expect(checkFormat(node({ raw: 48.83, currency: 'MXN', text: '48.80' })).grade).toBe('FAIL');
+  });
   it('accepts the placeholder only when no figure was declared', () => {
     expect(checkFormat(node({ raw: null, text: '—' })).grade).toBe('PASS');
     expect(checkFormat(node({ raw: null, text: '$0' })).grade).toBe('FAIL');
@@ -87,11 +107,31 @@ describe('rule 2 — symbol', () => {
     expect(result.grade).toBe('FAIL');
     expect(result.detail).toContain('bare figure');
   });
-  it('requires $ on USD and the code on anything else', () => {
-    expect(checkSymbol(node({ currency: 'USD', text: '$2,000' })).grade).toBe('PASS');
-    expect(checkSymbol(node({ currency: 'USD', text: '2,000' })).grade).toBe('FAIL');
-    expect(checkSymbol(node({ currency: 'MXN', text: '2,000 MXN' })).grade).toBe('PASS');
+  it('requires the symbol and the code on every known currency', () => {
+    expect(checkSymbol(node({ currency: 'USD', text: '$2,000 USD' })).grade).toBe('PASS');
+    expect(checkSymbol(node({ currency: 'MXN', text: '$2,000 MXN' })).grade).toBe('PASS');
+    expect(checkSymbol(node({ currency: 'EUR', text: '€2,000 EUR' })).grade).toBe('PASS');
+    expect(checkSymbol(node({ currency: 'USD', text: '$2,000' })).grade).toBe('FAIL');
     expect(checkSymbol(node({ currency: 'MXN', text: '$2,000' })).grade).toBe('FAIL');
+    expect(checkSymbol(node({ currency: 'MXN', text: '2,000 MXN' })).grade).toBe('FAIL');
+    expect(checkSymbol(node({ currency: 'EUR', text: '$2,000 EUR' })).grade).toBe('FAIL');
+  });
+  it('takes the code from the column header for a cell that declares it', () => {
+    expect(checkSymbol(node({ currency: 'MXN', codeIn: 'header', text: '$99.57' })).grade).toBe(
+      'PASS',
+    );
+    expect(checkSymbol(node({ currency: 'MXN', codeIn: 'header', text: '$99.57 MXN' })).grade).toBe(
+      'FAIL',
+    );
+    expect(
+      checkFormat(node({ raw: 99.57, currency: 'MXN', codeIn: 'header', text: '$99.57' })).grade,
+    ).toBe('PASS');
+  });
+  it('warns, not fails, when the code rides on the node and not in the text', () => {
+    const result = checkSymbol(node({ currency: 'MXN', raw: 48.83, text: '48.83' }));
+    expect(result.grade).toBe('WARN');
+    expect(result.detail).toContain('MXN is on the node');
+    expect(checkSymbol(node({ currency: 'MXN', text: '$2,000 USD' })).grade).toBe('FAIL');
   });
   it('skips figures that are not money', () => {
     expect(checkSymbol(node({ unit: 'percent', raw: 33, text: '33%' })).grade).toBe('SKIP');
@@ -101,16 +141,26 @@ describe('rule 2 — symbol', () => {
 describe('rule 3 — day · month agree', () => {
   it('passes the pair the compiled card renders', () => {
     const result = checkDayMonth(
-      node({ unit: 'per-period', raw: 25.54, currency: 'USD', text: '$25.54/day · $766/mo' }),
+      node({
+        unit: 'per-period',
+        raw: 25.54,
+        currency: 'USD',
+        text: '$25.54 USD/day · $766 USD/mo',
+      }),
     );
     expect(result.grade).toBe('PASS');
   });
   it('fails the "$26/day · $766/mo" pair a reader multiplies to 780', () => {
     const result = checkDayMonth(
-      node({ unit: 'per-period', raw: 25.54, currency: 'USD', text: '$26/day · $766/mo' }),
+      node({
+        unit: 'per-period',
+        raw: 25.54,
+        currency: 'USD',
+        text: '$26 USD/day · $766 USD/mo',
+      }),
     );
     expect(result.grade).toBe('FAIL');
-    expect(result.detail).toContain('expected "$25.54"');
+    expect(result.detail).toContain('expected "$25.54 USD"');
   });
   it('rounds the month to cents before formatting, like perPeriod', () => {
     const result = checkDayMonth(
@@ -218,10 +268,16 @@ describe('the recap sentence — prose that quotes figures', () => {
     expect(result.detail).toContain('no daily series');
   });
   it('extracts money tokens with their symbols', () => {
-    expect(moneyTokens('$1,430 and 28.60 MXN')).toEqual([
-      { token: '$1,430', value: 1430, symbol: '$' },
-      { token: '28.60 MXN', value: 28.6, symbol: 'MXN' },
+    expect(moneyTokens('$1,430 MXN and 28.60')).toEqual([
+      { token: '$1,430 MXN', value: 1430, symbol: '$', code: 'MXN' },
+      { token: '28.60', value: 28.6, symbol: '', code: '' },
     ]);
+  });
+  it('passes "$… MXN" in prose about a peso account and fails a foreign symbol', () => {
+    const peso = { ...sentence, currency: 'MXN', text: 'Spent $1,430 MXN on 50 leads.' };
+    expect(checkSentence(peso, { kind: 'sentence', path: 'growth', figures }).grade).toBe('PASS');
+    const euro = { ...sentence, currency: 'MXN', text: 'Spent €1,430 on 50 leads.' };
+    expect(checkSentence(euro, { kind: 'sentence', path: 'growth', figures }).grade).toBe('FAIL');
   });
   it('passes when every figure quoted is one of the growth figures', () => {
     expect(checkSentence(sentence, { kind: 'sentence', path: 'growth', figures }).grade).toBe(
@@ -252,7 +308,7 @@ describe('gradeNodes and readFigureNode', () => {
         'data-figure-window': 'none',
         'data-figure-unit': 'per-period',
       },
-      '$25.54/day · $766/mo',
+      '$25.54 USD/day · $766 USD/mo',
     );
     expect(read).not.toBeNull();
     const results = gradeNodes([read as FigureNode], () => ({

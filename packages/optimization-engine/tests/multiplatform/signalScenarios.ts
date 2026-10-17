@@ -25,6 +25,9 @@ import {
   vivo47Snapshots,
 } from './signalFixtures';
 
+/** M1: a "$" is only ever the symbol before a figure whose ISO code follows it. */
+const DOLLAR_WITHOUT_CODE = /\$\d[\d,]*(?:\.\d+)?(?![\d.,]| [A-Z]{3}\b)/;
+
 const MXN = (amount: number) => ({ amount, currency: 'MXN' });
 const EKATAR = '20775796216';
 
@@ -32,7 +35,7 @@ type Google = NonNullable<PlatformSignals['google']>;
 type TikTok = NonNullable<PlatformSignals['tiktok']>;
 
 /** Every evaluation, whatever it found: cards and actions pass their contracts, every
- *  finding waits for a person, no reason prints "$", and (rule, entity, subject) is unique. */
+ *  finding waits for a person, no reason prints a "$" without its ISO code, and (rule, entity, subject) is unique. */
 function wellFormed(r: PlatformSignalsEvaluation): string[] {
   const problems: string[] = [];
   const keys = new Set<string>();
@@ -41,7 +44,7 @@ function wellFormed(r: PlatformSignalsEvaluation): string[] {
     if (x.action && !OptimizerActionSchema.safeParse(x.action).success)
       problems.push(`${x.rule} action`);
     if (x.needsApproval !== true) problems.push(`${x.rule} auto`);
-    if (x.reason.includes('$')) problems.push(`${x.rule} prints $`);
+    if (DOLLAR_WITHOUT_CODE.test(x.reason)) problems.push(`${x.rule} prints $ without its code`);
     const key = `${x.rule}|${x.entity.id}|${x.subject_key}`;
     if (keys.has(key)) problems.push(`duplicate ${key}`);
     keys.add(key);
@@ -553,7 +556,7 @@ export function runSignalScenarios(rec: Recorder): void {
 
   const problems = all.flatMap(wellFormed);
   rec.check(
-    `e31–e40: ${all.length} evaluations — every card passes PlatformCardSchema, every action OptimizerActionSchema, all wait for a person, no "$", (rule, entity, subject) unique`,
+    `e31–e40: ${all.length} evaluations — every card passes PlatformCardSchema, every action OptimizerActionSchema, all wait for a person, no "$" without its ISO code (M1), (rule, entity, subject) unique`,
     problems.length === 0,
     problems.join('; ') ||
       `${all.reduce((n, r) => n + r.recommendations.length, 0)} findings checked`,

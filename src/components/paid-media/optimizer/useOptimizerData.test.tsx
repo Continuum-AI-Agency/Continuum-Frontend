@@ -15,6 +15,7 @@ mock.module('@/lib/supabase/client', () => ({
 
 const {
   optimizerQueryKeys,
+  useCurrentMoves,
   useOptimizerMutations,
   useOptimizerPortfolios,
   useRevertOptimizerAction,
@@ -490,5 +491,51 @@ describe('useRevertOptimizerAction', () => {
         result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT }),
       ).rejects.toThrow('optimizer-apply-action-revert unreachable');
     });
+  });
+});
+
+describe('useCurrentMoves fails closed on the roster read', () => {
+  const PORTFOLIO = { id: '44444444-4444-4444-8444-444444444444', last_cycle_current: true };
+  const move = (adset_id: string) => ({
+    adset_id,
+    current_budget: 100,
+    final_budget: 120,
+    change_abs: 20,
+  });
+  const items = [move('a'), move('b')];
+  const rosterRead = (roster: unknown[]) =>
+    rpc.mockImplementation((async (fn: string) =>
+      fn === 'optimizer_list_portfolio_adsets'
+        ? { data: roster, error: null }
+        : { data: [], error: null }) as never);
+
+  it('withdraws nothing when one roster row is unreadable — an error, never a shorter roster', async () => {
+    rosterRead([{ adset_id: 'a', adset_name: 'A', active: true }, { adset_id: 42 }]);
+    const { result } = renderHook(
+      () => useCurrentMoves(PORTFOLIO as never, BRAND, 'act_1', items as never),
+      { wrapper: createWrapper() },
+    );
+    // The read retries once with a ~1s backoff before it settles as an error.
+    await waitFor(
+      () =>
+        expect(
+          rpc.mock.calls.filter((call) => (call as unknown[])[0] === 'optimizer_list_portfolio_adsets')
+            .length,
+        ).toBe(2),
+      { timeout: 5_000 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current.notes.size).toBe(0);
+    expect(result.current.current).toBe(items as never);
+  });
+
+  it('still withdraws the move of an ad set that left a readable roster', async () => {
+    rosterRead([{ adset_id: 'a', adset_name: 'A', active: true }]);
+    const { result } = renderHook(
+      () => useCurrentMoves(PORTFOLIO as never, BRAND, 'act_1', items as never),
+      { wrapper: createWrapper() },
+    );
+    await waitFor(() => expect(result.current.notes.get('b')).toBe('no longer in this portfolio'));
+    expect(result.current.current.map((item) => item.adset_id)).toEqual(['a']);
   });
 });

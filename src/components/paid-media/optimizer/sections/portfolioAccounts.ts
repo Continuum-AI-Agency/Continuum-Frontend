@@ -25,13 +25,18 @@ export type HiddenPortfolioAccount = {
 };
 
 /** Which empty state the optimizer should render. `other-account` is the case the notice
- *  exists for; `onboarding` means the brand genuinely has no portfolios. */
-export type EmptyPortfolioState = 'onboarding' | 'other-account';
+ *  exists for; `onboarding` means the brand genuinely has no portfolios. `other-platform` is
+ *  no empty state at all: the brand's portfolios are on Google or TikTok, which no Meta account
+ *  view holds, so the surface opens on that platform's tab instead of hiding them. */
+export type EmptyPortfolioState = 'onboarding' | 'other-account' | 'other-platform';
 
 export function resolveEmptyPortfolioState(scope: {
   brandPortfolioCount: number;
   otherAccountIds: string[];
+  /** The brand's portfolios on a platform other than Meta (Google, TikTok). */
+  otherPlatformCount: number;
 }): EmptyPortfolioState {
+  if (scope.otherPlatformCount > 0) return 'other-platform';
   return scope.brandPortfolioCount > 0 && scope.otherAccountIds.length > 0
     ? 'other-account'
     : 'onboarding';

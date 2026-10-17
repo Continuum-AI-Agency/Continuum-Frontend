@@ -99,7 +99,7 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     const { container } = render(<PortfolioRowCard currency="USD" portfolio={portfolio()} />);
     expect(container.textContent).toContain('Lead');
     expect(container.textContent).toContain('2 ad sets');
-    expect(container.textContent).toContain('$500/day');
+    expect(container.textContent).toContain('$500 USD/day');
   });
 
   it('counts a single ad set in the singular', () => {
@@ -115,14 +115,44 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     const { container, getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
-    expect(figure(container, 'cost').textContent).toBe('$40.00');
-    expect(figure(container, 'target').textContent).toBe('$30.00');
+    expect(figure(container, 'cost').textContent).toBe('$40.00 USD');
+    expect(figure(container, 'target').textContent).toBe('$30.00 USD');
     expect(figure(container, 'target').getAttribute('data-figure-raw')).toBe('30');
     expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead');
     expect(figure(container, 'results').textContent).toBe('50');
     expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
-    expect(figure(container, 'spend').textContent).toBe('$2,000');
-    expect(getByTestId('portfolio-row-spend').textContent).toContain('USD 7d');
+    expect(figure(container, 'spend').textContent).toBe('$2,000 USD');
+    expect(getByTestId('portfolio-row-spend').textContent).toContain('$2,000 USDspend 7d');
+  });
+
+  // Google attributes fractional conversions (217.970058 leads); the node declares a count.
+  it('counts results whole, with the raw figure on the node', () => {
+    const pf = portfolio({ cpa_target: 30 });
+    const { container } = render(
+      <PortfolioRowCard
+        currency="MXN"
+        portfolio={pf}
+        window={{ ...windowFor(pf), results: 217.970058 }}
+      />,
+    );
+    expect(figure(container, 'results').textContent).toBe('218');
+    expect(figure(container, 'results').getAttribute('data-figure-raw')).toBe('217.970058');
+  });
+
+  // PP-L3-pacing-noun-from-window-kind: a lead portfolio never captions itself in purchases,
+  // whatever kind the window it was handed claims to be.
+  it('names the result from the portfolio’s own metric, not from the window’s kind', () => {
+    const pf = portfolio({ cpa_target: 30 });
+    const { getByTestId } = render(
+      <PortfolioRowCard
+        currency="USD"
+        portfolio={pf}
+        window={{ ...windowFor(pf), kind: 'purchases' }}
+      />,
+    );
+    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead');
+    expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
+    expect(getByTestId('portfolio-row').textContent).not.toContain('purchase');
   });
 
   it('carries provenance on every figure so the parity bench can grade it', () => {
@@ -179,11 +209,11 @@ describe('PortfolioRowCard — one line per portfolio', () => {
   it('spells the window in the account currency, or leaves it bare without one', () => {
     const pf = portfolio({ cpa_target: 30 });
     const mxn = render(<PortfolioRowCard currency="MXN" portfolio={pf} window={windowFor(pf)} />);
-    expect(mxn.getByTestId('portfolio-row-spend').textContent).toContain('MXN 7d');
-    expect(figure(mxn.container, 'cost').textContent).toBe('40.00 MXN');
+    expect(mxn.getByTestId('portfolio-row-spend').textContent).toContain('$2,000 MXNspend 7d');
+    expect(figure(mxn.container, 'cost').textContent).toBe('$40.00 MXN');
     cleanup();
     const bare = render(<PortfolioRowCard portfolio={pf} window={windowFor(pf)} />);
-    expect(bare.getByTestId('portfolio-row-spend').textContent).toBe('2,0007d');
+    expect(bare.getByTestId('portfolio-row-spend').textContent).toBe('2,000spend 7d');
     expect(figure(bare.container, 'spend').getAttribute('data-figure-currency')).toBe('none');
   });
 

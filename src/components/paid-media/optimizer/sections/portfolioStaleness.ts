@@ -9,8 +9,15 @@
 // RPC before the migration renders exactly as it did — and never invents a figure it was
 // not handed.
 
-import type { PacingStamp, PortfolioListItem } from '@continuum/contracts';
+import type {
+  AccountEnrollment,
+  CycleItemRow,
+  PacingStamp,
+  PortfolioListItem,
+  PortfolioWithdrawnReason,
+} from '@continuum/contracts';
 import { pacingPlanFreshness } from '@continuum/contracts';
+import { entityOf, isMetaEntity } from '../entityNoun';
 
 export type StalenessRead = Pick<
   PortfolioListItem,
@@ -136,6 +143,95 @@ export function pacingStaleLine(
     title: `The last cycle paced the ${describePlan(reading.runPlan)} plan; the flight is now ${flight}. The verdict is about a plan this portfolio no longer has.`,
   };
 }
+
+const WITHDRAWN_WORDS: Record<PortfolioWithdrawnReason, string> = {
+  no_members: 'nothing is enrolled any more',
+  roster_absent: 'its whole roster has left the ad account',
+  missed_cycles: 'no cycle has run since',
+};
+
+/** The list read's verdict on the latest cycle. Optional: a row from the RPC before
+ *  migration 20261014220200 does not carry it, and then nothing is withdrawn. */
+export type CycleCurrency = {
+  last_cycle_current?: boolean | null;
+  withdrawn_reason?: PortfolioWithdrawnReason | null;
+  last_actual_cycle_at?: string | null;
+};
+
+/**
+ * "Last proposal, Oct 12 — withdrawn: no cycle has run since". Once the list read says the
+ * latest cycle no longer stands (an empty or vanished roster, a missed cycle), its moves are
+ * history: shown, never offered. Null while current, before any cycle, and when the read does
+ * not say — an unknown must never withdraw a move.
+ */
+export function withdrawnLine(portfolio: CycleCurrency): string | null {
+  if (portfolio.last_cycle_current !== false) return null;
+  const at = parseIso(portfolio.last_actual_cycle_at);
+  if (at === null) return null;
+  const why = portfolio.withdrawn_reason
+    ? WITHDRAWN_WORDS[portfolio.withdrawn_reason]
+    : 'it no longer stands';
+  return `Last proposal, ${SINCE_FMT.format(new Date(at))} — withdrawn: ${why}`;
+}
+
+export type CurrentMoves = {
+  /** The whole proposal's withdrawal, or null while it stands. */
+  line: string | null;
+  /** adset_id → why that one move is withdrawn ("now in Conversaciones Whatsapp"). */
+  notes: ReadonlyMap<string, string>;
+  /** The items a person may still approve: none once the proposal is withdrawn. */
+  current: CycleItemRow[];
+};
+
+/**
+ * Split the latest cycle's items into the moves that can still happen and the withdrawn
+ * rest. A Meta item whose ad set is no longer on this portfolio's roster is withdrawn, named
+ * by its new holder when the account's membership map can say it. Non-Meta items are left
+ * alone (the roster read lists Meta ad sets only), and so is everything while the roster has
+ * not loaded (`rosterIds` null). `current` is `items` itself when nothing is withdrawn.
+ */
+export function currentMoves(
+  items: CycleItemRow[],
+  portfolio: CycleCurrency & { id: string },
+  rosterIds: ReadonlySet<string> | null,
+  enrollments: readonly AccountEnrollment[] = [],
+): CurrentMoves {
+  const line = withdrawnLine(portfolio);
+  if (line) return { line, notes: new Map(), current: [] };
+  const notes = new Map<string, string>();
+  if (rosterIds) {
+    const holderById = new Map(
+      enrollments
+        .filter((row) => row.portfolio_id !== portfolio.id && row.portfolio_name)
+        .map((row) => [row.adset_id, row.portfolio_name as string]),
+    );
+    for (const item of items) {
+      if (!isMetaEntity(entityOf(item)) || rosterIds.has(item.adset_id)) continue;
+      const holder = holderById.get(item.adset_id);
+      notes.set(item.adset_id, holder ? `now in ${holder}` : 'no longer in this portfolio');
+    }
+  }
+  // A move the database already withdrew ('skipped', 'voided: <why>') is history, not an offer:
+  // a moved ad set voids its whole run, so its run-mates' raises go too (no raise without its cut).
+  // Any other skip ("already at target" during an apply) is the apply's own record, not a withdrawal.
+  for (const item of items) {
+    const voided = item.apply_status === 'skipped' && item.apply_error?.startsWith('voided:');
+    if (!voided || notes.has(item.adset_id)) continue;
+    notes.set(item.adset_id, VOIDED_WORDS[item.apply_error ?? ''] ?? 'withdrawn by a roster change');
+  }
+  return {
+    line,
+    notes,
+    current: notes.size > 0 ? items.filter((item) => !notes.has(item.adset_id)) : items,
+  };
+}
+
+const VOIDED_WORDS: Readonly<Record<string, string>> = {
+  'voided: adset_moved': 'its ad set moved to another portfolio',
+  'voided: adset_not_enrolled': 'its ad set left this portfolio',
+  'voided: roster_changed': "this portfolio's ad sets changed since it was proposed",
+  'voided: portfolio_archived': 'the portfolio was archived',
+};
 
 /** How many of the given portfolios have missed a cycle. */
 export function staleCount(portfolios: readonly Pick<StalenessRead, 'stale_for_days'>[]): number {

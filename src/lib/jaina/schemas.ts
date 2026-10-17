@@ -23,11 +23,12 @@ import {
   metricGridBlockSchema as contractMetricGridBlockSchema,
   metricItemSchema as contractMetricItemSchema,
   narrativeBlockSchema as contractNarrativeBlockSchema,
+  stepsBlockSchema as contractStepsBlockSchema,
   surveyBlockSchema as contractSurveyBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
+  jainaOperatorActionSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaScaffoldActionSchema,
-  jainaOperatorActionSchema,
   jainaToolActionSchema,
   jainaToolApprovalRequiredPayloadSchema,
   jainaToolApprovalResolvedPayloadSchema,
@@ -587,6 +588,11 @@ export const surveyBlockV2Schema = contractSurveyBlockSchema.extend({
 });
 export type SurveyBlockV2 = z.infer<typeof surveyBlockV2Schema>;
 
+export const stepsBlockV2Schema = contractStepsBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type StepsBlockV2 = z.infer<typeof stepsBlockV2Schema>;
+
 export const answerTemplateBlockV2Schema = contractAnswerTemplateBlockSchema.extend({
   priority: blockPriorityV2Schema,
 });
@@ -603,6 +609,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   actionsBlockV2Schema,
   goalPacingBlockV2Schema,
   surveyBlockV2Schema,
+  stepsBlockV2Schema,
   answerTemplateBlockV2Schema,
 ]);
 

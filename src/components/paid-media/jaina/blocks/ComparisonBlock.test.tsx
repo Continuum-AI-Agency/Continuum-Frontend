@@ -103,3 +103,86 @@ describe('ComparisonBlock — the change column carries a judgement, not a sign'
     }
   });
 });
+
+describe('ComparisonBlock — two sides, money by the one rule', () => {
+  const twoAdSets = (): ComparisonBlockV2 => ({
+    ...block([
+      pair({
+        label: 'Cost per result',
+        before: 85.47,
+        after: 112.3,
+        format: 'currency',
+        currency: 'MXN',
+        change: 31,
+        change_direction: 'up',
+      }),
+    ]),
+    title: 'CAÑADAS // MENSAJES vs SATÉLITE // MENSAJES',
+    before_label: 'CAÑADAS // MENSAJES',
+    after_label: 'SATÉLITE // MENSAJES',
+    side_a: { label: 'CAÑADAS // MENSAJES', window: 'Last 7 days', entity: null },
+    side_b: { label: 'SATÉLITE // MENSAJES', window: 'Last 7 days', entity: null },
+  });
+
+  it('heads each column with its side and names a shared window once', () => {
+    render(<ComparisonBlock block={twoAdSets()} isStreaming={false} />);
+    const headers = Array.from(document.querySelectorAll('th')).map((th) => th.textContent);
+    expect(headers.slice(1, 3)).toEqual(['CAÑADAS // MENSAJES', 'SATÉLITE // MENSAJES']);
+    expect(document.querySelector('[data-comparison-window]')?.textContent).toBe('Last 7 days');
+  });
+
+  it('names each side its own window when the windows differ', () => {
+    const block = twoAdSets();
+    render(
+      <ComparisonBlock
+        block={{
+          ...block,
+          side_a: { label: 'CAÑADAS', window: 'Sep 1–7', entity: null },
+          side_b: { label: 'CAÑADAS', window: 'Sep 8–14', entity: null },
+        }}
+        isStreaming={false}
+      />,
+    );
+    const headers = Array.from(document.querySelectorAll('th')).map((th) => th.textContent);
+    expect(headers.slice(1, 3)).toEqual(['CAÑADASSep 1–7', 'CAÑADASSep 8–14']);
+    expect(document.querySelector('[data-comparison-window]')).toBeNull();
+  });
+
+  it('reads a Spanish cost label that rose as a problem', () => {
+    render(
+      <ComparisonBlock
+        block={{
+          ...twoAdSets(),
+          pairs: twoAdSets().pairs.map((p) => ({ ...p, label: 'Costo por resultado' })),
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(cellFor('Costo por resultado').className).toContain('text-destructive');
+  });
+
+  it('prints each money leg as "$85.47 MXN" and stamps its raw value and currency', () => {
+    render(<ComparisonBlock block={twoAdSets()} isStreaming={false} />);
+    const figures = screen.getAllByTestId('figure');
+    expect(figures.map((figure) => figure.textContent)).toEqual(['$85.47 MXN', '$112 MXN']);
+    expect(figures[0].getAttribute('data-figure-raw')).toBe('85.47');
+    expect(figures[0].getAttribute('data-figure-currency')).toBe('MXN');
+  });
+
+  it('names each side on its own figure cell, for the one-card-per-metric narrow reading', () => {
+    render(<ComparisonBlock block={twoAdSets()} isStreaming={false} />);
+    const sides = screen
+      .getAllByTestId('figure')
+      .map((figure) => figure.closest('td')?.getAttribute('data-side'));
+    expect(sides).toEqual(['CAÑADAS // MENSAJES', 'SATÉLITE // MENSAJES']);
+    expect(document.querySelector('table')?.parentElement?.className).toContain(
+      '@container/comparison',
+    );
+  });
+
+  it('keeps before_label / after_label on a block stored before the sides existed', () => {
+    render(<ComparisonBlock block={block([pair({})])} isStreaming={false} />);
+    const headers = Array.from(document.querySelectorAll('th')).map((th) => th.textContent);
+    expect(headers.slice(1, 3)).toEqual(['Last week', 'This week']);
+  });
+});

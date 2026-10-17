@@ -77,7 +77,7 @@ export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
 export const PROVIDER_GROUP_DESCRIPTIONS: Record<ProviderGroup, string> = {
   facebook: 'Facebook & Instagram',
   google: 'Google Ads & YouTube',
-  tiktok: 'TikTok Marketing',
+  tiktok: 'Creator profile (organic)',
   linkedin: 'LinkedIn Ads / Organic',
   x: 'X (Twitter)',
   openai: 'ChatGPT Ads (API key)',

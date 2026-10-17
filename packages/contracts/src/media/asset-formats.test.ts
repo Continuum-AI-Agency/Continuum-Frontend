@@ -199,6 +199,8 @@ describe('format parity widening (Wave 0)', () => {
     ['part.STEP', '', 'model_3d', 'file', 'model_viewer'],
     ['part.igs', '', 'model_3d', 'file', 'model_viewer'],
     ['scene.usdz', 'model/vnd.usdz+zip', 'model_3d', 'file', 'model_viewer'],
+    ['spot.blend', 'application/x-blender', 'blender', 'file', 'none'],
+    ['Spot.BLEND', '', 'blender', 'file', 'none'],
   ] as const)('%s (%s) is %s, kind %s, preview %s', (fileName, mimeType, family, kind, strategy) => {
     const format = classifyLibraryFile({ fileName, mimeType });
     if (!format.accepted) throw new Error(`expected ${fileName} to be accepted`);

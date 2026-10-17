@@ -15,6 +15,10 @@ import type { HeadlineTone, ModuleTile } from './headlineModel';
 import type { HeroSetting } from './heroHeaderModel';
 import { SETTING_TEXT } from './PortfolioHeaderLine';
 
+/** A tile's sub-line: one line, ellipsized, clipped SIDEWAYS only. `truncate` (overflow: hidden)
+ *  also clipped vertically, which cut a setting chip's invisible hit area to the 16px line. */
+const ONE_LINE = 'block overflow-x-clip text-ellipsis whitespace-nowrap';
+
 export type PortfolioTilesProps = {
   tiles: ModuleTile[];
   onEditSetting: (setting: HeroSetting) => void;
@@ -67,7 +71,7 @@ export function PortfolioTiles({ tiles, onEditSetting, onReviewDecisions }: Port
               state={tile.state}
               sub={
                 <>
-                  <span className={cn('block truncate', toneOf(tile.subTone))}>
+                  <span className={cn(ONE_LINE, toneOf(tile.subTone))}>
                     {tile.sub.map((segment) =>
                       typeof segment === 'string' ? (
                         segment
@@ -87,7 +91,7 @@ export function PortfolioTiles({ tiles, onEditSetting, onReviewDecisions }: Port
                     )}
                   </span>
                   {tile.detail || cta ? (
-                    <span className="block truncate">
+                    <span className={ONE_LINE}>
                       {tile.detail ? (
                         <span className={toneOf(tile.detailTone)} data-testid="kpi-detail">
                           {tile.detail}
@@ -96,7 +100,7 @@ export function PortfolioTiles({ tiles, onEditSetting, onReviewDecisions }: Port
                       {tile.detail && cta ? <span aria-hidden> · </span> : null}
                       {cta ? (
                         <button
-                          className="font-semibold text-primary-ink hover:underline focus-visible:underline focus-visible:outline-none"
+                          className="hit-area font-semibold text-primary-ink hover:underline focus-visible:underline focus-visible:outline-none"
                           data-testid="decisions-review-cta"
                           onClick={onReviewDecisions}
                           type="button"

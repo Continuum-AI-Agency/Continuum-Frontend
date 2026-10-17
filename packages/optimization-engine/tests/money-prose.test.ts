@@ -3,9 +3,10 @@
 // A Mexican account whose currency is null read "$29.10 per lead" and "CPP 14d $198" on the
 // same card that printed the Frontend's bare "28.68/day": each template carried its own
 // `$${x.toFixed(...)}`. The rule is now `formatMoney` from contracts — the Frontend's own
-// formatCurrency, mirrored — and this file pins every producer to it: null currency prints
-// BARE, USD prints "$", any other code follows the figure. Delete the formatter in one
-// producer and exactly that case fails.
+// money rule, mirrored — and this file pins every producer to it under M1 (2026-10-13): null
+// currency prints BARE, a known currency prints its symbol before the figure and its code
+// after it ("$29.10 USD", "$29.10 MXN"). Delete the formatter in one producer and exactly
+// that case fails.
 import { expect, test } from 'bun:test';
 import type {
   AdSetSnapshot,
@@ -50,8 +51,8 @@ const withCurrency = (currency: string | null): EngineConfig => ({ ...DEFAULT_CO
 /** The three spellings one figure must take: bare, dollars, pesos. */
 const CASES: { currency: string | null; expect: (figure: string) => string }[] = [
   { currency: null, expect: (f) => f },
-  { currency: 'USD', expect: (f) => `$${f}` },
-  { currency: 'MXN', expect: (f) => `${f} MXN` },
+  { currency: 'USD', expect: (f) => `$${f} USD` },
+  { currency: 'MXN', expect: (f) => `$${f} MXN` },
 ];
 
 test('P1, P2 and P3 pause reasons carry the account currency, or none', () => {
@@ -203,6 +204,6 @@ test('D2 prints the budget it is ACTIVE with in the account currency, or bare', 
 test('the pacing note prints the daily total in the account currency, or bare', () => {
   const state = { periodBudget: 3000, periodDays: 30, dayIndex: 11, actualSpendToDate: 700 };
   expect(computePacing(state).note).toContain('daily raised to 115 to catch up');
-  expect(computePacing(state, 'USD').note).toContain('daily raised to $115');
-  expect(computePacing(state, 'MXN').note).toContain('daily raised to 115 MXN');
+  expect(computePacing(state, 'USD').note).toContain('daily raised to $115 USD');
+  expect(computePacing(state, 'MXN').note).toContain('daily raised to $115 MXN');
 });

@@ -139,7 +139,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
             comparator:
               upper3d === 0
                 ? `en 3 días con 0 ${resultNounPlural(cfg, s)} y 0 ${upperFunnelNoun(upperLabel, 0)}`
-                : `en 3 días con 0 ${resultNounPlural(cfg, s)}, ${titleMoney(atcCost3d, cfg)} por ${upperFunnelNoun(upperLabel, 1)} frente a ${titleMoney(avgAtcCost, cfg)} de promedio (${multiple(atcCost3d, avgAtcCost)})`,
+                : `en 3 días con 0 ${resultNounPlural(cfg, s)}, ${titleMoney(atcCost3d, cfg, avgAtcCost)} por ${upperFunnelNoun(upperLabel, 1)} frente a ${titleMoney(avgAtcCost, cfg, atcCost3d)} de promedio (${multiple(atcCost3d, avgAtcCost)})`,
             window: 'd3',
           }),
           action: action('pause', cfg, { perDay: perDayOver(d3.spend, 'd3') }),
@@ -180,7 +180,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
               from: round2(cpp14),
               to: round2(robustBestCpp),
             },
-            // "101 MXN por lead, 2.9× la referencia de 35 MXN": the cost per result is the
+            // "$101 MXN por lead, 2.9× la referencia de $35 MXN": the cost per result is the
             // figure, and the reference it crossed is the comparison. No verb — the pause
             // and what it saves are the button's.
             title: title({
@@ -220,13 +220,14 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           window: 'd14',
           estImpactPerDay: perDayOver(d14.spend, 'd14'),
           headline: avoidedHeadline(perDayOver(d14.spend, 'd14')),
-          // "298 MXN en 14 días y 0 leads": the spend, the window, and the nothing it bought,
+          // "$298 MXN en 14 días y 0 leads": the spend, the window, and the nothing it bought,
           // with the target it exceeded so the reader knows why 14 days was enough.
           title: title({
             entity: entityOf(s),
             figure: d14.spend,
             unit: currencyCode(cfg),
-            comparator: `en 14 días y 0 ${resultNounPlural(cfg, s)}, más que el objetivo de ${titleMoney(cfg.cpaTarget, cfg)} por ${resultNoun(cfg, s)}`,
+            comparator: `en 14 días y 0 ${resultNounPlural(cfg, s)}, más que el objetivo de ${titleMoney(cfg.cpaTarget, cfg, round2(d14.spend))} por ${resultNoun(cfg, s)}`,
+            reference: cfg.cpaTarget,
             window: 'd14',
           }),
           action: action('pause', cfg, { perDay: perDayOver(d14.spend, 'd14') }),

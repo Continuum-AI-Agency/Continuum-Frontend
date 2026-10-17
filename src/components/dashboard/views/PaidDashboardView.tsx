@@ -12,6 +12,7 @@ import { CompetitorAdsTable } from '@/components/dashboard/competitor/Competitor
 import { DashboardWarmOnMount } from '@/components/dashboard/DashboardWarmOnMount';
 import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 
@@ -215,6 +216,9 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   const [selectedMetric, setSelectedMetric] = useState<PaidPerformanceMetricKey>('spend');
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const reduceMotion = useReducedMotion();
+  // The account's currency as the Optimizer reads it: what money prints in when a payload
+  // carries no label of its own (PP-L3-home-paid-prints-dollar-signs-no-currency).
+  const accountCurrency = useAdAccountCurrency(brandId, selectedAccountId);
 
   useEffect(() => {
     setCollapsed(readCollapsed());
@@ -246,6 +250,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
         <PaidMediaReportingWidget
           brandId={brandId}
           accountId={selectedAccountId ?? undefined}
+          accountCurrency={accountCurrency}
           onAccountChange={handleAccountChange}
           selectedMetric={selectedMetric}
           onSelectedMetricChange={setSelectedMetric}
@@ -279,7 +284,11 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
           </div>
           <SendPulseButton brandId={brandId} />
         </div>
-        <PaidMetricStrip brandId={brandId} adAccountId={selectedAccountId} />
+        <PaidMetricStrip
+          accountCurrency={accountCurrency}
+          adAccountId={selectedAccountId}
+          brandId={brandId}
+        />
         <div
           data-tour-id="dashboard-top-ads"
           className="grid grid-cols-1 items-start gap-[var(--dashboard-section-gap)] lg:grid-cols-2 lg:[&>*]:min-h-[var(--dashboard-min-panel-height)]"
@@ -290,6 +299,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
               <PaidKpiSelect />
             </div>
             <PaidEntityTable
+              accountCurrency={accountCurrency}
               brandId={brandId}
               adAccountId={selectedAccountId}
               scope={paidScope}

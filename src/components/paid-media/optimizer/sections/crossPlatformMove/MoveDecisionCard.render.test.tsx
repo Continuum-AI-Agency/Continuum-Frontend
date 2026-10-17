@@ -67,7 +67,7 @@ describe('MoveDecisionCard', () => {
   it('one Decision, its legs as sub-rows with each platform’s receipt, and Undo both', () => {
     const card = renderMove([googleUp(), tiktokDown()]);
     expect(card.textContent).toContain('Decision');
-    expect(card.textContent).toContain('Move 100.00 MXN/day from TikTok to Google');
+    expect(card.textContent).toContain('Move $100.00 MXN/day from TikTok to Google');
     expect(card.textContent).toContain('Leads // All platforms');
     expect(within(card).getByTestId('move-state').textContent).toBe('applied');
     const legs = within(card).getAllByTestId('move-decision-leg');
@@ -141,7 +141,7 @@ describe('MoveDecisionCard', () => {
       .getAllByTestId('move-leg-state')
       .map((el) => el.textContent);
     expect(states).toEqual([
-      'applied, then 900.00 MXN → 1,000.00 MXN reverted',
+      'applied, then $900.00 MXN → $1,000.00 MXN reverted',
       'refused: BUDGET_BELOW_PER_DAY_MINIMUM',
     ]);
     expect(within(card).queryByRole('button', { name: /Undo/ })).toBeNull();
@@ -175,7 +175,7 @@ describe('MoveDecisionCard', () => {
     expect(within(card).getByTestId('move-state').textContent).toBe('stuck — autopilot paused');
     const explainer = within(card).getByTestId('move-explainer').textContent ?? '';
     expect(explainer).toContain('Meta refused: OAuthException 190');
-    expect(explainer).toContain('TikTok is up to 10.68 MXN/day lower and Meta did not go up');
+    expect(explainer).toContain('TikTok is up to $10.68 MXN/day lower and Meta did not go up');
     expect(explainer).toContain('Autopilot is paused on this portfolio until someone checks it.');
     const states = within(card)
       .getAllByTestId('move-leg-state')

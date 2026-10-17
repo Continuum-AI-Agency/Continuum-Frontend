@@ -88,4 +88,23 @@ describe('resolvePublishingAssets', () => {
       }),
     ).toEqual([{ assetId: 'frame-asset', versionId: 'frame-version', kind: 'image', order: 0 }]);
   });
+
+  // The montage a Fast Cut run filed is a video creative like any other render.
+  it('resolves a Fast Cut montage as a video source', () => {
+    expect(
+      resolvePublishingAssets({
+        nodeId: 'publisher',
+        data: { format: 'video' },
+        nodes: [
+          {
+            id: 'cut',
+            type: 'fastCut',
+            position: { x: 0, y: 0 },
+            data: { renderOutputAssetId: 'cut-asset', renderOutputAssetVersionId: 'cut-version' },
+          },
+        ],
+        edges: [{ id: 'e1', source: 'cut', target: 'publisher', targetHandle: 'video-in' }],
+      }),
+    ).toEqual([{ assetId: 'cut-asset', versionId: 'cut-version', kind: 'video', order: 0 }]);
+  });
 });

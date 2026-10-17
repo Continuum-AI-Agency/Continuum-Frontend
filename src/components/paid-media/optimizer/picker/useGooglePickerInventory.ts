@@ -24,7 +24,11 @@ const RankingRowSchema = z.object({
   labels: z.record(z.string(), z.string()).optional(),
   metrics: z.object({ spend: z.number() }).partial().optional(),
 });
-const RankingSchema = z.object({ rows: z.array(RankingRowSchema) });
+const RankingSchema = z.object({
+  rows: z.array(RankingRowSchema),
+  /** The customer's currency, which the edge resolves even when the account row lacks it. */
+  currency: z.string().nullable().optional(),
+});
 
 export type GoogleInventory = {
   account: AdAccount;
@@ -47,8 +51,11 @@ export function parseGoogleInventory(
   const campaigns = RankingSchema.safeParse(campaignsAnswer);
   const adGroups = RankingSchema.safeParse(adGroupsAnswer);
   if (!campaigns.success || !adGroups.success) return null;
+  // A Google asset row carries no currency (list_brand_ad_accounts), and the picker's currency
+  // rule would then refuse the whole account; the ranking answer carries the customer's.
+  const rankedCurrency = campaigns.data.currency?.trim().toUpperCase() || null;
   return {
-    account,
+    account: { ...account, currency: account.currency ?? rankedCurrency },
     campaigns: campaigns.data.rows.map((row) => ({
       id: row.id,
       name: row.name,

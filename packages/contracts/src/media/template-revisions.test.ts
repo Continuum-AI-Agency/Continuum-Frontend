@@ -89,6 +89,32 @@ describe('immutable template revision edits', () => {
     ).toBe(false);
   });
 
+  test('only a new variant is tagged, and a recolour names six-digit colours', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    const request = {
+      brandId: id,
+      parentRevisionId: id,
+      expectedHeadRevisionId: id,
+      idempotencyKey: id,
+      tags: ['brand_aligned'],
+      edits: { recolor: { palette: ['#E30613'], minChroma: 0.1 } },
+    };
+    expect(
+      saveTemplateRevisionRequestSchema.safeParse({ ...request, name: 'Brand-aligned' }).success,
+    ).toBe(true);
+    expect(saveTemplateRevisionRequestSchema.safeParse({ ...request, variantId: id }).success).toBe(
+      false,
+    );
+    expect(
+      saveTemplateRevisionRequestSchema.safeParse({ ...request, name: 'X', tags: ['other'] })
+        .success,
+    ).toBe(false);
+    expect(templateRevisionEditsSchema.safeParse({ recolor: { palette: ['#e306'] } }).success).toBe(
+      false,
+    );
+    expect(templateRevisionEditsSchema.safeParse({ recolor: { palette: [] } }).success).toBe(false);
+  });
+
   test('a revision by a seeded user still reads', () => {
     // The local fixture login is a valid Postgres uuid but not RFC 4122 v4.
     const createdBy = templateRevisionSchema.shape.createdBy;

@@ -29,6 +29,16 @@ function adset(id: string, name: string, campaignName: string, roas: number): Pa
 }
 
 describe('formatKpiValue', () => {
+  // PP-L3-home-paid-prints-dollar-signs-no-currency: money carries the account's code — `$`
+  // only for USD, the ISO code after the figure otherwise, a bare figure when unknown. Never
+  // a `$` the account did not earn.
+  it('formats money in the account currency, never a bare dollar sign', () => {
+    expect(formatKpiValue(2345.6, 'currency', 'MXN')).toBe('$2,346 MXN');
+    expect(formatKpiValue(2345.6, 'currency', 'USD')).toBe('$2,346 USD');
+    expect(formatKpiValue(0.7, 'currency', 'MXN')).toBe('$0.70 MXN');
+    expect(formatKpiValue(2345.6, 'currency', null)).toBe('2,346');
+  });
+
   it('formats a multiplier KPI', () => {
     expect(formatKpiValue(3.123, 'multiplier')).toBe('3.12x');
   });
@@ -41,17 +51,19 @@ describe('formatKpiValue', () => {
 describe('buildPaidLeaderboardRows', () => {
   it('joins a campaign insight by campaign id and shows spend', () => {
     const rows = buildPaidLeaderboardRows({
+      currency: 'MXN',
       scope: 'top_campaigns',
       entities: [campaign('c1', 'Summer Sale', 3.1, 1200)],
       insights: [{ campaignId: 'c1', campaignName: 'Summer Sale', title: 'ROAS climbing 18% WoW' }],
     });
     expect(rows[0]?.insightLine).toBe('ROAS climbing 18% WoW');
     expect(rows[0]?.metricValue).toBe('3.10x');
-    expect(rows[0]?.subLabel).toContain('spend');
+    expect(rows[0]?.subLabel).toBe('$1,200 MXN spend');
   });
 
   it('rolls up the parent campaign insight onto an ad set by campaign name', () => {
     const rows = buildPaidLeaderboardRows({
+      currency: 'MXN',
       scope: 'top_adsets',
       entities: [adset('a1', 'Lookalike 1%', 'Summer Sale', 4.0)],
       insights: [{ campaignId: 'c1', campaignName: 'Summer Sale', title: 'ROAS climbing 18% WoW' }],
@@ -62,6 +74,7 @@ describe('buildPaidLeaderboardRows', () => {
 
   it('omits the insight line when no persisted insight matches', () => {
     const rows = buildPaidLeaderboardRows({
+      currency: 'MXN',
       scope: 'top_campaigns',
       entities: [campaign('c2', 'Retargeting', 2.4, 300)],
       insights: [],
@@ -72,6 +85,7 @@ describe('buildPaidLeaderboardRows', () => {
   it('surfaces the aggregation level and the explicit path label', () => {
     const pathLabel = ['Spring Sale', 'LAL 1%', 'High Hook'].join(ENTITY_PATH_SEPARATOR);
     const rows = buildPaidLeaderboardRows({
+      currency: 'MXN',
       scope: 'top_ads',
       entities: [
         {
@@ -95,6 +109,7 @@ describe('buildPaidLeaderboardRows', () => {
   it('composes the path label from the hierarchy when path_label is absent', () => {
     const expected = ['Spring Sale', 'LAL 1%', 'High Hook'].join(ENTITY_PATH_SEPARATOR);
     const rows = buildPaidLeaderboardRows({
+      currency: 'MXN',
       scope: 'top_ads',
       entities: [
         {

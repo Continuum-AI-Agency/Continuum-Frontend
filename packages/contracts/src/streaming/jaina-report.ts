@@ -101,6 +101,8 @@ export const blockCategorySchema = z.enum([
   'data_table',
   'insight_list',
   'comparison',
+  // How to do something, in order: each step with its place and what it should change.
+  'steps',
   // The four the reference methodology requires and this contract lacked:
   'data_scope',
   'actions',
@@ -130,6 +132,7 @@ const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
   metric_grid: 'answer',
   narrative: 'answer',
   insight_list: 'answer',
+  steps: 'answer',
   actions: 'answer',
   chart: 'justification',
   survey: 'justification',
@@ -140,6 +143,20 @@ const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
 
 export function sectionOfBlockCategory(category: BlockCategory): JainaReportSection {
   return SECTION_OF_BLOCK_CATEGORY[category];
+}
+
+/**
+ * The section ONE block renders in: the answer when it carries the format the ask requested
+ * (`answer_format` — "dame una tabla", "compáralas", "en un gráfico": the table is the answer,
+ * not evidence folded under it), else its category's section. An unknown category is evidence.
+ */
+export function sectionOfBlock(block: {
+  category: string;
+  answer_format?: boolean;
+}): JainaReportSection {
+  if (block.answer_format === true) return 'answer';
+  const parsed = blockCategorySchema.safeParse(block.category);
+  return parsed.success ? sectionOfBlockCategory(parsed.data) : 'justification';
 }
 
 /**
@@ -154,6 +171,7 @@ export const J2_BLOCK_ORDER: ReadonlyArray<BlockCategory> = [
   'metric_grid',
   'narrative',
   'insight_list',
+  'steps',
   'actions',
   'goal_pacing',
   'comparison',
@@ -171,16 +189,27 @@ export const j2RankOf = (category: string): number =>
   J2_RANK.get(category as BlockCategory) ?? J2_BLOCK_ORDER.length;
 
 /**
- * The blocks in J2 order. A stable sort by category rank only: nothing is added, dropped
- * or rewritten, and blocks of one category keep the order they came in. Returns the SAME
- * array when it is already in order, so a caller can tell whether anything moved.
+ * The block that IS the format the ask requested sits right after the frame (and a templated
+ * answer): the requested format comes right after the one-sentence answer, ahead of the tiles,
+ * the justification and every other block.
  */
-export function withJ2BlockOrder<B extends { category: string }>(
+const ANSWER_FORMAT_RANK = (J2_RANK.get('answer_template') ?? 1) + 0.5;
+
+const blockRankOf = (block: { category: string; answer_format?: boolean }): number =>
+  block.answer_format === true ? ANSWER_FORMAT_RANK : j2RankOf(block.category);
+
+/**
+ * The blocks in J2 order. A stable sort by category rank only: nothing is added, dropped
+ * or rewritten, and blocks of one category keep the order they came in. A block marked
+ * `answer_format` ranks right after the frame. Returns the SAME array when it is already in
+ * order, so a caller can tell whether anything moved.
+ */
+export function withJ2BlockOrder<B extends { category: string; answer_format?: boolean }>(
   blocks: ReadonlyArray<B>,
 ): ReadonlyArray<B> {
   const sorted = blocks
     .map((block, index) => ({ block, index }))
-    .sort((a, b) => j2RankOf(a.block.category) - j2RankOf(b.block.category) || a.index - b.index)
+    .sort((a, b) => blockRankOf(a.block) - blockRankOf(b.block) || a.index - b.index)
     .map((entry) => entry.block);
   return sorted.every((block, index) => block === blocks[index]) ? blocks : sorted;
 }
@@ -233,6 +262,13 @@ export const blockBaseSchema = z.object({
    * block a reader would otherwise have had.
    */
   grounding: z.array(groundingViolationSchema).nullable().default(null),
+  /**
+   * True on the ONE block that carries the format the ask requested — the list, the steps,
+   * the table, the comparison or the chart. Set by the Backend, never by a model; absent on
+   * every other block and on every report written before 2026-10-13. The renderer shows it in
+   * the answer, right under the sentence (`sectionOfBlock`), whatever its category.
+   */
+  answer_format: z.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -704,18 +740,84 @@ export const comparisonPairSchema = z.object({
   change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
   cite_ids: z.array(z.string()).default([]),
+  /**
+   * The ISO currency of `before` / `after` / `delta` when the pair is money ("MXN"); the
+   * renderer prints them through `formatMoney`. Absent on a pair stored before 2026-10-13.
+   */
+  currency: z.string().nullable().optional(),
+  /** `after − before` in the pair's own unit, computed by code; absent when not computed. */
+  delta: z.number().nullable().optional(),
 });
 export type ComparisonPair = z.infer<typeof comparisonPairSchema>;
 
+/**
+ * One side of a comparison: what the reader is told it is ("CAÑADAS // MENSAJES", "Semana
+ * anterior"), and what it was read on — a window, an entity, or both. Side A is `before`,
+ * side B is `after` in every pair.
+ */
+export const comparisonSideSchema = z.object({
+  label: z.string().min(1),
+  window: z.string().nullable().default(null),
+  entity: z.string().nullable().default(null),
+});
+export type ComparisonSide = z.infer<typeof comparisonSideSchema>;
+
 export const comparisonBlockSchema = blockBaseSchema.extend({
   category: z.literal('comparison'),
+  /** Side A's label (the window case: the earlier period). Kept for every stored report. */
   before_label: z.string(),
+  /** Side B's label (the window case: the later period). */
   after_label: z.string(),
   baseline_label: z.string().nullable().default(null),
   pairs: z.array(comparisonPairSchema).min(1),
   citations: z.array(citationSchema).default([]),
+  /**
+   * The two sides named, for a comparison of two entities (or one entity on two windows):
+   * each side's label, window and entity. Absent on a before/after comparison stored before
+   * 2026-10-13 — the renderer falls back to `before_label` / `after_label`.
+   */
+  side_a: comparisonSideSchema.optional(),
+  side_b: comparisonSideSchema.optional(),
 });
 export type ComparisonBlock = z.infer<typeof comparisonBlockSchema>;
+
+// ---------------------------------------------------------------------------
+// Steps block — how to do something, in order (Ramiro, 2026-10-13: "cuando le pregunto cómo
+// aprovechar una oportunidad, no me da pasos"). Each step is one action, the place it is done
+// (an Ads Manager location or a Continuum surface), what it should change, and the figure it
+// stands on when it stands on one.
+// ---------------------------------------------------------------------------
+
+/** The figure a step stands on, with its currency when it is money (printed via `formatMoney`). */
+export const stepFigureSchema = z.object({
+  label: z.string().min(1),
+  value: z.union([z.number(), z.string()]),
+  unit: z.string().nullable().default(null),
+  currency: z.string().nullable().default(null),
+  format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
+  percent_basis: percentBasisSchema.nullable().default(null),
+});
+export type StepFigure = z.infer<typeof stepFigureSchema>;
+
+export const stepItemSchema = z.object({
+  /** The move, in the imperative, naming the entity it is on. */
+  action: z.string().min(1),
+  /** Where it is done: "Ads Manager → Conjuntos de anuncios → Presupuesto", "Continuum → Optimizer". */
+  where: z.string().min(1),
+  /** What doing it should change, naming the metric and the direction. */
+  expected_effect: z.string().min(1),
+  figure: stepFigureSchema.nullable().default(null),
+  cite_ids: z.array(z.string()).default([]),
+});
+export type StepItem = z.infer<typeof stepItemSchema>;
+
+export const stepsBlockSchema = blockBaseSchema.extend({
+  category: z.literal('steps'),
+  /** In the order they are done. */
+  items: z.array(stepItemSchema).min(1),
+  citations: z.array(citationSchema).default([]),
+});
+export type StepsBlock = z.infer<typeof stepsBlockSchema>;
 
 // ---------------------------------------------------------------------------
 // V2 discriminated union
@@ -860,6 +962,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   dataTableBlockBaseSchema,
   insightListBlockSchema,
   comparisonBlockSchema,
+  stepsBlockSchema,
   dataScopeBlockSchema,
   actionsBlockSchema,
   goalPacingBlockSchema,
@@ -1312,7 +1415,11 @@ export type GroundingOptions = {
   figures?: ReadonlyArray<number>;
 };
 
-type ClaimSource = { text: string; citeIds: ReadonlyArray<string> | null };
+/**
+ * A piece of prose a block carries. `proposes` marks text that IS a move (a step's action):
+ * every percentage in it is the size of that move, computed by the proposal, never read.
+ */
+type ClaimSource = { text: string; citeIds: ReadonlyArray<string> | null; proposes?: boolean };
 
 const stringOf = (value: unknown): string => (typeof value === 'string' ? value : '');
 
@@ -1525,6 +1632,18 @@ export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
               format: formatOf(rec.format, 'number'),
             });
           }
+        });
+        break;
+      case 'steps':
+        looseArray(block.items).forEach((item, i) => {
+          const figure = looseRecord(looseRecord(item).figure);
+          if (figure.value === undefined || figure.value === null) return;
+          out.push({
+            value: figure.value,
+            where: `${id}.items[${i}].figure.value`,
+            label: typeof figure.label === 'string' ? figure.label : 'figure',
+            format: formatOf(figure.format, 'number'),
+          });
         });
         break;
       case 'actions':
@@ -1957,7 +2076,15 @@ const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
     'giu',
   ),
   new RegExp(String.raw`\b(?:${THRESHOLD_COMPARATORS})\s+${MONEY_AMOUNT}`, 'giu'),
+  // A lookalike's size is a setting chosen, never a read: "lookalike 1%", "similar al 1%".
+  new RegExp(
+    String.raw`\b(?:lookalikes?|similar(?:es)?|parecid[oa]s?)\s+(?:al?\s+|del?\s+|of\s+)?${PERCENT}`,
+    'giu',
+  ),
 ];
+
+/** In a sentence that IS a move (a step's action), a percentage is the move's size. */
+const PROPOSED_PERCENT = new RegExp(PERCENT, 'gu');
 
 /**
  * Whether every figure a sentence states — with the entities it names and the numbers it
@@ -1969,8 +2096,10 @@ const proseFiguresAreMeasured = (
   sentence: string,
   entities: ReadonlyArray<ReportEntity>,
   sorted: ReadonlyArray<number>,
+  proposes = false,
 ): boolean => {
-  const stated = COMPUTED_PROSE_FIGURES.reduce(
+  const masks = proposes ? [...COMPUTED_PROSE_FIGURES, PROPOSED_PERCENT] : COMPUTED_PROSE_FIGURES;
+  const stated = masks.reduce(
     (text, pattern) => text.replace(pattern, ' '),
     claimableText(sentence, entities),
   );
@@ -2002,6 +2131,11 @@ const claimSourcesOf = (block: Record<string, unknown>): ClaimSource[] => {
         text: stringOf(row.action),
         citeIds: citeIdsOf(row.cite_ids),
       }));
+    case 'steps':
+      return recordsOf(block.items).flatMap((item) => [
+        { text: stringOf(item.action), citeIds: citeIdsOf(item.cite_ids), proposes: true },
+        { text: stringOf(item.expected_effect), citeIds: citeIdsOf(item.cite_ids) },
+      ]);
     default:
       return [];
   }
@@ -2038,7 +2172,10 @@ export const groundingViolationsOf = (
   for (const source of claimSourcesOf(block)) {
     for (const claim of classifyClaims(source.text, { entities })) {
       if (claim.kind === 'figure') {
-        if (sorted !== null && !proseFiguresAreMeasured(claim.span, entities, sorted)) {
+        if (
+          sorted !== null &&
+          !proseFiguresAreMeasured(claim.span, entities, sorted, source.proposes === true)
+        ) {
           report({ kind: 'figure', span: claim.span, reason: 'claim_without_source' });
         }
         continue;

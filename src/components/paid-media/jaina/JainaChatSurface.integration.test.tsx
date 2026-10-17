@@ -322,11 +322,14 @@ mock.module('./components/JainaConversationSidebar', () => ({
   JainaConversationSidebar: ({
     sessions,
     onSelectConversation,
+    loadError,
   }: {
     sessions: { sessionId: string; title?: string | null }[];
     onSelectConversation: (sessionId: string) => void;
+    loadError?: string | null;
   }) => (
     <div data-testid="conversation-sidebar">
+      {loadError ? <span data-testid="jaina-conversations-error">{loadError}</span> : null}
       {sessions.map((session) => (
         <button
           key={session.sessionId}
@@ -1135,6 +1138,20 @@ describe('JainaChatSurface integration', () => {
     expect(screen.getAllByTestId('user-content').map((node) => node.textContent)).toEqual([
       'question in session-b',
     ]);
+  });
+
+  it('says a failed history load once, inline in the sidebar, never as a toast over the composer', async () => {
+    // PP-L1V-covered-controls-actions-jaina-manage: the sidebar already reads "Couldn't load
+    // conversations … Retry". The same failure ALSO raised a toast, whose description <p> sat
+    // over the composer's Pro / Dictate / Attach buttons at every viewport.
+    global.fetch = mock(() => Promise.reject(new TypeError('Failed to fetch'))) as typeof fetch;
+
+    render(surface, { wrapper: withQueryClient });
+
+    expect((await screen.findByTestId('jaina-conversations-error')).textContent).toMatch(
+      /conversations/i,
+    );
+    expect(toastShowMock).not.toHaveBeenCalled();
   });
 
   it('acknowledges a report the reader watched arrive as a live render', async () => {

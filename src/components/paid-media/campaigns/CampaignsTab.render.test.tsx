@@ -96,6 +96,21 @@ describe('CampaignsTab', () => {
     expect(within(active).getByRole('button', { name: 'Show ad sets' })).toBeTruthy();
   });
 
+  // PP-L1V-cls-overview-0.865 (Campaigns 0.26 at 375): the status filter arrived with the first
+  // page and wrapped the header onto a second line, pushing the table down.
+  it('holds the status filter row open while the first page loads, as bars, not controls', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CampaignsTab brandId={scope.brandId} adAccountId={scope.adAccountId} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId('scale-campaigns-table').getAttribute('data-state')).toBe('loading');
+    const held = screen.getByTestId('scale-campaigns-filter-skeleton');
+    expect(held.getAttribute('aria-hidden')).toBe('true');
+    expect(held.querySelectorAll('button')).toHaveLength(0);
+    expect(held.querySelectorAll('[data-slot="skeleton-text"]')).toHaveLength(4);
+  });
+
   it('shows the empty copy as quiet text', () => {
     renderWith({ fetchedAt: null, rows: [] });
     expect(screen.getByTestId('scale-campaigns-table').getAttribute('data-state')).toBe('empty');
@@ -128,6 +143,18 @@ describe('CampaignsTab', () => {
     fireEvent.click(within(filter).getByRole('button', { name: 'Archived 1' }));
     expect(screen.getAllByTestId('scale-campaign-row')).toHaveLength(1);
     expect(screen.getByTestId('scale-campaigns-table').textContent).not.toContain('paused');
+  });
+
+  it('grows each status filter button to a 24px target invisibly, the 19px pill as drawn', () => {
+    // PP-L1V tap-target: the status pills paint at py-0.5 text-xs (19px).
+    renderWith({ fetchedAt: null, rows: [campaign({ id: 'c1', status: 'ACTIVE' })] });
+    const buttons = within(screen.getByTestId('scale-campaigns-filter')).getAllByRole('button');
+    expect(buttons.length).toBe(4);
+    for (const button of buttons) {
+      const classes = button.className.split(' ');
+      expect(classes).toContain('hit-area');
+      expect(classes).toContain('py-0.5');
+    }
   });
 
   it("sums an active ABO campaign's ad-set budgets and marks a paused one as on its ad sets", () => {

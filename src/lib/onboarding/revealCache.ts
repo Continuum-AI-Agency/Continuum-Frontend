@@ -40,7 +40,7 @@ type RevealCacheActions = {
 };
 
 export function makeRevealCacheKey(brandId: string, websiteUrl: string): string {
-  return `${brandId}::${normalizeUrl(websiteUrl)}::v${REVEAL_PROMPT_VERSION}`;
+  return `${brandId}::${websiteUrl.startsWith('input:') ? websiteUrl : normalizeUrl(websiteUrl)}::v${REVEAL_PROMPT_VERSION}`;
 }
 
 function normalizeUrl(input: string): string {

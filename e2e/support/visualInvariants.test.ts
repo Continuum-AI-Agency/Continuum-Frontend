@@ -27,6 +27,14 @@ import {
   type VisualNode,
   violation,
 } from './visualGeometry';
+import {
+  hitTestPoint,
+  measureHitArea,
+  paintedEdgeThief,
+  rendersContent,
+  TAP_TARGET_COARSE_PX,
+  textSpill,
+} from './visualInvariants';
 
 const rect = (x: number, y: number, width: number, height: number): Rect => ({
   x,
@@ -166,6 +174,107 @@ describe('tap targets', () => {
     expect(tapTargetShortfall(rect(0, 0, 20, 32))).toBe('width 20px < 24px');
     expect(tapTargetShortfall(rect(0, 0, 32, 16))).toBe('height 16px < 24px');
     expect(tapTargetShortfall(rect(0, 0, 16, 16))).toBe('width 16px, height 16px < 24px');
+  });
+});
+
+// PP-L1V-detector-tap-target-reads-box-not-hit-area: the rule grades what the pointer can
+// reach, not the painted box. `hits` stands in for elementFromPoint.
+describe('tap targets are the hit area, not the painted box', () => {
+  const centre = { x: 100, y: 100 };
+  const squareHit =
+    (half: number) =>
+    (x: number, y: number): boolean =>
+      Math.abs(x - centre.x) <= half && Math.abs(y - centre.y) <= half;
+
+  test('a 22 px control whose pseudo-element pads the hit area to 28 px meets the floor', () => {
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, squareHit(14));
+    expect(area).not.toBeNull();
+    expect(tapTargetShortfall({ x: 0, y: 0, ...(area ?? { width: 0, height: 0 }) })).toBeNull();
+  });
+
+  test('a 22 px control with no padding still falls short on both axes', () => {
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, squareHit(10));
+    expect(area).toEqual({ width: 21, height: 21 });
+  });
+
+  test('the measure stops at the floor: a big button is not scanned to its edge', () => {
+    let probes = 0;
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, (x, y) => {
+      probes += 1;
+      return squareHit(200)(x, y);
+    });
+    expect(area).toEqual({ width: 2 * MIN_TAP_TARGET_PX + 1, height: 2 * MIN_TAP_TARGET_PX + 1 });
+    expect(probes).toBeLessThan(40);
+  });
+
+  test('names the short axis: a wide 18 px-tall row of chips', () => {
+    const area = measureHitArea(centre, MIN_TAP_TARGET_PX, (x, y) => {
+      return Math.abs(x - centre.x) <= 60 && Math.abs(y - centre.y) <= 8;
+    });
+    expect(area).toEqual({ width: 49, height: 17 });
+    expect(tapTargetShortfall({ x: 0, y: 0, ...(area ?? { width: 0, height: 0 }) })).toBe(
+      'height 17px < 24px',
+    );
+  });
+
+  test('a covered centre has no hit area to measure', () => {
+    expect(measureHitArea(centre, MIN_TAP_TARGET_PX, () => false)).toBeNull();
+  });
+
+  test('the coarse-pointer floor is 44 px', () => {
+    expect(TAP_TARGET_COARSE_PX).toBe(44);
+  });
+});
+
+// PP-L1V-detector-hit-tests-points-outside-inner-scroll: the hit-test point is chosen inside
+// the part of the control that is on screen once every overflow ancestor has clipped it.
+describe('the hit-test point lies in the visible part of the control', () => {
+  const viewport = { width: 375, height: 812 };
+
+  test('a control fully on screen is tested at its centre', () => {
+    const box = rect(10, 100, 100, 40);
+    expect(hitTestPoint(box, box, viewport)).toEqual({ point: [60, 120], partial: false });
+  });
+
+  test('a control scrolled past its inner ScrollArea edge is partial and tested inside the slice', () => {
+    const box = rect(10, 780, 100, 40);
+    const clipped = rect(10, 780, 100, 8); // the panel ends at y=788, the viewport at 812
+    const probe = hitTestPoint(box, clipped, viewport);
+    expect(probe.partial).toBe(true);
+    expect(probe.point).toEqual([60, 784]);
+  });
+
+  test('a control entirely clipped by its scroll container has no point', () => {
+    expect(hitTestPoint(rect(10, 900, 100, 40), null, viewport)).toEqual({
+      point: null,
+      partial: true,
+    });
+  });
+
+  test('the viewport clips too', () => {
+    const box = rect(10, 800, 100, 40);
+    expect(hitTestPoint(box, box, viewport)).toEqual({ point: [60, 806], partial: true });
+    expect(hitTestPoint(rect(10, 900, 100, 40), rect(10, 900, 100, 40), viewport)).toEqual({
+      point: null,
+      partial: true,
+    });
+  });
+});
+
+describe('content the browser does not render is not audited', () => {
+  test('a control inside a closed <details> is not rendered, though it has a box', () => {
+    // Portfolio detail, 2026-10-14: the "Exact figures per ad set" summary and its four sort
+    // buttons sit inside the closed "Show detail" disclosure — 582 × 14.5 px boxes at
+    // y = 1733, checkVisibility() false — and were graded as 15 px tap targets.
+    expect(rendersContent({ checkVisibility: () => false })).toBe(false);
+  });
+
+  test('a rendered control is audited', () => {
+    expect(rendersContent({ checkVisibility: () => true })).toBe(true);
+  });
+
+  test('a browser without checkVisibility is trusted to render', () => {
+    expect(rendersContent({})).toBe(true);
   });
 });
 
@@ -341,5 +450,49 @@ describe('reporting', () => {
     expect(text).toBe(
       '[Jaina @375 dark loaded] clipped-text p.lead 100×18@10,21: scrollWidth 140 > clientWidth 100',
     );
+  });
+});
+
+// A hit pad only ever grows a control's target; when a neighbour's pad overlaps this control's
+// DRAWN box, a press on what is drawn as this control lands on the neighbour. `ownerAt` stands
+// in for elementsFromPoint resolved to the owning control.
+describe('a neighbour hit pad never wins a tap on a drawn edge', () => {
+  const tab = { x: 100, y: 10, width: 60, height: 22 };
+
+  test('two segments whose pads stay out of each other pass', () => {
+    expect(paintedEdgeThief(tab, () => 'self')).toBeNull();
+  });
+
+  test('the next segment pad reaching 2px into this one is named, at the probe that hit it', () => {
+    // The neighbour starts at x=160 and pads 2px to the left: x >= 158 belongs to it.
+    const ownerAt = (x: number) => (x >= 158 ? 'button#next' : 'self');
+    expect(paintedEdgeThief(tab, ownerAt)).toEqual({ by: 'button#next', at: [158, 21] });
+  });
+
+  test('a non-control on top is the centre rule, not a stolen edge', () => {
+    expect(paintedEdgeThief(tab, () => null)).toBeNull();
+  });
+});
+
+describe('clipped text is measured on the text, not on the box', () => {
+  // A 31px chip, padding box from x=100 to x=131, with a 44px hit pad (::after) centred on it.
+  const padding = rect(100, 10, 31, 24);
+
+  test('a label that fits is not clipped even when a hit pad inflates scrollWidth', () => {
+    // "7d": the text runs 108..123; the pad's right overhang made scrollWidth 38 > 31.
+    expect(textSpill(rect(108, 14, 15, 16), padding, 'x')).toBe(0);
+  });
+
+  test('a label wider than its box spills by both overhangs', () => {
+    expect(textSpill(rect(97, 14, 40, 16), padding, 'x')).toBe(9);
+  });
+
+  test('vertical spill is measured on the y axis', () => {
+    expect(textSpill(rect(104, 12, 20, 30), padding, 'y')).toBe(8);
+    expect(textSpill(rect(104, 12, 20, 30), padding, 'x')).toBe(0);
+  });
+
+  test('an element with no rendered text never spills', () => {
+    expect(textSpill(null, padding, 'x')).toBe(0);
   });
 });

@@ -42,12 +42,18 @@ describe('PlatformComparisonRow — the table', () => {
     const table = getByTestId('platform-comparison').querySelector('table');
     expect(
       [...(table?.querySelectorAll('thead th') ?? [])].map((node) => node.textContent),
-    ).toEqual(['Leads by platform', 'Spend · 7 days', 'Leads', 'Cost per lead', 'Share']);
+    ).toEqual([
+      'Leads by platform',
+      'Spend · 7 days · MXN',
+      'Leads',
+      'Cost per lead · MXN',
+      'Share of leads',
+    ]);
     const google = getAllByTestId('comparison-column')[1];
     expect([...(google?.querySelectorAll('td') ?? [])].map((node) => node.textContent)).toEqual([
-      '11,200 MXN',
+      '$11,200',
       '118',
-      '31.40 MXN',
+      '$31.40',
       '55%',
     ]);
     for (const row of getAllByTestId('comparison-column')) {
@@ -74,12 +80,41 @@ describe('PlatformComparisonRow — the table', () => {
       <PlatformComparisonRow metrics={EASY_FIT_MP1} />,
     );
     expect(getByTestId('comparison-sentence').textContent).toBe(
-      'Google buys leads cheapest: 31.40 MXN per lead, against 41.30 MXN on Meta and 53.00 MXN on TikTok.',
+      'Google buys leads cheapest: $31.40 MXN per lead, against $41.30 MXN on Meta and $53.00 MXN on TikTok.',
     );
     const marked = getAllByTestId('comparison-cheapest');
     expect(marked).toHaveLength(1);
     expect(marked[0]?.closest('[data-platform]')?.getAttribute('data-platform')).toBe('google_ads');
     expect(marked[0]?.textContent).toBe('· cheapest');
+  });
+
+  // PP-L3-overview-meta-share-100-where-results-say-89: a share without its basis read as a
+  // share of everything. The header says which result it is a share of and the node names it.
+  // paid:parity:e2e:bench 2026-10-13: comparison.google_ads.results printed "0" and declared
+  // no raw figure. A platform that bought none of the result is a zero, and the node says so.
+  it('stamps a platform that bought none of the result as raw 0, the figure its "0" is', () => {
+    const { getAllByTestId } = render(
+      <PlatformComparisonRow
+        metrics={buildMetrics([
+          META_TOTALS,
+          { ...GOOGLE_TOTALS, results_by_kind: [], unclassified_spend: GOOGLE_TOTALS.spend ?? 0 },
+        ])}
+      />,
+    );
+    const google = getAllByTestId('comparison-column').find(
+      (row) => row.getAttribute('data-platform') === 'google_ads',
+    );
+    const node = google?.querySelector('[data-figure$=".results"]');
+    expect(node?.textContent).toBe('0');
+    expect(node?.getAttribute('data-figure-raw')).toBe('0');
+  });
+
+  it('declares the basis of every share: the compared result kind, on the header and the node', () => {
+    const { getAllByTestId } = render(<PlatformComparisonRow metrics={EASY_FIT_MP1} />);
+    for (const row of getAllByTestId('comparison-column')) {
+      const node = row.querySelector('[data-figure$=".share"]');
+      expect(node?.getAttribute('data-share-of')).toBe('leads');
+    }
   });
 
   it('stamps each share node in percent points, the raw its "NN%" text is formatted from', () => {
@@ -96,16 +131,22 @@ describe('PlatformComparisonRow — the table', () => {
     }
   });
 
-  it('totals the account in its one currency, which every spend figure carries', () => {
+  it('totals the account in its one currency, named once in the column headers (M1)', () => {
     const { getByTestId, getAllByTestId, queryByTestId } = render(
       <PlatformComparisonRow metrics={EASY_FIT_MP1} />,
     );
     expect(getByTestId('comparison-totals').textContent).toBe(
-      'All platforms: 38,411 MXN · 214 leads · 36.83 MXN per lead',
+      'All platforms: $38,411 MXN · 214 leads · $36.83 MXN per lead',
     );
     for (const row of getAllByTestId('comparison-column')) {
-      expect(row.querySelector('td')?.textContent).toContain('MXN');
+      const spend = row.querySelector('td');
+      expect(spend?.textContent).toMatch(/^\$[\d,]+$/);
+      expect(spend?.getAttribute('data-figure-code')).toBe('header');
     }
+    const headers = [...getByTestId('platform-comparison').querySelectorAll('thead th')].map(
+      (th) => th.textContent,
+    );
+    expect(headers.filter((text) => text?.endsWith(' · MXN'))).toHaveLength(2);
     // One currency: no separate currency label beside each platform's name.
     expect(queryByTestId('comparison-currency')).toBeNull();
   });
@@ -127,7 +168,8 @@ describe('PlatformComparisonRow — the table', () => {
       'USD',
     ]);
     const google = getAllByTestId('comparison-column')[1];
-    expect(google?.textContent).toContain('$11,200');
+    // Two currencies: no code in the headers, each cell carries its own.
+    expect(google?.textContent).toContain('$11,200 USD');
     expect(google?.textContent).not.toContain('MXN');
     expect(getByTestId('platform-comparison').textContent).not.toContain('35,111');
   });

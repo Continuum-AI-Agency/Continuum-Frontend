@@ -874,6 +874,9 @@ export const CycleItemRowSchema = z
     // optimizer_get_portfolio_performance returns the whole cycle_items row (to_jsonb),
     // so these arrive already — declaring them is what makes a held item renderable.
     apply_status: CycleItemApplyStatusSchema.nullable().optional(),
+    /** Why a 'skipped' item was not applied; 'voided: <reason>' when the database withdrew it
+     *  (an enrollment move, an unenroll, an archive). */
+    apply_error: z.string().nullable().optional(),
     apply_requested_by: z.string().nullable().optional(),
     apply_requested_at: z.string().nullable().optional(),
     /** The move's "why" in a sentence, written at cycle time (optimizer.cycle_items.reason).
@@ -1136,6 +1139,15 @@ export type ParsedCycleRunReport = z.infer<typeof ParsedCycleRunReportSchema>;
 export const PortfolioRosterStateSchema = z.enum(['empty', 'present', 'partial', 'absent']);
 export type PortfolioRosterState = z.infer<typeof PortfolioRosterStateSchema>;
 
+/** Why a portfolio's latest cycle no longer stands, in optimizer_list_portfolios' precedence:
+ *  nothing enrolled, the whole roster gone from the platform, or a missed cycle. */
+export const PortfolioWithdrawnReasonSchema = z.enum([
+  'no_members',
+  'roster_absent',
+  'missed_cycles',
+]);
+export type PortfolioWithdrawnReason = z.infer<typeof PortfolioWithdrawnReasonSchema>;
+
 /** One row of optimizer_list_portfolios — the Overview/Portfolios list model.
  *  DB-derived, so objective/mode/apply_mode stay loose strings (FE narrows). */
 export const PortfolioListItemSchema = z.object({
@@ -1218,10 +1230,44 @@ export const PortfolioListItemSchema = z.object({
    *  gone. `.catch(null)`: an unknown state costs the portfolio its roster read, never its
    *  row — a row that fails to parse disappears from the list entirely. */
   roster_state: PortfolioRosterStateSchema.nullable().catch(null).optional(),
-  /** min(missing_since) over the active roster when ALL of it is absent; null otherwise. */
+  /** max(missing_since) over the active roster when ALL of it is absent — since the LAST
+   *  member went missing (20261014225136); null otherwise. */
   roster_absent_since: z.string().nullable().optional(),
   /** Active enrollments currently absent from Meta. */
   roster_missing_count: z.number().int().nonnegative().nullable().optional(),
+  /**
+   * Whether the latest cycle's moves can still be acted on, from migration 20261014225136.
+   * False when there is no run, a cycle was missed, or the roster is empty or gone; its moves
+   * are then withdrawn (show them read-only) and pending_budget_moves reads 0. Defaulted so a
+   * payload from the RPC before the migration parses, and null means "not said", never false.
+   */
+  last_cycle_current: z.boolean().nullable().default(null),
+  /** Why the latest cycle is not current; null while current, and for a portfolio with
+   *  members that has not cycled yet. `.catch(null)`: an unknown reason costs the row its
+   *  reason, never the row. */
+  withdrawn_reason: PortfolioWithdrawnReasonSchema.nullable().default(null).catch(null),
+  /** The platforms the portfolio's accounts are on (its own platform and every
+   *  portfolio_platforms row), Meta first. A platform tab lists a portfolio by these, never by
+   *  the one ad account the page has selected. Empty from a server before 20261015160023: the
+   *  reader then falls back to the portfolio's account. An unknown platform is dropped. */
+  platforms: z
+    .array(z.unknown())
+    .default([])
+    .catch([])
+    .transform((rows) =>
+      rows.flatMap((row) => {
+        const parsed = PlatformIdSchema.safeParse(row);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  /** The currency the row's figures are in, stamped on the portfolio at creation (20261015160023).
+   *  A Google account's asset row carries none, so the account list cannot supply it. */
+  currency: z.string().nullable().optional(),
+  /** Whether the Optimizer may write each platform's budgets in this portfolio
+   *  (portfolio_platforms.apply_enabled, false when any of that platform's accounts is off;
+   *  20261017090000). A platform with no row is absent: Meta then applies as it always has, and
+   *  any other platform has no write path. `{}` from an older server. */
+  platform_writes: z.record(z.string(), z.boolean()).default({}).catch({}),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
 
@@ -2210,7 +2256,18 @@ export type OptimizerActionFamily = z.infer<typeof OptimizerActionFamilySchema>;
 /** The specific operation inside a family. Enumerated rather than left open because
  *  optimizer_list_actions emits these as hardcoded SQL literals — they cannot drift without
  *  a migration, unlike the table columns behind them. */
-export const OptimizerActionOpSchema = z.enum(['budget', 'status', 'setting', 'decision']);
+export const OptimizerActionOpSchema = z.enum([
+  'budget',
+  'status',
+  'setting',
+  'decision',
+  // A platform write's own kinds (Google, 20261016172613): a bid target, negative keywords, a
+  // keyword. Their before/after are the audit's prior/target ({field, value}; {absent} →
+  // {negatives}; {absent} → {keyword}).
+  'bid',
+  'negatives',
+  'keyword',
+]);
 export type OptimizerActionOp = z.infer<typeof OptimizerActionOpSchema>;
 
 /** One row of the unified optimizer action feed (public.optimizer_list_actions) — every

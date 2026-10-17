@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
 import {
+  type AccountEnrollment,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
   type ApplyRunResponse,
@@ -174,8 +177,15 @@ const applyAdsetStatusMutate = mock(
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
 const realOptimizerData = await import('../useOptimizerData');
+const { currentMoves } = await import('./portfolioStaleness');
+// The roster and membership map the moves split reads; null = not loaded, nothing withdrawn.
+let activeRoster: Set<string> | null = null;
+let activeEnrollments: AccountEnrollment[] = [];
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
+  // The real split, over the roster this test installs (the real hook reads two queries).
+  useCurrentMoves: (p: PortfolioListItem, _brand: string, _account: string, items: CycleItemRow[]) =>
+    currentMoves(items, p, activeRoster, activeEnrollments),
   useOptimizerPerformance: () => ({ data: activeReport, isLoading: false }),
   useOptimizerActions: () => ({ data: recentActions }),
   useOptimizerEnrolledAdsets: () => ({ data: [] }),
@@ -213,6 +223,9 @@ mock.module('../useOptimizerData', () => ({
   }),
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
   useRevertApply: () => ({ mutateAsync: async () => ({ ok: true }), isPending: false }),
+  // A platform card's own control asks the service through these; nothing here confirms one.
+  useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
+  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
@@ -271,6 +284,33 @@ mock.module('./RevertApplyDialog', () => ({
   ),
 }));
 
+// The card control's own flow (preview, confirm, undo) is PlatformCardActionControl's suite, and
+// the dialog mock above draws nothing while closed, trigger included. Here the control stands in
+// as the button it draws, carrying what the group handed it.
+const realCardControl = await import('./platformCards/PlatformCardActionControl');
+const { cardActionLabel } = await import('./platformCards/platformCardActionModel');
+mock.module('./platformCards/PlatformCardActionControl', () => ({
+  ...realCardControl,
+  PlatformCardActionControl: ({
+    portfolioId,
+    recommendationId,
+    write,
+  }: {
+    portfolioId: string;
+    recommendationId?: string | null;
+    write: Parameters<typeof cardActionLabel>[0];
+  }) => (
+    <button
+      data-portfolio-id={portfolioId}
+      data-recommendation-id={recommendationId ?? ''}
+      data-testid="platform-card-action"
+      type="button"
+    >
+      {cardActionLabel(write)}
+    </button>
+  ),
+}));
+
 mock.module('./RecommendationInsight', () => ({
   RecommendationInsight: ({ kind }: { kind: string }) => <span>{kind}</span>,
 }));
@@ -298,6 +338,8 @@ afterEach(() => {
   activeReport = report;
   activeProposals = [];
   recentActions = [];
+  activeRoster = null;
+  activeEnrollments = [];
 });
 
 const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
@@ -401,6 +443,40 @@ describe('buildActionQueue — pure inclusion + selectability', () => {
     const hidden = rows.find((row) => row.route === 'hidden');
     expect(hidden).toBeDefined();
     expect(isSelectableRow(hidden as never)).toBe(false);
+  });
+});
+
+describe('OptimizerActionsPortfolioGroup — withdrawn moves', () => {
+  it('a withdrawn cycle offers no budget move and says why above its moves', () => {
+    renderGroup({
+      last_cycle_current: false,
+      withdrawn_reason: 'missed_cycles',
+      last_actual_cycle_at: '2026-07-20T12:00:00Z',
+    });
+    expect(screen.getByTestId('reallocation-withdrawn').textContent).toBe(
+      'Last proposal, Jul 20 — withdrawn: no cycle has run since',
+    );
+    expect(screen.queryByLabelText('Select budget move for Budget Set')).toBeNull();
+    // The recommendations are not the cycle's moves: they stay decidable.
+    expect(screen.getByLabelText(/^Select .* for Pause Set$/)).toBeDefined();
+  });
+
+  it('a move whose ad set left the portfolio is withdrawn and names its new holder', () => {
+    activeRoster = new Set(['as-pause', 'as-creative']);
+    activeEnrollments = [
+      {
+        adset_id: 'as-budget',
+        portfolio_id: '99999999-9999-4999-8999-999999999999',
+        portfolio_name: 'Conversaciones Whatsapp',
+        same_brand: true,
+        can_release: true,
+      },
+    ];
+    renderGroup();
+    expect(screen.getByTestId('reallocation-row-withdrawn').textContent).toBe(
+      'Withdrawn — now in Conversaciones Whatsapp',
+    );
+    expect(screen.queryByLabelText('Select budget move for Budget Set')).toBeNull();
   });
 });
 
@@ -675,11 +751,11 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     const { container } = renderGroup();
 
     fireEvent.click(screen.getByLabelText('Select budget move for Retarget 30d'));
-    expect(container.textContent).toContain('Net +$15.00/day');
+    expect(container.textContent).toContain('Net +$15.00 USD/day');
 
     fireEvent.click(screen.getByLabelText('Select budget move for Cold Lookalike'));
     expect(container.textContent).toContain('Spend stays flat');
-    expect(container.textContent).not.toContain('Net +$15.00/day');
+    expect(container.textContent).not.toContain('Net +$15.00 USD/day');
   });
 
   it('selects the whole group from the header checkbox, then clears it', () => {
@@ -734,7 +810,7 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     activeReport = rebalanceReport;
     const { container } = renderGroup();
     fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
-    expect(container.textContent).toContain('Before → after: $50.00 → $65.00');
+    expect(container.textContent).toContain('Before → after: $50.00 USD → $65.00 USD');
     // The row's own detail carries no why; the story above may still explain the donor.
     const detail = screen.getByText(/Before → after/).closest('[data-testid="queue-row-detail"]');
     expect(detail?.textContent ?? '').not.toContain('Why:');
@@ -1457,10 +1533,10 @@ describe('queueSentence', () => {
       'MXN',
     );
     expect(text(parts)).toBe(
-      '9 waiting on a decision: 3 refresh creative for creative fatigue, 224 MXN/day at stake; 4 not being delivered for off meta.',
+      '9 waiting on a decision: 3 refresh creative for creative fatigue, $224 MXN/day at stake; 4 not being delivered for off meta.',
     );
     const figures = (parts ?? []).filter((part) => part.figure).map((part) => part.text);
-    expect(figures).toEqual(['9', '3', '224 MXN/day', '4']);
+    expect(figures).toEqual(['9', '3', '$224 MXN/day', '4']);
     expect((parts ?? []).find((part) => part.figureKey)?.figureKey).toBe(
       'queue.summary.creative_refresh:F1_creative_fatigue.impact',
     );
@@ -1498,5 +1574,91 @@ describe('recRowLine', () => {
         null,
       ),
     ).toBe('CTR 0.27% down 56% vs 14d · 3d');
+  });
+});
+
+// G2: "Review in Actions" from the Google tab lands here, so a Google-only portfolio's pending
+// platform card must be actionable in its tray with the card's own control — the validate_only
+// preview, then the write — and switched off when the portfolio's writes to Google are. As a
+// queue row it took the fatigue route, whose Approve only flips the status.
+describe("a Google portfolio's pending platform card in its queue", () => {
+  const { AccountReadEnvelopeSchema } = realOptimizerData;
+  const benchDocument = AccountReadEnvelopeSchema.parse(
+    JSON.parse(
+      readFileSync(
+        join(import.meta.dir, 'platformCards/__fixtures__/accountReadPlatformCards.json'),
+        'utf8',
+      ),
+    ),
+  );
+  const BUDGET = (benchDocument?.read?.candidates ?? []).find(
+    (candidate) => candidate.platform_card?.variant === 'google_budget_limited',
+  );
+  if (!BUDGET?.card_action) throw new Error('the bench document has no budget card with an action');
+  const REC_ID = BUDGET.card_action.recommendation_id;
+  const googleReport = {
+    ...report,
+    latest_items: [],
+    recommendations: [
+      {
+        id: REC_ID,
+        adset_id: '22357506300',
+        kind: 'platform_signal',
+        trigger: 'platform_signal:G03',
+        severity: 'medium',
+        reason: 'Limited by budget while converting under target',
+        status: 'pending',
+      },
+    ],
+  };
+  const renderGoogle = (cards: (typeof BUDGET)[]) =>
+    render(
+      <OptimizerActionsPortfolioGroup
+        adAccountId="act_1"
+        brandId="b1"
+        platformCards={cards}
+        portfolio={portfolio({
+          ad_account_id: '5251780631',
+          pending_recommendations: 1,
+          platforms: ['google_ads'],
+        })}
+      />,
+    );
+  const waiting = () =>
+    within(screen.getByTestId('queue-tray')).getByText(/waiting$/, { selector: 'span' })
+      .parentElement?.textContent;
+
+  it('renders the card with its own control in place of a queue row, and counts it once', () => {
+    activeReport = googleReport;
+    renderGoogle([BUDGET]);
+    const cards = within(screen.getByTestId('queue-platform-cards')).getAllByTestId('account-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.getAttribute('data-variant')).toBe('google_budget_limited');
+    const control = within(cards[0] as HTMLElement).getByTestId('platform-card-action');
+    expect(control.textContent).toBe('Apply new budget');
+    expect(control.getAttribute('data-recommendation-id')).toBe(REC_ID);
+    expect(control.getAttribute('data-portfolio-id')).toBe(BUDGET.card_action.portfolio_id);
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(0);
+    expect(screen.queryByLabelText(/^Select platform signal/)).toBeNull();
+    expect(waiting()).toBe('1 waiting');
+  });
+
+  it('renders the control disabled with the reason when writes to Google are switched off', () => {
+    activeReport = googleReport;
+    renderGoogle([{ ...BUDGET, card_action: { ...BUDGET.card_action, apply_enabled: false } }]);
+    const control = screen.getByTestId('platform-card-action-unavailable');
+    expect(control.getAttribute('data-reason')).toBe('apply_disabled');
+    const button = within(control).getByRole('button') as HTMLButtonElement;
+    expect(button.textContent).toBe('Apply new budget');
+    expect(button.disabled).toBe(true);
+    expect(control.textContent).toContain('Writes to Google are switched off for this portfolio.');
+  });
+
+  it('keeps the recommendation a queue row when no card was read for it', () => {
+    activeReport = googleReport;
+    renderGoogle([]);
+    expect(screen.queryByTestId('queue-platform-cards')).toBeNull();
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(1);
+    expect(waiting()).toBe('1 waiting');
   });
 });

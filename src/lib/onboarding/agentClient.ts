@@ -21,6 +21,7 @@ import {
   businessSummarySchema,
   type FirstImpression,
   firstImpressionSchema,
+  type OnboardingPreviewEvidence,
   onboardingReportStructuredSchema,
   type ReadinessAnalysis,
   type ReadinessDimensionKey as ReadinessDimension,
@@ -165,7 +166,7 @@ const initialPhaseResultSchema = z.object({
 
 export type InitialPhaseResult = z.infer<typeof initialPhaseResultSchema>;
 
-export type AgentRequestPayload = {
+export type AgentRequestPayload = OnboardingPreviewEvidence & {
   brandProfile: AgentBrandProfile;
   runContext: AgentRunContext;
   scrape?: ScrapeResult | null;
@@ -554,6 +555,10 @@ export async function runOnboardingPreview(
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,
       scrape: options.payload.scrape ?? null,
+      intake: options.payload.intake,
+      instagram_profile: options.payload.instagram_profile,
+      facebook_profile: options.payload.facebook_profile,
+      document_ids: options.payload.document_ids,
       richMode: true,
     }),
     cache: 'no-store',
@@ -698,6 +703,10 @@ export async function computePreviewInputHash(input: {
     brandProfile: input.payload.brandProfile,
     runContext: input.payload.runContext,
     scrape: input.payload.scrape ?? null,
+    intake: input.payload.intake ?? null,
+    instagram_profile: input.payload.instagram_profile ?? null,
+    facebook_profile: input.payload.facebook_profile ?? null,
+    document_ids: input.payload.document_ids ?? [],
     rich: input.rich ?? true,
     promptVersion: input.promptVersion ?? PREVIEW_PROMPT_VERSION,
   });
@@ -1196,6 +1205,8 @@ export async function approveOnboardingBrandProfile(
     body: JSON.stringify({
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,
+      intake: options.payload.intake,
+      preview_run_id: options.payload.preview_run_id,
     }),
     cache: 'no-store',
     signal: options?.signal,

@@ -61,18 +61,53 @@ describe('templateChecks', () => {
 
   test('MAPPING distinguishes verified identity from a name guess and unresolved layers', () => {
     const ready = {
-      state: 'ready' as const, identityAvailable: true, slotCount: 1, matchedSlots: 1,
-      fields: [{ key: 'headline', label: 'Headline', kind: 'text' as const,
-        slotKey: 'text__headline', slotName: 'Headline', comps: ['wide'], sample: 'Hi',
-      match: 'layer_id' as const }], unmatchedSlots: [], ignoredSlots: [],
+      state: 'ready' as const,
+      identityAvailable: true,
+      slotCount: 1,
+      matchedSlots: 1,
+      fields: [
+        {
+          key: 'headline',
+          label: 'Headline',
+          kind: 'text' as const,
+          slotKey: 'text__headline',
+          slotName: 'Headline',
+          comps: ['wide'],
+          sample: 'Hi',
+          match: 'layer_id' as const,
+        },
+      ],
+      unmatchedSlots: [],
+      ignoredSlots: [],
     };
-    expect(row({ mappingReview: ready, run: runRow({ state: 'review_ready' }) }, 'mapping'))
-      .toMatchObject({ state: 'pass', result: '1 of 1 layers mapped' });
-    expect(row({ mappingReview: { ...ready, identityAvailable: false } , run: runRow({ state: 'review_ready' }) }, 'mapping').state)
-      .toBe('warn');
-    expect(row({ mappingReview: { ...ready, state: 'needs_review', matchedSlots: 0,
-      unmatchedSlots: [{ key: 'text__headline', name: 'Headline', kind: 'text', comps: ['wide'] }] },
-      run: runRow({ state: 'review_ready' }) }, 'mapping').state).toBe('fail');
+    expect(
+      row({ mappingReview: ready, run: runRow({ state: 'review_ready' }) }, 'mapping'),
+    ).toMatchObject({ state: 'pass', result: '1 of 1 layers mapped' });
+    expect(
+      row(
+        {
+          mappingReview: { ...ready, identityAvailable: false },
+          run: runRow({ state: 'review_ready' }),
+        },
+        'mapping',
+      ).state,
+    ).toBe('warn');
+    expect(
+      row(
+        {
+          mappingReview: {
+            ...ready,
+            state: 'needs_review',
+            matchedSlots: 0,
+            unmatchedSlots: [
+              { key: 'text__headline', name: 'Headline', kind: 'text', comps: ['wide'] },
+            ],
+          },
+          run: runRow({ state: 'review_ready' }),
+        },
+        'mapping',
+      ).state,
+    ).toBe('fail');
   });
 
   test('PARSE: read, not opened, unreadable, unsupported', () => {
@@ -175,7 +210,7 @@ describe('templateChecks', () => {
       row({ run: runRow({ state: 'needs_input', needs: assetNeeds }) }, 'build'),
     ).toMatchObject({
       state: 'warn',
-      result: 'Pick a picture for 2 media variables, then build again',
+      result: 'Pick a picture for 2 media variables',
       action: 'resume',
     });
     const mixedNeeds: TemplateRunRow['needs'] = [

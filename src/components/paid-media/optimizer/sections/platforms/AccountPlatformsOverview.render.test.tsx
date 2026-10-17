@@ -30,7 +30,7 @@ describe('AllPlatformsHeadline', () => {
     );
     const headline = getByTestId('overview-headline');
     expect(headline.textContent).toBe(
-      'The account spent 38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
+      'The account spent $38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
     );
     // The figure sits in mono; the decisions clause takes the primary colour, its count mono.
     expect(headline.querySelector('[data-figure="overview.spend.MXN"]')?.className).toContain(
@@ -50,7 +50,7 @@ describe('AllPlatformsHeadline', () => {
     );
     expect(delta?.textContent).toBe('▼ 3%');
     expect(delta?.className).toContain('text-success');
-    expect(delta?.getAttribute('title')).toBe('prev. 7 days 41.34 MXN');
+    expect(delta?.getAttribute('title')).toBe('prev. 7 days $41.34 MXN');
     // Leads have no account-wide prior: no move is invented.
     expect(
       getByTestId('tile-kind-leads').querySelector('[data-testid="cost-prior-delta"]'),
@@ -81,7 +81,7 @@ describe('AllPlatformsHeadline', () => {
     const { getByTestId } = render(<AllPlatformsHeadline metrics={frame} pendingCount={6} />);
     const text = getByTestId('overview-headline').textContent ?? '';
     expect(text).toStartWith(
-      'The account spent 23,911 MXN and $11,200 in 7 days across two platforms.',
+      'The account spent $23,911 MXN and $11,200 USD in 7 days across two platforms.',
     );
     expect(text).not.toContain('35,111');
   });
@@ -101,14 +101,14 @@ describe('AllPlatformsTiles', () => {
     );
     const tiles = getByTestId('account-tiles');
     expect(tiles.getAttribute('data-source')).toBe('account-platform-metrics');
-    expect(tile(container, 'tile-spend')).toContain('38,411 MXN');
+    expect(tile(container, 'tile-spend')).toContain('$38,411 MXN');
     expect(tile(container, 'tile-spend')).toContain('Meta 62% · Google 29% · TikTok 9%');
     expect(tile(container, 'tile-kind-conversations')).toContain('Conversations · Meta');
     expect(tile(container, 'tile-kind-conversations')).toContain('516');
     expect(tile(container, 'tile-kind-leads')).toContain('Leads · 3 platforms');
     expect(tile(container, 'tile-kind-leads')).toContain('214');
-    expect(tile(container, 'tile-kind-leads')).toContain('Google cheapest at 31.40 MXN');
-    expect(tile(container, 'tile-kind-purchases')).toContain('75.60 MXN spent, no results');
+    expect(tile(container, 'tile-kind-leads')).toContain('Google cheapest at $31.40 MXN');
+    expect(tile(container, 'tile-kind-purchases')).toContain('$75.60 MXN spent, no results');
     expect(tile(container, 'tile-decisions')).toContain('6');
     expect(tile(container, 'tile-autopilot')).toContain('4/5');
     // The figure node carries the raw count alone; "/5" sits beside it, so the parity oracle
@@ -161,8 +161,20 @@ describe('AllPlatformsTiles', () => {
     const { container } = render(
       <AllPlatformsTiles metrics={frame} pendingCount={6} onOpenActions={() => {}} />,
     );
-    expect(tile(container, 'tile-spend')).toContain('23,911 MXN · $11,200');
+    expect(tile(container, 'tile-spend')).toContain('$23,911 MXN · $11,200 USD');
     expect(tile(container, 'tile-spend')).not.toContain('%');
+  });
+
+  it('stamps the raw spend it prints even when the producer names no currency', () => {
+    const frame = buildMetrics([{ ...META_TOTALS, share_of_spend: 1 }]);
+    frame.spend_by_currency = [{ currency: null, spend: 13890 }];
+    const { container } = render(
+      <AllPlatformsTiles metrics={frame} pendingCount={2} onOpenActions={() => {}} />,
+    );
+    const figure = container.querySelector('[data-figure="tiles.spend"]');
+    expect(figure?.textContent).toBe('13,890');
+    expect(figure?.getAttribute('data-figure-raw')).toBe('13890');
+    expect(figure?.getAttribute('data-figure-currency')).toBe('none');
   });
 });
 
@@ -215,18 +227,20 @@ describe('PlatformMetricsSection', () => {
       <PlatformMetricsSection metrics={EASY_FIT_MP1} platform="google_ads" />,
     );
     expect(getByTestId('platform-headline').textContent).toBe(
-      'Google spent 11,200 MXN in 7 days (29% of the account): 118 leads at 31.40 MXN.',
+      'Google spent $11,200 MXN in 7 days (29% of the account): 118 leads at $31.40 MXN.',
     );
     expect(tile(container, 'platform-tile-spend')).toContain('29% of the account');
     expect(tile(container, 'platform-tile-kind-leads')).toContain('118');
-    expect(tile(container, 'platform-tile-kind-leads')).toContain('prev. 33.10 MXN');
-    expect(tile(container, 'platform-tile-unclassified')).toContain('7,495 MXN');
+    expect(tile(container, 'platform-tile-kind-leads')).toContain('prev. $33.10 MXN');
+    expect(tile(container, 'platform-tile-unclassified')).toContain('$7,495 MXN');
     expect(container.textContent).toContain('every campaign of the connected accounts');
   });
 
   it("renders TikTok's tiles, and Meta's coverage as its portfolios", () => {
     const tiktok = render(<PlatformMetricsSection metrics={EASY_FIT_MP1} platform="tiktok_ads" />);
-    expect(tiktok.getByTestId('platform-headline').textContent).toContain('TikTok spent 3,300 MXN');
+    expect(tiktok.getByTestId('platform-headline').textContent).toContain(
+      'TikTok spent $3,300 MXN',
+    );
     expect(tile(tiktok.container, 'platform-tile-spend')).toContain('+10% on the period before');
     cleanup();
     const meta = render(<PlatformMetricsSection metrics={EASY_FIT_MP1} platform="meta" />);

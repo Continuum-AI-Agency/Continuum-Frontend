@@ -138,6 +138,7 @@ const DERIVED_BY_CATEGORY: Record<BlockCategory, DashboardDerived | null> = {
   insight_list: 'severity',
   actions: 'severity',
   comparison: 'comparison',
+  steps: 'severity',
   goal_pacing: 'pacing',
   metric_grid: null,
   chart: null,

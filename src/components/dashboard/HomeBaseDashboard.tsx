@@ -98,7 +98,7 @@ export function HomeBaseDashboard({
               <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {activeConfig.title}
               </h1>
-              <p className="min-w-0 truncate text-xs text-muted-foreground/80">
+              <p className="min-w-0 truncate text-xs text-muted-foreground">
                 {activeConfig.microcopy}
               </p>
             </div>
@@ -123,7 +123,7 @@ export function HomeBaseDashboard({
                       title={config.microcopy}
                       onClick={() => handleViewChange(view)}
                       className={cn(
-                        'h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
+                        'hit-area h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
                         isActive
                           ? 'bg-muted/60 text-foreground'
                           : 'text-muted-foreground hover:text-foreground',

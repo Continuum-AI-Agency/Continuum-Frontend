@@ -22,6 +22,11 @@ export type ApproveScheduleOptions = {
    * single "Approved N • skipped M" summary instead of N toasts stacking up.
    */
   silent?: boolean;
+  /**
+   * Receives the reason a draft was not scheduled. A silent caller's summary toast
+   * must name it — "could not be scheduled" alone hid a missing caption.
+   */
+  onFailure?: (message: string) => void;
 };
 
 export type UseApproveScheduleDraftResult = {
@@ -49,14 +54,17 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
       const notify: typeof show = (toast) => {
         if (!options?.silent) show(toast);
       };
+      const fail = (title: string, description: string): false => {
+        options?.onFailure?.(description);
+        notify({ title, description, variant: 'error' });
+        return false;
+      };
       const backendDraftId = draft.backendDraftId;
       if (!backendDraftId) {
-        notify({
-          title: 'Not saved yet',
-          description: 'This draft has not been saved to the server yet — try again in a moment.',
-          variant: 'error',
-        });
-        return false;
+        return fail(
+          'Not saved yet',
+          'This draft has not been saved to the server yet — try again in a moment.',
+        );
       }
 
       setIsApproving(true);
@@ -80,12 +88,12 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
           // invalid_state = the row is already approved/scheduled — scheduling may
           // still proceed; every other rejection (quality/media gate) is terminal.
           if (payload.error !== 'invalid_state') {
-            const description =
+            return fail(
+              'Approval blocked',
               (payload.reason && APPROVE_ERROR_MESSAGES[payload.reason]) ??
-              payload.message ??
-              'The draft could not be approved.';
-            notify({ title: 'Approval blocked', description, variant: 'error' });
-            return false;
+                payload.message ??
+                'The draft could not be approved.',
+            );
           }
         }
 
@@ -102,12 +110,10 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
 
         if (!scheduleResp.ok) {
           const payload = (await scheduleResp.json().catch(() => ({}))) as { message?: string };
-          notify({
-            title: 'Scheduling failed',
-            description: payload.message ?? 'The draft was approved but could not be scheduled.',
-            variant: 'error',
-          });
-          return false;
+          return fail(
+            'Scheduling failed',
+            payload.message ?? 'The draft was approved but could not be scheduled.',
+          );
         }
 
         updateDraft(draft.id, (d) => ({ ...d, status: 'scheduled' as const }));
@@ -118,12 +124,7 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
         });
         return true;
       } catch {
-        notify({
-          title: 'Approval failed',
-          description: 'Network error. Please try again.',
-          variant: 'error',
-        });
-        return false;
+        return fail('Approval failed', 'Network error. Please try again.');
       } finally {
         setIsApproving(false);
       }

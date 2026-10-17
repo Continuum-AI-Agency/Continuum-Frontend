@@ -705,8 +705,8 @@ export type RecommendationEvidence = {
   platformCard?: PlatformCard;
   /**
    * The title: entity + figure with its unit + the comparison the trigger fired on, in
-   * Spanish with ISO currency codes and no verb — "ITESO // AGOSTO - RTG: 101 MXN por lead,
-   * 2.9× la referencia de 35 MXN". Composed from `value`, `threshold` and the reference the
+   * Spanish, money by the M1 rule, and no verb — "ITESO // AGOSTO - RTG: $101 MXN por lead,
+   * 2.9× la referencia de $35 MXN". Composed from `value`, `threshold` and the reference the
    * trigger held, never from `reason`, which stays for one release as the legacy line.
    *
    * Rides inside `evidence` for the same reason `headline` does (loose schema, whole-jsonb

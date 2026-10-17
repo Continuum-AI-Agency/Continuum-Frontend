@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import type { MultiPlatformSnapshot } from '@continuum/contracts';
-import { currencyMinorOffset } from '@continuum/contracts';
+import { currencyMinorOffset, formatMoney } from '@continuum/contracts';
 import type { OptimizationObjective, WindowMetrics } from '../types';
 import { isGoogleBidLearning, platformCaps } from './learning';
 
@@ -19,7 +19,6 @@ export const G03_PROJECTION_MIN_HISTORY_DAYS = 7;
 const G03_PROJECTION_BASIS_DAYS = 7;
 
 const cents = (v: number): number => Math.round(v * 100) / 100;
-const money = (v: number, currency: string): string => `${cents(v).toFixed(2)} ${currency}`;
 
 function majorBudget(s: MultiPlatformSnapshot): number {
   return s.budget.minor / currencyMinorOffset(s.budget.currency);
@@ -126,13 +125,13 @@ export function g03BudgetLimitedRaise(s: MultiPlatformSnapshot, ctx: G03Context)
   if (!ctx.cpaTarget || ctx.cpaTarget.currency !== currency) {
     return refuse(
       'missing_cpa_target',
-      `${name} loses ${lostText} to budget, but each result costs ${money(cost, currency)}. Set a target cost per result in ${currency} and I'll tell you whether more budget is worth it.`,
+      `${name} loses ${lostText} to budget, but each result costs ${formatMoney(cost, currency)}. Set a target cost per result in ${currency} and I'll tell you whether more budget is worth it.`,
     );
   }
   if (cost >= ctx.cpaTarget.amount) {
     return refuse(
       'above_target',
-      `${name} loses ${lostText} to budget at ${money(cost, currency)} per result, above the ${money(ctx.cpaTarget.amount, currency)} target.`,
+      `${name} loses ${lostText} to budget at ${formatMoney(cost, currency, { distinguishFrom: ctx.cpaTarget.amount })} per result, above the ${formatMoney(ctx.cpaTarget.amount, currency, { distinguishFrom: cost })} target.`,
     );
   }
   if (isGoogleBidLearning(s.bidding?.systemStatus)) {
@@ -152,7 +151,7 @@ export function g03BudgetLimitedRaise(s: MultiPlatformSnapshot, ctx: G03Context)
     costPerResult: cost,
     budgetLostImpressionShare: lost,
     needsApproval: true,
-    reason: `${name} loses ${lostText} to budget with results at ${money(cost, currency)}, ${under}% under target. Raise to ${money(to, currency)}/day.`,
+    reason: `${name} loses ${lostText} to budget with results at ${formatMoney(cost, currency)}, ${under}% under target. Raise to ${formatMoney(to, currency)}/day.`,
     projection: g03Projection({
       conversions,
       cost,
@@ -247,7 +246,7 @@ export function googleDarkness(
         campaignIds: active.map((s) => s.id),
         dailyBudget,
         currency,
-        reason: `This account has ${active.length} active campaigns and ${money(dailyBudget, currency)}/day of budget but showed no ads in 14 days. Check billing in Google Ads.`,
+        reason: `This account has ${active.length} active campaigns and ${formatMoney(dailyBudget, currency)}/day of budget but showed no ads in 14 days. Check billing in Google Ads.`,
       });
       continue;
     }
@@ -313,6 +312,6 @@ export function g11LowQualityKeyword(
     fires: true,
     rule: 'G11',
     keywordId: k.id,
-    reason: `"${k.text}" has Quality Score ${k.qualityScore} and spent ${money(k.spend, currency)} (${k.window}) with no conversions.`,
+    reason: `"${k.text}" has Quality Score ${k.qualityScore} and spent ${formatMoney(k.spend, currency)} (${k.window}) with no conversions.`,
   };
 }

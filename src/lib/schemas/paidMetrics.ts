@@ -71,6 +71,10 @@ const previousRangeSchema = z.object({
 });
 
 export const PaidMetricsResponseSchema = z.object({
+  // The account's currency and timezone as the edge labelled the daily-scope payload; null
+  // when it could not read them. Declared so the route's parse keeps them.
+  currency: z.string().nullable().optional(),
+  timezone: z.string().nullable().optional(),
   metrics: metricsSchema,
   comparison: comparisonRecordSchema,
   trends: z.array(trendPointSchema),

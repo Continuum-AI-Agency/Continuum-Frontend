@@ -126,15 +126,15 @@ describe('the headline — each detector leads with its own metric, money suppor
 
   it('still carries the money every card shares, as day · month', () => {
     const html = accountCardHtml(withHeadline(), opts);
-    // Whole units above 100, per `money()` — the month is a figure to grasp, not audit.
-    expect(html).toContain('$66.67/day · $2000/mo');
+    // Whole units above 100, per `formatMoney` (M1) — the month is a figure to grasp, not audit.
+    expect(html).toContain('$66.67 USD/day · $2,000 USD/mo');
   });
 
   it('says the month even when the money is the headline it fell back to', () => {
     // No detector declared one: the money leads, exactly as before, plus the month.
     const html = accountCardHtml(candidate(), opts);
-    expect(html).toContain('<span class="fig">$66.67</span><span class="unit">/day</span>');
-    expect(html).toContain('· $2000/mo');
+    expect(html).toContain('<span class="fig">$66.67 USD</span><span class="unit">/day</span>');
+    expect(html).toContain('· $2,000 USD/mo');
   });
 
   it('prints a count as a count and money per day as money', () => {
@@ -146,7 +146,7 @@ describe('the headline — each detector leads with its own metric, money suppor
         withHeadline({ kind: 'avoided', value: 96.4, unit: 'currency_per_day' }),
         opts,
       ),
-    ).toContain('<span class="fig">$96.40</span>');
+    ).toContain('<span class="fig">$96.40 USD</span>');
   });
 
   it('clips a label that would push the figure row out of its band', () => {

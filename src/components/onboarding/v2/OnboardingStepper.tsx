@@ -14,18 +14,22 @@ type OnboardingStepperProps = {
 
 export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps) {
   return (
-    <ol className="flex w-full items-stretch justify-center gap-0">
+    <ol className="flex w-full items-stretch justify-between gap-1 sm:justify-center sm:gap-0">
       {steps.map((step, index) => {
         const interactive = step.state !== 'pending' && onStepClick;
         const isLast = index === steps.length - 1;
         return (
-          <li key={step.id} className="flex flex-1 items-center gap-3">
+          <li
+            key={step.id}
+            className="flex min-w-0 items-center gap-1 sm:min-w-max sm:flex-1 sm:gap-3"
+          >
             <button
               type="button"
+              aria-label={`${step.label}: ${step.description}`}
               disabled={!interactive}
               onClick={interactive ? () => onStepClick(step.id) : undefined}
               className={cn(
-                'group flex flex-1 items-center gap-3 text-left transition-opacity',
+                'group flex min-w-0 flex-1 items-center gap-1 text-left transition-opacity sm:min-w-max sm:gap-3',
                 !interactive && 'cursor-default',
                 interactive && 'hover:opacity-80',
               )}
@@ -61,10 +65,10 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                   </motion.span>
                 )}
               </motion.span>
-              <div className="min-w-0 flex-1">
+              <div className={cn('min-w-0 flex-1', step.state !== 'active' && 'hidden sm:block')}>
                 <p
                   className={cn(
-                    'truncate text-sm font-semibold leading-tight transition-colors',
+                    'truncate text-xs font-semibold leading-tight transition-colors sm:text-sm',
                     step.state === 'active' && 'text-foreground',
                     step.state === 'done' && 'text-foreground',
                     step.state === 'pending' && 'text-muted-foreground',
@@ -72,11 +76,13 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                 >
                   {step.label}
                 </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{step.description}</p>
+                <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">
+                  {step.description}
+                </p>
               </div>
             </button>
             {isLast ? null : (
-              <div className="relative h-px flex-1 overflow-hidden bg-border">
+              <div className="relative hidden h-px flex-1 overflow-hidden bg-border sm:block">
                 <motion.span
                   initial={false}
                   animate={{ scaleX: step.state === 'done' ? 1 : 0 }}

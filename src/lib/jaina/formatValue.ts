@@ -1,3 +1,5 @@
+import { formatMoney } from '@continuum/contracts';
+
 export type ValueFormat =
   | 'currency'
   | 'percent'
@@ -71,20 +73,13 @@ export function formatValue(
   if (Number.isNaN(num)) return String(value);
 
   switch (format) {
-    // A missing code is NOT dollars. Every block that renders money already says
-    // "N (currency unknown)" when its `currency_code` is null — the backend's dataset
-    // materializer names that spelling too — and defaulting to USD here was the one place a
-    // peso figure could still reach a reader wearing a dollar sign.
-    case 'currency': {
-      const code = (options?.currency ?? '').trim().toUpperCase();
-      if (!/^[A-Z]{3}$/.test(code))
-        return `${formatValue(num, 'number', options)} (currency unknown)`;
-      return new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency: code,
-        maximumFractionDigits: 2,
-      }).format(num);
-    }
+    // Money is the product's one rule (M1, `formatMoney` in @continuum/contracts): "$2,889 MXN",
+    // "$25.54 USD", two decimals under 100 and none at or above, and the bare figure when the
+    // currency is unknown — the spelling the Backend's own prose and the Optimizer print, so one
+    // answer never shows the same figure two ways. Never the locale's "MX$", never a guessed
+    // "$", never "(currency unknown)".
+    case 'currency':
+      return formatMoney(num, options?.currency);
 
     case 'percent': {
       const basis = options?.percentBasis ?? null;

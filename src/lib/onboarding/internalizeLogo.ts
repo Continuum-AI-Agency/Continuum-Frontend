@@ -29,7 +29,7 @@ export async function internalizeLogo(
   if (blob.size === 0 || blob.size > MAX_BYTES) return null;
 
   const ext = pickExtension(contentType, externalUrl);
-  const filename = `${LOGO_BASENAME}.${ext}`;
+  const filename = `${LOGO_BASENAME}-${crypto.randomUUID()}.${ext}`;
   const file = new File([blob], filename, { type: contentType });
 
   const supabase = createSupabaseBrowserClient();
@@ -38,7 +38,7 @@ export async function internalizeLogo(
   const { error } = await supabase.storage
     .from(getCreativeAssetsBucket())
     .upload(targetPath, file, {
-      upsert: true,
+      upsert: false,
       cacheControl: '3600',
       contentType,
     });

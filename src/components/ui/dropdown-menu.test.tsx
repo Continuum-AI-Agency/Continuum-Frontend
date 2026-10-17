@@ -5,7 +5,9 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from './dropdown-menu';
 
@@ -14,6 +16,51 @@ afterEach(cleanup);
 // Base UI mounts a portalled positioner per render; on a machine running several
 // benches at once the first one in a file can take longer than bun's 5s default.
 const RENDER_TIMEOUT_MS = 30_000;
+
+// Base UI's GroupLabel reads MenuGroupContext and THROWS when it is absent, so a bare
+// <DropdownMenuLabel> takes the page down to global-error's "500" the moment its menu
+// opens. Airtable #403: the Library Reformat menu did exactly that. Radix tolerated a
+// bare label and the call sites were written against Radix; the same guard lives in
+// context-menu.test.tsx.
+describe('DropdownMenuLabel', () => {
+  it(
+    'renders outside an explicit group without throwing',
+    () => {
+      expect(() =>
+        render(
+          <DropdownMenu open>
+            <DropdownMenuTrigger>open me</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Reformat for placement</DropdownMenuLabel>
+              <DropdownMenuItem>Fast crop</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>,
+        ),
+      ).not.toThrow();
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'still renders inside an explicit group',
+    () => {
+      const { getByText } = render(
+        <DropdownMenu open>
+          <DropdownMenuTrigger>open me</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Pre-made workflows</DropdownMenuLabel>
+              <DropdownMenuItem>Open</DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>,
+      );
+
+      expect(getByText('Pre-made workflows')).toBeDefined();
+    },
+    RENDER_TIMEOUT_MS,
+  );
+});
 
 // Base UI's Menu.Item activates on `onClick` and has no `onSelect` at all. A `<div>` DOES
 // have a DOM text-selection event of that name, so React accepted the prop, TypeScript

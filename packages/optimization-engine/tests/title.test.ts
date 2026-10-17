@@ -184,10 +184,10 @@ test('P2 states the cost per lead against the reference, and the saving moves to
     'P2_sustained_poor',
   );
   const { title, text, button } = wire(rec);
-  expect(text).toBe('ITESO // AGOSTO - RTG: 102 MXN por lead, 5.1× la referencia de 20.00 MXN');
+  expect(text).toBe('ITESO // AGOSTO - RTG: $102 MXN por lead, 5.1× la referencia de $20.00 MXN');
   expect(title.window).toBe('d14');
   expect(title.figure).toBe(102);
-  expect(button).toBe('Pausar · 72.86 MXN/día');
+  expect(button).toBe('Pause · $72.86 MXN/day');
   expect(rec?.reason).toContain('CPP 14d'); // the legacy line stays for one release
 });
 
@@ -201,9 +201,24 @@ test('P3 states the spend, the window and the nothing it bought', () => {
   const rec = byTrigger(evaluateTriggers([dead], leadsMxn).recommendations, 'P3_low_significance');
   const { text, button } = wire(rec);
   expect(text).toBe(
-    'ALEIRA // AGOSTO - LKL: 298 MXN, en 14 días y 0 leads, más que el objetivo de 35.00 MXN por lead',
+    'ALEIRA // AGOSTO - LKL: $298 MXN, en 14 días y 0 leads, más que el objetivo de $35.00 MXN por lead',
   );
-  expect(button).toBe('Pausar · 21.29 MXN/día');
+  expect(button).toBe('Pause · $21.29 MXN/day');
+});
+
+test('P3 never prints the spend and the target it exceeded as the same figure', () => {
+  const dead = mk({
+    id: 'aleira',
+    name: 'ALEIRA',
+    kpiField: 'leads',
+    windows: { d3: wl(0, 0), d7: wl(50, 0), d14: wl(100.01, 0) },
+  });
+  const cfg: EngineConfig = { ...leadsMxn, cpaTarget: 100 };
+  const rec = byTrigger(evaluateTriggers([dead], cfg).recommendations, 'P3_low_significance');
+  const { text } = wire(rec);
+  expect(text).toBe(
+    'ALEIRA: $100.01 MXN, en 14 días y 0 leads, más que el objetivo de $100.00 MXN por lead',
+  );
 });
 
 test('P1 names the dead upper funnel in the objective’s own nouns', () => {
@@ -212,7 +227,7 @@ test('P1 names the dead upper funnel in the objective’s own nouns', () => {
     'P1_zero_upper_funnel',
   );
   const { text, title } = wire(rec);
-  expect(text).toBe('CONJUNTO X: 90.00 MXN, en 3 días con 0 compras y 0 agregados al carrito');
+  expect(text).toBe('CONJUNTO X: $90.00 MXN, en 3 días con 0 compras y 0 agregados al carrito');
   expect(title.window).toBe('d3');
 });
 
@@ -253,9 +268,9 @@ test('C1 names the losing ad, its cost per lead and the winner beside it', () =>
   );
   const { text, button } = wire(rec);
   expect(text).toBe(
-    'Perdedor: 66.00 MXN por lead, 2.2× el ganador "Ganador" a 30.00 MXN, en 660 MXN de gasto',
+    'Perdedor: $66.00 MXN por lead, 2.2× el ganador "Ganador" a $30.00 MXN, en $660 MXN de gasto',
   );
-  expect(button).toBe('Pausar el anuncio · 47.14 MXN/día');
+  expect(button).toBe('Pause the ad · $47.14 MXN/day');
 });
 
 test('C2 names the winner and how much cheaper it buys a lead than its sibling', () => {
@@ -265,11 +280,11 @@ test('C2 names the winner and how much cheaper it buys a lead than its sibling',
   );
   const { text, button, action } = wire(rec);
   expect(text).toBe(
-    'Ganador: 30.00 MXN por lead, 55% menos que "Perdedor" a 66.00 MXN en el mismo conjunto',
+    'Ganador: $30.00 MXN por lead, 55% menos que "Perdedor" a $66.00 MXN en el mismo conjunto',
   );
   // Making variants puts no measured money on the table: the button is the verb alone.
   expect(action.sizing).toBeNull();
-  expect(button).toBe('Hacer variantes');
+  expect(button).toBe('Make variants');
 });
 
 // --- The delivery family: D2 -----------------------------------------------------------
@@ -290,9 +305,9 @@ test('D2 states the idle budget and the days with no impressions', () => {
   );
   const { text, button } = wire(rec);
   expect(text).toBe(
-    'ITESO // AGOSTO - RTG: 48.80 MXN por día de presupuesto, y 0 impresiones en 7 días',
+    'ITESO // AGOSTO - RTG: $48.80 MXN por día de presupuesto, y 0 impresiones en 7 días',
   );
-  expect(button).toBe('Restaurar la entrega · 48.80 MXN/día');
+  expect(button).toBe('Restore delivery · $48.80 MXN/day');
 });
 
 // --- The fatigue family: F1 / F3 -------------------------------------------------------
@@ -308,9 +323,9 @@ test('F1 states the recent CTR against its own 14 days, with the CPA rise that p
   const rec = byTrigger(evaluateFatigue([worn], purchasesMxn), 'F1_creative_fatigue');
   const { text, button } = wire(rec);
   expect(text).toBe(
-    'CONJUNTO X: 0.5% de CTR en 3 días, 75% menos que los 14 días (2.00%) y CPA +50% (60.00 MXN frente a 40.00 MXN por compra)',
+    'CONJUNTO X: 0.5% de CTR en 3 días, 75% menos que los 14 días (2.00%) y CPA +50% ($60.00 MXN frente a $40.00 MXN por compra)',
   );
-  expect(button).toBe('Renovar el creativo · 66.67 MXN/día');
+  expect(button).toBe('Refresh the creative · $66.67 MXN/day');
 });
 
 test('F3 states the share of new people against the floor it fell under', () => {
@@ -321,7 +336,7 @@ test('F3 states the share of new people against the floor it fell under', () => 
   );
   const { text, title } = wire(rec);
   expect(text).toBe(
-    'CONJUNTO X: 4% de personas nuevas al pasar de 7 a 14 días, bajo el piso de 15% y CPA +50% (60.00 MXN frente a 40.00 MXN por compra)',
+    'CONJUNTO X: 4% de personas nuevas al pasar de 7 a 14 días, bajo el piso de 15% y CPA +50% ($60.00 MXN frente a $40.00 MXN por compra)',
   );
   expect(title.window).toBe('d14');
 });
@@ -337,9 +352,9 @@ test('S3 states the money left unplaced against the pool; the plan → placed pa
   );
   const { text, button } = wire(rec);
   expect(text).toBe(
-    'Portafolio: 60.00 MXN por día sin colocar, de un pool de 400 MXN (15%) en modo eficiencia',
+    'Portafolio: $60.00 MXN por día sin colocar, de un pool de $400 MXN (15%) en modo eficiencia',
   );
-  expect(button).toBe('Ajustar la configuración · 400 → 340 MXN');
+  expect(button).toBe('Adjust the settings · $400 MXN → $340 MXN');
 });
 
 test('S5 states the untracked spend and how many delivering ad sets carry it', () => {
@@ -355,7 +370,7 @@ test('S5 states the untracked spend and how many delivering ad sets carry it', (
   );
   const { text } = wire(rec);
   expect(text).toBe(
-    'Portafolio: 298 MXN, en 14 días en 1 conjunto con impresiones y 0 leads registrados',
+    'Portafolio: $298 MXN, en 14 días en 1 conjunto con impresiones y 0 leads registrados',
   );
 });
 
@@ -372,7 +387,7 @@ test('a seeded parity rule carries the same title as the built-in trigger it mir
   expect(fromRule && titleText(fromRule)).toBe(builtIn.text);
 });
 
-// --- The rule no template may break: no verb, no "$", the code after the figure ----------
+// --- The rule no template may break: no verb, the symbol before and the code after the figure
 
 /** Every recommendation a full cycle over the fixtures above raises, under one currency. */
 function everyTitle(currency: string | null) {
@@ -407,14 +422,23 @@ test('no title carries an action verb, in any currency', () => {
   }
 });
 
-test('a USD account prints "USD" after the figure and never "$"; an unknown currency prints bare', () => {
+// M1: a "$" is only ever the symbol in front of a figure whose code follows it.
+const dollarWithout = (code: string): RegExp =>
+  new RegExp(`\\$\\d[\\d,]*(?:\\.\\d+)?(?![\\d.,]| ${code}\\b)`);
+
+test('a USD account prints "$" before and "USD" after the figure; an unknown currency prints bare', () => {
   for (const text of everyTitle('USD')) {
-    expect(text).not.toContain('$');
+    expect(text).not.toMatch(dollarWithout('USD'));
     expect(text).toContain(' USD');
+    expect(text).not.toContain('MXN');
   }
   for (const text of everyTitle(null)) {
     expect(text).not.toContain('$');
     expect(text).not.toMatch(/\b(USD|MXN)\b/);
   }
-  for (const text of everyTitle('MXN')) expect(text).toContain(' MXN');
+  for (const text of everyTitle('MXN')) {
+    expect(text).toContain(' MXN');
+    expect(text).not.toMatch(dollarWithout('MXN'));
+    expect(text).not.toContain('USD');
+  }
 });

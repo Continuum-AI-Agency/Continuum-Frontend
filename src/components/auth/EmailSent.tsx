@@ -2,14 +2,12 @@
 
 import { Loader2, Mail } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import type { z } from 'zod';
 import { FormAlert } from '@/components/auth/FormAlert';
 import { FormInput } from '@/components/auth/FormInput';
 import { Button } from '@/components/ui/button';
-import { emailCodeSchema } from '@/lib/auth/schemas';
+import type { EmailCodeInput } from '@/lib/auth/schemas';
 
-const codeFormSchema = emailCodeSchema.pick({ token: true });
-type CodeFormInput = z.input<typeof codeFormSchema>;
+type CodeFormInput = Pick<EmailCodeInput, 'token'>;
 
 interface EmailSentProps {
   email: string;
@@ -25,10 +23,13 @@ export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: E
     handleSubmit,
     formState: { errors },
   } = useForm<CodeFormInput>({
-    // Loaded on submit, like LoginForm's, to keep the resolver off /login's first load.
+    // Loaded on submit, like LoginForm's, to keep zod and the resolver off /login's first load.
     resolver: async (values, context, options) => {
-      const { zodResolver } = await import('@hookform/resolvers/zod');
-      return zodResolver(codeFormSchema)(values, context, options);
+      const [{ zodResolver }, { emailCodeSchema }] = await Promise.all([
+        import('@hookform/resolvers/zod'),
+        import('@/lib/auth/schemas'),
+      ]);
+      return zodResolver(emailCodeSchema.pick({ token: true }))(values, context, options);
     },
     defaultValues: { token: '' },
   });

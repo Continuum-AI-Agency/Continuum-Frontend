@@ -425,7 +425,6 @@ const COMPOSE_FAILED = 'Composed preview unavailable — showing the measured bo
 export function RenderPreviewPanel({
   brandId,
   contract,
-  templateRef,
   rows,
   rowId,
   renderSetId,
@@ -433,7 +432,6 @@ export function RenderPreviewPanel({
 }: {
   brandId: string;
   contract: ApiRenderTemplateContract;
-  templateRef?: string;
   rows: RequestRow[];
   rowId: string | null;
   renderSetId: string | null;
@@ -615,7 +613,6 @@ export function RenderPreviewPanel({
     contract.template.bindingId,
     templateKey,
     contract.template.contractHash,
-    templateRef ?? null,
     row?.id ?? null,
     format?.id ?? null,
     format?.comp?.name ?? null,
@@ -640,7 +637,6 @@ export function RenderPreviewPanel({
         bindingId: contract.template.bindingId,
         templateKey,
         contractHash: contract.template.contractHash,
-        ...(templateRef ? { templateRef } : {}),
         outputId: format!.id,
         comp: format!.comp!.name,
         values,

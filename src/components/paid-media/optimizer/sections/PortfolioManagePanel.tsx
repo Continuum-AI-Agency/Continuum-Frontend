@@ -87,7 +87,7 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
-import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../format';
+import { currencyFieldSuffix, formatCurrency, humanize, normalizeCurrency } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
@@ -119,6 +119,7 @@ export { buildConversionDescriptor } from './wizard/conversionDescriptor';
 
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
 import { TierCards } from './fields/TierCards';
+import { PlatformActionsField } from './platformActions/PlatformActionsField';
 import { PlatformCapsField } from './platformCaps/PlatformCapsField';
 import {
   buildPatch,
@@ -646,7 +647,7 @@ export function PortfolioManagePanel({
     archive.mutate(portfolio.id, { onSuccess: () => onDone?.() });
   }
 
-  const symbol = currencySymbol(currency);
+  const symbol = normalizeCurrency(currency);
   const unit = currencyFieldSuffix(currency);
   const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
   const rootError = form.formState.errors.root?.message;
@@ -674,6 +675,9 @@ export function PortfolioManagePanel({
     budgetSource === 'fixed' && dailyNum > 0 ? dailyNum : selectedBudgetSum || dailyNum;
 
   const sectionId = (key: string) => `manage-${key}-${portfolio.id}`;
+  // The list names each portfolio's platforms (20261015160023); a portfolio on Meta alone has no
+  // action kinds to choose, because Meta's writes never cross the executor that reads them.
+  const holdsNonMeta = (portfolio.platforms ?? []).some((platform) => platform !== 'meta');
   const sheetSections: SheetSection[] = [
     { id: sectionId('identity'), label: 'Identity' },
     { id: sectionId('strategy'), label: 'Strategy' },
@@ -682,6 +686,7 @@ export function PortfolioManagePanel({
     { id: sectionId('attribution'), label: 'Attribution' },
     ...(guardrailsRelevant ? [{ id: sectionId('guardrails'), label: 'Guardrails' }] : []),
     { id: sectionId('platform-limits'), label: 'Daily limits' },
+    ...(holdsNonMeta ? [{ id: sectionId('platform-actions'), label: 'Allowed actions' }] : []),
     { id: sectionId('enrolled'), label: level === 'campaign' ? 'Campaigns' : 'Ad sets' },
   ];
 
@@ -1317,10 +1322,20 @@ export function PortfolioManagePanel({
           <Section
             id={sectionId('platform-limits')}
             title="Daily limit per platform"
-            description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound Meta, Google and TikTok writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
+            description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound every platform's writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
           >
             <PlatformCapsField portfolioId={portfolio.id} />
           </Section>
+
+          {holdsNonMeta ? (
+            <Section
+              id={sectionId('platform-actions')}
+              title="Allowed actions per platform"
+              description="What the Optimizer may change on each platform when you approve a card. Ticking a kind switches nothing on by itself: every change still waits for your approval, and a platform's changes stay off for this portfolio until they are enabled there."
+            >
+              <PlatformActionsField portfolioId={portfolio.id} />
+            </Section>
+          ) : null}
 
           <Section
             id={sectionId('enrolled')}
@@ -1334,6 +1349,7 @@ export function PortfolioManagePanel({
               <MultiPlatformPicker
                 brandId={brandId}
                 metaAccount={adAccountId}
+                portfolioId={portfolio.id}
                 portfolioCurrency={currency ?? null}
               >
                 <CampaignAdsetPicker
@@ -1943,7 +1959,9 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="hit-area inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+      // On touch its 44px hit area reached up into the input it fills; the px margin keeps
+      // the two apart.
+      className="hit-area inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted pointer-coarse:mt-[14px]"
     >
       {label}
       <span aria-hidden="true" className="rounded border border-border/70 bg-background px-1">

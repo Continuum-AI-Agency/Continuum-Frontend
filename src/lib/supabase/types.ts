@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.3"
   }
   agent_workspace: {
     Tables: {
@@ -8350,6 +8350,209 @@ export type Database = {
           },
         ]
       }
+      meta_capi_deliveries: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          event_count: number
+          event_names: string[]
+          events_received: number | null
+          fbtrace_id: string | null
+          forward_error: string | null
+          forward_status: string | null
+          id: string
+          pixel_id: string
+          source: string
+          source_id: string | null
+          test_event_code: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          event_count: number
+          event_names?: string[]
+          events_received?: number | null
+          fbtrace_id?: string | null
+          forward_error?: string | null
+          forward_status?: string | null
+          id?: string
+          pixel_id: string
+          source: string
+          source_id?: string | null
+          test_event_code?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          event_count?: number
+          event_names?: string[]
+          events_received?: number | null
+          fbtrace_id?: string | null
+          forward_error?: string | null
+          forward_status?: string | null
+          id?: string
+          pixel_id?: string
+          source?: string
+          source_id?: string | null
+          test_event_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "meta_capi_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_capi_deliveries_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "meta_capi_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_capi_settings: {
+        Row: {
+          ad_account_id: string
+          brand_id: string
+          created_at: string
+          forward_destination_id: string | null
+          pixel_id: string
+          pixel_name: string | null
+          test_event_code: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ad_account_id: string
+          brand_id: string
+          created_at?: string
+          forward_destination_id?: string | null
+          pixel_id: string
+          pixel_name?: string | null
+          test_event_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ad_account_id?: string
+          brand_id?: string
+          created_at?: string
+          forward_destination_id?: string | null
+          pixel_id?: string
+          pixel_name?: string | null
+          test_event_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_settings_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "meta_capi_settings_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_capi_settings_forward_destination_id_fkey"
+            columns: ["forward_destination_id"]
+            isOneToOne: false
+            referencedRelation: "automation_webhook_destinations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_capi_sources: {
+        Row: {
+          action_source: string
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          event_name: string
+          field_map: Json
+          id: string
+          last_received_at: string | null
+          name: string
+          public_id: string
+          require_signature: boolean
+          secret_encrypted: string
+          secret_hash: string
+          updated_at: string
+        }
+        Insert: {
+          action_source: string
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          event_name: string
+          field_map?: Json
+          id?: string
+          last_received_at?: string | null
+          name: string
+          public_id: string
+          require_signature?: boolean
+          secret_encrypted: string
+          secret_hash: string
+          updated_at?: string
+        }
+        Update: {
+          action_source?: string
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          event_name?: string
+          field_map?: Json
+          id?: string
+          last_received_at?: string | null
+          name?: string
+          public_id?: string
+          require_signature?: boolean
+          secret_encrypted?: string
+          secret_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_sources_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "meta_capi_sources_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_deliveries: {
         Row: {
           attempts: number
@@ -16566,6 +16769,414 @@ export type Database = {
   }
   media: {
     Tables: {
+      "template_authoring_preparations": {
+        Row: {
+          "artifact_id": string;
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "command_digest": string;
+          "created_at": string;
+          "draft_revision": number;
+          "error_code": string | null;
+          "forge_run_id": string | null;
+          "forge_state": string | null;
+          "idempotency_key": string;
+          "package_checksum": string;
+          "progress": Json | null;
+          "source_checksum": string;
+          "state": string;
+          "updated_at": string;
+          "user_id": string;
+        };
+        ComputedFields: never;
+        Insert: {
+          "artifact_id": string;
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "command_digest": string;
+          "created_at"?: string;
+          "draft_revision": number;
+          "error_code"?: string | null;
+          "forge_run_id"?: string | null;
+          "forge_state"?: string | null;
+          "idempotency_key": string;
+          "package_checksum": string;
+          "progress"?: Json | null;
+          "source_checksum": string;
+          "state"?: string;
+          "updated_at"?: string;
+          "user_id": string;
+        };
+        Update: {
+          "artifact_id"?: string;
+          "asset_id"?: string;
+          "base_version_id"?: string;
+          "brand_id"?: string;
+          "command_digest"?: string;
+          "created_at"?: string;
+          "draft_revision"?: number;
+          "error_code"?: string | null;
+          "forge_run_id"?: string | null;
+          "forge_state"?: string | null;
+          "idempotency_key"?: string;
+          "package_checksum"?: string;
+          "progress"?: Json | null;
+          "source_checksum"?: string;
+          "state"?: string;
+          "updated_at"?: string;
+          "user_id"?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_preparation_artifact_fk";
+            columns: [
+              "artifact_id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "template_authoring_artifacts";
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id"
+            ];
+          }
+        ];
+      };
+      "template_authoring_native_renders": {
+        Row: {
+          "artifact_id": string;
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "command_digest": string;
+          "created_at": string;
+          "draft_revision": number;
+          "engine": string | null;
+          "error_code": string | null;
+          "frames": NonNullable<Json>;
+          "id": string;
+          "native_run_id": string | null;
+          "package_checksum": string;
+          "request_digest": string;
+          "selections": NonNullable<Json>;
+          "source_checksum": string;
+          "state": string;
+          "updated_at": string;
+          "user_id": string;
+        };
+        ComputedFields: never;
+        Insert: {
+          "artifact_id": string;
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "command_digest": string;
+          "created_at"?: string;
+          "draft_revision": number;
+          "engine"?: string | null;
+          "error_code"?: string | null;
+          "frames"?: NonNullable<Json>;
+          "id": string;
+          "native_run_id"?: string | null;
+          "package_checksum": string;
+          "request_digest": string;
+          "selections": NonNullable<Json>;
+          "source_checksum": string;
+          "state"?: string;
+          "updated_at"?: string;
+          "user_id": string;
+        };
+        Update: {
+          "artifact_id"?: string;
+          "asset_id"?: string;
+          "base_version_id"?: string;
+          "brand_id"?: string;
+          "command_digest"?: string;
+          "created_at"?: string;
+          "draft_revision"?: number;
+          "engine"?: string | null;
+          "error_code"?: string | null;
+          "frames"?: NonNullable<Json>;
+          "id"?: string;
+          "native_run_id"?: string | null;
+          "package_checksum"?: string;
+          "request_digest"?: string;
+          "selections"?: NonNullable<Json>;
+          "source_checksum"?: string;
+          "state"?: string;
+          "updated_at"?: string;
+          "user_id"?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_native_render_artifact_fk";
+            columns: [
+              "artifact_id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "template_authoring_artifacts";
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id"
+            ];
+          }
+        ];
+      };
+      "template_authoring_drafts": {
+        Row: {
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "commands": NonNullable<Json>;
+          "revision": number;
+          "seed_artifact_id": string | null;
+          "seed_attached_revision": number | null;
+          "source_checksum": string;
+          "updated_at": string;
+          "user_id": string;
+        };
+        ComputedFields: never;
+        Insert: {
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "commands": NonNullable<Json>;
+          "revision": number;
+          "seed_artifact_id"?: string | null;
+          "seed_attached_revision"?: number | null;
+          "source_checksum": string;
+          "updated_at"?: string;
+          "user_id": string;
+        };
+        Update: {
+          "asset_id"?: string;
+          "base_version_id"?: string;
+          "brand_id"?: string;
+          "commands"?: NonNullable<Json>;
+          "revision"?: number;
+          "seed_artifact_id"?: string | null;
+          "seed_attached_revision"?: number | null;
+          "source_checksum"?: string;
+          "updated_at"?: string;
+          "user_id"?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_draft_seed_fk";
+            columns: [
+              "seed_artifact_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "template_authoring_artifacts";
+            referencedColumns: [
+              "id"
+            ];
+          },
+          {
+            foreignKeyName: "template_authoring_drafts_asset_brand_fk";
+            columns: [
+              "asset_id",
+              "brand_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: [
+              "id",
+              "brand_id"
+            ];
+          },
+          {
+            foreignKeyName: "template_authoring_drafts_version_asset_brand_fk";
+            columns: [
+              "base_version_id",
+              "asset_id",
+              "brand_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "asset_versions";
+            referencedColumns: [
+              "id",
+              "asset_id",
+              "brand_id"
+            ];
+          }
+        ];
+      };
+      "template_authoring_artifacts": {
+        Row: {
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "child_asset_id": string | null;
+          "command_digest": string;
+          "commit_result": Json | null;
+          "created_at": string;
+          "draft_revision": number;
+          "filename": string;
+          "id": string;
+          "object_path": string;
+          "package_checksum": string;
+          "provenance": NonNullable<Json>;
+          "purpose": string;
+          "result_parse": Json | null;
+          "reviewed_at": string | null;
+          "reviewed_by": string | null;
+          "save_target": string | null;
+          "settings_plan": Json | null;
+          "settings_reconciled_asset_id": string | null;
+          "settings_reconciled_at": string | null;
+          "settings_reconciled_package_checksum": string | null;
+          "settings_reconciled_version_id": string | null;
+          "size_bytes": number;
+          "source_checksum": string;
+          "state": string;
+          "updated_at": string;
+          "user_id": string;
+          "variant_name": string | null;
+          "verification": NonNullable<Json>;
+          "workspace_seed_artifact_id": string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          "asset_id": string;
+          "base_version_id": string;
+          "brand_id": string;
+          "child_asset_id"?: string | null;
+          "command_digest": string;
+          "commit_result"?: Json | null;
+          "created_at"?: string;
+          "draft_revision": number;
+          "filename": string;
+          "id": string;
+          "object_path": string;
+          "package_checksum": string;
+          "provenance"?: NonNullable<Json>;
+          "purpose"?: string;
+          "result_parse"?: Json | null;
+          "reviewed_at"?: string | null;
+          "reviewed_by"?: string | null;
+          "save_target"?: string | null;
+          "settings_plan"?: Json | null;
+          "settings_reconciled_asset_id"?: string | null;
+          "settings_reconciled_at"?: string | null;
+          "settings_reconciled_package_checksum"?: string | null;
+          "settings_reconciled_version_id"?: string | null;
+          "size_bytes": number;
+          "source_checksum": string;
+          "state"?: string;
+          "updated_at"?: string;
+          "user_id": string;
+          "variant_name"?: string | null;
+          "verification": NonNullable<Json>;
+          "workspace_seed_artifact_id"?: string | null;
+        };
+        Update: {
+          "asset_id"?: string;
+          "base_version_id"?: string;
+          "brand_id"?: string;
+          "child_asset_id"?: string | null;
+          "command_digest"?: string;
+          "commit_result"?: Json | null;
+          "created_at"?: string;
+          "draft_revision"?: number;
+          "filename"?: string;
+          "id"?: string;
+          "object_path"?: string;
+          "package_checksum"?: string;
+          "provenance"?: NonNullable<Json>;
+          "purpose"?: string;
+          "result_parse"?: Json | null;
+          "reviewed_at"?: string | null;
+          "reviewed_by"?: string | null;
+          "save_target"?: string | null;
+          "settings_plan"?: Json | null;
+          "settings_reconciled_asset_id"?: string | null;
+          "settings_reconciled_at"?: string | null;
+          "settings_reconciled_package_checksum"?: string | null;
+          "settings_reconciled_version_id"?: string | null;
+          "size_bytes"?: number;
+          "source_checksum"?: string;
+          "state"?: string;
+          "updated_at"?: string;
+          "user_id"?: string;
+          "variant_name"?: string | null;
+          "verification"?: NonNullable<Json>;
+          "workspace_seed_artifact_id"?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_artifacts_asset_fk";
+            columns: [
+              "asset_id",
+              "brand_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: [
+              "id",
+              "brand_id"
+            ];
+          },
+          {
+            foreignKeyName: "template_authoring_artifacts_draft_fk";
+            columns: [
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "template_authoring_drafts";
+            referencedColumns: [
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id"
+            ];
+          },
+          {
+            foreignKeyName: "template_authoring_artifacts_version_fk";
+            columns: [
+              "base_version_id",
+              "asset_id",
+              "brand_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "asset_versions";
+            referencedColumns: [
+              "id",
+              "asset_id",
+              "brand_id"
+            ];
+          },
+          {
+            foreignKeyName: "template_authoring_workspace_seed_reference_fk";
+            columns: [
+              "workspace_seed_artifact_id"
+            ];
+            isOneToOne: false;
+            referencedRelation: "template_authoring_artifacts";
+            referencedColumns: [
+              "id"
+            ];
+          }
+        ];
+      };
       ad_render_jobs: {
         Row: {
           approval_package_id: string | null
@@ -16578,6 +17189,7 @@ export type Database = {
           delivery_receipts: Json
           delivery_target: Json
           engine: string
+          engine_fallback: string | null
           environment: string | null
           error: string | null
           finished_at: string | null
@@ -16627,6 +17239,7 @@ export type Database = {
           delivery_receipts?: Json
           delivery_target?: Json
           engine?: string
+          engine_fallback?: string | null
           environment?: string | null
           error?: string | null
           finished_at?: string | null
@@ -16676,6 +17289,7 @@ export type Database = {
           delivery_receipts?: Json
           delivery_target?: Json
           engine?: string
+          engine_fallback?: string | null
           environment?: string | null
           error?: string | null
           finished_at?: string | null
@@ -17837,6 +18451,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -17866,6 +18481,7 @@ export type Database = {
           kind: string
           lease_expires_at?: string | null
           lease_token?: string | null
+          operation_name?: string | null
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
@@ -17895,6 +18511,7 @@ export type Database = {
           kind?: string
           lease_expires_at?: string | null
           lease_token?: string | null
+          operation_name?: string | null
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
@@ -20125,6 +20742,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
+          import_mapping: Json | null
           template_key: string
           updated_at: string
         }
@@ -20134,6 +20752,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          import_mapping?: Json | null
           template_key: string
           updated_at?: string
         }
@@ -20143,6 +20762,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          import_mapping?: Json | null
           template_key?: string
           updated_at?: string
         }
@@ -20163,6 +20783,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           enabled: boolean
+          encode_default: Json | null
           environment_key: string
           id: string
           is_default: boolean
@@ -20175,6 +20796,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           enabled?: boolean
+          encode_default?: Json | null
           environment_key: string
           id?: string
           is_default?: boolean
@@ -20187,6 +20809,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           enabled?: boolean
+          encode_default?: Json | null
           environment_key?: string
           id?: string
           is_default?: boolean
@@ -21349,6 +21972,38 @@ export type Database = {
           },
         ]
       }
+      template_variant_defaults: {
+        Row: {
+          brand_id: string
+          set_by: string | null
+          template_id: string
+          updated_at: string
+          variant_id: string
+        }
+        Insert: {
+          brand_id: string
+          set_by?: string | null
+          template_id: string
+          updated_at?: string
+          variant_id: string
+        }
+        Update: {
+          brand_id?: string
+          set_by?: string | null
+          template_id?: string
+          updated_at?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_variant_defaults_variant_id_brand_id_template_id_fkey"
+            columns: ["variant_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_variants"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+        ]
+      }
       template_variants: {
         Row: {
           archived_at: string | null
@@ -21360,6 +22015,7 @@ export type Database = {
           name: string
           parent_revision_id: string | null
           published_head_revision_id: string | null
+          tags: string[]
           template_id: string
         }
         Insert: {
@@ -21372,6 +22028,7 @@ export type Database = {
           name: string
           parent_revision_id?: string | null
           published_head_revision_id?: string | null
+          tags?: string[]
           template_id: string
         }
         Update: {
@@ -21384,6 +22041,7 @@ export type Database = {
           name?: string
           parent_revision_id?: string | null
           published_head_revision_id?: string | null
+          tags?: string[]
           template_id?: string
         }
         Relationships: [
@@ -21563,6 +22221,360 @@ export type Database = {
       }
     }
     Functions: {
+      "stage_template_authoring_seed_artifact": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_filename": string;
+          "p_id": string;
+          "p_object_path": string;
+          "p_package_checksum": string;
+          "p_provenance"?: Json;
+          "p_result_parse": Json;
+          "p_size_bytes": number;
+          "p_source_checksum": string;
+          "p_user_id": string;
+          "p_verification": Json;
+        };
+        Returns: Json;
+      };
+      "stage_template_authoring_artifact": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_filename": string;
+          "p_id": string;
+          "p_object_path": string;
+          "p_package_checksum": string;
+          "p_provenance"?: Json;
+          "p_result_parse": Json;
+          "p_size_bytes": number;
+          "p_source_checksum": string;
+          "p_user_id": string;
+          "p_verification": Json;
+        };
+        Returns: Json;
+      };
+      "review_template_authoring_artifact": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_expected_revision": number;
+          "p_id": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "reserve_template_authoring_preparation": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_idempotency_key": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "reserve_template_authoring_native_render": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_id": string;
+          "p_package_checksum": string;
+          "p_request_digest": string;
+          "p_selections": Json;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "reserve_template_authoring_fork": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_expected_revision": number;
+          "p_id": string;
+          "p_name": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "record_template_authoring_preparation_run": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_forge_run_id": string;
+          "p_idempotency_key": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "record_template_authoring_preparation_evidence": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_evidence": Json;
+          "p_expected_revision": number;
+          "p_id": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "record_template_authoring_native_render": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_engine": string;
+          "p_error_code": string;
+          "p_frames": Json;
+          "p_id": string;
+          "p_native_run_id": string;
+          "p_package_checksum": string;
+          "p_request_digest": string;
+          "p_source_checksum": string;
+          "p_state": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      } | {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_engine": string;
+          "p_error_code": string;
+          "p_frames": Json;
+          "p_id": string;
+          "p_native_run_id": string;
+          "p_package_checksum": string;
+          "p_request_digest": string;
+          "p_required_samples": Json;
+          "p_source_checksum": string;
+          "p_state": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "reconcile_template_authoring_artifact_settings": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_committed_asset_id": string;
+          "p_committed_version_id": string;
+          "p_expected_revision": number;
+          "p_id": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "put_template_authoring_draft": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_commands": Json;
+          "p_expected_revision": number;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "observe_template_authoring_preparation_state_cas": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_error_code": string;
+          "p_expected_command_digest": string;
+          "p_expected_draft_revision": number;
+          "p_expected_package_checksum": string;
+          "p_expected_source_checksum": string;
+          "p_expected_state": string;
+          "p_expected_updated_at": string;
+          "p_forge_run_id": string;
+          "p_forge_state": string;
+          "p_progress": Json;
+          "p_state": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "observe_template_authoring_preparation_run": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_error_code": string;
+          "p_forge_run_id": string;
+          "p_forge_state": string;
+          "p_progress": Json;
+          "p_state": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "mark_template_authoring_preparation_pending": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_command_digest": string;
+          "p_draft_revision": number;
+          "p_error_code": string;
+          "p_idempotency_key": string;
+          "p_package_checksum": string;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "library_register_asset_version_expected_head": {
+        Args: {
+          "p_actor": string;
+          "p_asset_id": string;
+          "p_brand_id": string;
+          "p_bucket": string;
+          "p_checksum": string;
+          "p_expected_head_version_id": string;
+          "p_file_name": string;
+          "p_idempotency_key": string;
+          "p_integrity_state": string;
+          "p_mime_type": string;
+          "p_note": string;
+          "p_size_bytes": number;
+          "p_storage_path": string;
+        };
+        Returns: Json;
+      };
+      "detach_template_authoring_workspace_seed": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_expected_revision": number;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "complete_template_authoring_fork": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_child_asset_id": string;
+          "p_child_version_id": string;
+          "p_command_digest": string;
+          "p_expected_revision": number;
+          "p_id": string;
+          "p_package_checksum": string;
+          "p_parent_revision_id": string;
+          "p_revision_dependencies": Json;
+          "p_revision_edits": Json;
+          "p_source_checksum": string;
+          "p_template_id": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
+      "commit_template_authoring_revision": {
+        Args: {
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_bucket": string;
+          "p_command_digest": string;
+          "p_expected_head_revision_id": string;
+          "p_expected_revision": number;
+          "p_filename": string;
+          "p_fonts": (string)[];
+          "p_id": string;
+          "p_idempotency_key": string;
+          "p_note": string;
+          "p_origin_ref": Json;
+          "p_package_checksum": string;
+          "p_parent_revision_id": string;
+          "p_ratios": (string)[];
+          "p_revision_dependencies": Json;
+          "p_revision_edits": Json;
+          "p_save_target": string;
+          "p_size_bytes": number;
+          "p_slot_count": number;
+          "p_source_checksum": string;
+          "p_storage_path": string;
+          "p_template_id": string;
+          "p_user_id": string;
+          "p_variant_id": string;
+        };
+        Returns: Json;
+      };
+      "capture_template_authoring_settings_plan": {
+        Args: {
+          "p_asset_id": string;
+          "p_commands": Json;
+        };
+        Returns: Json;
+      };
+      "attach_template_authoring_workspace_seed": {
+        Args: {
+          "p_artifact_id": string;
+          "p_asset_id": string;
+          "p_base_version_id": string;
+          "p_brand_id": string;
+          "p_expected_revision": number;
+          "p_source_checksum": string;
+          "p_user_id": string;
+        };
+        Returns: Json;
+      };
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
       _window_metrics: { Args: { w: Json }; Returns: Json }
       activate_template_source_bundle: {
@@ -21678,6 +22690,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -21731,6 +22744,49 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "editor_generation_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_forge_micro_render_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -21878,6 +22934,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -21920,6 +22977,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22006,6 +23064,51 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_forge_micro_render_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_result_asset_refs?: Json
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22049,6 +23152,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22092,6 +23196,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22219,6 +23324,52 @@ export type Database = {
         Returns: number
       }
       expire_client_render_targets: { Args: never; Returns: number }
+      fail_forge_micro_render_job: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_job_id: string
+          p_lease_token: string
+          p_terminal?: boolean
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       fail_service_render_job: {
         Args: {
           p_error_code: string
@@ -22244,6 +23395,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22288,6 +23440,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22335,6 +23488,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22698,6 +23852,7 @@ export type Database = {
         }[]
       }
       reap_expired_client_render_leases: { Args: never; Returns: number }
+      reap_expired_forge_micro_render_jobs: { Args: never; Returns: number }
       reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
@@ -29503,6 +30658,10 @@ export type Database = {
         Returns: undefined
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
+      optimizer_action_count_by_kind: {
+        Args: { p_authorized_kind: string; p_since?: string }
+        Returns: number
+      }
       optimizer_add_portfolio_members: {
         Args: { p_members: Json; p_portfolio_id: string }
         Returns: Json
@@ -29846,6 +31005,10 @@ export type Database = {
         Args: { p_since?: string }
         Returns: number
       }
+      optimizer_decision_outcome_count: {
+        Args: { p_result?: string; p_since?: string; p_status?: string }
+        Returns: number
+      }
       optimizer_delete_bench_portfolio: {
         Args: { p_portfolio_id: string }
         Returns: boolean
@@ -30018,6 +31181,10 @@ export type Database = {
       optimizer_get_enrolled_adsets: {
         Args: { p_portfolio_id: string }
         Returns: string[]
+      }
+      optimizer_get_platform_cards: {
+        Args: { p_brand_id: string; p_platform: string }
+        Returns: Json
       }
       optimizer_get_platform_objective_map: {
         Args: { p_platform: string }
@@ -30192,6 +31359,10 @@ export type Database = {
             }
             Returns: string
           }
+      optimizer_invalidate_asked_audience_proposal: {
+        Args: { p_blocked_by: Json; p_id: string }
+        Returns: boolean
+      }
       optimizer_list_account_enrollments: {
         Args: { p_ad_account_id?: string; p_brand_id: string }
         Returns: {
@@ -30248,6 +31419,27 @@ export type Database = {
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
         Returns: Json
+      }
+      optimizer_list_asked_ready_audience_proposals: {
+        Args: never
+        Returns: {
+          ad_account_id: string
+          adset_id: string
+          brand_id: string
+          held: boolean
+          id: string
+          portfolio_id: string
+        }[]
+      }
+      optimizer_list_decision_outcomes: {
+        Args: { p_grading?: string; p_limit?: number; p_portfolio_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "decision_outcome_readings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       optimizer_list_logs: {
         Args: {

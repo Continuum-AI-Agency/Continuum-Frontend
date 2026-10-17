@@ -122,8 +122,14 @@ export function useFanOutDraft(): UseFanOutDraftResult {
               backendDraftId: member.id,
               platforms: [member.platform],
             };
-            const approved = await approveAndSchedule(memberDraft, { silent: true });
-            return { platform: member.platform, approved };
+            let reason: string | null = null;
+            const approved = await approveAndSchedule(memberDraft, {
+              silent: true,
+              onFailure: (message) => {
+                reason = message;
+              },
+            });
+            return { platform: member.platform, approved, reason };
           }),
         );
 
@@ -137,11 +143,22 @@ export function useFanOutDraft(): UseFanOutDraftResult {
             variant: 'success',
           });
         } else {
+          // Members of one post usually fail for one reason, so name each distinct
+          // reason once: "Instagram, Facebook: This draft has no caption — …".
+          const platformsByReason = new Map<string, string[]>();
+          for (const outcome of failed) {
+            const reason =
+              outcome.reason ?? 'could not be scheduled — open that post and try again.';
+            platformsByReason.set(reason, [
+              ...(platformsByReason.get(reason) ?? []),
+              publishPlatformLabel(outcome.platform),
+            ]);
+          }
           show({
             title: `Approved ${outcomes.length - failed.length} of ${outcomes.length}`,
-            description: `${failed
-              .map((outcome) => publishPlatformLabel(outcome.platform))
-              .join(', ')} could not be scheduled — open that post and try again.`,
+            description: [...platformsByReason]
+              .map(([reason, labels]) => `${labels.join(', ')}: ${reason}`)
+              .join(' '),
             variant: 'warning',
           });
         }

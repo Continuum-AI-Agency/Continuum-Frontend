@@ -45,7 +45,7 @@ type Props = {
   profileRows: HomeProfileRow[];
 };
 
-function ModuleCard({
+export function ModuleCard({
   title,
   accent,
   href,
@@ -70,7 +70,7 @@ function ModuleCard({
         <h2 className="text-sm font-semibold">{title}</h2>
         <Link
           href={href}
-          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+          className="hit-area inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
         >
           Open <ArrowUpRight className="size-3" />
         </Link>
@@ -119,7 +119,7 @@ function Unavailable({ children, onRetry }: { children: React.ReactNode; onRetry
   );
 }
 
-function CreativeSlot({
+export function CreativeSlot({
   tone,
   row,
   image,
@@ -135,14 +135,17 @@ function CreativeSlot({
       <span
         className={cn(
           'text-2xs font-semibold uppercase tracking-wide',
-          tone === 'best' ? 'text-success' : 'text-destructive',
+          tone === 'best' ? 'text-success-ink' : 'text-destructive-ink',
         )}
       >
         {tone === 'best' ? 'Best' : 'Worst'}
       </span>
       {row ? (
         <>
-          <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
+          {/* The value has its own line under the image, never a badge on it: an image under
+           *  text is what the geometry audit reads as an overlap, and the line is readable at any
+           *  width. */}
+          <div className="aspect-square w-full overflow-hidden rounded-md bg-muted">
             {image ? (
               // biome-ignore lint/performance/noImgElement: Meta CDN URLs expire and are not in next/image remotePatterns.
               <img src={image} alt={row.name} className="size-full object-cover" loading="lazy" />
@@ -151,12 +154,12 @@ function CreativeSlot({
                 <ImageOff className="size-5" />
               </span>
             )}
-            <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 font-mono text-2xs tabular-nums">
-              {valueLabel}
-            </span>
           </div>
-          <span className="truncate text-xs" title={row.name}>
-            {row.name}
+          <span className="flex items-baseline justify-between gap-2 text-xs">
+            <span className="min-w-0 truncate" title={row.name}>
+              {row.name}
+            </span>
+            <span className="shrink-0 font-mono tabular-nums">{valueLabel}</span>
           </span>
         </>
       ) : (

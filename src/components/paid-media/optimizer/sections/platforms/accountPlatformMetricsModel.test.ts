@@ -36,9 +36,15 @@ describe('the All frame', () => {
   });
 
   it('splits spend by platform share in one currency', () => {
-    expect(spendByCurrencyLabel(EASY_FIT_MP1)).toBe('38,411 MXN');
+    expect(spendByCurrencyLabel(EASY_FIT_MP1)).toBe('$38,411 MXN');
     expect(spendSplitLabel(EASY_FIT_MP1)).toBe('Meta 62% · Google 29% · TikTok 9%');
     expect(topSpendLabel(EASY_FIT_MP1)).toBe('Meta takes 62% of the spend');
+  });
+
+  it('names no top spender when one platform is connected', () => {
+    const frame = buildMetrics([{ ...META_TOTALS, share_of_spend: 1 }]);
+    expect(frame.headline_facts.top_spend).not.toBeNull();
+    expect(topSpendLabel(frame)).toBeNull();
   });
 
   it('never adds two currencies: each platform keeps its own figure and no share', () => {
@@ -49,8 +55,8 @@ describe('the All frame', () => {
       accounts: [{ account_id: '5251780631', currency: 'USD', ingested: true }],
     };
     const frame = buildMetrics([{ ...META_TOTALS, share_of_spend: null }, usdGoogle]);
-    expect(spendByCurrencyLabel(frame)).toBe('23,911 MXN and $11,200');
-    expect(spendSplitLabel(frame)).toBe('Meta 23,911 MXN · Google $11,200');
+    expect(spendByCurrencyLabel(frame)).toBe('$23,911 MXN and $11,200 USD');
+    expect(spendSplitLabel(frame)).toBe('Meta $23,911 MXN · Google $11,200 USD');
     expect(topSpendLabel(frame)).toBeNull();
   });
 
@@ -61,18 +67,18 @@ describe('the All frame', () => {
     if (!leads) throw new Error('leads missing');
     expect(kindTileLabel(EASY_FIT_MP1, leads)).toBe('Leads · 3 platforms');
     expect(kindTileSub(EASY_FIT_MP1, leads)).toBe(
-      '36.83 MXN each · no target · Google cheapest at 31.40 MXN',
+      '$36.83 MXN each · no target · Google cheapest at $31.40 MXN',
     );
     const conversations = rankedKinds(EASY_FIT_MP1)[0];
     if (!conversations) throw new Error('conversations missing');
     expect(kindTileLabel(EASY_FIT_MP1, conversations)).toBe('Conversations · Meta');
-    expect(kindTileSub(EASY_FIT_MP1, conversations)).toBe('39.95 MXN each · no target');
+    expect(kindTileSub(EASY_FIT_MP1, conversations)).toBe('$39.95 MXN each · no target');
   });
 
   it('says a kind with spend and no results instead of a cost of zero', () => {
     const purchases = rankedKinds(EASY_FIT_MP1).find((kind) => kind.kind === 'purchases');
     if (!purchases) throw new Error('purchases missing');
-    expect(kindTileSub(EASY_FIT_MP1, purchases)).toBe('75.60 MXN spent, no results');
+    expect(kindTileSub(EASY_FIT_MP1, purchases)).toBe('$75.60 MXN spent, no results');
   });
 
   it('says a kind with no spend has no target either', () => {
@@ -84,7 +90,7 @@ describe('the All frame', () => {
   it('gives the headline spend, window and decisions — one sentence, no per-kind costs', () => {
     const segments = allPlatformsHeadlineSegments(EASY_FIT_MP1, 6);
     expect(headlineText(segments)).toBe(
-      'The account spent 38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
+      'The account spent $38,411 MXN in 7 days across three platforms. 6 decisions waiting.',
     );
     const figure = segments.find((segment) => segment.kind === 'figure');
     expect(figure?.kind === 'figure' ? figure.figure['data-figure'] : null).toBe(
@@ -175,7 +181,7 @@ describe('one platform', () => {
   it('prints cost and the prior cost per kind', () => {
     const leads = GOOGLE_TOTALS.results_by_kind[0];
     if (!leads) throw new Error('leads missing');
-    expect(platformKindSub(leads, 'MXN')).toBe('31.40 MXN each · prev. 33.10 MXN');
+    expect(platformKindSub(leads, 'MXN')).toBe('$31.40 MXN each · prev. $33.10 MXN');
   });
 });
 

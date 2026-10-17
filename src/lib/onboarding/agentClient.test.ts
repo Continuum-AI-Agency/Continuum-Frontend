@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import {
+  approveOnboardingBrandProfile,
   computePreviewInputHash,
   fetchPreviewLatest,
   fetchPreviewSnapshot,
@@ -113,6 +114,26 @@ describe('runOnboardingPreview SSE parser', () => {
     expect(events.some((e) => e.type === 'complete')).toBe(true);
     expect(sequences).toEqual([1, 2]);
   });
+  it('approval sends the source and exact durable run alongside reviewed edits', async () => {
+    const intake = {
+      kind: 'description' as const,
+      brand_name: 'Acme',
+      url: null,
+      description: 'We install solar.',
+    };
+    const preview_run_id = '00000000-0000-4000-8000-000000000009';
+    fetchSpy.mockImplementationOnce(async () =>
+      jsonResponse({ brand_profile: minimalPayload.brandProfile }),
+    );
+    await approveOnboardingBrandProfile({
+      payload: { ...minimalPayload, intake, preview_run_id },
+      accessToken: 'test-token',
+    });
+    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(body.intake).toEqual(intake);
+    expect(body.preview_run_id).toBe(preview_run_id);
+    expect(body.brandProfile.brand_name).toBe('Acme');
+  });
 
   it('surfaces runId from the run handshake via onRunId + return', async () => {
     fetchSpy.mockImplementationOnce(async () =>
@@ -148,6 +169,51 @@ describe('runOnboardingPreview SSE parser', () => {
     expect(headers?.['X-Idempotency-Key']).toBeUndefined();
     const body = init?.body ? (JSON.parse(String(init.body)) as { richMode?: boolean }) : {};
     expect(body.richMode).toBe(true);
+  });
+
+  it('serializes new intake evidence across the actual HTTP boundary', async () => {
+    const intake = {
+      kind: 'description' as const,
+      brand_name: 'Acme',
+      url: null,
+      description: 'We install solar.',
+    };
+    const facebook_profile = {
+      name: 'Acme',
+      url: 'https://facebook.com/acme',
+      description: 'We install solar.',
+      image_url: null,
+      fetched_at: '2026-10-10T00:00:00Z',
+      source: 'public_page' as const,
+    };
+    const instagram_profile = {
+      handle: 'acme',
+      url: 'https://instagram.com/acme',
+      source: 'og_scrape' as const,
+      fetched_at: '2026-10-10T00:00:00Z',
+      recent_posts: [],
+      og_description: 'We install solar.',
+    };
+    await runOnboardingPreview({
+      payload: {
+        ...minimalPayload,
+        intake,
+        facebook_profile,
+        instagram_profile,
+        document_ids: ['00000000-0000-4000-8000-000000000001'],
+      },
+      onEvent: () => {},
+    });
+    const call = fetchSpy.mock.calls.find((args) =>
+      String(args[0]).endsWith('/onboarding/brand-profiles/preview'),
+    );
+    const init = call?.[1] as RequestInit | undefined;
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      intake,
+      facebook_profile,
+      instagram_profile,
+      document_ids: ['00000000-0000-4000-8000-000000000001'],
+    });
   });
 
   it('throws PreviewRateLimitedError on 429 with Retry-After', async () => {

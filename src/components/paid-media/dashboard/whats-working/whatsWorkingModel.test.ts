@@ -15,6 +15,7 @@ import {
   percent,
   selectVerdictsByKind,
   selectWinRateRows,
+  VERDICT_STYLE,
 } from './whatsWorkingModel';
 
 describe('flag vocabulary', () => {
@@ -174,13 +175,13 @@ describe('formatters', () => {
   it('renders percentages and money, with an em dash for nulls', () => {
     expect(percent(0.755)).toBe('76%');
     expect(percent(null)).toBe('—');
-    expect(money(12, 'USD')).toBe('$12.00');
+    expect(money(12, 'USD')).toBe('$12.00 USD');
     expect(money(null, 'USD')).toBe('—');
   });
 
   it('prints money in the account currency, never a dollar sign on a peso account', () => {
-    expect(money(64.1, 'MXN')).toBe('64.10 MXN');
-    expect(money(1240, 'MXN')).toBe('1,240 MXN');
+    expect(money(64.1, 'MXN')).toBe('$64.10 MXN');
+    expect(money(1240, 'MXN')).toBe('$1,240 MXN');
     // An unknown currency is not dollars: the bare figure, no symbol.
     expect(money(12, null)).toBe('12.00');
   });
@@ -247,5 +248,16 @@ describe('groupWinRatesByDimension', () => {
   it('sorts a thin 100% cohort below every trustworthy one', () => {
     const hooks = groupWinRatesByDimension(rows)[0].rows.map((r) => r.value);
     expect(hooks).toEqual(['strong', 'weak', 'solo']);
+  });
+});
+
+// PP-L1V-crawler-small-signatures: the verdict pills printed the FILL colour on its own 10% tint —
+// emerald-600 3.28:1, destructive 3.24:1, amber-600 2.91:1. Light reads the ink of the same hue;
+// the tint stays, and dark keeps its own text.
+describe('VERDICT_STYLE', () => {
+  it('prints each verdict in its ink on its tint', () => {
+    expect(VERDICT_STYLE.kill).toBe('bg-destructive/10 text-destructive-ink');
+    expect(VERDICT_STYLE.scale).toBe('bg-emerald-500/10 text-emerald-700 dark:text-emerald-400');
+    expect(VERDICT_STYLE.iterate).toBe('bg-amber-500/10 text-amber-800 dark:text-amber-400');
   });
 });
