@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
   type DepthJudgement,
-  depthSummaryOf,
   depthVerdictOf as depthOf,
+  depthSummaryOf,
   describeDepthSummary,
+  LAYER_TOOLS,
   missingActionParts,
 } from './jaina-depth-rubric';
 import type { JainaDepthLabel } from './jaina-question-plan';
@@ -65,6 +66,7 @@ describe('depthVerdictOf', () => {
         'get_ad_sets',
         'get_breakdown_insights_summary',
         'get_top_ads',
+        'get_meta_change_history',
       ),
       [{ category: 'actions', rows: [fullRow] }],
       deepJudgement,
@@ -73,8 +75,9 @@ describe('depthVerdictOf', () => {
       asks: [{ ask: 'cause', answered: true }],
       hypotheses: [{ hypothesis: 'cpm', status: 'confirmed' }],
     });
-    // change_history has no read yet and pacing is not mandated without a budget ask.
-    expect(deep.missing).toEqual(['change_history']);
+    // Change history is read from the platform's own log; pacing is not mandated without a
+    // budget ask.
+    expect(deep.missing).toEqual([]);
     expect(deep.parts.actions).toBe(1);
     expect(shallow.parts.actions).toBe(0);
     expect(shallow.parts.asks).toBe(0.5);
@@ -144,5 +147,68 @@ describe('depthSummaryOf', () => {
     expect(summary.mean).toBeCloseTo(2.5 / 3);
     expect(summary.byClass.diagnostic).toEqual({ graded: 2, mean: 0.75 });
     expect(describeDepthSummary(summary)).toContain('diagnostic 75% (2)');
+  });
+});
+
+describe('Phase 2 scoped layer proof is a separate measurement', () => {
+  const label: JainaDepthLabel = {
+    class: 'lookup',
+    asks: ['figure'],
+    named_levels: [],
+    about_budget: false,
+  };
+  it('cannot fill missing scoped proof with successful tool names', () => {
+    const verdict = depthOf({
+      label,
+      okToolNames: new Set(['get_key_metrics']),
+      scopedLayerProof: [],
+      blocks: [],
+      judgement: null,
+    });
+    expect(verdict.read).toEqual([]);
+    expect(verdict.layer_method).toBe('phase2_scoped_receipts');
+    for (const proof of [
+      [{ layer: 'account_totals' as const, required_reads: 2, satisfied_reads: 1 }],
+      [{ layer: 'account_totals' as const, required_reads: 0, satisfied_reads: 0 }],
+      [{ layer: 'account_totals' as const, required_reads: 1.5, satisfied_reads: 1.5 }],
+    ])
+      expect(
+        depthOf({
+          label,
+          okToolNames: new Set(['get_key_metrics']),
+          scopedLayerProof: proof,
+          blocks: [],
+          judgement: null,
+        }).read,
+      ).toEqual([]);
+  });
+  it('requires all scoped reads while preserving the frozen legacy baseline map', () => {
+    const strict = depthOf({
+      label,
+      okToolNames: new Set(),
+      scopedLayerProof: [{ layer: 'account_totals', required_reads: 2, satisfied_reads: 2 }],
+      blocks: [],
+      judgement: null,
+    });
+    expect(strict.read).toEqual(['account_totals']);
+    const legacy = depthOf({
+      label,
+      okToolNames: new Set(['get_key_metrics']),
+      blocks: [],
+      judgement: null,
+    });
+    expect(legacy.read).toEqual(['account_totals']);
+    expect(legacy.layer_method).toBe('legacy_tool_names');
+    expect(LAYER_TOOLS.conversion_settling).toEqual(['get_conversion_settling']);
+    expect(LAYER_TOOLS.campaign_scoreboard).toContain('get_campaign_batch_analysis');
+    expect(LAYER_TOOLS.account_totals).not.toContain('get_campaign_batch_analysis');
+    expect(LAYER_TOOLS.account_totals).toContain('get_google_ads_overview');
+    expect(LAYER_TOOLS.pacing).not.toContain('preview_optimizer_cycle');
+    const summary = depthSummaryOf([
+      { label, depth: strict },
+      { label, depth: legacy },
+    ]);
+    expect(summary.layer_methods).toEqual({ phase2_scoped_receipts: 1, legacy_tool_names: 1 });
+    expect(describeDepthSummary(summary)).toContain('layer measurement:');
   });
 });

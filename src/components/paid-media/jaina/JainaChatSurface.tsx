@@ -150,6 +150,7 @@ import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { JainaAnalysisProgress } from './components/JainaAnalysisProgress';
 import { JainaConversationSidebar } from './components/JainaConversationSidebar';
 import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
@@ -915,6 +916,11 @@ export function JainaChatSurface({
         }),
       );
   }, [uiMessages, isStreaming, optimisticPlanStatusById, historyMessageIds]);
+
+  const uiMessageById = React.useMemo(
+    () => new Map(uiMessages.map((message) => [message.id, message])),
+    [uiMessages],
+  );
 
   const sessionContent = React.useMemo(() => jainaSessionContent(messages), [messages]);
   // PromptInput has no imperative handle; a tray click reaches the composer through this queue.
@@ -2979,6 +2985,7 @@ export function JainaChatSurface({
 
                   {messages.map((message) => (
                     <React.Fragment key={message.id}>
+                      <JainaAnalysisProgress message={uiMessageById.get(message.id)} />
                       <JainaMessageItem
                         message={message}
                         onCreativeReady={applyCreativeFromTranscript}
