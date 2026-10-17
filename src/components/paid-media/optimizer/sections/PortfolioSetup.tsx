@@ -17,6 +17,7 @@ import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { isRequestTimeout } from '@/lib/api/timeout';
 import { cn } from '@/lib/utils';
 import { PAID_SETUP_CONNECT_HREF } from '../../paid-setup-diagnostics';
 import { humanize } from '../format';
@@ -239,7 +240,14 @@ export function PortfolioSetup({
         suggestionsEmptyMessage={suggestEmptyMessage(suggestReason, level, {
           hasProjections: projectedConversions.length > 0,
         })}
-        suggestionsError={suggestRead.isError}
+        onRetrySuggestions={() => void suggestRead.refetch()}
+        suggestionsFailure={
+          suggestRead.isError
+            ? isRequestTimeout(suggestRead.error)
+              ? 'timeout'
+              : 'unreachable'
+            : null
+        }
         suggestionsLoading={suggestRead.isLoading}
       />
     </div>
