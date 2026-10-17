@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cutLayoutSchema, cutPacingSchema } from '../headless-content/cutEdit';
 import { headlessGrammarSchema, headlessVariationAxisSchema } from '../headless-content/index';
 import { reelTemplateIdSchema } from '../reels/templates';
 
@@ -65,8 +66,13 @@ export const headlessGuidanceSchema = z
       .max(4)
       .optional()
       .describe('The winning angles to sell on: angle ids listed by view=guidance.'),
-    characterElementIds: ids('Approved people the director may cast.'),
+    characterElementIds: ids(
+      'The identity lock: approved people the director casts from, and only from; each reel is one of them, the same person in every shot.',
+    ),
     sceneElementIds: ids('Approved places to shoot in.'),
+    productElementIds: ids(
+      'The product lock: approved products every reel and still shows, the same product in every shot it appears in.',
+    ),
     referenceAssetIds: z
       .array(
         z
@@ -142,6 +148,17 @@ export const headlessGuidanceSchema = z
       .max(40)
       .optional()
       .describe("A still's layout family (view=guidance layouts); absent, the director picks."),
+    pacing: z
+      .enum(['none', ...cutPacingSchema.options])
+      .optional()
+      .describe(
+        "Locks the reel's edit (view=guidance edits). none: spoken beats only. steady, build, stutter or drop-hit: a fast-cut montage of silent action shots cut on the beat of a music bed between the spoken hook and the spoken CTA; build runs 1 s cuts down to 0.05 s into the drop. Absent, the director picks.",
+      ),
+    layout: cutLayoutSchema
+      .optional()
+      .describe(
+        "Locks how the montage draws its cuts (view=guidance edits). cut: each fills the frame. collage: each snaps in as a tile in its own section of one canvas and stays, the photo-wall open of an event recap. collage with no pacing locks build. Absent, cut.",
+      ),
     conceptVariantId: z
       .string()
       .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)

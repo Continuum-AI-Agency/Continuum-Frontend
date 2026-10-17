@@ -234,6 +234,13 @@ describe('compileFastCutWorkflow', () => {
     expect(compiled.outputRefs).toEqual(['fastcut:montage']);
   });
 
+  it('lays the montage down as a collage when the recipe asks; cut otherwise', () => {
+    const data = (compiled: ReturnType<typeof compileFastCutWorkflow>) =>
+      fastCutNodeDataSchema.parse(compiled.nodes.find((node) => node.type === 'fastCut')?.data);
+    expect(data(compileFastCutWorkflow({ ...recipe, layout: 'collage' })).layout).toBe('collage');
+    expect(data(compileFastCutWorkflow(recipe)).layout).toBe('cut');
+  });
+
   it('refuses a montage of one shot and duplicate shot ids', () => {
     expect(() => compileFastCutWorkflow({ ...recipe, shots: [recipe.shots[1]] })).toThrow();
     expect(() =>
