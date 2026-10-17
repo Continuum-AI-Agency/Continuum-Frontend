@@ -259,7 +259,14 @@ export const capiSourceSchema = z.object({
   /** When true, unsigned requests are refused; when false, a signature is still checked if sent. */
   requireSignature: z.boolean(),
   enabled: z.boolean(),
+  /** Stamped on every authenticated arrival, including ones that then fail to map. */
   lastReceivedAt: z.string().nullable(),
+  /**
+   * The last arrival's key STRUCTURE with every value redacted (strings `"<string>"`, or a
+   * same-format stand-in `XXX` / `https://example.com/` / `"0"`; numbers 0), so a field map can
+   * be picked from what the sender really posts. Never customer data.
+   */
+  lastSample: z.unknown().nullable(),
   createdAt: z.string(),
 });
 export type CapiSource = z.infer<typeof capiSourceSchema>;
