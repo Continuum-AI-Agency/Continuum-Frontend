@@ -263,6 +263,9 @@ export const editorKeyframeSchema = z
       'text.fontSize',
     ]),
     parameterName: z.string().min(1).max(200).optional(),
+    /** effect.parameter only: the clip effect (`EditorEffectInstance.id`) the key drives. Absent
+     * = the clip's first enabled effect that has `parameterName`. */
+    effectInstanceId: editorIdSchema.optional(),
     // Control points may precede the retained clip clock after a start extension.
     timeSec: z.number().finite().min(-86_400).max(86_400),
     value: editorKeyframeValueSchema,
@@ -292,6 +295,13 @@ export const editorKeyframeSchema = z
         code: z.ZodIssueCode.custom,
         path: ['parameterName'],
         message: 'effect.parameter keyframes require parameterName',
+      });
+    }
+    if (keyframe.property !== 'effect.parameter' && keyframe.effectInstanceId !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['effectInstanceId'],
+        message: 'only effect.parameter keyframes name an effect',
       });
     }
   });
@@ -368,6 +378,13 @@ export const editorParentMotionBindingSchema = z
   .strict();
 export type EditorParentMotionBinding = z.infer<typeof editorParentMotionBindingSchema>;
 
+/** The HyperFrames revision a clip's film was rendered from. edit_hyperframes_clip_motion commits
+ * motion to it and re-renders the film; the clip's `source` stays the pinned Library version. */
+export const editorHyperframesLinkSchema = z
+  .object({ revisionId: z.string().min(1), fingerprint: z.string().length(64) })
+  .strict();
+export type EditorHyperframesLink = z.infer<typeof editorHyperframesLinkSchema>;
+
 const editorClipBaseShape = {
   id: editorIdSchema,
   name: z.string().min(1).max(500).optional(),
@@ -405,6 +422,7 @@ export const editorVideoClipSchema = z
     fadeOutSec: secondsSchema.optional(),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
+    hyperframes: editorHyperframesLinkSchema.optional(),
   })
   .strict()
   .refine(
@@ -462,6 +480,8 @@ export const editorOverlayClipSchema = z
       .default('normal'),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
+    // Optional so existing project documents and fingerprints stay unchanged.
+    hyperframes: editorHyperframesLinkSchema.optional(),
   })
   .strict();
 export type EditorOverlayClip = z.infer<typeof editorOverlayClipSchema>;

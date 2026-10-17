@@ -376,6 +376,27 @@ export function parseMotionOp(value: unknown): MotionOp {
   return parsed.data;
 }
 
+/** Agent tools take ops as a JSON string: the op union is not a provider-safe tool schema. */
+export function parseMotionOpsJson(json: string): MotionOp[] {
+  let ops: unknown;
+  try {
+    ops = JSON.parse(json);
+  } catch {
+    throw new MotionTimelineError('The motion ops must be a JSON array of op objects.');
+  }
+  if (!Array.isArray(ops) || ops.length < 1 || ops.length > 50)
+    throw new MotionTimelineError('The motion ops must be a JSON array of 1 to 50 op objects.');
+  return ops.map((op, index) => {
+    try {
+      return parseMotionOp(op);
+    } catch (error) {
+      throw new MotionTimelineError(
+        `Motion op ${index}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
+}
+
 export type MotionOpContext = { width: number; height: number; fps: number; durationSec: number };
 
 // ── Shared editor helpers (the video editor reuses these on EditorKeyframe) ───────────
@@ -1201,6 +1222,12 @@ export const keyframeClipInputSchema = z
     clipId: clipIdSchema,
     property: editorKeyframeSchema.shape.property,
     parameterName: z.string().min(1).max(200).optional(),
+    effectInstanceId: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe('effect.parameter only: which of the clip effects; default the first with it'),
     keys: z.array(editorKeyInputSchema).min(1).max(500),
     /** true clears the property's keys first; false replaces only keys at the same times. */
     replace: z.boolean().default(false),
@@ -1217,7 +1244,7 @@ export const keyframeClipOutputSchema = z
  * `editorKeyframeSchema` refuses (effect.parameter without parameterName).
  */
 export function editorKeyframeFromKeyInput(
-  input: Pick<KeyframeClipInput, 'property' | 'parameterName'>,
+  input: Pick<KeyframeClipInput, 'property' | 'parameterName' | 'effectInstanceId'>,
   key: EditorKeyInput,
   id: string,
 ): EditorKeyframe {
@@ -1235,6 +1262,7 @@ export function editorKeyframeFromKeyInput(
     id,
     property: input.property,
     ...(input.parameterName !== undefined ? { parameterName: input.parameterName } : {}),
+    ...(input.effectInstanceId !== undefined ? { effectInstanceId: input.effectInstanceId } : {}),
     timeSec: key.t,
     value: position ? { x: key.x, y: key.y } : key.v,
     ...easeTiming(editorEaseFromInput(key) ?? 'linear'),
@@ -1280,3 +1308,73 @@ export function validateRetimeMotionInput(
     throw new MotionTimelineError('retime_motion needs shiftSec, durationSec, ease or bezier');
   return { shiftSec: input.shiftSec, durationSec: input.durationSec, ease };
 }
+
+// HyperFrames films as editor clips. A clip carries `hyperframes {revisionId, fingerprint}`; its
+// source stays the pinned Library version of the rendered film (an overlay clip's film is
+// transparent VP9 WebM, a video clip's an opaque MP4).
+
+export const addHyperframesClipInputSchema = z
+  .object({
+    revisionId: z.string().min(1),
+    atSec: secondsSchema.default(0),
+    trackId: z.string().optional(),
+    newTrack: z.boolean().default(false),
+  })
+  .strict();
+export type AddHyperframesClipInput = z.infer<typeof addHyperframesClipInputSchema>;
+export const addHyperframesClipOutputSchema = z
+  .object({
+    clipId: z.string(),
+    trackId: z.string(),
+    assetId: z.string(),
+    versionId: z.string(),
+  })
+  .strict();
+
+export const getHyperframesClipMotionInputSchema = z.object({ clipId: clipIdSchema }).strict();
+export const getHyperframesClipMotionOutputSchema = z
+  .object({
+    clipId: z.string(),
+    revisionId: z.string(),
+    fingerprint: z.string().length(64),
+    /** Timeline seconds of the composition's t = 0; add it to a composition time. */
+    compositionStartSec: z.number().finite(),
+    durationSec: secondsSchema,
+    animations: z.array(
+      z
+        .object({
+          id: z.string(),
+          label: z.string(),
+          targets: z.array(z.string()),
+          /** Composition seconds. */
+          startSec: secondsSchema,
+          endSec: secondsSchema,
+          staggerEachSec: z.number().finite().optional(),
+          properties: z.array(z.string()),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type GetHyperframesClipMotionOutput = z.infer<typeof getHyperframesClipMotionOutputSchema>;
+
+export const editHyperframesClipMotionInputSchema = z
+  .object({
+    clipId: clipIdSchema,
+    opsJson: z
+      .string()
+      .min(2)
+      .max(50_000)
+      .describe(
+        'A JSON array of 1 to 50 HyperFrames motion ops in composition seconds: add_animation, stagger, retime, ease, set_keyframes, upsert_keyframe, remove_keyframes, remove_animation, split_text',
+      ),
+  })
+  .strict();
+export const editHyperframesClipMotionOutputSchema = z
+  .object({
+    /** Every clip of the project that showed the edited film, now on the new render. */
+    clipIds: z.array(z.string()),
+    revisionId: z.string(),
+    versionId: z.string(),
+  })
+  .strict();

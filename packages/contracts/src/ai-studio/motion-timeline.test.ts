@@ -23,6 +23,7 @@ import {
   motionDocSchema,
   motionTargetSchema,
   parseMotionDoc,
+  parseMotionOpsJson,
   readMotionFromHtml,
   retimeKeyframes,
   retimeMotionInputSchema,
@@ -1025,5 +1026,32 @@ describe('wire schemas', () => {
       () => validateRetimeMotionInput({ ease: 'linear', bezier: [0, 0, 1, 1] }),
       /ease or bezier, not both/,
     );
+  });
+});
+
+describe('wave 2 seams', () => {
+  test('parseMotionOpsJson names the bad op and refuses an empty or oversized list', () => {
+    expect(parseMotionOpsJson('[{"type":"split_text","hfId":"headline"}]')).toEqual([
+      { type: 'split_text', hfId: 'headline' },
+    ]);
+    expect(() => parseMotionOpsJson('[]')).toThrow(/1 to 50/);
+    expect(() => parseMotionOpsJson('{')).toThrow(MotionTimelineError);
+    expect(() => parseMotionOpsJson('[{"type":"split_text"}]')).toThrow(/Motion op 0/);
+  });
+
+  test('an effect key names its effect instance; no other property may', () => {
+    const key = editorKeyframeFromKeyInput(
+      { property: 'effect.parameter', parameterName: 'amount', effectInstanceId: 'fx-1' },
+      { t: 1, v: 0.5 },
+      'k1',
+    );
+    expect(key.effectInstanceId).toBe('fx-1');
+    expect(() =>
+      editorKeyframeFromKeyInput(
+        { property: 'transform.opacity', effectInstanceId: 'fx-1' },
+        { t: 1, v: 0.5 },
+        'k2',
+      ),
+    ).toThrow(/only effect.parameter/);
   });
 });

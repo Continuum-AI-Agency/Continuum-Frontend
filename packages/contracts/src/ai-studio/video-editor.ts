@@ -23,6 +23,12 @@ import {
   textTemplateIdSchema,
 } from './motion-presets';
 import {
+  addHyperframesClipInputSchema,
+  addHyperframesClipOutputSchema,
+  editHyperframesClipMotionInputSchema,
+  editHyperframesClipMotionOutputSchema,
+  getHyperframesClipMotionInputSchema,
+  getHyperframesClipMotionOutputSchema,
   getMotionInputSchema,
   getMotionOutputSchema,
   keyframeClipInputSchema,
@@ -783,6 +789,36 @@ export const VIDEO_EDITOR_OPS = {
       '"Snappier", "slower", "bouncier": shift (shiftSec), rescale to durationSec, and/or re-ease the keyframes of the selected clips — every keyframed property, or one. The clips themselves do not move. Re-ease with an ease name, or bezier [x1, y1, x2, y2] for a custom curve.',
     input: retimeMotionInputSchema.extend(projectRef),
     output: committed(retimeMotionOutputSchema.shape),
+  },
+  add_hyperframes_clip: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Place a HyperFrames composition (its revisionId) on its own overlay track as a transparent film at atSec, linked to the revision so get_hyperframes_clip_motion and edit_hyperframes_clip_motion can read and change its animations. Renders the film first, which takes a while.',
+    input: addHyperframesClipInputSchema.extend(projectRef),
+    output: committed(addHyperframesClipOutputSchema.shape),
+  },
+  get_hyperframes_clip_motion: {
+    group: 'motion',
+    commits: false,
+    scope: 'project',
+    access: 'read',
+    description:
+      "Read the animations inside a HyperFrames clip: each animation's id, label, targets (data-hf-id), start and end in composition seconds, stagger and properties, with compositionStartSec to place them on the timeline. Read it before edit_hyperframes_clip_motion.",
+    input: getHyperframesClipMotionInputSchema.extend(projectRef),
+    output: getHyperframesClipMotionOutputSchema,
+  },
+  edit_hyperframes_clip_motion: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      '"Stagger the headline", "make the CTA snappier" inside a HyperFrames clip: apply motion ops to its composition (only the named animations change), re-render the film, and point every clip showing it at the new render. One undo restores the previous film. Use stagger_clips or retime_motion for ordinary clips.',
+    input: editHyperframesClipMotionInputSchema.extend(projectRef),
+    output: committed(editHyperframesClipMotionOutputSchema.shape),
   },
   add_transition: {
     group: 'motion',
