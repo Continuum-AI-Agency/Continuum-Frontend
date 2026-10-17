@@ -8,18 +8,23 @@
 //
 //   bun run Continuum-Frontend/src/lib/organic/organic-metrics-compare.bench.ts
 //
+// Each assertion is one Recorder row; the last stdout line is the JSON envelope the
+// factory and organic:qa:bench read. Fixtures only — no network, DB or browser.
 // Headless browser inspection of the mounted UI is a separate Playwright spec:
 //   Continuum-Frontend/e2e/organic-metrics-compare.spec.ts
 
+import { createBenchRecorder } from '../../../e2e/support/benchRecorder';
 import { blendMetric, buildSeriesSet, platformBlendKey, type SeriesMode } from './blendAccounts';
 import type { SnapshotAccountResult } from './brandOrganicSnapshot';
 
-let checks = 0;
-const failures: string[] = [];
+const recorder = createBenchRecorder('organic:metrics:compare:bench', [
+  'pure: fixture accounts through blendMetric/buildSeriesSet; the mounted UI is not driven here',
+]);
+let failures = 0;
 
 function assert(condition: boolean, message: string) {
-  checks += 1;
-  if (!condition) failures.push(message);
+  if (!condition) failures += 1;
+  recorder.record(message, condition ? 'PASS' : 'FAIL');
 }
 
 function account(
@@ -135,11 +140,5 @@ console.log('\n── 4. Mode matrix (one account) never empty ──');
   }
 }
 
-console.log('\n────────────────────────────────────────');
-console.log(`checks=${checks} failures=${failures.length}`);
-if (failures.length > 0) {
-  for (const f of failures) console.error(`FAIL: ${f}`);
-  process.exit(1);
-}
-console.log('BENCH GREEN — organic metrics compare blend path');
-process.exit(0);
+recorder.print();
+process.exit(failures > 0 ? 1 : 0);
