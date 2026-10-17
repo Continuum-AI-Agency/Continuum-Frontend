@@ -4,12 +4,17 @@ import {
   API_RENDER_DRAFT_DOCUMENTS_MAX,
   API_RENDER_DRAFT_MEDIA_MAX,
   API_RENDER_SUGGEST_ROWS_MAX,
+  type ApiRenderAssistGrid,
   type ApiRenderInputValue,
   type ApiRenderRowGate,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   classifyLibraryFile,
+  decodeDelimitedBytes,
+  parseDelimited,
   readableLayerName,
+  readWorkbook,
+  sheetTable,
 } from '@continuum/contracts';
 import { FolderOpen, Loader2, Paperclip, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -37,6 +42,12 @@ import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/
 //
 // The model checker is parked. Source evidence and deterministic checks are shown in the row
 // fields; any older flagged gate result can still be reviewed before the rows enter the grid.
+//
+// With rows in the grid, or a spreadsheet attached, it is the grid's assistant instead: "odds on
+// row 3 to 1.80", "red box on the higher odd for all of these", "build Card B from this sheet".
+// The sheet is read here and never uploaded; the answer is applied as one undo step and the
+// bubble stays open for the next ask. A sheet with nothing asked of it goes to Import, which maps
+// it exactly instead of interpreting it.
 
 type DraftedRow = ApiRenderSuggestRowsResponse['rows'][number];
 
@@ -81,6 +92,46 @@ type DraftFile = {
   status: 'uploading' | 'processing' | 'ready' | 'error';
 };
 type SelectedFile = { file: File; name: string };
+type AttachedSheet = { name: string; file: File; tables: ApiRenderAssistGrid['tables'] };
+
+const isSheetFile = (file: File) => /\.(xlsx|csv|tsv)$/i.test(file.name);
+
+/** Every tab of a spreadsheet, located (header, data block, notes, legend), as the assistant reads it. */
+async function readAttachedSheet(file: File): Promise<AttachedSheet> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const sheets = /\.xlsx$/i.test(file.name)
+    ? readWorkbook(bytes)
+    : [
+        {
+          name: file.name,
+          cells: parseDelimited(decodeDelimitedBytes(bytes), { keepBlankRows: true }),
+        },
+      ];
+  return {
+    name: file.name,
+    file,
+    tables: sheets.slice(0, 8).flatMap(({ name, cells }) => {
+      const table = sheetTable(cells);
+      return table.rows.length
+        ? [
+            {
+              name: name.trim() || file.name,
+              headers: table.headers,
+              rows: table.rows
+                .slice(0, 200)
+                .map((row) =>
+                  Object.fromEntries(
+                    Object.entries(row).map(([key, value]) => [key, value.slice(0, 500)]),
+                  ),
+                ),
+              notes: table.notes,
+              legend: table.legend,
+            },
+          ]
+        : [];
+    }),
+  };
+}
 
 export function AiDraftDialog({
   open,
@@ -93,6 +144,10 @@ export function AiDraftDialog({
   maxRows = API_RENDER_SUGGEST_ROWS_MAX,
   anchor,
   onDrafted,
+  gridContext,
+  onAssist,
+  onSheet,
+  onUndo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -107,7 +162,20 @@ export function AiDraftDialog({
   maxRows?: number;
   anchor?: Element | null;
   onDrafted: (response: ApiRenderSuggestRowsResponse) => void;
+  /** The grid as it stands when the person sends — rows, selection and the set's rules. */
+  gridContext?: () => Omit<ApiRenderAssistGrid, 'tables' | 'mapColumns'>;
+  /** Apply the assistant's answer to the grid. */
+  onAssist?: (response: ApiRenderSuggestRowsResponse) => void;
+  /** A spreadsheet sent with nothing asked: hand it to Import. */
+  onSheet?: (file: File) => void;
+  /** Take the grid's last step back — the answer just applied. */
+  onUndo?: () => void;
 }) {
+  const [sheets, setSheets] = useState<AttachedSheet[]>([]);
+  const [answer, setAnswer] = useState<Pick<
+    ApiRenderSuggestRowsResponse,
+    'reply' | 'assumptions' | 'cannot' | 'dropped'
+  > | null>(null);
   const [prompt, setPrompt] = useState('');
   const [files, setFiles] = useState<DraftFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -124,6 +192,8 @@ export function AiDraftDialog({
     if (!open) return;
     setDrafted(null);
     setFiles([]);
+    setSheets([]);
+    setAnswer(null);
     setProblem(null);
   }, [open, parent?.id]);
 
@@ -156,9 +226,24 @@ export function AiDraftDialog({
     return () => clearTimeout(timer);
   }, [brandId, files, open]);
 
-  const upload = async (selected: SelectedFile[]) => {
-    if (!selected.length || uploading || busy) return;
+  const upload = async (all: SelectedFile[]) => {
+    if (!all.length || uploading || busy) return;
     setProblem(null);
+    // A spreadsheet is read here for the assistant, never uploaded — unless this drafts
+    // variations of one row, which reads its sources the old way.
+    const local = parent || !onAssist ? [] : all.filter(({ file }) => isSheetFile(file));
+    const selected = all.filter((entry) => !local.includes(entry));
+    if (local.length) {
+      try {
+        const read = await Promise.all(local.map(({ file }) => readAttachedSheet(file)));
+        const empty = read.find((sheet) => sheet.tables.length === 0);
+        if (empty) setProblem(`${empty.name} has no rows to read.`);
+        setSheets((current) => [...current, ...read.filter((sheet) => sheet.tables.length)]);
+      } catch {
+        setProblem('Could not read that spreadsheet. Save it as .xlsx or .csv and try again.');
+      }
+    }
+    if (!selected.length) return;
     const entries = selected.map(({ file, name }) => {
       const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
       const kind =
@@ -264,7 +349,68 @@ export function AiDraftDialog({
       );
   };
 
-  const draft = async () => {
+  const grid = gridContext?.();
+  /** The assistant answers when there are rows to change or a sheet to read — never for a row's variations. */
+  const assisting =
+    !parent &&
+    Boolean(onAssist) &&
+    files.length === 0 &&
+    (sheets.length > 0 || (grid?.rows.length ?? 0) > 0);
+
+  const assist = async () => {
+    const context = gridContext?.();
+    if (!context || !onAssist) return;
+    const ask = prompt.trim();
+    if (!ask && sheets.length) {
+      // Nothing asked of the sheet: Import maps it exactly, the model would only paraphrase it.
+      onSheet?.(sheets[0]!.file);
+      return;
+    }
+    if (!ask) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const response = await apiRendersApi.suggestRows({
+        brandId,
+        ...(bindingId ? { bindingId } : {}),
+        templateKey: contract.template.key,
+        contractHash: contract.template.contractHash,
+        prompt: ask,
+        count: 1,
+        autoCount: false,
+        documentIds: [],
+        mediaAssetIds: [],
+        forksPerRow: 0,
+        grid: {
+          ...context,
+          mapColumns: false,
+          tables: sheets.flatMap((sheet) => sheet.tables).slice(0, 8),
+        },
+      });
+      onAssist(response);
+      setAnswer({
+        reply: response.reply,
+        assumptions: response.assumptions,
+        cannot: response.cannot,
+        dropped: response.dropped,
+      });
+      setPrompt('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setProblem(
+        message.includes('suggest_unavailable')
+          ? 'The assistant is unavailable right now. Try again in a minute, or edit the grid directly.'
+          : describeRenderDiscoveryFailure(message),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const draft = () => (assisting ? assist() : draftRows());
+
+  /** New rows from a brief and files, pictures chosen from the Library — proposed until kept. */
+  const draftRows = async () => {
     if (
       (!prompt.trim() && files.length === 0) ||
       maxRows < 1 ||
@@ -428,13 +574,52 @@ export function AiDraftDialog({
           {parent ? `Vary “${parent.label}” with AI` : 'Draft rows with AI'}
         </h2>
         <p className="mt-1 mb-4 text-xs text-muted-foreground">
-          Add a brief, files, or both. AI chooses the useful rows; review them in the grid before
-          rendering.
+          {assisting
+            ? 'Say what to change — on the selected rows, a row by number, or all of them. Attach a sheet to build rows from it. Changes land in the grid as one undo step; nothing renders.'
+            : 'Add a brief, files, or both. AI chooses the useful rows; review them in the grid before rendering.'}
         </p>
         <div className="flex flex-col gap-3">
+          {answer ? (
+            <div
+              role="status"
+              className="flex flex-col gap-1 rounded-md border bg-muted/40 p-2 text-xs"
+            >
+              {answer.reply ? <p className="font-medium">{answer.reply}</p> : null}
+              {answer.assumptions?.length ? (
+                <ul className="list-disc pl-4 text-muted-foreground">
+                  {answer.assumptions.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {[...(answer.cannot ?? []), ...answer.dropped].map((line) => (
+                <p key={line} className="flex items-start gap-1 text-amber-700 dark:text-amber-400">
+                  <TriangleAlert className="mt-0.5 size-3 shrink-0" aria-hidden />
+                  {line}
+                </p>
+              ))}
+              {onUndo ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="w-fit"
+                  onClick={() => {
+                    onUndo();
+                    setAnswer(null);
+                  }}
+                >
+                  Undo this change
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ai-draft-prompt">
-              Brief <span className="font-normal text-muted-foreground">(optional with files)</span>
+              {assisting ? 'Ask' : 'Brief'}{' '}
+              <span className="font-normal text-muted-foreground">
+                {assisting ? '' : '(optional with files)'}
+              </span>
             </Label>
             <Textarea
               id="ai-draft-prompt"
@@ -444,9 +629,16 @@ export function AiDraftDialog({
               placeholder={
                 parent
                   ? 'Punchier headlines, one per season'
-                  : 'Five weekend offers for the summer range, each a different product and headline'
+                  : assisting
+                    ? sheets.length
+                      ? 'Build the Card B rows from this sheet'
+                      : 'Odds on row 3 to 1.80 · red box on the higher odd for the selected rows'
+                    : 'Five weekend offers for the summer range, each a different product and headline'
               }
               onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void draft();
+              }}
             />
           </div>
           <input
@@ -505,6 +697,31 @@ export function AiDraftDialog({
               Add folder
             </Button>
           </div>
+          {sheets.length ? (
+            <ul className="flex flex-col gap-1 text-xs">
+              {sheets.map((sheet) => (
+                <li
+                  key={sheet.name}
+                  className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                >
+                  <span className="truncate">
+                    {sheet.name} · read here ·{' '}
+                    {sheet.tables.map((table) => `${table.name} (${table.rows.length})`).join(', ')}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${sheet.name}`}
+                    disabled={busy}
+                    onClick={() =>
+                      setSheets((current) => current.filter((item) => item.name !== sheet.name))
+                    }
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {files.length ? (
             <ul className="flex flex-col gap-1 text-xs">
               {files.map((file) => (
@@ -554,8 +771,18 @@ export function AiDraftDialog({
             disabled={busy || uploading}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {answer ? 'Done' : 'Cancel'}
           </Button>
+          {assisting && sheets.length === 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || uploading || maxRows < 1 || !prompt.trim()}
+              onClick={() => void draftRows()}
+            >
+              Draft new rows
+            </Button>
+          ) : null}
           <Button
             type="button"
             className="gap-2"
@@ -564,7 +791,7 @@ export function AiDraftDialog({
               uploading ||
               maxRows < 1 ||
               files.some((file) => file.status === 'error' || file.status === 'uploading') ||
-              (!prompt.trim() && files.length === 0)
+              (!prompt.trim() && files.length === 0 && sheets.length === 0)
             }
             onClick={() => void draft()}
           >
@@ -573,7 +800,7 @@ export function AiDraftDialog({
             ) : (
               <Sparkles className="size-4" aria-hidden />
             )}
-            Draft
+            {assisting ? (!prompt.trim() && sheets.length ? 'Import sheet' : 'Send') : 'Draft'}
           </Button>
         </div>
       </PopoverContent>

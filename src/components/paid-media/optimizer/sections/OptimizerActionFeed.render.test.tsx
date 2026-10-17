@@ -526,3 +526,22 @@ describe('a cross-platform move in the action feed', () => {
     ).toHaveLength(1);
   });
 });
+
+describe('actionTone — a Google write that landed reads as landed (G4)', () => {
+  it('colours a bid target, negatives and a keyword as landed writes, and an undone one muted', async () => {
+    const { actionTone } = await import('./OptimizerActionFeed');
+    const google = (op: string, extra: Record<string, unknown> = {}) =>
+      ({
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ts: '2026-10-16T10:00:00Z',
+        family: 'money',
+        op,
+        receipt: { platform: 'google_ads' },
+        ...extra,
+      }) as unknown as OptimizerActionFeedRow;
+    for (const op of ['bid', 'negatives', 'keyword']) expect(actionTone(google(op))).toBe('landed');
+    expect(actionTone(google('bid', { reverted_by: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }))).toBe(
+      'neutral',
+    );
+  });
+});

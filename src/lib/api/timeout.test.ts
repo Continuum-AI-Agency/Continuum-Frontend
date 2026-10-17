@@ -61,6 +61,7 @@ describe('supabaseTimeoutPolicy', () => {
       LONG_OPERATION_TIMEOUT_MS,
     );
   });
+
 });
 
 describe('fetchWithTimeout', () => {

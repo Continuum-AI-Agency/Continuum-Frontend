@@ -9,7 +9,8 @@
   "git": {
     "deploymentEnabled": {
       "main": true,
-      "beta": true
+      "beta": true,
+      "feat/forge95-release-checkpoint": false
     }
   }
 }

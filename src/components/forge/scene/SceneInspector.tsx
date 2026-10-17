@@ -2,9 +2,11 @@
 
 import type { BlendField } from '@continuum/contracts';
 import { ChevronRight, RotateCcw } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import { SceneFieldControl } from './SceneFieldControl';
 import type { SceneChanges, SceneValue } from './sceneEditorReducer';
@@ -13,6 +15,9 @@ import type { SceneChanges, SceneValue } from './sceneEditorReducer';
 // first, then each object's visibility and transform, the camera this output looks through, the
 // lights, and whatever else the parse found. The editor sends `scope: 'all'`, so hidden fields are
 // editable here too; they only sit lower down.
+//
+// A real scene carries thousands of transform fields. A closed panel unmounts its rows, so Objects
+// starts closed and each object opens on its own; search reaches any field without opening any.
 
 export type SceneFieldGroup = 'content' | 'objects' | 'camera' | 'lights' | 'advanced';
 
@@ -25,7 +30,9 @@ export const SCENE_GROUP_TITLES: Record<SceneFieldGroup, string> = {
 };
 
 const GROUP_ORDER: SceneFieldGroup[] = ['content', 'objects', 'camera', 'lights', 'advanced'];
-const OPEN_BY_DEFAULT = new Set<SceneFieldGroup>(['content', 'objects', 'camera']);
+const OPEN_BY_DEFAULT = new Set<SceneFieldGroup>(['content', 'camera']);
+/** Rows a search shows at once; a broader query is refined, not scrolled. */
+export const SEARCH_LIMIT = 50;
 
 /**
  * Where one field belongs. `camera` is the selected output's camera object; `cameras` is every
@@ -70,6 +77,17 @@ function byObject(fields: BlendField[]): Array<[string, BlendField[]]> {
 
 /** "Swatch · location" is read aloud as "Swatch location". */
 export const sceneFieldLabel = (field: BlendField) => field.name.replaceAll(' · ', ' ');
+
+/** Fields whose name, spoken label or object holds the query, ignoring case. */
+export function searchSceneFields(fields: readonly BlendField[], query: string): BlendField[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return fields.filter((field) =>
+    [field.name, sceneFieldLabel(field), field.target.idName].some((text) =>
+      text.toLowerCase().includes(needle),
+    ),
+  );
+}
 
 /** Inside an object's own heading, its name is noise: "Swatch · location" shows "location". */
 const shortName = (field: BlendField) => {
@@ -170,6 +188,55 @@ function FieldRow({
   );
 }
 
+function ObjectFields({
+  object,
+  fields,
+  ...row
+}: RowProps & { object: string; fields: BlendField[] }) {
+  return (
+    <Collapsible>
+      {/* Named by the object alone, so "Swatch" finds it; the count is for the eye. */}
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-2xs font-medium hover:bg-muted/60">
+        <ChevronRight
+          className="size-3 shrink-0 transition-transform group-data-[panel-open]:rotate-90"
+          aria-hidden
+        />
+        <span className="min-w-0 truncate">{object}</span>
+        <span aria-hidden className="ml-auto tabular-nums text-muted-foreground">
+          {fields.length}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-0.5 pl-3">
+        {fields.map((field) => (
+          <FieldRow key={field.key} field={field} shown={shortName(field)} {...row} />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function SearchResults({
+  fields,
+  query,
+  ...row
+}: RowProps & { fields: readonly BlendField[]; query: string }) {
+  const matches = searchSceneFields(fields, query);
+  if (!matches.length) {
+    return <p className="m-0 p-3 text-xs text-muted-foreground">No field matches “{query}”.</p>;
+  }
+  const more = matches.length - SEARCH_LIMIT;
+  return (
+    <section aria-label="Matching fields" className="flex flex-col gap-1 p-2">
+      {matches.slice(0, SEARCH_LIMIT).map((field) => (
+        <FieldRow key={field.key} field={field} shown={field.name} {...row} />
+      ))}
+      {more > 0 ? (
+        <p className="m-0 px-1.5 text-xs text-muted-foreground">{more} more — refine the search</p>
+      ) : null}
+    </section>
+  );
+}
+
 export function SceneInspector({
   fields,
   camera,
@@ -180,38 +247,48 @@ export function SceneInspector({
   camera: string | null;
   cameras: ReadonlySet<string>;
 }) {
+  const [search, setSearch] = useState('');
+  const query = useDebounce(search.trim());
   const groups = groupSceneFields(fields, camera, cameras);
   if (!groups.length) {
     return <p className="p-3 text-xs text-muted-foreground">This file exposes no fields.</p>;
   }
   return (
     <div className="flex flex-col">
-      {groups.map(({ group, fields: members }) => (
-        <Section
-          key={group}
-          title={SCENE_GROUP_TITLES[group]}
-          count={members.length}
-          defaultOpen={OPEN_BY_DEFAULT.has(group)}
-        >
-          {group === 'objects'
-            ? byObject(members).map(([object, own]) => (
-                <div key={object} className="flex flex-col gap-0.5 pt-1">
-                  <h4 className="px-1.5 text-2xs font-medium">{object}</h4>
-                  {own.map((field) => (
-                    <FieldRow key={field.key} field={field} shown={shortName(field)} {...row} />
-                  ))}
-                </div>
-              ))
-            : members.map((field) => (
-                <FieldRow
-                  key={field.key}
-                  field={field}
-                  shown={group === 'camera' ? shortName(field) : field.name}
-                  {...row}
-                />
-              ))}
-        </Section>
-      ))}
+      <div className="border-b border-border p-2">
+        <Input
+          aria-label="Search fields"
+          placeholder="Search fields or objects"
+          className="h-8 text-xs"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </div>
+      {query ? (
+        <SearchResults fields={fields} query={query} {...row} />
+      ) : (
+        groups.map(({ group, fields: members }) => (
+          <Section
+            key={group}
+            title={SCENE_GROUP_TITLES[group]}
+            count={members.length}
+            defaultOpen={OPEN_BY_DEFAULT.has(group)}
+          >
+            {group === 'objects'
+              ? byObject(members).map(([object, own]) => (
+                  <ObjectFields key={object} object={object} fields={own} {...row} />
+                ))
+              : members.map((field) => (
+                  <FieldRow
+                    key={field.key}
+                    field={field}
+                    shown={group === 'camera' ? shortName(field) : field.name}
+                    {...row}
+                  />
+                ))}
+          </Section>
+        ))
+      )}
     </div>
   );
 }

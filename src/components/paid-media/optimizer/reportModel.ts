@@ -295,6 +295,12 @@ export function freezeLabel(
         label: 'Held · lifetime budget',
         hint: 'This campaign has a whole-flight lifetime budget, not a daily one. The optimizer paces and scores in daily terms, so it will not resize a flight it cannot reason about.',
       };
+    case 'no_spend':
+      // The engine's own words (packages/optimization-engine/src/explain.ts).
+      return {
+        label: 'Held · no spend',
+        hint: `This ${entityNoun(entity)} spent nothing in the last 14 days, so there is nothing to score it on and nothing of its own to redistribute — budget left unchanged. If it is funded and not being served, the delivery finding beside it says so.`,
+      };
     case 'no_own_budget':
       return {
         label: 'Held · no budget of its own',

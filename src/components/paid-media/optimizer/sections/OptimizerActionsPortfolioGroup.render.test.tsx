@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -221,6 +223,9 @@ mock.module('../useOptimizerData', () => ({
   }),
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
   useRevertApply: () => ({ mutateAsync: async () => ({ ok: true }), isPending: false }),
+  // A platform card's own control asks the service through these; nothing here confirms one.
+  useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
+  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
@@ -275,6 +280,33 @@ mock.module('./RevertApplyDialog', () => ({
   RevertApplyDialog: ({ auditId, scope }: { auditId: string; scope?: string | null }) => (
     <button type="button" data-audit-id={auditId}>
       {scope === 'adset_status' ? 'Unpause' : 'Revert'}
+    </button>
+  ),
+}));
+
+// The card control's own flow (preview, confirm, undo) is PlatformCardActionControl's suite, and
+// the dialog mock above draws nothing while closed, trigger included. Here the control stands in
+// as the button it draws, carrying what the group handed it.
+const realCardControl = await import('./platformCards/PlatformCardActionControl');
+const { cardActionLabel } = await import('./platformCards/platformCardActionModel');
+mock.module('./platformCards/PlatformCardActionControl', () => ({
+  ...realCardControl,
+  PlatformCardActionControl: ({
+    portfolioId,
+    recommendationId,
+    write,
+  }: {
+    portfolioId: string;
+    recommendationId?: string | null;
+    write: Parameters<typeof cardActionLabel>[0];
+  }) => (
+    <button
+      data-portfolio-id={portfolioId}
+      data-recommendation-id={recommendationId ?? ''}
+      data-testid="platform-card-action"
+      type="button"
+    >
+      {cardActionLabel(write)}
     </button>
   ),
 }));
@@ -1542,5 +1574,91 @@ describe('recRowLine', () => {
         null,
       ),
     ).toBe('CTR 0.27% down 56% vs 14d · 3d');
+  });
+});
+
+// G2: "Review in Actions" from the Google tab lands here, so a Google-only portfolio's pending
+// platform card must be actionable in its tray with the card's own control — the validate_only
+// preview, then the write — and switched off when the portfolio's writes to Google are. As a
+// queue row it took the fatigue route, whose Approve only flips the status.
+describe("a Google portfolio's pending platform card in its queue", () => {
+  const { AccountReadEnvelopeSchema } = realOptimizerData;
+  const benchDocument = AccountReadEnvelopeSchema.parse(
+    JSON.parse(
+      readFileSync(
+        join(import.meta.dir, 'platformCards/__fixtures__/accountReadPlatformCards.json'),
+        'utf8',
+      ),
+    ),
+  );
+  const BUDGET = (benchDocument?.read?.candidates ?? []).find(
+    (candidate) => candidate.platform_card?.variant === 'google_budget_limited',
+  );
+  if (!BUDGET?.card_action) throw new Error('the bench document has no budget card with an action');
+  const REC_ID = BUDGET.card_action.recommendation_id;
+  const googleReport = {
+    ...report,
+    latest_items: [],
+    recommendations: [
+      {
+        id: REC_ID,
+        adset_id: '22357506300',
+        kind: 'platform_signal',
+        trigger: 'platform_signal:G03',
+        severity: 'medium',
+        reason: 'Limited by budget while converting under target',
+        status: 'pending',
+      },
+    ],
+  };
+  const renderGoogle = (cards: (typeof BUDGET)[]) =>
+    render(
+      <OptimizerActionsPortfolioGroup
+        adAccountId="act_1"
+        brandId="b1"
+        platformCards={cards}
+        portfolio={portfolio({
+          ad_account_id: '5251780631',
+          pending_recommendations: 1,
+          platforms: ['google_ads'],
+        })}
+      />,
+    );
+  const waiting = () =>
+    within(screen.getByTestId('queue-tray')).getByText(/waiting$/, { selector: 'span' })
+      .parentElement?.textContent;
+
+  it('renders the card with its own control in place of a queue row, and counts it once', () => {
+    activeReport = googleReport;
+    renderGoogle([BUDGET]);
+    const cards = within(screen.getByTestId('queue-platform-cards')).getAllByTestId('account-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.getAttribute('data-variant')).toBe('google_budget_limited');
+    const control = within(cards[0] as HTMLElement).getByTestId('platform-card-action');
+    expect(control.textContent).toBe('Apply new budget');
+    expect(control.getAttribute('data-recommendation-id')).toBe(REC_ID);
+    expect(control.getAttribute('data-portfolio-id')).toBe(BUDGET.card_action.portfolio_id);
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(0);
+    expect(screen.queryByLabelText(/^Select platform signal/)).toBeNull();
+    expect(waiting()).toBe('1 waiting');
+  });
+
+  it('renders the control disabled with the reason when writes to Google are switched off', () => {
+    activeReport = googleReport;
+    renderGoogle([{ ...BUDGET, card_action: { ...BUDGET.card_action, apply_enabled: false } }]);
+    const control = screen.getByTestId('platform-card-action-unavailable');
+    expect(control.getAttribute('data-reason')).toBe('apply_disabled');
+    const button = within(control).getByRole('button') as HTMLButtonElement;
+    expect(button.textContent).toBe('Apply new budget');
+    expect(button.disabled).toBe(true);
+    expect(control.textContent).toContain('Writes to Google are switched off for this portfolio.');
+  });
+
+  it('keeps the recommendation a queue row when no card was read for it', () => {
+    activeReport = googleReport;
+    renderGoogle([]);
+    expect(screen.queryByTestId('queue-platform-cards')).toBeNull();
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(1);
+    expect(waiting()).toBe('1 waiting');
   });
 });

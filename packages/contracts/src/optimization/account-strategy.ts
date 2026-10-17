@@ -489,6 +489,11 @@ export const accountCandidateSchema = z.object({
       recommendation_id: z.string().uuid(),
       portfolio_id: z.string().uuid(),
       action: OptimizerActionSchema,
+      /** The write switch of the card's account in its portfolio as it stands now
+       *  (portfolio_platforms.apply_enabled, which optimizer_reserve_action enforces). False:
+       *  the control shows itself switched off instead of offering a write the service refuses.
+       *  Absent from a server before 20261015160023. */
+      apply_enabled: z.boolean().optional(),
     })
     .nullable()
     .optional(),

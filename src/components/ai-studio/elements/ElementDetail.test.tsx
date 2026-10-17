@@ -14,7 +14,7 @@ const buildElement = (overrides: Partial<ElementRecord> = {}): ElementRecord => 
   brandId: 'brand-1',
   name: 'Aria',
   slug: 'aria',
-  category: 'product',
+  category: 'general',
   guidelines: null,
   rightsNote: null,
   members: [{ assetId: 'member-1', position: 0 }],
@@ -209,6 +209,39 @@ describe('ElementDetail', () => {
     ).toBe(true);
   });
 
+  it('generates a product’s sheet as the paid product continuity sheet, framed portrait', async () => {
+    const props = renderDetail(
+      buildElement({
+        category: 'product',
+        referenceHistory: ['sheet-1'],
+        defaultReferenceAssetId: 'sheet-1',
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Generate product sheet — two paid image calls' }),
+    );
+    expect(props.onGenerateReference).toHaveBeenCalled();
+    const preview = await screen.findByAltText('Aria product sheet');
+    expect(preview.closest('.aspect-\\[3\\/4\\]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Generate candidate sheet/ })).toBeNull();
+  });
+
+  it('keeps the product-sheet wording for an object Element too', () => {
+    renderDetail(buildElement({ category: 'object' }));
+
+    expect(
+      screen.getByRole('button', { name: 'Generate product sheet — two paid image calls' }),
+    ).toBeTruthy();
+  });
+
+  it('mounts the reference board for the Element', () => {
+    renderDetail(buildElement());
+
+    expect(screen.getByTestId('element-board')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save board' })).toBeTruthy();
+  });
+
   it('regenerates from the members', () => {
     const props = renderDetail(
       buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }),
@@ -267,7 +300,7 @@ describe('ElementDetail', () => {
 
     expect(props.onSave).toHaveBeenCalledWith({
       name: 'Aria',
-      category: 'product',
+      category: 'general',
       guidelines: 'the matte finish, not the glossy one',
       rightsNote: null,
       facts: [],

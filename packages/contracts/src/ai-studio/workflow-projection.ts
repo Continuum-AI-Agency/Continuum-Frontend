@@ -55,6 +55,8 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   // the agent gets ids from the `list_elements` tool. `elementName` is display-only
   // (a label fallback), carried so a projection reads as a name and not a bare uuid.
   element: ['elementId', 'elementName'],
+  // The cut is the node's settings; `durationSec` is what the last run rendered, read-only.
+  fastCut: ['pacing', 'rung', 'bars', 'transients', 'durationSec'],
   videoDecode: ['value'],
   frameExtract: ['selector', 'timestampSec', 'outputWidth', 'quality'],
   nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],

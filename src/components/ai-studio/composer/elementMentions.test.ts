@@ -132,7 +132,14 @@ describe('readElementMention', () => {
       assetIds: [asset(1), asset(2)],
       mode: 'fallback',
       droppedCount: 0,
+      styleSlugs: [],
     });
+  });
+
+  it('carries the Element’s style slugs on its reference', () => {
+    expect(readElementMention(mention(element({ styleSlugs: ['film-grain'] })))?.styleSlugs).toEqual(
+      ['film-grain'],
+    );
   });
 
   it('ignores an ordinary media grab', () => {
@@ -230,6 +237,21 @@ describe('expandElementMentions', () => {
     expect(expanded.elements).toEqual([]);
   });
 
+  it('collects every mentioned Element’s style slugs in mention order, once each', () => {
+    const model = element({ styleSlugs: ['film-grain', 'golden-hour'] });
+    const product = element({
+      id: 'element-2',
+      name: 'Aero Bottle',
+      category: 'product',
+      styleSlugs: ['golden-hour', 'matte'],
+    });
+    expect(expandElementMentions([mention(model), mention(product)]).styleSlugs).toEqual([
+      'film-grain',
+      'golden-hour',
+      'matte',
+    ]);
+  });
+
   it('collapses the same Element mentioned twice into one grab', () => {
     const reference = mention(element());
     const expanded = expandElementMentions([reference, reference]);
@@ -294,5 +316,25 @@ describe('appendElementGrounding', () => {
   it('keeps the prompt intact when not even one line fits', () => {
     const prompt = 'x'.repeat(CANVAS_COMPOSE_PROMPT_MAX_CHARS - 1);
     expect(appendElementGrounding(prompt, 'first line')).toBe(prompt);
+  });
+
+  it('puts the Elements’ style tokens BEFORE the prompt so a typed slug still wins', () => {
+    expect(
+      appendElementGrounding('a shot of @Nova /noir', 'Reference image #1 is …', [
+        'film-grain',
+        'golden-hour',
+      ]),
+    ).toBe(
+      '/film-grain /golden-hour a shot of @Nova /noir\n\n<elements>\nReference image #1 is …\n</elements>',
+    );
+  });
+
+  it('styles a prompt with nothing to ground', () => {
+    expect(appendElementGrounding('a shot', '', ['matte'])).toBe('/matte a shot');
+  });
+
+  it('drops the style defaults rather than the user’s words at the ceiling', () => {
+    const prompt = 'x'.repeat(CANVAS_COMPOSE_PROMPT_MAX_CHARS - 2);
+    expect(appendElementGrounding(prompt, '', ['film-grain'])).toBe(prompt);
   });
 });

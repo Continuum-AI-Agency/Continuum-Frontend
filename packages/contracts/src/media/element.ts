@@ -99,6 +99,66 @@ export const isElementPersonCategory = (category: ElementCategory): boolean =>
  */
 export const ELEMENT_REFERENCE_TAG = 'element-reference';
 
+// --- Boards -----------------------------------------------------------------
+
+/**
+ * What one member image IS to the Element — the turnaround view, the label, the hand that
+ * gives it scale. Stored as `origin_ref.memberRoles[assetId]` and surfaced as
+ * `members[i].role`; a member with no role is still a member.
+ */
+export const ELEMENT_MEMBER_ROLES = [
+  'identity',
+  'front',
+  'back',
+  'side',
+  'three_quarter',
+  'top',
+  'detail',
+  'label',
+  'packaging',
+  'in_hand',
+  'wardrobe',
+  'pose',
+] as const;
+export const elementMemberRoleSchema = z.enum(ELEMENT_MEMBER_ROLES);
+export type ElementMemberRole = z.infer<typeof elementMemberRoleSchema>;
+
+/** Keyed by member asset id. The Backend prunes it to the current members on every write. */
+export const elementMemberRolesSchema = z.record(z.string().uuid(), elementMemberRoleSchema);
+export type ElementMemberRoles = z.infer<typeof elementMemberRolesSchema>;
+
+/**
+ * `/slug` style shortcuts an Element carries into every generation it feeds. The Backend
+ * validates each against the brand's visual creative-direction skills; the shape here is the
+ * token grammar `parseShortcutTokens` reads (lowercase slug, no slash).
+ */
+export const ELEMENT_STYLE_SLUG_LIMIT = 6;
+export const elementStyleSlugSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]*$/)
+  .max(120);
+export const elementStyleSlugsSchema = z
+  .array(elementStyleSlugSchema)
+  .max(ELEMENT_STYLE_SLUG_LIMIT);
+
+/** Linked boards: the look an Element is shot in, kept as other same-brand Elements. */
+export const ELEMENT_BOARD_LIMIT = 4;
+export const ELEMENT_BOARD_CATEGORIES = [
+  'moodboard',
+  'style',
+  'palette',
+  'setting',
+  'location',
+] as const satisfies readonly ElementCategory[];
+export const elementBoardIdsSchema = z.array(z.string().uuid()).max(ELEMENT_BOARD_LIMIT);
+
+export const isElementBoardCategory = (category: ElementCategory): boolean =>
+  (ELEMENT_BOARD_CATEGORIES as readonly ElementCategory[]).includes(category);
+
+/** The two categories whose reference is the product continuity sheet. */
+export const isElementProductCategory = (category: ElementCategory): boolean =>
+  category === 'product' || category === 'object';
+
 // --- Product facts -----------------------------------------------------------
 
 /**
@@ -196,6 +256,11 @@ export const elementOriginRefSchema = z
     referenceHistory: z.array(z.string().uuid()).default([]),
     defaultReferenceAssetId: z.string().uuid().nullable().default(null),
     revisions: z.array(elementRevisionSchema).default([]),
+    // Optional and never defaulted: absent in the bag means absent on the record, which is
+    // what keeps a Backend that knows these keys readable by a Frontend that does not.
+    memberRoles: elementMemberRolesSchema.optional(),
+    styleSlugs: elementStyleSlugsSchema.optional(),
+    boardElementIds: elementBoardIdsSchema.optional(),
   })
   .passthrough();
 export type ElementOriginRef = z.infer<typeof elementOriginRefSchema>;
@@ -204,6 +269,7 @@ export const elementMemberSchema = z
   .object({
     assetId: z.string().uuid(),
     position: z.number().int().nonnegative(),
+    role: elementMemberRoleSchema.optional(),
   })
   .strict();
 export type ElementMember = z.infer<typeof elementMemberSchema>;
@@ -231,6 +297,9 @@ export const elementRecordSchema = z
     referenceHistory: z.array(z.string().uuid()),
     defaultReferenceAssetId: z.string().uuid().nullable(),
     revisions: z.array(elementRevisionSchema).optional(),
+    /** Omitted when empty — see the deploy-order note on `elementOriginRefSchema`. */
+    styleSlugs: elementStyleSlugsSchema.optional(),
+    boardElementIds: elementBoardIdsSchema.optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -255,6 +324,10 @@ export const elementErrorCodeSchema = z.enum([
   'element_update_conflict',
   'element_motion_not_video',
   'element_catalog_row_invalid',
+  'element_style_unknown',
+  'element_style_conflict',
+  'element_board_invalid',
+  'element_not_promotable',
 ]);
 export type ElementErrorCode = z.infer<typeof elementErrorCodeSchema>;
 
@@ -283,6 +356,9 @@ export const createElementRequestSchema = z
       .nullable()
       .optional(),
     memberAssetIds: memberIdsSchema,
+    memberRoles: elementMemberRolesSchema.optional(),
+    styleSlugs: elementStyleSlugsSchema.optional(),
+    boardElementIds: elementBoardIdsSchema.optional(),
   })
   .strict();
 export type CreateElementRequest = z.input<typeof createElementRequestSchema>;
@@ -305,6 +381,10 @@ export const updateElementRequestSchema = z
       .nullable()
       .optional(),
     memberAssetIds: memberIdsSchema.optional(),
+    /** Each REPLACES the stored value; an empty one clears it. */
+    memberRoles: elementMemberRolesSchema.optional(),
+    styleSlugs: elementStyleSlugsSchema.optional(),
+    boardElementIds: elementBoardIdsSchema.optional(),
     expectedUpdatedAt: z.string().optional(),
   })
   .strict();
@@ -353,6 +433,29 @@ export const restoreElementRequestSchema = z
   })
   .strict();
 export type RestoreElementRequest = z.infer<typeof restoreElementRequestSchema>;
+
+/**
+ * POST /api/media/elements/:id/headless — the user's click that makes a product Element a
+ * typed, approved headless product the Optimizer and server canvas can cast. `rightsNote` is
+ * the rights basis; it is written to the Element first when the Element has none.
+ */
+export const promoteElementToHeadlessRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    rightsNote: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+export type PromoteElementToHeadlessRequest = z.infer<typeof promoteElementToHeadlessRequestSchema>;
+export const promoteElementToHeadlessResponseSchema = z
+  .object({
+    element: elementRecordSchema,
+    revision: z.number().int().positive(),
+    approved: z.literal(true),
+  })
+  .strict();
+export type PromoteElementToHeadlessResponse = z.infer<
+  typeof promoteElementToHeadlessResponseSchema
+>;
 
 // --- Identity ----------------------------------------------------------------
 
@@ -599,6 +702,35 @@ export const buildElementReferenceLabel = (params: {
   `Reference image #${params.slot} is the ${params.category} reference for "${params.name}". ` +
   'Preserve it exactly; do not redraw, restyle or improve it.';
 
+/**
+ * The one asset an Element node stands for: its motion clip for a motion use, else its first
+ * emitted ref (the pinned sheet, or the first member in fallback). The browser canvas and the
+ * server canvas run both resolve an Element node through this.
+ */
+export const elementSourceAssetId = (
+  element: {
+    category: ElementCategory;
+    members: readonly ElementMember[];
+    defaultReferenceAssetId: string | null;
+    motionAssetId?: string | null;
+  },
+  intent: ElementUseIntent,
+): string | undefined => {
+  if (intent === 'motion') return element.motionAssetId ?? undefined;
+  return resolveElementRefs(element)[0]?.asset_id;
+};
+
+/**
+ * Put an Element's `/slug` style tokens BEFORE the prompt. The shortcut resolver keeps the
+ * later of two conflicting shortcuts, so a slug the user typed in the prompt beats the
+ * Element's default with no rule of its own; a slug both name resolves once.
+ */
+export const withElementStyleTokens = (prompt: string, slugs: readonly string[]): string => {
+  const tokens = [...new Set(slugs)].map((slug) => `/${slug}`).join(' ');
+  if (!tokens) return prompt;
+  return prompt.trim() ? `${tokens} ${prompt}` : tokens;
+};
+
 // --- Reference generation prompt ---------------------------------------------
 
 const UNIVERSAL_NEGATIVES =
@@ -702,11 +834,11 @@ Repeat the same subject across panels when the profile calls for multiple views.
 };
 
 /**
- * The framing of the reference the Element route generates. A person Element's reference
- * is the portrait continuity sheet (./continuity-sheet); every other category is the
+ * The framing of the reference the Element route generates. A person's and a product's
+ * reference is a portrait continuity sheet (./continuity-sheet); every other category is the
  * one-call board `buildElementReferencePrompt` describes.
  */
 export const elementReferenceAspectRatio = (category: ElementCategory): string =>
-  isElementPersonCategory(category) ? '3:4' : '16:9';
+  isElementPersonCategory(category) || isElementProductCategory(category) ? '3:4' : '16:9';
 
 export { libraryImageRefSchema as elementImageRefSchema };

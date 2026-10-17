@@ -100,6 +100,9 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
   const preview = (previewAssetId ? signedUrls[previewAssetId] : undefined) ?? data.previewUrl;
   const motionUrl =
     (element?.motionAssetId ? signedUrls[element.motionAssetId] : undefined) ?? data.motionUrl;
+  // The live Element when it has loaded (the record omits an empty list), else what the
+  // last run stamped on the node.
+  const styleSlugs = element ? (element.styleSlugs ?? []) : (data.styleSlugs ?? []);
 
   // Three distinct absences. "Never bound" is a node placed from the palette without an
   // Element chosen — that user needs a way IN (pick one, or create the brand's first),
@@ -213,6 +216,23 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     >
                       {categoryLabel}
                     </Badge>
+                  ) : null}
+
+                  {styleSlugs.length > 0 && !unavailable ? (
+                    <div
+                      className="absolute left-2 top-8 z-20 flex max-w-[calc(100%-1rem)] flex-wrap gap-1"
+                      data-testid="element-node-styles"
+                    >
+                      {styleSlugs.map((slug) => (
+                        <Badge
+                          key={slug}
+                          variant="outline"
+                          className="h-5 bg-background/90 px-1.5 font-mono text-3xs"
+                        >
+                          /{slug}
+                        </Badge>
+                      ))}
+                    </div>
                   ) : null}
 
                   {intent !== 'motion' && emission?.mode === 'fallback' ? (

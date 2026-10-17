@@ -32,6 +32,7 @@ import {
   revertState,
 } from './actionRows';
 import { formatWhen, ReceiptToken } from './feedChrome';
+import { PlatformUndoControl } from './platformCards/PlatformCardActionControl';
 import { PlatformChip } from './platforms/PlatformChip';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
@@ -172,6 +173,18 @@ export function ActionRevertControl({
   currency: string | null;
 }) {
   const revert = revertState(row);
+  if (revert.kind === 'available' && actionPlatform(row) !== 'meta') {
+    // A platform write (Google, TikTok) undoes through optimizer-apply-action-revert, which
+    // reads the audit's own prior; the Meta dialog's edge refuses every other platform.
+    return (
+      <PlatformUndoControl
+        auditId={revert.auditId}
+        currency={currency}
+        portfolioId={revert.portfolioId}
+        title={readActionChange(row).label}
+      />
+    );
+  }
   if (revert.kind === 'available') {
     return (
       <RevertApplyDialog

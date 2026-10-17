@@ -34,13 +34,18 @@ const VIEW = {
   externals: [],
 };
 const HOUSE_BRAND = '33333333-3333-4333-8333-333333333333';
-const source = (parseState: string, house = false): TemplateSourceSummary =>
+const source = (
+  parseState: string,
+  parseError: string | null = null,
+  house = false,
+): TemplateSourceSummary =>
   templateSourceSummarySchema.parse({
     assetId: ASSET,
     brandId: house ? HOUSE_BRAND : BRAND,
     versionId: VERSION,
     family: 'blender',
     parseState,
+    parseError,
     displayName: 'Summer Scene',
     createdAt: '2026-10-14T00:00:00Z',
     house,
@@ -64,6 +69,7 @@ const listSceneRenders = mock(async () => ({
       outputs: [{ assetId: OUT_ASSET, versionId: OUT_VERSION }],
       outputId: 'Main/CamWide',
       createdAt: new Date().toISOString(),
+      mediaType: 'image',
     },
     {
       jobId: FAILED,
@@ -72,6 +78,7 @@ const listSceneRenders = mock(async () => ({
       outputs: [],
       outputId: 'Main/CamWide',
       createdAt: new Date().toISOString(),
+      mediaType: 'image',
     },
   ],
 }));
@@ -104,7 +111,7 @@ afterAll(() => {
 });
 
 function mount(
-  parseState = 'parsed',
+  summary: string | TemplateSourceSummary = 'parsed',
   handlers: { onBack?: () => void; onRename?: (title: string) => void; onRemove?: () => void } = {},
   house = false,
 ) {
@@ -113,7 +120,7 @@ function mount(
     <QueryClientProvider client={client}>
       <SceneTemplateDetail
         brandId={BRAND}
-        source={source(parseState, house)}
+        source={typeof summary === 'string' ? source(summary, null, house) : summary}
         onBack={handlers.onBack ?? (() => {})}
         onRename={handlers.onRename ?? (() => {})}
         onRemove={handlers.onRemove ?? (() => {})}
@@ -190,6 +197,29 @@ describe('SceneTemplateDetail', () => {
     const fields = await screen.findByRole('region', { name: 'Fields' });
     for (const line of ['Content · 3', 'Objects · 2', 'Camera · 1', 'Lights · 1'])
       expect(within(fields).getByText(line)).toBeTruthy();
+  });
+
+  test('names the first 12 fields of a group and counts the rest', async () => {
+    const headline = parse.fields.find((field) => field.key === 'headline')!;
+    const texts = Array.from({ length: 15 }, (_, n) => ({
+      ...headline,
+      key: `text_${n}`,
+      name: `Text ${n}`,
+    }));
+    fetchSceneTemplate.mockImplementationOnce(async () => ({ ...VIEW, fields: texts }));
+    mount();
+    const fields = await screen.findByRole('region', { name: 'Fields' });
+    await within(fields).findByText('Content · 15');
+    const names = Array.from({ length: 12 }, (_, n) => `Text ${n}`).join(', ');
+    expect(within(fields).getByText(`${names} and 3 more`)).toBeTruthy();
+  });
+
+  test('a .blend the forge refused says why, in words', () => {
+    mount(source('failed', 'ATV_Buggy.blend is not a readable Blender file: too_old'));
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Saved in Blender 2.79 or older. Open it in Blender 2.80 or newer, save it, and upload it again.',
+    );
+    expect(fetchSceneTemplate).not.toHaveBeenCalled();
   });
 
   test('lists recent renders with their files and readable failures', async () => {

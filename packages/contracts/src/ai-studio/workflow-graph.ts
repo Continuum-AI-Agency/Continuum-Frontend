@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { actionDef, actionInputPort, actionOutputModality, isActionId } from './action-registry';
+import {
+  cutPacingSchema,
+  cutRungSchema,
+  cutTransientKindSchema,
+  DEFAULT_CUT_TRANSIENTS,
+} from '../headless-content/cutEdit';
 import { API_RENDER_MEDIA_LIST_MAX } from './api-renders';
 import { type BatchItemKind, batchItemType, MAX_BATCH_ITEMS } from './batch-node';
 import {
@@ -59,6 +65,8 @@ export const STUDIO_NODE_TYPES = [
   'layerEditor',
   'element',
   'designRef',
+  // A beat-cut montage of the media wired into it, cut to a music bed (cutPlan.ts).
+  'fastCut',
 ] as const;
 
 export type StudioNodeType = (typeof STUDIO_NODE_TYPES)[number];
@@ -473,6 +481,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   'omniGen',
   'extendVideo',
   'timelineEditor',
+  'fastCut',
 ]);
 
 /** Can this node's output be applied as the post's image creative? */
@@ -674,6 +683,7 @@ const isVideoProducingSource = (node: GraphNodeLike, sourceHandle?: string | nul
   node.type === 'video' ||
   node.type === 'extendVideo' ||
   node.type === 'timelineEditor' ||
+  node.type === 'fastCut' ||
   node.type === 'hyperframesAgent' ||
   node.type === 'omniGen' ||
   isVideoGeneratorNodeType(node.type) ||
@@ -739,6 +749,30 @@ export const HYPERFRAMES_MEDIA_INPUT_HANDLES = [
   HYPERFRAMES_AUDIO_INPUT_HANDLE,
 ] as const;
 export const HYPERFRAMES_MEDIA_POOL_LIMIT = 20;
+
+// Fast Cut (fastCut): clips and stills on one `media-in` pool and the music bed they are cut
+// to on `audio-in`. The bed's measured grid places every cut (cutPlan.ts); the montage carries
+// no source audio, so the pool takes footage only. The planner cuts from at most 24 sources.
+export const FAST_CUT_MEDIA_INPUT_HANDLE = TIMELINE_MEDIA_INPUT_HANDLE;
+export const FAST_CUT_AUDIO_INPUT_HANDLE = HYPERFRAMES_AUDIO_INPUT_HANDLE;
+export const FAST_CUT_VIDEO_OUTPUT_HANDLE = 'video';
+export const FAST_CUT_MEDIA_POOL_LIMIT = 24;
+
+/**
+ * A fastCut node's own settings. Not strict: node data also carries what a run filed onto it,
+ * and parsing keeps only these. `durationSec` is written back by a run, never set by hand.
+ */
+export const fastCutNodeDataSchema = z.object({
+  pacing: cutPacingSchema.default('build'),
+  /** Steady's rung, or stutter's base rung (cutPlan.ts). */
+  rung: cutRungSchema.optional(),
+  bars: z.number().int().min(2).max(16).default(4),
+  transients: z.array(cutTransientKindSchema).max(4).default([...DEFAULT_CUT_TRANSIENTS]),
+  durationSec: z.number().positive().optional(),
+  /** The master tier renders 1080×1920 only. */
+  aspectRatio: z.literal('9:16').default('9:16'),
+});
+export type FastCutNodeData = z.infer<typeof fastCutNodeDataSchema>;
 
 // Publishing sinks accept a format-specific single input or explicit ordered
 // carousel slots. They have no MEDIA source output, so they are deliberately absent
@@ -1116,6 +1150,8 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
     case 'timelineEditor':
     case 'hyperframesAgent':
       return ['video'];
+    case 'fastCut':
+      return [FAST_CUT_VIDEO_OUTPUT_HANDLE];
     case 'omniGen':
       return ['video'];
     case 'apiRender': {
@@ -1170,6 +1206,8 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       return ['prompt', 'video'];
     case 'timelineEditor':
       return [TIMELINE_MEDIA_INPUT_HANDLE];
+    case 'fastCut':
+      return [FAST_CUT_MEDIA_INPUT_HANDLE, FAST_CUT_AUDIO_INPUT_HANDLE];
     case 'hyperframesAgent':
       return [HYPERFRAMES_PROMPT_INPUT_HANDLE, ...HYPERFRAMES_MEDIA_INPUT_HANDLES];
     case 'plannerDraft':
@@ -1235,6 +1273,10 @@ export function getTargetHandleConnectionLimit(
   if (node.type === 'frameExtract' && targetHandle === 'video') return 1;
   if (node.type === 'timelineEditor' && isTimelineMediaHandle(targetHandle))
     return TIMELINE_MEDIA_POOL_LIMIT;
+  if (node.type === 'fastCut' && targetHandle === FAST_CUT_MEDIA_INPUT_HANDLE)
+    return FAST_CUT_MEDIA_POOL_LIMIT;
+  // One bed: the cuts sit on its grid.
+  if (node.type === 'fastCut' && targetHandle === FAST_CUT_AUDIO_INPUT_HANDLE) return 1;
   if (node.type === 'hyperframesAgent' && targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE)
     return 1;
   if (
@@ -1355,6 +1397,15 @@ function isConnectionCompatible(
   } else if (targetNode.type === 'timelineEditor') {
     if (!isTimelineMediaHandle(targetHandle)) return false;
     if (!timelineMediaKind(sourceNode, sourceHandle)) return false;
+  } else if (targetNode.type === 'fastCut') {
+    if (targetHandle === FAST_CUT_AUDIO_INPUT_HANDLE) {
+      if (sourceNode.type !== 'audio') return false;
+    } else if (targetHandle === FAST_CUT_MEDIA_INPUT_HANDLE) {
+      const kind = timelineMediaKind(sourceNode, sourceHandle);
+      if (kind !== 'video' && kind !== 'image') return false;
+    } else {
+      return false;
+    }
   } else if (targetNode.type === 'hyperframesAgent') {
     if (targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE) {
       if (!isTextProducingSource(sourceNode, sourceHandle)) return false;
@@ -1909,6 +1960,16 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
     }
     case 'extendVideo':
       return { data: { prompt: '' }, style: { width: 360, height: 200 } };
+    case 'fastCut':
+      return {
+        data: {
+          pacing: 'build',
+          bars: 4,
+          transients: [...DEFAULT_CUT_TRANSIENTS],
+          aspectRatio: '9:16',
+        },
+        style: { width: 320, height: 380 },
+      };
     case 'timelineEditor':
       return {
         data: {
@@ -2245,6 +2306,23 @@ function coerceActionConfig(
   return { data: next, changes };
 }
 
+/**
+ * A fastCut setting the planner cannot read (an invented pacing, a rung off the ladder) is
+ * dropped per key at write time, so the node keeps what it had rather than failing its run.
+ */
+function coerceFastCutConfig(patch: Record<string, unknown>): NodeConfigCoercion {
+  const changes: string[] = [];
+  const next: Record<string, unknown> = { ...patch };
+  const shape = fastCutNodeDataSchema.shape;
+  for (const key of Object.keys(shape) as Array<keyof typeof shape>) {
+    if (!(key in next) || next[key] === undefined) continue;
+    if (shape[key].safeParse(next[key]).success) continue;
+    changes.push(`fastCut ${key} "${JSON.stringify(next[key])}" is not valid — using the default`);
+    delete next[key];
+  }
+  return { data: next, changes };
+}
+
 export function coerceNodeConfig(
   type: StudioNodeType,
   patch: Record<string, unknown>,
@@ -2252,6 +2330,7 @@ export function coerceNodeConfig(
 ): NodeConfigCoercion {
   if (isVideoGeneratorNodeType(type)) return coerceVideoGeneratorConfig(type, patch, current);
   if (type === 'action') return coerceActionConfig(patch, current);
+  if (type === 'fastCut') return coerceFastCutConfig(patch);
   if (type !== 'nanoGen') return { data: patch, changes: [] };
 
   const changes: string[] = [];

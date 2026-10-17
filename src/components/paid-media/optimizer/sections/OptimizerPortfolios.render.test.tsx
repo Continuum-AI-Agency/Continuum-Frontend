@@ -332,6 +332,24 @@ describe('OptimizerPortfolios — a portfolio dead on Meta reads stale', () => {
     expect(getByRole('button', { name: 'Open Prospecting' }).textContent).toContain('2 ad sets');
   });
 
+  it('names members by what they are on their platform: campaigns on Google, members when mixed', () => {
+    const google = portfolio({
+      id: 'g1',
+      name: 'Leads Google',
+      adset_count: 3,
+      platforms: ['google_ads'],
+    });
+    const mixed = portfolio({
+      id: 'm1',
+      name: 'Mixed',
+      adset_count: 2,
+      platforms: ['meta', 'google_ads'],
+    });
+    const { getByRole } = renderList({ portfolios: [google, mixed], brandPortfolioCount: 2 });
+    expect(getByRole('button', { name: 'Open Leads Google' }).textContent).toContain('3 campaigns');
+    expect(getByRole('button', { name: 'Open Mixed' }).textContent).toContain('2 members');
+  });
+
   it('adds nothing to a fresh row after the migration', () => {
     const { queryByTestId } = renderList({
       portfolios: [portfolio({ id: 'p1', name: 'MENSAJES // TODOS', ...FRESH_OVER })],
@@ -386,7 +404,7 @@ describe('OptimizerPortfolios — a live table, one row per portfolio', () => {
   it('labels the columns once, above the rows', () => {
     const { getByTestId } = renderList();
     expect(getByTestId('portfolio-table-header').textContent).toBe(
-      'PortfolioCost vs targetPer dayAd setsPendingStatus',
+      'PortfolioCost vs targetPer dayMembersPendingStatus',
     );
   });
 

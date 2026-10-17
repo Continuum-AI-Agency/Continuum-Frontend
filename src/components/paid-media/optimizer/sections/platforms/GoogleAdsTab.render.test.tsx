@@ -175,23 +175,17 @@ describe('GoogleAdsTabView — currency and what the Optimizer reads', () => {
     expect(getByTestId('google-tiles').textContent).toContain('453 MXN each');
   });
 
-  it("names what the figures are and when the Optimizer's own reading starts, with the way in", () => {
-    let created = 0;
+  it("names what the figures are and when the Optimizer's own reading starts", () => {
     const { getByTestId, queryByTestId } = render(
-      <GoogleAdsTabView
-        onCreatePortfolio={() => {
-          created += 1;
-        }}
-        state={{ status: 'ready', account: VIVO_47, overview }}
-      />,
+      <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview }} />,
     );
     expect(queryByTestId('google-not-managed')).toBeNull();
     const note = getByTestId('platform-reading-note');
-    expect(note.textContent).toContain(
+    expect(note.textContent).toBe(
       "These figures come straight from Google. The Optimizer's own reading of Google starts once a portfolio holds Google campaigns.",
     );
-    note.querySelector('button')?.click();
-    expect(created).toBe(1);
+    // The way in is the tab's portfolio rows (OptimizerOverview), not a second button here.
+    expect(note.querySelector('button')).toBeNull();
   });
 
   it('leaves the note out when the frame above already said it', () => {

@@ -12,6 +12,8 @@ export const forgeQueryKeys = {
   templateVariants: (brandId: string) => ['forge', brandId, 'template-variants'] as const,
   revisionVariants: (brandId: string, assetId: string) =>
     ['forge', brandId, 'revision-variants', assetId] as const,
+  /** The variant each template family opens on, for the whole brand. */
+  variantDefaults: (brandId: string) => ['forge', brandId, 'variant-defaults'] as const,
   templateSources: (brandId: string) => ['forge', brandId, 'template-sources'] as const,
   templateVariables: (brandId: string, assetId: string, versionId: string) =>
     ['forge', brandId, 'template-variables', assetId, versionId] as const,
@@ -42,7 +44,6 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'render-sets', templateKey ?? 'all'] as const,
   runs: (brandId: string) => ['forge', brandId, 'runs'] as const,
   run: (brandId: string, assetId: string) => ['forge', brandId, 'runs', assetId] as const,
-  lineage: (brandId: string, assetId: string) => ['forge', brandId, 'lineage', assetId] as const,
   mappingReview: (brandId: string, assetId: string, versionId: string, state: string | null) =>
     ['forge', brandId, 'mapping-review', assetId, versionId, state] as const,
   renderJobs: (brandId: string) => ['forge', brandId, 'render-jobs'] as const,

@@ -207,6 +207,12 @@ export const supabaseTimeoutPolicy: TimeoutPolicy = (url) => {
   return READ_TIMEOUT_MS;
 };
 
+/** A render answered only once its file exists, so time-to-headers IS the encode: a fast cut
+ *  at 1080×1920 and 60 fps, its master and its delivery copy. The render call passes it itself:
+ *  routing it here by URL made this module (on every route, under http.ts) import the canvas
+ *  contracts, which put /organic's first load 76 KiB over its budget. */
+export const RENDER_TIMEOUT_MS = 300_000;
+
 /** The Backend client's bound: a GET is a read; anything else may be a job. */
 export const backendTimeoutPolicy: TimeoutPolicy = (_url, method) =>
   method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;

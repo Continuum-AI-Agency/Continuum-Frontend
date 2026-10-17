@@ -1,14 +1,21 @@
 'use client';
 
-import { type SceneTemplateView, templateDisplayName } from '@continuum/contracts';
+import {
+  type BlendOutput,
+  MAX_FRAMES,
+  type SceneTemplateView,
+  templateDisplayName,
+} from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Clapperboard, Redo2, RotateCcw, Undo2 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchSceneTemplate, sceneProblem } from '@/lib/library/sceneTemplates';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
@@ -21,6 +28,56 @@ import { useSceneRenderJob } from './useSceneRenderJob';
 
 // The Blender scene editor: the file's fields on the left, a draft of the picked camera in the
 // middle, final renders on the right. It edits what one render will say, never the .blend itself.
+
+type SceneMediaType = BlendOutput['mediaType'];
+
+const sceneFrameCount = (output: BlendOutput) => output.frameEnd - output.frameStart + 1;
+
+/**
+ * What Render final makes until someone picks. The parse's type is a hint — a still often keeps
+ * Blender's default frame range — so a range no render accepts defaults to a still.
+ */
+function defaultSceneMediaType(output: BlendOutput): SceneMediaType {
+  const frames = sceneFrameCount(output);
+  return frames <= 1 || frames > MAX_FRAMES ? 'image' : output.mediaType;
+}
+
+/** Still or animation for Render final. A one-frame output is a still and offers no choice. */
+function SceneMediaTypePicker({
+  output,
+  value,
+  onChange,
+}: {
+  output: BlendOutput;
+  value: SceneMediaType;
+  onChange: (next: SceneMediaType) => void;
+}) {
+  const frames = sceneFrameCount(output);
+  if (frames <= 1) return null;
+  const tooLong = frames > MAX_FRAMES;
+  return (
+    <RadioGroup
+      aria-label="Render as"
+      value={value}
+      onValueChange={(next) => onChange(next as SceneMediaType)}
+      className="flex w-auto flex-wrap items-center gap-x-3 gap-y-1"
+    >
+      <Label className="text-xs font-normal">
+        <RadioGroupItem value="image" />
+        {`Still · frame ${output.frameStart}`}
+      </Label>
+      <Label className="text-xs font-normal">
+        <RadioGroupItem value="video" disabled={tooLong} />
+        {`Animation · ${frames} frames`}
+      </Label>
+      {tooLong ? (
+        <span className="text-2xs text-muted-foreground">
+          {`Blender's range is ${frames} frames; renders take at most ${MAX_FRAMES}`}
+        </span>
+      ) : null}
+    </RadioGroup>
+  );
+}
 
 export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: string }) {
   const queryClient = useQueryClient();
@@ -95,6 +152,9 @@ function SceneEditorBody({
 }) {
   const [state, dispatch] = useReducer(sceneEditorReducer, view, initialSceneEditor);
   const output = view.outputs.find((candidate) => candidate.id === state.outputId) ?? null;
+  // Cleared whenever the output changes, so each output starts from its own default.
+  const [pickedMediaType, setPickedMediaType] = useState<SceneMediaType | null>(null);
+  const mediaType = output ? (pickedMediaType ?? defaultSceneMediaType(output)) : null;
   const cameras = useMemo(() => new Set(view.outputs.map((entry) => entry.camera)), [view.outputs]);
   const preview = useScenePreview({
     brandId,
@@ -157,6 +217,9 @@ function SceneEditorBody({
             <RotateCcw className="size-3.5" aria-hidden />
             Reset
           </Button>
+          {output && mediaType ? (
+            <SceneMediaTypePicker output={output} value={mediaType} onChange={setPickedMediaType} />
+          ) : null}
           <Button
             type="button"
             size="sm"
@@ -164,10 +227,12 @@ function SceneEditorBody({
             disabled={!output || render.starting}
             onClick={() =>
               output &&
+              mediaType &&
               render.start({
                 versionId: view.versionId,
                 outputId: output.id,
                 values: state.changes,
+                overrides: { mediaType },
               })
             }
           >
@@ -216,7 +281,10 @@ function SceneEditorBody({
           <ScenePreviewStage
             outputs={view.outputs}
             outputId={output?.id ?? null}
-            onOutputChange={(outputId) => dispatch({ type: 'chooseOutput', outputId })}
+            onOutputChange={(outputId) => {
+              if (outputId !== state.outputId) setPickedMediaType(null);
+              dispatch({ type: 'chooseOutput', outputId });
+            }}
             preview={preview}
           />
         </main>
@@ -230,6 +298,7 @@ function SceneEditorBody({
             outputs={view.outputs}
             job={render.job}
             jobOutputId={render.jobOutputId}
+            jobMediaType={render.jobMediaType}
             error={render.error}
           />
         </aside>

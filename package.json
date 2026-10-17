@@ -40,6 +40,7 @@
     "forge:layers:ui:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-layers-ui.bench.ts",
     "forge:gallery:ui:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-gallery-ui.bench.ts",
     "forge:scene:ui:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-scene-editor.bench.ts",
+    "forge:scene:real:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-scene-real.bench.ts",
     "forge:folder:e2e:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env.production e2e/forge-folder.bench.ts",
     "render:ui:bench": "bun test ./src/StudioCanvas/nodes/api-render/apiRenderLibrary.bench.tsx",
     "studio:veo-refs:e2e:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/studio-veo-refs-e2e playwright test e2e/studio-veo-reference-connections.spec.ts --workers=1",
@@ -56,6 +57,7 @@
     "forge:studio:e2e:bench": "playwright test --config playwright.forge-studio.config.ts --workers=1",
     "forge:publish-status:e2e:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-publish-status.bench.ts",
     "forge:meta:live:bench": "playwright test --config playwright.forge-live.config.ts --workers=1",
+    "forge:caliente:ui:bench": "playwright test --config playwright.forge-caliente.config.ts --workers=1",
     "forge:ingest-heal:live:bench": "FORGE_STUDIO_LIVE=1 playwright test --config playwright.forge-studio.config.ts e2e/ingest-heal.forge-studio.bench.spec.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
@@ -66,6 +68,7 @@
     "brands:session-tenancy:e2e:bench": "set -a; . ./.env.local; set +a; playwright test --config playwright.brand-session-tenancy.config.ts --workers=1",
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
     "optimizer:stale-moves:e2e:bench": "playwright test --config playwright.optimizer-stale-moves.config.ts --workers=1",
+    "optimizer:multiplatform:portfolio:e2e:bench": "playwright test --config playwright.optimizer-portfolio-mixed.config.ts --workers=1",
     "perfplus:l3:ui:bench": "playwright test --config playwright.perfplus-l3.config.ts --workers=1",
     "perfplus:visual:bench": "playwright test --config playwright.perfplus-visual.config.ts --workers=1",
     "perfplus:tiktok:honesty:ui:bench": "playwright test --config playwright.perfplus-tiktok.config.ts --workers=1",
@@ -137,6 +140,7 @@
     "paste:e2e:bench": "playwright test --config playwright.paste-context.config.ts --workers=1",
     "design-system:upload:e2e:bench": "playwright test --config playwright.design-system-upload.config.ts --workers=1",
     "organic:creative-replace:fe:e2e:bench": "BENCH_BACKEND_PORT=4424 NEXT_PUBLIC_API_URL=http://127.0.0.1:4424 PORT=3124 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3124 NEXT_DIST_DIR=.next/creative-replace-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/organic-creative-replace.bench.spec.ts --workers=1",
+    "forge:variant-family:fe:e2e:bench": "BENCH_BACKEND_PORT=4113 NEXT_PUBLIC_API_URL=http://127.0.0.1:4113 PORT=3113 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3113 NEXT_DIST_DIR=.next/variant-family-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/forge-variant-family.bench.spec.ts --workers=1",
     "library:reformat-menu:fe:e2e:bench": "BENCH_BACKEND_PORT=4433 NEXT_PUBLIC_API_URL=http://127.0.0.1:4433 PORT=3153 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3153 NEXT_DIST_DIR=.next/reformat-menu-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/library-reformat-menu.bench.spec.ts --workers=1",
     "organic:ship:fe:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4423 NEXT_PUBLIC_API_URL=http://127.0.0.1:4423 PORT=3123 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3123 NEXT_DIST_DIR=.next/organic-ship-e2e playwright test e2e/organic-ship.bench.spec.ts --workers=1",
     "plugin:web:bench": "bun --no-env-file e2e/plugin-public.bench.ts",
@@ -146,7 +150,8 @@
     "videoeditor:audio:render:bench": "node scripts/video-editor-audio-render-bench.mjs",
     "videoeditor:first-cut:finish:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-first-cut-finish.spec.ts --workers=1",
     "videoeditor:record:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-record.spec.ts --workers=1",
-    "videoeditor:combos:e2e:bench": "VIDEO_EDITOR_COMBOS=1 playwright test --config=playwright.browser-render.config.ts e2e/video-editor-combos.spec.ts --workers=1"
+    "videoeditor:combos:e2e:bench": "VIDEO_EDITOR_COMBOS=1 playwright test --config=playwright.browser-render.config.ts e2e/video-editor-combos.spec.ts --workers=1",
+    "forge:template-editor:e2e:bench": "bun --no-env-file e2e/forge-template-editor.bench.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.109",

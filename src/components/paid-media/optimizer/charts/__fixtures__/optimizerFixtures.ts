@@ -110,6 +110,8 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     pending_budget_moves: 3,
     last_cycle_current: true,
     withdrawn_reason: null,
+    platforms: ['meta'],
+    platform_writes: {},
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
@@ -129,5 +131,7 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     pending_budget_moves: 2,
     last_cycle_current: true,
     withdrawn_reason: null,
+    platforms: ['meta'],
+    platform_writes: {},
   },
 ];

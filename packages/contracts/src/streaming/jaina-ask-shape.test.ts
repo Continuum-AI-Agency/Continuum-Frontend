@@ -78,38 +78,46 @@ describe('askShapeOf — format', () => {
   });
 });
 
-describe('askShapeOf — depth and technical', () => {
+describe('askShapeOf — brevity is a format, depth is never a phrase', () => {
   it.each([
-    ['Explícame en detalle por qué subió el CPA', 'profundo', false],
-    ['Explícame paso a paso cómo escalar la campaña de mensajes', 'profundo', false],
-    ['Hazme un análisis a fondo de la cuenta', 'profundo', false],
-    ['Give me a deep dive on the ad set performance', 'profundo', false],
-    ['Walk me through the funnel in detail', 'profundo', false],
-    ['Explícame a nivel técnico cómo se calcula el costo por resultado', 'profundo', true],
-    ['How is the cost per result calculated? Technical answer please', 'profundo', true],
-    ['Which single ad should I scale 10x tomorrow? One line, no caveats.', 'breve', false],
-    ['Solo dame el total en una cifra, no me importa la moneda.', 'breve', false],
-    ['Rápido: ¿cuánto gastamos ayer?', 'breve', false],
-    ['Give me a 7-day campaign health brief with risks and opportunities.', 'estandar', false],
-    ['Briefly, how did the account do last week?', 'breve', false],
-    ['Explícame en una línea por qué subió el CPA', 'breve', false],
-    ['Is that in USD? Just give me the totals in dollars.', 'breve', false],
-    ['What is our current total ad spend this month?', 'estandar', false],
-    ['¿Cómo vamos este mes?', 'estandar', false],
-    ['Recommend budget reallocations for this week by campaign.', 'estandar', false],
-  ] as const)('%s → %s (technical %s)', (query, depth, technical) => {
-    const shape = askShapeOf(query);
-    expect(shape.depth).toBe(depth);
-    expect(shape.technical).toBe(technical);
+    ['Which single ad should I scale 10x tomorrow? One line, no caveats.', 'short'],
+    ['Solo dame el total en una cifra, no me importa la moneda.', 'short'],
+    ['Rápido: ¿cuánto gastamos ayer?', 'short'],
+    ['Briefly, how did the account do last week?', 'short'],
+    ['Explícame en una línea por qué subió el CPA', 'short'],
+    ['Is that in USD? Just give me the totals in dollars.', 'short'],
+    ['Keep it brief: what did we spend yesterday?', 'short'],
+    // an explicit container wins over brevity
+    ['Dame una lista rápida de los anuncios que más gastaron', 'list'],
+    ['Rápido, en una tabla: gasto por campaña', 'table'],
+    // a depth phrase reads as nothing of its own
+    ['Explícame en detalle por qué subió el CPA', 'explanation'],
+    ['Hazme un análisis a fondo de la cuenta', 'direct'],
+    ['Give me a deep dive on the ad set performance', 'direct'],
+    ['Give me a 7-day campaign health brief with risks and opportunities.', 'direct'],
+  ] as const)('%s → %s', (query, format) => {
+    expect(askShapeOf(query).format).toBe(format);
+  });
+
+  it('reads no depth at all', () => {
+    expect(Object.keys(askShapeOf('Explícame en detalle, a fondo')).sort()).toEqual([
+      'format',
+      'technical',
+    ]);
+  });
+
+  it.each([
+    ['Explícame a nivel técnico cómo se calcula el costo por resultado', true],
+    ['How is the cost per result calculated? Technical answer please', true],
+    ['Explícame en detalle por qué subió el CPA', false],
+    ['¿Cómo vamos este mes?', false],
+  ] as const)('%s → technical %s', (query, technical) => {
+    expect(askShapeOf(query).technical).toBe(technical);
   });
 
   it('folds accents and case so the two spellings of a phrase are one', () => {
     expect(foldAsk('  Explícame  PASO a Paso ')).toBe('explicame paso a paso');
-    expect(askShapeOf('EXPLICAME PASO A PASO').depth).toBe('profundo');
-  });
-
-  it('does not read a direction in the frame ("top-down") or "keep it brief" as a report', () => {
-    expect(askShapeOf('Keep it brief: what did we spend yesterday?').depth).toBe('breve');
+    expect(askShapeOf('EXPLICAME PASO A PASO').format).toBe('steps');
   });
 });
 
@@ -141,11 +149,13 @@ describe('formatDelivered', () => {
     expect(formatBlockOf([{ category: 'chart', data: [] }], 'chart')).toBeNull();
   });
 
-  it('an explanation is prose of its own; a direct answer needs nothing', () => {
+  it('an explanation is prose of its own; a direct or short answer needs nothing', () => {
     expect(formatDelivered({ blocks: [] }, 'explanation')).toBe(false);
     expect(
       formatDelivered({ blocks: [{ category: 'narrative', body: 'Because…' }] }, 'explanation'),
     ).toBe(true);
     expect(formatDelivered({ blocks: [] }, 'direct')).toBe(true);
+    expect(formatDelivered({ blocks: [] }, 'short')).toBe(true);
+    expect(formatBlockOf([{ category: 'insight_list', items: [{}, {}] }], 'short')).toBeNull();
   });
 });

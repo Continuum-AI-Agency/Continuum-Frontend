@@ -31,4 +31,4 @@ export const NEWS_LIST = 'flex flex-col divide-y divide-border/60';
  * against `FINDING_ROW_BREAKPOINT_REM`, so the two cannot drift apart silently.
  */
 export const FINDING_ROW =
-  'grid grid-cols-1 gap-x-5 gap-y-2 py-3 @[36rem]/news:grid-cols-[8rem_minmax(0,1fr)_auto] @[36rem]/news:items-baseline';
+  'grid grid-cols-1 gap-x-5 gap-y-2 py-3 pointer-coarse:gap-y-[14px] @[36rem]/news:grid-cols-[8rem_minmax(0,1fr)_auto] @[36rem]/news:items-baseline';

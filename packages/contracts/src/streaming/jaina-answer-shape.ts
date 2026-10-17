@@ -688,11 +688,11 @@ export function answerShapeOf(report: unknown, ask?: { query: string }): AnswerS
     );
   }
 
-  // A breve ask ("rápido", "en una línea", "one line, no caveats") is answered by the sentence:
+  // A short ask ("rápido", "en una línea", "one line, no caveats") is answered by the sentence:
   // its figure, window and comparison. The justification's floor and its relation are the
-  // estándar card's rules, never a brief answer's (Ramiro, 2026-10-13).
+  // standard card's rules, never a short answer's (Ramiro, 2026-10-13).
   const asked = ask ? askShapeOf(ask.query) : null;
-  const brief = asked?.depth === 'breve';
+  const brief = asked?.format === 'short';
   const justificationText = texts.justification.join('\n\n');
   const justificationSentences = texts.justification.flatMap(splitSentences);
   const justificationWords = texts.justification.reduce((sum, text) => sum + wordCount(text), 0);

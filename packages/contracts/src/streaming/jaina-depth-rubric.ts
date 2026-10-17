@@ -25,37 +25,17 @@ import {
 
 /**
  * The Jaina reads that evidence each layer of the §3.3 table: a layer counts as read when at
- * least one of its tools returned ok. `change_history` has no read yet (Meta's ad-account
- * activity log is not wired), so a plan that mandates it reports it unread.
+ * least one of its tools returned ok. Only tools the strategist can call are listed (the
+ * registry in `Jaina/src/tools/tools.ts` plus the Optimizer core band): a name nobody can call
+ * would make a layer unreadable by construction. `change_history` has no read yet (Meta's
+ * ad-account activity log is not wired), so a plan that mandates it reports it unread.
  */
 export const LAYER_TOOLS: Record<JainaLayer, readonly string[]> = {
-  account_totals: [
-    'get_key_metrics',
-    'get_ad_account_insights',
-    'get_meta_overview_summary',
-    'get_meta_overview',
-  ],
-  campaign_scoreboard: ['get_campaigns', 'get_campaign_batch_analysis'],
-  top_movers: [
-    'get_campaign_daily_trends',
-    'get_trend_metrics',
-    'get_trend_metrics_summary',
-    'get_inflection_points',
-  ],
-  adset_audience: [
-    'get_ad_sets',
-    'get_top_adsets',
-    'get_adset_batch_analysis',
-    'get_audience_key_metrics',
-    'get_audience_trend_metrics',
-    'get_audience_action_insights',
-  ],
-  placement_device_geo: [
-    'get_breakdown_insights',
-    'get_breakdown_insights_summary',
-    'get_audience_breakdown_insights',
-    'get_audience_demographics',
-  ],
+  account_totals: ['get_key_metrics', 'get_ad_account_insights', 'get_meta_overview_summary'],
+  campaign_scoreboard: ['get_campaigns'],
+  top_movers: ['get_campaign_daily_trends', 'get_trend_metrics_summary'],
+  adset_audience: ['get_ad_sets', 'get_top_adsets'],
+  placement_device_geo: ['get_breakdown_insights_summary', 'get_audience_demographics'],
   creative_tier: [
     'get_ads',
     'get_top_ads',
@@ -64,22 +44,19 @@ export const LAYER_TOOLS: Record<JainaLayer, readonly string[]> = {
     'get_ad_creative_details',
     'get_ad_creative_details_batch',
     'get_live_creative_audience_matrix',
-    'get_optimizer_adset_creative_winrates',
   ],
   // Waste is zero results above the spend threshold, read off the ad set and ad rows.
-  waste: [
-    'get_ad_sets',
-    'get_top_adsets',
-    'get_adset_batch_analysis',
-    'get_ads',
-    'get_top_ads',
-    'get_top_ads_batch',
-  ],
-  pacing: ['get_optimizer_status', 'preview_optimizer_cycle', 'get_optimizer_performance'],
+  waste: ['get_ad_sets', 'get_top_adsets', 'get_ads', 'get_top_ads', 'get_top_ads_batch'],
+  pacing: ['preview_optimizer_cycle', 'get_optimizer_performance'],
   change_history: [],
   // Settling needs the last days one by one: are recent conversions still arriving?
-  conversion_settling: ['get_campaign_daily_trends', 'get_trend_metrics'],
+  conversion_settling: ['get_campaign_daily_trends'],
 };
+
+/** Every read that can evidence one of `layers`, de-duplicated: the plan's tool surface (§3.3). */
+export const toolsForLayers = (layers: readonly JainaLayer[]): string[] => [
+  ...new Set(layers.flatMap((layer) => LAYER_TOOLS[layer])),
+];
 
 /** The layers among `layers` that `okToolNames` evidence. */
 export const layersReadBy = (

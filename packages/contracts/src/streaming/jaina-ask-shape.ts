@@ -1,13 +1,17 @@
 /**
  * The SHAPE an ask wants its answer in: the format it names (a list, steps, a table, a
- * comparison, a chart, an explanation — or nothing, the direct answer) and the depth it asks
- * for (breve, estándar, profundo), plus whether it asks to go technical.
+ * comparison, a chart, an explanation, a short answer — or nothing, the direct answer), plus
+ * whether it asks to go technical.
  *
  * Ramiro, 2026-10-13 (docs/perfplus-campaign/criteria-ramiro.md, "Jaina: formato y
  * profundidad de la respuesta"): Jaina answered every ask in one executive shape — a sentence,
  * a grid, the three-box justification — so a list ask got no list, a table or a comparison
  * was never made, "how do I seize this" got no steps, and "explain it in detail" did not go
- * long. The answer must come in the format and at the depth the question asks for.
+ * long. The answer must come in the format the question asks for.
+ *
+ * Depth is NOT read here: it comes from what the question asks (the asks it carries, graded by
+ * the depth rubric in jaina-depth-rubric.ts), never from words like "en detalle" (jaina-prism,
+ * decision 2). Brevity stays, as a format: "rápido, en una línea" asks for a sentence.
  *
  * Deterministic and model-free, like `inferAskWindows` and `askLanguageOf`: a folded EN+ES
  * phrase table. The Backend plans and gates on it, the golden grader and the judge prompt
@@ -21,16 +25,13 @@ export const ANSWER_FORMATS = [
   'comparison',
   'chart',
   'explanation',
+  'short',
   'direct',
 ] as const;
 export type AnswerFormat = (typeof ANSWER_FORMATS)[number];
 
-export const ANSWER_DEPTHS = ['breve', 'estandar', 'profundo'] as const;
-export type AnswerDepth = (typeof ANSWER_DEPTHS)[number];
-
 export type AskShape = {
   format: AnswerFormat;
-  depth: AnswerDepth;
   /** The ask wants the mechanics: the formula, the attribution, the setting, the method. */
   technical: boolean;
 };
@@ -46,11 +47,42 @@ const phrases = (alternatives: ReadonlyArray<string>): RegExp =>
 const COUNT_WORD =
   '(?:\\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)';
 
+/** A brevity ask: "rápido", "en una línea", "one line, no caveats". */
+const SHORT = phrases([
+  'rapido',
+  'rapidito',
+  'quick(?:ly)?',
+  'en una (?:linea|frase|oracion|cifra|palabra)',
+  'in (?:one|a single) (?:line|sentence|word|number)',
+  'one line',
+  'one sentence',
+  'single line',
+  'breve(?:mente)?',
+  'briefly',
+  'be brief',
+  'in brief',
+  'brief (?:answer|reply|summary|version)',
+  'keep it (?:short|brief)',
+  'short answer',
+  'corto',
+  'resumid[oa]',
+  'en pocas palabras',
+  'tl;?dr',
+  'solo (?:el|la) (?:numero|cifra|total|dato)',
+  'solo dame',
+  'just (?:the|give me)',
+  'only the (?:answer|number|figure)',
+  'give only',
+  'no caveats',
+  'sin rodeos',
+]);
+
 /**
  * The phrase table, in the order a conflict is settled: the container the ask names (steps, a
  * table, a chart) wins over the operation it names ("compáralas en una tabla" is a table), a
- * comparison over a list, and an explanation is what a why or "explain" ask wants when it named
- * no container.
+ * comparison over a list, any of them over brevity ("dame una lista rápida" is a list), brevity
+ * over an explanation ("explícame en una línea" is a sentence), and an explanation is what a why
+ * or "explain" ask wants when it named no container.
  */
 export const ASK_FORMAT_PHRASES: ReadonlyArray<readonly [AnswerFormat, RegExp]> = [
   [
@@ -138,6 +170,7 @@ export const ASK_FORMAT_PHRASES: ReadonlyArray<readonly [AnswerFormat, RegExp]> 
       `(?:dame|dime|danos|give me|tell me|name|nombra|menciona|sugiereme|sugiere|suggest|propon|proponme|propose)(?: (?!top |bottom )[^ ]+){0,2}? ${COUNT_WORD} [a-z]+`,
     ]),
   ],
+  ['short', SHORT],
   [
     'explanation',
     phrases([
@@ -155,62 +188,6 @@ export const ASK_FORMAT_PHRASES: ReadonlyArray<readonly [AnswerFormat, RegExp]> 
     ]),
   ],
 ];
-
-const PROFUNDO = phrases([
-  'en detalle',
-  'con detalle',
-  'detallad[oa]s?',
-  'detalla(?:me)?',
-  'a detalle',
-  'al detalle',
-  'explica(?:me|nos)?',
-  'paso a paso',
-  'step[- ]by[- ]step',
-  'tecnic\\w*',
-  'technical\\w*',
-  'a fondo',
-  'en profundidad',
-  'profund\\w*',
-  'in detail',
-  'detailed',
-  'deep[- ]?dive',
-  'in[- ]depth',
-  'thorough(?:ly)?',
-  'exhaustiv\\w*',
-  'walk me through',
-  'long form',
-  'largo',
-  'extens[oa]',
-]);
-
-const BREVE = phrases([
-  'rapido',
-  'rapidito',
-  'quick(?:ly)?',
-  'en una (?:linea|frase|oracion|cifra|palabra)',
-  'in (?:one|a single) (?:line|sentence|word|number)',
-  'one line',
-  'one sentence',
-  'single line',
-  'breve(?:mente)?',
-  'briefly',
-  'be brief',
-  'in brief',
-  'brief (?:answer|reply|summary|version)',
-  'keep it (?:short|brief)',
-  'short answer',
-  'corto',
-  'resumid[oa]',
-  'en pocas palabras',
-  'tl;?dr',
-  'solo (?:el|la) (?:numero|cifra|total|dato)',
-  'solo dame',
-  'just (?:the|give me)',
-  'only the (?:answer|number|figure)',
-  'give only',
-  'no caveats',
-  'sin rodeos',
-]);
 
 const TECHNICAL = phrases([
   'tecnic\\w*',
@@ -236,26 +213,15 @@ export const askFormatOf = (query: string): AnswerFormat => {
   return 'direct';
 };
 
-/**
- * The shape of the answer the ask wants. Depth is the ask's own word for it: a brevity marker
- * ("rápido", "en una línea", "one line, no caveats") wins, then a depth marker ("en detalle",
- * "explícame", "paso a paso", "técnico", "a fondo", "in detail", "deep dive"); a technical ask
- * is profundo. An ask that says neither is estándar.
- */
-export const askShapeOf = (query: string): AskShape => {
-  const folded = foldAsk(query);
-  const technical = TECHNICAL.test(folded);
-  const depth: AnswerDepth = BREVE.test(folded)
-    ? 'breve'
-    : technical || PROFUNDO.test(folded)
-      ? 'profundo'
-      : 'estandar';
-  return { format: askFormatOf(query), depth, technical };
-};
+/** The shape of the answer the ask wants: the format it names and whether it goes technical. */
+export const askShapeOf = (query: string): AskShape => ({
+  format: askFormatOf(query),
+  technical: TECHNICAL.test(foldAsk(query)),
+});
 
 /**
- * The block category that carries a format. An explanation is prose (the narrative) and a
- * direct answer is the sentence: neither needs a block of its own.
+ * The block category that carries a format. An explanation is prose (the narrative), and a
+ * direct or short answer is the sentence: none of them needs a block of its own.
  */
 export const FORMAT_BLOCK_CATEGORY: Readonly<Record<AnswerFormat, string | null>> = {
   list: 'insight_list',
@@ -264,6 +230,7 @@ export const FORMAT_BLOCK_CATEGORY: Readonly<Record<AnswerFormat, string | null>
   comparison: 'comparison',
   chart: 'chart',
   explanation: null,
+  short: null,
   direct: null,
 };
 
@@ -314,10 +281,11 @@ export const formatBlockOf = (
 
 /**
  * Whether a report carries the format its ask requested. An explanation is delivered by prose
- * of its own (a narrative block or a justification of two paragraphs); a direct answer always is.
+ * of its own (a narrative block or a justification of two paragraphs); a direct or short answer
+ * always is.
  */
 export const formatDelivered = (report: unknown, format: AnswerFormat): boolean => {
-  if (format === 'direct') return true;
+  if (format === 'direct' || format === 'short') return true;
   const blocks = Array.isArray(recordOf(report).blocks)
     ? (recordOf(report).blocks as unknown[])
     : [];
