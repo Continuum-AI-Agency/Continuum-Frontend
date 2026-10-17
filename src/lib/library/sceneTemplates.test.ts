@@ -156,7 +156,14 @@ describe('sceneTemplates', () => {
       `${API}/api/ai-studio/templates/${ASSET}/scene/renders/${JOB}?brandId=${BRAND}`,
     );
     answer({
-      renders: [{ ...status, outputId: 'Main/CamWide', createdAt: '2026-10-14T12:00:00Z' }],
+      renders: [
+        {
+          ...status,
+          outputId: 'Main/CamWide',
+          createdAt: '2026-10-14T12:00:00Z',
+          mediaType: 'image',
+        },
+      ],
     });
     const history = await scene.listSceneRenders(BRAND, ASSET);
     expect(history.renders[0]?.outputId).toBe('Main/CamWide');
@@ -196,5 +203,47 @@ describe('sceneTemplates', () => {
     ).toBe(true);
     expect(scene.isTerminalSceneRender('claimed')).toBe(false);
     expect(scene.sceneErrorSentence('scene_render_failed')).toBe('Scene render failed');
+  });
+
+  test('blendParseProblem reads the forge refusal code as a sentence', () => {
+    const refused = (code: string) =>
+      scene.blendParseProblem(`ATV_Buggy.blend is not a readable Blender file: ${code}`);
+    expect(refused('too_old')).toBe(
+      'Saved in Blender 2.79 or older. Open it in Blender 2.80 or newer, save it, and upload it again.',
+    );
+    expect(refused('too_new')).toBe(
+      'Saved in a newer Blender than Forge reads yet (5.2). Save it from Blender 5.2 or older and upload it again.',
+    );
+    const oldBuild =
+      'Saved by an old 32-bit or big-endian build of Blender. Open it in a current Blender, save it, and upload it again.';
+    expect(refused('big_endian')).toBe(oldBuild);
+    expect(refused('pointer_32bit')).toBe(oldBuild);
+    expect(refused('not_blend')).toBe("This isn't a Blender file.");
+    expect(refused('too_large')).toBe('This .blend is too large to read.');
+    expect(refused('malformed')).toBe(
+      'This .blend is damaged or incomplete. Save it again in Blender and re-upload.',
+    );
+  });
+
+  test('blendParseProblem keeps an unknown error and has a sentence for none', () => {
+    expect(scene.blendParseProblem('forge timed out')).toBe(
+      'This .blend could not be read: forge timed out',
+    );
+    expect(scene.blendParseProblem('x.blend: constructor')).toBe(
+      'This .blend could not be read: x.blend: constructor',
+    );
+    expect(scene.blendParseProblem(null)).toBe('This .blend could not be read.');
+  });
+
+  test('parseErrorSentence words a Blender refusal and leaves any other family as written', () => {
+    expect(
+      scene.parseErrorSentence('ATV_Buggy.blend is not a readable Blender file: too_old'),
+    ).toMatch(/^Saved in Blender 2\.79 or older\./);
+    expect(scene.parseErrorSentence('The project references missing footage')).toBe(
+      'The project references missing footage',
+    );
+    expect(scene.parseErrorSentence('x.blend is not a readable Blender file: constructor')).toBe(
+      'x.blend is not a readable Blender file: constructor',
+    );
   });
 });

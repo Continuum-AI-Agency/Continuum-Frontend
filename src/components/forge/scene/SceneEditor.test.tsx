@@ -2,7 +2,8 @@
  * The scene editor end to end against its data layer: the file's fields load into the inspector,
  * an edit settles into ONE draft request carrying only the change and `scope: 'all'` (a newer edit
  * aborts the draft it made stale), and Render final posts, polls the job to completion and shows
- * the finished file with its Library link.
+ * the finished file with its Library link. An output with a frame range offers Still or Animation;
+ * the pick rides on Render final as `overrides.mediaType`.
  */
 
 import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
@@ -23,7 +24,16 @@ const OUT_ASSET = '88888888-8888-4888-8888-888888888888';
 const OUT_VERSION = '99999999-9999-4999-8999-999999999999';
 
 const parse = blendParseSchema.parse(parseExample);
-const VIEW = {
+type View = {
+  assetId: string;
+  versionId: string;
+  templateKey: string;
+  parseState: string;
+  fields: typeof parse.fields;
+  outputs: typeof parse.outputs;
+  externals: never[];
+};
+const VIEW: View = {
   assetId: ASSET,
   versionId: VERSION,
   templateKey: `blend:${ASSET}`,
@@ -42,6 +52,7 @@ const draft = (n: number): ScenePreview => ({
   cached: false,
 });
 
+let view = VIEW;
 const previewSignals: AbortSignal[] = [];
 let hangFirstPreview = false;
 const requestScenePreview = mock(
@@ -75,7 +86,7 @@ const realSources = { ...(await import('@/lib/library/templateSources')) };
 const realElements = { ...(await import('@/lib/ai-studio/elements')) };
 mock.module('@/lib/library/sceneTemplates', () => ({
   ...realScene,
-  fetchSceneTemplate: async () => VIEW,
+  fetchSceneTemplate: async () => view,
   requestScenePreview,
   requestSceneRender,
   fetchSceneRender,
@@ -94,6 +105,7 @@ import { PREVIEW_DEBOUNCE_MS } from './useScenePreview';
 
 afterEach(() => {
   cleanup();
+  view = VIEW;
   previewSignals.length = 0;
   hangFirstPreview = false;
   jobReads = 0;
@@ -180,6 +192,7 @@ describe('SceneEditor', () => {
       outputId: 'Main/CamWide',
       values: { headline: 'Black Friday' },
       scope: 'all',
+      overrides: { mediaType: 'image' },
     });
     expect(body?.requestId).toMatch(/^[0-9a-f-]{36}$/);
 
@@ -193,5 +206,57 @@ describe('SceneEditor', () => {
     expect(signLibraryAsset).toHaveBeenCalledWith(BRAND, OUT_ASSET, OUT_VERSION);
     expect(within(panel).getByText('Completed')).toBeTruthy();
     expect(within(panel).getByRole('link', { name: /Open in Library/ })).toBeTruthy();
+  });
+
+  test('a one-frame output offers no choice; a range picks its parsed type and sends the pick', async () => {
+    mount();
+    await screen.findByRole('heading', { level: 1, name: 'Summer Scene' });
+    expect(screen.queryByRole('radiogroup', { name: 'Render as' })).toBeNull();
+
+    const motion = screen.getByRole('button', { name: 'Motion · CamWide · 320×180' });
+    fireEvent.click(motion);
+    const still = await screen.findByRole('radio', { name: 'Still · frame 1' });
+    const animation = screen.getByRole('radio', { name: 'Animation · 12 frames' });
+    expect(animation.getAttribute('aria-checked')).toBe('true');
+    expect(still.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(still);
+    await waitFor(() => expect(still.getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Render final' }));
+    await waitFor(() => expect(requestSceneRender).toHaveBeenCalledTimes(1));
+    expect(requestSceneRender.mock.calls[0]?.[1]).toMatchObject({
+      outputId: 'Motion/CamWide',
+      overrides: { mediaType: 'image' },
+    });
+
+    // Another output and back: the pick starts over from the output's own type.
+    fireEvent.click(screen.getByRole('button', { name: 'Main · CamWide · 640×360' }));
+    fireEvent.click(motion);
+    expect(
+      (await screen.findByRole('radio', { name: 'Animation · 12 frames' })).getAttribute(
+        'aria-checked',
+      ),
+    ).toBe('true');
+  });
+
+  test('a range longer than a render takes defaults to a still and says why', async () => {
+    view = {
+      ...VIEW,
+      outputs: VIEW.outputs.map((output) =>
+        output.id === 'Motion/CamWide' ? { ...output, frameStart: 1, frameEnd: 1_000 } : output,
+      ),
+    };
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Motion · CamWide · 320×180' }));
+    const still = await screen.findByRole('radio', { name: 'Still · frame 1' });
+    const animation = screen.getByRole('radio', { name: 'Animation · 1000 frames' });
+    expect(still.getAttribute('aria-checked')).toBe('true');
+    expect(animation.hasAttribute('data-disabled')).toBe(true);
+    expect(
+      screen.getByText("Blender's range is 1000 frames; renders take at most 600"),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Render final' }));
+    await waitFor(() => expect(requestSceneRender).toHaveBeenCalledTimes(1));
+    expect(requestSceneRender.mock.calls[0]?.[1]?.overrides).toEqual({ mediaType: 'image' });
   });
 });

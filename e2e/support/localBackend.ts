@@ -184,9 +184,12 @@ async function spawnLocalBackend(options: StartOptions): Promise<LocalBackend> {
   );
 
   const tail: string[] = [];
+  // LOCAL_BACKEND_LOG=<file> keeps the whole output: the tail above is only shown on a failed start.
+  const logFile = process.env.LOCAL_BACKEND_LOG;
   const capture = (chunk: Buffer) => {
     tail.push(chunk.toString());
     if (tail.length > 40) tail.shift();
+    if (logFile) fs.appendFileSync(logFile, chunk);
   };
   child.stdout?.on('data', capture);
   child.stderr?.on('data', capture);

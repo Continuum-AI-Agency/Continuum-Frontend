@@ -187,7 +187,7 @@ test('P2 states the cost per lead against the reference, and the saving moves to
   expect(text).toBe('ITESO // AGOSTO - RTG: $102 MXN por lead, 5.1× la referencia de $20.00 MXN');
   expect(title.window).toBe('d14');
   expect(title.figure).toBe(102);
-  expect(button).toBe('Pausar · $72.86 MXN/día');
+  expect(button).toBe('Pause · $72.86 MXN/day');
   expect(rec?.reason).toContain('CPP 14d'); // the legacy line stays for one release
 });
 
@@ -203,7 +203,7 @@ test('P3 states the spend, the window and the nothing it bought', () => {
   expect(text).toBe(
     'ALEIRA // AGOSTO - LKL: $298 MXN, en 14 días y 0 leads, más que el objetivo de $35.00 MXN por lead',
   );
-  expect(button).toBe('Pausar · $21.29 MXN/día');
+  expect(button).toBe('Pause · $21.29 MXN/day');
 });
 
 test('P3 never prints the spend and the target it exceeded as the same figure', () => {
@@ -270,7 +270,7 @@ test('C1 names the losing ad, its cost per lead and the winner beside it', () =>
   expect(text).toBe(
     'Perdedor: $66.00 MXN por lead, 2.2× el ganador "Ganador" a $30.00 MXN, en $660 MXN de gasto',
   );
-  expect(button).toBe('Pausar el anuncio · $47.14 MXN/día');
+  expect(button).toBe('Pause the ad · $47.14 MXN/day');
 });
 
 test('C2 names the winner and how much cheaper it buys a lead than its sibling', () => {
@@ -284,7 +284,7 @@ test('C2 names the winner and how much cheaper it buys a lead than its sibling',
   );
   // Making variants puts no measured money on the table: the button is the verb alone.
   expect(action.sizing).toBeNull();
-  expect(button).toBe('Hacer variantes');
+  expect(button).toBe('Make variants');
 });
 
 // --- The delivery family: D2 -----------------------------------------------------------
@@ -307,7 +307,7 @@ test('D2 states the idle budget and the days with no impressions', () => {
   expect(text).toBe(
     'ITESO // AGOSTO - RTG: $48.80 MXN por día de presupuesto, y 0 impresiones en 7 días',
   );
-  expect(button).toBe('Restaurar la entrega · $48.80 MXN/día');
+  expect(button).toBe('Restore delivery · $48.80 MXN/day');
 });
 
 // --- The fatigue family: F1 / F3 -------------------------------------------------------
@@ -325,7 +325,7 @@ test('F1 states the recent CTR against its own 14 days, with the CPA rise that p
   expect(text).toBe(
     'CONJUNTO X: 0.5% de CTR en 3 días, 75% menos que los 14 días (2.00%) y CPA +50% ($60.00 MXN frente a $40.00 MXN por compra)',
   );
-  expect(button).toBe('Renovar el creativo · $66.67 MXN/día');
+  expect(button).toBe('Refresh the creative · $66.67 MXN/day');
 });
 
 test('F3 states the share of new people against the floor it fell under', () => {
@@ -354,7 +354,7 @@ test('S3 states the money left unplaced against the pool; the plan → placed pa
   expect(text).toBe(
     'Portafolio: $60.00 MXN por día sin colocar, de un pool de $400 MXN (15%) en modo eficiencia',
   );
-  expect(button).toBe('Ajustar la configuración · $400 MXN → $340 MXN');
+  expect(button).toBe('Adjust the settings · $400 MXN → $340 MXN');
 });
 
 test('S5 states the untracked spend and how many delivering ad sets carry it', () => {

@@ -324,7 +324,7 @@ describe('answerShapeOf — non-template answers', () => {
     );
   });
 
-  it('holds a breve ask to its sentence: no justification floor, no relation rule', () => {
+  it('holds a short ask to its sentence: no justification floor, no relation rule', () => {
     const report = {
       executive_summary: 'We spent 1,200 MXN yesterday, 8% under the day before.',
       blocks: [{ block_id: 'scope', category: 'data_scope', dates: 'x', source: 'api' }],

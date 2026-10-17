@@ -27,6 +27,7 @@ export * from './forge-motion-proof';
 export * from './forge-render-imports';
 export * from './forge-render-preview';
 export * from './forge-render-sets';
+export * from './forge-sheet-import';
 export * from './forge-scene';
 export * from './format-workflows';
 export * from './generation-error';

@@ -126,6 +126,7 @@ type PageHelpers = ReturnType<typeof pageHelpers> & {
   measureHitArea: typeof measureHitArea;
   paintedEdgeThief: typeof paintedEdgeThief;
   hitTestPoint: typeof hitTestPoint;
+  textSpill: typeof textSpill;
 };
 
 declare global {
@@ -288,6 +289,11 @@ export async function auditVisual(
   // Hover and focus styles are not the page's resting state; a tab still under the mouse
   // after its click would read as highlighted for the wrong reason.
   await parkMouse(page, viewport);
+  // A new page's pointer starts at (0, 0), the collapsed sidebar's hover zone, and Chromium's
+  // hover update can expand it before the park. The panel collapses only after its 180 ms
+  // grace timer and a 0.3 s width spring (components/ui/sidebar.tsx); measured sooner, the
+  // still-open panel reads as covering every control under it.
+  await page.waitForTimeout(SIDEBAR_COLLAPSE_MS);
   await page
     .evaluate(() => {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -466,6 +472,9 @@ export async function auditVisual(
   return { context, violations, unexercised, stats };
 }
 
+/** The sidebar's hover-collapse grace (180 ms) plus its width spring (300 ms), with margin. */
+const SIDEBAR_COLLAPSE_MS = 550;
+
 /** Parks the pointer where nothing reacts to it: the middle of the right edge. The top-left
  *  corner is the collapsed sidebar's hover zone, and a sidebar expanded by the bench's own
  *  pointer would be measured as covering the page. */
@@ -532,7 +541,8 @@ export function paintedEdgeThief(
   ];
   for (const [x, y] of probes) {
     const owner = ownerAt(x, y);
-    if (owner !== null && owner !== 'self') return { by: owner, at: [Math.round(x), Math.round(y)] };
+    if (owner !== null && owner !== 'self')
+      return { by: owner, at: [Math.round(x), Math.round(y)] };
   }
   return null;
 }
@@ -542,6 +552,27 @@ export function paintedEdgeThief(
  *  that content reports a real box, a visible computed style and a `display` that is not
  *  `none` — and still cannot be seen, hovered or tapped. `checkVisibility()` is the renderer's
  *  own answer; a browser without it is trusted to render. */
+/** How many px a label's rendered text runs past its element's padding box on `axis` (0 when it
+ *  fits). `scrollWidth` cannot answer this: an absolutely positioned `::after` hit pad (44px under
+ *  a coarse pointer) inside a `position: relative` control counts toward it, so every chip
+ *  narrower than the pad read as clipped text while its label fit. `text` is the box of the
+ *  element's own contents (a Range over them, which pseudo-elements never join); `null` means
+ *  nothing rendered. */
+export function textSpill(
+  text: { x: number; y: number; width: number; height: number } | null,
+  padding: { x: number; y: number; width: number; height: number },
+  axis: 'x' | 'y',
+): number {
+  if (!text || text.width === 0 || text.height === 0) return 0;
+  const start = axis === 'x' ? text.x : text.y;
+  const size = axis === 'x' ? text.width : text.height;
+  const boxStart = axis === 'x' ? padding.x : padding.y;
+  const boxSize = axis === 'x' ? padding.width : padding.height;
+  const before = Math.max(0, boxStart - start);
+  const after = Math.max(0, start + size - (boxStart + boxSize));
+  return Math.round(before + after);
+}
+
 export function rendersContent(el: { checkVisibility?: () => boolean }): boolean {
   return typeof el.checkVisibility !== 'function' || el.checkVisibility();
 }
@@ -710,7 +741,8 @@ async function installPageHelpers(page: Page): Promise<void> {
     `window.__l1vHelpers = (${pageHelpers.toString()})(${JSON.stringify(OVERLAY_SELECTOR)}, ${rendersContent.toString()});` +
       `window.__l1vHelpers.measureHitArea = ${measureHitArea.toString()};` +
       `window.__l1vHelpers.paintedEdgeThief = ${paintedEdgeThief.toString()};` +
-      `window.__l1vHelpers.hitTestPoint = ${hitTestPoint.toString()};`,
+      `window.__l1vHelpers.hitTestPoint = ${hitTestPoint.toString()};` +
+      `window.__l1vHelpers.textSpill = ${textSpill.toString()};`,
   );
 }
 
@@ -828,8 +860,21 @@ async function collectClippedText(
         const style = window.getComputedStyle(el);
         const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
         const scrollable = (axis: string) => axis === 'auto' || axis === 'scroll';
+        // The box overflows; whether the TEXT does is measured on the text itself.
+        const bounds = el.getBoundingClientRect();
+        const padding = {
+          x: bounds.x + box.clientLeft,
+          y: bounds.y + box.clientTop,
+          width: box.clientWidth,
+          height: box.clientHeight,
+        };
+        const contents = document.createRange();
+        contents.selectNodeContents(el);
+        const textBox = contents.getBoundingClientRect();
+        const spill = (axis: 'x' | 'y') => helpers.textSpill(textBox, padding, axis);
         if (
           box.scrollWidth > box.clientWidth + tolerance &&
+          spill('x') > tolerance &&
           style.textOverflow !== 'ellipsis' &&
           !scrollable(style.overflowX)
         ) {
@@ -837,7 +882,7 @@ async function collectClippedText(
             selector: helpers.describe(el),
             bbox: helpers.toRect(el.getBoundingClientRect()),
             axis: 'x',
-            scroll: box.scrollWidth,
+            scroll: box.clientWidth + spill('x'),
             client: box.clientWidth,
             overflow: style.overflowX,
             text,
@@ -846,6 +891,7 @@ async function collectClippedText(
         const lineClamp = style.getPropertyValue('-webkit-line-clamp');
         if (
           box.scrollHeight > box.clientHeight + tolerance &&
+          spill('y') > tolerance &&
           (style.overflowY === 'hidden' || style.overflowY === 'clip') &&
           (lineClamp === '' || lineClamp === 'none')
         ) {
@@ -853,7 +899,7 @@ async function collectClippedText(
             selector: helpers.describe(el),
             bbox: helpers.toRect(el.getBoundingClientRect()),
             axis: 'y',
-            scroll: box.scrollHeight,
+            scroll: box.clientHeight + spill('y'),
             client: box.clientHeight,
             overflow: style.overflowY,
             text,
@@ -913,7 +959,18 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
           helpers.clipToAncestors(el, rect),
           viewport,
         );
-        if (probe.partial) {
+        // A control flush with a scroller's edge can show its whole painted box while the
+        // scroller cuts its pad; centred, the pad has room unless the scroller itself is
+        // smaller than the floor — which is then a real finding.
+        const padCut = (box: DOMRect): boolean => {
+          const cx = box.x + box.width / 2;
+          const cy = box.y + box.height / 2;
+          const half = tapFloor / 2;
+          const pad = new DOMRect(cx - half, cy - half, tapFloor, tapFloor);
+          const kept = helpers.clipToAncestors(el, pad);
+          return kept === null || kept.width < tapFloor - 1 || kept.height < tapFloor - 1;
+        };
+        if (probe.partial || padCut(rect)) {
           el.scrollIntoView({ block: 'center', inline: 'nearest' });
           rect = el.getBoundingClientRect();
           probe = helpers.hitTestPoint(
@@ -956,7 +1013,10 @@ async function collectControls(page: Page, maxControls: number): Promise<Control
               ) {
                 step += 1;
               }
-              const past = topAt(cx + (horizontal ? step + 1 : 0), cy + (horizontal ? 0 : step + 1));
+              const past = topAt(
+                cx + (horizontal ? step + 1 : 0),
+                cy + (horizontal ? 0 : step + 1),
+              );
               stopsAt = past ? helpers.describe(past) : 'nothing (off screen)';
             }
             edgeStolen = helpers.paintedEdgeThief(painted, (x, y) => {

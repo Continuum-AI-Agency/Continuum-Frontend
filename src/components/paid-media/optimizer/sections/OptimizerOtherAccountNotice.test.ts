@@ -20,18 +20,41 @@ const account = (overrides: Partial<AdAccount> = {}): AdAccount => ({
 describe('resolveEmptyPortfolioState', () => {
   it('sends a brand with portfolios on another ad account to the notice, not onboarding', () => {
     expect(
-      resolveEmptyPortfolioState({ brandPortfolioCount: 3, otherAccountIds: ['act_999'] }),
+      resolveEmptyPortfolioState({
+        brandPortfolioCount: 3,
+        otherAccountIds: ['act_999'],
+        otherPlatformCount: 0,
+      }),
     ).toBe('other-account');
   });
 
   it('sends a genuinely empty brand to onboarding', () => {
-    expect(resolveEmptyPortfolioState({ brandPortfolioCount: 0, otherAccountIds: [] })).toBe(
+    expect(resolveEmptyPortfolioState({
+        brandPortfolioCount: 0,
+        otherAccountIds: [],
+        otherPlatformCount: 0,
+      })).toBe(
       'onboarding',
     );
   });
 
+  it('opens a brand whose portfolios are on Google, not Meta, rather than hiding them', () => {
+    // Easy Fit: two Google portfolios on its Google customer, none on the Meta account.
+    expect(
+      resolveEmptyPortfolioState({
+        brandPortfolioCount: 2,
+        otherAccountIds: ['5251780631'],
+        otherPlatformCount: 2,
+      }),
+    ).toBe('other-platform');
+  });
+
   it('sends portfolios with no ad account at all to onboarding — nothing is being hidden', () => {
-    expect(resolveEmptyPortfolioState({ brandPortfolioCount: 2, otherAccountIds: [] })).toBe(
+    expect(resolveEmptyPortfolioState({
+        brandPortfolioCount: 2,
+        otherAccountIds: [],
+        otherPlatformCount: 0,
+      })).toBe(
       'onboarding',
     );
   });

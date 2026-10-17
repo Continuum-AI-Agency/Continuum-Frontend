@@ -109,6 +109,7 @@ function renderGallery(
     sources = SOURCES,
     catalog = [],
     families = [],
+    defaults = [],
     shared = SHARED,
     adopting = null,
     onOpen = () => undefined,
@@ -118,6 +119,8 @@ function renderGallery(
     catalog?: TemplateVariant[];
     /** `null` leaves the registry unread, so the gallery asks for it. */
     families?: TemplateRevisionVariant[] | null;
+    /** The variant each family opens on; none = every family opens on its Original. */
+    defaults?: Array<{ templateId: string; variantId: string }>;
     shared?: SharedTemplate[];
     adopting?: string | null;
     onOpen?: (assetId: string, tab?: string, comp?: string) => void;
@@ -127,6 +130,7 @@ function renderGallery(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(['forge', BRAND, 'template-variants'], catalog);
   if (families) client.setQueryData(['forge', BRAND, 'revision-variants', 'all'], families);
+  client.setQueryData(['forge', BRAND, 'variant-defaults'], defaults);
   render(
     <QueryClientProvider client={client}>
       <TemplateGallery
@@ -623,6 +627,26 @@ describe('template families', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide 2 variants of Summer promo' }));
     expect(subRows()).toEqual([]);
+  });
+
+  test('a family with a default variant opens on it and marks it Default', () => {
+    const onOpen = mock((_assetId: string, _tab?: string) => undefined);
+    const crop = revision(cropId, 1, squareCrop);
+    crop.publications = [
+      { templateKey: '777', bindingId: BRAND, workspace: 'test', contractHash: null },
+    ];
+    renderGallery(undefined, {
+      sources: [original, secondRevision, squareCrop],
+      shared: [],
+      families: [families[0]!, variant(cropId, 'Square crop', [crop], crop.id)],
+      defaults: [{ templateId: original.assetId, variantId: cropId }],
+      onOpen,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Summer promo' }));
+    expect(onOpen).toHaveBeenLastCalledWith(squareCrop.assetId);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Summer promo' }));
+    const cropRow = subRows().find((row) => row.textContent?.includes('Square crop'));
+    expect(cropRow && within(cropRow).getByText('Default')).toBeTruthy();
   });
 
   test('a published build is a row under its template, and Edit opens the upload it was built from', () => {

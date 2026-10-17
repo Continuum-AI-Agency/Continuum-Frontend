@@ -23,6 +23,7 @@ import {
   cardActionChange,
   cardActionLabel,
   cardActionTitle,
+  cardActionUnavailableNote,
   cardWriteOf,
   previewVerdict,
   resultVerdict,
@@ -54,6 +55,25 @@ describe('cardActionAvailability', () => {
     ).toBe('tiktok_not_connected');
   });
 
+  it("disables a Google write when the portfolio's write switch is off, and only then", () => {
+    const action = write(RAISE_GOOGLE_BUDGET);
+    expect(
+      cardActionAvailability(GOOGLE_BUDGET_LIMITED, { ...target(action), applyEnabled: false }),
+    ).toBe('apply_disabled');
+    expect(
+      cardActionAvailability(GOOGLE_BUDGET_LIMITED, { ...target(action), applyEnabled: true }),
+    ).toBe('ready');
+    // An older server sends no switch: today's behaviour holds.
+    expect(cardActionAvailability(GOOGLE_BUDGET_LIMITED, target(action))).toBe('ready');
+    // Off or not, a TikTok write still says TikTok is not connected.
+    expect(
+      cardActionAvailability(TIKTOK_BUDGET_BELOW_LEARNING, {
+        ...target(write(PAUSE_TIKTOK_AD_GROUP)),
+        applyEnabled: false,
+      }),
+    ).toBe('tiktok_not_connected');
+  });
+
   it('offers nothing on a read-only card, even when an action rides along', () => {
     for (const card of [GOOGLE_VIDEO, GOOGLE_DELIVERY_ONE_CAMPAIGN, TIKTOK_ATTRIBUTION_WINDOW]) {
       expect(cardActionAvailability(card, target(write(PAUSE_GOOGLE_CAMPAIGN)))).toBe('none');
@@ -72,6 +92,20 @@ describe('cardActionAvailability', () => {
     };
     expect(cardWriteOf(move)).toBeNull();
     expect(cardActionAvailability(GOOGLE_BUDGET_LIMITED, move)).toBe('none');
+  });
+});
+
+describe('cardActionUnavailableNote', () => {
+  it('says in one line why a disabled control is disabled, and nothing for one that is not', () => {
+    const google = write(RAISE_GOOGLE_BUDGET);
+    expect(cardActionUnavailableNote('apply_disabled', google)).toBe(
+      'Writes to Google are switched off for this portfolio.',
+    );
+    expect(cardActionUnavailableNote('tiktok_not_connected', write(PAUSE_TIKTOK_AD_GROUP))).toBe(
+      'TikTok is not connected for changes yet. Make this change in TikTok Ads Manager.',
+    );
+    expect(cardActionUnavailableNote('ready', google)).toBeNull();
+    expect(cardActionUnavailableNote('none', google)).toBeNull();
   });
 });
 

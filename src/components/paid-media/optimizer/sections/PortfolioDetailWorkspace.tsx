@@ -58,6 +58,7 @@ import {
 import { DateRangeControl } from '../components/DateRangeControl';
 import { TEXT_DISCLOSURE } from '../components/disclosure';
 import { costCiLegend, kpiColumns } from '../kpiColumns';
+import { itemWritable } from '../platformWrites';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   DEFAULT_CPA_SERIES_LIMIT,
@@ -107,7 +108,7 @@ import {
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
-import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import { isStale, pacingStaleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -213,7 +214,14 @@ export function PortfolioDetailWorkspace({
   // ONE definition of "moved" — this used to be derived here as gaining+losing while the
   // card counted distinct ids, so the Apply gate and the copy could disagree.
   const movedCount = reallocation.movedCount;
-  const canApplyReallocation = portfolio.apply_mode === 'recommend' && movedCount > 0;
+  // …and only when every moved entity's platform may be written here: a Google move with
+  // Google writes off is a proposal, and the service would refuse the apply (platformWrites.ts).
+  const canApplyReallocation =
+    portfolio.apply_mode === 'recommend' &&
+    movedCount > 0 &&
+    moves.current.every(
+      (item) => Math.abs(item.change_abs ?? 0) < 1 || itemWritable(portfolio, item),
+    );
   // Observe is only worth interrupting for once the engine has actually produced
   // moves it is being prevented from making. Before that it is just the mode.
   const isObserveWithMoves = portfolio.apply_mode === 'observe' && movedCount > 0;
@@ -612,7 +620,7 @@ export function PortfolioDetailWorkspace({
           }
           onRun={() => run.mutate(portfolio.id)}
           onSecondary={onSecondary}
-          platforms={OPTIMIZER_PORTFOLIO_PLATFORMS}
+          platforms={portfolioPlatforms(portfolio.platforms)}
           running={run.isPending}
           secondaryPending={setPaused.isPending}
           tabs={

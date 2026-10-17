@@ -18,6 +18,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 // Playwright transpiles specs and configs to CJS, so `__dirname` is the portable
@@ -27,6 +28,38 @@ const BACKEND_ENV = resolve(__dirname, '../../../Continuum-Backend/.env');
 
 /** The one Supabase project these live benches are allowed to read. */
 export const PROD_SUPABASE_URL = 'https://nkejqgyushulohxwtytl.supabase.co';
+
+/** The Supabase CLI's token: SUPABASE_ACCESS_TOKEN, else the file the CLI writes on Linux
+ *  (the other Management API helpers read the macOS keychain, which this machine lacks). */
+function managementToken(): string | null {
+  if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN.trim();
+  try {
+    return readFileSync(resolve(homedir(), '.supabase/access-token'), 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** SQL on a hosted project through the Management API — for what PostgREST cannot reach
+ *  (the optimizer schema, auth.sessions). `projectUrl` names the project; a bench's cleanup
+ *  passes the URL it ran against, so it can never touch another project. */
+export async function managementSql<T>(
+  query: string,
+  projectUrl: string = PROD_SUPABASE_URL,
+): Promise<T[]> {
+  const token = managementToken();
+  if (!token) throw new Error('no Management API token (SUPABASE_ACCESS_TOKEN or ~/.supabase)');
+  const host = new URL(projectUrl).hostname;
+  if (!host.endsWith('.supabase.co')) throw new Error(`not a hosted project: ${host}`);
+  const ref = host.split('.')[0];
+  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) throw new Error(`management sql ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return (await res.json()) as T[];
+}
 
 const KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 

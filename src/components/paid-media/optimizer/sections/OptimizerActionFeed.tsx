@@ -201,6 +201,10 @@ export function actionTone(row: OptimizerActionFeedRow): TimelineTone {
   switch (row.op) {
     case 'budget':
     case 'convert':
+    // A platform write's own kinds (G4): a bid target, negatives or a keyword that landed.
+    case 'bid':
+    case 'negatives':
+    case 'keyword':
       return 'landed';
     case 'status':
       return after === 'paused' ? 'stopped' : after === 'active' ? 'landed' : 'neutral';

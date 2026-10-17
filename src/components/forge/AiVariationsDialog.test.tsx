@@ -546,3 +546,97 @@ describe('DraftWithAiButton', () => {
     expect(screen.getByText('Available once this template is published.')).toBeTruthy();
   });
 });
+
+describe('AiDraftDialog as the grid assistant', () => {
+  const grid = () => ({
+    rows: [
+      {
+        id: PARENT,
+        parentId: null,
+        label: 'Melgar',
+        outputIds: [],
+        values: { headline: 'Hola' },
+      },
+    ],
+    selection: [PARENT],
+    setDescription: 'La cuota más alta lleva caja roja.',
+  });
+  const chooseSheet = (file: File) =>
+    fireEvent.change(screen.getByLabelText('Choose source files'), { target: { files: [file] } });
+
+  test('a sheet is read here, never uploaded, and reaches the assistant with the grid', async () => {
+    const onAssist = mock((_response: unknown) => undefined);
+    suggestRows.mockImplementationOnce(async () => ({
+      ...ANSWER,
+      rows: [],
+      ops: [],
+      reply: 'Añadí 2 filas.',
+      assumptions: ['Ganarías = 100 × la cuota en rojo'],
+      cannot: ['Card A is not in this sheet'],
+    }));
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+        gridContext={grid}
+        onAssist={onAssist}
+      />,
+    );
+    chooseSheet(
+      new File(['Title\n\nPartido,Mercado\nA - B,Ambos\nC - D,Más\n'], 'Hoja1.csv', {
+        type: 'text/csv',
+      }),
+    );
+    await screen.findByText(/Hoja1.csv · read here/);
+    fireEvent.change(screen.getByLabelText(/^Ask/), { target: { value: 'Arma las filas' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(onAssist).toHaveBeenCalledTimes(1));
+    expect(uploadBrandDocument).toHaveBeenCalledTimes(0);
+    const sent = suggestRows.mock.calls.at(-1)![0] as {
+      prompt: string;
+      grid: {
+        selection: string[];
+        setDescription: string;
+        tables: Array<{ headers: string[]; rows: unknown[]; notes: string[] }>;
+      };
+    };
+    expect(sent.prompt).toBe('Arma las filas');
+    expect(sent.grid.selection).toEqual([PARENT]);
+    expect(sent.grid.setDescription).toBe('La cuota más alta lleva caja roja.');
+    expect(sent.grid.tables[0]).toMatchObject({ headers: ['Partido', 'Mercado'], notes: ['Title'] });
+    expect(sent.grid.tables[0]?.rows).toHaveLength(2);
+    expect(screen.getByText('Añadí 2 filas.')).toBeTruthy();
+    expect(screen.getByText('Ganarías = 100 × la cuota en rojo')).toBeTruthy();
+    expect(screen.getByText('Card A is not in this sheet')).toBeTruthy();
+  });
+
+  test('a sheet with nothing asked goes to Import, not to the model', async () => {
+    const onSheet = mock((_file: File) => undefined);
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+        gridContext={grid}
+        onAssist={() => undefined}
+        onSheet={onSheet}
+      />,
+    );
+    const file = new File(['Partido,Mercado\nA - B,Ambos\n'], 'rows.csv', { type: 'text/csv' });
+    chooseSheet(file);
+    await screen.findByText(/rows.csv · read here/);
+    fireEvent.click(screen.getByRole('button', { name: 'Import sheet' }));
+    expect(onSheet).toHaveBeenCalledWith(file);
+    expect(suggestRows).toHaveBeenCalledTimes(0);
+  });
+});

@@ -1,17 +1,17 @@
-import { mkdirSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { PortfolioListItem } from '@continuum/contracts';
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { pinProdSupabase } from './paid-parity.env';
 import {
-  mintAccessTokenForEmail,
-  mintSessionForEmail,
-  type PlaywrightStorageState,
+  type MintedSession,
+  mintSessionBundleForEmail,
+  restoreBrandPreference,
+  revokeBenchSession,
 } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
-import { PROD_SUPABASE_URL, readBackendEnv } from './support/prodEnv';
+import { managementSql, PROD_SUPABASE_URL, readBackendEnv } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
 // optimizer:stale-moves:e2e:bench — a portfolio whose last cycle can no longer be acted on
@@ -106,6 +106,7 @@ const QUEUE = [
 ];
 const SEED = 'seed: 4 paused bench portfolios, 6 bench ad sets, 3 cycle runs, A roster absent';
 const CLEANUP = 'cleanup: every bench portfolio of this run deleted by id, rosters gone';
+const SESSION_CLEANUP = 'cleanup: the bench session is revoked, its brand preference as found';
 const EVERY_CHECK = [
   ACCOUNT_CHECK,
   SEED,
@@ -150,30 +151,6 @@ async function uiCheck(step: string, run: () => Promise<void>): Promise<boolean>
   }
 }
 
-/** The Supabase CLI's token: SUPABASE_ACCESS_TOKEN, else the file the CLI writes on Linux
- *  (the other Management API helpers read the macOS keychain, which this machine lacks). */
-function managementToken(): string | null {
-  if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN.trim();
-  try {
-    return readFileSync(resolve(homedir(), '.supabase/access-token'), 'utf8').trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-async function managementSql<T>(query: string): Promise<T[]> {
-  const token = managementToken();
-  if (!token) throw new Error('no Management API token (SUPABASE_ACCESS_TOKEN or ~/.supabase)');
-  const ref = new URL(PROD_SUPABASE_URL).hostname.split('.')[0];
-  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) throw new Error(`management sql ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return (await res.json()) as T[];
-}
-
 async function rpc<T>(client: SupabaseClient, fn: string, args: object): Promise<T> {
   const { data, error } = await client.rpc(fn, args);
   if (error) throw new Error(`${fn}: ${error.message}`);
@@ -188,8 +165,10 @@ let before = new Map<Slot, ListRow>();
 let after = new Map<Slot, ListRow>();
 let sqlApplied = false;
 let notReached = 'not reached: beforeAll failed (see the error above)';
-let storageState: PlaywrightStorageState | null = null;
-let originalActiveBrandId: string | null | undefined;
+/** One GoTrue session for the API client and the browser, revoked in afterAll. */
+let session: MintedSession | null = null;
+let browserPinned = false;
+let originalActiveBrandId: string | null = null;
 
 /** The account the page can select: plugin_mcp.list_brand_ad_accounts, the read /scale makes. */
 async function readAssignedMetaAccount(): Promise<string | null> {
@@ -340,8 +319,9 @@ const describeRow = (row: ListRow | undefined) =>
       })
     : 'row missing';
 
-async function browserSession(): Promise<PlaywrightStorageState> {
-  if (storageState) return storageState;
+async function browserSession(): Promise<MintedSession['state']> {
+  if (!session) throw new Error('no bench session: beforeAll did not mint one');
+  if (browserPinned) return session.state;
   const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
   const { data } = await prefs.select('active_brand_id').eq('user_id', benchUserId).maybeSingle();
   originalActiveBrandId = (data as { active_brand_id: string } | null)?.active_brand_id ?? null;
@@ -350,8 +330,8 @@ async function browserSession(): Promise<PlaywrightStorageState> {
     { onConflict: 'user_id' },
   );
   if (error) throw new Error(`brand pin failed: ${error.message}`);
-  storageState = await mintSessionForEmail(BENCH_OWNER_EMAIL);
-  return storageState;
+  browserPinned = true;
+  return session.state;
 }
 
 async function pinAdAccount(page: Page): Promise<void> {
@@ -419,7 +399,8 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Optimizer — a stale cycle shows its moves as withdrawn', () => {
   test.beforeAll(async () => {
     test.setTimeout(240_000);
-    const token = await mintAccessTokenForEmail(BENCH_OWNER_EMAIL);
+    session = await mintSessionBundleForEmail(BENCH_OWNER_EMAIL);
+    const token = session.accessToken;
     benchUserId = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString()).sub;
     member = createClient(PROD_SUPABASE_URL, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -480,15 +461,19 @@ test.describe('Optimizer — a stale cycle shows its moves as withdrawn', () => 
     } catch (error) {
       grade(CLEANUP, 'FAIL', firstLine(error));
     }
-    if (originalActiveBrandId && originalActiveBrandId !== BENCH_BRAND_ID) {
-      await admin.schema('brand_profiles').from('user_brand_preferences').upsert(
-        {
-          user_id: benchUserId,
-          active_brand_id: originalActiveBrandId,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' },
+    try {
+      const revoked = session ? await revokeBenchSession(session.state, session.accessToken) : null;
+      const restored = browserPinned
+        ? await restoreBrandPreference(benchUserId, originalActiveBrandId)
+        : originalActiveBrandId;
+      check(
+        SESSION_CLEANUP,
+        (revoked === null || (revoked.revoked && revoked.pinsLeft === 0)) &&
+          restored === originalActiveBrandId,
+        `${revoked ? `session ${revoked.sessionId}: ${revoked.detail}` : 'no session minted'}; preference ${restored ?? 'none'}, was ${originalActiveBrandId ?? 'none'}`,
       );
+    } catch (error) {
+      grade(SESSION_CLEANUP, 'FAIL', firstLine(error));
     }
     console.log(
       `${counts.fail > 0 ? 'FAIL' : 'PASS'} — ${BENCH}: ${counts.pass} pass, 0 warn, ` +

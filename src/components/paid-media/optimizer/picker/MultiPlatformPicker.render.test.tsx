@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import vivo47 from '../sections/platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
 import { MultiPlatformPickerView } from './MultiPlatformPicker';
 import {
@@ -175,9 +175,14 @@ describe('platformPickerModel', () => {
       childKind: 'asset_group',
     });
     expect(googleCampaignEligibility('DEMAND_GEN')).toMatchObject({ eligible: true });
-    for (const type of ['SMART', 'DISPLAY', 'VIDEO', 'LOCAL', null]) {
+    // Decision 14: Search, Performance Max and Demand Gen only — the types the engine admits.
+    for (const type of ['SHOPPING', 'DISCOVERY', 'SMART', 'DISPLAY', 'VIDEO', 'LOCAL', null]) {
       expect(googleCampaignEligibility(type).eligible).toBe(false);
     }
+    expect(googleCampaignEligibility('SHOPPING')).toMatchObject({
+      typeLabel: 'Shopping',
+      reason: 'Shopping campaigns are outside this version.',
+    });
     expect(googleCampaignEligibility('LOCAL').typeLabel).toBe('Local');
   });
 
@@ -205,7 +210,143 @@ describe('platformPickerModel', () => {
     expect(group.campaigns[0]?.name).toBe('VIVO 47-EKATAR');
   });
 
+  it("takes the account's currency from the ranking answer when the account row has none", () => {
+    const bare = { ...VIVO47, currency: null };
+    const inventory = parseGoogleInventory(
+      bare,
+      { ...vivo47.top_campaigns, currency: 'mxn' },
+      AD_GROUPS,
+    );
+    expect(inventory?.account.currency).toBe('MXN');
+    const group = buildGooglePickerGroup({
+      account: inventory?.account ?? bare,
+      portfolioCurrency: 'MXN',
+      campaigns: inventory?.campaigns ?? [],
+      adGroups: inventory?.adGroups ?? [],
+    });
+    expect(group.refusal).toBeNull();
+    expect(
+      parseGoogleInventory(bare, vivo47.top_campaigns, AD_GROUPS)?.account.currency,
+    ).toBeNull();
+  });
+
   it('refuses to parse a ranking answer it does not know', () => {
     expect(parseGoogleInventory(VIVO47, { rows: 'x' }, AD_GROUPS)).toBeNull();
+  });
+});
+
+describe('the Google group in Manage: what the portfolio holds, saved on its own', () => {
+  const member = (entityId: string, name: string, channelType: string) => ({
+    platform: 'google_ads',
+    accountId: '3710693645',
+    entityId,
+    level: 'campaign',
+    name,
+    channelType,
+  });
+  type Change = { accountId: string; add: { id: string; name: string }[]; remove: string[] };
+
+  function renderEditable(
+    held: ReturnType<typeof member>[],
+    save: (change: Change) => Promise<unknown>,
+  ) {
+    return render(
+      <MultiPlatformPickerView
+        google={{ status: 'ready', inventory: vivo47Inventory() }}
+        members={{ status: 'ready', members: held }}
+        metaAccount="act_521903353286118"
+        portfolioCurrency="MXN"
+        save={save}
+      >
+        <div data-testid="meta-tree">Meta campaigns and ad sets</div>
+      </MultiPlatformPickerView>,
+    );
+  }
+  const row = (name: string) =>
+    screen.getAllByTestId('picker-google-campaign').find((el) => el.textContent?.includes(name));
+  const box = (name: string) => row(name)?.querySelector('[data-slot="checkbox"]');
+
+  it('ticks the held campaigns first, and shows a held one the spend ranking does not list', () => {
+    renderEditable(
+      [
+        member('20775796216', 'VIVO 47-EKATAR', 'SEARCH'),
+        member('999', 'Paused · Pasarela', 'SEARCH'),
+      ],
+      async () => undefined,
+    );
+    const rows = screen.getAllByTestId('picker-google-campaign');
+    expect(rows.slice(0, 2).map((el) => el.dataset.held)).toEqual(['true', 'true']);
+    expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('true');
+    expect(box('VIVO 47-EKATAR')?.getAttribute('aria-checked')).toBe('true');
+    expect(box('PMax · Sedes')?.getAttribute('aria-checked')).toBe('false');
+    expect(box('Video | Vivo 47 | 2025')?.hasAttribute('data-disabled')).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Save Google campaigns' }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('saves what changed: the newly ticked to add, the unticked to remove', async () => {
+    const saved: Change[] = [];
+    renderEditable([member('20775796216', 'VIVO 47-EKATAR', 'SEARCH')], async (change) => {
+      saved.push(change);
+    });
+    fireEvent.click(screen.getByText('PMax · Sedes'));
+    fireEvent.click(screen.getByText('VIVO 47-EKATAR'));
+    expect(screen.getByText('+1 to add · −1 to remove')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save Google campaigns' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]).toEqual({
+      accountId: '3710693645',
+      add: [{ id: 'pmax-1', name: 'PMax · Sedes' }],
+      remove: ['20775796216'],
+    });
+  });
+
+  it('keeps a campaign it let go on the list, unticked, so it can be taken back', () => {
+    const held = [member('999', 'Paused · Pasarela', 'SEARCH')];
+    const view = (members: ReturnType<typeof member>[]) => (
+      <MultiPlatformPickerView
+        google={{ status: 'ready', inventory: vivo47Inventory() }}
+        members={{ status: 'ready', members }}
+        metaAccount="act_521903353286118"
+        portfolioCurrency="MXN"
+        save={async () => undefined}
+      >
+        <div />
+      </MultiPlatformPickerView>
+    );
+    const { rerender } = render(view(held));
+    expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('true');
+    rerender(view([]));
+    expect(row('Paused · Pasarela')?.dataset.held).toBe('false');
+    expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it("shows the database's refusal when a save is refused", async () => {
+    renderEditable([], async () => {
+      throw new Error('optimizer: google_ads campaign pmax-1 is already in portfolio 5aaf5931');
+    });
+    fireEvent.click(screen.getByText('PMax · Sedes'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Google campaigns' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('is already in portfolio');
+  });
+
+  it('is a list only, and says why, until the members read answers', () => {
+    render(
+      <MultiPlatformPickerView
+        google={{ status: 'ready', inventory: vivo47Inventory() }}
+        members={{ status: 'unavailable' }}
+        metaAccount="act_521903353286118"
+        portfolioCurrency="MXN"
+        save={async () => undefined}
+      >
+        <div />
+      </MultiPlatformPickerView>,
+    );
+    expect(screen.getByText(/can't be read yet/)).toBeTruthy();
+    expect(
+      document.querySelector('[data-testid="picker-google-campaign"] [data-slot="checkbox"]'),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save Google campaigns' })).toBeNull();
   });
 });

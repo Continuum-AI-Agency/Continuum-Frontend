@@ -125,6 +125,20 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     expect(getByTestId('portfolio-row-spend').textContent).toContain('$2,000 USDspend 7d');
   });
 
+  // Google attributes fractional conversions (217.970058 leads); the node declares a count.
+  it('counts results whole, with the raw figure on the node', () => {
+    const pf = portfolio({ cpa_target: 30 });
+    const { container } = render(
+      <PortfolioRowCard
+        currency="MXN"
+        portfolio={pf}
+        window={{ ...windowFor(pf), results: 217.970058 }}
+      />,
+    );
+    expect(figure(container, 'results').textContent).toBe('218');
+    expect(figure(container, 'results').getAttribute('data-figure-raw')).toBe('217.970058');
+  });
+
   // PP-L3-pacing-noun-from-window-kind: a lead portfolio never captions itself in purchases,
   // whatever kind the window it was handed claims to be.
   it('names the result from the portfolio’s own metric, not from the window’s kind', () => {

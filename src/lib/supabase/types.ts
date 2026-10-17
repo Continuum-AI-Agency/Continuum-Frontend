@@ -8350,6 +8350,209 @@ export type Database = {
           },
         ]
       }
+      meta_capi_deliveries: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          event_count: number
+          event_names: string[]
+          events_received: number | null
+          fbtrace_id: string | null
+          forward_error: string | null
+          forward_status: string | null
+          id: string
+          pixel_id: string
+          source: string
+          source_id: string | null
+          test_event_code: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          event_count: number
+          event_names?: string[]
+          events_received?: number | null
+          fbtrace_id?: string | null
+          forward_error?: string | null
+          forward_status?: string | null
+          id?: string
+          pixel_id: string
+          source: string
+          source_id?: string | null
+          test_event_code?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          event_count?: number
+          event_names?: string[]
+          events_received?: number | null
+          fbtrace_id?: string | null
+          forward_error?: string | null
+          forward_status?: string | null
+          id?: string
+          pixel_id?: string
+          source?: string
+          source_id?: string | null
+          test_event_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "meta_capi_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_capi_deliveries_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "meta_capi_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_capi_settings: {
+        Row: {
+          ad_account_id: string
+          brand_id: string
+          created_at: string
+          forward_destination_id: string | null
+          pixel_id: string
+          pixel_name: string | null
+          test_event_code: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ad_account_id: string
+          brand_id: string
+          created_at?: string
+          forward_destination_id?: string | null
+          pixel_id: string
+          pixel_name?: string | null
+          test_event_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ad_account_id?: string
+          brand_id?: string
+          created_at?: string
+          forward_destination_id?: string | null
+          pixel_id?: string
+          pixel_name?: string | null
+          test_event_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_settings_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "meta_capi_settings_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_capi_settings_forward_destination_id_fkey"
+            columns: ["forward_destination_id"]
+            isOneToOne: false
+            referencedRelation: "automation_webhook_destinations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_capi_sources: {
+        Row: {
+          action_source: string
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          event_name: string
+          field_map: Json
+          id: string
+          last_received_at: string | null
+          name: string
+          public_id: string
+          require_signature: boolean
+          secret_encrypted: string
+          secret_hash: string
+          updated_at: string
+        }
+        Insert: {
+          action_source: string
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          event_name: string
+          field_map?: Json
+          id?: string
+          last_received_at?: string | null
+          name: string
+          public_id: string
+          require_signature?: boolean
+          secret_encrypted: string
+          secret_hash: string
+          updated_at?: string
+        }
+        Update: {
+          action_source?: string
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          event_name?: string
+          field_map?: Json
+          id?: string
+          last_received_at?: string | null
+          name?: string
+          public_id?: string
+          require_signature?: boolean
+          secret_encrypted?: string
+          secret_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_capi_sources_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "meta_capi_sources_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_deliveries: {
         Row: {
           attempts: number
@@ -18248,6 +18451,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -18277,6 +18481,7 @@ export type Database = {
           kind: string
           lease_expires_at?: string | null
           lease_token?: string | null
+          operation_name?: string | null
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
@@ -18306,6 +18511,7 @@ export type Database = {
           kind?: string
           lease_expires_at?: string | null
           lease_token?: string | null
+          operation_name?: string | null
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
@@ -20536,6 +20742,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
+          import_mapping: Json | null
           template_key: string
           updated_at: string
         }
@@ -20545,6 +20752,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          import_mapping?: Json | null
           template_key: string
           updated_at?: string
         }
@@ -20554,6 +20762,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          import_mapping?: Json | null
           template_key?: string
           updated_at?: string
         }
@@ -21763,6 +21972,38 @@ export type Database = {
           },
         ]
       }
+      template_variant_defaults: {
+        Row: {
+          brand_id: string
+          set_by: string | null
+          template_id: string
+          updated_at: string
+          variant_id: string
+        }
+        Insert: {
+          brand_id: string
+          set_by?: string | null
+          template_id: string
+          updated_at?: string
+          variant_id: string
+        }
+        Update: {
+          brand_id?: string
+          set_by?: string | null
+          template_id?: string
+          updated_at?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_variant_defaults_variant_id_brand_id_template_id_fkey"
+            columns: ["variant_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_variants"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+        ]
+      }
       template_variants: {
         Row: {
           archived_at: string | null
@@ -22449,6 +22690,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22528,6 +22770,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22691,6 +22934,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22733,6 +22977,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22819,6 +23064,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22862,6 +23108,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22905,6 +23152,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -22948,6 +23196,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23100,6 +23349,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23145,6 +23395,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23189,6 +23440,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -23236,6 +23488,7 @@ export type Database = {
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
+          operation_name: string | null
           phase: string | null
           progress: number
           result_asset_ids: string[]
@@ -30752,6 +31005,10 @@ export type Database = {
         Args: { p_since?: string }
         Returns: number
       }
+      optimizer_decision_outcome_count: {
+        Args: { p_result?: string; p_since?: string; p_status?: string }
+        Returns: number
+      }
       optimizer_delete_bench_portfolio: {
         Args: { p_portfolio_id: string }
         Returns: boolean
@@ -30924,6 +31181,10 @@ export type Database = {
       optimizer_get_enrolled_adsets: {
         Args: { p_portfolio_id: string }
         Returns: string[]
+      }
+      optimizer_get_platform_cards: {
+        Args: { p_brand_id: string; p_platform: string }
+        Returns: Json
       }
       optimizer_get_platform_objective_map: {
         Args: { p_platform: string }
@@ -31098,6 +31359,10 @@ export type Database = {
             }
             Returns: string
           }
+      optimizer_invalidate_asked_audience_proposal: {
+        Args: { p_blocked_by: Json; p_id: string }
+        Returns: boolean
+      }
       optimizer_list_account_enrollments: {
         Args: { p_ad_account_id?: string; p_brand_id: string }
         Returns: {
@@ -31154,6 +31419,27 @@ export type Database = {
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
         Returns: Json
+      }
+      optimizer_list_asked_ready_audience_proposals: {
+        Args: never
+        Returns: {
+          ad_account_id: string
+          adset_id: string
+          brand_id: string
+          held: boolean
+          id: string
+          portfolio_id: string
+        }[]
+      }
+      optimizer_list_decision_outcomes: {
+        Args: { p_grading?: string; p_limit?: number; p_portfolio_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "decision_outcome_readings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       optimizer_list_logs: {
         Args: {

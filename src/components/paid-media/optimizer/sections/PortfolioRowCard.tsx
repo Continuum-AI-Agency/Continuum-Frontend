@@ -368,6 +368,20 @@ export function portfolioLeads(candidates: readonly AccountCandidate[]): {
   return { leads, emphasised };
 }
 
+/** What one member of a portfolio is on its platform: Meta enrolls ad sets, Google campaigns.
+ *  A portfolio on several platforms (or an unknown one) counts members. No platform yet (still
+ *  being read) keeps the Meta word every portfolio had before Google. */
+const MEMBER_NOUN: Partial<Record<AdPlatform, string>> = { meta: 'ad set', google_ads: 'campaign' };
+
+export function memberNoun(count: number, platforms: readonly AdPlatform[]): string {
+  const noun = platforms.length > 1 ? 'member' : (MEMBER_NOUN[platforms[0] ?? 'meta'] ?? 'member');
+  return count === 1 ? noun : `${noun}s`;
+}
+
+export function memberCountLabel(count: number, platforms: readonly AdPlatform[]): string {
+  return `${count} ${memberNoun(count, platforms)}`;
+}
+
 type PortfolioRowCardProps = {
   portfolio: PortfolioListItem;
   currency?: string | null;
@@ -428,7 +442,9 @@ export function PortfolioRowCard({
             figureKey={figureKey('results')}
             raw={window?.results ?? null}
             testId="portfolio-row-results"
-            text={window ? window.results.toLocaleString('en-US') : '—'}
+            text={
+              window ? window.results.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'
+            }
             unit="count"
             window="d7"
           />
@@ -476,8 +492,8 @@ export function PortfolioRowCard({
             ) : null}
             <span>{humanize(portfolio.objective)}</span>
             <span aria-hidden>·</span>
-            <span className="tabular-nums">
-              {portfolio.adset_count} {portfolio.adset_count === 1 ? 'ad set' : 'ad sets'}
+            <span className="tabular-nums" data-testid="portfolio-row-members">
+              {memberCountLabel(portfolio.adset_count, chips)}
             </span>
             <span aria-hidden>·</span>
             <span className="tabular-nums">

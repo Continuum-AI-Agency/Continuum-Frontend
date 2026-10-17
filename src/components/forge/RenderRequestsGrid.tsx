@@ -76,6 +76,7 @@ import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import {
   addSibling,
+  applyAssistOps,
   applyFormats,
   applyValue,
   clearKey,
@@ -135,7 +136,6 @@ import {
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
-import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -153,7 +153,6 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import {
-  fetchTemplateLineage,
   fetchTemplateRevisionVariants,
   fetchTemplateVariants,
   saveTemplateVariables,
@@ -374,11 +373,6 @@ export type ForgeRenderIntent = {
   bindingId?: string;
   renderSetId?: string;
   draftWithAi?: boolean;
-  /**
-   * Render this named head instead of the template's live pointer. Set by the variants panel,
-   * which could list heads but never aim a render at one, so every name on it was decoration.
-   */
-  templateRef?: string;
   templateRevision?: TemplateRevisionRef;
   /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
   rowId?: string;
@@ -453,39 +447,23 @@ export function RenderRequestsGrid({
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
-  // The checkpoint this grid is pinned to, or null to follow whatever is live.
-  const [templateRef, setTemplateRef] = useState<string | null>(null);
-  // The template's history, for the checkpoint picker: which checkpoint renders, and the rest.
-  const sourceAssetId = contract?.template.sourceAssetId ?? null;
-  const lineage = useQuery({
-    queryKey: forgeQueryKeys.lineage(brandId, sourceAssetId ?? ''),
-    queryFn: () => fetchTemplateLineage(brandId, sourceAssetId as string),
-    enabled: sourceAssetId !== null,
-    staleTime: FORGE_STALE_MS.lists,
-  });
-  const checkpoints = useMemo(
-    () => (lineage.data ? checkpointGraph(lineage.data) : null),
-    [lineage.data],
-  );
-  // Every row's dry-run asked about the previous checkpoint; a new pin asks again, so a pin that
-  // cannot hold (live moved) shows on the rows now rather than at Render.
-  const pinCheckpoint = (ref: string | null) => {
-    setTemplateRef(ref);
-    setRows((current) =>
-      current.map((row) =>
-        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
-      ),
-    );
-  };
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [inputSetLoad, setInputSetLoad] = useState<CollectionLoad>({
-    phase: 'loading', error: null, initialFailed: false, hasData: false,
-    unassignedDraft: false, refreshing: false,
+    phase: 'loading',
+    error: null,
+    initialFailed: false,
+    hasData: false,
+    unassignedDraft: false,
+    refreshing: false,
   });
   const [renderSetLoad, setRenderSetLoad] = useState<CollectionLoad>({
-    phase: 'loading', error: null, initialFailed: false, hasData: false,
-    unassignedDraft: false, refreshing: false,
+    phase: 'loading',
+    error: null,
+    initialFailed: false,
+    hasData: false,
+    unassignedDraft: false,
+    refreshing: false,
   });
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
@@ -519,6 +497,8 @@ export function RenderRequestsGrid({
   const [pendingDiscard, setPendingDiscard] = useState<(() => void) | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [pasted, setPasted] = useState<{ text: string } | null>(null);
+  /** A sheet attached to the AI button with nothing asked of it: imported, not interpreted. */
+  const [preloadedSheet, setPreloadedSheet] = useState<{ file: File } | null>(null);
   const [nameRequest, setNameRequest] = useState<NameRequest | null>(null);
   const [dropHint, setDropHint] = useState<RowDrop | null>(null);
   // The open review: `key` is the snapshot the tray reviews, `signature` what it was taken of.
@@ -745,12 +725,20 @@ export function RenderRequestsGrid({
     let cancelled = false;
     loadGeneration.current += 1;
     setInputSetLoad({
-      phase: 'loading', error: null, initialFailed: false, hasData: false,
-      unassignedDraft: false, refreshing: false,
+      phase: 'loading',
+      error: null,
+      initialFailed: false,
+      hasData: false,
+      unassignedDraft: false,
+      refreshing: false,
     });
     setRenderSetLoad({
-      phase: 'loading', error: null, initialFailed: false, hasData: false,
-      unassignedDraft: false, refreshing: false,
+      phase: 'loading',
+      error: null,
+      initialFailed: false,
+      hasData: false,
+      unassignedDraft: false,
+      refreshing: false,
     });
     const reads = templateLoadQueries(brandId, contractBindingId, templateKey);
     Promise.all([
@@ -823,12 +811,20 @@ export function RenderRequestsGrid({
         if (cancelled) return;
         toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
         setInputSetLoad({
-          phase: 'error', error: 'Input sets could not be loaded.', initialFailed: true,
-          hasData: false, unassignedDraft: false, refreshing: false,
+          phase: 'error',
+          error: 'Input sets could not be loaded.',
+          initialFailed: true,
+          hasData: false,
+          unassignedDraft: false,
+          refreshing: false,
         });
         setRenderSetLoad({
-          phase: 'error', error: 'Saved render sets could not be loaded.', initialFailed: true,
-          hasData: false, unassignedDraft: false, refreshing: false,
+          phase: 'error',
+          error: 'Saved render sets could not be loaded.',
+          initialFailed: true,
+          hasData: false,
+          unassignedDraft: false,
+          refreshing: false,
         });
       });
     return () => {
@@ -849,7 +845,11 @@ export function RenderRequestsGrid({
       if (!isCurrent()) return;
       setInputSets(result.items);
       setInputSetLoad((current) => ({
-        ...current, phase: 'ready', error: null, initialFailed: false, hasData: true,
+        ...current,
+        phase: 'ready',
+        error: null,
+        initialFailed: false,
+        hasData: true,
         refreshing: false,
       }));
     } catch (error) {
@@ -885,8 +885,13 @@ export function RenderRequestsGrid({
         signatureOf(latestRows.current, forContract) !== savedSignatureRef.current;
       setRenderSets(inBinding);
       setRenderSetLoad((current) => ({
-        ...current, phase: 'ready', error: null, initialFailed: false, hasData: true,
-        refreshing: false, unassignedDraft,
+        ...current,
+        phase: 'ready',
+        error: null,
+        initialFailed: false,
+        hasData: true,
+        refreshing: false,
+        unassignedDraft,
       }));
       if (activeSetRef.current === null) {
         if (unassignedDraft) setActiveSet(null);
@@ -1017,8 +1022,10 @@ export function RenderRequestsGrid({
   );
 
   // --- server preflight, per dirty row, debounced ---------------------------------------
-  // ponytail: one preflight per dirty row, no concurrency cap; throttle to 3 like the poll if
-  // the backend complains.
+  // At most PREFLIGHT_CONCURRENCY at once: an imported sheet arms fifty rows in one go, and fifty
+  // simultaneous dry-runs queue behind each other on the server anyway.
+  const PREFLIGHT_CONCURRENCY = 3;
+  const checksInFlight = useRef(0);
   const timers = useRef(
     new Map<string, { timer: ReturnType<typeof setTimeout>; snapshot: string }>(),
   );
@@ -1097,9 +1104,7 @@ export function RenderRequestsGrid({
     const pending = timers.current;
     for (const row of rows) {
       const snapshot = preflightSnapshot(rows, row.id);
-      // Armed for these values AND this checkpoint: a pin made while a dry-run waits must re-arm
-      // it, or it fires with the checkpoint it was armed under.
-      const armedFor = `${snapshot}|${templateRef ?? ''}`;
+      const armedFor = snapshot;
       const scheduled = pending.get(row.id);
       // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
       if (scheduled?.snapshot === armedFor) continue;
@@ -1125,8 +1130,13 @@ export function RenderRequestsGrid({
             return current;
           return current.map((item) => (item === target ? { ...item, check: next } : item));
         });
-      const timer = setTimeout(async () => {
+      const run = async () => {
+        if (checksInFlight.current >= PREFLIGHT_CONCURRENCY) {
+          pending.set(row.id, { timer: setTimeout(run, 250), snapshot: armedFor });
+          return;
+        }
         pending.delete(row.id);
+        checksInFlight.current += 1;
         settle({ state: 'checking' }, 'idle');
         let check: RequestRow['check'];
         try {
@@ -1137,7 +1147,6 @@ export function RenderRequestsGrid({
             contractHash,
             variables: resolved,
             ...(outputIds.length ? { outputIds } : {}),
-            ...(templateRef ? { templateRef } : {}),
             ...(templateRevision ? { templateRevision } : {}),
             ...(activeSet && signatureOf(rows, contract) === savedSignature
               ? {
@@ -1169,9 +1178,10 @@ export function RenderRequestsGrid({
             guardrails: guardrails.success ? guardrails.data : [],
           };
         }
+        checksInFlight.current -= 1;
         settle(check, 'checking');
-      }, PREFLIGHT_DEBOUNCE_MS);
-      pending.set(row.id, { timer, snapshot: armedFor });
+      };
+      pending.set(row.id, { timer: setTimeout(run, PREFLIGHT_DEBOUNCE_MS), snapshot: armedFor });
     }
   }, [
     rows,
@@ -1179,7 +1189,6 @@ export function RenderRequestsGrid({
     clientErrors,
     brandId,
     bindingId,
-    templateRef,
     templateRevision,
     activeSet,
     savedSignature,
@@ -1209,7 +1218,8 @@ export function RenderRequestsGrid({
   );
   const variant =
     rowVariants.size > 1 ? null : rowVariants.size ? [...rowVariants][0] : emptyVariant;
-  const appendRows = (added: RequestRow[]): boolean => {
+  /** `keepOutputs`: rows that already name their formats (a sheet's market column) keep them. */
+  const appendRows = (added: RequestRow[], keepOutputs = false): boolean => {
     const current = latestRows.current;
     if (current.length + added.length > MAX_BATCH_ROWS) {
       toast.error(
@@ -1220,7 +1230,11 @@ export function RenderRequestsGrid({
     record();
     latestRows.current = [
       ...current,
-      ...added.map((row) => (variant && !row.parentId ? { ...row, outputIds: [variant] } : row)),
+      ...added.map((row) =>
+        variant && !row.parentId && !(keepOutputs && row.outputIds.length)
+          ? { ...row, outputIds: [variant] }
+          : row,
+      ),
     ];
     setRows(latestRows.current);
     return true;
@@ -1431,7 +1445,6 @@ export function RenderRequestsGrid({
       } else {
         confirmDiscard(() => {
           setTemplateRevision(picked.ref);
-          setTemplateRef(null);
           setSelection({
             templateKey: picked.target.templateKey,
             bindingId: picked.target.bindingId,
@@ -1446,6 +1459,64 @@ export function RenderRequestsGrid({
     } finally {
       setRevisionChangeBusy(false);
     }
+  };
+  // Every other published variant of this family, at its published head — what an experiment
+  // runs the same rows on.
+  // ponytail: a revision published to several workspaces runs on its first; pick per target if one needs another.
+  const otherVariantHeads =
+    revisionVariants?.flatMap((variant) => {
+      const head = variant.revisions.find((item) => item.id === variant.publishedHeadRevisionId);
+      const target = head?.publications[0];
+      return head &&
+        target &&
+        !variant.archivedAt &&
+        variant.variantId !== activeSet?.templateRevision?.variantId
+        ? [{ variant, head, target }]
+        : [];
+    }) ?? [];
+  const runOnVariants = async () => {
+    if (!activeSet) return;
+    setRevisionChangeBusy(true);
+    const made: string[] = [];
+    const refused: string[] = [];
+    try {
+      for (const { variant, head, target } of otherVariantHeads) {
+        const name = variant.original ? 'Original' : variant.name;
+        try {
+          const next = await apiRendersApi.getContract(
+            brandId,
+            target.templateKey,
+            target.bindingId,
+          );
+          const created = await apiRendersApi.createRenderSet({
+            brandId,
+            bindingId: target.bindingId,
+            name: `${activeSet.name} · ${name}`.slice(0, 200),
+            templateKey: target.templateKey,
+            contractHash: next.template.contractHash,
+            templateRevision: {
+              templateId: variant.templateId,
+              variantId: variant.variantId,
+              revisionId: head.id,
+            },
+            // The same rows with the same ids: one row id is one row on every variant, which is
+            // what the Variants tab's Compare lines up.
+            rows: activeSet.rows,
+          });
+          made.push(created.name);
+        } catch (error) {
+          refused.push(`${name}: ${describeRenderDiscoveryFailure(error)}`);
+        }
+      }
+    } finally {
+      setRevisionChangeBusy(false);
+    }
+    void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
+    if (made.length)
+      toast.success(
+        `Made ${made.length === 1 ? 'a set' : `${made.length} sets`}: ${made.join(', ')}`,
+      );
+    if (refused.length) toast.error(`Not made — ${refused.join('; ')}`);
   };
   const currentSource = sourceVariants?.find(
     (item) => item.assetId === contract?.template.sourceAssetId,
@@ -1500,6 +1571,99 @@ export function RenderRequestsGrid({
         }
       },
     });
+  };
+
+  /**
+   * Imported rows land selected — the next click renders them — and the first is previewed. A
+   * root renders the formats its sheet named, else the toolbar's, else every one. A picture no
+   * sheet column fills (Inyogo's QR) carries over when every row already here shares one.
+   */
+  const importRows = (imported: RequestRow[]) => {
+    if (!contract) return;
+    const current = latestRows.current.filter((row) => !row.proposed && !row.parentId);
+    const shared = contract.variables.flatMap((item) => {
+      if (item.kind !== 'image' && item.kind !== 'video') return [];
+      const values = current.map((row) => effectiveValues(latestRows.current, row.id)[item.key]);
+      const first = values[0];
+      return first !== undefined &&
+        values.every((value) => JSON.stringify(value) === JSON.stringify(first))
+        ? [{ key: item.key, value: first, media: current[0]!.media[item.key] }]
+        : [];
+    });
+    const all = allOutputIdsOf(contract);
+    const rows = imported.map((row) => {
+      const values = { ...row.values };
+      const media = { ...row.media };
+      for (const carried of shared)
+        if (values[carried.key] === undefined) {
+          values[carried.key] = structuredClone(carried.value);
+          if (carried.media) media[carried.key] = carried.media;
+        }
+      const outputIds =
+        row.parentId !== null || row.outputIds.length ? row.outputIds : variant ? [variant] : all;
+      return { ...row, values, media, outputIds };
+    });
+    if (!appendRows(rows, true)) return;
+    setExpanded(true);
+    setRowSelection(Object.fromEntries(rows.map((row) => [row.id, true])));
+    setPreviewRowId(rows[0]?.id ?? null);
+  };
+
+  /** What the AI button reads of the grid: every row as it renders, and what is selected. */
+  const assistContext = () => {
+    const current = latestRows.current.filter((row) => !row.proposed);
+    return {
+      rows: current.slice(0, MAX_BATCH_ROWS).map((row) => ({
+        id: row.id,
+        parentId: row.parentId,
+        label: row.label.trim() || 'Untitled',
+        outputIds: effectiveOutputIds(latestRows.current, row.id),
+        values: effectiveValues(latestRows.current, row.id),
+      })),
+      selection: Object.keys(rowSelection).filter(
+        (id) => rowSelection[id] && current.some((row) => row.id === id),
+      ),
+      setDescription: activeSetRef.current?.description ?? null,
+    };
+  };
+
+  /** The AI button's answer, applied as one undo step; it never renders anything. */
+  const applyAssist = (response: ApiRenderSuggestRowsResponse) => {
+    if (!contract) return;
+    const result = applyAssistOps(latestRows.current, response.ops ?? [], allOutputIdsOf(contract));
+    if (result.rows.length > MAX_BATCH_ROWS) {
+      toast.error(`A render set supports at most ${MAX_BATCH_ROWS} rows. Nothing was changed.`);
+      return;
+    }
+    const before = history.current.past.at(-1);
+    editRows(() => result.rows);
+    const changed = history.current.past.at(-1) !== before;
+    if (result.selected)
+      setRowSelection(Object.fromEntries(result.selected.map((id) => [id, true])));
+    if (result.added.length) {
+      setExpanded(true);
+      setPreviewRowId(result.added[0]!);
+    } else {
+      const touched = (response.ops ?? []).flatMap((op) =>
+        op.op === 'set' || op.op === 'set_outputs'
+          ? op.rowIds
+          : op.op === 'rename'
+            ? [op.rowId]
+            : [],
+      );
+      if (touched.length === 1) setPreviewRowId(touched[0]!);
+    }
+    if (changed) {
+      const mark = history.current.past.at(-1);
+      toast.success(response.reply || 'Done', {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            if (history.current.past.at(-1) === mark) undo();
+          },
+        },
+      });
+    }
   };
 
   /** A draft's rows, proposed, under the rows already there; the first one is shown. */
@@ -1703,10 +1867,8 @@ export function RenderRequestsGrid({
   useEffect(() => {
     if (!intent) return;
     onIntentConsumed?.();
-    // A head belongs to the template it was picked from. Taking it from the intent — rather
-    // than leaving it set — means switching template clears it, so a ref can never be carried
-    // onto a template whose tree has never heard of it.
-    setTemplateRef(intent.templateRef ?? null);
+    // A revision belongs to the template it was picked from. Taking it from the intent — rather
+    // than leaving it set — means switching template clears it.
     setTemplateRevision(intent.templateRevision ?? null);
     const alreadyOpen =
       intent.templateKey === templateKey &&
@@ -2447,10 +2609,13 @@ export function RenderRequestsGrid({
       // In the grid, or on something holding it: a closing menu hands focus back to the grid's
       // nearest focusable ancestor — the Render tab's panel — which is still this grid's keyboard.
       const box = gridBox.current;
+      // The toolbar counts too: closing the AI button's bubble hands focus back to its trigger,
+      // and ⌘Z right after an answer must take that answer back.
       const inGrid =
         !target ||
         target === document.body ||
-        Boolean(box && (box.contains(target) || target.contains(box)));
+        Boolean(box && (box.contains(target) || target.contains(box))) ||
+        Boolean(target.closest('[role="toolbar"][aria-label="Render"]'));
       const key = event.key.toLowerCase();
       if (key === 's') {
         event.preventDefault();
@@ -2466,7 +2631,8 @@ export function RenderRequestsGrid({
   // --- render -----------------------------------------------------------------------------
   const ready = rows.filter((row) => row.check.state === 'ready').length;
   // The pinned revision's own file when the set pins one, else the template's source.
-  const settingsAssetId = pinnedRevisionLabel?.revision.sourceAssetId ?? sourceAssetId;
+  const settingsAssetId =
+    pinnedRevisionLabel?.revision.sourceAssetId ?? contract?.template.sourceAssetId ?? null;
   const previewId = previewRowId ?? (selected.length === 1 ? selected[0]!.id : null);
   return (
     // Bounded by the tab: the toolbar stays put, the rows and the review tray share the rest.
@@ -2482,7 +2648,7 @@ export function RenderRequestsGrid({
             </span>
           ) : null}
           <label className="flex items-center gap-2">
-            Template variant / revision
+            Variant revision
             <select
               aria-label="Published template revision"
               className="h-8 max-w-64 rounded-md border bg-background px-2"
@@ -2506,6 +2672,20 @@ export function RenderRequestsGrid({
           >
             {activeSet ? 'Change set template revision' : 'Load template revision'}
           </Button>
+          {activeSet && otherVariantHeads.length ? (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={revisionChangeBusy || needsSave}
+              title="Copies this set's rows to a new set on every other published variant, pinned to its published revision."
+              onClick={() => void runOnVariants()}
+            >
+              Run on{' '}
+              {otherVariantHeads.length === 1
+                ? '1 other variant'
+                : `${otherVariantHeads.length} other variants`}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <RenderToolbar
@@ -2530,9 +2710,8 @@ export function RenderRequestsGrid({
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
-          // A checkpoint belongs to the template it was picked from; never carry it to another.
+          // A revision belongs to the template it was picked from; never carry it to another.
           confirmDiscard(() => {
-            setTemplateRef(null);
             setTemplateRevision(null);
             setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
           });
@@ -2562,9 +2741,6 @@ export function RenderRequestsGrid({
         // Only this brand's own upload can be changed from here; a granted template cannot.
         layerSwitches={contract?.template.sourceAssetId ? layerSwitches : []}
         onAskSwitch={(variable) => void askSwitch(variable)}
-        checkpoints={checkpoints}
-        templateRef={templateRef}
-        onTemplateRefChange={pinCheckpoint}
         onUpload={() => setImportOpen(true)}
         onDownloadTemplate={() =>
           contract &&
@@ -2924,7 +3100,6 @@ export function RenderRequestsGrid({
                       <RenderPreviewPanel
                         brandId={brandId}
                         contract={contract}
-                        templateRef={templateRef ?? undefined}
                         rows={rows}
                         rowId={previewId}
                         renderSetId={activeSet?.id ?? null}
@@ -2986,7 +3161,6 @@ export function RenderRequestsGrid({
                   bindingId={bindingId}
                   templateKey={contract.template.key}
                   contractHash={contract.template.contractHash}
-                  templateRef={templateRef}
                   contract={contract}
                   rows={batch.rows}
                   records={batch.records}
@@ -3059,20 +3233,16 @@ export function RenderRequestsGrid({
             existingRows={rows.length}
             open={importOpen}
             pasted={pasted}
+            preloaded={preloadedSheet}
             onOpenChange={(open) => {
               setImportOpen(open);
-              // Spent once reviewed: a remounted dialog must not replay an old paste.
-              if (!open) setPasted(null);
+              // Spent once reviewed: a remounted dialog must not replay an old paste or handover.
+              if (!open) {
+                setPasted(null);
+                setPreloadedSheet(null);
+              }
             }}
-            onImport={(imported) =>
-              appendRows(
-                imported.map((row) =>
-                  row.parentId === null && row.outputIds.length === 0
-                    ? { ...row, outputIds: allOutputIdsOf(contract) }
-                    : row,
-                ),
-              )
-            }
+            onImport={importRows}
           />
         </>
       ) : (
@@ -3092,6 +3262,14 @@ export function RenderRequestsGrid({
           maxRows={MAX_BATCH_ROWS - rows.length}
           anchor={draftAnchor.current}
           onDrafted={acceptDraft}
+          gridContext={assistContext}
+          onAssist={applyAssist}
+          onUndo={undo}
+          onSheet={(file) => {
+            setAiDraft(null);
+            setPreloadedSheet({ file });
+            setImportOpen(true);
+          }}
         />
       ) : null}
       <SetHistoryDialog

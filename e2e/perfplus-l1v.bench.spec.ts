@@ -9,7 +9,13 @@ import {
   test,
 } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { mintSessionBundleForEmail, type PlaywrightStorageState } from './support/auth';
+import {
+  mintSessionBundleForEmail,
+  type PlaywrightStorageState,
+  pinSessionBrand,
+  restoreBrandPreference,
+  revokeBenchSession,
+} from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import {
   clickExpectingEffect,
@@ -42,7 +48,8 @@ import {
 // A real Chrome drives the real Frontend as the Easy Fit owner, against production Supabase
 // and the Backend the Frontend `.env` names. The surface list is the L1 lane's
 // (perfplus-l1.bench.spec.ts): the Optimizer (Overview, every tab its tablist exposes, the
-// first portfolio's detail and its Manage / Activity sections), Jaina, Campaigns, Dashboard,
+// first portfolio's detail and its Manage / Activity sections, and the Google tab of every
+// brand with Google portfolios — `Optimizer/Google`), Jaina, Campaigns, Dashboard,
 // Approvals, Campaign Canvas and Home Overview. Each is audited at
 //
 //   viewports  375 · 768 · 1280 · 1440
@@ -52,16 +59,20 @@ import {
 //
 // with the ten rules of e2e/support/visualInvariants.ts: overlap, clipped-text,
 // covered-control, tap-target, horizontal-scroll, layout-shift, contrast, tooltip-offscreen,
-// money-currency and selected-tab-indicator. Every violation is one FAIL row naming surface ×
+// money-currency and selected-tab-indicator — plus, on the Google tab, platform-color: Google
+// yellow (--platform-google*) only on a platform chip, its dot and a tab underline, never on a
+// figure, a status or a surface. Every violation is one FAIL row naming surface ×
 // viewport × theme × state × rule × selector, with a full-page screenshot per audit in
 // e2e/__screenshots__/perfplus-l1v/. The thresholds are the intent's (24 px, CLS 0.1, AA) and
 // are never tuned here: a violation is a FINDING for the campaign ledger.
 //
 // ── READ ONLY ── Nothing here approves, applies, pauses, converts, reverts, creates or saves.
 // The only clicks are `role="tab"` triggers and a portfolio row (a URL push); the only hovers
-// and focuses are the first tooltip triggers of each page. The single write is the bench
-// user's active-brand preference (pinned to Easy Fit, restored at the end) — the same row the
-// in-app brand switcher writes, written the same way.
+// and focuses are the first tooltip triggers of each page. The only writes are the bench
+// user's active-brand preference (pinned to Easy Fit, restored at the end) and the bench
+// session's own brand pin (brand_profiles.user_session_brands) — the rows the in-app brand
+// switcher writes. The session is signed out at the end, which deletes its pin; Vivo 47 is
+// only ever viewed.
 //
 // ── ONE TEST, MANY STEPS ── as in the L1 lane: one test with a step per audit and SOFT
 // assertions prints one Recorder envelope and still names everything on every failure.
@@ -81,6 +92,14 @@ const EASYFIT_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
  *  carries a portfolio, so the Optimizer step runs on the first candidate that does. */
 const EASYFIT_LEDGER_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 const OPTIMIZER_BRAND_CANDIDATES = [EASYFIT_BRAND_ID, EASYFIT_LEDGER_BRAND_ID] as const;
+/** The Optimizer's Google tab (G2), on the brands that hold Google portfolios: Easy Fit's row
+ *  with the two Google portfolios (its Meta account has none, so it lands on this tab by
+ *  itself), and Vivo 47 — Meta and Google both, READ-ONLY: it is viewed, never written. */
+const GOOGLE_SURFACE = 'Optimizer/Google';
+const GOOGLE_TAB_BRANDS = [
+  { name: 'Easy Fit', brandId: EASYFIT_LEDGER_BRAND_ID },
+  { name: 'Vivo 47', brandId: '61b80f51-709a-4408-9f11-04142a286baa' },
+] as const;
 
 const VIEWPORTS = [
   { width: 375, height: 812 },
@@ -113,6 +132,7 @@ type Surface = { name: string; path: string; states: readonly VisualState[] };
 
 const SURFACES: readonly Surface[] = [
   { name: 'Optimizer', path: '/scale?tab=performance', states: ['loaded', 'empty', 'error'] },
+  { name: GOOGLE_SURFACE, path: '/scale?tab=performance&platform=google_ads', states: ['loaded'] },
   { name: 'Jaina', path: '/scale?tab=jaina', states: ['loaded', 'empty', 'error'] },
   { name: 'Campaigns', path: '/scale?tab=campaigns', states: ['loaded'] },
   { name: 'Dashboard', path: '/scale?tab=dashboard', states: ['loaded'] },
@@ -121,15 +141,21 @@ const SURFACES: readonly Surface[] = [
   { name: 'Home Overview', path: '/dashboard?view=overview', states: ['loaded'] },
 ];
 
-/** PERFPLUS_VISUAL_SURFACES=Optimizer,Jaina re-runs only those surfaces, by name. A partial run
- *  says so in its notes: it covers less than the matrix. */
+/** PERFPLUS_VISUAL_SURFACES=Optimizer,Jaina re-runs only those surfaces, by name; a parent name
+ *  takes its children (`Optimizer` runs `Optimizer/Google` too), a child name runs alone. A
+ *  partial run says so in its notes: it covers less than the matrix. */
 const ONLY_SURFACES = (process.env.PERFPLUS_VISUAL_SURFACES ?? '')
   .split(',')
   .map((name) => name.trim())
   .filter(Boolean);
-const MATRIX_SURFACES = ONLY_SURFACES.length > 0
-  ? SURFACES.filter((surface) => ONLY_SURFACES.includes(surface.name))
-  : SURFACES;
+const MATRIX_SURFACES =
+  ONLY_SURFACES.length > 0
+    ? SURFACES.filter(
+        (surface) =>
+          ONLY_SURFACES.includes(surface.name) ||
+          ONLY_SURFACES.includes(surface.name.split('/')[0] ?? ''),
+      )
+    : SURFACES;
 
 /** The Optimizer's tablist (OptimizerTab.tsx), minus Overview which is the landing view. */
 const OPTIMIZER_TABS = ['Automations', 'Portfolios', 'Actions', 'Activity'] as const;
@@ -198,8 +224,8 @@ let memberId: string;
 let originalBrand: string | null = null;
 let optimizerBrand: string = EASYFIT_BRAND_ID;
 
-/** The envelope is printed ONCE: from the test when it completes and from afterAll when the
- *  test was aborted. The factory runner reads the last `{...counts...}` stdout line. */
+/** The envelope is printed ONCE, from afterAll — after the session cleanup it grades, whether
+ *  the test completed or was aborted. The factory runner reads the last `{...counts...}` line. */
 let envelopePrinted = false;
 function printEnvelopeOnce(): void {
   if (envelopePrinted) return;
@@ -269,11 +295,12 @@ async function resolveOptimizerBrand(): Promise<string> {
   return EASYFIT_BRAND_ID;
 }
 
-/** Pins the brand the pages will render, the way the in-app brand switcher does, read back
- *  through the page's own resolver so a switch that did not take fails here by name. */
+/** Pins the brand the pages will render, the way the in-app brand switcher does: the account's
+ *  preference and THIS session's pin (tier 1, which every page render reads first). Both are
+ *  written with the service role — the minted token expires after an hour, the run does not —
+ *  and the pin is read back, so a switch that did not take fails here by name. */
 async function selectBrand(brandId: string): Promise<void> {
-  const client = memberClient();
-  const { error } = await client
+  const { error } = await admin
     .schema('brand_profiles')
     .from('user_brand_preferences')
     .upsert(
@@ -281,8 +308,17 @@ async function selectBrand(brandId: string): Promise<void> {
       { onConflict: 'user_id' },
     );
   if (error) throw new Error(`[perfplus-l1v] brand switch failed: ${error.message}`);
-  const { data } = await client.schema('brand_profiles').rpc('resolve_active_brand_for_session');
-  expect(data, `the bench session must render brand ${brandId}`).toBe(brandId);
+  await pinSessionBrand(memberToken, brandId);
+}
+
+/** Runs `run` with `brandId` pinned, and the lane's seeded brand pinned back after it. */
+async function withBrand(brandId: string, run: () => Promise<void>): Promise<void> {
+  if (brandId !== EASYFIT_BRAND_ID) await selectBrand(brandId);
+  try {
+    await run();
+  } finally {
+    if (brandId !== EASYFIT_BRAND_ID) await selectBrand(EASYFIT_BRAND_ID);
+  }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -526,6 +562,172 @@ async function auditOptimizer(
   }
 }
 
+type ColorHit = { selector: string; detail: string };
+
+/**
+ * Google's identity colour lands only where the design puts it (PlatformChip.tsx, G2 "Platform
+ * identity"): the chip's surface and text, its dot, and the active tab's underline. Any other
+ * element painted in a --platform-google* token — a figure, a status, a border, a fill — is a
+ * hit. The tokens are resolved in the page's own theme, so dark reads dark.
+ * ponytail: exact rgb match only — a token mixed through an opacity modifier (oklab) is not
+ * seen; widen to a hue distance if one ever ships.
+ */
+async function platformColorHits(page: Page): Promise<{ hits: ColorHit[]; tokens: string[] }> {
+  return page.evaluate(() => {
+    const tokens = ['--platform-google', '--platform-google-soft', '--platform-google-fg'];
+    const rgbKey = (value: string): string | null => {
+      const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(value.trim());
+      if (!match || match[4] === '0') return null;
+      return `${match[1]},${match[2]},${match[3]}`;
+    };
+    const byRgb = new Map<string, string>();
+    const probe = document.createElement('span');
+    document.body.appendChild(probe);
+    for (const token of tokens) {
+      if (!getComputedStyle(document.documentElement).getPropertyValue(token).trim()) continue;
+      probe.style.color = `var(${token})`;
+      const key = rgbKey(getComputedStyle(probe).color);
+      if (key) byRgb.set(key, token);
+    }
+    probe.remove();
+
+    const label = (el: Element): string => {
+      const own = el.getAttribute('data-testid');
+      if (own) return `[data-testid=${own}]`;
+      const owner = el.parentElement?.closest('[data-testid]')?.getAttribute('data-testid');
+      const classes = [...el.classList].slice(0, 3).join('.');
+      return `${owner ? `[data-testid=${owner}] ` : ''}${el.tagName.toLowerCase()}${classes ? `.${classes}` : ''}`;
+    };
+    const hits: { selector: string; detail: string }[] = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none') continue;
+      if (el.closest('[data-testid="platform-chip"]')) continue;
+      const painted: [string, string][] = [];
+      const ownText = [...el.childNodes].some(
+        (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '',
+      );
+      if (ownText) painted.push(['color', style.color]);
+      painted.push(['background-color', style.backgroundColor]);
+      for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+        const width = Number.parseFloat(style.getPropertyValue(`border-${side}-width`));
+        if (width > 0 && style.getPropertyValue(`border-${side}-style`) !== 'none')
+          painted.push([`border-${side}-color`, style.getPropertyValue(`border-${side}-color`)]);
+      }
+      if (style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0)
+        painted.push(['outline-color', style.outlineColor]);
+      if (el instanceof SVGElement) {
+        painted.push(['fill', style.fill], ['stroke', style.stroke]);
+      }
+      const isDot =
+        box.width <= 12 &&
+        box.height <= 12 &&
+        Number.parseFloat(style.borderTopLeftRadius) >= Math.min(box.width, box.height) / 2;
+      const isSelectedTab =
+        el.getAttribute('role') === 'tab' && el.getAttribute('aria-selected') === 'true';
+      for (const [property, value] of painted) {
+        const token = byRgb.get(rgbKey(value) ?? '');
+        if (!token) continue;
+        if (isDot && property === 'background-color') continue;
+        if (isSelectedTab && property === 'border-bottom-color') continue;
+        hits.push({ selector: label(el), detail: `${property} is ${token} (${value})` });
+      }
+    }
+    return { hits, tokens: [...byRgb.values()] };
+  });
+}
+
+/** The Google tab of one brand, loaded: the detector's rules, then the platform-colour rule. */
+async function auditGoogleTab(
+  context: BrowserContext,
+  surface: Surface,
+  viewport: number,
+  theme: VisualTheme,
+  brand: (typeof GOOGLE_TAB_BRANDS)[number],
+): Promise<void> {
+  const key = {
+    surface: `${GOOGLE_SURFACE} · ${brand.name}`,
+    viewport,
+    theme,
+    state: 'loaded' as const,
+  };
+  const label = labelOf(key);
+  const page = await open(context, surface, 'loaded');
+  try {
+    const tab = page.locator('[data-testid="optimizer-overview"][data-platform-tab="google_ads"]');
+    const rendered = await tab
+      .waitFor({ state: 'visible', timeout: SETTLE_MS })
+      .then(() => true)
+      .catch(() => false);
+    if (!rendered) {
+      const landing = (
+        await page
+          .locator('main h2, main h3')
+          .first()
+          .textContent()
+          .catch(() => null)
+      )?.trim();
+      recorder.record(
+        `${label} google-tab`,
+        'FAIL',
+        `the Google tab never rendered (landed on "${landing ?? 'unknown'}")`,
+      );
+      notes.push(`${label}: the Google tab never rendered (landed on "${landing}")`);
+      expect.soft(rendered, `${label}: the Google tab rendered`).toBe(true);
+      return;
+    }
+    // The read leads; the portfolio rows arrive last (after the cycles), so the audit waits for
+    // them — or for the state that says why there are none.
+    await page
+      .locator(
+        '[data-testid="portfolio-rows"], [data-testid="google-empty-no-connection"], [data-testid="google-empty-no-grant"], [data-testid="google-empty-error"]',
+      )
+      .first()
+      .waitFor({ state: 'visible', timeout: SETTLE_MS })
+      .catch(() =>
+        notes.push(`${label}: no portfolio rows and no Google empty state after ${SETTLE_MS} ms`),
+      );
+    const report = await audit(page, key);
+    if (!report) return;
+    // What the audited tab was made of, for the run's notes.
+    const sections = await page.evaluate(() =>
+      [
+        'platform-metrics-google_ads',
+        'google-breakdown',
+        'google-tab',
+        'multiplatform-error',
+        'overview-recommendations',
+        'platform-cards-error',
+        'overview-links',
+        'portfolio-row',
+        'platform-portfolios-empty',
+        'figure',
+      ]
+        .map((id) => `${id}×${document.querySelectorAll(`[data-testid="${id}"]`).length}`)
+        .join(' '),
+    );
+    const { hits, tokens } = await platformColorHits(page);
+    if (tokens.length === 0) {
+      recorder.record(`${label} platform-color`, 'SKIP', 'no --platform-google token resolved');
+    } else if (hits.length === 0) {
+      recorder.record(
+        `${label} platform-color`,
+        'PASS',
+        `${tokens.join(', ')} only on chip, dot, tab underline`,
+      );
+    } else {
+      for (const hit of hits)
+        recorder.record(`${label} platform-color ${hit.selector}`, 'FAIL', hit.detail);
+      expect.soft(hits, `${label}: Google yellow outside chip/dot/underline`).toEqual([]);
+    }
+    notes.push(`${label}: sections ${sections}; platform-color ${hits.length} hit(s)`);
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
 async function auditSurface(
   context: BrowserContext,
   surface: Surface,
@@ -575,8 +777,22 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
   });
 
   test.afterAll(async () => {
-    if (originalBrand && originalBrand !== EASYFIT_BRAND_ID) await selectBrand(originalBrand);
-    printEnvelopeOnce();
+    try {
+      const cleanup = await revokeBenchSession(storageState, memberToken);
+      const restored = await restoreBrandPreference(memberId, originalBrand);
+      recorder.record(
+        'cleanup session',
+        cleanup.revoked && cleanup.pinsLeft === 0 ? 'PASS' : 'FAIL',
+        `session ${cleanup.sessionId}: ${cleanup.detail}; ${cleanup.pinsLeft} session pin(s) left`,
+      );
+      recorder.record(
+        'cleanup active brand',
+        restored === originalBrand ? 'PASS' : 'FAIL',
+        `preference ${restored ?? 'none'}, was ${originalBrand ?? 'none'}`,
+      );
+    } finally {
+      printEnvelopeOnce();
+    }
   });
 
   test('every Performance+ surface holds the visual invariants at 375/768/1280/1440, light and dark, loaded/empty/error', async ({
@@ -596,6 +812,17 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
         try {
           for (const surface of MATRIX_SURFACES) {
             for (const state of surface.states) {
+              if (surface.name === GOOGLE_SURFACE) {
+                // One visit per Google brand, each on its own pin; the lane's seeded brand is
+                // pinned back after it.
+                for (const brand of GOOGLE_TAB_BRANDS) {
+                  await test.step(`${surface.name} · ${brand.name} @${viewport.width} ${theme} ${state}`, () =>
+                    withBrand(brand.brandId, () =>
+                      auditGoogleTab(context, surface, viewport.width, theme, brand),
+                    ));
+                }
+                continue;
+              }
               await test.step(`${surface.name} @${viewport.width} ${theme} ${state}`, async () => {
                 if (surface.name !== 'Optimizer') {
                   await auditSurface(context, surface, viewport.width, theme, state);
@@ -603,16 +830,20 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
                 }
                 // The Optimizer renders on the brand that owns a portfolio; the rest of the
                 // lane stays on the seeded brand, so the pin is swapped around this step only.
-                if (optimizerBrand !== EASYFIT_BRAND_ID) await selectBrand(optimizerBrand);
-                try {
-                  await auditOptimizer(context, viewport.width, theme, state);
-                } finally {
-                  if (optimizerBrand !== EASYFIT_BRAND_ID) await selectBrand(EASYFIT_BRAND_ID);
-                }
+                await withBrand(optimizerBrand, () =>
+                  auditOptimizer(context, viewport.width, theme, state),
+                );
               });
             }
           }
         } finally {
+          // Carry the session the browser refreshed forward: a context starting from the minted
+          // cookie re-spends a rotated refresh token, which GoTrue reads as reuse once the chain
+          // has moved twice — and revokes the session mid-run.
+          storageState = {
+            cookies: (await context.storageState().catch(() => storageState)).cookies,
+            origins: [],
+          };
           await context.close().catch((error: unknown) => {
             notes.push(
               `context.close @${viewport.width} ${theme} failed: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`,
@@ -621,6 +852,5 @@ test.describe('Performance+ L1V — every surface × viewport × theme × state,
         }
       }
     }
-    printEnvelopeOnce();
   });
 });

@@ -149,6 +149,8 @@ export const templateRevisionErrorCodeSchema = z.enum([
   /** The exact file is still there, but its bytes no longer match what was published. */
   'template_revision_source_changed',
   'template_variant_archived',
+  /** Only a variant with a published revision can be the one a family opens on. */
+  'template_variant_unpublished',
   'template_revision_head_conflict',
   'template_revision_multi_source_edit_unsupported',
   'template_revision_multi_source_publish_unsupported',
@@ -240,6 +242,26 @@ export type TemplateRevisionVariant = z.infer<typeof templateRevisionVariantSche
 export const templateRevisionVariantsResponseSchema = z
   .object({ items: z.array(templateRevisionVariantSchema) })
   .strict();
+
+/**
+ * The variant a family opens on — its gallery card and the Render tab. No row means the Original.
+ * Its own read rather than a field on the strict variant shape: an unpromoted Frontend rejects
+ * unknown keys, so one default would fail every catalog read for the brand.
+ */
+export const templateVariantDefaultSchema = z
+  .object({ templateId: z.string().uuid(), variantId: z.string().uuid() })
+  .strict();
+export type TemplateVariantDefault = z.infer<typeof templateVariantDefaultSchema>;
+export const templateVariantDefaultsResponseSchema = z
+  .object({ items: z.array(templateVariantDefaultSchema) })
+  .strict();
+/** Making the Original the default clears the family's pointer. */
+export const setTemplateVariantDefaultRequestSchema = z
+  .object({ brandId: z.string().uuid() })
+  .strict();
+export type SetTemplateVariantDefaultRequest = z.infer<
+  typeof setTemplateVariantDefaultRequestSchema
+>;
 
 export const templateRevisionPreviewRequestSchema = z
   .object({

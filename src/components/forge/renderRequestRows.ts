@@ -1,5 +1,6 @@
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderAssistOp,
   type ApiRenderDeliveryTarget,
   type ApiRenderEncodeOverride,
   type ApiRenderFitReport,
@@ -529,45 +530,8 @@ export function toVariableMap(
 
 // --- spreadsheets ------------------------------------------------------------------------------
 
-/**
- * RFC 4180: quoted cells, `""` inside quotes, CRLF/LF/CR rows, newlines inside quotes kept.
- * Tab-separated when the first line has a tab — what a copy out of Sheets or Excel is. Blank
- * lines are dropped; a leading BOM (Excel's CSV export) is not a header character.
- */
-export function parseDelimited(text: string): string[][] {
-  const source = text.replace(/^\uFEFF/, '');
-  const firstLine = source.slice(0, source.search(/[\r\n]|$/));
-  const separator = firstLine.includes('\t') ? '\t' : ',';
-  const table: string[][] = [];
-  let row: string[] = [];
-  let cell = '';
-  let quoted = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index]!;
-    if (quoted) {
-      if (char !== '"') cell += char;
-      else if (source[index + 1] === '"') {
-        cell += '"';
-        index += 1;
-      } else quoted = false;
-    } else if (char === '"' && cell === '') quoted = true;
-    else if (char === separator) {
-      row.push(cell);
-      cell = '';
-    } else if (char === '\r' || char === '\n') {
-      if (char === '\r' && source[index + 1] === '\n') index += 1;
-      row.push(cell);
-      table.push(row);
-      row = [];
-      cell = '';
-    } else cell += char;
-  }
-  if (cell !== '' || row.length > 0) {
-    row.push(cell);
-    table.push(row);
-  }
-  return table.filter((cells) => cells.some((value) => value.trim() !== ''));
-}
+/** RFC 4180, tab / `;` / `,` sniffed — shared with the Backend bench so both read a sheet alike. */
+export { parseDelimited } from '@continuum/contracts';
 
 const csvCell = (value: string) =>
   /[",\r\n]|^\s|\s$/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -1119,6 +1083,91 @@ export function resetKey(rows: RequestRow[], key: string, ids: string[]): Reques
     };
   });
   return idleFrom(next, changed);
+}
+
+/**
+ * The AI button's answer applied to the rows, as the person would have made it by hand: a set
+ * value clears that field's evidence and blank, every changed row and what inherits from it is
+ * dry-run again, a deleted row takes its variations with it. New rows are the person's own, not
+ * proposals — the answer is one undo step. Returns which rows to leave selected: the ones the
+ * answer names, else the ones it added.
+ */
+export function applyAssistOps(
+  rows: RequestRow[],
+  ops: ApiRenderAssistOp[],
+  allOutputIds: string[],
+): { rows: RequestRow[]; added: string[]; selected: string[] | null } {
+  let next = rows;
+  const changed = new Set<string>();
+  const added: string[] = [];
+  let selected: string[] | null = null;
+  const touch = (ids: string[], change: (row: RequestRow) => RequestRow) => {
+    const targets = new Set(ids);
+    next = next.map((row) => {
+      if (!targets.has(row.id)) return row;
+      changed.add(row.id);
+      return change(row);
+    });
+  };
+  for (const op of ops) {
+    switch (op.op) {
+      case 'set':
+        touch(op.rowIds, (row) => {
+          const { [op.key]: _media, ...media } = row.media;
+          const { [op.key]: _evidence, ...evidence } = row.evidence ?? {};
+          return {
+            ...row,
+            values: { ...row.values, [op.key]: op.value },
+            media,
+            evidence,
+            clearedKeys: row.clearedKeys.filter((key) => key !== op.key),
+          };
+        });
+        break;
+      case 'add_rows': {
+        const ids = new Map<string, string>();
+        const existing = new Set(next.map((row) => row.id));
+        const fresh = op.rows.map((spec) => {
+          const id = newRowId();
+          ids.set(spec.ref, id);
+          const parentId = spec.parentRef
+            ? (ids.get(spec.parentRef) ?? (existing.has(spec.parentRef) ? spec.parentRef : null))
+            : null;
+          return {
+            ...seedRow([], spec.label, parentId),
+            id,
+            values: { ...spec.overrides },
+            outputIds: spec.outputIds.length ? spec.outputIds : parentId ? [] : [...allOutputIds],
+          };
+        });
+        next = [...next, ...fresh];
+        added.push(...fresh.map((row) => row.id));
+        break;
+      }
+      case 'delete_rows': {
+        const gone = descendantsOf(next, op.rowIds);
+        next = next.filter((row) => !gone.has(row.id));
+        break;
+      }
+      case 'set_outputs':
+        touch(op.rowIds, (row) => ({ ...row, outputIds: [...op.outputIds] }));
+        break;
+      case 'rename':
+        touch([op.rowId], (row) => ({ ...row, label: op.label }));
+        break;
+      case 'select':
+        selected = [...op.rowIds];
+        break;
+      case 'map':
+        break;
+    }
+  }
+  const present = new Set(next.map((row) => row.id));
+  return {
+    rows: idleFrom(next, new Set([...changed].filter((id) => present.has(id)))),
+    added,
+    selected: (selected ?? (added.length ? added : null))?.filter((id) => present.has(id)) ?? null,
+  };
 }
 
 // --- undo ------------------------------------------------------------------------------------

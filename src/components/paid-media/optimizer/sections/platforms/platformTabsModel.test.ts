@@ -5,6 +5,7 @@ import {
   connectedPlatforms,
   parsePlatformTab,
   platformTabLabel,
+  portfolioPlatforms,
   rendersManagedOverview,
 } from './platformTabsModel';
 
@@ -51,5 +52,17 @@ describe('rendersManagedOverview', () => {
     expect(rendersManagedOverview('meta')).toBe(true);
     expect(rendersManagedOverview('google_ads')).toBe(false);
     expect(rendersManagedOverview('tiktok_ads')).toBe(false);
+  });
+});
+
+describe('portfolioPlatforms', () => {
+  it("reads the list's platforms in Meta, Google, TikTok order, dropping unknown ones", () => {
+    expect(portfolioPlatforms(['google_ads', 'meta', 'snapchat'])).toEqual(['meta', 'google_ads']);
+    expect(portfolioPlatforms(['google_ads'])).toEqual(['google_ads']);
+  });
+
+  it('reads a list from before the platforms field as Meta, the platform every portfolio was on', () => {
+    expect(portfolioPlatforms(undefined)).toEqual(['meta']);
+    expect(portfolioPlatforms([])).toEqual(['meta']);
   });
 });

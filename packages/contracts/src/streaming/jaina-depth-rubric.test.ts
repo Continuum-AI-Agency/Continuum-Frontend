@@ -63,7 +63,7 @@ describe('depthVerdictOf', () => {
         'get_campaigns',
         'get_campaign_daily_trends',
         'get_ad_sets',
-        'get_breakdown_insights',
+        'get_breakdown_insights_summary',
         'get_top_ads',
       ),
       [{ category: 'actions', rows: [fullRow] }],

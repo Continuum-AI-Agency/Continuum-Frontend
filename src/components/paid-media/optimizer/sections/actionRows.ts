@@ -58,6 +58,18 @@ function readKey(value: Record<string, unknown> | null | undefined, key: string)
   return null;
 }
 
+/** '"gym near me" (exact), "gym" (phrase)' from the executor's [{text, matchType}]. */
+function termsText(terms: unknown): string | null {
+  if (!Array.isArray(terms)) return null;
+  const parts = terms.flatMap((term) => {
+    const text = (term as { text?: unknown } | null)?.text;
+    const match = (term as { matchType?: unknown } | null)?.matchType;
+    if (typeof text !== 'string' || text.trim() === '') return [];
+    return [`"${text}"${typeof match === 'string' ? ` (${match.toLowerCase()})` : ''}`];
+  });
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
 /** What this row changed, before → after. Never null: a row with no readable before/after
  *  still says WHICH field moved, because "something changed and we won't say what" is the
  *  failure mode this whole feed exists to end. */
@@ -90,6 +102,36 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
         unit: 'text',
         before: readKey(row.before, 'status'),
         after: readKey(row.after, 'status'),
+      };
+    // A platform write's own kinds (G4): the audit's prior/target, as the executor stored them.
+    case 'bid': {
+      const roas = (readKey(row.after, 'field') ?? readKey(row.before, 'field')) === 'target_roas';
+      const value = (side: Record<string, unknown> | null | undefined) => {
+        const raw = side?.value;
+        if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+        // tCPA travels in micros of the account currency; tROAS is a ratio.
+        return roas ? `${Math.round(raw * 100)}%` : (raw / 1_000_000).toFixed(2);
+      };
+      return {
+        label: roas ? 'Bid target (tROAS)' : 'Bid target (tCPA)',
+        unit: 'text',
+        before: value(row.before),
+        after: value(row.after),
+      };
+    }
+    case 'negatives':
+      return {
+        label: 'Negative keywords',
+        unit: 'text',
+        before: null,
+        after: termsText(row.after?.negatives),
+      };
+    case 'keyword':
+      return {
+        label: 'Keyword',
+        unit: 'text',
+        before: null,
+        after: termsText([row.after?.keyword]),
       };
     default:
       // 'convert' today (CBO → ABO), and whatever public.optimizer_list_actions emits next.
