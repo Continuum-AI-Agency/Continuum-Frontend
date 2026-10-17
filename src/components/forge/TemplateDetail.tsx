@@ -44,7 +44,6 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
-import { LineagePanel } from '@/components/forge/LineagePanel';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
@@ -54,7 +53,7 @@ import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateAuthoringEditor } from '@/components/forge/TemplateAuthoringEditor';
-import { type LayerDraftChange } from '@/components/forge/layerDraft';
+import type { LayerDraftChange } from '@/components/forge/layerDraft';
 import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
@@ -220,7 +219,6 @@ export function TemplateDetail({
   source,
   onBack,
   onOpenVariant,
-  onDeleteVariant,
   onRename,
   onRemove,
   onOpenRender,
@@ -239,7 +237,6 @@ export function TemplateDetail({
   initialTab?: string;
   /** The composition Edit layers opens on; the template's first when absent. */
   initialComp?: string;
-  onDeleteVariant?: (variant: import('@continuum/contracts').TemplateVariant) => void;
   onRename: (title: string) => void;
   onRemove?: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
@@ -1367,7 +1364,8 @@ export function TemplateDetail({
               <>
                 <CommentCount count={library.commentCount} />
                 <span className="tabular-nums text-muted-foreground">
-                  {library.versionCount} {library.versionCount === 1 ? 'version' : 'versions'}
+                  {library.versionCount}{' '}
+                  {library.versionCount === 1 ? 'file version' : 'file versions'}
                 </span>
               </>
             ) : null}
@@ -1729,10 +1727,7 @@ export function TemplateDetail({
               </TabsTrigger>
             ) : null}
             <TabsTrigger value="source" className="flex-none px-0 text-xs">
-              Source revision
-            </TabsTrigger>
-            <TabsTrigger value="history" className="flex-none px-0 text-xs">
-              History
+              Source file
             </TabsTrigger>
             <TabsTrigger value="details" className="flex-none px-0 text-xs">
               Details
@@ -1908,47 +1903,10 @@ export function TemplateDetail({
               assetId={assetId}
               expectedVersionId={source.versionId}
               onInspect={(assetId) => onOpenVariant?.(assetId, 'variants')}
-              onDelete={onDeleteVariant}
-              onCreated={async (variant) => {
-                await onChanged();
-                await onOpenVariant?.(variant.assetId);
-              }}
+              onBranch={(assetId) => onOpenVariant?.(assetId, 'layers')}
               onRender={onOpenRender}
               onEditLayers={() => setTab('layers')}
             />
-          </TabsContent>
-          <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-            {revisionCatalog ? (
-              <ol aria-label="Template revision history" className="space-y-3">
-                {revisionCatalog
-                  .flatMap((variant) =>
-                    variant.revisions.map((revision) => ({ variant, revision })),
-                  )
-                  .sort((a, b) => b.revision.createdAt.localeCompare(a.revision.createdAt))
-                  .map(({ variant, revision }) => (
-                    <li key={revision.id} className="rounded-md border p-3 text-xs">
-                      <p className="font-medium">
-                        {variant.name} · Revision {revision.number}
-                      </p>
-                      <p className="text-muted-foreground">
-                        {new Date(revision.createdAt).toLocaleString()} ·{' '}
-                        {revision.publications.length ? 'Published' : 'Draft'}
-                      </p>
-                      {onOpenVariant ? (
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => void onOpenVariant(revision.sourceAssetId, 'history')}
-                        >
-                          Inspect revision
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))}
-              </ol>
-            ) : (
-              <p className="text-xs text-muted-foreground">Reading revision history…</p>
-            )}
           </TabsContent>
           <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">

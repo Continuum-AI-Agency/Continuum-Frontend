@@ -666,7 +666,7 @@ export function RenderJobDetail({
               { icon: Layers, label: 'Set', value: setName },
               {
                 icon: FileDigit,
-                label: 'Template version',
+                label: 'Variant · revision',
                 value: <TemplateVersion job={job} />,
               },
               {

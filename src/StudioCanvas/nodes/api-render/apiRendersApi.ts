@@ -273,6 +273,7 @@ export const apiRendersApi = {
       templateKey?: string;
       status?: ApiRenderJob['status'];
       batchId?: string;
+      variantId?: string;
     },
   ) {
     return http.request<ApiRenderJobListResponse>({
@@ -285,6 +286,7 @@ export const apiRendersApi = {
         ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
         ...(options?.status ? { status: options.status } : {}),
         ...(options?.batchId ? { batchId: options.batchId } : {}),
+        ...(options?.variantId ? { variantId: options.variantId } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
     });

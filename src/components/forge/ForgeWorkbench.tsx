@@ -116,7 +116,6 @@ export function ForgeWorkbench({
   const [selectedShared, setSelectedShared] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
   const [removing, setRemoving] = useState<TemplateSourceSummary | null>(null);
-  const [removalReturn, setRemovalReturn] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   // Dropped files named like a template already here, waiting for "revision or new template?".
   const [sameName, setSameName] = useState<Array<{ file: File; source: TemplateSourceSummary }>>(
@@ -288,8 +287,7 @@ export function ForgeWorkbench({
         assetIds: [source.assetId],
       });
       if (!removed.includes(source.assetId)) throw new Error('The template file was not removed.');
-      if (selected === source.assetId) setSelected(removalReturn);
-      setRemovalReturn(null);
+      if (selected === source.assetId) setSelected(null);
       setRemoving(null);
       toast.success(`${sourceDisplayName(source)} removed from ${brandName ?? 'this brand'}`);
     } catch (error) {
@@ -542,10 +540,7 @@ export function ForgeWorkbench({
           source={current}
           onBack={() => open(null)}
           onRename={(title) => void rename(current.assetId, title)}
-          onRemove={() => {
-            setRemovalReturn(null);
-            setRemoving(current);
-          }}
+          onRemove={() => setRemoving(current)}
         />
       ) : current ? (
         <TemplateDetail
@@ -562,17 +557,8 @@ export function ForgeWorkbench({
             open(assetId, tab);
           }}
           onRename={(title) => void rename(current.assetId, title)}
-          onDeleteVariant={(variant) =>
-            exitGuard.runGuarded(() => {
-              setRemovalReturn(variant.rootAssetId);
-              setRemoving(variant.source);
-            })
-          }
           onRemove={() =>
-            exitGuard.runGuarded(() => {
-              setRemovalReturn(null);
-              setRemoving(current);
-            })
+            exitGuard.runGuarded(() => setRemoving(current))
           }
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}

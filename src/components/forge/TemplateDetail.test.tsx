@@ -226,18 +226,8 @@ mock.module('@/lib/library/templateSources', () => ({
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge,
   advanceTemplateForgeRun,
-  // The Versions and Source revision panels render for real, from these. Mocking the panels
-  // themselves would replace them for their own tests too: a multi-file Bun run shares mocks.
-  fetchTemplateLineage: async () => ({
-    connected: false,
-    known: false,
-    master: null,
-    currentMaster: null,
-    pinnedToOlderMaster: false,
-    roots: [],
-    log: [],
-    worktrees: [],
-  }),
+  // The Source file panel renders for real, from these. Mocking the panels themselves would
+  // replace them for their own tests too: a multi-file Bun run shares mocks.
   previewTemplateRebind,
   confirmTemplateRebind,
   repairTemplateText,
@@ -448,7 +438,7 @@ describe('TemplateDetail', () => {
     renderDetail();
     const comments = await screen.findByTitle('Comments in the Library');
     expect(comments.textContent).toBe('3 comments');
-    expect(screen.getByText('4 versions')).toBeTruthy();
+    expect(screen.getByText('4 file versions')).toBeTruthy();
     const href = screen.getByRole('link', { name: /Open in Library/ }).getAttribute('href') ?? '';
     expect(href.startsWith('/library?')).toBe(true);
     expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(ASSET);
@@ -575,7 +565,7 @@ describe('TemplateDetail', () => {
     expect(within(repair).getByText('Footage/hero.mov')).toBeTruthy();
     expect(repair.querySelector('input[type="file"]')).toBeTruthy();
     expect(
-      screen.getByRole('tab', { name: 'Source revision' }).getAttribute('aria-selected'),
+      screen.getByRole('tab', { name: 'Source file' }).getAttribute('aria-selected'),
     ).not.toBe('true');
   });
 

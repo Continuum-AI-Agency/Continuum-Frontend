@@ -393,7 +393,7 @@ export function RenderJobsGrid({
       },
       {
         id: 'version',
-        header: 'Template version',
+        header: 'Variant · revision',
         enableSorting: false,
         cell: ({ row: { original: job } }) => <TemplateVersion job={job} />,
       },

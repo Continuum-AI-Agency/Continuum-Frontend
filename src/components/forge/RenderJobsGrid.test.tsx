@@ -413,7 +413,7 @@ describe('RenderJobsGrid', () => {
     );
   }, 30_000);
 
-  test('the Template version column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
+  test('the Variant · revision column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
     const SHA = `${'a1b2c3d4e5'.repeat(6)}f1b2`;
     const OTHER_SHA = `${'0f9e8d7c6b'.repeat(6)}a0b1`;
     const pinned: ApiRenderJob = {
@@ -435,7 +435,7 @@ describe('RenderJobsGrid', () => {
       },
     };
     await renderLedger([pinned, revised, { ...BASE, id: 'job-legacy', label: 'Legacy' }], []);
-    expect(screen.getByRole('columnheader', { name: /Template version/ })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: /Variant · revision/ })).toBeTruthy();
     // The source revision and the day the render ran, the full digest one hover away.
     // `feat(forge): the ledger names the variant a render used, or says unchecked` (6104ec94)
     // wrapped the label so the variant can sit beside it, and the title moved to that
