@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { TextareaHTMLAttributes } from 'react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
@@ -52,6 +52,37 @@ describe('EditableCaption', () => {
     const field = screen.getByLabelText('Caption');
     fireEvent.blur(field);
     expect(screen.getByLabelText('Edit caption').tagName).toBe('BUTTON');
+  });
+
+  // The preview's second Escape reached nothing: the field unmounted with focus in it, so
+  // focus fell to <body>, outside every handler that closes the preview.
+  it('hands focus back to the Edit caption button when Escape leaves the field', () => {
+    render(<EditableCaption value="Hi" onChange={mock()} platform="instagram" />);
+    fireEvent.click(screen.getByLabelText('Edit caption'));
+    const field = screen.getByLabelText('Caption');
+    act(() => field.focus());
+
+    const escape = fireEvent.keyDown(field, { key: 'Escape' });
+
+    expect(escape).toBe(false);
+    const readout = screen.getByLabelText('Edit caption');
+    expect(document.activeElement).toBe(readout);
+  });
+
+  it('leaves focus where a pointer put it when the field blurs', () => {
+    render(
+      <>
+        <EditableCaption value="Hi" onChange={mock()} platform="instagram" />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    fireEvent.click(screen.getByLabelText('Edit caption'));
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    act(() => screen.getByLabelText('Caption').focus());
+    act(() => elsewhere.focus());
+
+    expect(screen.getByLabelText('Edit caption').tagName).toBe('BUTTON');
+    expect(document.activeElement).toBe(elsewhere);
   });
 });
 

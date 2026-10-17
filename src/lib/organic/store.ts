@@ -1,4 +1,5 @@
 import type { PublishPlatform } from '@continuum/contracts';
+import { replaceEqualDeep } from '@tanstack/react-query';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { makeCalendarDay } from '@/components/organic/primitives/calendar-utils';
@@ -12,6 +13,41 @@ import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import * as storeRegistry from '@/lib/storage/storeRegistry';
 
 export type CalendarDateRange = { from: string; to: string };
+
+// Drafts are matched by id, not position: a save moves the edited row's updated_at, and the
+// server's order with it, so by position every draft after it on that day looked changed.
+function shareUnchangedDay(prior: OrganicCalendarDay, day: OrganicCalendarDay): OrganicCalendarDay {
+  const priorDrafts = new Map(prior.slots.map((slot) => [slot.id, slot]));
+  const slots = day.slots.map((slot) => {
+    const priorDraft = priorDrafts.get(slot.id);
+    return priorDraft ? replaceEqualDeep(priorDraft, slot) : slot;
+  });
+  const sameSlots =
+    slots.length === prior.slots.length &&
+    slots.every((slot, index) => slot === prior.slots[index]);
+  const sameFields = replaceEqualDeep(prior, { ...day, slots: prior.slots }) === prior;
+  if (sameSlots && sameFields) return prior;
+  return { ...day, slots: sameSlots ? prior.slots : slots };
+}
+
+/**
+ * `next`, with every day and draft that did not change swapped for the object `previous`
+ * already holds. A refetch builds the whole set anew from the server, so each save echo
+ * handed every memoised cell a new day and re-rendered the entire grid for one edited draft.
+ */
+function shareUnchangedDays(
+  previous: OrganicCalendarDay[],
+  next: OrganicCalendarDay[],
+): OrganicCalendarDay[] {
+  const priorById = new Map(previous.map((day) => [day.id, day]));
+  const shared = next.map((day) => {
+    const prior = priorById.get(day.id);
+    return prior ? shareUnchangedDay(prior, day) : day;
+  });
+  const unchanged =
+    shared.length === previous.length && shared.every((day, index) => day === previous[index]);
+  return unchanged ? previous : shared;
+}
 
 /** One of the brand's connected accounts on a platform, as offered by the planner's switcher. */
 export type PlannerAccountOption = { id: string; label: string };
@@ -396,7 +432,8 @@ export const useCalendarStore = create<CalendarState>()(
       // Every write that changes WHAT the planner is looking at also un-hides it: a new
       // day set, a new timeframe, or a new view are all fresh things to see, and leaving
       // them hidden would look like the load failed.
-      setDays: (days) => set({ days, isViewCleared: false }),
+      setDays: (days) =>
+        set((state) => ({ days: shareUnchangedDays(state.days, days), isViewCleared: false })),
 
       markDraftEditPending: (draftId, fields) =>
         set((state) => {
@@ -428,13 +465,21 @@ export const useCalendarStore = create<CalendarState>()(
           return { pendingDraftEdits: next };
         }),
 
+      // Only the day holding the draft gets new arrays. Every memoised cell compares its day,
+      // so one caption keystroke used to hand all of them a fresh one; a miss changes nothing.
       updateDraft: (draftId, updater) =>
-        set((state) => ({
-          days: state.days.map((day) => ({
-            ...day,
-            slots: day.slots.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
-          })),
-        })),
+        set((state) => {
+          let matched = false;
+          const days = state.days.map((day) => {
+            if (!day.slots.some((slot) => slot.id === draftId)) return day;
+            matched = true;
+            return {
+              ...day,
+              slots: day.slots.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
+            };
+          });
+          return matched ? { days } : state;
+        }),
 
       moveDraft: (draftId, targetDayId) =>
         set((state) => {
@@ -590,7 +635,10 @@ export const useCalendarStore = create<CalendarState>()(
           return { selectedDraftIds: Array.from(next) };
         }),
 
-      clearDraftSelection: () => set({ selectedDraftIds: [] }),
+      // Every single-select click calls this; minting a fresh [] each time re-rendered
+      // every cell that reads the multi-selection.
+      clearDraftSelection: () =>
+        set((state) => (state.selectedDraftIds.length > 0 ? { selectedDraftIds: [] } : state)),
 
       toggleTrend: (trendId, maxSelections = 5) =>
         set((state) => {

@@ -302,17 +302,18 @@ export const platformBadgeVariants = cva(
 );
 
 export const cardVariants = cva(
-  'group relative w-full rounded-lg border px-3 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary overflow-hidden',
+  'group relative w-full rounded-lg border px-3 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
   {
     variants: {
       selected: {
         // The selected card drives the preview panel, so it has to win the cell at a
-        // glance: a full brand ring (not a tinted border alone) plus a brand fill.
-        true: 'z-10 border-brand-primary bg-brand-primary/10 ring-2 ring-brand-primary ring-offset-1 ring-offset-background',
+        // glance: a brand fill here, and the outline CalendarDraftCard adds (a ring here
+        // would lose the ring merge to the failed/streaming rings).
+        true: 'z-10 border-primary bg-primary/10',
         false: 'border-subtle bg-surface/70 hover:bg-surface',
       },
       multiSelected: {
-        true: 'border-2 border-brand-primary/50 bg-brand-primary/5',
+        true: 'border-2 border-primary/50 bg-primary/5',
         false: '',
       },
       streaming: {

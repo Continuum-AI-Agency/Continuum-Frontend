@@ -305,7 +305,11 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
     <ContextMenu>
       <ContextMenuTrigger
         render={
-          <div className="rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
+          // A size container: beside an open preview the planner is ~820-930px wide, and the
+          // row used to wrap there, pushing the grid down 33px on every selection. Below
+          // 68rem the secondary actions keep their icons and names but drop the visible
+          // label; below 58rem the two count badges fold away.
+          <div className="@container/planner-toolbar rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex items-center rounded-md border border-border bg-muted/35 p-0.5">
@@ -356,7 +360,10 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Badge variant="outline" className="text-2xs">
+                      <Badge
+                        variant="outline"
+                        className="text-2xs @max-[58rem]/planner-toolbar:hidden"
+                      >
                         Trends selected: {selectedTrendCount}
                         {typeof maxTrendSelections === 'number' ? ` of ${maxTrendSelections}` : ''}
                       </Badge>
@@ -372,7 +379,10 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                   <Tooltip>
                     <TooltipTrigger
                       render={
-                        <Badge variant="outline" className="text-2xs uppercase tracking-wide">
+                        <Badge
+                          variant="outline"
+                          className="text-2xs uppercase tracking-wide @max-[58rem]/planner-toolbar:hidden"
+                        >
                           {scopeLabel} · {postedContentCount} posted
                         </Badge>
                       }
@@ -393,13 +403,12 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     title="Fetch third-party posted content"
                   >
                     <RefreshCw
-                      className={
-                        isFetchingPostedContent
-                          ? 'mr-1 h-3.5 w-3.5 animate-spin'
-                          : 'mr-1 h-3.5 w-3.5'
-                      }
+                      className={cn(
+                        'mr-1 h-3.5 w-3.5 @max-[68rem]/planner-toolbar:mr-0',
+                        isFetchingPostedContent && 'animate-spin',
+                      )}
                     />
-                    Posts
+                    <span className="@max-[68rem]/planner-toolbar:sr-only">Posts</span>
                   </Button>
                 ) : null}
                 {/* Which of the brand's accounts this planner generates for and publishes to.
@@ -411,9 +420,10 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                   variant="outline"
                   aria-label="Open trends"
                   onClick={onOpenTrends}
+                  title="Open trends: what is moving for this brand right now"
                 >
-                  <Zap className="mr-1 h-3.5 w-3.5" />
-                  Trends
+                  <Zap className="mr-1 h-3.5 w-3.5 @max-[68rem]/planner-toolbar:mr-0" />
+                  <span className="@max-[68rem]/planner-toolbar:sr-only">Trends</span>
                 </Button>
                 <Separator orientation="vertical" className="h-5" />
                 {onGeneratePlan ? (
@@ -428,11 +438,14 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     title="Propose a content plan for this week. You approve it before anything is generated."
                   >
                     <Sparkles
-                      className={
-                        isProposingPlan ? 'mr-1 h-3.5 w-3.5 animate-pulse' : 'mr-1 h-3.5 w-3.5'
-                      }
+                      className={cn(
+                        'mr-1 h-3.5 w-3.5 @max-[68rem]/planner-toolbar:mr-0',
+                        isProposingPlan && 'animate-pulse',
+                      )}
                     />
-                    {isProposingPlan ? 'Proposing…' : 'Generate'}
+                    <span className="@max-[68rem]/planner-toolbar:sr-only">
+                      {isProposingPlan ? 'Proposing…' : 'Generate'}
+                    </span>
                   </Button>
                 ) : null}
                 {isGenerating ? (
@@ -461,8 +474,8 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     onClick={onClear}
                     title="Hides posts from this view. Nothing is deleted."
                   >
-                    <EyeOff className="mr-1 h-3.5 w-3.5" />
-                    Clear view
+                    <EyeOff className="mr-1 h-3.5 w-3.5 @max-[68rem]/planner-toolbar:mr-0" />
+                    <span className="@max-[68rem]/planner-toolbar:sr-only">Clear view</span>
                   </Button>
                 </DisabledControl>
               </div>

@@ -11,6 +11,7 @@ import { PlannerMatrix } from './PlannerMatrix';
 import type {
   CreatePostFormat,
   CreatePostMode,
+  CreatePostOptions,
   PlannerPlatform,
   PlannerPlatformKey,
 } from './planner-platforms';
@@ -27,6 +28,8 @@ type TimeGridCanvasProps = {
   postedContent: OrganicCalendarPostedContent[];
   selectedDraftId: string | null;
   selectedDraftIds: string[];
+  /** The published post open in the preview, if any; its chip reads as pressed. */
+  selectedPostId?: string | null;
   rangeTitle: string;
   rangeSubtitle?: string;
   onPreviousWeek: () => void;
@@ -55,6 +58,7 @@ type TimeGridCanvasProps = {
     data: OrganicSeedDragPayload,
     platformKey?: OrganicPlatformTag,
   ) => void;
+  onSelectPost: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
 };
 
 export function TimeGridCanvas({
@@ -63,6 +67,7 @@ export function TimeGridCanvas({
   postedContent,
   selectedDraftId,
   selectedDraftIds,
+  selectedPostId,
   rangeTitle,
   rangeSubtitle,
   onPreviousWeek,
@@ -80,8 +85,15 @@ export function TimeGridCanvas({
   onRealize,
   onStitch,
   onNativeDrop,
+  onSelectPost,
 }: TimeGridCanvasProps) {
   const todayId = React.useMemo(() => formatDayId(new Date()), []);
+  // Stable so the memoised day headers and cells, which all receive it, skip a selection.
+  const handleCreatePost = React.useCallback(
+    ({ dayId, platformKey, status, mode, format }: CreatePostOptions) =>
+      onCreatePost({ dayId, platform: platformKey, status, mode, format }),
+    [onCreatePost],
+  );
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-2 rounded-lg bg-card/50 p-2">
@@ -121,6 +133,7 @@ export function TimeGridCanvas({
         postedContent={postedContent}
         selectedDraftId={selectedDraftId}
         selectedDraftIds={selectedDraftIds}
+        selectedPostId={selectedPostId}
         todayId={todayId}
         onSelectDraft={onSelectDraft}
         onToggleSelection={onToggleSelection}
@@ -130,15 +143,8 @@ export function TimeGridCanvas({
         onRealize={onRealize}
         onStitch={onStitch}
         onNativeDrop={onNativeDrop}
-        onCreatePost={({ dayId, platformKey, status, mode, format }) =>
-          onCreatePost({
-            dayId,
-            platform: platformKey,
-            status,
-            mode,
-            format,
-          })
-        }
+        onCreatePost={handleCreatePost}
+        onSelectPost={onSelectPost}
       />
     </section>
   );

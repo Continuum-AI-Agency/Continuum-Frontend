@@ -2,21 +2,25 @@ import { plannerInstantFromDayTime, resolvePlannerTimeZone } from '@continuum/co
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
-import { mintSignedUrls, type SignablePath } from '@/lib/media/signed-urls';
+import { mintSignedUrls } from '@/lib/media/signed-urls';
 import {
   type CalendarPostAccountsByPlatform,
   calendarPostAccountsByPlatformSchema,
   calendarPostsResponseSchema,
-  formatCalendarDayId,
-  formatPostedDayId,
-  formatPostedTimeLabel,
   normalizeCalendarPlatform,
   shouldFetchExternalCalendarPosts,
 } from '@/lib/organic/calendar-posts';
-import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { normalizeInstagramOrganicMetricsResponse } from '@/lib/organic-metrics/normalize';
-import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  asRecord,
+  type DurableMedia,
+  dedupePosts,
+  durableMedia,
+  mapAnalyticsPost,
+  mapPublishedPost,
+  mapTimestampToPostFields,
+} from './postedContent';
 import { fetchPublishedPostPages, type PublishedPostRow } from './publishedPostPages';
 
 const calendarPostsRequestSchema = z.object({
@@ -40,24 +44,6 @@ type TikTokEdgeResponse = {
   videos?: TikTokVideo[];
 };
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return value as Record<string, unknown>;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function readMediaUrl(value: unknown): string | null {
-  if (typeof value === 'string' && value.trim().length > 0) return value.trim();
-  if (!Array.isArray(value)) return null;
-  const first = value.find(
-    (item): item is string => typeof item === 'string' && item.trim().length > 0,
-  );
-  return first?.trim() ?? null;
-}
-
 function toTimestampRange(start: string, end: string, timeZone: string) {
   const nextDay = new Date(`${end}T12:00:00.000Z`);
   nextDay.setUTCDate(nextDay.getUTCDate() + 1);
@@ -72,105 +58,6 @@ function toTimestampRange(start: string, end: string, timeZone: string) {
     endIso: nextStartIso
       ? new Date(Date.parse(nextStartIso) - 1).toISOString()
       : `${end}T23:59:59.999Z`,
-  };
-}
-
-function mapTimestampToPostFields(timestamp: string, timeZone: string) {
-  const parsed = new Date(timestamp);
-  const dayId = Number.isNaN(parsed.getTime())
-    ? timestamp.slice(0, 10)
-    : (formatPostedDayId(timestamp, timeZone) ?? formatCalendarDayId(parsed));
-  return {
-    dayId,
-    timeLabel: formatPostedTimeLabel(timestamp, timeZone),
-  };
-}
-
-// The durable {bucket, path} for a published post's thumbnail, read from the original
-// placement snapshot. `media_urls` holds the 24h signed URL sent to Meta at publish time
-// and expires; re-signing this durable ref on every read keeps the calendar thumbnail live.
-function durableThumbRef(snapshot: Record<string, unknown>): SignablePath | null {
-  const assets = Array.isArray(snapshot.publishingAssets) ? snapshot.publishingAssets : [];
-  for (const asset of assets) {
-    const record = asRecord(asset);
-    if (
-      record.kind === 'image' &&
-      typeof record.storagePath === 'string' &&
-      typeof record.bucket === 'string'
-    ) {
-      return { path: record.storagePath, bucket: record.bucket };
-    }
-  }
-  const ms = asRecord(asRecord(snapshot.creative).mediaSuggestion);
-  if (typeof ms.url === 'string' && typeof ms.bucket === 'string' && !/^https?:/i.test(ms.url)) {
-    return { path: ms.url, bucket: ms.bucket };
-  }
-  const hyperframe = asRecord(ms.hyperframe);
-  if (typeof hyperframe.coverPath === 'string' && typeof hyperframe.bucket === 'string') {
-    return { path: hyperframe.coverPath, bucket: hyperframe.bucket };
-  }
-  return null;
-}
-
-function mapPublishedPost(
-  row: PublishedPostRow,
-  freshThumbnailUrl: string | null,
-  timeZone: string,
-): OrganicCalendarPostedContent {
-  const snapshot = asRecord(row.content_snapshot);
-  const timestamp = row.published_at || row.created_at;
-  const caption = row.caption ?? readString(snapshot.caption) ?? undefined;
-  const title = readString(snapshot.title) ?? caption?.slice(0, 72) ?? 'Published post';
-  const mediaUrl =
-    freshThumbnailUrl ?? readMediaUrl(row.media_urls) ?? readMediaUrl(snapshot.mediaUrls);
-  const { dayId, timeLabel } = mapTimestampToPostFields(timestamp, timeZone);
-  const platform = normalizeCalendarPlatform(row.platform);
-
-  return {
-    id: `published:${platform}:${row.platform_post_id}`,
-    source: 'published_posts',
-    platform,
-    integrationAccountId: row.platform_account_id,
-    externalPostId: row.platform_post_id,
-    timestamp,
-    dayId,
-    timeLabel,
-    title,
-    caption,
-    permalink: row.permalink ?? undefined,
-    mediaType: row.post_type,
-    mediaUrl,
-    thumbnailUrl: mediaUrl,
-  };
-}
-
-function mapAnalyticsPost(args: {
-  post: OrganicPost;
-  platform: OrganicPlatformKey;
-  integrationAccountId: string;
-  timeZone: string;
-}): OrganicCalendarPostedContent | null {
-  const { post, platform, integrationAccountId, timeZone } = args;
-  if (!post.timestamp) return null;
-
-  const { dayId, timeLabel } = mapTimestampToPostFields(post.timestamp, timeZone);
-  const caption = post.caption ?? post.title;
-
-  return {
-    id: `external:${platform}:${post.id}`,
-    source: 'external',
-    platform,
-    integrationAccountId,
-    externalPostId: post.id,
-    timestamp: post.timestamp,
-    dayId,
-    timeLabel,
-    title: post.title ?? caption?.slice(0, 72) ?? 'Published post',
-    caption,
-    permalink: post.permalink,
-    mediaType: post.mediaType ?? post.mediaProductType,
-    mediaUrl: post.mediaUrl ?? null,
-    thumbnailUrl: post.thumbnailUrl ?? post.mediaUrl ?? null,
   };
 }
 
@@ -200,20 +87,6 @@ function mapTikTokVideo(
     mediaUrl: video.cover_image_url ?? null,
     thumbnailUrl: video.cover_image_url ?? null,
   };
-}
-
-function dedupePosts(posts: OrganicCalendarPostedContent[]): OrganicCalendarPostedContent[] {
-  const byKey = new Map<string, OrganicCalendarPostedContent>();
-  for (const post of posts) {
-    const key = post.permalink
-      ? `${post.platform}:url:${post.permalink}`
-      : `${post.platform}:id:${post.externalPostId ?? post.id}`;
-    const existing = byKey.get(key);
-    if (!existing || existing.source === 'external') {
-      byKey.set(key, post);
-    }
-  }
-  return Array.from(byKey.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }
 
 async function fetchExternalPosts(params: {
@@ -353,15 +226,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const thumbRefByRow = new Map<PublishedPostRow, SignablePath>();
+  const durableByRow = new Map<PublishedPostRow, DurableMedia>();
   for (const row of rows) {
-    const ref = durableThumbRef(asRecord(row.content_snapshot));
-    if (ref) thumbRefByRow.set(row, ref);
+    const media = durableMedia(asRecord(row.content_snapshot));
+    if (media) durableByRow.set(row, media);
   }
-  const signedByPath = await mintSignedUrls([...thumbRefByRow.values()]);
-  const databasePosts = rows.map((row) =>
-    mapPublishedPost(row, signedByPath.get(thumbRefByRow.get(row)?.path ?? '') ?? null, timeZone),
+  const signedByPath = await mintSignedUrls(
+    [...durableByRow.values()].flatMap((media) => ('ref' in media ? [media.ref] : [])),
   );
+  const databasePosts = rows.map((row) => {
+    const media = durableByRow.get(row);
+    const url = media && ('ref' in media ? signedByPath.get(media.ref.path) : media.url);
+    return mapPublishedPost(row, media && url ? { url, kind: media.kind } : null, timeZone);
+  });
   const shouldFetchExternal = shouldFetchExternalCalendarPosts({
     databaseCount: databasePosts.length,
     includeExternal: parsed.data.includeExternal,

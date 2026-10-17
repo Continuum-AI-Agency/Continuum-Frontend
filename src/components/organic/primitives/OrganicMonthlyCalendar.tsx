@@ -32,12 +32,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { isCarouselMediaType } from '@/lib/organic/carousel';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
+import { EMPTY_SELECTION, selectionWithin } from '../hooks/useCalendarSelection';
 import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
 import { formatDayId } from './calendar-utils';
 import { StatusDot } from './DraftCardBadges';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { draftStatusPresentation, statusFrameClasses } from './draft-card-styles';
+import { metricsPostHref } from './PlannerCell';
 import { PostedContentPreview } from './PostedContentQuickLook';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import type {
@@ -47,25 +49,17 @@ import type {
 } from './types';
 import { useDraftDragHandle } from './useDraftDragHandle';
 
+// Solid, and never `text-white` / `bg-slate-900`: the light theme remaps both (globals.css),
+// which put foreground-navy text on a pink chip and turned the TikTok chip into a card.
 const PLATFORM_CHIP_COLORS: Record<string, string> = {
-  instagram: 'bg-pink-500/80 text-white',
-  linkedin: 'bg-blue-600/80 text-white',
-  facebook: 'bg-indigo-500/80 text-white',
-  tiktok: 'bg-slate-900/80 text-white',
-  youtube: 'bg-red-500/80 text-white',
+  instagram: 'bg-pink-700 text-neutral-50',
+  linkedin: 'bg-blue-700 text-neutral-50',
+  facebook: 'bg-indigo-600 text-neutral-50',
+  tiktok: 'bg-neutral-900 text-neutral-50',
+  youtube: 'bg-red-700 text-neutral-50',
 };
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function metricsPostHref(post: OrganicCalendarPostedContent): string | null {
-  if (!post.integrationAccountId || !post.externalPostId) return null;
-  return `?${new URLSearchParams({
-    tab: 'metrics',
-    platform: post.platform,
-    accountId: post.integrationAccountId,
-    postId: post.externalPostId,
-  })}`;
-}
 
 type OrganicMonthlyCalendarProps = {
   days: OrganicCalendarDay[];
@@ -73,10 +67,14 @@ type OrganicMonthlyCalendarProps = {
   todayId?: string;
   platforms: PlannerPlatform[];
   postedContent: OrganicCalendarPostedContent[];
+  /** Names the account in the published post's hover preview. */
+  brandName?: string;
   selectedDraftId: string | null;
   /** The multi-selection, so a shift-click on a chip can extend it and a bulk drag can
       move the whole set — the same contract the week grid already honours. */
   selectedDraftIds?: string[];
+  /** The published post open in the preview, if any; its chip reads as pressed. */
+  selectedPostId?: string | null;
   onSelectDraft: (id: string) => void;
   onSelectPost: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
   onToggleSelection?: (id: string) => void;
@@ -110,11 +108,11 @@ function buildMonthGrid(weekStart: Date): Date[] {
   return cells;
 }
 
-function DraftChip({
+const DraftChip = React.memo(function DraftChip({
   draft,
   isSelected,
   isMultiSelected,
-  onClick,
+  onSelect,
   onToggleSelection,
   onRegenerate,
   onDelete,
@@ -122,14 +120,15 @@ function DraftChip({
   draft: OrganicCalendarDraft;
   isSelected: boolean;
   isMultiSelected: boolean;
-  onClick: () => void;
+  onSelect: (id: string) => void;
   onToggleSelection?: (id: string) => void;
   onRegenerate?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   const platform = draft.platforms[0] ?? 'instagram';
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
-  const { setNodeRef, listeners, attributes, isDragging, style } = useDraftDragHandle(draft.id);
+  const { setNodeRef, listeners, setActivatorNodeRef, activatorAttributes, isDragging, style } =
+    useDraftDragHandle(draft.id);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const { label: statusLabel } = draftStatusPresentation(draft.status);
 
@@ -154,15 +153,20 @@ function DraftChip({
           render={
             <ContextMenuTrigger
               render={
+                // The wrapper is what moves; the button is the one tab stop and the drag
+                // activator (see useDraftDragHandle).
                 <div
                   ref={setNodeRef}
                   style={style}
                   className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
                   {...listeners}
-                  {...attributes}
                 >
                   <button
                     type="button"
+                    ref={setActivatorNodeRef}
+                    {...activatorAttributes}
+                    data-draft-id={draft.id}
+                    aria-pressed={isSelected || isMultiSelected}
                     onClick={(e) => {
                       e.stopPropagation();
                       // A drag ends in a click on the chip it started from. Un-guarded, every
@@ -173,13 +177,15 @@ function DraftChip({
                         onToggleSelection(draft.id);
                         return;
                       }
-                      onClick();
+                      onSelect(draft.id);
                     }}
                     className={cn(
                       'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-xs font-medium leading-tight transition-opacity hover:opacity-80',
                       statusFrameClasses(platform, draft.status, 'chip'),
-                      isSelected && 'ring-1 ring-brand-primary ring-offset-1',
-                      isMultiSelected && !isSelected && 'ring-1 ring-brand-primary/50',
+                      // `primary`: Tailwind emits no `*-brand-primary` utilities (the token is
+                      // declared in :root, not @theme), so these rings drew in currentColor.
+                      isSelected && 'ring-1 ring-primary ring-offset-1',
+                      isMultiSelected && !isSelected && 'ring-1 ring-primary/50',
                     )}
                     // The chip is coloured by PLATFORM, so without the dot and this title the
                     // month grid was the one surface that named no status at all.
@@ -230,20 +236,28 @@ function DraftChip({
       </HoverCardContent>
     </HoverCard>
   );
-}
+});
 
-function PostedContentChip({
+const PostedContentChip = React.memo(function PostedContentChip({
   post,
+  brandName,
+  isSelected,
   onSelect,
 }: {
   post: OrganicCalendarPostedContent;
+  brandName?: string;
+  isSelected: boolean;
   onSelect: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
 }) {
-  const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? 'bg-emerald-600/80 text-white';
+  const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? 'bg-emerald-700 text-neutral-50';
   const isCarousel = isCarouselMediaType(post.mediaType);
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const metricsHref = metricsPostHref(post);
+  // Stable, so the memoised preview inside the hover card does not re-render on every open.
+  const viewMetrics = React.useCallback(() => {
+    if (metricsHref) router.push(metricsHref);
+  }, [metricsHref, router]);
 
   return (
     <HoverCard open={previewOpen} onOpenChange={setPreviewOpen} openDelay={300} closeDelay={100}>
@@ -251,9 +265,12 @@ function PostedContentChip({
         render={
           <button
             type="button"
+            data-post-id={post.id}
+            aria-pressed={isSelected}
             className={cn(
               'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
               colorClass,
+              isSelected && 'outline-2! outline-offset-1 outline-primary!',
             )}
             onClick={(event) => {
               event.stopPropagation();
@@ -277,12 +294,40 @@ function PostedContentChip({
       >
         <PostedContentPreview
           post={post}
-          onViewMetrics={metricsHref ? () => router.push(metricsHref) : undefined}
+          brandName={brandName}
+          onViewMetrics={metricsHref ? viewMetrics : undefined}
         />
       </HoverCardContent>
     </HoverCard>
   );
-}
+});
+
+const EMPTY_DRAFTS: OrganicCalendarDraft[] = [];
+const EMPTY_POSTS: OrganicCalendarPostedContent[] = [];
+
+type MonthDayCellProps = {
+  dayId: string;
+  dayOfMonth: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isFocused: boolean;
+  drafts: OrganicCalendarDraft[];
+  posts: OrganicCalendarPostedContent[];
+  brandName?: string;
+  /** Only when the selected draft is in this day, so a click re-renders two cells, not 35. */
+  selectedDraftId: string | null;
+  selectedDraftIdSet: ReadonlySet<string>;
+  /** Only when the opened published post is in this day, for the same reason. */
+  selectedPostId: string | null;
+  onFocusDay: (dayId: string) => void;
+  onOpenDay: (dayId: string) => void;
+  onCreatePost: (options: CreatePostOptions) => void;
+  onSelectDraft: (id: string) => void;
+  onSelectPost: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
+  onToggleSelection?: (id: string) => void;
+  onRegenerate?: (draftId: string) => void;
+  onDeleteDraft?: (draftId: string) => void;
+};
 
 /**
  * One month cell: the day's chips AND the drop target for a draft dragged onto that day.
@@ -290,28 +335,40 @@ function PostedContentChip({
  * The droppable id reuses the week grid's grammar verbatim, minus the platform segment —
  * `parsePlannerCellId` already reads a platform-less id as "reschedule the day, leave the
  * channel alone", which is the right semantics here because a month cell spans platforms.
+ *
+ * Memoised on primitive and stable props, never JSX children: each cell mounts a context
+ * menu and a "+" menu, and re-rendering all of them was ~1.3k component renders per click.
  */
-function MonthDayCell({
+const MonthDayCell = React.memo(function MonthDayCell({
   dayId,
+  dayOfMonth,
   isCurrentMonth,
   isToday,
   isFocused,
+  drafts,
+  posts,
+  brandName,
+  selectedDraftId,
+  selectedDraftIdSet,
+  selectedPostId,
   onFocusDay,
-  children,
-}: {
-  dayId: string;
-  isCurrentMonth: boolean;
-  isToday: boolean;
-  isFocused: boolean;
-  onFocusDay: (dayId: string) => void;
-  children: React.ReactNode;
-}) {
+  onOpenDay,
+  onCreatePost,
+  onSelectDraft,
+  onSelectPost,
+  onToggleSelection,
+  onRegenerate,
+  onDeleteDraft,
+}: MonthDayCellProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `planner-cell::${dayId}`,
     data: { type: 'planner-cell', dayId },
   });
+  const visibleDrafts = drafts.slice(0, Math.max(0, 3 - Math.min(posts.length, 2)));
+  const visiblePosts = posts.slice(0, Math.max(1, 3 - visibleDrafts.length));
+  const overflowCount = drafts.length + posts.length - visibleDrafts.length - visiblePosts.length;
 
-  return (
+  const cell = (
     // Clicking the cell (not a chip) focuses the day, so the toolbar "+" and the
     // right-click "New post" target it. DraftChip stops propagation. No keyboard handler
     // by design: this is a pointer shortcut to a target keyboard users reach directly —
@@ -331,10 +388,76 @@ function MonthDayCell({
         isFocused && 'ring-2 ring-inset ring-primary/40',
       )}
     >
-      {children}
+      <div className="mb-1 flex items-center justify-between">
+        {isToday ? (
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-2xs font-semibold text-primary-foreground">
+            {dayOfMonth}
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-muted-foreground">{dayOfMonth}</span>
+        )}
+        {/* No platformKey: the workspace picks the brand's default platform,
+            which a hardcoded "instagram" here would override. */}
+        <AddPostMenu dayId={dayId} onCreatePost={onCreatePost} align="start">
+          <button
+            type="button"
+            aria-label="Add post"
+            className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <Plus className="size-3 text-muted-foreground" />
+          </button>
+        </AddPostMenu>
+      </div>
+
+      <div className="flex flex-col gap-0.5">
+        {visibleDrafts.map((draft) => (
+          <DraftChip
+            key={draft.id}
+            draft={draft}
+            isSelected={draft.id === selectedDraftId}
+            isMultiSelected={selectedDraftIdSet.has(draft.id)}
+            onSelect={onSelectDraft}
+            onToggleSelection={onToggleSelection}
+            onRegenerate={onRegenerate}
+            onDelete={onDeleteDraft}
+          />
+        ))}
+        {visiblePosts.map((post) => (
+          <PostedContentChip
+            key={post.id}
+            post={post}
+            brandName={brandName}
+            isSelected={post.id === selectedPostId}
+            onSelect={onSelectPost}
+          />
+        ))}
+        {overflowCount > 0 && (
+          <button
+            type="button"
+            data-day-overflow={dayId}
+            className="pl-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline"
+            aria-label={`Show all ${drafts.length + posts.length} posts for ${dayId}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenDay(dayId);
+            }}
+          >
+            +{overflowCount} more
+          </button>
+        )}
+      </div>
     </div>
   );
-}
+
+  // Right-click on the cell offers the same create actions as its "+" menu, preset to this
+  // day. No platformKey by design: the workspace picks the brand's default platform (see
+  // the "+" note above).
+  return (
+    <AddPostContextMenu dayId={dayId} onCreatePost={onCreatePost}>
+      {cell}
+    </AddPostContextMenu>
+  );
+});
 
 export function OrganicMonthlyCalendar({
   days,
@@ -342,6 +465,7 @@ export function OrganicMonthlyCalendar({
   todayId: brandTodayId,
   selectedDraftId,
   selectedDraftIds,
+  selectedPostId = null,
   onSelectDraft,
   onSelectPost,
   onToggleSelection,
@@ -352,15 +476,23 @@ export function OrganicMonthlyCalendar({
   onRegenerate,
   onDeleteDraft,
   postedContent,
+  brandName,
 }: OrganicMonthlyCalendarProps) {
   const todayId = brandTodayId ?? formatDayId(new Date());
   const selectedDraftIdSet = React.useMemo(
-    () => new Set(selectedDraftIds ?? []),
+    () => (selectedDraftIds?.length ? new Set(selectedDraftIds) : EMPTY_SELECTION),
     [selectedDraftIds],
   );
   const focusedDayId = useCalendarStore((state) => state.focusedDayId);
   const setFocusedDayId = useCalendarStore((state) => state.setFocusedDayId);
   const [openDayId, setOpenDayId] = React.useState<string | null>(null);
+  const handleOpenDay = React.useCallback(
+    (dayId: string) => {
+      setFocusedDayId(dayId);
+      setOpenDayId(dayId);
+    },
+    [setFocusedDayId],
+  );
 
   const draftsByDayId = React.useMemo(() => {
     const map = new Map<string, OrganicCalendarDraft[]>();
@@ -431,87 +563,45 @@ export function OrganicMonthlyCalendar({
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div className="grid grid-cols-7" style={{ gridAutoRows: 'minmax(108px, 1fr)' }}>
+      <div data-planner-scroller="month" className="min-h-0 flex-1 overflow-auto">
+        {/* min-h-full gives the 1fr rows a definite height to share, so five or six weeks
+            fill the region instead of stopping at 108px each over a dead band. */}
+        <div
+          data-planner-content="month"
+          className="grid min-h-full grid-cols-7"
+          style={{ gridAutoRows: 'minmax(108px, 1fr)' }}
+        >
           {gridCells.map((date) => {
             const dayId = formatDayId(date);
-            const isCurrentMonth = date.getMonth() === currentMonth;
-            const isToday = dayId === todayId;
-            const drafts = draftsByDayId.get(dayId) ?? [];
-            const posts = postedByDayId.get(dayId) ?? [];
-            const visibleDrafts = drafts.slice(0, Math.max(0, 3 - Math.min(posts.length, 2)));
-            const visiblePosts = posts.slice(0, Math.max(1, 3 - visibleDrafts.length));
-            const overflowCount =
-              drafts.length + posts.length - visibleDrafts.length - visiblePosts.length;
+            const drafts = draftsByDayId.get(dayId) ?? EMPTY_DRAFTS;
+            const posts = postedByDayId.get(dayId) ?? EMPTY_POSTS;
+            const daySelection = selectionWithin(drafts, selectedDraftId, selectedDraftIdSet);
 
             return (
-              // Right-click on the cell offers the same create actions as its "+"
-              // menu, preset to this day. No platformKey by design: the workspace
-              // picks the brand's default platform (see the "+" note below).
-              <AddPostContextMenu key={dayId} dayId={dayId} onCreatePost={onCreatePost}>
-                <MonthDayCell
-                  dayId={dayId}
-                  isCurrentMonth={isCurrentMonth}
-                  isToday={isToday}
-                  isFocused={dayId === focusedDayId}
-                  onFocusDay={setFocusedDayId}
-                >
-                  <div className="mb-1 flex items-center justify-between">
-                    {isToday ? (
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-2xs font-semibold text-primary-foreground">
-                        {date.getDate()}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {date.getDate()}
-                      </span>
-                    )}
-                    {/* No platformKey: the workspace picks the brand's default platform,
-                      which a hardcoded "instagram" here would override. */}
-                    <AddPostMenu dayId={dayId} onCreatePost={onCreatePost} align="start">
-                      <button
-                        type="button"
-                        aria-label="Add post"
-                        className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                      >
-                        <Plus className="size-3 text-muted-foreground" />
-                      </button>
-                    </AddPostMenu>
-                  </div>
-
-                  <div className="flex flex-col gap-0.5">
-                    {visibleDrafts.map((draft) => (
-                      <DraftChip
-                        key={draft.id}
-                        draft={draft}
-                        isSelected={draft.id === selectedDraftId}
-                        isMultiSelected={selectedDraftIdSet.has(draft.id)}
-                        onClick={() => onSelectDraft(draft.id)}
-                        onToggleSelection={onToggleSelection}
-                        onRegenerate={onRegenerate}
-                        onDelete={onDeleteDraft}
-                      />
-                    ))}
-                    {visiblePosts.map((post) => (
-                      <PostedContentChip key={post.id} post={post} onSelect={onSelectPost} />
-                    ))}
-                    {overflowCount > 0 && (
-                      <button
-                        type="button"
-                        className="pl-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline"
-                        aria-label={`Show all ${drafts.length + posts.length} posts for ${dayId}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setFocusedDayId(dayId);
-                          setOpenDayId(dayId);
-                        }}
-                      >
-                        +{overflowCount} more
-                      </button>
-                    )}
-                  </div>
-                </MonthDayCell>
-              </AddPostContextMenu>
+              <MonthDayCell
+                key={dayId}
+                dayId={dayId}
+                dayOfMonth={date.getDate()}
+                isCurrentMonth={date.getMonth() === currentMonth}
+                isToday={dayId === todayId}
+                isFocused={dayId === focusedDayId}
+                drafts={drafts}
+                posts={posts}
+                brandName={brandName}
+                selectedDraftId={daySelection.selectedDraftId}
+                selectedDraftIdSet={daySelection.selectedDraftIdSet}
+                selectedPostId={
+                  posts.some((post) => post.id === selectedPostId) ? selectedPostId : null
+                }
+                onFocusDay={setFocusedDayId}
+                onOpenDay={handleOpenDay}
+                onCreatePost={onCreatePost}
+                onSelectDraft={onSelectDraft}
+                onSelectPost={onSelectPost}
+                onToggleSelection={onToggleSelection}
+                onRegenerate={onRegenerate}
+                onDeleteDraft={onDeleteDraft}
+              />
             );
           })}
         </div>

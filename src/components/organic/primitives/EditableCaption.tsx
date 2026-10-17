@@ -122,6 +122,16 @@ export function EditableCaption({
   editable?: boolean;
 }) {
   const [editing, setEditing] = React.useState(false);
+  // Leaving the field by keyboard unmounts it, which drops focus to <body>: the next Escape
+  // then reached nothing, and Tab started over from the top of the page. Focus lands back on
+  // the readout that opened the field instead. A click away keeps focus where it went.
+  const readoutRef = React.useRef<HTMLButtonElement>(null);
+  const refocusReadoutRef = React.useRef(false);
+  React.useEffect(() => {
+    if (editing || !refocusReadoutRef.current) return;
+    refocusReadoutRef.current = false;
+    readoutRef.current?.focus();
+  }, [editing]);
 
   // Read-only view mode: faithful text, no click-to-edit button or textarea.
   if (!editable) {
@@ -141,6 +151,7 @@ export function EditableCaption({
     const hasText = value.trim().length > 0;
     return (
       <button
+        ref={readoutRef}
         type="button"
         onClick={() => setEditing(true)}
         aria-label={
@@ -169,6 +180,7 @@ export function EditableCaption({
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
+            refocusReadoutRef.current = true;
             setEditing(false);
           }
         }}

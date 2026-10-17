@@ -34,7 +34,8 @@ function DraggableDraftCardComponent({
   onPreview,
 }: DraggableDraftCardProps) {
   const reduceMotion = useReducedMotion();
-  const { attributes, listeners, setNodeRef, isDragging, style } = useDraftDragHandle(draft.id);
+  const { listeners, setNodeRef, setActivatorNodeRef, activatorAttributes, isDragging, style } =
+    useDraftDragHandle(draft.id);
 
   return (
     <motion.div
@@ -55,7 +56,6 @@ function DraggableDraftCardComponent({
       }
       style={style}
       {...listeners}
-      {...attributes}
     >
       <CalendarDraftCard
         draft={draft}
@@ -69,6 +69,8 @@ function DraggableDraftCardComponent({
         onRealize={onRealize}
         onStitch={onStitch}
         isDragging={isDragging}
+        dragActivatorRef={setActivatorNodeRef}
+        dragActivatorAttributes={activatorAttributes}
         onMouseEnter={() => onPreview?.(draft)}
         onMouseLeave={() => onPreview?.(null)}
       />

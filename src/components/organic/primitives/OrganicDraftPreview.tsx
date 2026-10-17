@@ -46,13 +46,6 @@ import {
   PublishOptionsPanel,
 } from '@/components/organic/publish-options/PublishOptionsPanel';
 import { Button } from '@/components/ui/button';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
@@ -89,7 +82,14 @@ import { PostCommandMenu } from './PostCommandMenu';
 import { PostMetaChips } from './PostMetaChips';
 import { type DropZoneFallbackAction, PreviewMediaDropZone } from './PreviewMediaDropZone';
 import { SocialPostFrame } from './SocialPostFrame';
-import { resolvePreviewAspectRatio, resolvePreviewMaxWidth } from './social-preview-utils';
+import {
+  frameDayLabel,
+  frameFormatLabel,
+  type LoadedMediaSize,
+  loadedMediaSize,
+  previewFormat,
+  resolvePreviewFrame,
+} from './social-preview-utils';
 import type { OrganicCalendarDraft } from './types';
 
 interface OrganicDraftPreviewProps {
@@ -140,6 +140,9 @@ type PreviewSlide = {
   kind: DraftMediaKind;
   /** Poster frame for a video slide; `null` for an image. */
   poster: string | null;
+  /** Stored pixel size, when the asset record carries one. Sizes the preview frame. */
+  width?: number | null;
+  height?: number | null;
 };
 
 // Storage-first: slides are durable published assets (storageUrl, refreshed by
@@ -158,17 +161,22 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
       storagePath: a.storagePath,
       kind: a.kind === 'video' ? 'video' : 'image',
       poster: a.kind === 'video' && hasText(reelPoster) ? reelPoster.trim() : null,
+      width: a.width,
+      height: a.height,
     }));
   }
 
   const primary = resolveDraftMedia(draft);
   if (primary) {
+    const suggestion = draft.mediaSuggestion;
     return [
       {
         storageUrl: primary.url,
         storagePath: primary.url,
         kind: primary.kind,
         poster: primary.poster,
+        width: suggestion?.width ?? suggestion?.hyperframe?.width,
+        height: suggestion?.height ?? suggestion?.hyperframe?.height,
       },
     ];
   }
@@ -177,6 +185,7 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
 
 // One renderer for a slide, whatever its kind — ChatMediaThumb exists precisely
 // because every earlier surface used an <img> and so rendered MP4s into image tags.
+// Transparent, so a full-screen frame's black shows through where it letterboxes.
 function PreviewSlideMedia({ slide, alt }: { slide: PreviewSlide; alt: string }) {
   return (
     <ChatMediaThumb
@@ -187,7 +196,7 @@ function PreviewSlideMedia({ slide, alt }: { slide: PreviewSlide; alt: string })
         kind: slide.kind,
         name: alt,
       }}
-      className="absolute inset-0 rounded-none"
+      className="absolute inset-0 rounded-none bg-transparent"
     />
   );
 }
@@ -201,6 +210,9 @@ type SlideNavProps = {
   // both computed from the same captured value and netted +1 for two clicks.
   onStepSlide: (delta: number) => void;
   onEnlargeSlide: (position: number) => void;
+  // Full-screen frames (reel, story, TikTok photo post) carry their own chrome in the
+  // corners and along the bottom, so the slide chrome steps out of the way there.
+  overlayChrome?: boolean;
 };
 
 // The slide chrome shared by the editable and read-only media areas — creative,
@@ -213,10 +225,13 @@ function CarouselSlideNav({
   onSelectSlide,
   onStepSlide,
   onEnlargeSlide,
+  overlayChrome = false,
 }: SlideNavProps & { alt: string }) {
   const total = slides.length;
   const activeSlide = slides[activeIndex];
   if (!activeSlide) return null;
+  const roundButton =
+    'absolute flex h-7 w-7 items-center justify-center rounded-full bg-neutral-950/55 text-neutral-50 transition-colors';
 
   return (
     <>
@@ -233,13 +248,15 @@ function CarouselSlideNav({
         className="group/enlarge absolute inset-0 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label="Enlarge creative"
       >
-        <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white transition-colors group-hover/enlarge:bg-black/60">
-          <Maximize2 className="h-3.5 w-3.5" />
-        </span>
+        {!overlayChrome && (
+          <span className={cn(roundButton, 'left-2 top-2 group-hover/enlarge:bg-neutral-950/75')}>
+            <Maximize2 className="h-3.5 w-3.5" />
+          </span>
+        )}
       </button>
 
-      {total > 1 && (
-        <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white tabular-nums">
+      {total > 1 && !overlayChrome && (
+        <div className="absolute right-2 top-2 rounded-full bg-neutral-950/55 px-2 py-0.5 text-sm font-semibold text-neutral-50 tabular-nums">
           {activeIndex + 1}/{total}
         </div>
       )}
@@ -251,7 +268,7 @@ function CarouselSlideNav({
             e.stopPropagation();
             onStepSlide(-1);
           }}
-          className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          className={cn(roundButton, 'left-2 top-1/2 -translate-y-1/2 hover:bg-neutral-950/75')}
           aria-label="Previous slide"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -265,7 +282,7 @@ function CarouselSlideNav({
             e.stopPropagation();
             onStepSlide(1);
           }}
-          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          className={cn(roundButton, 'right-2 top-1/2 -translate-y-1/2 hover:bg-neutral-950/75')}
           aria-label="Next slide"
         >
           <ChevronRight className="h-4 w-4" />
@@ -273,7 +290,12 @@ function CarouselSlideNav({
       )}
 
       {total > 1 && (
-        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1">
+        <div
+          className={cn(
+            'absolute left-1/2 flex -translate-x-1/2 items-center gap-1',
+            overlayChrome ? 'top-3' : 'bottom-2',
+          )}
+        >
           {slides.map((_, position) => (
             <button
               key={position}
@@ -284,7 +306,7 @@ function CarouselSlideNav({
               }}
               className={cn(
                 'h-1.5 rounded-full transition-all',
-                position === activeIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
+                position === activeIndex ? 'w-4 bg-neutral-50' : 'w-1.5 bg-neutral-50/50',
               )}
               aria-label={`Slide ${position + 1}`}
             />
@@ -292,6 +314,49 @@ function CarouselSlideNav({
         </div>
       )}
     </>
+  );
+}
+
+// Facebook and LinkedIn show a multi-image post as a collage, not a pager: two side by
+// side, three as one tall and two stacked, four or more as a 2×2 with "+N" on the last.
+function SlideCollage({
+  slides,
+  alt,
+  aspectRatio,
+  onEnlargeSlide,
+}: {
+  slides: PreviewSlide[];
+  alt: string;
+  aspectRatio: number;
+  onEnlargeSlide: (position: number) => void;
+}) {
+  const shown = slides.slice(0, 4);
+  const hidden = slides.length - shown.length;
+  return (
+    <div
+      className={cn('grid w-full grid-cols-2 gap-0.5 bg-card', shown.length > 2 && 'grid-rows-2')}
+      style={{ aspectRatio: `${aspectRatio}` }}
+    >
+      {shown.map((slide, position) => (
+        <button
+          key={`${slide.storagePath}-${position}`}
+          type="button"
+          onClick={() => onEnlargeSlide(position)}
+          aria-label={`Enlarge slide ${position + 1}`}
+          className={cn(
+            'relative min-h-0 overflow-hidden cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            shown.length === 3 && position === 0 && 'row-span-2',
+          )}
+        >
+          <PreviewSlideMedia slide={slide} alt={`${alt} — slide ${position + 1}`} />
+          {hidden > 0 && position === shown.length - 1 && (
+            <span className="absolute inset-0 flex items-center justify-center bg-neutral-950/55 text-lg font-semibold text-neutral-50">
+              +{hidden}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -323,7 +388,6 @@ function InteractiveCarouselMediaArea({
   slides,
   alt,
   aspectRatio,
-  borderClass = 'border-b border-border/70',
   slotId,
   onActivate,
   onNativeDrop,
@@ -344,11 +408,11 @@ function InteractiveCarouselMediaArea({
   isEnriching,
   onEnlargeFrame,
   onEnlargeSlide,
+  overlayChrome,
 }: SlideNavProps & {
   draft: OrganicCalendarDraft;
   alt: string;
   aspectRatio: number;
-  borderClass?: string;
   slotId: string;
   onActivate: () => void;
   onNativeDrop?: (assetId: string) => void;
@@ -443,7 +507,7 @@ function InteractiveCarouselMediaArea({
         onSelectLibrary={onSelectLibrary}
         onFilesChosen={onFilesChosen}
         aspectRatio={aspectRatio}
-        className={cn('w-full', borderClass)}
+        className="w-full"
         error={placement?.error}
       >
         <CarouselSlideNav
@@ -453,6 +517,7 @@ function InteractiveCarouselMediaArea({
           onSelectSlide={onSelectSlide}
           onStepSlide={onStepSlide}
           onEnlargeSlide={onEnlargeSlide}
+          overlayChrome={overlayChrome}
         />
 
         {showStoryboard && (
@@ -492,40 +557,30 @@ function ReadOnlyCarouselMediaArea({
   slides,
   alt,
   aspectRatio,
-  borderClass = 'border-b border-border/70',
   activeIndex,
   onSelectSlide,
   onStepSlide,
   onEnlargeSlide,
+  overlayChrome,
+  collage = false,
 }: SlideNavProps & {
   alt: string;
   aspectRatio: number;
-  borderClass?: string;
+  collage?: boolean;
 }) {
-  if (slides.length === 0) {
+  if (collage && slides.length > 1) {
     return (
-      <div
-        className={cn(
-          'flex w-full items-center justify-center bg-muted/30 text-center',
-          borderClass,
-        )}
-        style={{ aspectRatio: `${aspectRatio}` }}
-      >
-        <div className="px-4 text-center">
-          <p className="text-xs font-medium text-muted-foreground">No media</p>
-          <p className="mt-1 text-2xs text-muted-foreground">
-            Edit this draft to add creative before publishing.
-          </p>
-        </div>
-      </div>
+      <SlideCollage
+        slides={slides}
+        alt={alt}
+        aspectRatio={aspectRatio}
+        onEnlargeSlide={onEnlargeSlide}
+      />
     );
   }
 
   return (
-    <div
-      className={cn('relative w-full overflow-hidden bg-muted/20', borderClass)}
-      style={{ aspectRatio: `${aspectRatio}` }}
-    >
+    <div className="relative w-full overflow-hidden" style={{ aspectRatio: `${aspectRatio}` }}>
       <CarouselSlideNav
         slides={slides}
         activeIndex={activeIndex}
@@ -533,6 +588,7 @@ function ReadOnlyCarouselMediaArea({
         onSelectSlide={onSelectSlide}
         onStepSlide={onStepSlide}
         onEnlargeSlide={onEnlargeSlide}
+        overlayChrome={overlayChrome}
       />
     </div>
   );
@@ -717,11 +773,15 @@ function HashtagTiers({
 }
 
 export function OrganicDraftPreview({
-  draft,
+  draft: storedDraft,
   brandName,
   brandProfileId,
   onApprove,
 }: OrganicDraftPreviewProps) {
+  // Typed text reaches the store once per burst; until then only the editor's copy has it, so
+  // everything this panel shows, gates and publishes reads that copy.
+  const fieldEditor = useDraftFieldEditor(storedDraft);
+  const { draft } = fieldEditor;
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   // The day this draft currently sits on. A time change is a schedule change, and the
   // route composes the instant from (day, time-of-day) — so the day has to travel with it.
@@ -751,8 +811,6 @@ export function OrganicDraftPreview({
     previewFramePlatform && selectedPlatforms.includes(previewFramePlatform)
       ? previewFramePlatform
       : selectedPlatforms[0];
-  const previewMaxWidth = resolvePreviewMaxWidth(framePlatform);
-  const mediaAspectRatio = resolvePreviewAspectRatio(framePlatform, draft.format);
   const creativeDirection = resolveCreativeDirection(draft);
   const inspirationSourceUrl = safeSourceUrl(draft.inspirationSourceUrl);
   // The agent-generated hook, if this draft has been generated. Scored on view.
@@ -795,6 +853,40 @@ export function OrganicDraftPreview({
   // Clamping at render (rather than in an effect) is what keeps a shrinking slide
   // array — a removed slide — from flashing the fallback creative for a frame.
   const activeSlidePosition = Math.min(activeSlideIndex, lastSlidePosition);
+
+  // The frame takes the first slide's shape (as a carousel does on every platform). The
+  // stored asset size wins; until one exists, the size the browser decodes stands in.
+  const firstSlide = previewSlides[0];
+  const firstSlideKey = `${draft.id}:${firstSlide?.storageUrl ?? ''}`;
+  const [loadedSize, setLoadedSize] = React.useState<(LoadedMediaSize & { key: string }) | null>(
+    null,
+  );
+  const decodedSize = loadedSize?.key === firstSlideKey ? loadedSize : null;
+  const handleMediaLoaded = React.useCallback(
+    (event: React.SyntheticEvent) => {
+      const size = loadedMediaSize(event.target);
+      if (!size || !firstSlide || !size.src.startsWith(firstSlide.storageUrl)) return;
+      setLoadedSize({ ...size, key: firstSlideKey });
+    },
+    [firstSlide, firstSlideKey],
+  );
+  const previewFrame = resolvePreviewFrame({
+    platform: framePlatform,
+    format: isCarouselFormat ? 'carousel' : draft.format,
+    mediaWidth: firstSlide?.width ?? decodedSize?.width,
+    mediaHeight: firstSlide?.height ?? decodedSize?.height,
+    durationSec:
+      draft.mediaSuggestion?.reel?.durationSec ??
+      draft.mediaSuggestion?.hyperframe?.durationSeconds ??
+      decodedSize?.durationSec,
+  });
+  const mediaAspectRatio = previewFrame.mediaAspect;
+  const overlayChrome = previewFrame.kind === 'vertical' || previewFrame.kind === 'story';
+  // Facebook and LinkedIn publish a text-only post as-is; every other surface needs media.
+  const canPostWithoutMedia =
+    previewFrame.kind === 'feed' &&
+    (framePlatform === 'facebook' || framePlatform === 'linkedin') &&
+    previewFormat(draft.format) === 'post';
 
   const selectSlide = React.useCallback(
     (position: number) => {
@@ -883,7 +975,6 @@ export function OrganicDraftPreview({
     // Top-level DnD context — sub-contexts (CarouselSlideStrip) own their drag end.
   }, []);
 
-  const fieldEditor = useDraftFieldEditor(draft);
   // Un-scheduling has to reach the server or it has not happened: the poller goes on
   // publishing a post whose card says "Draft". Shared with the calendar card's menu.
   const { unschedule } = useUnscheduleDraft();
@@ -995,14 +1086,17 @@ export function OrganicDraftPreview({
   // (rather than at selection) is what keeps the copy/media shared while it is editable.
   const { fanOutAndApprove, isFanningOut } = useFanOutDraft();
   const isMultiPlatform = selectedPlatforms.length > 1;
-  const handleApprove = React.useCallback(() => {
+  // Typing is saved in bursts; approving or publishing before the burst lands would bump
+  // updated_at under it, so the queued caption 409s and the post ships with the old one.
+  const handleApprove = React.useCallback(async () => {
     if (!onApprove) return;
+    await fieldEditor.flush();
     if (isMultiPlatform) {
       void fanOutAndApprove(draft);
       return;
     }
     onApprove(draft.id);
-  }, [draft, fanOutAndApprove, isMultiPlatform, onApprove]);
+  }, [draft, fanOutAndApprove, fieldEditor.flush, isMultiPlatform, onApprove]);
   const approveLabel = isFanningOut
     ? 'Approving…'
     : draft.status === 'scheduled'
@@ -1177,24 +1271,32 @@ export function OrganicDraftPreview({
             isEnriching={isExpanding}
             onEnlargeFrame={(index) => setLightbox({ kind: 'blueprint', index })}
             onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
+            overlayChrome={overlayChrome}
           />
         }
       />
     ) : null;
 
   // Read-only "final look" media: the resolved creative with view-only navigation,
-  // no dropzone or generate/replace controls. Shown unless the pencil is active.
-  const readOnlyMediaNode = !isHyperframeFormat ? (
-    <ReadOnlyCarouselMediaArea
-      slides={previewSlides}
-      alt={resolveDraftMediaAltText(draftForPreview)}
-      aspectRatio={mediaAspectRatio}
-      activeIndex={activeSlidePosition}
-      onSelectSlide={selectSlide}
-      onStepSlide={stepSlide}
-      onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
-    />
-  ) : null;
+  // no dropzone or generate/replace controls. Shown unless the pencil is active; a
+  // draft with no slides has no media node, and the frame shows its own placeholder.
+  const readOnlyMediaNode =
+    !isHyperframeFormat && previewSlides.length > 0 ? (
+      <ReadOnlyCarouselMediaArea
+        slides={previewSlides}
+        alt={resolveDraftMediaAltText(draftForPreview)}
+        aspectRatio={mediaAspectRatio}
+        activeIndex={activeSlidePosition}
+        onSelectSlide={selectSlide}
+        onStepSlide={stepSlide}
+        onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
+        overlayChrome={overlayChrome}
+        collage={
+          previewFrame.kind === 'feed' &&
+          (framePlatform === 'facebook' || framePlatform === 'linkedin')
+        }
+      />
+    ) : null;
 
   const mediaNode = isEditing ? interactiveMediaNode : readOnlyMediaNode;
 
@@ -1424,6 +1526,64 @@ export function OrganicDraftPreview({
     </div>
   );
 
+  const slotScrolls = isEditing || creativeOpen || hashtagsOpen || isHyperframeFormat;
+  const slotContent = (
+    <>
+      {creativeOpen && (
+        <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
+          <InlinePreviewTextarea
+            value={creativeDirection}
+            onChange={(event) => handleCreativeDirectionChange(event.target.value)}
+            onBlur={() => {
+              void fieldEditor.flush();
+            }}
+            placeholder="Describe the hook, visual intent, and mood."
+            className="min-h-[5rem] text-sm leading-relaxed"
+          />
+        </ContextualPanel>
+      )}
+
+      {hashtagsOpen && (
+        <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
+          <HashtagTiers draft={draft} onHashtagsChange={handleHashtagsChange} />
+        </ContextualPanel>
+      )}
+
+      {isHyperframeFormat ? (
+        <div className="flex flex-col gap-3">
+          <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
+          <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Caption
+            </p>
+            <EditableCaption
+              value={draft.captionPreview}
+              onChange={handleCaptionChange}
+              platform={framePlatform}
+              editable={isEditing}
+            />
+          </div>
+        </div>
+      ) : (
+        <SocialPostFrame
+          platform={framePlatform}
+          frame={previewFrame}
+          caption={draftForPreview.captionPreview}
+          hashtags={draftForPreview.hashtags}
+          brandName={brandName}
+          dayLabel={frameDayLabel(dayId)}
+          timeLabel={draft.timeLabel}
+          mediaNode={mediaNode}
+          onAddMedia={canPostWithoutMedia ? undefined : () => setIsEditing(true)}
+          isEditing={isEditing}
+          onCaptionChange={handleCaptionChange}
+          onEditCreativeDirection={() => setCreativeOpen(true)}
+          onEditHashtags={() => setHashtagsOpen(true)}
+        />
+      )}
+    </>
+  );
+
   return (
     <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
       <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
@@ -1432,6 +1592,11 @@ export function OrganicDraftPreview({
         <PostMetaChips
           platforms={selectedPlatforms}
           format={toPublishFormat(draft.format)}
+          formatLabel={frameFormatLabel(
+            toPublishFormat(draft.format),
+            framePlatform,
+            previewFrame.kind,
+          )}
           timeLabel={draft.timeLabel}
           onPlatformsChange={(next) => {
             const platforms = next.filter((value) => isOrganicPlatformKey(value));
@@ -1521,18 +1686,14 @@ export function OrganicDraftPreview({
           )}
         </div>
 
-        {/* Single scroll — media-first frame. Contextual editors (creative
-            direction, hashtags) reveal inline on demand from the ⋯ menu.
-            min-h-0 is required: without it this flex-1 child grows to its content's
-            intrinsic height and the panel's overflow-hidden clips it, so the Radix
-            viewport never overflows and no scrollbar appears. */}
-        <ScrollArea className="min-h-0 flex-1 bg-muted/10 p-3">
-          <div
-            className="mx-auto flex w-full flex-col gap-3"
-            style={{ maxWidth: `${previewMaxWidth}px` }}
-          >
+        {/* Fixed rows above, then the frame slot. The slot is a size container: the frame
+            sizes itself from the slot's width AND height, so in view mode the whole post fits
+            without scrolling. Editing (and the on-demand editor panels) may outgrow it, so
+            those states scroll inside the same slot. min-h-0 keeps the flex-1 children from
+            growing to their content and being clipped by the panel. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/10 p-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
             {panelTabs}
-
             {inspirationSourceUrl && (
               <a
                 href={inspirationSourceUrl}
@@ -1543,109 +1704,50 @@ export function OrganicDraftPreview({
                 Inspiration source · View original post
               </a>
             )}
-
-            {panelTab === 'publish' ? (
-              publishTab
-            ) : (
-              <>
-                {draftHook && brandProfileId ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/90 px-3 py-2">
-                    <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Hook
-                    </span>
-                    <p
-                      className="min-w-0 flex-1 truncate text-sm text-foreground"
-                      title={draftHook}
-                    >
-                      {draftHook}
-                    </p>
-                    <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
-                  </div>
-                ) : null}
-
-                {creativeOpen && (
-                  <ContextualPanel
-                    title="Creative direction"
-                    onClose={() => setCreativeOpen(false)}
-                  >
-                    <InlinePreviewTextarea
-                      value={creativeDirection}
-                      onChange={(event) => handleCreativeDirectionChange(event.target.value)}
-                      onBlur={() => {
-                        void fieldEditor.flush();
-                      }}
-                      placeholder="Describe the hook, visual intent, and mood."
-                      className="min-h-[5rem] text-sm leading-relaxed"
-                    />
-                  </ContextualPanel>
-                )}
-
-                {hashtagsOpen && (
-                  <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
-                    <HashtagTiers draft={draft} onHashtagsChange={handleHashtagsChange} />
-                  </ContextualPanel>
-                )}
-
-                {platformSwitch('See it on')}
-
-                {isHyperframeFormat ? (
-                  <div className="flex flex-col gap-3">
-                    <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
-                    <div className="rounded-xl border border-border/70 bg-background/90 p-3">
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Caption
-                      </p>
-                      <EditableCaption
-                        value={draft.captionPreview}
-                        onChange={handleCaptionChange}
-                        platform={framePlatform}
-                        editable={isEditing}
-                      />
-                    </div>
-                  </div>
-                ) : !isEditing &&
-                  previewSlides.length === 0 &&
-                  POST_PLATFORMS[framePlatform].frame === 'vertical' ? (
-                  <Empty className="h-auto gap-3 rounded-lg border border-dashed border-border bg-muted/20 py-8">
-                    <EmptyHeader>
-                      <EmptyTitle>No media</EmptyTitle>
-                      <EmptyDescription>
-                        {publishPlatformLabel(framePlatform)} preview needs creative before it can
-                        show the final post.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                    {draft.captionPreview && (
-                      <p className="line-clamp-4 max-w-sm whitespace-pre-wrap text-left text-xs leading-relaxed text-foreground">
-                        {draft.captionPreview}
-                      </p>
-                    )}
-                    <EmptyContent>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        Edit post to add media
-                      </Button>
-                    </EmptyContent>
-                  </Empty>
-                ) : (
-                  <SocialPostFrame
-                    draft={draftForPreview}
-                    onCaptionChange={handleCaptionChange}
-                    brandName={brandName}
-                    platform={framePlatform}
-                    mediaNode={mediaNode}
-                    isEditing={isEditing}
-                    onEditCreativeDirection={() => setCreativeOpen(true)}
-                    onEditHashtags={() => setHashtagsOpen(true)}
-                  />
-                )}
-              </>
-            )}
           </div>
-        </ScrollArea>
+
+          {panelTab === 'publish' ? (
+            <ScrollArea className="min-h-0 flex-1">{publishTab}</ScrollArea>
+          ) : (
+            <>
+              {draftHook && brandProfileId ? (
+                <div className="flex shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-background/90 px-3 py-2">
+                  <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Hook
+                  </span>
+                  <p className="min-w-0 flex-1 truncate text-sm text-foreground" title={draftHook}>
+                    {draftHook}
+                  </p>
+                  <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
+                </div>
+              ) : null}
+
+              {selectedPlatforms.length > 1 && (
+                <div className="shrink-0">{platformSwitch('See it on')}</div>
+              )}
+
+              {slotScrolls ? (
+                <ScrollArea
+                  data-preview-frame-slot=""
+                  className="min-h-0 flex-1 [container-type:size]"
+                  onLoadCapture={handleMediaLoaded}
+                  onLoadedMetadataCapture={handleMediaLoaded}
+                >
+                  <div className="flex flex-col gap-3">{slotContent}</div>
+                </ScrollArea>
+              ) : (
+                <div
+                  data-preview-frame-slot=""
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden [container-type:size]"
+                  onLoadCapture={handleMediaLoaded}
+                  onLoadedMetadataCapture={handleMediaLoaded}
+                >
+                  {slotContent}
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         {/* Footer CTA */}
         {showFooter ? (
@@ -1659,52 +1761,56 @@ export function OrganicDraftPreview({
               </div>
             )}
 
-            {onApprove && (
-              <button
-                type="button"
-                disabled={isApproveDisabled || !readiness.ready || isFanningOut}
-                onClick={handleApprove}
-                className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors',
-                  isApproveDisabled || !readiness.ready || isFanningOut
-                    ? 'cursor-not-allowed bg-muted text-muted-foreground'
-                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
+            {(onApprove || canPublish) && (
+              <div className="flex gap-2">
+                {onApprove && (
+                  <button
+                    type="button"
+                    disabled={isApproveDisabled || !readiness.ready || isFanningOut}
+                    onClick={handleApprove}
+                    className={cn(
+                      'flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold leading-tight transition-colors',
+                      isApproveDisabled || !readiness.ready || isFanningOut
+                        ? 'cursor-not-allowed bg-muted text-muted-foreground'
+                        : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                    )}
+                  >
+                    {approveLabel}
+                  </button>
                 )}
-              >
-                {approveLabel}
-              </button>
-            )}
 
-            {canPublish && (
-              <button
-                type="button"
-                disabled={isPublishing || !readiness.ready}
-                onClick={() => publish(draft)}
-                className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors',
-                  isPublishing || !readiness.ready
-                    ? 'cursor-not-allowed bg-muted text-muted-foreground'
-                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                {canPublish && (
+                  <button
+                    type="button"
+                    disabled={isPublishing || !readiness.ready}
+                    onClick={() => void fieldEditor.flush().then(() => publish(draft))}
+                    className={cn(
+                      'flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold leading-tight transition-colors',
+                      isPublishing || !readiness.ready
+                        ? 'cursor-not-allowed bg-muted text-muted-foreground'
+                        : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                    )}
+                  >
+                    {isPublishing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {stage === 'container_created'
+                          ? 'Uploading media…'
+                          : stage === 'polling'
+                            ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
+                            : 'Publishing…'}
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        {isMultiPlatform
+                          ? 'Publish now'
+                          : `Publish to ${publishPlatformLabel(publishPlatform)}`}
+                      </>
+                    )}
+                  </button>
                 )}
-              >
-                {isPublishing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {stage === 'container_created'
-                      ? 'Uploading media…'
-                      : stage === 'polling'
-                        ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
-                        : 'Publishing…'}
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    {isMultiPlatform
-                      ? 'Publish now'
-                      : `Publish to ${publishPlatformLabel(publishPlatform)}`}
-                  </>
-                )}
-              </button>
+              </div>
             )}
 
             {isPublished && (

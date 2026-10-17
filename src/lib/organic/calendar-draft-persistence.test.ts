@@ -9,6 +9,7 @@ import {
   mapPersistedRowToCalendarEntry,
   newRowCopyPatch,
   normalizePersistedStatus,
+  platformRetargetRowPatch,
   resolvePersistedRowDayId,
   type PersistedOrganicDraftRow,
 } from './calendar-draft-persistence';
@@ -839,5 +840,67 @@ describe('newRowCopyPatch', () => {
     expect(
       newRowCopyPatch(makeDraft({ captionPreview: '', hashtags: { high: [], low: [] } })),
     ).toBeNull();
+  });
+});
+
+describe('platformRetargetRowPatch', () => {
+  it('rewrites every platform field the create path stamps, keeping the rest of slot_data', () => {
+    const slotData = {
+      dayId: '2026-04-21',
+      timeLabel: '9:00 AM',
+      platform: 'facebook',
+      draftSnapshot: { id: 'draft-1', platforms: ['facebook'], targetAccountId: 'acct-fb' },
+    };
+    expect(platformRetargetRowPatch(slotData, 'instagram', 'acct-ig')).toEqual({
+      platform: 'instagram',
+      platform_account_id: 'acct-ig',
+      slot_data: {
+        dayId: '2026-04-21',
+        timeLabel: '9:00 AM',
+        platform: 'instagram',
+        draftSnapshot: { id: 'draft-1', platforms: ['instagram'], targetAccountId: 'acct-ig' },
+      },
+    });
+  });
+
+  it('keeps an agent row snapshot-free and its { name } platform shape', () => {
+    const patch = platformRetargetRowPatch(
+      { dayId: '2026-04-21', platform: { name: 'facebook', placement: 'feed' } },
+      'tiktok',
+      undefined,
+    );
+    expect(patch.platform_account_id).toBe('unassigned');
+    expect(patch.slot_data).toEqual({
+      dayId: '2026-04-21',
+      platform: { name: 'tiktok', placement: 'feed' },
+    });
+  });
+
+  // The defect: the drop restamped the store, the refetch read the row, and the card went
+  // back to its old row. Whatever the patch writes must map back to the new platform.
+  it('maps back onto the new platform at the next refetch', () => {
+    const days = buildWeekDays(new Date('2026-04-20T12:00:00'));
+    const rowFor = (slotData: Record<string, unknown>): PersistedOrganicDraftRow => {
+      const patch = platformRetargetRowPatch(slotData, 'instagram', 'acct-ig');
+      return {
+        id: 'row-1',
+        status: 'draft',
+        scheduled_date: null,
+        slot_data: patch.slot_data,
+        platform_account_id: patch.platform_account_id,
+      };
+    };
+    const manual = mapPersistedRowToCalendarEntry(
+      rowFor({ dayId: '2026-04-21', platform: 'facebook', draftSnapshot: { platforms: ['facebook'] } }),
+      days,
+    );
+    const agent = mapPersistedRowToCalendarEntry(
+      rowFor({ dayId: '2026-04-21', platform: 'facebook' }),
+      days,
+    );
+    expect(manual?.draft.platforms).toEqual(['instagram']);
+    expect(manual?.draft.targetAccountId).toBe('acct-ig');
+    expect(agent?.draft.platforms).toEqual(['instagram']);
+    expect(agent?.draft.groupMembers?.[0]?.platform).toBe('instagram');
   });
 });

@@ -140,16 +140,19 @@ const NOOP = () => undefined;
 function renderList(options: {
   days?: OrganicCalendarDay[];
   backlogDrafts?: OrganicCalendarDraft[];
+  selectedDraftId?: string | null;
   selectedDraftIds?: string[];
+  onSelectDraft?: (id: string) => void;
+  onToggleSelection?: (id: string) => void;
 }) {
   return render(
     <OrganicListView
       days={options.days ?? []}
       platforms={[]}
-      selectedDraftId={null}
+      selectedDraftId={options.selectedDraftId ?? null}
       selectedDraftIds={options.selectedDraftIds ?? []}
-      onSelectDraft={NOOP}
-      onToggleSelection={NOOP}
+      onSelectDraft={options.onSelectDraft ?? NOOP}
+      onToggleSelection={options.onToggleSelection ?? NOOP}
       onRegenerate={NOOP}
       onCreatePost={NOOP}
       backlogDrafts={options.backlogDrafts ?? []}
@@ -317,6 +320,19 @@ describe('OrganicListView', () => {
     });
   });
 
+  // Base UI emits `data-checked`; the old `data-[state=checked]` (Radix) never matched, so a
+  // selected row's tick vanished until hover. Hidden controls must also show on focus.
+  it('shows a ticked box at rest, and every hover-only control on focus', () => {
+    renderList({ days: [makeDay([makeDraft()])], selectedDraftIds: ['draft-1'] });
+
+    const box = screen.getByRole('checkbox', { name: /Select/ });
+    expect(box.hasAttribute('data-checked')).toBe(true);
+    expect(box.className).toContain('data-checked:opacity-100');
+    for (const control of [box, ...screen.getAllByRole('button', { name: 'Remove' })]) {
+      expect(control.className).toContain('focus-visible:opacity-100');
+    }
+  });
+
   it('keeps every clickable row reachable from the keyboard', () => {
     renderList({ days: [makeDay([makeDraft()])], backlogDrafts: [makeDraft({ id: 'backlog-1' })] });
 
@@ -325,6 +341,51 @@ describe('OrganicListView', () => {
     for (const row of rows) {
       expect(row.getAttribute('tabindex')).toBe('0');
     }
+  });
+
+  // Rows take the list's shared id-based handlers (so the memo holds across a selection)
+  // and carry the attributes focus return re-queries.
+  describe('selection', () => {
+    const rowOf = (title: string) => {
+      const row = screen.getByText(title).closest('[data-draft-id]');
+      if (!row) throw new Error(`no row carries a draft id for ${title}`);
+      return row as HTMLElement;
+    };
+
+    it('marks each row with its draft id and pressed state', () => {
+      renderList({
+        days: [makeDay([makeDraft(), makeDraft({ id: 'draft-2', title: 'Other draft' })])],
+        backlogDrafts: [makeDraft({ id: 'backlog-1', title: 'Backlog idea' })],
+        selectedDraftId: 'draft-2',
+      });
+
+      expect(rowOf('Draft title').getAttribute('data-draft-id')).toBe('draft-1');
+      expect(rowOf('Draft title').getAttribute('aria-pressed')).toBe('false');
+      expect(rowOf('Other draft').getAttribute('aria-pressed')).toBe('true');
+      expect(rowOf('Backlog idea').getAttribute('data-draft-id')).toBe('backlog-1');
+    });
+
+    it('selects the row by id from a click and from Enter', () => {
+      const onSelectDraft = mock((_id: string) => undefined);
+      renderList({
+        days: [makeDay([makeDraft(), makeDraft({ id: 'draft-2', title: 'Other draft' })])],
+        onSelectDraft,
+      });
+
+      fireEvent.click(rowOf('Other draft'));
+      fireEvent.keyDown(rowOf('Draft title'), { key: 'Enter' });
+
+      expect(onSelectDraft.mock.calls).toEqual([['draft-2'], ['draft-1']]);
+    });
+
+    it('toggles the multi-selection by id from the row checkbox', () => {
+      const onToggleSelection = mock((_id: string) => undefined);
+      renderList({ days: [makeDay([makeDraft({ id: 'draft-9' })])], onToggleSelection });
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select Draft title' }));
+
+      expect(onToggleSelection).toHaveBeenCalledWith('draft-9');
+    });
   });
 
   // The list row used to carry its OWN status table — a third, contradicting copy: it

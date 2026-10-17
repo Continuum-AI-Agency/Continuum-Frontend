@@ -8,7 +8,7 @@ import { useCalendarStore } from '@/lib/organic/store';
 type RequestOptions = {
   path: string;
   method?: string;
-  body?: { dayId?: string; timeOfDay?: string };
+  body?: { dayId?: string; timeOfDay?: string; expected_updated_at?: string | null };
 };
 
 const requestCalls: RequestOptions[] = [];
@@ -22,8 +22,42 @@ const show = mock(() => {});
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
 
+// The platform write's two round trips: the row read, then the guarded update.
+type RowCall = {
+  op: 'select' | 'update';
+  payload?: Record<string, unknown>;
+  filters: [string, unknown][];
+};
+const rowCalls: RowCall[] = [];
+let storedRow: { slot_data: unknown; updated_at: string } | null = null;
+let updateWrites = true;
+function draftsTable() {
+  const call: RowCall = { op: 'select', filters: [] };
+  const builder = {
+    select: () => builder,
+    update: (payload: Record<string, unknown>) => {
+      call.op = 'update';
+      call.payload = payload;
+      return builder;
+    },
+    eq: (column: string, value: unknown) => {
+      call.filters.push([column, value]);
+      return builder;
+    },
+    maybeSingle: async () => {
+      rowCalls.push(call);
+      if (call.op === 'select') return { data: storedRow, error: null };
+      return { data: updateWrites ? { updated_at: 'T1' } : null, error: null };
+    },
+  };
+  return builder;
+}
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({ schema: () => ({ from: () => draftsTable() }) }),
+}));
+
 // Imported AFTER the module mocks so the hook binds to them.
-const { useRescheduleDraft } = await import('./useRescheduleDraft');
+const { retargetDraft, useRescheduleDraft } = await import('./useRescheduleDraft');
 
 function draft(id: string, over: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
@@ -220,5 +254,151 @@ describe('useRescheduleDraft', () => {
         ?.slots.map((s) => s.id)
         .sort(),
     ).toEqual(['m0', 'm1', 'm2', 'm3', 'm4', 'm5']);
+  });
+});
+
+describe('retargetDraft', () => {
+  it('takes the destination platform and its default account', () => {
+    const next = retargetDraft(draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb' }), {
+      platform: 'instagram',
+      accountId: 'acct-ig',
+    });
+    expect(next?.platforms).toEqual(['instagram']);
+    expect(next?.targetAccountId).toBe('acct-ig');
+  });
+
+  // Production 2026-09-22: an Instagram draft dragged into the TikTok row kept its IG
+  // account, and every scheduled publish was refused as "not linked to this brand".
+  it("drops the source platform's account when the destination has no default", () => {
+    const next = retargetDraft(draft('a', { platforms: ['instagram'], targetAccountId: 'acct-ig' }), {
+      platform: 'tiktok',
+      accountId: undefined,
+    });
+    expect(next?.platforms).toEqual(['tiktok']);
+    expect(next?.targetAccountId).toBeUndefined();
+  });
+
+  it('keeps a chosen account when the primary platform stays', () => {
+    const next = retargetDraft(
+      draft('a', { platforms: ['instagram', 'facebook'], targetAccountId: 'acct-ig-second' }),
+      { platform: 'instagram', accountId: 'acct-ig' },
+    );
+    expect(next?.platforms).toEqual(['instagram']);
+    expect(next?.targetAccountId).toBe('acct-ig-second');
+  });
+
+  it('changes nothing for a drop on its own row', () => {
+    expect(retargetDraft(draft('a'), { platform: 'instagram', accountId: 'acct-ig' })).toBeNull();
+  });
+
+  // Publish reads its targets from groupMembers, so a restamp that left them would post
+  // to the old platform.
+  it('moves the single group member with the draft', () => {
+    const member = { backendDraftId: 'srv-a', platform: 'facebook' as const, status: 'draft' as const };
+    const next = retargetDraft(draft('a', { platforms: ['facebook'], groupMembers: [member] }), {
+      platform: 'instagram',
+      accountId: undefined,
+    });
+    expect(next?.groupMembers).toEqual([{ ...member, platform: 'instagram' }]);
+  });
+
+  it('leaves a fan-out group alone: one card is several rows', () => {
+    const members = (['instagram', 'facebook'] as const).map((platform) => ({
+      backendDraftId: `srv-${platform}`,
+      platform,
+      status: 'draft' as const,
+    }));
+    expect(
+      retargetDraft(draft('a', { platforms: ['instagram', 'facebook'], groupMembers: members }), {
+        platform: 'tiktok',
+        accountId: undefined,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('useRescheduleDraft — a drop on another platform row', () => {
+  const RETARGET = { draftId: 'a', platform: 'instagram' as const, accountId: 'acct-ig' };
+
+  beforeEach(() => {
+    requestCalls.length = 0;
+    requestImpl = async () => ({});
+    rowCalls.length = 0;
+    storedRow = { slot_data: { dayId: FROM_DAY, platform: 'facebook' }, updated_at: 'T0' };
+    updateWrites = true;
+    show.mockClear();
+  });
+
+  it('persists the platform, then the day under the updated_at that write left', async () => {
+    seedDays([draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb', updatedAt: 'T0' })]);
+    const target = dayIdAhead(20);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('a', target, RETARGET);
+    });
+
+    const update = rowCalls.find((call) => call.op === 'update');
+    expect(update?.payload).toMatchObject({
+      platform: 'instagram',
+      platform_account_id: 'acct-ig',
+      slot_data: { dayId: FROM_DAY, platform: 'instagram' },
+    });
+    expect(update?.filters).toContainEqual(['id', 'srv-a']);
+    expect(update?.filters).toContainEqual(['updated_at', 'T0']);
+    expect(requestCalls).toHaveLength(1);
+    expect(requestCalls[0]?.body?.dayId).toBe(target);
+    expect(requestCalls[0]?.body?.expected_updated_at).toBe('T1');
+    // The store says what the row now says.
+    const after = findDraft('a');
+    expect(after?.dayId).toBe(target);
+    expect(after?.draft.platforms).toEqual(['instagram']);
+    expect(after?.draft.targetAccountId).toBe('acct-ig');
+  });
+
+  it('retargets a drop on the same day, which moves no day', async () => {
+    seedDays([draft('a', { platforms: ['facebook'] })]);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('a', FROM_DAY, RETARGET);
+    });
+
+    expect(rowCalls.some((call) => call.op === 'update')).toBe(true);
+    expect(requestCalls).toHaveLength(0);
+    expect(findDraft('a')?.dayId).toBe(FROM_DAY);
+    expect(findDraft('a')?.draft.platforms).toEqual(['instagram']);
+  });
+
+  it('restores day and platform when the platform write is refused', async () => {
+    updateWrites = false;
+    seedDays([draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb' })]);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('a', dayIdAhead(20), RETARGET);
+    });
+
+    expect(requestCalls).toHaveLength(0);
+    const after = findDraft('a');
+    expect(after?.dayId).toBe(FROM_DAY);
+    expect(after?.draft.platforms).toEqual(['facebook']);
+    expect(after?.draft.targetAccountId).toBe('acct-fb');
+    expect(show.mock.calls[0]?.[0]?.variant).toBe('error');
+  });
+
+  it('retargets only the dragged draft of a selection', async () => {
+    seedDays([draft('a', { platforms: ['facebook'] }), draft('b', { platforms: ['facebook'] })]);
+    const target = dayIdAhead(20);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.rescheduleMany(['a', 'b'], target, RETARGET);
+    });
+
+    expect(rowCalls.filter((call) => call.op === 'update')).toHaveLength(1);
+    expect(findDraft('a')?.draft.platforms).toEqual(['instagram']);
+    expect(findDraft('b')?.draft.platforms).toEqual(['facebook']);
+    expect(findDraft('b')?.dayId).toBe(target);
   });
 });

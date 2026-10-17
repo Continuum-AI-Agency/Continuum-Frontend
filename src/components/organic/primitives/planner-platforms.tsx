@@ -112,12 +112,31 @@ export function comingSoonPlannerPlatforms(): PlannerPlatform[] {
   }));
 }
 
+// The rows depend only on WHICH platforms show, so one array per platform set is reused. The
+// workspace rebuilds this on every draft edit, and fresh rows reached every memoised cell and
+// dock tile as a new `platform` prop: each caption keystroke re-rendered the whole week.
+const rowsBySignature = new Map<string, PlannerPlatform[]>();
+
 export function buildPlannerPlatforms(
   activePlatforms: OrganicPlatformKey[],
   days: OrganicCalendarDay[],
   postedContent: OrganicCalendarPostedContent[] = [],
   options: BuildPlannerPlatformsOptions = {},
 ): PlannerPlatform[] {
+  const shownKeys = visiblePlannerPlatformKeys(activePlatforms, days, postedContent);
+  const signature = `${shownKeys.join(',')}|${options.includeComingSoon ? 'soon' : ''}`;
+  const cached = rowsBySignature.get(signature);
+  if (cached) return cached;
+  const rows = plannerPlatformRows(shownKeys, options);
+  rowsBySignature.set(signature, rows);
+  return rows;
+}
+
+function visiblePlannerPlatformKeys(
+  activePlatforms: OrganicPlatformKey[],
+  days: OrganicCalendarDay[],
+  postedContent: OrganicCalendarPostedContent[],
+): PlannerPlatformKey[] {
   const visible = new Set<PlannerPlatformKey>();
 
   activePlatforms.forEach((platform) => {
@@ -138,9 +157,14 @@ export function buildPlannerPlatforms(
     visible.add('instagram');
   }
 
-  const meaningfulPlatforms = DISPLAY_PLATFORM_ORDER.filter((platform) =>
-    visible.has(platform),
-  ).map((platform) => ({
+  return DISPLAY_PLATFORM_ORDER.filter((platform) => visible.has(platform));
+}
+
+function plannerPlatformRows(
+  shownKeys: PlannerPlatformKey[],
+  options: BuildPlannerPlatformsOptions,
+): PlannerPlatform[] {
+  const meaningfulPlatforms = shownKeys.map((platform) => ({
     ...PLATFORM_META[platform],
     canCreate: SCHEDULABLE_PLATFORM_ORDER.includes(platform as OrganicPlatformTag),
   }));

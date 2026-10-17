@@ -85,12 +85,13 @@ function PlannedBadge() {
 /**
  * Keyboard activation for a clickable row. The row cannot be a `<button>` — it
  * contains its own controls (checkbox, delete) — so it announces itself as one
- * and answers Enter/Space instead.
+ * and answers Enter/Space instead. A draft row also reports whether it is selected.
  */
-function rowActivationProps(onSelect: () => void) {
+function rowActivationProps(onSelect: () => void, pressed?: boolean) {
   return {
     role: 'button' as const,
     tabIndex: 0,
+    'aria-pressed': pressed,
     onClick: onSelect,
     onKeyDown: (event: React.KeyboardEvent) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -155,6 +156,10 @@ function DraftRowHoverPreview({ draft }: { draft: OrganicCalendarDraft }) {
   );
 }
 
+const NOOP_DRAFT_ACTION = (_draftId: string) => undefined;
+
+// Rows take id-based handlers shared by the whole list. Per-row closures were new on every
+// render, so the memo never held and a selection re-rendered every row.
 const DraftRow = React.memo(function DraftRow({
   draft,
   isSelected,
@@ -167,10 +172,10 @@ const DraftRow = React.memo(function DraftRow({
   draft: OrganicCalendarDraft;
   isSelected: boolean;
   isMultiSelected: boolean;
-  onSelect: () => void;
-  onToggle: () => void;
-  onDelete: () => void;
-  onRegenerate?: () => void;
+  onSelect: (draftId: string) => void;
+  onToggle: (draftId: string) => void;
+  onDelete: (draftId: string) => void;
+  onRegenerate?: (draftId: string) => void;
 }) {
   const framePlatform = draft.platforms[0] ?? 'instagram';
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
@@ -188,14 +193,17 @@ const DraftRow = React.memo(function DraftRow({
                     statusFrameClasses(framePlatform, draft.status, 'row'),
                     isSelected && 'bg-primary/[0.05]',
                   )}
-                  {...rowActivationProps(onSelect)}
+                  data-draft-id={draft.id}
+                  {...rowActivationProps(() => onSelect(draft.id), isSelected || isMultiSelected)}
                 >
                   <Checkbox
                     checked={isMultiSelected}
                     aria-label={`Select ${draft.title || 'Untitled'}`}
                     onClick={(e) => e.stopPropagation()}
-                    onCheckedChange={() => onToggle()}
-                    className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
+                    onCheckedChange={() => onToggle(draft.id)}
+                    // Base UI marks a ticked box `data-checked`; `data-[state=checked]` never matched,
+                    // so a selected row's tick hid until hover. Focus shows it too.
+                    className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-checked:opacity-100"
                   />
 
                   <DraftRowThumbnail draft={draft} />
@@ -225,9 +233,9 @@ const DraftRow = React.memo(function DraftRow({
                       aria-label="Remove"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDelete();
+                        onDelete(draft.id);
                       }}
-                      className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                      className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
                     >
                       <X className="size-3" />
                     </button>
@@ -245,14 +253,17 @@ const DraftRow = React.memo(function DraftRow({
           {onRegenerate && draft.status !== 'streaming' && (
             <>
               <ContextMenuSeparator />
-              <ContextMenuItem onSelect={onRegenerate}>
+              <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
                 <Zap className="mr-2 h-3.5 w-3.5" />
                 {draft.status === 'failed' ? 'Retry generation' : 'Regenerate'}
               </ContextMenuItem>
             </>
           )}
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onSelect={() => onDelete(draft.id)}
+          >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
             Delete
           </ContextMenuItem>
@@ -271,8 +282,8 @@ const BacklogRow = React.memo(function BacklogRow({
 }: {
   draft: OrganicCalendarDraft;
   isSelected: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
+  onSelect: (draftId: string) => void;
+  onDelete: (draftId: string) => void;
 }) {
   return (
     <HoverCard openDelay={300} closeDelay={120}>
@@ -283,7 +294,8 @@ const BacklogRow = React.memo(function BacklogRow({
               'group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40',
               isSelected && 'bg-primary/[0.05]',
             )}
-            {...rowActivationProps(onSelect)}
+            data-draft-id={draft.id}
+            {...rowActivationProps(() => onSelect(draft.id), isSelected)}
           >
             <DraftRowThumbnail draft={draft} />
             <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -308,9 +320,9 @@ const BacklogRow = React.memo(function BacklogRow({
                 aria-label="Remove"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDelete();
+                  onDelete(draft.id);
                 }}
-                className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
               >
                 <X className="size-3" />
               </button>
@@ -419,6 +431,21 @@ export function OrganicListView({
 
   const toggleGroup = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  const handleDeleteDraft = React.useCallback(
+    (draftId: string) => requestDraftDeletion([draftId], bulkDeleteDrafts),
+    [bulkDeleteDrafts, requestDraftDeletion],
+  );
+  const handleDeleteBacklogDraft = React.useCallback(
+    (draftId: string) =>
+      requestDraftDeletion([draftId], (ids) => ids.forEach(onDeleteBacklogDraft)),
+    [onDeleteBacklogDraft, requestDraftDeletion],
+  );
+  // A scheduled row's remove sends it back to draft rather than deleting it.
+  const handleUnscheduleDraft = React.useCallback(
+    (draftId: string) => updateDraft(draftId, (d) => ({ ...d, status: 'draft' as const })),
+    [updateDraft],
+  );
+
   const handleCreateBacklog = (title: string) => {
     const backlogId = `backlog-${crypto.randomUUID()}`;
     const draft: OrganicCalendarDraft = {
@@ -467,10 +494,8 @@ export function OrganicListView({
               key={draft.id}
               draft={draft}
               isSelected={draft.id === selectedDraftId}
-              onSelect={() => onSelectDraft(draft.id)}
-              onDelete={() =>
-                requestDraftDeletion([draft.id], (ids) => ids.forEach(onDeleteBacklogDraft))
-              }
+              onSelect={onSelectDraft}
+              onDelete={handleDeleteBacklogDraft}
             />
           ))}
           {backlogDrafts.length === 0 && creating !== 'backlog' && (
@@ -499,10 +524,10 @@ export function OrganicListView({
                     draft={draft}
                     isSelected={draft.id === selectedDraftId}
                     isMultiSelected={selectedIdSet.has(draft.id)}
-                    onSelect={() => onSelectDraft(draft.id)}
-                    onToggle={() => onToggleSelection(draft.id)}
-                    onDelete={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
-                    onRegenerate={() => onRegenerate(draft.id)}
+                    onSelect={onSelectDraft}
+                    onToggle={onToggleSelection}
+                    onDelete={handleDeleteDraft}
+                    onRegenerate={onRegenerate}
                   />
                 ))}
               </>
@@ -533,10 +558,10 @@ export function OrganicListView({
               draft={draft}
               isSelected={draft.id === selectedDraftId}
               isMultiSelected={selectedIdSet.has(draft.id)}
-              onSelect={() => onSelectDraft(draft.id)}
-              onToggle={() => onToggleSelection(draft.id)}
-              onDelete={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
-              onRegenerate={() => onRegenerate(draft.id)}
+              onSelect={onSelectDraft}
+              onToggle={onToggleSelection}
+              onDelete={handleDeleteDraft}
+              onRegenerate={onRegenerate}
             />
           ))}
           {draftDrafts.length === 0 && creating !== 'draft' && (
@@ -561,11 +586,9 @@ export function OrganicListView({
               draft={draft}
               isSelected={draft.id === selectedDraftId}
               isMultiSelected={selectedIdSet.has(draft.id)}
-              onSelect={() => onSelectDraft(draft.id)}
-              onToggle={() => onToggleSelection(draft.id)}
-              onDelete={() => {
-                updateDraft(draft.id, (d) => ({ ...d, status: 'draft' as const }));
-              }}
+              onSelect={onSelectDraft}
+              onToggle={onToggleSelection}
+              onDelete={handleUnscheduleDraft}
             />
           ))}
           {scheduledDrafts.length === 0 && (
@@ -590,9 +613,9 @@ export function OrganicListView({
               draft={draft}
               isSelected={draft.id === selectedDraftId}
               isMultiSelected={selectedIdSet.has(draft.id)}
-              onSelect={() => onSelectDraft(draft.id)}
-              onToggle={() => onToggleSelection(draft.id)}
-              onDelete={() => {}}
+              onSelect={onSelectDraft}
+              onToggle={onToggleSelection}
+              onDelete={NOOP_DRAFT_ACTION}
             />
           ))}
           {publishedDrafts.length === 0 && (
@@ -611,53 +634,59 @@ export function OrganicListView({
           ScrollArea root grows to its intrinsic content height, the parent's
           `overflow-hidden` clips it, and the viewport never overflows — a list that
           renders every row but scrolls none of them. */}
-      <ScrollArea className="min-h-0 flex-1">
-        {groupData.map(({ key, label, count, colorClass, showAdd, content }) => (
-          <div key={key} className="group/section">
-            <div
-              className="flex cursor-pointer select-none items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-2"
-              {...rowActivationProps(() => toggleGroup(key))}
-            >
-              <div className="flex items-center gap-2">
-                <ChevronDown
-                  className={cn(
-                    'size-3.5 text-muted-foreground transition-transform duration-150',
-                    collapsed[key] && '-rotate-90',
-                  )}
-                />
-                <span className={cn('text-xs font-semibold uppercase tracking-wide', colorClass)}>
-                  {label}
-                </span>
-                <Badge variant="outline" className="h-4 px-1.5 text-2xs">
-                  {count}
-                </Badge>
+      <ScrollArea data-planner-scroller="list" className="min-h-0 flex-1">
+        <div data-planner-content="list">
+          {groupData.map(({ key, label, count, colorClass, showAdd, content }) => (
+            <div key={key} className="group/section">
+              <div
+                className="flex cursor-pointer select-none items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-2"
+                {...rowActivationProps(() => toggleGroup(key))}
+              >
+                <div className="flex items-center gap-2">
+                  <ChevronDown
+                    className={cn(
+                      'size-3.5 text-muted-foreground transition-transform duration-150',
+                      collapsed[key] && '-rotate-90',
+                    )}
+                  />
+                  <span className={cn('text-xs font-semibold uppercase tracking-wide', colorClass)}>
+                    {label}
+                  </span>
+                  <Badge variant="outline" className="h-4 px-1.5 text-2xs">
+                    {count}
+                  </Badge>
+                </div>
+                {showAdd && (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Add ${label}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCreating(key);
+                      setCollapsed((prev) => ({ ...prev, [key]: false }));
+                    }}
+                    className="h-6 w-6 cursor-pointer opacity-0 transition-opacity hover:opacity-100 group-hover/section:opacity-100 focus-visible:opacity-100"
+                  >
+                    <Plus className="size-3" />
+                  </Button>
+                )}
               </div>
-              {showAdd && (
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={`Add ${label}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCreating(key);
-                    setCollapsed((prev) => ({ ...prev, [key]: false }));
-                  }}
-                  className="h-6 w-6 cursor-pointer opacity-0 transition-opacity hover:opacity-100 group-hover/section:opacity-100"
-                >
-                  <Plus className="size-3" />
-                </Button>
-              )}
+              {!collapsed[key] && content}
             </div>
-            {!collapsed[key] && content}
-          </div>
-        ))}
-        {/* BulkActionToolbar is `fixed bottom-8` and rendered outside the panel
+          ))}
+          {/* BulkActionToolbar is `fixed bottom-8` and rendered outside the panel
             group, so it takes no layout space and covers the last rows. Scroll
             clearance is the list's job because the list is what scrolls. */}
-        {selectedDraftIds.length > 0 ? (
-          <div aria-hidden="true" data-testid="bulk-toolbar-clearance" className="h-24 shrink-0" />
-        ) : null}
+          {selectedDraftIds.length > 0 ? (
+            <div
+              aria-hidden="true"
+              data-testid="bulk-toolbar-clearance"
+              className="h-24 shrink-0"
+            />
+          ) : null}
+        </div>
       </ScrollArea>
     </div>
   );

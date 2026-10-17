@@ -44,16 +44,18 @@ export function PlannerWorkflowRail({
       aria-label="Content workflow"
       className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
     >
-      <ol className="flex min-w-[18rem] flex-1 items-center">
+      {/* No min-w-0 on the list or its items: squeezed below their content, a stage's label
+          ran under the next stage's number. The insight note wraps instead. */}
+      <ol className="flex flex-1 items-center">
         {STAGES.map((stage, index) => {
           const complete = index < currentIndex;
           const current = stage.id === currentStage;
           return (
-            <li key={stage.id} className="flex min-w-0 flex-1 items-center last:flex-none">
+            <li key={stage.id} className="flex flex-1 items-center last:flex-none">
               <span
                 aria-current={current ? 'step' : undefined}
                 className={cn(
-                  'inline-flex items-center gap-1.5 text-xs font-medium',
+                  'inline-flex shrink-0 items-center gap-1.5 text-xs font-medium',
                   current && 'text-foreground',
                   complete && 'text-primary',
                   !current && !complete && 'text-muted-foreground',
@@ -69,7 +71,8 @@ export function PlannerWorkflowRail({
                 >
                   {complete ? <Check aria-hidden="true" /> : index + 1}
                 </span>
-                {stage.label}
+                {/* Phones only have room for the current stage's label; the rest stay readable to screen readers. */}
+                <span className={cn(!current && 'max-sm:sr-only')}>{stage.label}</span>
               </span>
               {index < STAGES.length - 1 ? (
                 <span className="mx-2 h-px min-w-3 flex-1 bg-border" aria-hidden="true" />
@@ -82,7 +85,7 @@ export function PlannerWorkflowRail({
         <div
           role="note"
           aria-label="Planning insight"
-          className="flex max-w-lg items-start gap-1.5 border-border text-xs leading-snug text-muted-foreground sm:border-l sm:pl-3"
+          className="flex max-w-lg items-start gap-1.5 border-border text-xs leading-snug text-muted-foreground max-sm:basis-full sm:border-l sm:pl-3"
         >
           <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
           <span>{insight}</span>

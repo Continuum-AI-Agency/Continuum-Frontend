@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { plannerDayIdInZone } from '@continuum/contracts';
+import { z } from 'zod';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
@@ -39,6 +39,7 @@ export const calendarPostedContentSchema = z.object({
   mediaType: z.string().optional(),
   mediaUrl: z.string().nullable().optional(),
   thumbnailUrl: z.string().nullable().optional(),
+  mediaKind: z.enum(['image', 'video']).optional(),
 }) satisfies z.ZodType<OrganicCalendarPostedContent>;
 
 export const calendarPostsResponseSchema = z.object({

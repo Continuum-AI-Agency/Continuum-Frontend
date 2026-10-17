@@ -155,11 +155,13 @@ mock.module('./PostMetaChips', () => ({
   PostMetaChips: ({
     platforms,
     format,
+    formatLabel,
     timeLabel,
     actions,
   }: {
     platforms: string[];
     format: string;
+    formatLabel?: string;
     timeLabel: string;
     actions?: ReactNode;
   }) => (
@@ -167,7 +169,7 @@ mock.module('./PostMetaChips', () => ({
       {platforms.map((platform) => (
         <span key={platform}>{platform}</span>
       ))}
-      <span>{format}</span>
+      <span data-testid="meta-format">{formatLabel ?? format}</span>
       <span>{timeLabel}</span>
       {actions}
     </div>
@@ -237,11 +239,6 @@ mock.module('@/components/ui/textarea', () => ({
 
 mock.module('@/lib/organic/platforms', () => ({
   isOrganicPlatformKey: () => true,
-}));
-
-mock.module('./social-preview-utils', () => ({
-  resolvePreviewAspectRatio: () => 1,
-  resolvePreviewMaxWidth: () => 480,
 }));
 
 mock.module('./PreviewMediaDropZone', () => ({
@@ -798,7 +795,7 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     expect(chips.textContent).toContain('linkedin');
   });
 
-  it('offers to approve every platform at once and fans out instead of approving one row', () => {
+  it('offers to approve every platform at once and fans out instead of approving one row', async () => {
     const onApprove = mock();
     render(
       <OrganicDraftPreview
@@ -813,11 +810,11 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
 
     // Fan-out is a backend row-copy: a browser-cloned sibling would fail the publish
     // gate, which reads media and caption exclusively from content_json.
-    expect(fanOutAndApproveMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fanOutAndApproveMock).toHaveBeenCalledTimes(1));
     expect(onApprove).not.toHaveBeenCalled();
   });
 
-  it('keeps the single-platform CTA and the single-draft approve path intact', () => {
+  it('keeps the single-platform CTA and the single-draft approve path intact', async () => {
     const onApprove = mock();
     render(
       <OrganicDraftPreview
@@ -838,7 +835,7 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve & Schedule' }));
-    expect(onApprove).toHaveBeenCalledWith('draft-1');
+    await waitFor(() => expect(onApprove).toHaveBeenCalledWith('draft-1'));
     expect(fanOutAndApproveMock).not.toHaveBeenCalled();
   });
 });
@@ -866,19 +863,131 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       ],
     });
 
-  it('uses a compact empty state until a TikTok draft has creative', () => {
-    render(
+  it('holds the TikTok frame open with a Needs media placeholder until it has creative', () => {
+    const { container } = render(
       <OrganicDraftPreview
         draft={baseDraft({ platforms: ['tiktok'], format: 'Reel' })}
         brandProfileId="brand-1"
       />,
     );
 
-    expect(screen.getByText('No media')).toBeTruthy();
-    expect(screen.getByText(/TikTok preview needs creative/)).toBeTruthy();
+    const frame = container.querySelector('[data-preview-frame="tiktok"]');
+    expect(frame?.getAttribute('data-frame-kind')).toBe('vertical');
+    expect(frame?.querySelector('[data-frame-media]')?.textContent).toContain('Needs media');
+    // Dark in both themes, so the neutral-50 overlay chrome stays legible on it.
+    expect(screen.getByText('Needs media').parentElement?.className).toContain('bg-neutral-900');
     expect(screen.getByText('Test caption')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Edit post to add media' }));
     expect(screen.getByTestId('drop-zone')).toBeTruthy();
+  });
+
+  it('renders a text-only Facebook post with no media box at all', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ platforms: ['facebook'], format: 'Post' })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    const frame = container.querySelector('[data-preview-frame="facebook"]');
+    expect(frame?.getAttribute('data-frame-kind')).toBe('feed');
+    expect(frame?.querySelector('[data-frame-media]')).toBeNull();
+    expect(screen.queryByText('Needs media')).toBeNull();
+    expect(screen.queryByText('No media')).toBeNull();
+    expect(screen.getByText('Test caption')).toBeTruthy();
+    // The header names the draft's own slot, never a made-up "Just now".
+    expect(frame?.textContent).toContain('9:00 AM');
+    expect(frame?.textContent).not.toContain('Just now');
+  });
+
+  it('previews an Instagram story with story chrome and no caption overlay', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          format: 'Story',
+          publishingAssets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              storagePath: 'library/story.png',
+              storageUrl: 'https://cdn.example/story.png',
+            },
+          ],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    const frame = container.querySelector('[data-preview-frame="instagram"]');
+    expect(frame?.getAttribute('data-frame-kind')).toBe('story');
+    expect(frame?.querySelector('[data-story-progress]')).toBeTruthy();
+    expect(screen.getByText('Send message')).toBeTruthy();
+    expect(screen.queryByText('Test caption')).toBeNull();
+    expect(screen.getByText('Stories post without a caption')).toBeTruthy();
+  });
+
+  it('previews a 16:9 YouTube video on the long-form watch page, titled by its first line', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          platforms: ['youtube'],
+          format: 'Reel',
+          captionPreview: '\n  How we brew it  \nThe full walkthrough.',
+          publishingAssets: [
+            {
+              role: 'primary',
+              kind: 'video',
+              storagePath: 'library/long.mp4',
+              storageUrl: 'https://cdn.example/long.mp4',
+              width: 1920,
+              height: 1080,
+            },
+          ],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    const frame = container.querySelector('[data-preview-frame="youtube"]');
+    expect(frame?.getAttribute('data-frame-kind')).toBe('landscape');
+    // The title is the first line; the description is the whole caption, as the publisher
+    // sends it (youtubePublisher), so the first line reads in both.
+    expect(frame?.textContent?.split('How we brew it').length).toBe(3);
+    expect(screen.getByText(/The full walkthrough\./)).toBeTruthy();
+    expect(screen.getByText('Subscribe')).toBeTruthy();
+    expect(screen.queryByText('Shorts')).toBeNull();
+    expect(screen.getByTestId('meta-format').textContent).toBe('Video');
+  });
+
+  for (const [platform, format, label, railIcon] of [
+    ['instagram', 'Reel', 'Reel', 'lucide-send'],
+    ['facebook', 'Reel', 'Reel', 'lucide-forward'],
+    ['youtube', 'Reel', 'Short', 'lucide-thumbs-down'],
+    ['tiktok', 'Reel', 'Video', 'lucide-bookmark'],
+  ] as const) {
+    it(`calls a ${platform} vertical video a ${label} and draws its own action rail`, () => {
+      const { container } = render(
+        <OrganicDraftPreview
+          draft={{ ...reelDraft(platform), format }}
+          brandProfileId="brand-1"
+        />,
+      );
+
+      expect(screen.getByTestId('meta-format').textContent).toBe(label);
+      const frame = container.querySelector(`[data-preview-frame="${platform}"]`);
+      expect(frame?.getAttribute('data-frame-kind')).toBe('vertical');
+      expect(frame?.querySelector(`svg.${railIcon}`)).toBeTruthy();
+    });
+  }
+
+  it('shows story chrome only on a story', () => {
+    const { container } = render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+
+    expect(container.querySelector('[data-frame-kind]')?.getAttribute('data-frame-kind')).toBe(
+      'feed',
+    );
+    expect(container.querySelector('[data-story-progress]')).toBeNull();
+    expect(screen.queryByText('Send message')).toBeNull();
   });
 
   for (const [platform, label] of [
@@ -894,9 +1003,13 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       expect(container.querySelector('video')?.getAttribute('src')).toContain(
         'https://cdn.example/clip.mp4',
       );
+      // A vertical clip with no stored size previews as a Short; TikTok carries no label.
       expect(
-        screen.getByText(`${label === 'YouTube' ? 'YouTube Shorts' : label} preview`),
-      ).toBeTruthy();
+        container.querySelector(`[data-preview-frame="${platform}"]`)?.getAttribute(
+          'data-frame-kind',
+        ),
+      ).toBe('vertical');
+      expect(screen.queryAllByText('Shorts').length).toBe(platform === 'youtube' ? 1 : 0);
       expect(screen.queryByText('Sponsored')).toBeNull();
       const publish = screen.getByRole('button', { name: `Publish to ${label}` });
       expect((publish as HTMLButtonElement).disabled).toBe(false);

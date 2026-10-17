@@ -407,6 +407,171 @@ describe('CalendarDraftCard', () => {
     expect(onMouseEnter).toHaveBeenCalledTimes(1);
   });
 
+  // The compact card is a container query, not a prop (a prop would re-render every memoised
+  // week cell). What the test DOM can prove is the contract the query switches between: the
+  // card is its own size container, the compact line names the status and format, and the
+  // detail block it folds away is one element.
+  it('is a size container whose compact line names the status and the format', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, format: 'Reel' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(card?.className).toContain('@container/draft-card');
+    const compactLine = card?.querySelector('[class*="@max-[14rem]/draft-card:inline-flex"]');
+    expect(compactLine?.textContent).toContain('Reel');
+    expect(compactLine?.querySelector('[title]')).toBeTruthy();
+    const detail = screen
+      .getByText('Caption text')
+      .closest('[class*="@max-[14rem]/draft-card:hidden"]');
+    expect(detail).toBeTruthy();
+  });
+
+  // A week column beside the preview is ~6rem of card. The time used to truncate there
+  // ("10:0…") while the decorative glyphs kept their room.
+  it('never shrinks the compact time: the format glyph, then the status dot, give way first', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, timeLabel: '12:45 PM', format: 'Reel' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const time = container.querySelector('[data-card-time]');
+    expect(time?.textContent).toBe('12:45 PM');
+    expect(time?.className).toContain('shrink-0');
+    expect(time?.className).toContain('whitespace-nowrap');
+    expect(time?.className).toContain('tabular-nums');
+    expect(time?.className).not.toContain('truncate');
+    const compactLine = container.querySelector('[class*="@max-[14rem]/draft-card:inline-flex"]');
+    expect(compactLine?.querySelector('svg')?.getAttribute('class')).toContain(
+      '@max-[7rem]/draft-card:hidden',
+    );
+    expect(compactLine?.querySelector('[title]')?.className).toContain(
+      '@max-[5.5rem]/draft-card:hidden',
+    );
+    // The dot can go; the status it names cannot.
+    expect(compactLine?.textContent).toContain('Draft');
+  });
+
+  it('keeps a status strip and a needs-media marker on a compact draft that has no media', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, mediaSuggestion: { mediaStatus: 'pending' } }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(card?.querySelector('[class*="@max-[14rem]/draft-card:block"]')).toBeTruthy();
+    const compactLine = card?.querySelector('[class*="@max-[14rem]/draft-card:inline-flex"]');
+    expect(compactLine?.querySelector('[title="Needs media"]')?.textContent).toBe('Needs media');
+  });
+
+  it('shows no needs-media marker once the draft is scheduled', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'scheduled', mediaSuggestion: { mediaStatus: 'pending' } }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    expect(container.querySelector('[title="Needs media"]')).toBeNull();
+  });
+
+  it('keeps Retry on a failed card in the compact layout without selecting the card', () => {
+    const onRegenerate = mock((_id: string) => undefined);
+    const onSelect = mock((_id: string) => undefined);
+    render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'failed' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={onSelect}
+        onToggleSelection={mock()}
+        onRegenerate={onRegenerate}
+      />,
+    );
+
+    const retry = screen.getByText('Retry');
+    expect(retry.closest('[class*="@max-[14rem]/draft-card:flex"]')).toBeTruthy();
+    fireEvent.click(retry);
+    expect(onRegenerate).toHaveBeenCalledWith('draft-1');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('outlines the selected card so a failed card ring cannot hide the selection', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'failed' }}
+        isSelected
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(card?.className).toContain('outline-2!');
+    expect(card?.className).toContain('outline-offset-1');
+    expect(card?.className).toContain('outline-primary!');
+    expect(card?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('makes its own button the drag activator, so the card is one tab stop', () => {
+    const activatorRef = mock((_node: HTMLElement | null) => undefined);
+    const { container } = render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        dragActivatorRef={activatorRef}
+        dragActivatorAttributes={{
+          'aria-roledescription': 'draggable',
+          'aria-describedby': 'dnd-instructions',
+        }}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(activatorRef).toHaveBeenCalledWith(card);
+    expect(card?.getAttribute('aria-roledescription')).toBe('draggable');
+    expect(card?.getAttribute('aria-describedby')).toBe('dnd-instructions');
+    expect(card?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps the hover-only Regenerate shortcut out of the tab order', () => {
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Regenerate draft').getAttribute('tabindex')).toBe('-1');
+  });
+
   it("shows an explicit 'Text only' state for a pending draft with no media or storyboard", () => {
     const textOnly: OrganicCalendarDraft = {
       ...draft,

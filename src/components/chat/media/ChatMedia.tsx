@@ -159,7 +159,7 @@ export function ChatMediaThumb({
               hoverPlay && hovered && 'opacity-0',
             )}
           >
-            <Play className="size-5 fill-white/90 text-white/90 drop-shadow" aria-hidden="true" />
+            <Play className="size-5 fill-neutral-50/90 text-neutral-50/90 drop-shadow" aria-hidden="true" />
           </span>
         </>
       ) : showImage && imageSrc ? (

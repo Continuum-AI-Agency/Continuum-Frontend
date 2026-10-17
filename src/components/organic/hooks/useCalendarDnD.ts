@@ -1,11 +1,22 @@
-import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import {
+  closestCorners,
+  type DragEndEvent,
+  type DragStartEvent,
+  KeyboardCode,
+  type KeyboardCoordinateGetter,
+  type UniqueIdentifier,
+} from '@dnd-kit/core';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
-import { isPostPlatform } from '@/lib/organic/postPlatforms';
+import { isPostPlatform, postFormatOptions, postPlatformLabel } from '@/lib/organic/postPlatforms';
 import { useCalendarStore } from '@/lib/organic/store';
-import { formatTimeLabel, parseTimeLabelToHour } from '../primitives/calendar-utils';
+import {
+  formatTimeLabel,
+  makeCalendarDay,
+  parseTimeLabelToHour,
+} from '../primitives/calendar-utils';
 import { ORGANIC_BETA_LAUNCH_SCHEDULE } from '../primitives/organic-calendar-config';
 import type {
   OrganicCalendarDay,
@@ -13,8 +24,11 @@ import type {
   OrganicPlatformTag,
   OrganicSeedDragPayload,
 } from '../primitives/types';
+import type { UseRescheduleDraftResult } from './useRescheduleDraft';
 
-function parsePlannerCellId(id: string): { dayId: string; platform?: OrganicPlatformTag } | null {
+export function parsePlannerCellId(
+  id: string,
+): { dayId: string; platform?: OrganicPlatformTag } | null {
   if (!id.startsWith('planner-cell::')) return null;
   const [, dayId, platformRaw] = id.split('::');
   if (!dayId) return null;
@@ -23,6 +37,85 @@ function parsePlannerCellId(id: string): { dayId: string; platform?: OrganicPlat
     dayId,
     platform: isPostPlatform(platformRaw) ? platformRaw : undefined,
   };
+}
+
+/** "Tue, Oct 20 · Instagram" for a planner cell id — what a screen reader hears, not the id. */
+export function plannerCellLabel(id: UniqueIdentifier): string | null {
+  const cell = parsePlannerCellId(String(id));
+  if (!cell) return null;
+  const { label, dateLabel } = makeCalendarDay(cell.dayId);
+  const day = label ? `${label}, ${dateLabel}` : cell.dayId;
+  return cell.platform ? `${day} · ${postPlatformLabel(cell.platform)}` : day;
+}
+
+const ARROW_KEYS: readonly string[] = [
+  KeyboardCode.Right,
+  KeyboardCode.Left,
+  KeyboardCode.Down,
+  KeyboardCode.Up,
+];
+
+/**
+ * An arrow key carries a picked-up draft to the nearest cell in that direction. dnd-kit's
+ * sortable getter moved nothing here: it needs the dragged id to be a droppable too, and a
+ * draft is only draggable. "In that direction" is measured from the dragged rect's centre,
+ * so the cell it sits in is never the next one. The rect lands CENTRED on the cell: the
+ * overlay card is wider than a narrow cell, and the keyboard collision reads its centre.
+ */
+export const plannerCellKeyboardCoordinates: KeyboardCoordinateGetter = (event, { context }) => {
+  if (!ARROW_KEYS.includes(event.code)) return undefined;
+  event.preventDefault();
+  const { active, collisionRect, droppableRects, droppableContainers } = context;
+  if (!active || !collisionRect) return undefined;
+
+  const centerX = collisionRect.left + collisionRect.width / 2;
+  const centerY = collisionRect.top + collisionRect.height / 2;
+  const ahead = droppableContainers.getEnabled().filter((container) => {
+    const rect = droppableRects.get(container.id);
+    if (!rect) return false;
+    if (event.code === KeyboardCode.Right) return rect.left >= centerX;
+    if (event.code === KeyboardCode.Left) return rect.right <= centerX;
+    if (event.code === KeyboardCode.Down) return rect.top >= centerY;
+    return rect.bottom <= centerY;
+  });
+  const [closest] = closestCorners({
+    active,
+    collisionRect,
+    droppableRects,
+    droppableContainers: ahead,
+    pointerCoordinates: null,
+  });
+  const rect = closest ? droppableRects.get(closest.id) : undefined;
+  if (!rect) return undefined;
+  return {
+    x: rect.left + (rect.width - collisionRect.width) / 2,
+    y: rect.top + (rect.height - collisionRect.height) / 2,
+  };
+};
+
+// Every format the planner knows. A draft in any other (a HyperFrame, a legacy "Video")
+// is not refused here: nothing says which platforms take it.
+const KNOWN_FORMATS = postFormatOptions([]).map((option) => option.toLowerCase());
+
+/**
+ * Why `draft` cannot move onto `platform`'s row, or null when it can. A drop on another
+ * platform's row restamps the draft onto that platform, so a Story dropped on Facebook
+ * became a Facebook Story, which nothing can publish.
+ */
+export function crossPlatformDropRefusal(
+  draft: Pick<OrganicCalendarDraft, 'format' | 'platforms'>,
+  platform: OrganicPlatformTag,
+): string | null {
+  if (draft.platforms.length === 1 && draft.platforms[0] === platform) return null;
+  const format = draft.format.trim().toLowerCase();
+  // Stated outright: a Story draft can come from the agent even where the picker offers none.
+  if (format === 'story') return platform === 'instagram' ? null : 'Stories only post to Instagram';
+  if (!KNOWN_FORMATS.includes(format)) return null;
+  if (postFormatOptions([platform]).some((option) => option.toLowerCase() === format)) {
+    return null;
+  }
+  if (platform === 'youtube') return 'YouTube takes video reels only';
+  return `${postPlatformLabel(platform)} does not take a ${draft.format}`;
 }
 
 function buildSeededDraft({
@@ -78,18 +171,10 @@ export function useCalendarDnD(
   drafts: OrganicCalendarDraft[],
   platformAccountIds: Partial<Record<OrganicPlatformKey, string>>,
   selectedIds: string[],
-  rescheduler: {
-    reschedule: (draftId: string, targetDayId: string) => void | Promise<void>;
-    rescheduleMany: (draftIds: string[], targetDayId: string) => void | Promise<void>;
-  },
+  rescheduler: UseRescheduleDraftResult,
 ) {
   const { show } = useToast();
-  const { addDraft, updateDraft } = useCalendarStore(
-    useShallow((state) => ({
-      addDraft: state.addDraft,
-      updateDraft: state.updateDraft,
-    })),
-  );
+  const { addDraft } = useCalendarStore(useShallow((state) => ({ addDraft: state.addDraft })));
   const [activeDragDraft, setActiveDragDraft] = React.useState<OrganicCalendarDraft | null>(null);
 
   const draftsById = React.useMemo(() => {
@@ -107,6 +192,10 @@ export function useCalendarDnD(
     });
     return map;
   }, [days]);
+  // The native drop handler reaches every memoised week cell, so it reads the days when a
+  // drop lands instead of closing over them: a draft edit must not hand each cell a new one.
+  const daysByIdRef = React.useRef(daysById);
+  daysByIdRef.current = daysById;
 
   const handleDragStart = React.useCallback(
     (event: DragStartEvent) => {
@@ -120,8 +209,10 @@ export function useCalendarDnD(
   const handleDragEnd = React.useCallback(
     (event: DragEndEvent) => {
       setActiveDragDraft(null);
-      const { active, over } = event;
-      if (!over) return;
+      const { active, over, delta } = event;
+      // Picked up and put down without moving: nothing to do. Without this a keyboard
+      // Space, Space on an undated dock row dropped it on whichever cell was nearest.
+      if (!over || (delta.x === 0 && delta.y === 0)) return;
 
       const draftId = active.id as string;
       const overId = String(over.id);
@@ -135,27 +226,36 @@ export function useCalendarDnD(
         const plannerCell = parsePlannerCellId(overId);
 
         if (plannerCell) {
-          // Restamp the destination platform/account onto the dragged draft; the day
-          // move, dateLabel and persistence are owned by the reschedule hook below.
-          if (plannerCell.platform) {
-            const destPlatform = plannerCell.platform;
-            updateDraft(draftId, (draft) => ({
-              ...draft,
-              platforms: [destPlatform],
-              // Never the source row's account: an Instagram id on a TikTok draft is refused at publish.
-              targetAccountId:
-                destPlatform === draft.platforms[0]
-                  ? draft.targetAccountId
-                  : platformAccountIds[destPlatform],
-            }));
+          const draft = draftsById.get(draftId);
+          const refusal =
+            draft && plannerCell.platform
+              ? crossPlatformDropRefusal(draft, plannerCell.platform)
+              : null;
+          if (refusal) {
+            show({
+              title: refusal,
+              description: `"${draft?.title || 'Untitled'}" stays where it was.`,
+              variant: 'warning',
+            });
+            return;
           }
+
+          // A week cell names a platform row, and the dragged draft takes it; a month
+          // cell names none. The reschedule hook restamps and persists both together.
+          const retarget = plannerCell.platform
+            ? {
+                draftId,
+                platform: plannerCell.platform,
+                accountId: platformAccountIds[plannerCell.platform],
+              }
+            : undefined;
 
           // A multi-select drag moves the whole selection (previously only the dragged
           // id moved); a single drag moves just the dragged draft.
           if (selectedIds.includes(draftId) && selectedIds.length > 1) {
-            void rescheduler.rescheduleMany(selectedIds, plannerCell.dayId);
+            void rescheduler.rescheduleMany(selectedIds, plannerCell.dayId, retarget);
           } else {
-            void rescheduler.reschedule(draftId, plannerCell.dayId);
+            void rescheduler.reschedule(draftId, plannerCell.dayId, retarget);
           }
           return;
         }
@@ -166,7 +266,7 @@ export function useCalendarDnD(
         }
       }
     },
-    [daysById, platformAccountIds, updateDraft, selectedIds, rescheduler],
+    [daysById, draftsById, platformAccountIds, selectedIds, rescheduler, show],
   );
 
   const handleNativeDrop = React.useCallback(
@@ -183,7 +283,7 @@ export function useCalendarDnD(
       const trendId = data.trendId;
       if (!trendId) return;
 
-      const targetDay = daysById.get(dayId);
+      const targetDay = daysByIdRef.current.get(dayId);
       if (!targetDay) return;
 
       const fallbackPlatform = (ORGANIC_BETA_LAUNCH_SCHEDULE[
@@ -230,7 +330,7 @@ export function useCalendarDnD(
         variant: 'info',
       });
     },
-    [addDraft, daysById, platformAccountIds, show],
+    [addDraft, platformAccountIds, show],
   );
 
   return {

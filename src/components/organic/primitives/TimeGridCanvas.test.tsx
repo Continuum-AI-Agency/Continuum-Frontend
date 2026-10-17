@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { cloneElement, type ReactElement, type ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
@@ -152,6 +152,7 @@ describe('TimeGridCanvas', () => {
         onSelectDraft={mock()}
         onToggleSelection={mock()}
         onRegenerate={mock()}
+        onSelectPost={mock()}
       />,
     );
 
@@ -185,6 +186,7 @@ describe('TimeGridCanvas', () => {
         onSelectDraft={mock()}
         onToggleSelection={mock()}
         onRegenerate={mock()}
+        onSelectPost={mock()}
       />,
     );
 
@@ -233,6 +235,7 @@ describe('TimeGridCanvas', () => {
         onSelectDraft={mock()}
         onToggleSelection={mock()}
         onRegenerate={mock()}
+        onSelectPost={mock()}
       />,
     );
 
@@ -256,7 +259,7 @@ describe('TimeGridCanvas', () => {
   // (`OrganicPlatformTag`) is publishable now, so the "no create affordance where you cannot
   // post" guard moves to the one channel that still has no publisher: X, which the planner
   // only surfaces when coming-soon rows are asked for.
-  it('renders published content, and offers no create control on a channel with no publisher', async () => {
+  it('opens published content in the preview panel, and offers no create control on a channel with no publisher', () => {
     const days = buildWeekDays();
     const platforms = buildPlannerPlatforms(
       [],
@@ -277,6 +280,7 @@ describe('TimeGridCanvas', () => {
       { includeComingSoon: true },
     );
 
+    const onSelectPost = mock();
     render(
       <TimeGridCanvas
         days={days}
@@ -304,18 +308,19 @@ describe('TimeGridCanvas', () => {
         onSelectDraft={mock()}
         onToggleSelection={mock()}
         onRegenerate={mock()}
+        onSelectPost={onSelectPost}
       />,
     );
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'View posted content: Published video' }));
-      await Promise.resolve();
-    });
-
-    expect(screen.getByText('A published cross-platform calendar entry.')).toBeDefined();
-    expect(screen.getByRole('link', { name: /Open post/ }).getAttribute('href')).toBe(
-      'https://youtube.example.com/watch/123',
+    // The week chip hands the post to the workspace's preview panel, the month chip's path,
+    // instead of opening a popover of its own.
+    fireEvent.click(
+      screen.getByRole('button', { name: '3:00 PM Posted on YouTube: Published video' }),
     );
+    expect(onSelectPost).toHaveBeenCalledTimes(1);
+    expect(onSelectPost.mock.calls[0]?.[0]).toMatchObject({ id: 'youtube-post' });
+    expect(onSelectPost.mock.calls[0]?.[1]).toBeNull();
+    expect(screen.queryByRole('link', { name: /Open post/ })).toBeNull();
     // YouTube has a publisher, so its row IS creatable — that is the behaviour change.
     expect(screen.getByRole('button', { name: 'Add post for 2026-02-23 YouTube' })).toBeDefined();
     // X has none, so its row must never offer one.
@@ -341,6 +346,7 @@ describe('TimeGridCanvas', () => {
         onSelectDraft={mock()}
         onToggleSelection={mock()}
         onRegenerate={mock()}
+        onSelectPost={mock()}
         isLoadingPostedContent
         postedContentError="Published posts could not be loaded"
         onRetryPostedContent={onRetry}

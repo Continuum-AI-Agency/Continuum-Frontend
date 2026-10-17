@@ -509,10 +509,13 @@ test.describe('organic planner status + agent chat speakers', () => {
       await page.screenshot({ path: `${SCREENSHOT_DIR}/calendar-draft-hover.png` });
       await draftChip.click();
       const preview = page.getByRole('complementary', { name: 'Draft preview' });
-      await expect(preview.getByText(/TikTok preview needs creative/)).toBeVisible();
+      const frameMedia = preview.locator('[data-frame-media]');
+      await expect(frameMedia.getByText('Needs media', { exact: true })).toBeVisible();
       await expect(preview.getByText('Sponsored')).toHaveCount(0);
       await expect(preview.getByRole('button', { name: 'Details' })).toBeVisible();
-      await expect(preview.getByText('No media', { exact: true })).toBeVisible();
+      await expect(
+        frameMedia.getByRole('button', { name: 'Edit post to add media' }),
+      ).toBeVisible();
       await page.screenshot({ path: `${SCREENSHOT_DIR}/tiktok-post-preview.png` });
     } finally {
       await supabase

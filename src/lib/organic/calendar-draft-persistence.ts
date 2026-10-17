@@ -10,9 +10,9 @@ import {
   parsePlannerTimeOfDay,
   parseSiblingClientKey,
   plannerCompositionSchema,
+  plannerDayIdInZone,
   plannerDraftHasCopy,
   plannerInstantFromDayTime,
-  plannerDayIdInZone,
   plannerTimeOfDayInZone,
   publishOptionsByPlatformSchema,
   resolvePlannerTimeZone,
@@ -508,6 +508,45 @@ export function newRowCopyPatch(draft: OrganicCalendarDraft): PlannerDraftFieldP
 }
 
 /**
+ * The row fields a drop on another platform's row rewrites: every place the create path
+ * above stamps a platform. The publisher reads the `platform` column, but the planner maps
+ * a row back from the snapshot and then `slot_data.platform`, so writing only the column
+ * would put the card back on its old row at the next refetch.
+ *
+ * Merged onto the row's current `slot_data` rather than rebuilt: an agent row carries no
+ * draftSnapshot (none is invented) and may store `slot_data.platform` as `{ name }`.
+ */
+export function platformRetargetRowPatch(
+  slotData: unknown,
+  platform: OrganicPlatformKey,
+  accountId: string | undefined,
+): Pick<PersistedDraftWritePayload, 'platform' | 'platform_account_id' | 'slot_data'> {
+  const current = asRecord(slotData);
+  const slotPlatform = current.platform;
+  const snapshot = current.draftSnapshot;
+  return {
+    platform,
+    platform_account_id: accountId ?? UNASSIGNED_PLATFORM_ACCOUNT_ID,
+    slot_data: {
+      ...current,
+      platform:
+        slotPlatform && typeof slotPlatform === 'object'
+          ? { ...asRecord(slotPlatform), name: platform }
+          : platform,
+      ...(snapshot && typeof snapshot === 'object'
+        ? {
+            draftSnapshot: {
+              ...asRecord(snapshot),
+              platforms: [platform],
+              targetAccountId: accountId,
+            },
+          }
+        : {}),
+    },
+  };
+}
+
+/**
  * Reconcile a server-authoritative day set with the local one WITHOUT dropping
  * in-flight local drafts. A freshly-constructed manual draft lives only in the
  * local store until the debounced autosave inserts it (~500ms); a refetch in that
@@ -808,7 +847,7 @@ export function mapPersistedRowToCalendarEntry(
     seedTrendId: readString(snapshot.seedTrendId) ?? undefined,
     inspirationSourceUrl:
       generation.source === 'competitor_inspiration'
-        ? readString(inspiration.permalink) ?? undefined
+        ? (readString(inspiration.permalink) ?? undefined)
         : undefined,
     origin: resolveDraftOrigin(snapshot.origin ?? slotData.origin),
     targetAccountId:

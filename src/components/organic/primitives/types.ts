@@ -359,8 +359,12 @@ export type OrganicCalendarPostedContent = {
   caption?: string;
   permalink?: string;
   mediaType?: string;
+  /** The media itself: a video file for a video post that has no still. */
   mediaUrl?: string | null;
+  /** Always a still image when present. */
   thumbnailUrl?: string | null;
+  /** What `mediaUrl` points at, when the source says. */
+  mediaKind?: 'image' | 'video';
 };
 
 export type OrganicCreationStepStatus = 'complete' | 'active' | 'upcoming';

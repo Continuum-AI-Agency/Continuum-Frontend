@@ -78,10 +78,10 @@ function FrameTile({
         sizes="72px"
         className="object-contain"
       />
-      <span className="pointer-events-none absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="pointer-events-none absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-950/55 text-neutral-50 opacity-0 transition-opacity group-hover:opacity-100">
         <Maximize2 className="h-3 w-3" />
       </span>
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/55 px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-white">
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-neutral-950/55 px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-neutral-50">
         {index + 1}
         {hasText(frame.role) ? ` · ${frame.role}` : ''}
       </span>

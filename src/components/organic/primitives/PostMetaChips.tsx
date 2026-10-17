@@ -168,6 +168,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
 export function PostMetaChips({
   platforms,
   format,
+  formatLabel,
   timeLabel,
   onPlatformsChange,
   onFormatChange,
@@ -176,6 +177,8 @@ export function PostMetaChips({
 }: {
   platforms: OrganicPlatformKey[];
   format: string;
+  /** What the previewed platform calls this format ("Short", "Video"); defaults to it. */
+  formatLabel?: string;
   timeLabel: string;
   onPlatformsChange: (next: OrganicPlatformKey[]) => void;
   onFormatChange: (next: string) => void;
@@ -248,7 +251,7 @@ export function PostMetaChips({
         <DropdownMenuTrigger
           render={
             <button type="button" className={chipClass} aria-label="Change format">
-              {format}
+              {formatLabel ?? format}
             </button>
           }
         />

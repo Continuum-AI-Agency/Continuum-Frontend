@@ -100,7 +100,10 @@ export type UseDraftFieldEditorResult = {
     fields: readonly DraftEditField[],
     localPatch?: Partial<OrganicCalendarDraft>,
   ) => Promise<boolean>;
-  /** A text edit (caption, creative direction): store now, PATCH coalesced. */
+  /**
+   * A text edit (caption, creative direction): shown at once through `draft`, written to the
+   * store and PATCHed once per coalesced burst.
+   */
   queueFieldEdit: (
     patch: PlannerDraftFieldPatch,
     fields: readonly DraftEditField[],
@@ -108,6 +111,8 @@ export type UseDraftFieldEditorResult = {
   ) => void;
   /** Send any coalesced edit immediately. Call on blur and before navigating away. */
   flush: () => Promise<void>;
+  /** The draft with any typing that has not reached the store yet. Render THIS one. */
+  draft: OrganicCalendarDraft;
   isSaving: boolean;
   savingFields: ReadonlySet<DraftEditField>;
   saveError: string | null;
@@ -115,9 +120,15 @@ export type UseDraftFieldEditorResult = {
 };
 
 type QueuedEdit = {
+  /** The draft typed into, so a burst still lands on it if the panel moves to another. */
+  target: PersistTarget;
   patch: PlannerDraftFieldPatch;
   fields: DraftEditField[];
+  /** What the burst changes locally; it reaches the store once, with the PATCH result. */
+  localPatch?: Partial<OrganicCalendarDraft>;
 };
+
+type Typed = { draftId: string; patch: Partial<OrganicCalendarDraft> };
 
 /**
  * `localPatch` exists because the store's draft shape is not the wire patch: a
@@ -141,6 +152,10 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     () => new Set(),
   );
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  // Typing lives here until its burst is sent. Written to the store per keystroke, every
+  // memoised calendar cell holding the draft re-rendered on each one, then again for the
+  // PATCH's updated_at.
+  const [typed, setTyped] = React.useState<Typed | null>(null);
 
   // The draft as it is RIGHT NOW, read at send time rather than captured at call
   // time: a coalesced caption edit must send the latest keystroke, not the first.
@@ -152,15 +167,21 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
 
   const send = React.useCallback(
     async (
+      target: PersistTarget,
       patch: PlannerDraftFieldPatch,
       fields: readonly DraftEditField[],
       snapshot: Partial<OrganicCalendarDraft> | null,
+      localPatch?: Partial<OrganicCalendarDraft>,
     ): Promise<boolean> => {
-      const draftId = draftRef.current.id;
+      const draftId = target.id;
       markDraftEditPending(draftId, fields);
       setSavingFields((current) => new Set([...current, ...fields]));
 
-      const result = await persistDraftFields(draftRef.current, patch);
+      // The freshest CAS token: an edit that settled while this one waited moved it on.
+      const result = await persistDraftFields(
+        draftRef.current.id === draftId ? draftRef.current : target,
+        patch,
+      );
 
       clearDraftEditPending(draftId, fields);
       setSavingFields((current) => {
@@ -169,10 +190,25 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
         return next;
       });
 
+      // Typing still queued behind this send stays on screen; the rest is in the store now.
+      const settleTyped = () =>
+        setTyped(() => {
+          const queued = queuedRef.current;
+          return queued?.localPatch
+            ? { draftId: queued.target.id, patch: queued.localPatch }
+            : null;
+        });
+
       if (result.ok) {
-        if (result.updatedAt) {
-          updateDraft(draftId, (current) => ({ ...current, updatedAt: result.updatedAt }));
+        // ONE store write per burst: its text and the server's updated_at together.
+        if (localPatch || result.updatedAt) {
+          updateDraft(draftId, (current) => ({
+            ...current,
+            ...localPatch,
+            ...(result.updatedAt ? { updatedAt: result.updatedAt } : {}),
+          }));
         }
+        settleTyped();
         setSaveError(null);
         return true;
       }
@@ -186,10 +222,14 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
           variant: 'error',
         });
         requestCalendarRefetch();
+        settleTyped();
         return false;
       }
 
       if (snapshot) updateDraft(draftId, (current) => ({ ...current, ...snapshot }));
+      // Unsaved typing stays on screen, as the toast's "not saved" refers to it.
+      if (localPatch) updateDraft(draftId, (current) => ({ ...current, ...localPatch }));
+      settleTyped();
       setSaveError(result.message);
       show({ title: 'Change not saved', description: result.message, variant: 'error' });
       return false;
@@ -227,7 +267,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       if (localPatch) {
         updateDraft(draftRef.current.id, (current) => ({ ...current, ...localPatch }));
       }
-      return send(patch, fields, snapshot);
+      return send(draftRef.current, patch, fields, snapshot);
     },
     [send, snapshotFor, updateDraft],
   );
@@ -240,7 +280,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     const queued = queuedRef.current;
     if (!queued) return;
     queuedRef.current = null;
-    await send(queued.patch, queued.fields, null);
+    await send(queued.target, queued.patch, queued.fields, null, queued.localPatch);
   }, [send]);
 
   const queueFieldEdit = React.useCallback(
@@ -249,21 +289,32 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       fields: readonly DraftEditField[],
       localPatch?: Partial<OrganicCalendarDraft>,
     ): void => {
-      if (localPatch) {
-        updateDraft(draftRef.current.id, (current) => ({ ...current, ...localPatch }));
-      }
+      const target = draftRef.current;
       const previous = queuedRef.current;
+      // A burst belongs to one draft: typing into another one sends the first burst now.
+      if (previous && previous.target.id !== target.id) void flush();
+      const carried = queuedRef.current;
+      const queuedLocal =
+        localPatch || carried?.localPatch ? { ...carried?.localPatch, ...localPatch } : undefined;
       queuedRef.current = {
-        patch: { ...previous?.patch, ...patch },
-        fields: [...new Set([...(previous?.fields ?? []), ...fields])],
+        target,
+        patch: { ...carried?.patch, ...patch },
+        fields: [...new Set([...(carried?.fields ?? []), ...fields])],
+        localPatch: queuedLocal,
       };
+      if (queuedLocal) setTyped({ draftId: target.id, patch: queuedLocal });
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         void flush();
       }, TEXT_EDIT_COALESCE_MS);
     },
-    [flush, updateDraft],
+    [flush],
+  );
+
+  const shownDraft = React.useMemo(
+    () => (typed?.draftId === draft.id ? { ...draft, ...typed.patch } : draft),
+    [draft, typed],
   );
 
   // An unmount mid-burst must not drop the pending keystrokes. The timer is cleared
@@ -279,6 +330,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     editField,
     queueFieldEdit,
     flush,
+    draft: shownDraft,
     isSaving: savingFields.size > 0,
     savingFields,
     saveError,

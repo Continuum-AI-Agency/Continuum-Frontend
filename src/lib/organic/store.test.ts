@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+} from '@/components/organic/primitives/types';
 import { useCalendarStore } from './store';
 
 const createDraft = (id: string): OrganicCalendarDraft => ({
@@ -80,6 +83,32 @@ describe('useCalendarStore', () => {
 
     useCalendarStore.getState().clearPendingServerDeletes(['srv-1']);
     expect(useCalendarStore.getState().pendingServerDeletes).toEqual([]);
+  });
+
+  // A single-select click clears the multi-selection every time. Notifying with a fresh []
+  // when nothing was selected re-rendered every planner cell that reads the set.
+  describe('clearDraftSelection', () => {
+    it('does not notify subscribers when the multi-selection is already empty', () => {
+      const before = useCalendarStore.getState().selectedDraftIds;
+      let notifications = 0;
+      const unsubscribe = useCalendarStore.subscribe(() => {
+        notifications += 1;
+      });
+
+      useCalendarStore.getState().clearDraftSelection();
+      unsubscribe();
+
+      expect(notifications).toBe(0);
+      expect(useCalendarStore.getState().selectedDraftIds).toBe(before);
+    });
+
+    it('still clears a non-empty multi-selection', () => {
+      useCalendarStore.getState().setSelectedDraftIds(['d1', 'd2']);
+
+      useCalendarStore.getState().clearDraftSelection();
+
+      expect(useCalendarStore.getState().selectedDraftIds).toEqual([]);
+    });
   });
 
   it('supports complete_with_errors grid status', () => {
@@ -174,6 +203,101 @@ describe('useCalendarStore', () => {
     expect(created).toBeDefined();
     expect(created?.slots.map((slot) => slot.id)).toEqual(['d-month']);
     expect(state.days.find((day) => day.id === 'day-1')?.slots).toHaveLength(0);
+  });
+
+  // Memoised cells compare their day: an edit must not hand every cell a new one.
+  describe('updateDraft', () => {
+    it('rebuilds only the day that holds the draft', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().addDraft('day-2', createDraft('d2'));
+      const before = useCalendarStore.getState().days;
+
+      useCalendarStore.getState().updateDraft('d1', (draft) => ({ ...draft, title: 'Edited' }));
+
+      const after = useCalendarStore.getState().days;
+      expect(after[0]?.slots[0]?.title).toBe('Edited');
+      expect(after[0]).not.toBe(before[0]);
+      expect(after[1]).toBe(before[1]);
+      expect(after[1]?.slots[0]).toBe(before[1]?.slots[0]);
+    });
+
+    it('leaves the state alone when no draft matches', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      const before = useCalendarStore.getState();
+
+      useCalendarStore.getState().updateDraft('missing', (draft) => ({ ...draft, title: 'x' }));
+
+      expect(useCalendarStore.getState()).toBe(before);
+      expect(useCalendarStore.getState().days).toBe(before.days);
+    });
+  });
+
+  // A refetch rebuilds every day from the server. What did not change must keep its object, or
+  // each save echo re-renders the whole grid.
+  describe('setDays', () => {
+    const fromServer = (): OrganicCalendarDay[] =>
+      structuredClone(useCalendarStore.getState().days);
+
+    it('keeps the current days when the server sends the same set', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      const before = useCalendarStore.getState().days;
+
+      useCalendarStore.getState().setDays(fromServer());
+
+      expect(useCalendarStore.getState().days).toBe(before);
+    });
+
+    it('replaces only the changed draft and its day', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().addDraft('day-1', createDraft('d2'));
+      useCalendarStore.getState().addDraft('day-2', createDraft('d3'));
+      const before = useCalendarStore.getState().days;
+      const next = fromServer();
+      const edited = next[0]?.slots[0];
+      if (!edited) throw new Error('no d1');
+      edited.captionPreview = 'Edited elsewhere';
+
+      useCalendarStore.getState().setDays(next);
+
+      const after = useCalendarStore.getState().days;
+      expect(after[0]?.slots[0]?.captionPreview).toBe('Edited elsewhere');
+      expect(after[0]).not.toBe(before[0]);
+      expect(after[0]?.slots[1]).toBe(before[0]?.slots[1]);
+      expect(after[1]).toBe(before[1]);
+    });
+
+    // A save moves the edited row in the server's order; its neighbours did not change.
+    it('keeps unchanged drafts when the server returns a day in a new order', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().addDraft('day-1', createDraft('d2'));
+      const before = useCalendarStore.getState().days;
+      const next = fromServer();
+      const [first, second] = next[0]?.slots ?? [];
+      if (!first || !second) throw new Error('no d1/d2');
+      first.captionPreview = 'Saved';
+      if (next[0]) next[0].slots = [second, first];
+
+      useCalendarStore.getState().setDays(next);
+
+      const slots = useCalendarStore.getState().days[0]?.slots ?? [];
+      expect(slots.map((slot) => slot.id)).toEqual(['d2', 'd1']);
+      expect(slots[0]).toBe(before[0]?.slots[1]);
+      expect(slots[1]?.captionPreview).toBe('Saved');
+    });
+
+    it('takes a day the store did not hold as it comes', () => {
+      const added = {
+        id: 'day-3',
+        label: 'Wed',
+        dateLabel: 'Jan 3',
+        suggestedTimes: [],
+        slots: [],
+      };
+
+      useCalendarStore.getState().setDays([...fromServer(), added]);
+
+      expect(useCalendarStore.getState().days.at(-1)).toBe(added);
+    });
   });
 
   describe('bulkMoveDrafts', () => {

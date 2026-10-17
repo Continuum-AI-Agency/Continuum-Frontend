@@ -164,7 +164,7 @@ export function OrganicWorkspaceTabs({
 
   return (
     <OpenPlannerDraftProvider value={openPlannerDraft}>
-      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
         <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
           <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 

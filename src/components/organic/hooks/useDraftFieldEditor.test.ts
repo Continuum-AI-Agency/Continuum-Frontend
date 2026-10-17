@@ -29,13 +29,16 @@ const storeState = {
   draft: null as OrganicCalendarDraft | null,
   pendingDraftEdits: {} as Record<string, PendingDraftEdit>,
   refetchRequests: 0,
+  writes: 0,
 };
 
 const updateDraft = (
   draftId: string,
   updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
 ): void => {
-  if (storeState.draft?.id === draftId) storeState.draft = updater(storeState.draft);
+  if (storeState.draft?.id !== draftId) return;
+  storeState.draft = updater(storeState.draft);
+  storeState.writes += 1;
 };
 
 const markDraftEditPending = (draftId: string, fields: readonly DraftEditField[]): void => {
@@ -96,6 +99,7 @@ function seed(slot: OrganicCalendarDraft): void {
   storeState.draft = slot;
   storeState.pendingDraftEdits = {};
   storeState.refetchRequests = 0;
+  storeState.writes = 0;
 }
 
 function storedDraft(): OrganicCalendarDraft | null {
@@ -286,12 +290,78 @@ describe('queueFieldEdit', () => {
       result.current.queueFieldEdit({ caption: 'abc' }, ['caption'], { captionPreview: 'abc' });
     });
 
-    // Every keystroke is visible at once; only the send is deferred.
-    expect(storedDraft()?.captionPreview).toBe('abc');
+    // Every keystroke is visible at once in the editor's draft; the store and the send wait.
+    expect(result.current.draft.captionPreview).toBe('abc');
+    expect(storedDraft()?.captionPreview).toBe('original caption');
     expect(requestCalls).toHaveLength(0);
 
     await waitFor(() => expect(requestCalls).toHaveLength(1));
     expect(requestCalls[0]?.body?.caption).toBe('abc');
+    await waitFor(() => expect(storedDraft()?.captionPreview).toBe('abc'));
+  });
+
+  // Each store write re-renders every calendar cell holding the draft: a burst is one write,
+  // carrying the typed text and the server's updated_at together.
+  it('writes a burst to the store once, with the server updated_at', async () => {
+    requestImpl = async () => ({ updated_at: '2030-08-02T10:00:00.000Z' });
+    const target = draft();
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'a' }, ['caption'], { captionPreview: 'a' });
+      result.current.queueFieldEdit({ caption: 'ab' }, ['caption'], { captionPreview: 'ab' });
+    });
+    await act(async () => {
+      await result.current.flush();
+    });
+
+    expect(storeState.writes).toBe(1);
+    expect(storedDraft()?.captionPreview).toBe('ab');
+    expect(storedDraft()?.updatedAt).toBe('2030-08-02T10:00:00.000Z');
+  });
+
+  it('keeps unsaved typing in the store when the PATCH is rejected', async () => {
+    requestImpl = async () => {
+      throw new ApiError('boom', 500);
+    };
+    const target = draft();
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'kept' }, ['caption'], { captionPreview: 'kept' });
+    });
+    await act(async () => {
+      await result.current.flush();
+    });
+
+    expect(storedDraft()?.captionPreview).toBe('kept');
+    expect(show).toHaveBeenCalled();
+  });
+
+  // The panel can move to another draft mid-burst; the burst still belongs to the first one.
+  it('sends a burst to the draft it was typed into after the panel moves on', async () => {
+    const first = draft();
+    seed(first);
+    const { result, rerender } = renderHook(({ current }) => useDraftFieldEditor(current), {
+      initialProps: { current: first },
+    });
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'for one' }, ['caption'], {
+        captionPreview: 'for one',
+      });
+    });
+    rerender({ current: draft({ id: 'local-2', backendDraftId: 'srv-2' }) });
+
+    expect(result.current.draft.captionPreview).toBe('original caption');
+    await act(async () => {
+      await result.current.flush();
+    });
+
+    expect(requestCalls[0]?.path).toContain('/srv-1/');
+    expect(storedDraft()?.captionPreview).toBe('for one');
   });
 
   it('flush() sends the coalesced edit immediately', async () => {
