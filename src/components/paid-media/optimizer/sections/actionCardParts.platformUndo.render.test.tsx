@@ -54,15 +54,18 @@ const row = (over: Record<string, unknown>) =>
 
 function mount(value: unknown) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const ui = (next: unknown) => (
     <QueryClientProvider client={client}>
       <ActionRevertControl
         brandId="6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64"
         currency="MXN"
-        row={value as never}
+        row={next as never}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(ui(value));
+  /** The feed's refetch landing: the same row, re-read. */
+  return Object.assign(view, { reread: (next: unknown) => view.rerender(ui(next)) });
 }
 
 afterEach(() => {
@@ -84,6 +87,23 @@ describe("ActionRevertControl — a Google write's Undo in Activity", () => {
     await waitFor(() => expect(sent).toHaveLength(2));
     expect(sent[1]).toEqual({ portfolio_id: PORTFOLIO, audit_id: AUDIT, dryRun: false });
     expect((await view.findByText(/Undone\./)).textContent).toContain('recorded in Activity');
+  });
+
+  it('keeps the result on screen when the feed re-reads the row as undone (G4 live run 2)', async () => {
+    // Live, the revert landed in 13 s, the feed's refetch marked the row reverted, and the row
+    // swapped its Undo for the "Reverted" badge — unmounting the open dialog before a person
+    // (or the bench) ever saw "Undone.".
+    const google = row({ receipt: { platform: 'google_ads', requestId: 'req-1' } });
+    const view = mount(google);
+    fireEvent.click(view.getByTestId('activity-platform-undo'));
+    await view.findByText(/validate_only ok/);
+    fireEvent.click(view.getByTestId('activity-platform-undo-confirm'));
+    await waitFor(() => expect(sent).toHaveLength(2));
+    view.reread({ ...google, reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' });
+    expect((await view.findByTestId('platform-card-undo-result')).textContent).toContain('Undone.');
+    fireEvent.click(view.getByText('Close'));
+    await waitFor(() => expect(view.queryByTestId('activity-platform-undo')).toBeNull());
+    expect(view.getByText('Reverted')).toBeTruthy();
   });
 
   it('keeps the Meta dialog for a Meta row, and offers nothing for a row already undone', () => {

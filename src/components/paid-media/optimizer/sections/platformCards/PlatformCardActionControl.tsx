@@ -389,12 +389,15 @@ export function PlatformUndoControl({
   auditId,
   title,
   currency,
+  onOpenChange,
 }: {
   portfolioId: string;
   auditId: string;
   /** What was written, for the dialog title: "Daily budget", "Negative keywords"… */
   title: string;
   currency: string | null;
+  /** Told when the dialog opens and closes, so the row keeps it mounted while it is up. */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const revert = useRevertOptimizerAction();
   const [open, setOpen] = useState(false);
@@ -436,6 +439,7 @@ export function PlatformUndoControl({
     <AlertDialog
       onOpenChange={(next) => {
         setOpen(next);
+        onOpenChange?.(next);
         if (next) void check();
       }}
       open={open}
