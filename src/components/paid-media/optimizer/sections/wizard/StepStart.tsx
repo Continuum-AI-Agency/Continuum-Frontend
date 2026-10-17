@@ -335,8 +335,12 @@ export function StepStart({
             </span>
           ) : isLoading && slow ? (
             // The subtitle's own slot, so naming the wait shifts nothing below it.
-            <span className="text-muted-foreground text-xs" data-testid="suggestions-slow">
-              Still reading this account&rsquo;s ad sets from Meta&hellip;
+            <span
+              className="text-muted-foreground text-xs"
+              data-testid="suggestions-slow"
+              role="status"
+            >
+              Still reading this account&rsquo;s ad sets&hellip;
             </span>
           ) : isLoading ? (
             <SkeletonText className="text-xs" data-testid="suggestions-subtitle" wrap>
@@ -358,17 +362,30 @@ export function StepStart({
               <SuggestionCardSkeleton />
             </>
           ) : failure === 'timeout' ? (
-            <div className="flex items-center gap-2 py-3" data-testid="suggestions-failure">
-              <p className="text-warning text-xs">
-                Suggestions are taking longer than usual — reading this account from Meta did not
-                finish. Try again, or build a portfolio from scratch.
+            <div
+              className="flex items-start gap-3 py-3"
+              data-testid="suggestions-failure"
+              role="status"
+            >
+              <p className="min-w-0 flex-1 text-warning text-xs">
+                Suggestions are taking longer than usual. Try again, or build a portfolio from
+                scratch.
               </p>
-              <Button className="h-7 px-2 text-xs" onClick={onRetry} size="sm" variant="outline">
+              <Button
+                className="h-7 shrink-0 px-2 text-xs"
+                onClick={onRetry}
+                size="sm"
+                variant="outline"
+              >
                 Retry
               </Button>
             </div>
           ) : failure === 'unreachable' ? (
-            <p className="py-3 text-warning text-xs" data-testid="suggestions-failure">
+            <p
+              className="py-3 text-warning text-xs"
+              data-testid="suggestions-failure"
+              role="status"
+            >
               Suggestions are unavailable — the optimizer service is offline. You can still build a
               portfolio from scratch.
             </p>

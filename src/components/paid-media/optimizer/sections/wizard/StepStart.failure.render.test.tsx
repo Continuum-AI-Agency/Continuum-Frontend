@@ -37,6 +37,9 @@ describe('StepStart when the suggestions are slow or fail', () => {
     const notice = screen.getByTestId('suggestions-failure');
     expect(notice.textContent).not.toMatch(/offline/i);
     expect(notice.textContent).toMatch(/taking longer than usual/i);
+    // The list also carries Google, TikTok and cross-platform suggestions.
+    expect(notice.textContent).not.toMatch(/Meta/);
+    expect(notice.getAttribute('role')).toBe('status');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: /Start from scratch/ })).toBeTruthy();
@@ -44,9 +47,9 @@ describe('StepStart when the suggestions are slow or fail', () => {
 
   it('keeps the offline sentence for a service that did not answer', () => {
     render(renderStart({ isLoading: false, failure: 'unreachable' }));
-    expect(screen.getByTestId('suggestions-failure').textContent).toMatch(
-      /the optimizer service is offline/,
-    );
+    const notice = screen.getByTestId('suggestions-failure');
+    expect(notice.textContent).toMatch(/the optimizer service is offline/);
+    expect(notice.getAttribute('role')).toBe('status');
   });
 
   it('names a read still running past the read bound instead of a silent skeleton', () => {
@@ -57,9 +60,10 @@ describe('StepStart when the suggestions are slow or fail', () => {
       act(() => {
         jest.advanceTimersByTime(READ_TIMEOUT_MS);
       });
-      expect(screen.getByTestId('suggestions-slow').textContent).toMatch(
-        /Still reading this account.s ad sets from Meta/,
-      );
+      const slow = screen.getByTestId('suggestions-slow');
+      expect(slow.textContent).toMatch(/Still reading this account.s ad sets/);
+      expect(slow.textContent).not.toMatch(/Meta/);
+      expect(slow.getAttribute('role')).toBe('status');
     } finally {
       jest.useRealTimers();
     }
