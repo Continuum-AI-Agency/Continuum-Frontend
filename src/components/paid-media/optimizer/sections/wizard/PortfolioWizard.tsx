@@ -38,7 +38,7 @@ import { StepAssets } from './StepAssets';
 import { StepGoal } from './StepGoal';
 import { StepPlan } from './StepPlan';
 import { Stepper } from './Stepper';
-import { StepStart, type SuggestionOverride } from './StepStart';
+import { StepStart, type SuggestionOverride, type SuggestionsFailure } from './StepStart';
 import { WizardSummary } from './WizardSummary';
 import {
   buildCreateConfig,
@@ -65,7 +65,8 @@ type PortfolioWizardProps = {
   currency: string | null;
   suggestions: PortfolioSuggestion[];
   suggestionsLoading: boolean;
-  suggestionsError: boolean;
+  suggestionsFailure: SuggestionsFailure;
+  onRetrySuggestions: () => void;
   suggestionsEmptyMessage: string;
   snapshots: AdSetSnapshot[];
   snapshotsLoading: boolean;
@@ -104,7 +105,8 @@ export function PortfolioWizard({
   currency,
   suggestions,
   suggestionsLoading,
-  suggestionsError,
+  suggestionsFailure,
+  onRetrySuggestions,
   suggestionsEmptyMessage,
   snapshots,
   snapshotsLoading,
@@ -306,9 +308,10 @@ export function PortfolioWizard({
               currency={currency}
               emptyMessage={suggestionsEmptyMessage}
               extras={startExtras}
-              isError={suggestionsError}
+              failure={suggestionsFailure}
               isLoading={suggestionsLoading}
               onPick={pickSuggestion}
+              onRetry={onRetrySuggestions}
               onScratch={startScratch}
               snapshots={snapshots}
               suggestions={suggestions}

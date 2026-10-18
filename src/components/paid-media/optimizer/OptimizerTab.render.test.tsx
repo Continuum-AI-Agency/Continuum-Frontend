@@ -163,7 +163,9 @@ beforeEach(() => {
 describe('OptimizerTab on an account with no portfolios while the brand has them elsewhere', () => {
   beforeEach(() => {
     portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
-    elsewhere = [{ ...PORTFOLIO, id: '22222222-2222-4222-8222-222222222222', ad_account_id: 'act_2' }];
+    elsewhere = [
+      { ...PORTFOLIO, id: '22222222-2222-4222-8222-222222222222', ad_account_id: 'act_2' },
+    ];
   });
 
   it('offers the New portfolio control the notice promises, and it opens the create view', () => {
@@ -173,6 +175,16 @@ describe('OptimizerTab on an account with no portfolios while the brand has them
     expect(screen.queryByTestId('onboarding-section')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'New portfolio' }));
     expect(openCreate).toHaveBeenCalledTimes(1);
+  });
+
+  // The control above only proved the URL changed: the notice kept winning over the create
+  // view, so the click landed on the same notice (optimizer:e2e:bench, 2026-10-16).
+  it('renders the create view once the URL asks for it', () => {
+    view = 'create';
+    renderTab();
+
+    expect(screen.getByTestId('create-section')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'No portfolios on this ad account' })).toBeNull();
   });
 });
 
@@ -298,7 +310,7 @@ describe('OptimizerTab — the Google tab (G2)', () => {
     expect(screen.getByTestId('detail-section')).toBeTruthy();
   });
 
-  it("still drops the id of a Meta portfolio on another account, as after an account switch", () => {
+  it('still drops the id of a Meta portfolio on another account, as after an account switch', () => {
     elsewhere = [
       { ...GOOGLE_ONLY, ad_account_id: 'act_2', platforms: ['meta', 'google_ads'] },
     ] as PortfolioListItem[];
@@ -322,7 +334,9 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
       platforms: ['google_ads'],
       ...over,
     }) as PortfolioListItem;
-  const EASY_FIT_G1 = google('aaaaaaaa-0000-4000-8000-000000000001', { pending_recommendations: 2 });
+  const EASY_FIT_G1 = google('aaaaaaaa-0000-4000-8000-000000000001', {
+    pending_recommendations: 2,
+  });
   const EASY_FIT_G2 = google('aaaaaaaa-0000-4000-8000-000000000002');
 
   it("opens Easy Fit's shape on the Google tab, not the other-account notice", () => {
@@ -353,7 +367,14 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
 
   it('keeps the other-account notice for a Meta portfolio on a different Meta account', () => {
     portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
-    elsewhere = [{ ...PORTFOLIO, id: '22222222-2222-4222-8222-222222222222', ad_account_id: 'act_2', platforms: ['meta'] } as PortfolioListItem];
+    elsewhere = [
+      {
+        ...PORTFOLIO,
+        id: '22222222-2222-4222-8222-222222222222',
+        ad_account_id: 'act_2',
+        platforms: ['meta'],
+      } as PortfolioListItem,
+    ];
     renderTab();
     expect(screen.getByRole('heading', { name: 'No portfolios on this ad account' })).toBeTruthy();
     expect(screen.queryByTestId('overview-section')).toBeNull();
@@ -368,7 +389,11 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
   });
 
   it("queues the account's portfolios and the brand's Google ones in Actions, each once, and counts them", () => {
-    const mixed = { ...PORTFOLIO, pending_recommendations: 1, platforms: ['meta', 'google_ads'] } as PortfolioListItem;
+    const mixed = {
+      ...PORTFOLIO,
+      pending_recommendations: 1,
+      platforms: ['meta', 'google_ads'],
+    } as PortfolioListItem;
     portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [mixed] };
     onPlatform = { google_ads: [mixed, EASY_FIT_G1], tiktok_ads: [] };
     view = 'actions';

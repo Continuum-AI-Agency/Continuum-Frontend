@@ -459,6 +459,8 @@ export function forgeLineageVariantOfAttachment(
 
   const walk = (node: ForgeLineageNode): ForgeVariantPin | null => {
     if (shippedAs(node) === attachmentId) {
+      // `id` is the commit (a hash of the instruction set); `sha` is the checkout blob and is the
+      // commit only for an intake. Prefer the commit, and never pin to the ledger placeholder.
       const commitSha = node.id || node.sha;
       if (commitSha && commitSha !== 'from-ledger') {
         return { commitSha, ref: node.refs[0] ?? null };

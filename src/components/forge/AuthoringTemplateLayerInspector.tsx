@@ -81,7 +81,7 @@ export function TemplateLayerInspector({
   idPrefix?: string;
 }) {
   const locked = (key: TemplateLayerTransform) => disabled || !!layer.transformLocks[key];
-  const position = edit?.position ?? layer.position ?? [0, 0];
+  const position = [edit?.x ?? layer.x ?? 0, edit?.y ?? layer.y ?? 0] as [number, number];
   const scale = edit?.scale ?? layer.scale ?? [100, 100];
   const locks = [...new Set(Object.values(layer.transformLocks))];
   const font = edit?.font ?? layer.font;
@@ -125,7 +125,7 @@ export function TemplateLayerInspector({
             suffix="px"
             value={position[0]}
             disabled={locked('position')}
-            onChange={(x) => numericEdit('x', { position: [x, position[1]] })}
+            onChange={(x) => numericEdit('x', { x })}
             onCommit={() => numericCommit('x')}
           />
           <NumberScrubField
@@ -134,7 +134,7 @@ export function TemplateLayerInspector({
             suffix="px"
             value={position[1]}
             disabled={locked('position')}
-            onChange={(y) => numericEdit('y', { position: [position[0], y] })}
+            onChange={(y) => numericEdit('y', { y })}
             onCommit={() => numericCommit('y')}
           />
           <NumberScrubField

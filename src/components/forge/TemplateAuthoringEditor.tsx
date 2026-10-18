@@ -15,7 +15,7 @@ import {
   type TemplatePreview,
   type TemplateAuthoringCommand,
   type TemplateAuthoringDocument,
-  type TemplateAuthoringSaveTarget,
+  type TemplateAuthoringArtifactCommit,
   templateLayerPreviewRequestSchema,
 } from '@continuum/contracts';
 import type { MediaAsset } from '@continuum/contracts';
@@ -45,7 +45,8 @@ import {
   undoLayerHistory,
   updateLayerHistory,
 } from '@/components/forge/layerHistory';
-import type { PreviewEdits } from '@/components/forge/authoringLayerPreviewSvg';
+import type { PreviewEdits, PreviewLayerEdit } from '@/components/forge/authoringLayerPreviewSvg';
+import { nativeLayerEditKey } from '@/components/forge/layerDraft';
 import {
   canMutateTemplateAuthoringSourceGroup,
   canUngroupTemplateNode,
@@ -111,8 +112,8 @@ import {
 } from '@/lib/library/templateSources';
 
 type TemplateLayerEdit = AuthoringLayerEdit;
-type TemplateLayerSaveTarget = TemplateAuthoringSaveTarget;
-type Edits = Record<number, TemplateLayerEdit>;
+type TemplateLayerSaveTarget = TemplateAuthoringArtifactCommit['saveTo'];
+type Edits = Record<string, TemplateLayerEdit>;
 type Changes = { edits: TemplateLayerEdit[]; orders: { compId: number; layerIds: number[] }[] };
 type AuthoringComposition = TemplateAuthoringDocument['compositions'][number];
 type AuthoringFontChoice = TemplateAuthoringDocument['fontChoices'][number];
@@ -154,7 +155,8 @@ const EDIT_FIELDS = [
   'fontSize',
   'font',
   'visible',
-  'position',
+  'x',
+  'y',
   'rotation',
   'scale',
   'opacity',
@@ -169,8 +171,8 @@ const artboardLockCopy = (reason: string | null | undefined) => {
     : reason;
 };
 const hasChanges = (c: Changes) => c.edits.length > 0 || c.orders.length > 0;
-const byLayer = (list: TemplateLayerEdit[]): Edits =>
-  Object.fromEntries(list.map((e) => [e.layerId, e]));
+const byLayer = (list: TemplateLayerEdit[], compId: number): Record<number, TemplateLayerEdit> =>
+  Object.fromEntries(list.filter((e) => e.compId === compId).map((e) => [e.layerId, e]));
 
 function imageDimensions(url: string): Promise<[number, number]> {
   return new Promise((resolve, reject) => {
@@ -209,15 +211,15 @@ export function applyLayerChange(
       : [layer];
   for (const target of targets) {
     const next: TemplateLayerEdit = {
-      ...edits[target.layerId],
+      ...edits[nativeLayerEditKey(target.compId, target.layerId)],
       compId: target.compId,
       layerId: target.layerId,
       ...change,
     };
     for (const key of EDIT_FIELDS)
       if (next[key] !== undefined && same(next[key], target[key])) delete next[key];
-    if (EDIT_FIELDS.some((key) => next[key] !== undefined)) result[target.layerId] = next;
-    else delete result[target.layerId];
+    if (EDIT_FIELDS.some((key) => next[key] !== undefined)) result[nativeLayerEditKey(target.compId, target.layerId)] = next;
+    else delete result[nativeLayerEditKey(target.compId, target.layerId)];
   }
   return result;
 }
@@ -664,11 +666,7 @@ export function TemplateAuthoringEditor({
       brandId,
       expectedVersionId: effectiveVersionId,
       ...(compId ? { compId } : {}),
-      ...change,
-      edits: change.edits.map(({ position, ...edit }) => ({
-        ...edit,
-        ...(position ? { x: position[0], y: position[1] } : {}),
-      })),
+      edits: change.edits.filter((edit) => edit.compId === compId),
     });
   const composed = useQuery({
     queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled],
@@ -844,7 +842,11 @@ export function TemplateAuthoringEditor({
     const orderedLayers = stableOrder
       .map((nodeId) => authoringNodes.get(nodeId))
       .flatMap((node) => node?.sourceRef ? [node.sourceRef.layerId] : []);
-    const projectedCurrent = { ...edits };
+    const projectedCurrent: Record<number, PreviewLayerEdit> = Object.fromEntries(
+      Object.values(edits)
+        .filter((edit) => edit.compId === sceneComp)
+        .map((edit) => [edit.layerId, edit]),
+    );
     const hasGroupCommands = authoringCommands.some((command) => command.type === 'layer.group' || command.type === 'layer.ungroup');
     if (hasGroupCommands && authoringDocument) {
       const sourceNodes = new Map((authoringDraft.sourceDocument?.nodes ?? []).map((node) => [node.nodeId, node]));
@@ -865,14 +867,15 @@ export function TemplateAuthoringEditor({
           parentId = parent.parentNodeId;
         }
         const source = sourceNodes.get(node.nodeId);
-        const legacyPosition = edits[node.sourceRef.layerId]?.position;
-        if (legacyPosition && source?.position) {
-          worldX += legacyPosition[0] - source.position[0];
-          worldY += legacyPosition[1] - source.position[1];
+        const nativeEdit = edits[nativeLayerEditKey(node.sourceRef.compId, node.sourceRef.layerId)];
+        if (source?.position) {
+          worldX += (nativeEdit?.x ?? source.position[0]) - source.position[0];
+          worldY += (nativeEdit?.y ?? source.position[1]) - source.position[1];
         }
         projectedCurrent[node.sourceRef.layerId] = {
           ...projectedCurrent[node.sourceRef.layerId],
-          position: [worldX, worldY],
+          x: worldX,
+          y: worldY,
         };
       }
     }
@@ -908,7 +911,7 @@ export function TemplateAuthoringEditor({
     return {
       compId: sceneComp,
       layers,
-      rendered: byLayer(renderedFor.edits),
+      rendered: byLayer(renderedFor.edits, sceneComp),
       current: projectedCurrent,
       renderedOrder:
         renderedFor.orders.find((o) => o.compId === sceneComp)?.layerIds ??
@@ -946,9 +949,9 @@ export function TemplateAuthoringEditor({
       label: node?.textContent || node?.name || sourceLayer?.text || sourceLayer?.name || 'Untitled layer',
         detail: sourceLayer ? (query ? compName : sourceLayer.text && sourceLayer.text !== sourceLayer.name ? sourceLayer.name : undefined) : 'New layer',
       kind: node?.kind ?? sourceLayer!.kind,
-      hidden: sourceLayer ? !(edits[sourceLayer.layerId]?.visible ?? sourceLayer.visible) : !node!.visible,
+      hidden: sourceLayer ? !(edits[nativeLayerEditKey(sourceLayer.compId, sourceLayer.layerId)]?.visible ?? sourceLayer.visible) : !node!.visible,
       visibilityLocked: sourceLayer ? !!sourceLayer.visibilityReason : !!node!.visibilityReason,
-      edited: sourceLayer ? !!edits[sourceLayer.layerId] : id.startsWith('draft:'),
+      edited: sourceLayer ? !!edits[nativeLayerEditKey(sourceLayer.compId, sourceLayer.layerId)] : id.startsWith('draft:'),
       groupable: node?.capabilities.grouping === true && node.groupingReason === null && !node.parentNodeId,
     }];
   });
@@ -978,6 +981,9 @@ export function TemplateAuthoringEditor({
     variant.revisions.some(
       (revision) => revision.sourceAssetId === assetId && revision.sourceVersionId === effectiveVersionId,
     ),
+  );
+  const exactSourceRevision = sourceVariant?.revisions.find(
+    (revision) => revision.sourceAssetId === assetId && revision.sourceVersionId === effectiveVersionId,
   );
   const lineage = sourceVariant
     ? { role: sourceVariant.original ? 'golden' as const : 'variant' as const }
@@ -1228,10 +1234,17 @@ export function TemplateAuthoringEditor({
       command.type === 'layer.group' && command.nodeId === node.nodeId,
     );
     if (node.sourceRef ? !verifiedSourceGroup : !groupCommand) return false;
-    const allowed = new Set(['position', 'scale', 'rotation']);
+    const allowed = new Set(['position', 'x', 'y', 'scale', 'rotation']);
     if (!Object.keys(edit).length || Object.keys(edit).some((key) => !allowed.has(key))) return false;
+    const basePosition = node.position ?? [0, 0];
+    const tuplePosition = 'position' in edit ? edit.position : undefined;
+    const x = 'x' in edit ? edit.x : undefined;
+    const y = 'y' in edit ? edit.y : undefined;
+    const position = tuplePosition ?? (x === undefined && y === undefined
+      ? undefined
+      : [x ?? basePosition[0], y ?? basePosition[1]] as [number, number]);
     const transform = {
-      ...(edit.position === undefined ? {} : { position: edit.position }),
+      ...(position === undefined ? {} : { position }),
       ...(edit.scale === undefined ? {} : { scale: edit.scale }),
       ...(edit.rotation === undefined ? {} : { rotation: edit.rotation }),
     };
@@ -1546,8 +1559,17 @@ export function TemplateAuthoringEditor({
       setError(null);
       let committed: Awaited<ReturnType<typeof authoringLifecycle.reviewAndCommit>>;
       try {
+        const parentRevisionId = exactSourceRevision?.id;
+        if (!sourceVariant || !parentRevisionId) {
+          throw new Error('The exact source revision is not registered in the immutable Forge catalog.');
+        }
         committed = await authoringLifecycle.reviewAndCommit({
           saveTo,
+          parentRevisionId,
+          expectedHeadRevisionId: saveTo === 'this_variant'
+            ? sourceVariant.draftHeadRevisionId
+            : parentRevisionId,
+          ...(saveTo === 'this_variant' ? { variantId: sourceVariant.variantId } : {}),
           ...(variantName ? { name: variantName } : {}),
         });
       } catch (reason) {
@@ -1572,7 +1594,7 @@ export function TemplateAuthoringEditor({
         name: variantName ?? name,
         artifactId: committed!.artifactId,
         versionId: result.versionId,
-        revisionRef: { templateId: result.templateId, variantId: result.variantId, revisionId: result.revisionId },
+        revisionRef: { templateId: sourceVariant!.templateId, variantId: result.variantId, revisionId: result.revisionId },
         published: committed!.state === 'committed',
       });
       try {
@@ -2157,7 +2179,7 @@ export function TemplateAuthoringEditor({
                       ? byId.get(node.sourceRef.layerId)
                       : sourceMatch ? byId.get(Number(sourceMatch[1])) : undefined;
                     if (target) {
-                      if (target) editLayer(target, { visible: !(edits[target.layerId]?.visible ?? target.visible) });
+                      if (target) editLayer(target, { visible: !(edits[nativeLayerEditKey(target.compId, target.layerId)]?.visible ?? target.visible) });
                     } else if (node?.nodeId.startsWith('draft:') && node.capabilities.visibility && !node.visibilityReason) {
                       recordAuthoringCommand({ type: 'layer.edit', nodeId: node.nodeId, edit: { visible: !node.visible } });
                     }
@@ -2256,7 +2278,7 @@ export function TemplateAuthoringEditor({
                   onDuplicateNode={selectedNode && !selectedNode.duplicateReason && !staleSource ? duplicateSelected : undefined}
                   onDeleteNode={selectedNode && !selectedNode.deleteReason && !staleSource ? deleteSelected : undefined}
                   layer={previewCompId !== null && layer?.compId === previewCompId ? layer : undefined}
-                  edit={layer ? edits[layer.layerId] : undefined}
+                  edit={layer ? edits[nativeLayerEditKey(layer.compId, layer.layerId)] : undefined}
                   edits={edits}
                   fonts={fonts.data ?? []}
                   disabled={staleSource}
@@ -2431,7 +2453,7 @@ export function TemplateAuthoringEditor({
               <>
                 <TemplateLayerInspector
                   layer={layer}
-                  edit={edits[layer.layerId]}
+                  edit={edits[nativeLayerEditKey(layer.compId, layer.layerId)]}
                   fonts={fonts.data ?? []}
                   disabled={!authoringDraft.ready || staleSource}
                   onEdit={(change, group) => editAndPersistGesture(layer, change, group ?? null)}
@@ -2756,14 +2778,14 @@ export function TemplateAuthoringEditor({
           ) : null}
         </footer>
       </section>
-      {effectiveVersionId && inventoryData && 'designImport' in inventoryData && inventoryData.designImport ? (
+      {effectiveVersionId && exactSourceRevision && inventoryData && 'designImport' in inventoryData && inventoryData.designImport ? (
         <DesignLayersPanel
           brandId={brandId}
           assetId={assetId}
-          expectedVersionId={effectiveVersionId}
-          active={active}
+          revisionId={exactSourceRevision.id}
+          expectedHeadRevisionId={sourceVariant?.draftHeadRevisionId ?? exactSourceRevision.id}
+          variantId={sourceVariant && !sourceVariant.original ? sourceVariant.variantId : undefined}
           onSaved={onSaved}
-          onCreated={(variant) => onOpenVariant?.(variant.assetId)}
         />
       ) : null}
     </>

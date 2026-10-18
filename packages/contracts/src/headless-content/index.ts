@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { unsplashPhotoSchema } from '../media/unsplash';
 import { reelPresentationSchema } from '../reels/presentation';
 import { reelShotRoleSchema, reelTemplateIdSchema } from '../reels/templates';
+import { headlessEditSchema } from './cutEdit';
 import { resolvedEffectSchema } from './effects';
 import { headlessGrammarSchema, headlessVariationAxisSchema } from './grammar';
 import { creativeTargetSchema, optimizerGenerationContextSchema } from './optimizer';
@@ -553,6 +554,8 @@ export const headlessCompositionSchema = z
       .strict()
       .nullable()
       .optional(),
+    /** A beat-cut montage of silent shots between the spoken ones; see `cutPlan.ts`. */
+    edit: headlessEditSchema.optional(),
     productOverlays: z
       .array(
         z

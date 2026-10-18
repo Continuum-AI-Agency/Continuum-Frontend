@@ -132,6 +132,12 @@ type PanGesture = {
 
 const EMPTY_AUTHORED_RENDER_NODES: readonly AuthoredRenderNodeSample[] = [];
 
+type AuthoredGestureEdit = {
+  position?: [number, number];
+  scale?: [number, number];
+  rotation?: number;
+};
+
 type AuthoredHandleGesture = {
   pointerId: number;
   node: TemplateAuthoringNode;
@@ -146,7 +152,7 @@ type AuthoredHandleGesture = {
   startRotation: number;
   targets: CanvasRect[];
   tolerance: number;
-  edit: Partial<Pick<AuthoringLayerEdit, 'position' | 'scale' | 'rotation'>>;
+  edit: AuthoredGestureEdit;
   bounds: CanvasRect;
   elements: Array<{ element: SVGGElement; transform: string | null }>;
 };
@@ -297,7 +303,9 @@ function layerFrame(
   edit?: AuthoringLayerEdit,
 ): CanvasLayerFrame | null {
   const bounds = svgLayerBounds(svg, layer.layerId);
-  const position = edit?.position ?? layer.position;
+  const position = edit
+    ? [edit.x ?? layer.x ?? 0, edit.y ?? layer.y ?? 0] as [number, number]
+    : layer.position ?? [layer.x ?? 0, layer.y ?? 0];
   if (!position) return null;
   const measured = bounds ?? {
     left: position[0],
@@ -382,10 +390,7 @@ export function TemplateLayerPreview({
   onSelectNode?: (nodeId: string) => void;
   onDuplicateNode?: () => void;
   onDeleteNode?: () => void;
-  onAuthoredGestureCommit?: (
-    nodeId: string,
-    edit: Extract<TemplateAuthoringCommand, { type: 'layer.edit' }>['edit'],
-  ) => void;
+  onAuthoredGestureCommit?: (nodeId: string, edit: AuthoredGestureEdit) => void;
   authoredNodes?: readonly TemplateAuthoringNode[];
   authoredNodeIds?: readonly string[];
   /** Display-only sampled poses; canonical authoredNodes remain the interaction source. */

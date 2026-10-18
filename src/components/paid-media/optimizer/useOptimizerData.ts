@@ -110,7 +110,7 @@ import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
-import { READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
+import { PLATFORM_READ_TIMEOUT_MS, READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { retryUnlessTimeout } from '@/lib/react-query/retry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -1206,8 +1206,8 @@ const SNAPSHOTS_REFRESH_COOLDOWN_MS = 120_000;
  *  Supabase client already bounds the socket, and this keeps a parse or a second hop from
  *  holding a panel past it. A bound that fires is never retried (`retryUnlessTimeout`), so a
  *  dead read reaches OptimizerOffline at the bound, not at the bound times the retries. */
-function withReadTimeout<T>(promise: Promise<T>): Promise<T> {
-  return withTimeout(promise, READ_TIMEOUT_MS, 'optimizer read');
+function withReadTimeout<T>(promise: Promise<T>, ms: number = READ_TIMEOUT_MS): Promise<T> {
+  return withTimeout(promise, ms, 'optimizer read');
 }
 
 type OptimizerReadOptions<T> = {
@@ -1220,6 +1220,8 @@ type OptimizerReadOptions<T> = {
   refetchInterval?: number | false;
   /** Shown while the first fetch for this key runs — never cached as the answer. */
   placeholderData?: () => NoInfer<T> | undefined;
+  /** The read's bound; READ_TIMEOUT_MS unless the read is known to reach a platform live. */
+  timeoutMs?: number;
 };
 
 /** A small query adapter keeps the existing surface ergonomics (`data` is always
@@ -1233,10 +1235,11 @@ function useOptimizerRead<T>({
   gcTime = THIRTY_MINUTES,
   refetchInterval = false,
   placeholderData,
+  timeoutMs = READ_TIMEOUT_MS,
 }: OptimizerReadOptions<T>) {
   const query = useQuery({
     queryKey,
-    queryFn: () => withReadTimeout(queryFn()),
+    queryFn: () => withReadTimeout(queryFn(), timeoutMs),
     enabled,
     staleTime,
     gcTime,
@@ -2180,6 +2183,8 @@ export function useOptimizerSuggestions(
     empty: null,
     enabled: Boolean(brandId && adAccountId),
     staleTime: TEN_MINUTES,
+    // A cache miss reads the account's ad sets from Meta live (paid-media-metrics).
+    timeoutMs: PLATFORM_READ_TIMEOUT_MS,
   });
 }
 

@@ -4,6 +4,7 @@ import {
   templateAuthoringGroupIdentityMapEntrySchema,
   templateAuthoringGroupMemberIdentitySchema,
 } from './template-authoring-group';
+import { templateLayerEditSchema } from './template-layer-edits';
 import { templateLayerPositionSourceSchema, templateMaskSourceGeometrySchema } from './template-source';
 import { templateAuthoringSourceKeyframeIdSchema } from './template-authoring-keyframes';
 import { templateLayerPreviewResponseSchema } from './template-layer-edits';
@@ -104,18 +105,6 @@ export const templateAuthoringDraftNodeEditSchema = z
   })
   .strict()
   .refine((v) => Object.values(v).some((value) => value !== undefined), 'Choose a layer change');
-
-/** Native command coordinates remain AE Position pairs; the revision adapter records x/y. */
-export const templateAuthoringSourceLayerEditSchema = z.object({
-  ...templateAuthoringDraftNodeEditSchema.shape,
-  compId: nativeCompId,
-  layerId: z.number().int().positive(),
-  font: z.string().trim().min(1).max(200).optional(),
-}).strict().refine(
-  edit => Object.entries(edit).some(([key, value]) => !['compId', 'layerId'].includes(key) && value !== undefined),
-  'Choose a layer change',
-);
-export type TemplateAuthoringSourceLayerEdit = z.infer<typeof templateAuthoringSourceLayerEditSchema>;
 
 export const templateAuthoringScopeSchema = z
   .object({ brandId: uuid, assetId: uuid, baseVersionId: uuid })
@@ -259,7 +248,7 @@ export const templateAuthoringCommandSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('layer.edit'),
       nodeId,
-      edit: z.union([templateAuthoringSourceLayerEditSchema, templateAuthoringDraftNodeEditSchema]),
+      edit: z.union([templateLayerEditSchema, templateAuthoringDraftNodeEditSchema]),
     })
     .strict()
     .refine(
@@ -799,9 +788,6 @@ export type TemplateAuthoringArtifactProvenance = z.infer<
   typeof templateAuthoringArtifactProvenanceSchema
 >;
 
-export const templateAuthoringSaveTargetSchema = z.enum(['new_variant', 'this_variant']);
-export type TemplateAuthoringSaveTarget = z.infer<typeof templateAuthoringSaveTargetSchema>;
-
 export const templateAuthoringArtifactSchema = z
   .object({
     artifactId: uuid,
@@ -824,10 +810,11 @@ export const templateAuthoringArtifactSchema = z
       .object({
         assetId: uuid,
         versionId: uuid,
-        templateId: uuid,
-        variantId: uuid,
-        revisionId: uuid,
         packageChecksum: z.string().regex(/^[a-f0-9]{64}$/i),
+        revisionId: uuid,
+        variantId: uuid,
+        parentRevisionId: uuid,
+        expectedHeadRevisionId: uuid,
       })
       .strict()
       .nullable(),
@@ -853,12 +840,23 @@ export type TemplateAuthoringArtifactReview = z.infer<typeof templateAuthoringAr
 
 export const templateAuthoringArtifactCommitSchema = templateAuthoringArtifactReviewSchema
   .extend({
-    saveTo: templateAuthoringSaveTargetSchema,
+    saveTo: z.enum(['new_variant', 'this_variant']),
+    parentRevisionId: uuid,
+    expectedHeadRevisionId: uuid,
+    variantId: uuid.optional(),
     name: z.string().trim().min(1).max(120).optional(),
   })
   .strict()
-  .refine((value) => value.saveTo !== 'new_variant' || Boolean(value.name), {
-    message: 'Name the new variant',
-    path: ['name'],
+  .superRefine((value, ctx) => {
+    if (value.saveTo === 'new_variant') {
+      if (!value.name)
+        ctx.addIssue({ code: 'custom', message: 'Name the new variant', path: ['name'] });
+      if (value.variantId !== undefined)
+        ctx.addIssue({ code: 'custom', message: 'A new variant allocates its own ID', path: ['variantId'] });
+      if (value.expectedHeadRevisionId !== value.parentRevisionId)
+        ctx.addIssue({ code: 'custom', message: 'A fork must pin its parent revision', path: ['expectedHeadRevisionId'] });
+    } else if (!value.variantId) {
+      ctx.addIssue({ code: 'custom', message: 'Choose the variant to advance', path: ['variantId'] });
+    }
   });
 export type TemplateAuthoringArtifactCommit = z.infer<typeof templateAuthoringArtifactCommitSchema>;

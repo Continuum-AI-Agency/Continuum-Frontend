@@ -19,6 +19,7 @@ import {
   Download,
   Eye,
   FolderOpen,
+  GitCommitHorizontal,
   Loader2,
   Play,
   Plus,
@@ -45,6 +46,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -55,6 +58,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import type { CheckpointGraph } from './templateCheckpoints';
+import { shortSha } from './templateVersion';
 
 // The Render tab's toolbar: four controls, left to right in the order a person uses them —
 // which template, add rows, import rows, save and render. Which set the rows belong to is the
@@ -221,6 +226,9 @@ export function RenderToolbar({
   onAddFromInputs,
   layerSwitches,
   onAskSwitch,
+  checkpoints,
+  templateRef,
+  onTemplateRefChange,
   onUpload,
   onDownloadTemplate,
   dirty,
@@ -262,6 +270,9 @@ export function RenderToolbar({
   /** Layer Show switches no row can change yet; picking one asks for it per row. */
   layerSwitches: ApiRenderVariable[];
   onAskSwitch: (variable: ApiRenderVariable) => void;
+  checkpoints?: CheckpointGraph | null;
+  templateRef?: string | null;
+  onTemplateRefChange?: (ref: string | null) => void;
   onUpload: () => void;
   onDownloadTemplate: () => void;
   dirty: boolean;
@@ -313,6 +324,13 @@ export function RenderToolbar({
           onHighlight={onTemplateHighlight}
           sourceKinds={templateSourceKinds}
         />
+        {checkpoints?.live && onTemplateRefChange ? (
+          <CheckpointPicker
+            graph={checkpoints}
+            templateRef={templateRef ?? null}
+            onChange={onTemplateRefChange}
+          />
+        ) : null}
         {onOpenTemplateSettings ? (
           <Tooltip>
             <TooltipTrigger
@@ -537,6 +555,80 @@ export function RenderToolbar({
         </>
       ) : null}
     </div>
+  );
+}
+
+function CheckpointPicker({
+  graph,
+  templateRef,
+  onChange,
+}: {
+  graph: CheckpointGraph;
+  templateRef: string | null;
+  onChange: (ref: string | null) => void;
+}) {
+  const live = graph.live;
+  if (!live) return null;
+  const others = graph.rows.filter((row) => !row.live);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 px-2 text-xs"
+            aria-label="Checkpoint"
+          >
+            <GitCommitHorizontal className="size-3.5" aria-hidden />
+            <span className="font-mono">{shortSha(live.id)}</span>
+            <span className="text-muted-foreground">{templateRef ? 'pinned' : 'live'}</span>
+            <ChevronDown className="size-3.5" aria-hidden />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-80">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
+            Which checkpoint of this template renders
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={templateRef ?? 'live'}
+            onValueChange={(value) => onChange(value === 'live' ? null : value)}
+          >
+            <DropdownMenuRadioItem value="live">
+              Follow live — whatever is live when it renders
+            </DropdownMenuRadioItem>
+            {graph.liveRef ? (
+              <DropdownMenuRadioItem value={graph.liveRef}>
+                Pin {live.kind.toLowerCase()} {shortSha(live.id)} — refuse if live moves
+              </DropdownMenuRadioItem>
+            ) : null}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        {others.length ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
+                Not live — make one live to render from it
+              </DropdownMenuLabel>
+              {others.map((row) => (
+                <DropdownMenuItem key={row.id} disabled>
+                  <span className="truncate">
+                    {row.kind}{row.branch ? ` · ${row.branch}` : ''}
+                  </span>
+                  <span className="ml-auto font-mono text-2xs text-muted-foreground">
+                    {shortSha(row.id)}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

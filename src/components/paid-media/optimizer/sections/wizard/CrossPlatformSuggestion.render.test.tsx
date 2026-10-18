@@ -147,7 +147,8 @@ const renderWizard = (suggestions: PortfolioSuggestion[]) =>
       snapshotsLoading={false}
       suggestions={suggestions}
       suggestionsEmptyMessage="None"
-      suggestionsError={false}
+      onRetrySuggestions={() => {}}
+      suggestionsFailure={null}
       suggestionsLoading={false}
     />,
   );

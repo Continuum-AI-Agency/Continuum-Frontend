@@ -1100,9 +1100,15 @@ export function projectTemplateAuthoringCommands(
     } else if (command.type === 'layer.edit') {
       const node = nodes.get(command.nodeId);
       if (node) {
-        const edit = 'compId' in command.edit
-          ? (({ compId: _compId, layerId: _layerId, ...rest }) => rest)(command.edit)
+        const nativeEdit = 'compId' in command.edit ? command.edit : null;
+        const edit = nativeEdit
+          ? (({ compId: _compId, layerId: _layerId, ...rest }) => rest)(nativeEdit)
           : command.edit;
+        const position = nativeEdit
+          ? nativeEdit.x !== undefined || nativeEdit.y !== undefined
+            ? [nativeEdit.x ?? node.position?.[0] ?? 0, nativeEdit.y ?? node.position?.[1] ?? 0] as [number, number]
+            : node.position
+          : ('position' in edit ? edit.position : undefined) ?? node.position;
         const nextNode: TemplateAuthoringNode = {
           ...node,
           fontRef: ('fontRef' in edit ? edit.fontRef : undefined) ?? node.fontRef,
@@ -1111,7 +1117,7 @@ export function projectTemplateAuthoringCommands(
           fontSize: edit.fontSize ?? node.fontSize,
           textContent: edit.text ?? node.textContent,
           visible: edit.visible ?? node.visible,
-          position: edit.position ?? node.position,
+          position,
           rotation: edit.rotation ?? node.rotation,
           scale: edit.scale ?? node.scale,
           opacity: edit.opacity ?? node.opacity,
@@ -1122,9 +1128,9 @@ export function projectTemplateAuthoringCommands(
             if (edit.rotation !== undefined && channel.channel === 'rotation' && channel.reason === null &&
                 channel.keyframes.length === 0 && typeof channel.baseValue === 'number')
               return { ...channel, baseValue: edit.rotation };
-            if (edit.position !== undefined && channel.channel === 'position' && channel.reason === null &&
+            if (position && nativeEdit && (nativeEdit.x !== undefined || nativeEdit.y !== undefined) && channel.channel === 'position' && channel.reason === null &&
                 channel.keyframes.length === 0 && Array.isArray(channel.baseValue) && channel.baseValue.length === 3)
-              return { ...channel, baseValue: [edit.position[0], edit.position[1], channel.baseValue[2]!] as [number, number, number] };
+              return { ...channel, baseValue: [position[0], position[1], channel.baseValue[2]!] as [number, number, number] };
             return channel;
           }),
         };

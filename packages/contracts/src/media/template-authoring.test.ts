@@ -10,6 +10,7 @@ import {
   templateAuthoringArtboardDraftNodeId,
   templateAuthoringSeedSchema,
   templateAuthoringWorkspacePackageSchema,
+  templateAuthoringArtifactCommitSchema,
 } from './template-authoring';
 
 const scope = {
@@ -20,6 +21,38 @@ const scope = {
 const checksum = 'a'.repeat(64);
 
 describe('template authoring contracts', () => {
+  test('artifact commits pin a canonical parent and CAS the selected variant', () => {
+    const pins = {
+      artifactId: '66666666-6666-4666-8666-666666666666',
+      expectedDraftRevision: 4,
+      sourceChecksum: checksum,
+      commandDigest: checksum,
+      packageChecksum: checksum,
+      parentRevisionId: '77777777-7777-4777-8777-777777777777',
+      expectedHeadRevisionId: '77777777-7777-4777-8777-777777777777',
+    };
+    expect(templateAuthoringArtifactCommitSchema.safeParse({
+      ...pins,
+      saveTo: 'new_variant',
+      name: 'Fork',
+    }).success).toBe(true);
+    expect(templateAuthoringArtifactCommitSchema.safeParse({
+      ...pins,
+      saveTo: 'new_variant',
+      name: 'Fork',
+      variantId: '88888888-8888-4888-8888-888888888888',
+    }).success).toBe(false);
+    expect(templateAuthoringArtifactCommitSchema.safeParse({
+      ...pins,
+      saveTo: 'this_variant',
+      variantId: '88888888-8888-4888-8888-888888888888',
+    }).success).toBe(true);
+    expect(templateAuthoringArtifactCommitSchema.safeParse({
+      ...pins,
+      saveTo: 'this_variant',
+    }).success).toBe(false);
+  });
+
   test('keeps the original source pin separate from an explicitly identified HyperFrames workspace package', () => {
     const seed = {
       artifactId: '66666666-6666-4666-8666-666666666666',
@@ -101,11 +134,6 @@ describe('template authoring contracts', () => {
     expect(templateAuthoringCommandSchema.safeParse({
       type: 'layer.edit', nodeId: draftNodeId, edit: { position: [2, 3] },
     }).success).toBe(true);
-    expect(templateAuthoringCommandSchema.safeParse({ type: 'layer.edit', nodeId: 'aep:7:31',
-      edit: { compId: 7, layerId: 31, position: [20, 30] } }).success).toBe(true);
-    expect(templateAuthoringCommandSchema.safeParse({ type: 'layer.edit', nodeId: 'aep:7:32',
-      edit: { compId: 7, layerId: 31, position: [20, 30] } }).success).toBe(false);
-
     expect(templateAuthoringCommandSchema.safeParse({
       type: 'layer.edit', nodeId: draftNodeId, edit: { text: 'Changed' },
     }).success).toBe(true);
@@ -239,14 +267,6 @@ describe('template authoring contracts', () => {
       createdAt: '2026-10-11T00:00:00.000Z', reviewedAt: null, commit: null,
     });
     expect(artifact.success).toBe(true);
-    if (!artifact.success) throw artifact.error;
-    const commit = { assetId: scope.assetId, versionId: scope.baseVersionId, packageChecksum: checksum };
-    expect(templateAuthoringArtifactSchema.safeParse({ ...artifact.data, commit }).success).toBe(false);
-    expect(templateAuthoringArtifactSchema.safeParse({ ...artifact.data, commit: {
-      ...commit, templateId: scope.assetId,
-      variantId: '66666666-6666-4666-8666-666666666666',
-      revisionId: '77777777-7777-4777-8777-777777777777',
-    } }).success).toBe(true);
   });
 
   test('requires exact source pin and explicit unsupported-operation capabilities', () => {

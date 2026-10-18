@@ -21,6 +21,8 @@ export type LayerDraftState = {
 
 export type LayerDraftChange = (draft: LayerDraftState | null) => void;
 
+export const nativeLayerEditKey = (compId: number, layerId: number) => `${compId}:${layerId}`;
+
 export function appendLayerDraftCommand(
   snapshot: LayerDraftSnapshot,
   command: TemplateAuthoringCommand,
@@ -88,20 +90,14 @@ export function layerSnapshotFromCommands(
   const snapshot: LayerDraftSnapshot = {
     edits: {}, orders: {}, nodeOrders: {}, exposures: {}, operations: [],
   };
-  const layerRefs = new Map<number, number>();
   for (const command of commands) {
     if (command.type === 'layer.edit') {
       if (command.nodeId.startsWith('aep:')) {
         if (!('compId' in command.edit) || !('layerId' in command.edit) ||
           command.nodeId !== templateAuthoringNodeId(command.edit))
           throw new Error('This draft contains a layer with an invalid source identity.');
-        const existingComp = layerRefs.get(command.edit.layerId);
-        if (existingComp !== undefined && existingComp !== command.edit.compId)
-          throw new Error(
-            'This draft contains overlapping layer IDs that this editor cannot safely restore.',
-          );
-        layerRefs.set(command.edit.layerId, command.edit.compId);
-        snapshot.edits[command.edit.layerId] = structuredClone(command.edit);
+        snapshot.edits[nativeLayerEditKey(command.edit.compId, command.edit.layerId)] =
+          structuredClone(command.edit);
         snapshot.operations.push(structuredClone(command));
       } else {
         snapshot.operations.push(structuredClone(command));
