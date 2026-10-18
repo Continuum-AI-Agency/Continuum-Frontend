@@ -33,10 +33,10 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
+import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
-import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { useElements } from '@/lib/ai-studio/elements';
 import {
@@ -196,6 +196,15 @@ export function HyperframesAgentBlock({
         width: landscape ? longEdge : shortEdge,
         height: landscape ? shortEdge : square ? shortEdge : longEdge,
         storyboard,
+        // Only when the film is that revision's render: the editor edits motion through the link.
+        ...(revision && revision.data.revisionId === data.revisionId
+          ? {
+              hyperframes: {
+                revisionId: revision.data.revisionId,
+                fingerprint: revision.data.fingerprint,
+              },
+            }
+          : {}),
       });
       router.push(href);
     } catch (error) {
@@ -207,7 +216,7 @@ export function HyperframesAgentBlock({
     } finally {
       setOpeningEditor(false);
     }
-  }, [data, openingEditor, router, runtime, show, storyboard]);
+  }, [data, openingEditor, revision, router, runtime, show, storyboard]);
 
   // The film renders on the server; the run's events and the node's own status carry it.
   const failure = runError || data.error;
