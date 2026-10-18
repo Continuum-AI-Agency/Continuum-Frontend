@@ -1,10 +1,14 @@
 'use client';
 
 import {
+  type AdaptCaptionResponse,
+  adaptCaptionResponseSchema,
   type MediaAsset,
+  PUBLISH_PLATFORM_LABELS,
   type PublishFormat,
   type PublishOptionsByPlatform,
   type PublishPlan,
+  type PublishPlatform,
   publishFormatForAssetKinds,
   resolvePublishFormat,
   supportsFormat,
@@ -39,7 +43,7 @@ import {
   useDraftMediaPlacement,
 } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
-import { useFanOutDraft } from '@/components/organic/hooks/useFanOutDraft';
+import { useDraftMembership } from '@/components/organic/hooks/useFanOutDraft';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { usePublishPlan } from '@/components/organic/hooks/usePublishPlan';
@@ -48,20 +52,33 @@ import {
   PublishOptionsPanel,
 } from '@/components/organic/publish-options/PublishOptionsPanel';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
 import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
+import { ApiError } from '@/lib/api/errors';
+import { request } from '@/lib/api/http';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { groupMemberDrafts, isGroup, resolveFrameDraft } from '@/lib/organic/groupDraft';
+import { platformVerdicts } from '@/lib/organic/platformSelection';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
-import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform, POST_PLATFORMS, type PostFormatOption } from '@/lib/organic/postPlatforms';
 import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
+import {
+  accountsForPlatform,
+  findAccount,
+  usePublishAccountsState,
+} from '@/lib/organic/publishTargets';
 import { formatScheduleWithZone } from '@/lib/organic/scheduleLabel';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { resolveDraftHook } from '@/lib/virality/draftHook';
 import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
-import { scheduleFieldPatch, useDraftFieldEditor } from '../hooks/useDraftFieldEditor';
+import {
+  scheduleFieldPatch,
+  useDraftFieldEditor,
+  useDraftFieldPersistence,
+} from '../hooks/useDraftFieldEditor';
 import { useUnscheduleDraft } from '../hooks/useUnscheduleDraft';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { BlueprintStoryboard, resolveStoryboardFrames } from './BlueprintStoryboard';
@@ -74,6 +91,7 @@ import {
   resolveDraftMediaStage,
 } from './DraftLifecycle';
 import {
+  INTEGRATIONS_SETTINGS_HREF,
   type ReadinessFixTarget,
   type ReadinessItem,
   ReadinessLine,
@@ -85,6 +103,7 @@ import { EditableCaption, InlinePreviewTextarea } from './EditableCaption';
 import { HyperFramePlayer } from './HyperFramePlayer';
 import { type LightboxItem, MediaLightbox } from './MediaLightbox';
 import { MediaSelectPopover } from './MediaSelectPopover';
+import { PlatformIcon, PlatformSelector } from './PlatformSelector';
 import { PostCommandMenu } from './PostCommandMenu';
 import { PostMetaChips } from './PostMetaChips';
 import { type DropZoneFallbackAction, PreviewMediaDropZone } from './PreviewMediaDropZone';
@@ -114,6 +133,20 @@ interface OrganicDraftPreviewProps {
   /** Stitch a composed reel into its final video; the workspace owns the job. */
   onStitch?: (draftId: string) => void;
   isStitching?: boolean;
+}
+
+/** The card with the frame's live copy (typing not yet in the store) in that row's place. */
+function withLiveFrame(
+  card: OrganicCalendarDraft,
+  frame: OrganicCalendarDraft,
+): OrganicCalendarDraft {
+  if (frame.id === card.id) return frame;
+  return {
+    ...card,
+    groupMembers: card.groupMembers?.map((member) =>
+      member.draft?.id === frame.id ? { ...member, draft: frame } : member,
+    ),
+  };
 }
 
 function hasText(value: unknown): value is string {
@@ -226,6 +259,25 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
 // because every earlier surface used an <img> and so rendered MP4s into image tags.
 // Transparent, so a full-screen frame's black shows through where it letterboxes.
 function PreviewSlideMedia({ slide, alt }: { slide: PreviewSlide; alt: string }) {
+  // The preview IS the post, so a video shows its first frame. The chat tile loads no video
+  // bytes until hover (right for a strip of thumbnails, wrong here), so the frame renders its
+  // own <video> and falls back to the tile, which degrades to the poster, if this URL fails.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  if (slide.kind === 'video' && slide.storageUrl && failedUrl !== slide.storageUrl) {
+    return (
+      <video
+        // #t=0.01 paints the first frame when there is no poster, instead of a black box.
+        src={slide.poster ? slide.storageUrl : `${slide.storageUrl}#t=0.01`}
+        poster={slide.poster ?? undefined}
+        preload="metadata"
+        muted
+        playsInline
+        aria-label={alt}
+        onError={() => setFailedUrl(slide.storageUrl)}
+        className="absolute inset-0 size-full object-contain"
+      />
+    );
+  }
   return (
     <ChatMediaThumb
       media={{
@@ -809,34 +861,14 @@ export function OrganicDraftPreview({
   onStitch,
   isStitching = false,
 }: OrganicDraftPreviewProps) {
-  // Typed text reaches the store once per burst; until then only the editor's copy has it, so
-  // everything this panel shows, gates and publishes reads that copy.
-  const fieldEditor = useDraftFieldEditor(storedDraft);
-  const { draft } = fieldEditor;
-  const updateDraft = useCalendarStore((state) => state.updateDraft);
-  // The day this draft currently sits on. A time change is a schedule change, and the
-  // route composes the instant from (day, time-of-day) — so the day has to travel with it.
-  const dayId = useCalendarStore(
-    (state) => state.days.find((day) => day.slots.some((slot) => slot.id === draft.id))?.id ?? null,
-  );
-  const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
-  const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
-  const planAccountIds = useCalendarStore((state) => state.accountContext.accountIds);
-  const editingDraftId = useCalendarStore((state) => state.editingDraftId);
-  const setEditingDraftId = useCalendarStore((state) => state.setEditingDraftId);
-  const { requestDraftDeletion } = useDraftDeletionConfirmation();
-  const openInStudio = useOpenDraftInAiStudio();
-  const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId);
-  const isHyperframeFormat = draft.format.toLowerCase() === 'hyperframe';
-  // The platforms this post goes out on. Multi-select is the whole point of #235:
-  // one editable draft, N destinations.
+  // A post is a group: one row per platform. `storedDraft` is the card (its own row is the
+  // group's source); the frame in view is THAT platform's row, and everything the frame shows,
+  // edits, gates and publishes is that row's own — caption, first comment, cover, account.
   const selectedPlatforms = React.useMemo<OrganicPlatformKey[]>(
-    () => (draft.platforms.length > 0 ? draft.platforms : ['instagram']),
-    [draft.platforms],
+    () => (storedDraft.platforms.length > 0 ? storedDraft.platforms : ['instagram']),
+    [storedDraft.platforms],
   );
-  // Which platform's frame we are LOOKING at — a view concern, not a property of the
-  // post. Changing it must never touch draft.platforms, or "check how it lands on
-  // LinkedIn" would silently drop the other platforms from the post.
+  // Which platform's frame we are LOOKING at — a view concern, never a property of the post.
   const [previewFramePlatform, setPreviewFramePlatform] = React.useState<OrganicPlatformKey | null>(
     null,
   );
@@ -844,6 +876,27 @@ export function OrganicDraftPreview({
     previewFramePlatform && selectedPlatforms.includes(previewFramePlatform)
       ? previewFramePlatform
       : selectedPlatforms[0];
+  // Typed text reaches the store once per burst; until then only the editor's copy has it, so
+  // everything this panel shows, gates and publishes reads that copy.
+  const fieldEditor = useDraftFieldEditor(resolveFrameDraft(storedDraft, framePlatform));
+  const { draft } = fieldEditor;
+  // The post's time is the group's: it moves every member row, so it edits through the card.
+  const cardEditor = useDraftFieldEditor(storedDraft);
+  const updateDraft = useCalendarStore((state) => state.updateDraft);
+  // The day this post currently sits on. A time change is a schedule change, and the
+  // route composes the instant from (day, time-of-day) — so the day has to travel with it.
+  const dayId = useCalendarStore(
+    (state) =>
+      state.days.find((day) => day.slots.some((slot) => slot.id === storedDraft.id))?.id ?? null,
+  );
+  const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
+  const editingDraftId = useCalendarStore((state) => state.editingDraftId);
+  const setEditingDraftId = useCalendarStore((state) => state.setEditingDraftId);
+  const { requestDraftDeletion } = useDraftDeletionConfirmation();
+  const openInStudio = useOpenDraftInAiStudio();
+  const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId);
+  const isHyperframeFormat = draft.format.toLowerCase() === 'hyperframe';
   const creativeDirection = resolveCreativeDirection(draft);
   const inspirationSourceUrl = safeSourceUrl(draft.inspirationSourceUrl);
   // The agent-generated hook, if this draft has been generated. Scored on view.
@@ -854,10 +907,11 @@ export function OrganicDraftPreview({
 
   // The plan: exactly what the platform in view receives. The frame, the caption, the notices
   // and the readiness line all read it, through the resolver the publisher runs.
-  const { plan, verdict, accountsLoaded } = usePublishPlan(
-    draftForPreview,
-    isPostPlatform(framePlatform) ? framePlatform : null,
-  );
+  const {
+    plan,
+    verdict,
+    accounts: planAccounts,
+  } = usePublishPlan(draftForPreview, isPostPlatform(framePlatform) ? framePlatform : null);
   // A rendered hyperframe is an ordinary video once its MP4 exists; until then only its
   // composition can be shown.
   const showHyperframePlayer = isHyperframeFormat && (plan?.media.length ?? 0) === 0;
@@ -978,15 +1032,16 @@ export function OrganicDraftPreview({
   // editor" item (another component tree) still asks through the store; for this panel that
   // means opening the caption, which is what those entry points were for.
   // Declared first: effects run in order, so a mount that carries an intent resets, then opens.
+  // Keyed on the post, not the frame: switching frames keeps the open panel.
   React.useEffect(() => {
     setCaptionEditing(false);
     setOptionsOpen(false);
-  }, [draft.id]);
+  }, [storedDraft.id]);
   React.useEffect(() => {
-    if (editingDraftId !== draft.id) return;
+    if (editingDraftId !== storedDraft.id) return;
     setCaptionEditing(true);
     setEditingDraftId(null);
-  }, [draft.id, editingDraftId, setEditingDraftId]);
+  }, [storedDraft.id, editingDraftId, setEditingDraftId]);
   // Enlarge-and-act lightbox target: a blueprint concept frame or a realized slide.
   const [lightbox, setLightbox] = React.useState<{
     kind: 'blueprint' | 'slide';
@@ -1011,48 +1066,20 @@ export function OrganicDraftPreview({
   // publishing a post whose card says "Draft". Shared with the calendar card's menu.
   const { unschedule } = useUnscheduleDraft();
 
-  /**
-   * A store-only patch, for the handful of fields the field-edit route does not own.
-   *
-   * Every editable field used to go through here and stop here — the only writer was
-   * the browser autosave, which accepted manual-origin drafts only and did not even
-   * carry `format`, `hashtags` or `creativeDirectionPrompt` in its change signature.
-   * The next refetch replaced the day set and the edit was gone, silently. Anything
-   * the user can change now goes through `fieldEditor` instead.
-   */
-  const patchDraftLocally = React.useCallback(
-    (patch: Partial<OrganicCalendarDraft>) => {
-      updateDraft(draft.id, (current) => ({ ...current, ...patch }));
+  // Ticking a platform creates its row at once and unticking deletes it: the selection IS the
+  // group's rows on the server, never a browser-only list a refetch could drop (K1).
+  const membership = useDraftMembership();
+  const handleTogglePlatform = React.useCallback(
+    async (platform: PublishPlatform, checked: boolean) => {
+      if (membership.isSaving) return;
+      const next = checked
+        ? [...selectedPlatforms, platform]
+        : selectedPlatforms.filter((value) => value !== platform);
+      // A new row copies the card's row, so the typing goes to the server first.
+      if (!(await fieldEditor.flush())) return;
+      await membership.setPlatforms(storedDraft, next);
     },
-    [draft.id, updateDraft],
-  );
-
-  // The row publishes on its own platform. Adding platforms is a local choice until approve
-  // fans the post out, one row per platform, and the row's own platform stays first (the chip
-  // hands back menu order). Only dropping the row's platform moves the row — through the
-  // field-edit route, with the new platform's account, never the old one's.
-  const handlePlatformsChange = React.useCallback(
-    (next: string[]) => {
-      const selected = next.filter((value) => isOrganicPlatformKey(value));
-      const current = draft.platforms[0];
-      if (current && selected.includes(current)) {
-        patchDraftLocally({ platforms: [current, ...selected.filter((p) => p !== current)] });
-        return;
-      }
-      const platforms = selected;
-      const primary = platforms[0];
-      if (!primary) return;
-      if (!isPostPlatform(primary) || !draft.backendDraftId) {
-        patchDraftLocally({ platforms });
-        return;
-      }
-      const accountId = planAccountIds[primary] ?? null;
-      void fieldEditor.editField({ platform: primary, accountId }, ['platforms'], {
-        platforms,
-        targetAccountId: accountId ?? undefined,
-      });
-    },
-    [draft.backendDraftId, draft.platforms, fieldEditor, patchDraftLocally, planAccountIds],
+    [fieldEditor, membership, selectedPlatforms, storedDraft],
   );
 
   const handleFormatChange = React.useCallback(
@@ -1068,12 +1095,12 @@ export function OrganicDraftPreview({
       // locally so the chip still reflects the choice when it is placed on a day.
       const patch = dayId ? scheduleFieldPatch(dayId, value) : null;
       if (!patch) {
-        patchDraftLocally({ timeLabel: value });
+        updateDraft(storedDraft.id, (current) => ({ ...current, timeLabel: value }));
         return;
       }
-      void fieldEditor.editField(patch, ['schedule'], { timeLabel: value });
+      void cardEditor.editField(patch, ['schedule'], { timeLabel: value });
     },
-    [fieldEditor, dayId, patchDraftLocally],
+    [cardEditor, dayId, storedDraft.id, updateDraft],
   );
 
   const handleHashtagsChange = React.useCallback(
@@ -1136,10 +1163,96 @@ export function OrganicDraftPreview({
 
   const { publish, isPublishing, stage, pollingAttempt, tokenExpired } = usePublishDraft();
 
-  // Approving a multi-platform draft is a fan-out first: the backend copies the row
-  // once per platform, and only then does each row get approved. Doing it at approve
-  // (rather than at selection) is what keeps the copy/media shared while it is editable.
-  const { fanOutAndApprove, isFanningOut } = useFanOutDraft();
+  // The frame's caption on every other row, each saved against its own row's token. Explicit:
+  // nothing else ever copies a caption between platforms.
+  const { persistDraftFields } = useDraftFieldPersistence();
+  const { show } = useToast();
+  const [groupCaptionBusy, setGroupCaptionBusy] = React.useState<'apply' | 'adapt' | null>(null);
+  const handleApplyToAll = React.useCallback(async () => {
+    if (!(await fieldEditor.flush())) return;
+    const caption = draft.captionPreview;
+    const others = groupMemberDrafts(storedDraft).filter((member) => member.id !== draft.id);
+    setGroupCaptionBusy('apply');
+    try {
+      const failures: string[] = [];
+      await Promise.all(
+        others.map(async (member) => {
+          const saved = await persistDraftFields(member, { caption });
+          if (!saved.ok) {
+            failures.push(saved.message);
+            return;
+          }
+          updateDraft(member.id, (current) => ({
+            ...current,
+            captionPreview: caption,
+            updatedAt: saved.updatedAt ?? current.updatedAt,
+          }));
+        }),
+      );
+      if (failures.length > 0) {
+        show({
+          title: `Caption not saved on ${failures.length} of ${others.length}`,
+          description: failures[0],
+          variant: 'error',
+        });
+      }
+    } finally {
+      setGroupCaptionBusy(null);
+    }
+  }, [
+    draft.captionPreview,
+    draft.id,
+    fieldEditor,
+    persistDraftFields,
+    show,
+    storedDraft,
+    updateDraft,
+  ]);
+
+  // The frame's caption re-argued in its platform's voice, saved by the server on that row.
+  const handleAdapt = React.useCallback(async () => {
+    const rowId = draft.backendDraftId;
+    if (!rowId || !(await fieldEditor.flush())) return;
+    setGroupCaptionBusy('adapt');
+    try {
+      const adapted = await request<AdaptCaptionResponse>({
+        path: `/api/organic/calendar/drafts/${encodeURIComponent(rowId)}/adapt-caption`,
+        method: 'POST',
+        body: { platform: framePlatform },
+        schema: adaptCaptionResponseSchema,
+      });
+      const target =
+        groupMemberDrafts(storedDraft).find(
+          (member) => member.backendDraftId === adapted.memberId,
+        ) ?? draft;
+      updateDraft(target.id, (current) => ({
+        ...current,
+        captionPreview: adapted.caption,
+        updatedAt: adapted.updatedAt ?? current.updatedAt,
+      }));
+    } catch (error) {
+      // An approved or scheduled row is refused (409 reapproval_required): new copy nobody read
+      // would publish. The way out is back to draft, then approve again.
+      const reapprove =
+        error instanceof ApiError && (error.code ?? error.payload?.error) === 'reapproval_required';
+      show({
+        title: 'Caption not adapted',
+        description: error instanceof ApiError ? error.message : 'Network error. Please try again.',
+        variant: 'error',
+        ...(reapprove
+          ? {
+              action: {
+                label: 'Move back to draft',
+                onClick: () => void unschedule(storedDraft),
+              },
+            }
+          : {}),
+      });
+    } finally {
+      setGroupCaptionBusy(null);
+    }
+  }, [draft, fieldEditor, framePlatform, show, storedDraft, unschedule, updateDraft]);
+
   const isMultiPlatform = selectedPlatforms.length > 1;
   const isPublished = draft.status === 'published';
   const isScheduled = draft.status === 'scheduled';
@@ -1147,9 +1260,11 @@ export function OrganicDraftPreview({
   const editable = !isPublished && !isStreaming;
 
   // What blocks the post: the shared gate over the plan in view (with its account, once the
-  // dry run has answered), plus every other selected platform's gate — approve fans out into
-  // one row per platform and each row meets its own.
-  const readiness = React.useMemo(() => evaluateDraftReadiness(draft), [draft]);
+  // dry run has answered), plus every other member row's own gate — approve takes them all.
+  const readiness = React.useMemo(
+    () => evaluateDraftReadiness(withLiveFrame(storedDraft, draft)),
+    [storedDraft, draft],
+  );
   const readinessItems = React.useMemo<ReadinessItem[]>(() => {
     const seen = new Set<string>();
     return [...(verdict?.blockers ?? []), ...readiness.blockers].flatMap((issue) => {
@@ -1165,8 +1280,9 @@ export function OrganicDraftPreview({
   const flushPendingEdits = React.useCallback(async (): Promise<boolean> => {
     const mediaSaved = await placement.flushMedia();
     const fieldsSaved = await fieldEditor.flush();
-    return mediaSaved && fieldsSaved;
-  }, [placement, fieldEditor]);
+    const timeSaved = await cardEditor.flush();
+    return mediaSaved && fieldsSaved && timeSaved;
+  }, [placement, fieldEditor, cardEditor]);
 
   const [isApproving, setIsApproving] = React.useState(false);
   const approvingRef = React.useRef(false);
@@ -1176,16 +1292,13 @@ export function OrganicDraftPreview({
     setIsApproving(true);
     try {
       if (!(await flushPendingEdits())) return;
-      if (isMultiPlatform) {
-        await fanOutAndApprove(draft);
-        return;
-      }
-      await onApprove(draft.id);
+      // One call: the workspace approves every member of the group.
+      await onApprove(storedDraft.id);
     } finally {
       approvingRef.current = false;
       setIsApproving(false);
     }
-  }, [draft, fanOutAndApprove, flushPendingEdits, isMultiPlatform, onApprove]);
+  }, [flushPendingEdits, onApprove, storedDraft.id]);
 
   // Gate on "is there a publisher for this draft's platform", not on Instagram specifically.
   const publishPlatform = inferPublishPlatform(draft);
@@ -1275,8 +1388,8 @@ export function OrganicDraftPreview({
   }, [brandProfileId, draft.id, draft.backendDraftId, expandDrafts]);
 
   const handleDelete = React.useCallback(() => {
-    requestDraftDeletion([draft.id], bulkDeleteDrafts);
-  }, [bulkDeleteDrafts, draft.id, requestDraftDeletion]);
+    requestDraftDeletion([storedDraft.id], bulkDeleteDrafts);
+  }, [bulkDeleteDrafts, storedDraft.id, requestDraftDeletion]);
 
   const mediaStatusVariant = resolveMediaStatusVariant(draft);
   const mediaIsPending = mediaStatusVariant === 'pending';
@@ -1516,9 +1629,8 @@ export function OrganicDraftPreview({
       />
     ) : null;
 
-  // The payoff of multi-select: check how ONE copy lands on each surface before
-  // committing, or set each surface's own publish options. Purely a view switch — it
-  // never edits the post.
+  // Each platform's row, one frame at a time: what it previews and edits is that row. Purely a
+  // view switch — it never changes which platforms the post goes out on.
   const platformSwitch = (legend: string) =>
     selectedPlatforms.length > 1 ? (
       <fieldset className="flex items-center gap-1.5 border-0 p-0">
@@ -1532,13 +1644,14 @@ export function OrganicDraftPreview({
             aria-pressed={value === framePlatform}
             onClick={() => setPreviewFramePlatform(value)}
             className={cn(
-              'rounded-md border px-2 py-0.5 text-2xs font-medium transition-colors duration-150',
+              'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-2xs font-medium transition-colors duration-150',
               value === framePlatform
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
             )}
           >
-            {POST_PLATFORMS[value].abbr}
+            <PlatformIcon platform={value} className="size-3" />
+            {PUBLISH_PLATFORM_LABELS[value]}
           </button>
         ))}
       </fieldset>
@@ -1554,22 +1667,30 @@ export function OrganicDraftPreview({
           framePlatform,
           previewFrame.kind,
         );
-  const rawHandle = plan?.account.handle ?? plan?.account.displayName ?? null;
-  // A username reads with its @; a Page or a company name does not.
-  const shownHandle =
-    rawHandle && (framePlatform === 'instagram' || framePlatform === 'tiktok')
-      ? rawHandle.startsWith('@')
-        ? rawHandle
-        : `@${rawHandle}`
-      : rawHandle;
-  // Until the dry run answers, the account is not known to be missing: name the brand.
-  const identityHandle = accountsLoaded ? shownHandle : (shownHandle ?? brandName ?? null);
-  const frameAccountName = rawHandle?.replace(/^@/, '') ?? brandName;
-  // The confirm names the account by the handle shown here, when it is the one addressed.
+  // Who the frame's row posts as: its own stamp, resolved against the platform's candidates.
+  // Known before any dry run answers, and never the brand name (A4).
+  const { accounts: publishAccounts, isLoading: accountsLoading } = usePublishAccountsState(
+    brandProfileId ?? null,
+  );
+  const frameAccounts = React.useMemo(() => {
+    const listed = accountsForPlatform(publishAccounts, framePlatform);
+    return listed.length > 0 ? listed : (planAccounts ?? []);
+  }, [publishAccounts, framePlatform, planAccounts]);
+  const frameAccount = findAccount(frameAccounts, draft.targetAccountId);
+  // The post's poster is its account; with none chosen the frame says so, never the brand.
+  const frameAccountName =
+    frameAccount?.handle?.replace(/^@/, '') || frameAccount?.displayName || 'No account chosen';
+  const handleSelectAccount = React.useCallback(
+    (accountId: string) => {
+      void fieldEditor.editField({ accountId }, ['account'], { targetAccountId: accountId });
+    },
+    [fieldEditor],
+  );
+  // Publishing names every member's own account in its one confirm; nothing is overridden.
   const handlePublishNow = React.useCallback(async () => {
     if (!(await flushPendingEdits())) return;
-    publish(draft, { id: plan?.account.id ?? null, label: shownHandle });
-  }, [draft, flushPendingEdits, plan, publish, shownHandle]);
+    await publish(storedDraft);
+  }, [flushPendingEdits, publish, storedDraft]);
   const sentCaption = plan ? plan.caption.text : undefined;
 
   const handleFix = React.useCallback(
@@ -1586,12 +1707,19 @@ export function OrganicDraftPreview({
         case 'format':
           panel?.querySelector<HTMLButtonElement>('[aria-label="Change format"]')?.click();
           return;
-        case 'account':
-          // ponytail: both "connect one" and "choose between several" open the brand's
-          // integrations, where accounts are assigned; an in-panel account picker is the
-          // upgrade if choosing per post becomes common.
-          window.open('/settings?section=integrations', '_blank', 'noopener,noreferrer');
+        case 'account': {
+          // Choosing is the identity row's picker; only a platform with nothing connected
+          // sends the user to connect one.
+          const picker = panel?.querySelector<HTMLButtonElement>(
+            '[data-review-identity] button[data-account-id]',
+          );
+          if (picker && !picker.disabled) {
+            picker.click();
+            return;
+          }
+          window.open(INTEGRATIONS_SETTINGS_HREF, '_blank', 'noopener,noreferrer');
           return;
+        }
         case 'options':
         case 'cover':
           setOptionsOpen(true);
@@ -1635,11 +1763,11 @@ export function OrganicDraftPreview({
       onPlatformOptions={isPostPlatform(framePlatform) ? () => setOptionsOpen(true) : undefined}
       onEditCreativeDirection={() => setCreativeOpen(true)}
       onEditHashtags={() => setHashtagsOpen(true)}
-      onDuplicate={(targetDayId) => duplicateDraft(draft.id, targetDayId)}
+      onDuplicate={(targetDayId) => duplicateDraft(storedDraft.id, targetDayId)}
       onMoveBackToDraft={
         isScheduled
           ? () => {
-              void unschedule(draft);
+              void unschedule(storedDraft);
             }
           : undefined
       }
@@ -1657,7 +1785,7 @@ export function OrganicDraftPreview({
       ? {
           label: whenLabel ? `${approveVerb} · ${whenLabel}` : approveVerb,
           busyLabel: 'Approving…',
-          busy: isApproving || isFanningOut,
+          busy: isApproving,
           disabledReason: isUploading
             ? 'Uploading your media…'
             : blocked
@@ -1741,10 +1869,34 @@ export function OrganicDraftPreview({
     <PostMetaChips
       className="border-0 bg-transparent p-0"
       platforms={selectedPlatforms}
+      platformControl={
+        <PlatformSelector
+          selected={selectedPlatforms}
+          verdicts={platformVerdicts({
+            format: publishFormat,
+            caption: storedDraft.captionPreview,
+            hashtags: storedDraft.hashtags,
+            accounts: publishAccounts,
+            selected: selectedPlatforms,
+          })}
+          onToggle={(platform, checked) => void handleTogglePlatform(platform, checked)}
+          // The draft gets its row from the autosave within a moment; until then there is
+          // no row for a new platform to copy.
+          disabledReason={
+            !storedDraft.backendDraftId || membership.isSaving
+              ? 'Saving…'
+              : accountsLoading
+                ? 'Loading accounts…'
+                : // A platform added to a scheduled post would be a draft row nobody schedules.
+                  storedDraft.status === 'scheduled'
+                  ? 'Move it back to draft to change its platforms'
+                  : null
+          }
+        />
+      }
       format={toPublishFormat(draft.format)}
       formatLabel={formatLabel}
       timeLabel={draft.timeLabel}
-      onPlatformsChange={handlePlatformsChange}
       onFormatChange={handleFormatChange}
       onTimeChange={handleTimeChange}
     />
@@ -1785,6 +1937,37 @@ export function OrganicDraftPreview({
       ))}
     </div>
   ) : null;
+
+  const groupCaptionActions =
+    editable && isGroup(storedDraft) ? (
+      <div data-group-caption-actions="" className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={groupCaptionBusy !== null}
+          aria-busy={groupCaptionBusy === 'apply'}
+          // Keeps an open caption open: its blur re-lays the frame under the pointer and the
+          // click then lands on whatever moved there. The handler flushes the typing itself.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void handleApplyToAll()}
+        >
+          Apply to all platforms
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={groupCaptionBusy !== null || !draft.backendDraftId}
+          aria-busy={groupCaptionBusy === 'adapt'}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void handleAdapt()}
+        >
+          <Wand2 aria-hidden="true" />
+          Adapt for {PUBLISH_PLATFORM_LABELS[framePlatform]}
+        </Button>
+      </div>
+    ) : null;
 
   const slotScrolls =
     captionEditing ||
@@ -1883,6 +2066,8 @@ export function OrganicDraftPreview({
               displayValue={sentCaption ?? undefined}
               onChange={handleCaptionChange}
               platform={framePlatform}
+              hashtags={draft.hashtags}
+              ariaLabel={`${PUBLISH_PLATFORM_LABELS[framePlatform]} caption`}
               editable={editable}
               editing={captionEditing}
               onEditingChange={setCaptionEditing}
@@ -1895,7 +2080,9 @@ export function OrganicDraftPreview({
             isTextPost
               ? '[container-type:inline-size]'
               : slotScrolls
-                ? 'h-full shrink-0 [container-type:size]'
+                ? // Sized by the outer slot (the size container below), so an open caption grows
+                  // this box and pushes what follows down instead of spilling over it.
+                  'shrink-0'
                 : 'min-h-0 flex-1 [container-type:size]',
           )}
         >
@@ -1907,7 +2094,7 @@ export function OrganicDraftPreview({
             title={plan?.options.youtube?.title}
             hashtags={draftForPreview.hashtags}
             brandName={frameAccountName}
-            avatarUrl={plan?.account.avatarUrl}
+            avatarUrl={frameAccount?.avatarUrl ?? plan?.account.avatarUrl}
             timeLabel={whenLabel ?? draft.timeLabel}
             mediaNode={mediaNode}
             onAddMedia={canPostWithoutMedia ? undefined : () => handleFix('media')}
@@ -1922,6 +2109,8 @@ export function OrganicDraftPreview({
       {slideStrip}
 
       {addMediaToTextPost}
+
+      {groupCaptionActions}
 
       {planNotices}
 
@@ -1954,8 +2143,12 @@ export function OrganicDraftPreview({
         <ReviewIdentityRow
           titleRef={titleRef}
           insetStart={insetStart}
-          account={{ handle: identityHandle, avatarUrl: plan?.account.avatarUrl ?? null }}
-          platform={isPostPlatform(framePlatform) ? framePlatform : 'instagram'}
+          platform={framePlatform}
+          accounts={frameAccounts}
+          selectedAccountId={draft.targetAccountId ?? null}
+          onSelectAccount={editable && draft.backendDraftId ? handleSelectAccount : undefined}
+          pickerDisabledReason={fieldEditor.savingFields.has('account') ? 'Saving…' : null}
+          accountsLoading={accountsLoading && frameAccounts.length === 0}
           summary={[formatLabel, whenLabel ?? 'Not scheduled'].join(' · ')}
           menu={menu}
           onClose={onClose}
@@ -1965,7 +2158,7 @@ export function OrganicDraftPreview({
             height, so the whole post fits without scrolling. An open editor or panel may outgrow
             it, so those states scroll inside the same slot. min-h-0 keeps the flex-1 children
             from growing to their content and being clipped by the panel. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/10 p-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/10 p-3 [container-type:size]">
           {/* One element in both states: swapping it remounted the open caption, which lost
               the focus it returns to on Escape. */}
           <div

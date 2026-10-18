@@ -54,6 +54,19 @@ const sameDrafts = (a: readonly OrganicCalendarDraft[], b: readonly OrganicCalen
   a.length === b.length && a.every((draft, index) => draft === b[index]);
 
 /**
+ * The one row a card is filed under: the first of its platforms in the order the rows are
+ * shown. A post going to three platforms is one card, never three copies of it (C7); its
+ * other platforms read on the card. A platformless draft goes under Instagram.
+ */
+function cardRow(draft: OrganicCalendarDraft, rowOrder: readonly string[]): string {
+  return (
+    rowOrder.find((row) => draft.platforms.includes(row as OrganicPlatformTag)) ??
+    draft.platforms[0] ??
+    'instagram'
+  );
+}
+
+/**
  * Each `day::platform` cell's drafts, by time. A cell holding the same draft objects as in
  * `previous` keeps its previous array: every cell is memoised on it, and a fresh array per
  * cell made one caption keystroke re-render all 35 of them. Empty cells are left out.
@@ -61,18 +74,15 @@ const sameDrafts = (a: readonly OrganicCalendarDraft[], b: readonly OrganicCalen
 export function groupDraftsByCell(
   days: readonly OrganicCalendarDay[],
   previous: ReadonlyMap<string, OrganicCalendarDraft[]> = new Map(),
+  rowOrder: readonly string[] = [],
 ): Map<string, OrganicCalendarDraft[]> {
   const map = new Map<string, OrganicCalendarDraft[]>();
   for (const day of days) {
     for (const draft of day.slots) {
-      // The week grid files a platformless draft under Instagram.
-      const platforms = draft.platforms.length > 0 ? new Set(draft.platforms) : ['instagram'];
-      for (const platform of platforms) {
-        const key = `${day.id}::${platform}`;
-        const cell = map.get(key);
-        if (cell) cell.push(draft);
-        else map.set(key, [draft]);
-      }
+      const key = `${day.id}::${cardRow(draft, rowOrder)}`;
+      const cell = map.get(key);
+      if (cell) cell.push(draft);
+      else map.set(key, [draft]);
     }
   }
   for (const [key, cell] of map) {
@@ -174,9 +184,10 @@ export function PlannerMatrix({
   const committedDraftsByCellRef = React.useRef<ReadonlyMap<string, OrganicCalendarDraft[]>>(
     new Map(),
   );
+  const rowOrderKey = visiblePlatforms.map((platform) => platform.key).join(',');
   const draftsByCell = React.useMemo(
-    () => groupDraftsByCell(days, committedDraftsByCellRef.current),
-    [days],
+    () => groupDraftsByCell(days, committedDraftsByCellRef.current, rowOrderKey.split(',')),
+    [days, rowOrderKey],
   );
   React.useEffect(() => {
     committedDraftsByCellRef.current = draftsByCell;

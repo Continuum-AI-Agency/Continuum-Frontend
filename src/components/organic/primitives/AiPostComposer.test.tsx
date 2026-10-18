@@ -1,7 +1,18 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  cleanup,
+  fireEvent,
+  render as renderInDom,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+import * as http from '@/lib/api/http';
 import * as oneShotPost from '@/lib/organic/oneShotPost';
+import { publishAccountsKey } from '@/lib/organic/publishTargets';
 
 import type { Trend } from '@/lib/organic/trends';
 
@@ -24,6 +35,33 @@ mock.module('@/lib/creative-assets/useStudioLibraryBrowser', () => ({
 }));
 
 import { AiPostComposer } from './AiPostComposer';
+
+const candidate = (id: string, platform: string, handle: string) => ({
+  id,
+  platform,
+  handle,
+  displayName: null,
+  avatarUrl: null,
+  needsReauth: false,
+  isDefault: true,
+});
+
+// The brand's posting accounts, already cached: the composer names them, never their ids.
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+queryClient.setQueryData(publishAccountsKey('brand-1'), {
+  accounts: [
+    candidate('acct-ig', 'instagram', 'acme_a'),
+    candidate('acct-tt', 'tiktok', 'acme_tt'),
+  ],
+});
+function Providers({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: Providers });
 
 const SEED_UUID = '0b6fbf2e-8f6f-4a5f-9d5e-2f4f6f8a1c3d';
 
@@ -108,5 +146,66 @@ describe('AiPostComposer format', () => {
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
     expect(create.mock.calls[0][0].format).toBe('story');
+  });
+});
+
+// C6: the composer posted to one platform, named by nothing but its key.
+describe('AiPostComposer platforms', () => {
+  afterEach(() => {
+    cleanup();
+    mock.restore();
+  });
+
+  it('names the account each selected platform posts to, by handle', () => {
+    renderComposer();
+    expect(
+      screen.getByRole('button', { name: 'Change platforms — Instagram selected' }),
+    ).toBeTruthy();
+    const target = document.querySelector('[data-composer-target="instagram"]');
+    expect(target?.textContent).toBe('Instagram: @acme_a');
+    expect(document.body.textContent).not.toContain('acct-ig');
+  });
+
+  it('writes the post for the first platform, then adds the others to its group', async () => {
+    const create = spyOn(oneShotPost, 'createOneShotPost').mockResolvedValue({
+      status: 'created',
+      draftId: 'row-1',
+      jobId: null,
+      caption: null,
+      scheduledAt: '2026-07-20T12:00:00.000Z',
+      platform: 'instagram',
+      placement: {},
+    } as Awaited<ReturnType<typeof oneShotPost.createOneShotPost>>);
+    const fanOut = spyOn(http, 'request').mockResolvedValue({
+      sourceId: 'row-1',
+      sourcePlatform: 'instagram',
+      groupId: 'group-1',
+      members: [],
+      removed: [],
+      retained: [],
+    });
+    renderComposer();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Change platforms/ }));
+    fireEvent.click(
+      within(screen.getByRole('menu')).getByRole('menuitemcheckbox', { name: 'TikTok' }),
+    );
+    expect(document.querySelector('[data-composer-target="tiktok"]')?.textContent).toBe(
+      'TikTok: @acme_tt',
+    );
+    fireEvent.change(screen.getByLabelText('Direction'), { target: { value: 'Launch day' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create post' }));
+
+    await waitFor(() => expect(fanOut).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0][0].platform).toBe('instagram');
+    expect(fanOut.mock.calls[0][0]).toMatchObject({
+      path: '/api/organic/calendar/drafts/row-1/fan-out',
+      method: 'POST',
+      // The new TikTok row posts as the account the composer named, not the server's pick.
+      body: {
+        platforms: ['instagram', 'tiktok'],
+        accounts: { instagram: 'acct-ig', tiktok: 'acct-tt' },
+      },
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { CAPTION_MAX_ANY_PLATFORM } from '@continuum/contracts';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
@@ -194,6 +195,121 @@ describe('editField', () => {
     expect(result.current.saveError).not.toBeNull();
   });
 
+  // C5: a group is one post, so its time moves every member row, each with its own token.
+  it('moves every member of a group when the time changes, each against its own row', async () => {
+    const member = draft({ id: 'local-1::tiktok', backendDraftId: 'srv-tt', updatedAt: 'T-tt' });
+    const target = draft({
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: member,
+        },
+      ],
+    });
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    await act(async () => {
+      await result.current.editField({ dayId: '2030-08-06', timeOfDay: '13:00' }, ['schedule'], {
+        timeLabel: '1:00 PM',
+      });
+    });
+
+    expect(requestCalls.map((call) => call.path).sort()).toEqual([
+      '/api/organic/calendar/drafts/srv-1/fields',
+      '/api/organic/calendar/drafts/srv-tt/fields',
+    ]);
+    const tt = requestCalls.find((call) => call.path.includes('srv-tt'));
+    expect(tt?.body).toMatchObject({
+      dayId: '2030-08-06',
+      timeOfDay: '13:00',
+      expected_updated_at: 'T-tt',
+    });
+  });
+
+  it('puts the moved rows back when one member cannot move, so the platforms never split', async () => {
+    requestImpl = async (call) => {
+      if (call.path.includes('srv-tt')) throw new ApiError('boom', 500);
+      return { updated_at: 'T-new' };
+    };
+    const member = draft({ id: 'local-1::tiktok', backendDraftId: 'srv-tt', updatedAt: 'T-tt' });
+    const target = draft({
+      timeLabel: '5:00 PM',
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: member,
+        },
+      ],
+    });
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.editField(
+        { dayId: '2030-08-06', timeOfDay: '13:00' },
+        ['schedule'],
+        {
+          timeLabel: '1:00 PM',
+        },
+      );
+    });
+
+    expect(ok).toBe(false);
+    const cardWrites = requestCalls.filter((call) => call.path.includes('srv-1'));
+    expect(cardWrites.map((call) => call.body?.timeOfDay)).toEqual(['13:00', '17:00']);
+    expect(storedDraft()?.timeLabel).toBe('5:00 PM');
+  });
+
+  it('a caption edit on a group card stays on the card row', async () => {
+    const target = draft({
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: draft({ id: 'x', backendDraftId: 'srv-tt' }),
+        },
+      ],
+    });
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+    await act(async () => {
+      await result.current.editField({ caption: 'card only' }, ['caption']);
+    });
+    expect(requestCalls.map((call) => call.path)).toEqual([
+      '/api/organic/calendar/drafts/srv-1/fields',
+    ]);
+  });
+
+  // One caption rule: the route refuses an over-limit caption and names the limit; never truncate.
+  it("shows the route's own reason for a refused edit", async () => {
+    const message = 'LinkedIn captions are at most 3000 characters — this one is 3001';
+    requestImpl = async () => {
+      throw new ApiError(message, 422, undefined, { error: 'caption_too_long', message });
+    };
+    const target = draft();
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    await act(async () => {
+      await result.current.editField({ caption: 'x'.repeat(3001) }, ['caption']);
+    });
+
+    expect(result.current.saveError).toBe(message);
+  });
+
   // A 409 means someone else's newer value is on the row. Rolling back would
   // replace their change with an even older one, so reconcile instead.
   it('does NOT roll back on a stale-draft conflict; it requests a refetch', async () => {
@@ -270,7 +386,10 @@ describe('editField', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     await act(async () => {
-      await result.current.editField({ caption: 'x'.repeat(3000) }, ['caption']);
+      // Past the widest platform's limit: the wire schema bounds on CAPTION_MAX_ANY_PLATFORM.
+      await result.current.editField({ caption: 'x'.repeat(CAPTION_MAX_ANY_PLATFORM + 1) }, [
+        'caption',
+      ]);
     });
 
     expect(requestCalls).toHaveLength(0);

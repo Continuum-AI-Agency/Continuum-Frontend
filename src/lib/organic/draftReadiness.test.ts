@@ -127,7 +127,12 @@ describe('evaluateDraftReadiness — media kind', () => {
 
   it('blocks a YouTube video without a video, and a YouTube photo post outright', () => {
     const youtube = (format: string) =>
-      makeDraft({ platforms: ['youtube'], format, captionPreview: 'Hi', publishingAssets: [image] });
+      makeDraft({
+        platforms: ['youtube'],
+        format,
+        captionPreview: 'Hi',
+        publishingAssets: [image],
+      });
     expect(reasons(youtube('Reel'))).toEqual(['media_missing']);
     expect(fixes(youtube('Post'))).toContain('format');
   });
@@ -167,5 +172,31 @@ describe('evaluateDraftReadiness — several platforms', () => {
     });
     // One item per fix: both platforms want a video, and the line says so once.
     expect(reasons(draft)).toEqual(['media_missing']);
+  });
+
+  // Each member is its own row: the TikTok row's empty caption blocks even when Instagram's is set.
+  it("judges each platform on its own member row's content", () => {
+    const tiktok = makeDraft({
+      id: 'draft-1::tiktok',
+      platforms: ['tiktok'],
+      publishingAssets: [video],
+    });
+    const card = makeDraft({
+      platforms: ['instagram', 'tiktok'],
+      format: 'Reel',
+      captionPreview: 'Instagram words',
+      publishingAssets: [video],
+      groupMembers: [
+        { backendDraftId: 'be-ig', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'be-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: { ...tiktok, format: 'Reel' },
+        },
+      ],
+    });
+    expect(reasons(card)).toEqual(['caption_missing']);
   });
 });

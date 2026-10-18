@@ -1,4 +1,4 @@
-import { PLATFORM_CAPABILITIES } from '@continuum/contracts';
+import { PLATFORM_CAPABILITIES, PUBLISH_PLATFORM_ORDER } from '@continuum/contracts';
 import { CircleDashed } from 'lucide-react';
 
 import {
@@ -37,7 +37,6 @@ export type CreatePostOptions = {
 export type PlannerPlatform = {
   key: PlannerPlatformKey;
   label: string;
-  shortLabel: string;
   Icon: IconComponent;
   canCreate: boolean;
   comingSoon?: boolean;
@@ -47,7 +46,7 @@ function postPlatformMeta(
   key: OrganicPlatformKey,
   Icon: IconComponent,
 ): Omit<PlannerPlatform, 'canCreate'> {
-  return { key, label: POST_PLATFORMS[key].label, shortLabel: POST_PLATFORMS[key].abbr, Icon };
+  return { key, label: POST_PLATFORMS[key].label, Icon };
 }
 
 const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate'>> = {
@@ -56,12 +55,7 @@ const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate
   youtube: postPlatformMeta('youtube', YouTubeIcon),
   facebook: postPlatformMeta('facebook', FacebookIcon),
   tiktok: postPlatformMeta('tiktok', TikTokIcon),
-  x: {
-    key: 'x',
-    label: 'X',
-    shortLabel: 'X',
-    Icon: XIcon,
-  },
+  x: postPlatformMeta('x', XIcon),
 };
 
 /**
@@ -75,23 +69,17 @@ const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate
  */
 const PUBLISHABLE_PLATFORMS = new Set<string>(Object.keys(PLATFORM_CAPABILITIES));
 
-const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = (
-  ['instagram', 'linkedin', 'facebook', 'tiktok', 'youtube', 'x'] as OrganicPlatformTag[]
-).filter((platform) => PUBLISHABLE_PLATFORMS.has(platform));
+// One order everywhere: the contracts' (the selector, the rows, the publish confirm).
+const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = PUBLISH_PLATFORM_ORDER.filter((platform) =>
+  PUBLISHABLE_PLATFORMS.has(platform),
+);
 
 /** Whatever the planner can display but the backend cannot publish to. */
-const COMING_SOON_ORDER: PlannerPlatformKey[] = (
-  ['facebook', 'youtube', 'tiktok', 'x'] as PlannerPlatformKey[]
-).filter((platform) => !PUBLISHABLE_PLATFORMS.has(platform));
+const COMING_SOON_ORDER: PlannerPlatformKey[] = PUBLISH_PLATFORM_ORDER.filter(
+  (platform) => !PUBLISHABLE_PLATFORMS.has(platform),
+);
 
-const DISPLAY_PLATFORM_ORDER: PlannerPlatformKey[] = [
-  'instagram',
-  'linkedin',
-  'facebook',
-  'youtube',
-  'tiktok',
-  'x',
-];
+const DISPLAY_PLATFORM_ORDER: readonly PlannerPlatformKey[] = PUBLISH_PLATFORM_ORDER;
 
 // A planner row is expensive: every one of its seven cells claims a whole cell's worth
 // of vertical space. So a row has to earn its keep — a platform gets a row only if the

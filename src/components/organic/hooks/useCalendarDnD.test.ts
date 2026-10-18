@@ -246,6 +246,34 @@ describe('useCalendarDnD — cross-platform drop', () => {
     expect(reschedule).toHaveBeenCalledTimes(1);
     expect(show).not.toHaveBeenCalled();
   });
+
+  // C5/C7: a group dropped on another platform's row used to be ignored without a word.
+  const groupDraft = () =>
+    plannerDraft({
+      platforms: ['instagram', 'tiktok'],
+      groupMembers: (['instagram', 'tiktok'] as const).map((platform) => ({
+        backendDraftId: `srv-${platform}`,
+        platform,
+        status: 'draft' as const,
+        accountId: null,
+      })),
+    });
+
+  it('refuses a group dropped on a platform it is not on, and says where to change it', () => {
+    dragOntoCellId('planner-cell::2026-08-10::linkedin', ['d1'], { drafts: [groupDraft()] });
+
+    expect(reschedule).not.toHaveBeenCalled();
+    expect(show.mock.calls[0]?.[0].title).toBe(
+      'Change its platforms with "Change platforms" on the post',
+    );
+  });
+
+  it('moves a group to another day along any of its own platforms', () => {
+    dragOntoCellId('planner-cell::2026-08-10::tiktok', ['d1'], { drafts: [groupDraft()] });
+
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    expect(show).not.toHaveBeenCalled();
+  });
 });
 
 describe('plannerCellLabel', () => {

@@ -97,11 +97,21 @@ const ACCOUNTS = [
   {
     id: '0f1d0000-0000-4000-8000-000000000205',
     integration: INTEGRATIONS.tiktok,
-    type: 'tiktok_account',
+    type: 'tiktok_user',
     name: 'PLFID Tok',
     raw_payload: { username: 'plfid.tok' },
   },
 ] as const;
+
+// Every row is stamped with its platform's one seeded account: the stamp is the only account a
+// draft has (the backend no longer stands in the brand's only account for an unstamped row).
+const PLATFORM_ACCOUNT: Record<FidelityCase['platform'], string> = {
+  instagram: '0f1d0000-0000-4000-8000-000000000201',
+  facebook: '0f1d0000-0000-4000-8000-000000000202',
+  youtube: '0f1d0000-0000-4000-8000-000000000203',
+  linkedin: '0f1d0000-0000-4000-8000-000000000204',
+  tiktok: '0f1d0000-0000-4000-8000-000000000205',
+};
 
 async function purgeAccounts(supabase: SupabaseClient): Promise<void> {
   // Assets and brand links cascade from the integration rows.
@@ -122,6 +132,9 @@ async function seedAccounts(supabase: SupabaseClient): Promise<void> {
         id,
         user_id: OWNER_ID,
         provider,
+        // A live token: a lapsed one with no refresh token reads as needing reconnect.
+        status: 'active',
+        expires_at: new Date(Date.now() + 60 * 86_400_000).toISOString(),
         metadata: { bench: 'organic-preview-fidelity' },
       })),
     )
@@ -178,6 +191,8 @@ type FidelityCase = {
   assets: CaseAsset[];
   /** Notices the case exists to exercise; the plan must carry them (and the panel must show them). */
   mustNotice?: string[];
+  /** Blockers the case exists to exercise: the plan must refuse it for them (and the panel must say so). */
+  mustBlock?: string[];
   /** Seeded already bound, so no first-read bind write (and its refetch) races the case. */
   boundAccountId?: string;
 };
@@ -264,7 +279,8 @@ const CASES: FidelityCase[] = [
     format: 'Post',
     caption: longCopy,
     assets: [],
-    mustNotice: ['caption_truncated'],
+    // Over LinkedIn's limit: refused at publish, never cut (CONTRACT CHANGED (4)).
+    mustBlock: ['caption_too_long'],
   },
   {
     key: 'li-image',
@@ -339,7 +355,7 @@ function draftRow(fixture: FidelityCase, media: Map<MediaName, BenchMedia>) {
     brand_id: BRAND_ID,
     user_id: OWNER_ID,
     platform: fixture.platform,
-    platform_account_id: fixture.boundAccountId ?? 'unassigned',
+    platform_account_id: fixture.boundAccountId ?? PLATFORM_ACCOUNT[fixture.platform],
     status: 'draft',
     scheduled_date: scheduledAt,
     client_key: `${PREFIX}${fixture.key}`,
@@ -609,6 +625,12 @@ test.describe('organic preview fidelity — the preview renders the publish plan
         expect(
           plan.notices.map((notice) => notice.code),
           `${label}: the plan does not carry the ${code} notice this case exists for`,
+        ).toContain(code);
+      }
+      for (const code of fixture.mustBlock ?? []) {
+        expect(
+          dryRun.blockers.map((blocker) => blocker.reason),
+          `${label}: the plan is not refused for ${code}, which this case exists for`,
         ).toContain(code);
       }
 

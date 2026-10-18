@@ -100,12 +100,18 @@ const KNOWN_FORMATS = postFormatOptions([]).map((option) => option.toLowerCase()
 /**
  * Why `draft` cannot move onto `platform`'s row, or null when it can. A drop on another
  * platform's row restamps the draft onto that platform, so a Story dropped on Facebook
- * became a Facebook Story, which nothing can publish.
+ * became a Facebook Story, which nothing can publish. A group is several rows: it moves to
+ * a day on any of its own platforms' rows, and changes platforms only from its menu.
  */
 export function crossPlatformDropRefusal(
-  draft: Pick<OrganicCalendarDraft, 'format' | 'platforms'>,
+  draft: Pick<OrganicCalendarDraft, 'format' | 'platforms' | 'groupMembers'>,
   platform: OrganicPlatformTag,
 ): string | null {
+  if ((draft.groupMembers?.length ?? 0) > 1) {
+    return draft.platforms.includes(platform)
+      ? null
+      : 'Change its platforms with "Change platforms" on the post';
+  }
   if (draft.platforms.length === 1 && draft.platforms[0] === platform) return null;
   const format = draft.format.trim().toLowerCase();
   // Stated outright: a Story draft can come from the agent even where the picker offers none.

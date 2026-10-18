@@ -62,7 +62,6 @@ const { PlannerMatrix, groupDraftsByCell } = await import('./PlannerMatrix');
 const instagram: PlannerPlatform = {
   key: 'instagram',
   label: 'Instagram',
-  shortLabel: 'IG',
   Icon: () => <svg aria-hidden />,
   canCreate: true,
 };
@@ -257,5 +256,21 @@ describe('groupDraftsByCell', () => {
 
     expect(cells.get('2026-08-03::instagram')?.map((item) => item.id)).toEqual(['early', 'late']);
     expect(cells.has('2026-08-03::facebook')).toBe(false);
+  });
+
+  // C7: a post going to three platforms used to show as three copies, one per row.
+  it('files a grouped card once, under the first of its platforms in the row order', () => {
+    const grouped = {
+      ...draft('g'),
+      platforms: ['tiktok', 'facebook', 'linkedin'],
+    } as OrganicCalendarDraft;
+    const cells = groupDraftsByCell([day('2026-08-03', [grouped])], new Map(), [
+      'instagram',
+      'facebook',
+      'linkedin',
+      'tiktok',
+    ]);
+
+    expect([...cells.keys()]).toEqual(['2026-08-03::facebook']);
   });
 });

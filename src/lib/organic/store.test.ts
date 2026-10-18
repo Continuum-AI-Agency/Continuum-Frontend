@@ -85,6 +85,42 @@ describe('useCalendarStore', () => {
     expect(useCalendarStore.getState().pendingServerDeletes).toEqual([]);
   });
 
+  it('queues every member row of a deleted group card, once each', () => {
+    const card: OrganicCalendarDraft = {
+      ...createDraft('d1'),
+      backendDraftId: 'be-ig',
+      groupMembers: [
+        { backendDraftId: 'be-ig', platform: 'instagram', status: 'draft', accountId: null },
+        { backendDraftId: 'be-tt', platform: 'tiktok', status: 'draft', accountId: null },
+      ],
+    };
+    useCalendarStore.getState().addDraft('day-1', card);
+
+    useCalendarStore.getState().bulkDeleteDrafts(['d1']);
+
+    expect(useCalendarStore.getState().pendingServerDeletes).toEqual(['be-ig', 'be-tt']);
+  });
+
+  it('duplicates a group card as one new draft on its own platform, outside the group', () => {
+    const card: OrganicCalendarDraft = {
+      ...createDraft('d1'),
+      platforms: ['instagram', 'tiktok'],
+      groupId: 'group-1',
+      groupMembers: [
+        { backendDraftId: 'be-ig', platform: 'instagram', status: 'draft', accountId: null },
+        { backendDraftId: 'be-tt', platform: 'tiktok', status: 'draft', accountId: null },
+      ],
+    };
+    useCalendarStore.getState().addDraft('day-1', card);
+
+    useCalendarStore.getState().duplicateDraft('d1');
+
+    const copy = useCalendarStore.getState().days[0]?.slots.find((slot) => slot.id !== 'd1');
+    expect(copy?.platforms).toEqual(['instagram']);
+    expect(copy?.groupId).toBeUndefined();
+    expect(copy?.groupMembers).toBeUndefined();
+  });
+
   // A single-select click clears the multi-selection every time. Notifying with a fresh []
   // when nothing was selected re-rendered every planner cell that reads the set.
   describe('clearDraftSelection', () => {
@@ -219,6 +255,46 @@ describe('useCalendarStore', () => {
       expect(after[0]).not.toBe(before[0]);
       expect(after[1]).toBe(before[1]);
       expect(after[1]?.slots[0]).toBe(before[1]?.slots[0]);
+    });
+
+    it("reaches a group member's own draft by its id, leaving the card's own fields alone", () => {
+      const member = {
+        ...createDraft('d1::tiktok'),
+        platforms: ['tiktok' as const],
+        backendDraftId: 'be-tt',
+      };
+      const card: OrganicCalendarDraft = {
+        ...createDraft('d1'),
+        backendDraftId: 'be-ig',
+        platforms: ['instagram', 'tiktok'],
+        groupMembers: [
+          { backendDraftId: 'be-ig', platform: 'instagram', status: 'draft', accountId: null },
+          {
+            backendDraftId: 'be-tt',
+            platform: 'tiktok',
+            status: 'draft',
+            accountId: null,
+            draft: member,
+          },
+        ],
+      };
+      useCalendarStore.getState().addDraft('day-1', card);
+      useCalendarStore.getState().addDraft('day-2', createDraft('d2'));
+      const before = useCalendarStore.getState().days;
+
+      useCalendarStore.getState().updateDraft('d1::tiktok', (draft) => ({
+        ...draft,
+        captionPreview: 'TikTok words',
+        status: 'scheduled',
+      }));
+
+      const after = useCalendarStore.getState().days;
+      const slot = after[0]?.slots[0];
+      expect(slot?.captionPreview).toBe('Test Caption');
+      expect(slot?.groupMembers?.[1]?.draft?.captionPreview).toBe('TikTok words');
+      expect(slot?.groupMembers?.[1]?.status).toBe('scheduled');
+      expect(slot?.groupMembers?.[0]).toBe(card.groupMembers?.[0]);
+      expect(after[1]).toBe(before[1]);
     });
 
     it('leaves the state alone when no draft matches', () => {

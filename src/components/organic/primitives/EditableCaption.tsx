@@ -1,6 +1,11 @@
 'use client';
 
-import { captionLimits, toPublishPlatform } from '@continuum/contracts';
+import {
+  captionLimits,
+  type HashtagTiers,
+  platformCaptionLength,
+  toPublishPlatform,
+} from '@continuum/contracts';
 import * as React from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -62,9 +67,20 @@ export function InlinePreviewTextarea({
 // The counter reads the SAME capability block the publisher clamps against, so a caption
 // the counter shows as in-bounds is one that publishes whole. They used to be two maps and
 // a LinkedIn draft at 2,600 chars counted green while publishing truncated at 2200.
-export function CaptionCharCount({ caption, platform }: { caption: string; platform: string }) {
-  const limit = captionLimits(toPublishPlatform(platform) ?? 'instagram').maxLength;
-  const len = caption.length;
+// It counts the caption AS SENT — body plus the hashtags the platform takes — because that is
+// what the limit (and the publish gate) is measured against.
+export function CaptionCharCount({
+  caption,
+  platform,
+  hashtags,
+}: {
+  caption: string;
+  platform: string;
+  hashtags?: HashtagTiers | string[] | null;
+}) {
+  const publishPlatform = toPublishPlatform(platform) ?? 'instagram';
+  const limit = captionLimits(publishPlatform).maxLength;
+  const len = platformCaptionLength(publishPlatform, caption, hashtags);
   return (
     <div className="mt-1 flex justify-end">
       <span
@@ -114,7 +130,10 @@ export function EditableCaption({
   displayValue,
   lead,
   readoutClassName,
+  hashtags,
 }: {
+  /** Counted with the caption: the limit is the caption as sent. */
+  hashtags?: HashtagTiers | string[] | null;
   value: string;
   onChange: (next: string) => void;
   platform: string;
@@ -178,7 +197,10 @@ export function EditableCaption({
         type="button"
         onClick={() => setEditing(true)}
         aria-label={
-          hasText ? `Edit ${ariaLabel.toLowerCase()}` : `Add a ${ariaLabel.toLowerCase()}`
+          // Platform names keep their case ("Edit TikTok caption"); only the bare default lowers.
+          hasText
+            ? `Edit ${ariaLabel === 'Caption' ? 'caption' : ariaLabel}`
+            : `Add a ${ariaLabel === 'Caption' ? 'caption' : ariaLabel}`
         }
         className={cn(
           'block w-full rounded-md px-2 py-1.5 text-left text-foreground transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50',
@@ -218,7 +240,7 @@ export function EditableCaption({
           editClassName,
         )}
       />
-      <CaptionCharCount caption={value} platform={platform} />
+      <CaptionCharCount caption={value} platform={platform} hashtags={hashtags} />
     </div>
   );
 }

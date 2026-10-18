@@ -3,6 +3,8 @@
 import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
   type OneShotPostResponse,
+  PUBLISH_PLATFORM_LABELS,
+  PUBLISH_PLATFORM_ORDER,
   type PublishPlatform,
   plannerDayIdInZone,
   resolvePlannerTimeZone,
@@ -27,14 +29,16 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { pluralize } from '@/lib/format/pluralize';
-import { readSavedAccountSelection } from '@/lib/organic/account-selection';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { findDraftInDays } from '@/lib/organic/groupDraft';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform } from '@/lib/organic/postPlatforms';
+import { defaultPublishAccount } from '@/lib/organic/publish-utils';
+import { usePublishAccounts } from '@/lib/organic/publishTargets';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
 import { getLocalStorageJSON, removeLocalStorage, setLocalStorageJSON } from '@/lib/storage';
@@ -148,7 +152,6 @@ type OrganicCalendarWorkspaceClientProps = {
   brandName?: string;
   brandTimeZone?: string;
   userId?: string;
-  instagramAccountId?: string;
   initialWeekStart?: string | null;
   initialSelectedDraftId?: string | null;
   initialView?: 'week' | 'month' | 'list';
@@ -166,11 +169,8 @@ const NOOP_STRING = (_id: string) => {};
  * memoised cell and chip; closing over `drafts` handed each of them a new one per keystroke.
  */
 function findLoadedDraft(draftId: string): OrganicCalendarDraft | undefined {
-  for (const day of useCalendarStore.getState().days) {
-    const draft = day.slots.find((slot) => slot.id === draftId);
-    if (draft) return draft;
-  }
-  return undefined;
+  // A group member's own row (the preview's frame) is nested in its card, not a slot.
+  return findDraftInDays(useCalendarStore.getState().days, draftId);
 }
 
 /** "Wed, Oct 14 · 11:00 AM" — a published post carries its day as an id, not a label. */
@@ -206,7 +206,6 @@ function OrganicCalendarWorkspaceInner({
   brandProfileId,
   brandName,
   brandTimeZone,
-  instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
@@ -278,24 +277,17 @@ function OrganicCalendarWorkspaceInner({
     })),
   );
 
+  const publishAccounts = usePublishAccounts(brandProfileId ?? null);
   React.useEffect(() => {
-    // One account id per publishable platform — the account this workspace publishes to. It
-    // seeds from the brand's default, then from whatever the user last chose in the switcher
-    // (per brand), and both generation and publish read it. A choice that only lives in a
-    // dropdown is how posts kept landing on the brand's first-resolved account.
-    const instagram = instagramAccountId ?? platformAccountIds.instagram;
-    const defaults: Partial<Record<PublishPlatform, string>> = {
-      ...(instagram ? { instagram } : {}),
-      ...(platformAccountIds.facebook ? { facebook: platformAccountIds.facebook } : {}),
-      ...(platformAccountIds.linkedin ? { linkedin: platformAccountIds.linkedin } : {}),
-    };
-
-    const saved = readSavedAccountSelection(brandProfileId ?? null);
-    const accountIds = { ...defaults };
-    for (const [platform, accountId] of Object.entries(saved) as Array<[PublishPlatform, string]>) {
-      // Only honor a saved choice that is still one of the brand's accounts.
-      const options = platformAccountOptions[platform as OrganicPlatformKey] ?? [];
-      if (options.some((option) => option.id === accountId)) accountIds[platform] = accountId;
+    // One account id per platform — the account a new post on it goes to. It seeds from the
+    // brand's server-side default (the switcher writes it), else the only usable account, else
+    // what the page resolved. TikTok, YouTube and X used to get nothing, so their posts were
+    // created with no account and refused at publish (A8).
+    const accountIds: Partial<Record<PublishPlatform, string>> = {};
+    for (const platform of PUBLISH_PLATFORM_ORDER) {
+      const accountId =
+        defaultPublishAccount(publishAccounts, platform)?.id ?? platformAccountIds[platform];
+      if (accountId) accountIds[platform] = accountId;
     }
 
     setAccountContext({
@@ -306,9 +298,9 @@ function OrganicCalendarWorkspaceInner({
       brandId: brandProfileId ?? null,
     });
   }, [
-    instagramAccountId,
     platformAccountIds,
     platformAccountOptions,
+    publishAccounts,
     brandProfileId,
     setAccountContext,
   ]);
@@ -833,6 +825,15 @@ function OrganicCalendarWorkspaceInner({
       // yet. Don't prune the selection until hydration is authoritative, or the
       // back-nav transiently loses the draft being edited.
       if (!isCalendarHydrated) return;
+      // The same post under a new id: removing the card's own platform hands the card to
+      // another member row, which the refetch maps under that row's id. Follow the row.
+      const rowId = lastResolvedDraftRef.current?.backendDraftId;
+      const followed = rowId ? drafts.find((draft) => draft.backendDraftId === rowId) : undefined;
+      if (followed) {
+        if (editingDraftId === selectedId) beginEditingDraft(followed.id);
+        else setSelectedDraftId(followed.id);
+        return;
+      }
       // Current selection is stale -- attempt to restore a preferred draft
       // instead of nulling out then re-selecting on the next render cycle.
       if (typeof window !== 'undefined') {
@@ -868,7 +869,10 @@ function OrganicCalendarWorkspaceInner({
     }
   }, [
     allDraftIds,
+    beginEditingDraft,
     brandProfileId,
+    drafts,
+    editingDraftId,
     initialSelectedDraftId,
     isAutoSelectSuppressed,
     isCalendarHydrated,
@@ -1012,7 +1016,7 @@ function OrganicCalendarWorkspaceInner({
         title:
           status === 'placeholder'
             ? 'Content idea'
-            : `New ${selectedPlatform[0].toUpperCase()}${selectedPlatform.slice(1)} post`,
+            : `New ${PUBLISH_PLATFORM_LABELS[selectedPlatform]} post`,
         summary: '',
         timeLabel: targetDay.suggestedTimes[0] ?? '9:00 AM',
         dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,

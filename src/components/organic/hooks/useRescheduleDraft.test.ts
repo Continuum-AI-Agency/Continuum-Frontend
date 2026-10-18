@@ -238,10 +238,13 @@ describe('useRescheduleDraft', () => {
 
 describe('retargetDraft', () => {
   it('takes the destination platform and its default account', () => {
-    const next = retargetDraft(draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb' }), {
-      platform: 'instagram',
-      accountId: 'acct-ig',
-    });
+    const next = retargetDraft(
+      draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb' }),
+      {
+        platform: 'instagram',
+        accountId: 'acct-ig',
+      },
+    );
     expect(next?.platforms).toEqual(['instagram']);
     expect(next?.targetAccountId).toBe('acct-ig');
   });
@@ -249,10 +252,13 @@ describe('retargetDraft', () => {
   // Production 2026-09-22: an Instagram draft dragged into the TikTok row kept its IG
   // account, and every scheduled publish was refused as "not linked to this brand".
   it("drops the source platform's account when the destination has no default", () => {
-    const next = retargetDraft(draft('a', { platforms: ['instagram'], targetAccountId: 'acct-ig' }), {
-      platform: 'tiktok',
-      accountId: undefined,
-    });
+    const next = retargetDraft(
+      draft('a', { platforms: ['instagram'], targetAccountId: 'acct-ig' }),
+      {
+        platform: 'tiktok',
+        accountId: undefined,
+      },
+    );
     expect(next?.platforms).toEqual(['tiktok']);
     expect(next?.targetAccountId).toBeUndefined();
   });
@@ -273,12 +279,19 @@ describe('retargetDraft', () => {
   // Publish reads its targets from groupMembers, so a restamp that left them would post
   // to the old platform.
   it('moves the single group member with the draft', () => {
-    const member = { backendDraftId: 'srv-a', platform: 'facebook' as const, status: 'draft' as const };
+    const member = {
+      backendDraftId: 'srv-a',
+      platform: 'facebook' as const,
+      status: 'draft' as const,
+      accountId: 'acct-fb',
+    };
     const next = retargetDraft(draft('a', { platforms: ['facebook'], groupMembers: [member] }), {
       platform: 'instagram',
-      accountId: undefined,
+      accountId: 'acct-ig',
     });
-    expect(next?.groupMembers).toEqual([{ ...member, platform: 'instagram' }]);
+    expect(next?.groupMembers).toEqual([
+      { ...member, platform: 'instagram', accountId: 'acct-ig' },
+    ]);
   });
 
   it('leaves a fan-out group alone: one card is several rows', () => {
@@ -286,6 +299,7 @@ describe('retargetDraft', () => {
       backendDraftId: `srv-${platform}`,
       platform,
       status: 'draft' as const,
+      accountId: null,
     }));
     expect(
       retargetDraft(draft('a', { platforms: ['instagram', 'facebook'], groupMembers: members }), {
@@ -308,7 +322,9 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
 
   // Gating #1/#15: the platform used to be written straight to Supabase from the browser.
   it('sends the platform, its account and the day in ONE field-route PATCH', async () => {
-    seedDays([draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb', updatedAt: 'T0' })]);
+    seedDays([
+      draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb', updatedAt: 'T0' }),
+    ]);
     const target = dayIdAhead(20);
     const { result } = renderHook(() => useRescheduleDraft());
 
@@ -390,5 +406,91 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
     expect(findDraft('a')?.draft.platforms).toEqual(['instagram']);
     expect(findDraft('b')?.draft.platforms).toEqual(['facebook']);
     expect(findDraft('b')?.dayId).toBe(target);
+  });
+});
+
+describe('useRescheduleDraft — a group moves together (C5)', () => {
+  // The card is the Instagram row; the TikTok member carries its own draft and row id.
+  const groupCard = () =>
+    draft('g', {
+      platforms: ['instagram', 'tiktok'],
+      groupId: 'group-1',
+      updatedAt: 'T0',
+      groupMembers: [
+        { backendDraftId: 'srv-g', platform: 'instagram', status: 'draft', accountId: 'acct-ig' },
+        {
+          backendDraftId: 'srv-g-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: 'acct-tt',
+          draft: draft('g::tiktok', {
+            backendDraftId: 'srv-g-tt',
+            platforms: ['tiktok'],
+            updatedAt: 'U0',
+          }),
+        },
+      ],
+    });
+
+  beforeEach(() => {
+    requestCalls.length = 0;
+    requestImpl = async () => ({ updated_at: 'T1' });
+    show.mockClear();
+  });
+
+  it('PATCHes every member to the new day, in turn', async () => {
+    seedDays([groupCard()]);
+    const target = dayIdAhead(20);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('g', target);
+    });
+
+    expect(requestCalls.map((call) => [call.path, call.body?.dayId])).toEqual([
+      ['/api/organic/calendar/drafts/srv-g/fields', target],
+      ['/api/organic/calendar/drafts/srv-g-tt/fields', target],
+    ]);
+    expect(requestCalls[1]?.body?.expected_updated_at).toBe('U0');
+    expect(findDraft('g')?.dayId).toBe(target);
+  });
+
+  it('moves the members that already moved back when one fails, and restores the card', async () => {
+    seedDays([groupCard()]);
+    const target = dayIdAhead(20);
+    requestImpl = async (opts) => {
+      if (opts.path.includes('srv-g-tt')) throw new Error('500');
+      return { updated_at: 'T1' };
+    };
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('g', target);
+    });
+
+    expect(requestCalls.map((call) => [call.path, call.body?.dayId])).toEqual([
+      ['/api/organic/calendar/drafts/srv-g/fields', target],
+      ['/api/organic/calendar/drafts/srv-g-tt/fields', target],
+      ['/api/organic/calendar/drafts/srv-g/fields', FROM_DAY],
+    ]);
+    expect(findDraft('g')?.dayId).toBe(FROM_DAY);
+    expect(show.mock.calls[0]?.[0]?.variant).toBe('error');
+  });
+
+  it('never restamps a group onto a platform row: the drop only moves the day', async () => {
+    seedDays([groupCard()]);
+    const target = dayIdAhead(20);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('g', target, {
+        draftId: 'g',
+        platform: 'tiktok',
+        accountId: 'acct-tt',
+      });
+    });
+
+    expect(requestCalls.every((call) => call.body?.platform === undefined)).toBe(true);
+    expect(findDraft('g')?.draft.platforms).toEqual(['instagram', 'tiktok']);
   });
 });

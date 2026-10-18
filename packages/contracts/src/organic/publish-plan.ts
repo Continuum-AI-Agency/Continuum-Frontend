@@ -13,7 +13,11 @@
  * the plan's order — so what the user sees and what goes out cannot disagree.
  */
 import { z } from 'zod';
-import { assemblePlatformCaption, type HashtagTiers } from '../media/instagram-caption';
+import {
+  assembleCaption,
+  assemblePlatformCaption,
+  type HashtagTiers,
+} from '../media/instagram-caption';
 import {
   matchPublishFormat,
   type PublishOptions,
@@ -100,20 +104,68 @@ export interface PublishPlanDraft {
   savedPublishOptions: unknown;
 }
 
+/**
+ * One account a brand can post to — what `GET /api/organic/publish-accounts` lists and the dry run
+ * returns. `id` is the integration-account UUID, the id space of `platform_account_id`. Posting
+ * asset types only (no ad accounts), de-duplicated by the platform's own account id.
+ */
+export const publishAccountCandidateSchema = z.object({
+  id: z.string(),
+  platform: publishPlatformSchema,
+  handle: z.string().nullable(),
+  displayName: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  /** The connection's token expired or was revoked: shown, never selectable, never published to. */
+  needsReauth: z.boolean(),
+  /** The brand's default account for this platform: new drafts are stamped with it. */
+  isDefault: z.boolean(),
+  /**
+   * The same account linked a second time (a "twin": connected through two logins), each link
+   * with its own reconnect state. The list shows the account once; a draft stamped with a twin's
+   * id is still THIS account — match a stamp against `id` or any alias id.
+   */
+  aliases: z.array(z.object({ id: z.string(), needsReauth: z.boolean() })).optional(),
+});
+export type PublishAccountCandidate = z.infer<typeof publishAccountCandidateSchema>;
+
+/** What the account resolver reads of a candidate. A full `PublishAccountCandidate` fits. */
 export interface PublishPlanAccountCandidate {
   /** Integration-account UUID — the id space of `platform_account_id`. */
   id: string;
   handle: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  needsReauth?: boolean;
+  aliases?: ReadonlyArray<{ id: string; needsReauth: boolean }>;
+}
+
+/**
+ * The candidate a stamp names — by its id or a twin's — and whether THAT link needs reconnecting:
+ * a publish goes through the stamped link's own token, so a dead twin is dead even when the
+ * account's other link is live.
+ */
+export function findStampedCandidate<T extends PublishPlanAccountCandidate>(
+  accounts: ReadonlyArray<T>,
+  stamp: string,
+): { candidate: T; needsReauth: boolean } | null {
+  for (const candidate of accounts) {
+    if (candidate.id === stamp) return { candidate, needsReauth: candidate.needsReauth === true };
+    const alias = candidate.aliases?.find((twin) => twin.id === stamp);
+    if (alias) return { candidate, needsReauth: alias.needsReauth };
+  }
+  return null;
 }
 
 export interface PublishPlanAccountInput {
-  /** The account this publish asks for (the planner's switcher, MCP, the request body). */
-  requestedAccountId: string | null;
-  /** The draft's own stamp: `slot_data.platform.accountId`, then `platform_account_id`. */
+  /**
+   * The draft's ONE stamp, `platform_account_id`. A publish goes to exactly this account: no
+   * request names another, and nothing swaps it for "the brand's only account" at publish time.
+   */
   boundAccountId: string | null;
-  /** The brand's connected accounts for the platform; null when they were not loaded. */
+  /**
+   * The brand's candidates for the platform. Null means "not loaded" and trusts the stamp — a
+   * backend gate always loads them.
+   */
   accounts: ReadonlyArray<PublishPlanAccountCandidate> | null;
 }
 
@@ -180,20 +232,27 @@ export const publishPlanCoverSchema = z.object({
 export type PublishPlanCover = z.infer<typeof publishPlanCoverSchema>;
 
 export const publishPlanAccountSchema = z.object({
-  status: z.enum(['resolved', 'missing', 'ambiguous']),
+  /**
+   * `resolved` — the stamp is one of the brand's candidates and is connected.
+   * `missing` — no account is chosen (or the brand has none connected).
+   * `foreign` — the stamp is not one of the brand's candidates for this platform.
+   * `needs_reauth` — the stamp is a candidate whose connection must be renewed.
+   */
+  status: z.enum(['resolved', 'missing', 'foreign', 'needs_reauth']),
+  /** The stamp, whatever its status; null only when `missing`. */
   id: z.string().nullable(),
-  source: z.enum(['request', 'bound', 'brand_single_account', 'none']),
   handle: z.string().nullable(),
   displayName: z.string().nullable(),
   avatarUrl: z.string().nullable(),
   candidateCount: z.number().nullable(),
+  /** Why it cannot publish, naming the account and the choices. Null when `resolved`. */
+  message: z.string().nullable(),
 });
 export type PublishPlanAccount = z.infer<typeof publishPlanAccountSchema>;
 
 export const publishPlanNoticeSchema = z.object({
   code: z.enum([
     'hashtags_dropped',
-    'caption_truncated',
     'caption_not_sent',
     'media_not_sent',
     'aspect_out_of_range',
@@ -271,6 +330,7 @@ export const publishPlanIssueSchema = z.object({
     'media_missing',
     'hyperframe_mp4_not_ready',
     'caption_missing',
+    'caption_too_long',
     'account_missing',
   ]),
   message: z.string(),
@@ -321,16 +381,16 @@ export function draftFormatCandidates(row: {
 }
 
 /**
- * The account a draft row is bound to. `slot_data.platform` is either the legacy planner object
- * `{ name, accountId }` or, on MCP-created rows, a bare platform string. `'unassigned'` is the
- * planner's placeholder, not an account.
+ * The account a draft row is bound to: `platform_account_id`, the one stamp. The copies older
+ * writers left in `slot_data` (`platform.accountId`, `draftSnapshot.targetAccountId`) are never
+ * read — three stamps read in three orders is how the preview and the publish disagreed.
+ * `'unassigned'` is the planner's placeholder, not an account.
  */
 export function boundAccountIdFromRow(row: {
   slot_data?: unknown;
   platform_account_id?: string | null;
 }): string | null {
-  const stamped = asRecord(asRecord(row.slot_data)['platform'])['accountId'];
-  return realAccountId(stamped) ?? realAccountId(row.platform_account_id);
+  return realAccountId(row.platform_account_id);
 }
 
 function realAccountId(value: unknown): string | null {
@@ -652,53 +712,98 @@ export const PUBLISH_PLATFORM_LABELS: Readonly<Record<PublishPlatform, string>> 
 const label = (platform: PublishPlatform): string => PUBLISH_PLATFORM_LABELS[platform];
 
 /**
- * The account a publish addresses: the request's choice, then the draft's stamp — each only
- * when it is one of the brand's connected accounts — then the brand's ONLY account. Several
- * candidates and no valid stamp is a question for the user, never "the first one".
+ * How an account is named to a person — never a UUID. A Facebook Page reads as its name.
+ * Some providers store the handle with its '@' (YouTube's `@channel`), so one is stripped.
  */
-export function resolvePublishPlanAccount(input: PublishPlanAccountInput): PublishPlanAccount {
-  const requested = realAccountId(input.requestedAccountId);
-  const bound = realAccountId(input.boundAccountId);
-  const stamped = requested ?? bound;
-  const source = requested ? 'request' : 'bound';
+export function publishAccountLabel(account: {
+  handle: string | null;
+  displayName: string | null;
+}): string {
+  const handle = account.handle?.replace(/^@/, '') || null;
+  if (handle && handle !== account.displayName && account.handle !== account.displayName) {
+    return `@${handle}`;
+  }
+  return account.displayName ?? handle ?? 'an unnamed account';
+}
+
+/** The one caption-too-long sentence: the writer, the verdict and the gate all say this. */
+export function captionTooLongMessage(
+  platform: PublishPlatform,
+  maxLength: number,
+  length: number,
+): string {
+  return `${label(platform)} captions are at most ${maxLength} characters, hashtags included — this one is ${length}`;
+}
+
+function choiceList(accounts: ReadonlyArray<PublishPlanAccountCandidate>): string {
+  return accounts.map(publishAccountLabel).join(', ');
+}
+
+/**
+ * The account a publish addresses: EXACTLY the draft's stamp, when it is one of the brand's
+ * connected candidates for the platform. Nothing else is an answer — not a request's choice, not
+ * the brand's only account (that is stamped at creation, never swapped in at publish), not a bare
+ * platform id that cannot be checked. Every other case blocks with a message naming the accounts.
+ */
+export function resolvePublishPlanAccount(
+  input: PublishPlanAccountInput,
+  platform?: PublishPlatform,
+): PublishPlanAccount {
+  const name = platform ? label(platform) : 'this platform';
+  const stamp = realAccountId(input.boundAccountId);
   const accounts = input.accounts;
-  const describe = (id: string) => accounts?.find((candidate) => candidate.id === id) ?? null;
-  const resolved = (id: string, from: PublishPlanAccount['source']): PublishPlanAccount => {
-    const candidate = describe(id);
-    return {
-      status: 'resolved',
-      id,
-      source: from,
-      handle: candidate?.handle ?? null,
-      displayName: candidate?.displayName ?? null,
-      avatarUrl: candidate?.avatarUrl ?? null,
-      candidateCount: accounts?.length ?? null,
-    };
-  };
-  const unresolved = (status: 'missing' | 'ambiguous'): PublishPlanAccount => ({
-    status,
-    id: null,
-    source: 'none',
+  const usable = (accounts ?? []).filter((candidate) => !candidate.needsReauth);
+  const base = {
+    id: stamp,
     handle: null,
     displayName: null,
     avatarUrl: null,
     candidateCount: accounts?.length ?? null,
-  });
+  };
+  const choose =
+    usable.length > 0
+      ? `choose one of: ${choiceList(usable)}`
+      : accounts && accounts.length > 0
+        ? `reconnect ${name} first (${choiceList(accounts)} ${accounts.length === 1 ? 'needs' : 'need'} reconnecting)`
+        : `connect ${name} first`;
 
-  // A bare platform id (an IG user id, an open_id) cannot be checked against integration
-  // UUIDs; the token resolver matches it by asset type.
-  const checkable = (id: string) =>
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-  if (stamped && !checkable(stamped)) return resolved(stamped, source);
-  if (!accounts) return stamped ? resolved(stamped, source) : unresolved('missing');
-  // A stamp from another platform (a draft moved from Instagram to TikTok) is not an answer.
-  if (stamped && accounts.some((candidate) => candidate.id === stamped)) {
-    return resolved(stamped, source);
+  if (!stamp) {
+    return {
+      ...base,
+      status: 'missing',
+      // Unloaded candidates say nothing about what is connected, so the advice cannot be "connect".
+      message: !accounts
+        ? `Choose which ${name} account this draft posts to`
+        : usable.length > 0
+          ? `Choose which ${name} account this posts to: ${choiceList(usable)}`
+          : `No ${name} account is chosen — ${choose}`,
+    };
   }
-  // EXACTLY ONE, OR ASK: posting to the wrong account cannot be undone.
-  const only = accounts.length === 1 ? accounts[0] : undefined;
-  if (only) return resolved(only.id, 'brand_single_account');
-  return unresolved(accounts.length === 0 ? 'missing' : 'ambiguous');
+  if (!accounts) return { ...base, status: 'resolved', message: null };
+
+  const found = findStampedCandidate(accounts, stamp);
+  if (!found) {
+    return {
+      ...base,
+      status: 'foreign',
+      message: `This draft is set to post to an account that is not one of this brand's connected ${name} accounts — ${choose}`,
+    };
+  }
+  const { candidate } = found;
+  const described = {
+    ...base,
+    handle: candidate.handle,
+    displayName: candidate.displayName,
+    avatarUrl: candidate.avatarUrl,
+  };
+  if (found.needsReauth) {
+    return {
+      ...described,
+      status: 'needs_reauth',
+      message: `${publishAccountLabel(candidate)} must be reconnected before it can post — reconnect ${name} in Settings${usable.length > 0 ? `, or ${choose}` : ''}`,
+    };
+  }
+  return { ...described, status: 'resolved', message: null };
 }
 
 function resolveFormat(formats: ReadonlyArray<string | null | undefined>): {
@@ -834,13 +939,6 @@ export function resolvePublishPlan(input: PublishPlanInput): PublishPlan {
         target: 'caption',
       });
     }
-    if (assembled.truncated) {
-      notices.push({
-        code: 'caption_truncated',
-        message: `The caption is cut at ${assembled.truncatedAt} characters — ${label(platform)} allows ${assembled.limit}`,
-        target: 'caption',
-      });
-    }
   }
 
   // ── options and cover ──
@@ -948,7 +1046,7 @@ export function resolvePublishPlan(input: PublishPlanInput): PublishPlan {
     platform,
     format,
     verb,
-    account: resolvePublishPlanAccount(input.account),
+    account: resolvePublishPlanAccount(input.account, platform),
     caption: {
       text,
       body: assembled.body,
@@ -985,6 +1083,17 @@ export function resolvePublishPlan(input: PublishPlanInput): PublishPlan {
 }
 
 // ── Gate ──────────────────────────────────────────────────────────────────────
+
+/**
+ * The caption the plan was built from — body + every tag under the count cap — before the length
+ * clamp. Kept + dropped is the whole tag list in order: the clamp only ever drops a tail.
+ */
+function unclampedCaptionLength(caption: PublishPlan['caption']): number {
+  return assembleCaption(caption.body, [...caption.keptHashtags, ...caption.droppedHashtags], {
+    maxLength: Number.POSITIVE_INFINITY,
+    maxHashtags: caption.hashtagLimit,
+  }).text.length;
+}
 
 /**
  * Can this plan publish? The planner's readiness gate and the backend's approve, publish and
@@ -1090,13 +1199,23 @@ export function checkPublishability(plan: PublishPlan): PublishPlanVerdict {
     });
   }
 
+  // Refused, never cut: a caption the clamp would shorten is not the one the user approved.
+  if (plan.caption.truncated) {
+    blockers.push({
+      reason: 'caption_too_long',
+      message: captionTooLongMessage(
+        plan.platform,
+        plan.caption.limit,
+        unclampedCaptionLength(plan.caption),
+      ),
+      fix: 'caption',
+    });
+  }
+
   if (plan.account.status !== 'resolved') {
     blockers.push({
       reason: 'account_missing',
-      message:
-        plan.account.status === 'ambiguous'
-          ? `This brand has ${plan.account.candidateCount} connected ${platform} accounts — choose which one to publish to`
-          : `Connect ${platform} to publish this draft`,
+      message: plan.account.message ?? `Choose a ${platform} account to publish this draft`,
       fix: 'account',
     });
   }
@@ -1123,15 +1242,9 @@ export const publishPlanDryRunResponseSchema = z.object({
   /** The plan gate plus the backend's content-review rules. */
   blockers: z.array(publishPlanIssueSchema.extend({ reason: z.string() })),
   warnings: z.array(publishPlanIssueSchema.extend({ reason: z.string() })),
-  /** The account input the plan was resolved with — feed both back to resolve locally. */
-  accounts: z.array(
-    z.object({
-      id: z.string(),
-      handle: z.string().nullable(),
-      displayName: z.string().nullable(),
-      avatarUrl: z.string().nullable(),
-    }),
-  ),
+  /** The brand's candidates for the plan's platform — feed both back to resolve locally. */
+  accounts: z.array(publishAccountCandidateSchema),
+  /** The draft's one stamp, `platform_account_id`. */
   boundAccountId: z.string().nullable(),
   /** The exact provider requests, in order. Null unless asked for (`?wire=1`) or when the plan is blocked. */
   wire: z.array(publishWireRequestSchema).nullable(),

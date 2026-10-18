@@ -166,6 +166,24 @@ export function assemblePlatformCaption(
   return assembleCaption(caption, hashtags, captionLimits(platform));
 }
 
+/**
+ * The length of the caption `platform` would be sent — body + `\n\n` + the tags under its tag
+ * cap — before any clamp. The one number every caption check compares to `maxLength`: the
+ * editor counter, the write paths, the verdict and the publish gate. Measuring the body alone
+ * let a caption save and show "fits" that approve then refused once its hashtags were added.
+ */
+export function platformCaptionLength(
+  platform: PublishPlatform,
+  caption: string | null | undefined,
+  hashtags?: HashtagTiers | string[] | null,
+): number {
+  const { maxHashtags } = captionLimits(platform);
+  return assembleCaption(caption, hashtags, {
+    maxLength: Number.POSITIVE_INFINITY,
+    maxHashtags,
+  }).text.trimEnd().length;
+}
+
 /** The final pre-publish clamp, against the destination platform's own maximum. */
 export function clampPlatformCaption(
   platform: PublishPlatform,

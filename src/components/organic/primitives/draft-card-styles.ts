@@ -279,28 +279,6 @@ export function statusFrameClasses(
   return palette[frame];
 }
 
-export const platformBadgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-bold uppercase tracking-wider',
-  {
-    variants: {
-      platform: {
-        instagram:
-          'border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-950 dark:text-fuchsia-100 shadow-sm shadow-fuchsia-500/10',
-        linkedin:
-          'border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-100 shadow-sm shadow-sky-500/10',
-        facebook: 'border-blue-600/40 bg-blue-600/15 text-blue-950 dark:text-blue-100',
-        tiktok: 'border-zinc-500/40 bg-zinc-500/15 text-zinc-900 dark:text-zinc-100',
-        youtube: 'border-red-500/40 bg-red-500/15 text-red-900 dark:text-red-100',
-        twitter: 'border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100',
-        x: 'border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100',
-      },
-    },
-    defaultVariants: {
-      platform: 'instagram',
-    },
-  },
-);
-
 export const cardVariants = cva(
   'group relative w-full rounded-lg border px-3 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
   {

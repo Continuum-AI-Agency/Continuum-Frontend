@@ -301,8 +301,8 @@ export function captionLimits(platform: PublishPlatform): {
 
 /**
  * The widest caption any supported platform accepts. Wire schemas parse before the
- * platform is resolved, so they bound on this and leave exact per-platform truncation
- * to the publisher, which knows the destination.
+ * platform is resolved, so they bound on this and leave the exact per-platform limit to
+ * the write paths and the publish gate, which know the destination and refuse.
  */
 export const CAPTION_MAX_ANY_PLATFORM: number = Math.max(
   ...Object.values(PLATFORM_CAPABILITIES).map((capability) => capability.caption.maxLength),
@@ -354,10 +354,15 @@ export const publishErrorCodeSchema = z.enum([
   // written before an account is chosen, so this is the ordinary "nothing connected yet" state
   // — the publish is the stage that needs one.
   'account_missing',
+  // The caller expected another account than the draft's stamp: what the UI showed is stale.
+  'account_mismatch',
   'media_missing',
   // The draft resolved to no caption at all. A platform accepts a container with no caption
   // param and posts it blank, so this fails closed rather than publishing an empty post.
   'caption_missing',
+  // The caption the plan would send is shorter than the one it was built from (body + hashtags
+  // over the platform's limit). Refused, never cut.
+  'caption_too_long',
   'hyperframe_mp4_not_ready',
   // The draft's format is not offered by its platform.
   'unsupported_format',

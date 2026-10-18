@@ -1,14 +1,15 @@
 /**
- * Sibling-draft fan-out: publishing "the same post" to several platforms.
+ * Group membership: which platforms a post goes to. `POST /drafts/:id/fan-out` with the FULL
+ * selected set is the one membership write — ticking a platform adds its member row at once,
+ * unticking deletes an unpublished member. `:id` may be any member of the group.
  *
- * The organic stack is one-platform-per-draft-row, and stays that way. Fan-out mints
- * one sibling row per additional platform, each publishing through the UNCHANGED
- * single-platform path. Before fan-out there is one row, so everything is shared by
- * construction; after it, each platform is deliberately an independent post that can be
- * tailored on its own.
+ * The organic stack is one-platform-per-draft-row, and stays that way. A new member is born
+ * `draft`, with the source's caption VERBATIM (never a model rewrite — that is the explicit
+ * `adapt-caption` route), the source's planned day, and an account stamp validated against the
+ * brand's candidates for its platform. It publishes through the unchanged single-platform path.
  *
  * Both sides import from here: the Backend `fanOutDraftPlatforms` validates the request
- * and emits the response, the Frontend multi-select renders it.
+ * and emits the response, the Frontend selector renders it.
  */
 import { z } from 'zod';
 import { publishPlatformSchema } from './publishing';
@@ -57,9 +58,13 @@ export function parseSiblingClientKey(
 type PublishPlatformLiteral = z.infer<typeof publishPlatformSchema>;
 
 /**
- * Explicit per-platform account ids. Fan-out never guesses an account: an Instagram
- * account id stamped on a LinkedIn row would publish to the wrong place, and the failure
- * would surface as a provider error long after the row was written.
+ * Per-platform account ids. For a NEW member it is its stamp; for an existing unpublished member
+ * it re-stamps it (a published member's account never changes: `409 already_published`). Each
+ * must be one of the brand's candidates for that platform and not need reconnecting
+ * (`account_not_candidate` otherwise). Omitted, the member is stamped with the
+ * platform's only candidate or the brand's default; with several and no default it is created
+ * unstamped and its identity row asks — approve and publish block until it is chosen. A platform
+ * with no connected account is refused (`not_connected`): there is nothing to post through.
  *
  * `partialRecord`, not `record`: a `z.record` keyed by an enum is EXHAUSTIVE in Zod 4 —
  * it would demand an account id for every platform, including ones the caller did not
@@ -77,7 +82,7 @@ export const draftFanOutRequestSchema = z.object({
   platforms: z
     .array(publishPlatformSchema)
     .min(1)
-    .max(3)
+    .max(publishPlatformSchema.options.length)
     .refine((values) => new Set(values).size === values.length, {
       message: 'platforms must be unique',
     }),
@@ -89,7 +94,7 @@ export const draftFanOutMemberSchema = z.object({
   id: z.string(),
   platform: publishPlatformSchema,
   clientKey: z.string(),
-  /** Null on a source row drafted before an account was bound; siblings always carry one. */
+  /** `platform_account_id`; null until an account is chosen. */
   platformAccountId: z.string().nullable(),
   status: z.string(),
   /** True for the source row, which is never re-created. */

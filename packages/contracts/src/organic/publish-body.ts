@@ -3,7 +3,7 @@
  * and the format→postType mapping behind it.
  *
  * This is an FE→BE HTTP envelope, so it lives here and both sides import it: the planner
- * builds the body, the Backend's `PublishDraftBodySchema` parses it, and the publish bench
+ * builds the body, the Backend parses it with `publishDraftBodySchema`, and the publish bench
  * drives this exact builder instead of a hand-shaped stand-in that can't drift with it.
  *
  * `resolvePublishFormat` exists because the mapping used to be written twice — case-
@@ -17,6 +17,7 @@ import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-capt
 import { trialGraduationStrategySchema } from '../trial-reels/index';
 import { type PublishPlanDraft, type PublishPlanMedia, resolvePublishPlan } from './publish-plan';
 import {
+  CAPTION_MAX_ANY_PLATFORM,
   PLATFORM_CAPABILITIES,
   type PublishFormat,
   type PublishPlatform,
@@ -101,6 +102,102 @@ export function unsupportedPublishOptions(
   }
   return unsupported;
 }
+
+const carouselItemSchema = z
+  .object({
+    // https:// URLs and data: URIs (base64 images from the planner). A data: URI is uploaded
+    // to the staging bucket before the platform call.
+    imageUrl: z.string().min(1).optional(),
+    videoUrl: z.string().url().optional(),
+  })
+  .refine((item) => item.imageUrl || item.videoUrl, {
+    message: 'Each carousel item must have imageUrl or videoUrl',
+  });
+
+// The target fields shared by every publish body.
+//
+// The account is NOT a choice here: a persisted draft publishes to its own
+// `platform_account_id`. `accountId` (and the legacy Instagram alias `igAccountId`) is the
+// account the UI showed; the Backend refuses the publish (`account_mismatch`) when it differs
+// from the stamp. They matter on their own only for an inline draft with no row.
+const targetFields = {
+  platform: publishPlatformSchema.optional(),
+  accountId: z.string().min(1).optional(),
+  igAccountId: z.string().min(1).optional(),
+  brandId: z.string().uuid().optional(),
+  /**
+   * The `intent_hash` the caller was shown by `/publish-intent` and confirmed. It is bound to
+   * the caption, account, platform and format the human reviewed, so a confirmation cannot be
+   * redeemed for content the draft has since changed to. Required by the interactive publish
+   * routes; absent on the cron and automations paths, whose approval was scheduling.
+   */
+  confirmationHash: z.string().min(1).optional(),
+  /** First comment, chosen cover and AI label, gated per platform by the publisher. */
+  publishOptions: publishOptionsSchema.optional(),
+};
+
+// `caption` is bounded by the WIDEST caption any platform accepts: the destination platform
+// is not resolved until after this parses. The plan's `caption.text` is the wire string.
+// Media is optional: a persisted draft publishes its own row's media, and missing media is
+// refused by `checkPublishability`, not here.
+const caption = z.string().max(CAPTION_MAX_ANY_PLATFORM).optional();
+
+const postBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('POST'),
+  imageUrl: z.string().url().optional(),
+  caption,
+});
+const reelBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('REEL'),
+  videoUrl: z.string().url().optional(),
+  caption,
+  shareToFeed: z.boolean().optional(),
+  coverUrl: z.string().url().optional(),
+});
+// The per-platform maximum is enforced by the publisher against PLATFORM_CAPABILITIES
+// (Instagram and Facebook cap at 10, LinkedIn at 20).
+const carouselBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('CAROUSEL'),
+  items: z.array(carouselItemSchema).min(2).max(20).optional(),
+  caption,
+});
+// A story sends one image or video and no caption; the publisher drops a merged caption.
+const storyBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('STORY'),
+  imageUrl: z.string().url().optional(),
+  videoUrl: z.string().url().optional(),
+  caption,
+});
+
+/** `POST /api/organic/calendar/drafts/:id/publish`. */
+export const publishDraftBodySchema = z.discriminatedUnion('postType', [
+  postBodySchema,
+  reelBodySchema,
+  carouselBodySchema,
+  storyBodySchema,
+]);
+export type PublishDraftBody = z.infer<typeof publishDraftBodySchema>;
+
+const memberId = { id: z.string() };
+
+/** One member of `POST /api/organic/calendar/drafts/bulk-publish`: a publish body plus its row id. */
+export const bulkPublishItemSchema = z.discriminatedUnion('postType', [
+  postBodySchema.extend(memberId),
+  reelBodySchema.extend(memberId),
+  carouselBodySchema.extend(memberId),
+  storyBodySchema.extend(memberId),
+]);
+export type BulkPublishItem = z.infer<typeof bulkPublishItemSchema>;
+
+/** The group publish: one item per member, each with its own `/publish-intent` hash. */
+export const bulkPublishBodySchema = z.object({
+  items: z.array(bulkPublishItemSchema).min(1).max(20),
+});
+export type BulkPublishBody = z.infer<typeof bulkPublishBodySchema>;
 
 /** The draft fields the publish body is built from. The planner's richer draft satisfies it. */
 export interface PublishableDraft {
@@ -304,7 +401,7 @@ export function buildPublishBody(
   const plan = resolvePublishPlan({
     draft: planDraftOf(draft),
     platform: platform ?? 'instagram',
-    account: { requestedAccountId: accountId, boundAccountId: null, accounts: null },
+    account: { boundAccountId: accountId, accounts: null },
     publishOptions: publishOptions ?? null,
     mediaGenerated: null,
   });

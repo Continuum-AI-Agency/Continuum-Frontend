@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
+import { publishAccountsKey } from '@/lib/organic/publishTargets';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // happy-dom does not expose SyntaxError on its window object, which causes
@@ -125,6 +127,28 @@ mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 
+// The brand's posting accounts, already cached: the card names its account by handle and
+// makes no request of its own for them.
+const ACCOUNT_ID = '6f1c0b9e-0000-4000-8000-000000000001';
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+queryClient.setQueryData(publishAccountsKey('b1'), {
+  accounts: [
+    {
+      id: ACCOUNT_ID,
+      platform: 'instagram',
+      handle: 'acme_a',
+      displayName: 'Acme',
+      avatarUrl: null,
+      needsReauth: false,
+      isDefault: true,
+    },
+  ],
+});
+function QueryWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
+
 const draft: OrganicCalendarDraft = {
   id: 'draft-1',
   title: 'Draft title',
@@ -209,16 +233,18 @@ describe('CalendarDraftCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
+    fireEvent.click(screen.getAllByText('Time: 1:00 PM')[0]);
 
     expect(store.beginEditingDraft).not.toHaveBeenCalled();
   });
 
-  it('quick platform edit updates draft and keeps editor focused', () => {
+  // A15/C9: the card had its own platform list that changed only the browser's copy of a
+  // grouped card. Platforms change in the review panel's selector, so the menu opens it.
+  it('"Change platforms…" opens the review panel and writes nothing itself', () => {
     const onSelect = mock();
     render(
       <CalendarDraftCard
-        draft={draft}
+        draft={{ ...draft, backendDraftId: 'srv-1' }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={onSelect}
@@ -226,15 +252,12 @@ describe('CalendarDraftCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
+    expect(screen.queryByText(/^Platform: /)).toBeNull();
+    fireEvent.click(screen.getByText('Change platforms…'));
 
-    expect(store.updateDraft).toHaveBeenCalledTimes(1);
-    expect(store.updateDraft.mock.calls[0]?.[0]).toBe('draft-1');
-    const updater = store.updateDraft.mock.calls[0]?.[1] as (
-      currentDraft: OrganicCalendarDraft,
-    ) => OrganicCalendarDraft;
-    expect(updater(draft).platforms).toEqual(['linkedin']);
     expect(onSelect).toHaveBeenCalledWith('draft-1');
+    expect(store.updateDraft).not.toHaveBeenCalled();
+    expect(requestCalls).toHaveLength(0);
   });
 
   it('retry generation action calls onRegenerate', () => {
@@ -302,26 +325,89 @@ describe('CalendarDraftCard', () => {
     });
   });
 
-  it("moves a draft with a row to another platform through the field route, with that platform's account", async () => {
-    const saved = { ...draft, backendDraftId: 'srv-1', updatedAt: 'T0' };
-    render(
+  // C7 / end state 8-9: one card per group, saying every platform it goes to and the account.
+  describe('a grouped card', () => {
+    const grouped: OrganicCalendarDraft = {
+      ...draft,
+      backendDraftId: 'srv-1',
+      groupId: 'group-1',
+      targetAccountId: ACCOUNT_ID,
+      platforms: ['instagram', 'tiktok'],
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: ACCOUNT_ID },
+        {
+          backendDraftId: 'srv-2',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: {
+            ...draft,
+            id: 'draft-1::tiktok',
+            backendDraftId: 'srv-2',
+            platforms: ['tiktok'],
+          },
+        },
+      ],
+    };
+
+    it('carries the contract attributes the benches read', () => {
+      const { container } = render(
+        <CalendarDraftCard
+          draft={grouped}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+        />,
+      );
+      const card = container.querySelector('[data-draft-card]');
+      expect(card?.getAttribute('data-group-id')).toBe('group-1');
+      expect(card?.getAttribute('data-backend-draft-id')).toBe('srv-1');
+    });
+
+    it('shows one brand mark per platform and the account by handle, never its id', () => {
+      const { container } = render(
+        <CalendarDraftCard
+          draft={grouped}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+        />,
+      );
+      const platforms = container.querySelector('[data-card-platforms]');
+      expect(platforms?.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
+      expect(platforms?.textContent).toContain('Instagram, TikTok');
+      expect(container.querySelector('[data-card-account]')?.textContent).toBe('@acme_a');
+      expect(container.textContent).not.toContain(ACCOUNT_ID);
+    });
+
+    it('offers to publish every platform of the group', () => {
+      render(
+        <CalendarDraftCard
+          draft={{ ...grouped, publishingAssets: [] }}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+        />,
+      );
+      expect(screen.getByText(/^Publish to 2 platforms/)).toBeTruthy();
+    });
+  });
+
+  // K8: the card shows the caption that gets sent, hashtags included.
+  it('shows the caption its first platform receives, hashtags included', () => {
+    const { container } = render(
       <CalendarDraftCard
-        draft={saved}
+        draft={{ ...draft, hashtags: { high: ['#launch'], medium: [], low: [] } }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
       />,
     );
-
-    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
-
-    await waitFor(() => expect(requestCalls).toHaveLength(1));
-    expect(requestCalls[0]?.body).toEqual({
-      platform: 'linkedin',
-      accountId: 'li-acct',
-      expected_updated_at: 'T0',
-    });
+    expect(container.textContent).toContain('#launch');
   });
 
   it('exposes a custom time picker entry that defers mutation to the popover', () => {

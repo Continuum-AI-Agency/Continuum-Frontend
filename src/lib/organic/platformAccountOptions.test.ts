@@ -29,8 +29,17 @@ function account(
 const summary: Partial<BrandIntegrationSummary> = {
   instagram: {
     accounts: [
-      account({ integrationAccountId: 'ig-main', name: 'Main IG', alias: 'Main profile' }),
-      account({ integrationAccountId: 'ig-second', name: 'Second IG' }),
+      account({
+        integrationAccountId: 'ig-main',
+        name: 'Main IG',
+        alias: 'Main profile',
+        type: 'meta_instagram_account',
+      }),
+      account({
+        integrationAccountId: 'ig-second',
+        name: 'Second IG',
+        type: 'meta_instagram_account',
+      }),
     ],
   },
   linkedin: {
@@ -125,6 +134,57 @@ describe('deriveOrganicPlatformAccounts', () => {
     ).toEqual(['tiktok']);
   });
 
+  // A posting asset type per platform, the one its Backend token resolver signs with: an
+  // untyped or foreign row in the bucket is not a place to post.
+  it('offers only the posting asset type on every platform', () => {
+    const rows = deriveOrganicPlatformAccounts({
+      integrationSummary: {
+        instagram: {
+          accounts: [
+            account({ integrationAccountId: 'ig-untyped', type: null }),
+            account({ integrationAccountId: 'ig-legacy', type: 'instagram_account' }),
+            account({ integrationAccountId: 'ig-biz', type: 'meta_instagram_account' }),
+          ],
+        },
+        youtube: {
+          accounts: [
+            account({ integrationAccountId: 'yt-ads', type: 'google_ad_account' }),
+            account({ integrationAccountId: 'yt-channel', type: 'youtube_channel' }),
+          ],
+        },
+      },
+    });
+
+    expect(rows.find((row) => row.platform === 'instagram')?.options.map((o) => o.id)).toEqual([
+      'ig-biz',
+    ]);
+    expect(rows.find((row) => row.platform === 'youtube')?.options.map((o) => o.id)).toEqual([
+      'yt-channel',
+    ]);
+  });
+
+  // Two people connecting the same Page links it twice; it is still one place to post.
+  it('lists an account linked twice once, by its platform id', () => {
+    const rows = deriveOrganicPlatformAccounts({
+      integrationSummary: {
+        facebook: {
+          accounts: [
+            account({ integrationAccountId: 'fb-a', type: 'meta_page', externalAccountId: '111' }),
+            account({ integrationAccountId: 'fb-b', type: 'meta_page', externalAccountId: '111' }),
+            account({ integrationAccountId: 'fb-c', type: 'meta_page', externalAccountId: '222' }),
+            account({ integrationAccountId: 'fb-d', type: 'meta_page', externalAccountId: null }),
+          ],
+        },
+      },
+    });
+
+    expect(rows.find((row) => row.platform === 'facebook')?.options.map((o) => o.id)).toEqual([
+      'fb-a',
+      'fb-c',
+      'fb-d',
+    ]);
+  });
+
   it('survives a missing integration summary', () => {
     const rows = deriveOrganicPlatformAccounts({ integrationSummary: null });
     expect(rows.every((row) => row.connected === false && row.options.length === 0)).toBe(true);
@@ -158,8 +218,10 @@ describe('deriveOrganicPublishAccountOptions', () => {
   it('offers TikTok and X, which have publishers', () => {
     const options = deriveOrganicPublishAccountOptions({
       ...summary,
-      tiktok: { accounts: [account({ integrationAccountId: 'tt-1', name: 'TikTok' })] },
-      x: { accounts: [account({ integrationAccountId: 'x-1', name: 'X handle' })] },
+      tiktok: {
+        accounts: [account({ integrationAccountId: 'tt-1', name: 'TikTok', type: 'tiktok_user' })],
+      },
+      x: { accounts: [account({ integrationAccountId: 'x-1', name: 'X handle', type: 'x_user' })] },
     });
 
     expect(options.find((option) => option.platform === 'tiktok')).toEqual({

@@ -1,10 +1,10 @@
+import { describe, expect, it } from 'bun:test';
 import {
   checkPublishability,
   publishPlanDraftFromRow,
   resolvePublishPlan,
   retargetDraftPlatformRow,
 } from '@continuum/contracts';
-import { describe, expect, it } from 'bun:test';
 
 import { buildWeekDays } from '@/components/organic/primitives/calendar-utils';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
@@ -15,8 +15,8 @@ import {
   isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
   normalizePersistedStatus,
-  resolvePersistedRowDayId,
   type PersistedOrganicDraftRow,
+  resolvePersistedRowDayId,
 } from './calendar-draft-persistence';
 
 function makeDraft(partial: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
@@ -828,7 +828,7 @@ describe('field-edit read derivations', () => {
 
 // The field-edit route writes a platform change with the contract's retargetDraftPlatformRow;
 // the planner's mapping must read that row back on the new platform.
-describe('retargetDraftPlatformRow (the field route\'s platform write)', () => {
+describe("retargetDraftPlatformRow (the field route's platform write)", () => {
   it('rewrites every platform field the create path stamps, keeping the rest of slot_data', () => {
     const slotData = {
       dayId: '2026-04-21',
@@ -836,6 +836,7 @@ describe('retargetDraftPlatformRow (the field route\'s platform write)', () => {
       platform: 'facebook',
       draftSnapshot: { id: 'draft-1', platforms: ['facebook'], targetAccountId: 'acct-fb' },
     };
+    // The account lives only in the column: the snapshot's copy is removed, never rewritten.
     expect(retargetDraftPlatformRow(slotData, 'instagram', 'acct-ig')).toEqual({
       platform: 'instagram',
       platform_account_id: 'acct-ig',
@@ -843,7 +844,7 @@ describe('retargetDraftPlatformRow (the field route\'s platform write)', () => {
         dayId: '2026-04-21',
         timeLabel: '9:00 AM',
         platform: 'instagram',
-        draftSnapshot: { id: 'draft-1', platforms: ['instagram'], targetAccountId: 'acct-ig' },
+        draftSnapshot: { id: 'draft-1', platforms: ['instagram'] },
       },
     });
   });
@@ -854,7 +855,7 @@ describe('retargetDraftPlatformRow (the field route\'s platform write)', () => {
       'tiktok',
       null,
     );
-    expect(patch.platform_account_id).toBe('unassigned');
+    expect(patch.platform_account_id).toBeNull();
     expect(patch.slot_data).toEqual({
       dayId: '2026-04-21',
       platform: { name: 'tiktok', placement: 'feed' },
@@ -876,7 +877,11 @@ describe('retargetDraftPlatformRow (the field route\'s platform write)', () => {
       };
     };
     const manual = mapPersistedRowToCalendarEntry(
-      rowFor({ dayId: '2026-04-21', platform: 'facebook', draftSnapshot: { platforms: ['facebook'] } }),
+      rowFor({
+        dayId: '2026-04-21',
+        platform: 'facebook',
+        draftSnapshot: { platforms: ['facebook'] },
+      }),
       days,
     );
     const agent = mapPersistedRowToCalendarEntry(
@@ -953,7 +958,7 @@ describe('the plan a mapped draft resolves equals the plan the backend resolves 
     expect(paths(fePlan(draft))).toEqual(paths(bePlan(source)));
   });
 
-  it("calls a snapshot-only caption missing, as approve does, though the editor still shows it", () => {
+  it('calls a snapshot-only caption missing, as approve does, though the editor still shows it', () => {
     const source = row({
       content_json: { publishingAssets: [asset('a.png')] },
       slot_data: {
@@ -1001,7 +1006,10 @@ describe('the plan a mapped draft resolves equals the plan the backend resolves 
     const edited = {
       ...draft,
       captionPreview: 'Typed, not saved yet',
-      publishingAssets: [...(draft.publishingAssets ?? []), { ...asset('b.png'), kind: 'image' as const, slideIndex: 1, role: 'slide' }],
+      publishingAssets: [
+        ...(draft.publishingAssets ?? []),
+        { ...asset('b.png'), kind: 'image' as const, slideIndex: 1, role: 'slide' },
+      ],
       format: 'Carousel',
     };
     const plan = fePlan(edited);
@@ -1019,6 +1027,8 @@ describe('the plan a mapped draft resolves equals the plan the backend resolves 
       dayId: '2026-04-21',
       draft,
     });
-    expect('planSource' in (payload.slot_data.draftSnapshot as Record<string, unknown>)).toBe(false);
+    expect('planSource' in (payload.slot_data.draftSnapshot as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 });

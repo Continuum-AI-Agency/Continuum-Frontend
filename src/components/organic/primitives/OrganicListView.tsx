@@ -21,21 +21,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { UNSCHEDULED_DAY_ID } from './calendar-utils';
-import { StatusBadge } from './DraftCardBadges';
+import { CardTargets, StatusBadge, useCardCaption } from './DraftCardBadges';
 import { resolveDraftMedia } from './DraftCardMedia';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { statusFrameClasses } from './draft-card-styles';
 import type { CreatePostMode, PlannerPlatform } from './planner-platforms';
 import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
-
-const PLATFORM_BADGE_COLORS: Record<string, string> = {
-  instagram: 'bg-pink-500/15 text-pink-700 dark:text-pink-400',
-  linkedin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  facebook: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400',
-  tiktok: 'bg-slate-500/15 text-slate-700 dark:text-slate-400',
-  youtube: 'bg-red-500/15 text-red-700 dark:text-red-400',
-};
 
 type OnCreatePost = (options: {
   dayId?: string;
@@ -59,20 +51,6 @@ type OrganicListViewProps = {
   onDeleteBacklogDraft: (draftId: string) => void;
   onPromoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
 };
-
-function PlatformBadge({ platform }: { platform: string }) {
-  const colorClass = PLATFORM_BADGE_COLORS[platform] ?? 'bg-muted text-muted-foreground';
-  return (
-    <span
-      className={cn(
-        'rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide',
-        colorClass,
-      )}
-    >
-      {platform.slice(0, 2).toUpperCase()}
-    </span>
-  );
-}
 
 /** Provenance tag for drafts that belong to a bulk content plan. */
 function PlannedBadge() {
@@ -180,6 +158,7 @@ const DraftRow = React.memo(function DraftRow({
 }) {
   const framePlatform = draft.platforms[0] ?? 'instagram';
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
+  const caption = useCardCaption(draft);
 
   return (
     <HoverCard openDelay={300} closeDelay={120}>
@@ -195,6 +174,9 @@ const DraftRow = React.memo(function DraftRow({
                     isSelected && 'bg-primary/[0.05]',
                   )}
                   data-draft-id={draft.id}
+                  data-draft-card=""
+                  data-group-id={draft.groupId ?? undefined}
+                  data-backend-draft-id={draft.backendDraftId}
                   {...rowActivationProps(() => onSelect(draft.id), isSelected || isMultiSelected)}
                 >
                   <Checkbox
@@ -210,15 +192,16 @@ const DraftRow = React.memo(function DraftRow({
                   <DraftRowThumbnail draft={draft} />
 
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    {draft.platforms.map((p) => (
-                      <PlatformBadge key={p} platform={p} />
-                    ))}
+                    <CardTargets
+                      draft={draft}
+                      className="max-w-[40%] shrink-0 text-xs text-muted-foreground"
+                    />
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                       {draft.title || 'Untitled'}
                     </span>
-                    {draft.captionPreview && (
+                    {caption && (
                       <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
-                        {draft.captionPreview}
+                        {caption}
                       </span>
                     )}
                   </div>
@@ -286,6 +269,7 @@ const BacklogRow = React.memo(function BacklogRow({
   onSelect: (draftId: string) => void;
   onDelete: (draftId: string) => void;
 }) {
+  const caption = useCardCaption(draft);
   return (
     <HoverCard openDelay={300} closeDelay={120}>
       <HoverCardTrigger
@@ -296,19 +280,23 @@ const BacklogRow = React.memo(function BacklogRow({
               isSelected && 'bg-primary/[0.05]',
             )}
             data-draft-id={draft.id}
+            data-draft-card=""
+            data-group-id={draft.groupId ?? undefined}
+            data-backend-draft-id={draft.backendDraftId}
             {...rowActivationProps(() => onSelect(draft.id), isSelected)}
           >
             <DraftRowThumbnail draft={draft} />
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              {draft.platforms.map((p) => (
-                <PlatformBadge key={p} platform={p} />
-              ))}
+              <CardTargets
+                draft={draft}
+                className="max-w-[40%] shrink-0 text-xs text-muted-foreground"
+              />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                 {draft.title || 'Untitled'}
               </span>
-              {draft.captionPreview && (
+              {caption && (
                 <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
-                  {draft.captionPreview}
+                  {caption}
                 </span>
               )}
             </div>

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  PLANNER_CAPTION_MAX_LENGTH,
+  plannerCaptionTooLong,
   plannerDraftFieldPatchSchema,
   plannerDraftHasCopy,
   plannerFieldPatchToContentJson,
   plannerFieldPatchTouchesSchedule,
 } from './planner-draft-edit';
+import { checkPublishability, resolvePublishPlan } from './publish-plan';
+import { CAPTION_MAX_ANY_PLATFORM } from './publishing';
 
 describe('plannerDraftFieldPatchSchema', () => {
   it('accepts a single-field patch', () => {
@@ -22,13 +24,68 @@ describe('plannerDraftFieldPatchSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects a caption past the platform cap', () => {
-    const tooLong = 'x'.repeat(PLANNER_CAPTION_MAX_LENGTH + 1);
-    expect(plannerDraftFieldPatchSchema.safeParse({ caption: tooLong }).success).toBe(false);
-    expect(
-      plannerDraftFieldPatchSchema.safeParse({ caption: 'x'.repeat(PLANNER_CAPTION_MAX_LENGTH) })
-        .success,
-    ).toBe(true);
+  it('bounds the wire caption on the widest platform, and each platform on its own cap', () => {
+    const widest = 'x'.repeat(CAPTION_MAX_ANY_PLATFORM);
+    expect(plannerDraftFieldPatchSchema.safeParse({ caption: widest }).success).toBe(true);
+    expect(plannerDraftFieldPatchSchema.safeParse({ caption: `${widest}x` }).success).toBe(false);
+    // K6: a 2,500-character LinkedIn caption is legal; the same caption on Instagram is not.
+    const linkedin = 'x'.repeat(2500);
+    expect(plannerCaptionTooLong('linkedin', linkedin)).toBeNull();
+    expect(plannerCaptionTooLong('instagram', linkedin)).toEqual({
+      maxLength: 2200,
+      length: 2500,
+      message: 'Instagram captions are at most 2200 characters, hashtags included — this one is 2500',
+    });
+    expect(plannerCaptionTooLong('x', 'x'.repeat(281))?.maxLength).toBe(280);
+  });
+
+  it('refuses exactly one character over the limit, never at it', () => {
+    expect(plannerCaptionTooLong('x', 'x'.repeat(280))).toBeNull();
+    expect(plannerCaptionTooLong('x', 'x'.repeat(281))?.length).toBe(281);
+  });
+
+  // P6: the writer used to measure the body only, so a caption saved and showed "fits" that
+  // approve then refused once its hashtags were added. It measures what is sent: body + tags.
+  it('counts the hashtags, and refuses a hashtags-only edit that tips it over', () => {
+    const body = 'x'.repeat(275);
+    expect(plannerCaptionTooLong('x', body)).toBeNull();
+    expect(plannerCaptionTooLong('x', body, ['#launch'])).toEqual({
+      maxLength: 280,
+      length: 284,
+      message: 'X captions are at most 280 characters, hashtags included — this one is 284',
+    });
+  });
+
+  it('agrees with the publish gate on every caption around the limit', () => {
+    const platforms = ['x', 'instagram'] as const;
+    for (const platform of platforms) {
+      const max = platform === 'x' ? 280 : 2200;
+      for (const tags of [null, ['#a'], { high: ['#launch', '#spring'], low: ['#sale'] }]) {
+        for (let body = max - 30; body <= max + 2; body += 1) {
+          const caption = 'w '.repeat(Math.ceil(body / 2)).slice(0, body);
+          const writerRefuses = plannerCaptionTooLong(platform, caption, tags) !== null;
+          const gate = resolvePublishPlan({
+            draft: {
+              id: 'd',
+              formats: ['post'],
+              caption,
+              hashtags: Array.isArray(tags) ? { high: tags } : tags,
+              publishingAssets: [],
+              mediaSuggestion: null,
+              savedPublishOptions: null,
+            },
+            platform,
+            account: { boundAccountId: null, accounts: null },
+            publishOptions: null,
+            mediaGenerated: null,
+          });
+          const gateRefuses = checkPublishability(gate).blockers.some(
+            (blocker) => blocker.reason === 'caption_too_long',
+          );
+          expect([platform, body, writerRefuses]).toEqual([platform, body, gateRefuses]);
+        }
+      }
+    }
   });
 
   it('rejects an unknown key rather than silently dropping it', () => {
@@ -47,8 +104,9 @@ describe('plannerDraftFieldPatchSchema', () => {
         .success,
     ).toBe(false);
     expect(
-      plannerDraftFieldPatchSchema.safeParse({ publishOptions: { instagram: { firstComment: '' } } })
-        .success,
+      plannerDraftFieldPatchSchema.safeParse({
+        publishOptions: { instagram: { firstComment: '' } },
+      }).success,
     ).toBe(false);
   });
 

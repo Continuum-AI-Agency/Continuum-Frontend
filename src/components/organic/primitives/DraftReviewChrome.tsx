@@ -1,31 +1,30 @@
 'use client';
 
-// The review panel's readiness line and footer. Both are presentational: the preview
-// decides what blocks the post and what each action does, these decide only how it reads.
-// A disabled action always says why in text the user can read without hovering.
+// The review panel's identity row (which is the account picker), readiness line and footer.
+// All presentational: the preview decides what blocks the post and what each action does, these
+// decide only how it reads. A disabled action always says why in text the user can read without
+// hovering.
+//
+// Account picker roles (the bench reads them): the trigger is a button named
+// "<Platform> account: <@handle | name | Choose account>" carrying `data-account-id`; the popup is
+// a Base UI Popover holding a Base UI RadioGroup — `role="radiogroup"` named by `groupLabel`, items
+// `role="radio"` with `aria-checked` (NOT a Menu, whose radio items would be `menuitemradio`). Arrow
+// keys move the selection as radios do; the choice is written ONCE, on a click or when the popup
+// closes (Enter, Escape, click outside), so arrowing through three accounts is one PATCH, not three.
 
-import type { PublishPlatform } from '@continuum/contracts';
-import { CircleCheck, Loader2, X } from 'lucide-react';
+import { Radio as RadioPrimitive } from '@base-ui/react/radio';
+import { PUBLISH_PLATFORM_LABELS, type PublishPlatform } from '@continuum/contracts';
+import { Check, ChevronDown, CircleCheck, Loader2, X } from 'lucide-react';
 import * as React from 'react';
-import {
-  FacebookIcon,
-  InstagramIcon,
-  LinkedInIcon,
-  TikTokIcon,
-  XIcon,
-  YouTubeIcon,
-} from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RadioGroup } from '@/components/ui/radio-group';
+import { accountName, findAccount, type PublishAccount } from '@/lib/organic/publishTargets';
 import { cn } from '@/lib/utils';
+import { PlatformIcon } from './PlatformSelector';
 
-const PLATFORM_GLYPH: Record<PublishPlatform, React.ComponentType<{ className?: string }>> = {
-  instagram: InstagramIcon,
-  facebook: FacebookIcon,
-  linkedin: LinkedInIcon,
-  tiktok: TikTokIcon,
-  youtube: YouTubeIcon,
-  x: XIcon,
-};
+/** Where a person fixes a connection. Opened in a new tab so the draft stays open. */
+export const INTEGRATIONS_SETTINGS_HREF = '/settings?section=integrations';
 
 function initials(name: string): string {
   const letters = name
@@ -37,23 +36,178 @@ function initials(name: string): string {
   return (letters || name.slice(0, 2)).slice(0, 2).toUpperCase();
 }
 
-export type ReviewAccount = {
-  /** The handle the post goes out as, e.g. "@vivo47.fit"; null when none resolves. */
-  handle: string | null;
-  avatarUrl: string | null;
-};
+function AccountAvatar({
+  account,
+  className,
+}: {
+  account: PublishAccount | null;
+  className?: string;
+}) {
+  if (account?.avatarUrl) {
+    return (
+      <img
+        src={account.avatarUrl}
+        alt=""
+        className={cn('shrink-0 rounded-full border border-border/60 object-cover', className)}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-muted-foreground',
+        className,
+      )}
+    >
+      {account ? initials(accountName(account)) : '?'}
+    </span>
+  );
+}
+
+const linkClass =
+  'shrink-0 rounded px-1 text-xs font-medium text-primary underline underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
 /**
- * Who, what and when, read-only: the account the post goes out as, with the platform, the
- * format and the time under it. Editing those lives in the footer, beside the action they
- * feed, so this row holds only two controls (the ⋯ menu and close). The heading carries
- * `titleRef` so the panel can land focus on it when it opens.
+ * One account choice: a popover of radios, one per account, avatar + name. An account that needs
+ * reconnecting is shown disabled with a "Reconnect" link beside it.
+ */
+export function AccountPicker({
+  accounts,
+  selectedAccountId,
+  onSelect,
+  groupLabel,
+  trigger,
+  disabled = false,
+}: {
+  accounts: PublishAccount[];
+  selectedAccountId: string | null;
+  onSelect: (accountId: string) => void;
+  /** The radiogroup's name, also shown as the popup heading. */
+  groupLabel: string;
+  /** The trigger button element (Base UI `render`). */
+  trigger: React.ReactElement;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  // The stamp may be a twin's id: the picker shows the candidate it belongs to as chosen.
+  const selectedId = findAccount(accounts, selectedAccountId)?.id ?? selectedAccountId;
+  const [pending, setPending] = React.useState(selectedId);
+  const byPointer = React.useRef(false);
+  // Escape backs out: an account arrowed to but not confirmed never changes where a post goes.
+  const cancelled = React.useRef(false);
+  const headingId = React.useId();
+  const reauthId = React.useId();
+
+  const close = (choice: string | null) => {
+    setOpen(false);
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
+    if (choice && choice !== selectedId) onSelect(choice);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          cancelled.current = false;
+          setPending(selectedId);
+          setOpen(true);
+        } else {
+          close(pending);
+        }
+      }}
+    >
+      <PopoverTrigger disabled={disabled} render={trigger} />
+      <PopoverContent
+        align="start"
+        className="w-64 p-1"
+        onKeyDownCapture={(event) => {
+          if (event.key === 'Escape') cancelled.current = true;
+        }}
+      >
+        <p id={headingId} className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">
+          {groupLabel}
+        </p>
+        <RadioGroup
+          aria-label={groupLabel}
+          value={pending ?? ''}
+          onValueChange={(value) => {
+            const choice = String(value);
+            setPending(choice);
+            if (byPointer.current) close(choice);
+          }}
+          onPointerDownCapture={() => {
+            byPointer.current = true;
+          }}
+          onKeyDownCapture={(event) => {
+            byPointer.current = false;
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              close(pending);
+            }
+          }}
+          className="gap-0.5"
+        >
+          {accounts.map((account) => {
+            const checked = account.id === pending;
+            return (
+              <div key={account.id} className="flex items-center gap-1">
+                <RadioPrimitive.Root
+                  value={account.id}
+                  disabled={account.needsReauth}
+                  aria-describedby={account.needsReauth ? `${reauthId}-${account.id}` : undefined}
+                  data-account-id={account.id}
+                  className="flex min-w-0 flex-1 cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none hover:bg-muted focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-ring data-disabled:cursor-not-allowed data-disabled:text-muted-foreground data-disabled:hover:bg-transparent"
+                >
+                  <AccountAvatar account={account} className="size-6" />
+                  <span className="min-w-0 flex-1 truncate">{accountName(account)}</span>
+                  {checked ? <Check className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+                </RadioPrimitive.Root>
+                {account.needsReauth ? (
+                  <>
+                    <span id={`${reauthId}-${account.id}`} className="sr-only">
+                      Needs reconnecting before it can post
+                    </span>
+                    <a
+                      href={INTEGRATIONS_SETTINGS_HREF}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Reconnect ${accountName(account)}`}
+                      className={linkClass}
+                    >
+                      Reconnect
+                    </a>
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
+        </RadioGroup>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Who, what and when: the account the post goes out as — which is also where it is changed —
+ * with the platform, the format and the time under it. The account shown is the frame's own
+ * stamp resolved against the platform's candidates, so it reads right before any dry run answers
+ * (A4) and is never a brand name or an id. The heading carries `titleRef` so the panel can land
+ * focus on it when it opens.
  */
 export function ReviewIdentityRow({
   titleRef,
   insetStart = false,
-  account,
   platform,
+  accounts,
+  selectedAccountId,
+  onSelectAccount,
+  pickerDisabledReason = null,
+  accountsLoading = false,
   summary,
   menu,
   onClose,
@@ -61,14 +215,46 @@ export function ReviewIdentityRow({
   titleRef?: React.Ref<HTMLHeadingElement>;
   /** Leaves room for the wide panel's collapse chevron, which sits over the row's start. */
   insetStart?: boolean;
-  account: ReviewAccount;
   platform: PublishPlatform;
+  /** This platform's candidate accounts. */
+  accounts: PublishAccount[];
+  /** The frame draft's stamp (`platform_account_id`). */
+  selectedAccountId: string | null;
+  /** Absent: the account is shown, not changeable. */
+  onSelectAccount?: (accountId: string) => void;
+  /** Non-null disables the picker and is shown under the row. */
+  pickerDisabledReason?: string | null;
+  /** The candidates are still loading: the stamp is not yet known to be missing. */
+  accountsLoading?: boolean;
   /** "Carousel · Tue Oct 13, 10:00 AM PDT". */
   summary: string;
   menu: React.ReactNode;
   onClose?: () => void;
 }) {
-  const Glyph = PLATFORM_GLYPH[platform];
+  const label = PUBLISH_PLATFORM_LABELS[platform];
+  const stamped = findAccount(accounts, selectedAccountId);
+  const name = stamped ? accountName(stamped) : null;
+  const noAccounts = accounts.length === 0 && !accountsLoading;
+  const reasonId = React.useId();
+  const accountText = (
+    <span
+      data-review-account=""
+      data-account-id={selectedAccountId ?? ''}
+      className={cn(
+        'truncate',
+        !name && !accountsLoading && 'text-amber-700 dark:text-amber-300',
+        !name && accountsLoading && 'text-muted-foreground',
+      )}
+    >
+      {name ??
+        (accountsLoading
+          ? 'Loading account…'
+          : noAccounts
+            ? 'No account connected'
+            : 'Choose account')}
+    </span>
+  );
+
   return (
     <div
       data-review-identity=""
@@ -77,37 +263,65 @@ export function ReviewIdentityRow({
         insetStart ? 'pl-8' : 'pl-3',
       )}
     >
-      {account.avatarUrl ? (
-        <img
-          src={account.avatarUrl}
-          alt=""
-          className="size-8 shrink-0 rounded-full border border-border/60 object-cover"
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-muted-foreground"
-        >
-          {account.handle ? initials(account.handle) : '?'}
-        </span>
-      )}
+      <AccountAvatar account={stamped} className="size-8" />
       <div className="min-w-0 flex-1 leading-tight">
-        <h2
-          ref={titleRef}
-          tabIndex={-1}
-          className="flex min-w-0 items-center gap-1.5 text-sm font-semibold focus:outline-none"
-        >
-          <Glyph className="size-3.5 shrink-0" />
-          <span
-            data-review-account=""
-            className={cn('truncate', !account.handle && 'text-amber-700 dark:text-amber-300')}
+        <div className="flex min-w-0 items-center gap-1">
+          <h2
+            ref={titleRef}
+            tabIndex={-1}
+            className="flex min-w-0 items-center gap-1.5 text-sm font-semibold focus:outline-none"
           >
-            {account.handle ?? 'No account connected'}
-          </span>
-        </h2>
+            {onSelectAccount && !noAccounts ? (
+              <AccountPicker
+                accounts={accounts}
+                selectedAccountId={selectedAccountId}
+                onSelect={onSelectAccount}
+                groupLabel={`${label} account`}
+                disabled={pickerDisabledReason !== null || accountsLoading}
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={`${label} account: ${name ?? (accountsLoading ? 'Loading account…' : 'Choose account')}`}
+                    aria-describedby={pickerDisabledReason ? reasonId : undefined}
+                    data-account-id={selectedAccountId ?? ''}
+                    className="-mx-1 flex min-w-0 items-center gap-1.5 rounded px-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:hover:bg-transparent"
+                  >
+                    <PlatformIcon platform={platform} className="size-3.5" />
+                    {accountText}
+                    <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden="true" />
+                  </button>
+                }
+              />
+            ) : (
+              <>
+                <PlatformIcon platform={platform} className="size-3.5" />
+                {accountText}
+              </>
+            )}
+          </h2>
+          {noAccounts ? (
+            <a
+              href={INTEGRATIONS_SETTINGS_HREF}
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              Connect
+            </a>
+          ) : null}
+        </div>
         <p data-review-when="" className="truncate text-xs text-muted-foreground">
           {summary}
         </p>
+        {pickerDisabledReason ? (
+          <p
+            id={reasonId}
+            data-account-picker-reason=""
+            className="truncate text-xs text-muted-foreground"
+          >
+            {pickerDisabledReason}
+          </p>
+        ) : null}
       </div>
       {menu}
       {onClose && (

@@ -22,12 +22,12 @@ export type OrganicDraftStatus =
   | 'published';
 
 /**
- * One row of a fan-out group — "the same post" on one platform.
+ * One row of a group — "the same post" on one platform.
  *
- * The organic stack stays one-platform-per-draft-row: a multi-platform post is N sibling
- * rows sharing a `group_id`, each publishing through the unchanged single-platform path.
- * The planner collapses them into ONE card whose `platforms` is the union, and keeps the
- * per-row identities here so publish/approve can still address each row individually.
+ * A multi-platform post is N rows sharing a `group_id`, each publishing through the
+ * single-platform path. The planner shows ONE card (the source row's draft) whose `platforms`
+ * is the union, and every OTHER member carries its own mapped `draft`: the frame for that
+ * platform reads and edits it (`resolveFrameDraft`), never the card.
  */
 export type OrganicDraftGroupMember = {
   /** organic_calendar_drafts.id — the row this platform publishes from. */
@@ -36,6 +36,10 @@ export type OrganicDraftGroupMember = {
   status: OrganicDraftStatus;
   /** Per-brand identity; siblings carry `<sourceClientKey>::<platform>`. */
   clientKey?: string;
+  /** The row's one stamp, `platform_account_id`; null when no account is chosen. */
+  accountId: string | null;
+  /** The member row's own draft. Absent for the card's own row: the card IS that draft. */
+  draft?: OrganicCalendarDraft;
 };
 
 export type OrganicCalendarDraft = {
@@ -54,6 +58,7 @@ export type OrganicCalendarDraft = {
   // stamped text_only while content_json is still null — and captionPreview is a proxy
   // that drifts (a user can type a caption into a draft the agent never generated).
   hasCopy?: boolean;
+  /** The group's platforms, one per member row, in the contracts order. Never written by the browser. */
   platforms: OrganicPlatformTag[];
   format: string;
   objective: string;
@@ -74,6 +79,7 @@ export type OrganicCalendarDraft = {
   origin?: 'manual' | 'agent';
   // Non-null when this draft belongs to a bulk content plan ("planned" provenance).
   contentPlanId?: string | null;
+  /** The row's `platform_account_id` — the one stamp. */
   targetAccountId?: string;
   adjusted?: boolean;
   titleTopic?: string;
@@ -100,8 +106,8 @@ export type OrganicCalendarDraft = {
   /** Non-null when this draft is one platform of a fanned-out multi-platform post. */
   groupId?: string | null;
   /**
-   * Every row of this draft's group, in canonical platform order. Always at least the
-   * draft's own row, so consumers never have to special-case "not grouped".
+   * Every row of this draft's group, in the contracts platform order. Always at least the
+   * draft's own row once it has one; undefined only for a draft not saved yet.
    */
   groupMembers?: OrganicDraftGroupMember[];
   /**

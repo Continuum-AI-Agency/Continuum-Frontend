@@ -58,7 +58,6 @@ type OrganicCalendarWorkspaceProps = {
   brandName?: string;
   brandTimeZone?: string;
   userId?: string;
-  instagramAccountId?: string;
   initialWeekStart?: string | null;
   initialSelectedDraftId?: string | null;
   initialView?: 'week' | 'month' | 'list';
@@ -80,7 +79,6 @@ export function OrganicCalendarWorkspace({
   brandName,
   brandTimeZone,
   userId,
-  instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
@@ -113,7 +111,6 @@ export function OrganicCalendarWorkspace({
       brandName={brandName}
       brandTimeZone={brandTimeZone}
       userId={userId}
-      instagramAccountId={instagramAccountId}
       initialView={initialView}
       initialComposeTrendId={initialComposeTrendId}
       initialComposePlatform={initialComposePlatform}

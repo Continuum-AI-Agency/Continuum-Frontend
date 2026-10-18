@@ -31,6 +31,42 @@ const scheduledDraft = {
   platforms: ['instagram'],
 } as never;
 
+// The card is the Instagram row; TikTok is scheduled beside it; YouTube already went out.
+const scheduledGroup = {
+  id: 'placement-1',
+  backendDraftId: 'draft-1',
+  status: 'scheduled',
+  platforms: ['instagram', 'tiktok', 'youtube'],
+  groupId: 'group-1',
+  groupMembers: [
+    { backendDraftId: 'draft-1', platform: 'instagram', status: 'scheduled', accountId: null },
+    {
+      backendDraftId: 'draft-2',
+      platform: 'tiktok',
+      status: 'scheduled',
+      accountId: null,
+      draft: {
+        id: 'placement-1::tiktok',
+        backendDraftId: 'draft-2',
+        status: 'scheduled',
+        platforms: ['tiktok'],
+      },
+    },
+    {
+      backendDraftId: 'draft-3',
+      platform: 'youtube',
+      status: 'published',
+      accountId: null,
+      draft: {
+        id: 'placement-1::youtube',
+        backendDraftId: 'draft-3',
+        status: 'published',
+        platforms: ['youtube'],
+      },
+    },
+  ],
+} as never;
+
 function jsonResponse(status: number, body: unknown) {
   return {
     status,
@@ -104,6 +140,69 @@ describe('useUnscheduleDraft', () => {
 
     expect(outcome).toBe(false);
     expect(updateDraftMock).not.toHaveBeenCalled();
+  });
+
+  // A group is one row per platform. Unscheduling only the source row left the others
+  // 'scheduled', and the poller published them under a "will no longer publish" toast.
+  it('unschedules every scheduled member of a group, never a published one, with one toast', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { status: 'draft' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useUnscheduleDraft());
+    let outcome = false;
+    await act(async () => {
+      outcome = await result.current.unschedule(scheduledGroup);
+    });
+
+    expect(outcome).toBe(true);
+    expect(
+      fetchMock.mock.calls.map(([url, init]) => [url, init.method, JSON.parse(init.body)]),
+    ).toEqual([
+      [`${API_BASE}/api/organic/calendar/drafts/draft-1`, 'PATCH', { status: 'draft' }],
+      [`${API_BASE}/api/organic/calendar/drafts/draft-2`, 'PATCH', { status: 'draft' }],
+    ]);
+    expect(updateDraftMock.mock.calls.map(([id]) => id)).toEqual([
+      'placement-1',
+      'placement-1::tiktok',
+    ]);
+    expect(showMock).toHaveBeenCalledTimes(1);
+    expect(showMock.mock.calls[0][0]).toMatchObject({
+      title: 'Moved back to draft',
+      variant: 'success',
+    });
+  });
+
+  it('re-schedules the members it already moved and names the platform that failed', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'draft' }))
+      .mockResolvedValueOnce(jsonResponse(422, { message: 'Draft can no longer be edited.' }))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'approved' }))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'scheduled' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useUnscheduleDraft());
+    let outcome = true;
+    await act(async () => {
+      outcome = await result.current.unschedule(scheduledGroup);
+    });
+
+    expect(outcome).toBe(false);
+    expect(
+      fetchMock.mock.calls.map(([url, init]) => [url, init.method, init.body ?? null]),
+    ).toEqual([
+      [`${API_BASE}/api/organic/calendar/drafts/draft-1`, 'PATCH', '{"status":"draft"}'],
+      [`${API_BASE}/api/organic/calendar/drafts/draft-2`, 'PATCH', '{"status":"draft"}'],
+      [`${API_BASE}/api/organic/calendar/drafts/draft-1/approve`, 'POST', null],
+      [`${API_BASE}/api/organic/calendar/drafts/draft-1`, 'PATCH', '{"status":"scheduled"}'],
+    ]);
+    expect(updateDraftMock).not.toHaveBeenCalled();
+    expect(showMock).toHaveBeenCalledTimes(1);
+    expect(showMock.mock.calls[0][0]).toMatchObject({
+      title: 'Could not move back to draft',
+      description: expect.stringContaining('TikTok: Draft can no longer be edited.'),
+      variant: 'error',
+    });
   });
 
   it('skips the request for a draft with no server row and flips locally', async () => {

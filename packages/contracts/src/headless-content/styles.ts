@@ -4,6 +4,7 @@
 // (swipe to approve or skip; describe a change or re-style it at $0).
 
 import { z } from 'zod';
+import { publishPlatformSchema } from '../organic/publishing';
 import { reelTemplateIdSchema } from '../reels/templates';
 import { headlessConcept } from './concepts';
 import { headlessEffectSchema } from './effects';
@@ -105,7 +106,8 @@ export const reviewQueueItemSchema = z
   .object({
     draftId: z.string().uuid(),
     brandId: z.string().uuid(),
-    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']),
+    // Every publish platform: a hand-copied enum without 'x' dropped X drafts from the queue.
+    platform: publishPlatformSchema,
     scheduledAt: z.string().nullable(),
     caption: z.string().nullable(),
     media: z

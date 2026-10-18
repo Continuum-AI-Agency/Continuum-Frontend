@@ -1,7 +1,16 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, screen } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
+
+// The cards name their posting account through React Query; no brand is set, so it stays idle.
+const queryClient = new QueryClient();
+function QueryWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
+
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
@@ -432,6 +441,20 @@ describe('OrganicMonthlyCalendar selection', () => {
       `planner-cell::${DAY_ID}`,
       `planner-cell::${OTHER_DAY_ID}`,
     ]);
+  });
+
+  it('carries the card contract on a grouped chip, with every platform it goes to', () => {
+    cleanup();
+    renderMonth({
+      slots: [
+        draft({ backendDraftId: 'srv-1', groupId: 'group-1', platforms: ['tiktok', 'instagram'] }),
+      ],
+    });
+
+    expect(chip().getAttribute('data-draft-card')).toBe('');
+    expect(chip().getAttribute('data-group-id')).toBe('group-1');
+    expect(chip().getAttribute('data-backend-draft-id')).toBe('srv-1');
+    expect(chip().querySelector('[data-card-platforms]')?.textContent).toBe('Instagram, TikTok');
   });
 
   it('marks the chip with its draft id and pressed state, where focus can find it', () => {

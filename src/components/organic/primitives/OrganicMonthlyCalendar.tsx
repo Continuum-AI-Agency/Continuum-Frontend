@@ -36,7 +36,7 @@ import { EMPTY_SELECTION, selectionWithin } from '../hooks/useCalendarSelection'
 import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
 import { formatDayId } from './calendar-utils';
-import { StatusDot } from './DraftCardBadges';
+import { CardTargets, StatusDot } from './DraftCardBadges';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { draftStatusPresentation, statusFrameClasses } from './draft-card-styles';
 import { metricsPostHref } from './PlannerCell';
@@ -166,6 +166,9 @@ const DraftChip = React.memo(function DraftChip({
                     ref={setActivatorNodeRef}
                     {...activatorAttributes}
                     data-draft-id={draft.id}
+                    data-draft-card=""
+                    data-group-id={draft.groupId ?? undefined}
+                    data-backend-draft-id={draft.backendDraftId}
                     aria-pressed={isSelected || isMultiSelected}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -192,7 +195,8 @@ const DraftChip = React.memo(function DraftChip({
                     title={`${statusLabel} · ${draft.title || 'Untitled'}`}
                   >
                     <StatusDot status={draft.status} />
-                    <span className="truncate">{draft.title || 'Untitled'}</span>
+                    <span className="min-w-0 flex-1 truncate">{draft.title || 'Untitled'}</span>
+                    <CardTargets draft={draft} className="max-w-[50%] text-3xs font-normal" />
                   </button>
                 </div>
               }

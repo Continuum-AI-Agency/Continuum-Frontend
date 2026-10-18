@@ -495,6 +495,29 @@ describe('useApplyBackToPlanner', () => {
     expect(result.current.isApplyingBack).toBe(false);
   });
 
+  // K2: a grouped card's Instagram frame is its own row; the route keys on the row id.
+  it("applies to the frame's own row, and keeps the planner id for the return leg", async () => {
+    const seed = makeSeed({ draftId: 'draft-1::instagram', backendDraftId: 'row-instagram' });
+    applyBody = {
+      ...persistedResponse(seed, [{ role: 'image_1', kind: 'image' }]),
+      draftId: 'row-instagram',
+    };
+    store.nodes = [
+      imageNode('organic-seed-image-draft-1::instagram', 'https://cdn.example.com/one.png', 0),
+    ];
+    const { result } = renderApply(seed, 'brand-1');
+
+    await act(async () => {
+      await result.current.onApplyBack();
+    });
+
+    expect(requestBody().draftId).toBe('row-instagram');
+    const pending = JSON.parse(
+      window.localStorage.getItem(buildPendingApplyStorageKey('draft-1::instagram')) ?? 'null',
+    );
+    expect(pending?.draftId).toBe('draft-1::instagram');
+  });
+
   it('marks the selection as required and names the picked role for LinkedIn', async () => {
     const seed = makeSeed({ platform: 'linkedin', format: 'LinkedIn post' });
     applyBody = persistedResponse(seed, [{ role: 'image_1', kind: 'image' }]);

@@ -301,6 +301,7 @@ function PostCaption({
             displayValue={shown}
             onChange={props.onCaptionChange ?? noop}
             platform={props.platform}
+            hashtags={props.hashtags}
             ariaLabel={ariaLabel}
             placeholder={noun === 'caption' ? 'Write your caption…' : 'Write your post copy…'}
             editing={editing}

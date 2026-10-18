@@ -46,13 +46,17 @@ type DeriveInput = {
   platforms?: readonly OrganicPlatformKey[];
 };
 
-// Facebook and LinkedIn share their summary bucket with the platform's ad accounts, and an ad
-// account cannot receive a post. Only these asset types can — the same ones the Backend token
-// resolvers sign with. Pink Elephant, 2026-10-14: "Moisés Avendaño" (an ad account) sorted
-// ahead of the brand's Page and became the Facebook default.
-const POSTING_ASSET_TYPES: Partial<Record<OrganicPlatformKey, readonly string[]>> = {
-  facebook: ['meta_page'],
-  linkedin: ['linkedin_organization'],
+// A summary bucket can hold assets that cannot receive a post (Facebook and LinkedIn share theirs
+// with the platform's ad accounts). Only these asset types can — the same ones the Backend token
+// resolvers sign with, one per platform. Pink Elephant, 2026-10-14: "Moisés Avendaño" (an ad
+// account) sorted ahead of the brand's Page and became the Facebook default.
+const POSTING_ASSET_TYPES: Readonly<Record<OrganicPlatformKey, string>> = {
+  instagram: 'meta_instagram_account',
+  facebook: 'meta_page',
+  linkedin: 'linkedin_organization',
+  tiktok: 'tiktok_user',
+  youtube: 'youtube_channel',
+  x: 'x_user',
 };
 
 export function deriveOrganicPlatformAccounts({
@@ -62,14 +66,22 @@ export function deriveOrganicPlatformAccounts({
 }: DeriveInput): OrganicPlatformAccounts[] {
   return platforms.map((platform) => {
     const connection = connections?.[platform];
-    const postingTypes = POSTING_ASSET_TYPES[platform];
-    const summaryAccounts = (integrationSummary?.[platform as PlatformKey]?.accounts ?? []).filter(
-      (account) => !postingTypes || postingTypes.includes(account.type ?? ''),
-    );
-    const options: OrganicAccountOption[] = summaryAccounts.map((account) => ({
-      id: account.integrationAccountId,
-      label: account.alias ?? account.name,
-    }));
+    // The same account linked through two connections is one place to post (A10): keep the first.
+    const seen = new Set<string>();
+    const options: OrganicAccountOption[] = (
+      integrationSummary?.[platform as PlatformKey]?.accounts ?? []
+    )
+      .filter((account) => account.type === POSTING_ASSET_TYPES[platform])
+      .filter((account) => {
+        const key = account.externalAccountId ?? account.integrationAccountId;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((account) => ({
+        id: account.integrationAccountId,
+        label: account.alias ?? account.name,
+      }));
 
     return {
       platform,

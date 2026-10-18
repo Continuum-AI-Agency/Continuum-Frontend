@@ -37,7 +37,6 @@ const { PlannerCell, metricsPostHref } = await import('./PlannerCell');
 const instagram: PlannerPlatform = {
   key: 'instagram',
   label: 'Instagram',
-  shortLabel: 'IG',
   Icon: () => <svg aria-hidden />,
   canCreate: true,
 };
@@ -45,7 +44,6 @@ const instagram: PlannerPlatform = {
 const facebook: PlannerPlatform = {
   key: 'facebook',
   label: 'Facebook',
-  shortLabel: 'FB',
   Icon: () => <svg aria-hidden />,
   canCreate: false,
 };

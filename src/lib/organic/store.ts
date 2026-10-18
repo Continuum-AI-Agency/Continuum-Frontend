@@ -7,6 +7,7 @@ import type {
   EventHistory,
   OrganicCalendarDay,
   OrganicCalendarDraft,
+  OrganicDraftGroupMember,
   StreamEvent,
 } from '@/components/organic/primitives/types';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
@@ -50,7 +51,52 @@ function shareUnchangedDays(
 }
 
 /** One of the brand's connected accounts on a platform, as offered by the planner's switcher. */
-export type PlannerAccountOption = { id: string; label: string };
+export type PlannerAccountOption = {
+  id: string;
+  label: string;
+  handle?: string | null;
+  avatarUrl?: string | null;
+  needsReauth?: boolean;
+};
+
+/**
+ * `slot` with `updater` applied to the draft whose id is `draftId` — the card itself or one of
+ * its members' drafts. The same slot object when neither matches.
+ */
+function updateSlotDraft(
+  slot: OrganicCalendarDraft,
+  draftId: string,
+  updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
+): OrganicCalendarDraft {
+  // A member entry mirrors its row's account: a pick on a frame must reach it at once.
+  const mirror = (member: OrganicDraftGroupMember, draft: OrganicCalendarDraft) => ({
+    ...member,
+    status: draft.status,
+    accountId: draft.targetAccountId ?? member.accountId ?? null,
+  });
+  if (slot.id === draftId) {
+    const card = updater(slot);
+    if (!card.groupMembers) return card;
+    return {
+      ...card,
+      groupMembers: card.groupMembers.map((member) =>
+        !member.draft && member.backendDraftId === card.backendDraftId
+          ? mirror(member, card)
+          : member,
+      ),
+    };
+  }
+  const members = slot.groupMembers;
+  if (!members?.some((member) => member.draft?.id === draftId)) return slot;
+  return {
+    ...slot,
+    groupMembers: members.map((member) => {
+      if (member.draft?.id !== draftId) return member;
+      const draft = updater(member.draft);
+      return { ...mirror(member, draft), draft };
+    }),
+  };
+}
 
 export type GridSlot = {
   slotId: string;
@@ -161,6 +207,7 @@ export type DraftEditField =
   | 'schedule'
   | 'media'
   | 'platforms'
+  | 'account'
   | 'status'
   | 'publishOptions';
 
@@ -467,16 +514,15 @@ export const useCalendarStore = create<CalendarState>()(
 
       // Only the day holding the draft gets new arrays. Every memoised cell compares its day,
       // so one caption keystroke used to hand all of them a fresh one; a miss changes nothing.
+      // A group member's draft is reached by its own id, so a frame edits its row unchanged.
       updateDraft: (draftId, updater) =>
         set((state) => {
           let matched = false;
           const days = state.days.map((day) => {
-            if (!day.slots.some((slot) => slot.id === draftId)) return day;
+            const slots = day.slots.map((slot) => updateSlotDraft(slot, draftId, updater));
+            if (slots.every((slot, index) => slot === day.slots[index])) return day;
             matched = true;
-            return {
-              ...day,
-              slots: day.slots.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
-            };
+            return { ...day, slots };
           });
           return matched ? { days } : state;
         }),
@@ -579,12 +625,18 @@ export const useCalendarStore = create<CalendarState>()(
         set((state) => {
           const draftIdSet = new Set(draftIds);
           // Collect the backend ids of the drafts being removed so the persistence
-          // layer can delete the server rows too (RLS allows any brand member).
+          // layer can delete the server rows too (RLS allows any brand member). A card is
+          // its whole group: every member row goes with it.
           const backendIdsToDelete: string[] = [];
           for (const day of state.days) {
             for (const slot of day.slots) {
-              if (draftIdSet.has(slot.id) && slot.backendDraftId) {
-                backendIdsToDelete.push(slot.backendDraftId);
+              if (!draftIdSet.has(slot.id)) continue;
+              const rowIds = [
+                slot.backendDraftId,
+                ...(slot.groupMembers ?? []).map((member) => member.backendDraftId),
+              ];
+              for (const rowId of rowIds) {
+                if (rowId && !backendIdsToDelete.includes(rowId)) backendIdsToDelete.push(rowId);
               }
             }
           }
@@ -868,6 +920,17 @@ export const useCalendarStore = create<CalendarState>()(
               : sourceDraft.dateLabel,
             seedTrendId: undefined,
             targetAccountId: undefined,
+            // A copy is one new row on the card's own platform; the group's other rows stay theirs.
+            platforms: [
+              sourceDraft.groupMembers?.find(
+                (member) => member.backendDraftId === sourceDraft.backendDraftId,
+              )?.platform ??
+                sourceDraft.platforms[0] ??
+                'instagram',
+            ],
+            groupId: undefined,
+            groupMembers: undefined,
+            planSource: undefined,
             generationError: undefined,
             generationAttempts: undefined,
             instagram_post_id: undefined,

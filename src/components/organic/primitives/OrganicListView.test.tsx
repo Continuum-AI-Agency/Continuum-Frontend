@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
+
+// The cards name their posting account through React Query; no brand is set, so it stays idle.
+const queryClient = new QueryClient();
+function QueryWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
 
 // happy-dom does not expose SyntaxError on its window object, which crashes
 // @testing-library/dom's querySelectorAll internals.
@@ -379,6 +387,27 @@ describe('OrganicListView', () => {
       expect(rowOf('Draft title').getAttribute('aria-pressed')).toBe('false');
       expect(rowOf('Other draft').getAttribute('aria-pressed')).toBe('true');
       expect(rowOf('Backlog idea').getAttribute('data-draft-id')).toBe('backlog-1');
+    });
+
+    // C7: one row per post, naming every platform it goes to.
+    it('carries the card contract on a grouped row, with every platform it goes to', () => {
+      renderList({
+        days: [
+          makeDay([
+            makeDraft({
+              backendDraftId: 'srv-1',
+              groupId: 'group-1',
+              platforms: ['linkedin', 'instagram'],
+            }),
+          ]),
+        ],
+      });
+
+      const row = rowOf('Draft title');
+      expect(row.getAttribute('data-draft-card')).toBe('');
+      expect(row.getAttribute('data-group-id')).toBe('group-1');
+      expect(row.getAttribute('data-backend-draft-id')).toBe('srv-1');
+      expect(row.querySelector('[data-card-platforms]')?.textContent).toBe('Instagram, LinkedIn');
     });
 
     it('selects the row by id from a click and from Enter', () => {

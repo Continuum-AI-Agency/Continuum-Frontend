@@ -158,9 +158,14 @@ export function useCalendarDraftPersistence({
   // (manual constructions not yet autosaved) instead of clobbering them.
   const calendarDaysRef = React.useRef(calendarDays);
   calendarDaysRef.current = calendarDays;
+  // Only the latest refetch may write the grid. An older answer landing after a newer one
+  // would put back a group as it was before a platform was ticked, and the next tick, built
+  // from that stale card, would delete the new member row on the server.
+  const refetchSeqRef = React.useRef(0);
 
   const refetch = React.useCallback(async () => {
     if (!brandProfileId) return;
+    const seq = ++refetchSeqRef.current;
 
     // Fetch ALL of the brand's drafts (no date window). The calendar is no longer
     // week-scoped: every draft is loaded once, and each view filters/derives its
@@ -169,6 +174,7 @@ export function useCalendarDraftPersistence({
     const { drafts } = await request<{ drafts: PersistedOrganicDraftRow[] }>({
       path: `/api/organic/calendar/drafts?${params}`,
     });
+    if (seq !== refetchSeqRef.current) return;
 
     // Scaffold must contain a home day for every loaded draft (or the mapper drops
     // it), so pre-scan day ids before mapping. The visible month around today seeds

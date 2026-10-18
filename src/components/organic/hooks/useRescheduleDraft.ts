@@ -12,6 +12,7 @@ import type {
   OrganicPlatformTag,
 } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
+import { groupMemberDrafts, isGroup } from '@/lib/organic/groupDraft';
 import { isPostPlatform } from '@/lib/organic/postPlatforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { scheduleFieldPatch, useDraftFieldPersistence } from './useDraftFieldEditor';
@@ -49,15 +50,20 @@ export function retargetDraft(
   draft: OrganicCalendarDraft,
   retarget: Pick<PlatformRetarget, 'platform' | 'accountId'>,
 ): OrganicCalendarDraft | null {
-  // A fan-out card is N rows; restamping its source row alone would strand the siblings.
-  if ((draft.groupMembers?.length ?? 0) > 1) return null;
+  // A group is N rows; its platforms change through the platform menu, never a drop.
+  if (isGroup(draft)) return null;
   if (draft.platforms.length === 1 && draft.platforms[0] === retarget.platform) return null;
+  const targetAccountId =
+    draft.platforms[0] === retarget.platform ? draft.targetAccountId : retarget.accountId;
   return {
     ...draft,
     platforms: [retarget.platform],
-    targetAccountId:
-      draft.platforms[0] === retarget.platform ? draft.targetAccountId : retarget.accountId,
-    groupMembers: draft.groupMembers?.map((member) => ({ ...member, platform: retarget.platform })),
+    targetAccountId,
+    groupMembers: draft.groupMembers?.map((member) => ({
+      ...member,
+      platform: retarget.platform,
+      accountId: targetAccountId ?? null,
+    })),
   };
 }
 
@@ -141,35 +147,62 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
 
   const { persistDraftFields } = useDraftFieldPersistence();
 
-  // One PATCH through the field-edit route carries the platform and the day. The route
-  // restamps the row's platform, account and slot_data under its own CAS guard, so the
-  // browser never writes the row (it used to, straight to Supabase, for the platform).
+  // One PATCH per member row through the field-edit route, in turn: a group moves together or
+  // not at all. The route restamps the row's platform, account and slot_data under its own CAS
+  // guard, so the browser never writes the row (it used to, straight to Supabase, for the
+  // platform). A member that moved before a sibling failed is moved back, so a refetch cannot
+  // split the card across two days.
   const persistDraft = React.useCallback(
     async (snapshot: RescheduleSnapshot, targetDayId: string): Promise<boolean> => {
-      const { draft, retargeted } = snapshot;
-      if (!draft.backendDraftId) return true;
-      const movesDay = snapshot.fromDayId !== targetDayId;
-      const schedule = movesDay ? scheduleFieldPatch(targetDayId, draft.timeLabel) : null;
-      if (movesDay && !schedule) return false;
+      const { draft, retargeted, fromDayId } = snapshot;
+      const movesDay = fromDayId !== targetDayId;
       const platform = retargeted?.platforms[0];
       if (retargeted && !isPostPlatform(platform)) return false;
-      if (!schedule && !retargeted) return true;
-      const result = await persistDraftFields(
-        { id: draft.id, backendDraftId: draft.backendDraftId, updatedAt: draft.updatedAt },
-        {
-          ...schedule,
-          ...(retargeted && isPostPlatform(platform)
-            ? { platform, accountId: retargeted.targetAccountId ?? null }
-            : {}),
-        },
-      );
-      if (result.ok && result.updatedAt) {
-        const updatedAt = result.updatedAt;
-        updateDraft(draft.id, (current) => ({ ...current, updatedAt }));
+      if (!movesDay && !retargeted) return true;
+      const retargetPatch =
+        retargeted && isPostPlatform(platform)
+          ? { platform, accountId: retargeted.targetAccountId ?? null }
+          : {};
+
+      const moved: Array<{ member: OrganicCalendarDraft; updatedAt: string | null }> = [];
+      for (const member of groupMemberDrafts(draft)) {
+        if (!member.backendDraftId) continue;
+        const schedule = movesDay ? scheduleFieldPatch(targetDayId, member.timeLabel) : null;
+        const result =
+          movesDay && !schedule
+            ? { ok: false, updatedAt: null }
+            : await persistDraftFields(
+                {
+                  id: member.id,
+                  backendDraftId: member.backendDraftId,
+                  updatedAt: member.updatedAt,
+                },
+                { ...schedule, ...retargetPatch },
+              );
+        if (!result.ok) {
+          for (const done of isReschedulableDay(fromDayId) ? moved : []) {
+            const back = scheduleFieldPatch(fromDayId, done.member.timeLabel);
+            if (!back || !done.member.backendDraftId) continue;
+            await persistDraftFields(
+              {
+                id: done.member.id,
+                backendDraftId: done.member.backendDraftId,
+                updatedAt: done.updatedAt,
+              },
+              back,
+            );
+          }
+          if (moved.length > 0) requestCalendarRefetch();
+          return false;
+        }
+        moved.push({ member, updatedAt: result.updatedAt });
       }
-      return result.ok;
+      for (const { member, updatedAt } of moved) {
+        if (updatedAt) updateDraft(member.id, (current) => ({ ...current, updatedAt }));
+      }
+      return true;
     },
-    [persistDraftFields, updateDraft],
+    [persistDraftFields, requestCalendarRefetch, updateDraft],
   );
 
   const applyMove = React.useCallback(

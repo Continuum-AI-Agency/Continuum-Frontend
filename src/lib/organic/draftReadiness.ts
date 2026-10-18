@@ -9,8 +9,9 @@ import {
   resolvePublishPlan,
 } from '@continuum/contracts';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
-import { inferPublishPlatform } from './publish-utils';
+import { resolveFrameDraft } from './groupDraft';
 import { isPostPlatform } from './postPlatforms';
+import { inferPublishPlatform } from './publish-utils';
 import { publishPlanDraftFromCalendarDraft } from './publishPlan';
 
 export type DraftReadiness = {
@@ -19,21 +20,20 @@ export type DraftReadiness = {
   reason: string | null;
 };
 
-// A multi-platform draft fans out at approve into one row per platform, and each row meets
-// its own platform's gate — so the draft is ready only when every one of them is.
+// A multi-platform post is one row per platform, and each row meets its own platform's gate
+// with its own caption and media — so the card is ready only when every member is.
 export function evaluateDraftReadiness(draft: OrganicCalendarDraft): DraftReadiness {
   const tagged = draft.platforms.filter(isPostPlatform);
   // ponytail: a draft on no publishable platform (Threads) is judged as Instagram; its
   // publish buttons are hidden anyway.
   const platforms = tagged.length > 0 ? tagged : [inferPublishPlatform(draft) ?? 'instagram'];
-  const planDraft = publishPlanDraftFromCalendarDraft(draft);
   const seen = new Set<string>();
   const blockers = platforms.flatMap((platform) =>
     checkPublishability(
       resolvePublishPlan({
-        draft: planDraft,
+        draft: publishPlanDraftFromCalendarDraft(resolveFrameDraft(draft, platform)),
         platform,
-        account: { requestedAccountId: null, boundAccountId: null, accounts: null },
+        account: { boundAccountId: null, accounts: null },
         publishOptions: null,
         mediaGenerated: null,
       }),

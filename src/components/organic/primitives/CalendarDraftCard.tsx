@@ -18,6 +18,7 @@ import {
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import * as React from 'react';
+import { Pill } from '@/components/kibo-ui/pill';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
 import {
   scheduleFieldPatch,
@@ -35,7 +36,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Pill } from '@/components/kibo-ui/pill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -43,19 +43,19 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
-import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import {
-  isPostPlatform,
-  ORGANIC_POST_PLATFORM_KEYS,
-  POST_PLATFORMS,
-} from '@/lib/organic/postPlatforms';
-import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
+  groupPublishBlocker,
+  inferPublishPlatform,
+  publishPlatformLabel,
+  unpublishedMembers,
+} from '@/lib/organic/publish-utils';
 import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { UNSCHEDULED_DAY_ID } from './calendar-utils';
-import { PlatformBadge, StatusBadge } from './DraftCardBadges';
+import { CardTargets, StatusBadge, useCardCaption } from './DraftCardBadges';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { isReelMissingVideo, MediaStagePill, resolveDraftMediaStage } from './DraftLifecycle';
@@ -188,7 +188,13 @@ export function CalendarDraftCard({
     publishPlatform !== null && draft.status !== 'published' && draft.status !== 'streaming';
   // usePublishDraft enforces this; naming it here turns a click that silently refuses into
   // a disabled item that says why.
-  const publishBlockedReason = evaluateDraftReadiness(draft).reason;
+  const publishBlockedReason = React.useMemo(() => groupPublishBlocker(draft), [draft]);
+  const publishMemberCount = unpublishedMembers(draft).length;
+  const publishDestination =
+    publishMemberCount > 1
+      ? `${publishMemberCount} platforms`
+      : publishPlatformLabel(publishPlatform);
+  const caption = useCardCaption(draft);
 
   const accentColor = resolvePlatformAccentColor(platform);
   const FormatGlyph = formatGlyph(draft.format);
@@ -260,8 +266,8 @@ export function CalendarDraftCard({
     [draft.id, focusEditor, updateDraft],
   );
 
-  // The menu's platform and time picks are saved where publish reads them, through the field
-  // route the panel uses. They used to change the store only: a manual draft reached its row
+  // The menu's time picks are saved where publish reads them, through the field route the
+  // panel uses. They used to change the store only: a manual draft reached its row
   // through the browser autosave, and an agent draft not at all.
   const fieldEditor = useDraftFieldEditor(draft);
 
@@ -281,29 +287,6 @@ export function CalendarDraftCard({
       focusEditor(draft.id);
     },
     [applyQuickEdit, draft.id, fieldEditor, focusEditor],
-  );
-
-  const changePlatform = React.useCallback(
-    (option: (typeof ORGANIC_POST_PLATFORM_KEYS)[number]) => {
-      if (draft.platforms[0] === option) return;
-      // A fan-out card is several rows; the route moves one, so it stays a local choice.
-      if ((draft.groupMembers?.length ?? 0) > 1) {
-        applyQuickEdit((currentDraft) => ({
-          ...currentDraft,
-          platforms: [option],
-          targetAccountId: undefined,
-        }));
-        return;
-      }
-      // The account this workspace publishes to on that platform, never the old platform's.
-      const accountId = useCalendarStore.getState().accountContext?.accountIds?.[option] ?? null;
-      void fieldEditor.editField({ platform: option, accountId }, ['platforms'], {
-        platforms: [option],
-        targetAccountId: accountId ?? undefined,
-      });
-      focusEditor(draft.id);
-    },
-    [applyQuickEdit, draft.groupMembers, draft.id, draft.platforms, fieldEditor, focusEditor],
   );
 
   const clearFailure = React.useCallback(() => {
@@ -359,6 +342,9 @@ export function CalendarDraftCard({
                   onMouseEnter={() => onMouseEnter?.()}
                   onMouseLeave={() => onMouseLeave?.()}
                   data-draft-id={draft.id}
+                  data-draft-card=""
+                  data-group-id={draft.groupId ?? undefined}
+                  data-backend-draft-id={draft.backendDraftId}
                   aria-pressed={isSelected || isMultiSelected}
                   className={cn(
                     // The card is its own size container: below 14rem (a week column beside
@@ -535,6 +521,13 @@ export function CalendarDraftCard({
                       {draft.creativeIdea || draft.title}
                     </p>
 
+                    {/* Where it goes, at every width: a group filed under one row of the week
+                        must still say it also posts elsewhere, and to which account. */}
+                    <CardTargets
+                      draft={draft}
+                      className="mt-1 text-2xs text-muted-foreground @max-[14rem]/draft-card:mt-0.5"
+                    />
+
                     {/* The compact card hides the error panel, but not the one action a failed
                         card exists to offer. A refused publish has none: regenerating cannot fix it. */}
                     {isFailed && onRegenerate && (draft.generationError || !draft.publishError) ? (
@@ -562,7 +555,7 @@ export function CalendarDraftCard({
                           revealCaptionClass,
                         )}
                       >
-                        {draft.captionPreview}
+                        {caption}
                       </p>
 
                       {draft.status === 'placeholder' && (
@@ -734,12 +727,9 @@ export function CalendarDraftCard({
                         </p>
                       ) : null}
 
-                      {/* Footer: platforms | media chip | format */}
+                      {/* Footer: media chip | format */}
                       <div className="mt-2.5 flex items-center justify-between">
                         <div className="flex items-center gap-1">
-                          {draft.platforms.map((p) => (
-                            <PlatformBadge key={p} platform={p} />
-                          ))}
                           {isCarousel ? (
                             <span
                               className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/70 ml-0.5"
@@ -785,11 +775,9 @@ export function CalendarDraftCard({
             </ContextMenuItem>
           ) : null}
           <ContextMenuSeparator />
-          {ORGANIC_POST_PLATFORM_KEYS.map((option) => (
-            <ContextMenuItem key={option} onSelect={() => changePlatform(option)}>
-              Platform: {POST_PLATFORMS[option].label}
-            </ContextMenuItem>
-          ))}
+          {/* Platforms change in ONE place, the review panel's selector, which writes the
+              group's member rows. A second list here changed only the browser's copy. */}
+          <ContextMenuItem onSelect={() => onSelect(draft.id)}>Change platforms…</ContextMenuItem>
           {QUICK_TIME_OPTIONS.map((time) => (
             <ContextMenuItem key={time} onSelect={() => changeTime(time)}>
               Time: {time}
@@ -852,8 +840,8 @@ export function CalendarDraftCard({
               {isPublishing
                 ? 'Publishing…'
                 : publishBlockedReason
-                  ? `Publish to ${publishPlatformLabel(publishPlatform)} — needs setup`
-                  : `Publish to ${publishPlatformLabel(publishPlatform)}`}
+                  ? `Publish to ${publishDestination} — needs setup`
+                  : `Publish to ${publishDestination}`}
             </ContextMenuItem>
           ) : null}
           {openInStudio && !aiStudioHandoffIssue(draft) ? (

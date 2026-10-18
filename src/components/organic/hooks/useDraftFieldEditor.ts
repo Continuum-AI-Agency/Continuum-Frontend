@@ -12,6 +12,7 @@ import type { OrganicCalendarDraft } from '@/components/organic/primitives/types
 import { useToast } from '@/components/ui/ToastProvider';
 import { ApiError } from '@/lib/api/errors';
 import { request } from '@/lib/api/http';
+import { groupMemberDrafts, isGroup } from '@/lib/organic/groupDraft';
 import { type DraftEditField, useCalendarStore } from '@/lib/organic/store';
 
 /**
@@ -45,7 +46,8 @@ type PersistTarget = Pick<OrganicCalendarDraft, 'id' | 'backendDraftId' | 'updat
 
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 422) return 'This post can no longer be edited.';
+    // `caption_too_long` and `account_not_candidate` name the limit or the accounts: say it.
+    if (error.status === 422) return error.payload?.message ?? 'This post can no longer be edited.';
     if (error.status === 403) return 'You do not have access to this post.';
     if (error.status === 404) return 'This post no longer exists.';
   }
@@ -314,13 +316,60 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       fields: readonly DraftEditField[],
       localPatch?: Partial<OrganicCalendarDraft>,
     ): Promise<boolean> => {
+      const card = draftRef.current;
       const snapshot = snapshotFor(localPatch);
       if (localPatch) {
-        updateDraft(draftRef.current.id, (current) => ({ ...current, ...localPatch }));
+        updateDraft(card.id, (current) => ({ ...current, ...localPatch }));
       }
-      return send(draftRef.current, patch, fields, snapshot);
+      // A group is one post: its time moves every member row, each against its own token.
+      const others =
+        fields.includes('schedule') && isGroup(card)
+          ? groupMemberDrafts(card).filter((member) => member.id !== card.id)
+          : [];
+      if (others.length === 0) return send(card, patch, fields, snapshot);
+
+      const [cardSaved, ...results] = await Promise.all([
+        send(card, patch, fields, snapshot),
+        ...others.map((member) => persistDraftFields(member, patch)),
+      ]);
+      results.forEach((result, index) => {
+        const member = others[index];
+        if (!result.ok || !member) return;
+        updateDraft(member.id, (current) => ({
+          ...current,
+          ...localPatch,
+          ...(result.updatedAt ? { updatedAt: result.updatedAt } : {}),
+        }));
+      });
+      const movedMembers = others.filter((_, index) => results[index]?.ok);
+      if (cardSaved && movedMembers.length === others.length) return true;
+      // Some rows moved and some did not. Put the moved ones back, or the post's platforms go
+      // out at different times; our own write is the only one on them, so no token is needed.
+      const previous =
+        patch.dayId && snapshot?.timeLabel
+          ? scheduleFieldPatch(patch.dayId, snapshot.timeLabel)
+          : null;
+      const moved = [...(cardSaved ? [card] : []), ...movedMembers];
+      if (previous) {
+        await Promise.all(
+          moved.map(async (row) => {
+            await persistDraftFields({ ...row, updatedAt: null }, previous);
+            updateDraft(row.id, (current) => ({ ...current, ...snapshot }));
+          }),
+        );
+      }
+      const total = others.length + 1;
+      show({
+        title: 'Time not changed',
+        description: previous
+          ? `${total - moved.length} of ${total} platforms could not move, so none did.`
+          : 'Reloading the post as it is saved.',
+        variant: 'error',
+      });
+      requestCalendarRefetch();
+      return false;
     },
-    [send, snapshotFor, updateDraft],
+    [persistDraftFields, requestCalendarRefetch, send, show, snapshotFor, updateDraft],
   );
 
   const flush = React.useCallback(async (): Promise<boolean> => {

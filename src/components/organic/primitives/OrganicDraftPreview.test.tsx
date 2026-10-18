@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import type { MediaAsset } from '@continuum/contracts';
+import type { MediaAsset, PublishAccountCandidate } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   act,
   cleanup,
@@ -7,9 +8,11 @@ import {
   render as rtlRender,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useState } from 'react';
+import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';
 
@@ -30,15 +33,63 @@ mock.module('./HyperFramePlayer', () => ({
 // shows the brand and keeps the account blocker hidden, which is the loading state.
 type HttpOptions = { path: string; method?: string; body?: Record<string, unknown> };
 const httpCalls: HttpOptions[] = [];
+const fanOutCalls = () => httpCalls.filter((call) => call.path.endsWith('/fan-out'));
 let dryRunResponse: unknown = null;
+// The brand's posting accounts, every platform: what the identity row and the selector read.
+let publishAccounts: PublishAccountCandidate[] = [];
 // Set, field writes wait on it: a save still in flight.
 let heldSave: Promise<unknown> | null = null;
+// Set, the membership route refuses.
+let fanOutFails = false;
+// Set, adapt-caption answers 409 reapproval_required (the row is approved or scheduled).
+let adaptNeedsReapproval = false;
 const httpRequest = mock((opts: HttpOptions) => {
   httpCalls.push(opts);
   if (opts.path.includes('/publish-plan')) {
     return dryRunResponse ? Promise.resolve(dryRunResponse) : new Promise(() => {});
   }
+  if (opts.path.startsWith('/api/organic/publish-accounts')) {
+    return Promise.resolve({ accounts: publishAccounts });
+  }
   if (heldSave && opts.path.endsWith('/fields')) return heldSave;
+  if (opts.path.endsWith('/fan-out')) {
+    if (fanOutFails) return Promise.reject(new Error('fan-out refused'));
+    // The server answers with the group it now holds: one member per requested platform.
+    const platforms = (opts.body?.platforms ?? []) as string[];
+    return Promise.resolve({
+      sourceId: 'be-add',
+      sourcePlatform: platforms[0],
+      groupId: '00000000-0000-4000-8000-00000000f001',
+      members: platforms.map((platform, index) => ({
+        id: index === 0 ? 'be-add' : `be-${platform}`,
+        platform,
+        clientKey: `ck::${platform}`,
+        platformAccountId: null,
+        status: 'draft',
+        isSource: index === 0,
+        created: index > 0,
+      })),
+      removed: [],
+      retained: [],
+    });
+  }
+  if (opts.path.endsWith('/adapt-caption')) {
+    if (adaptNeedsReapproval) {
+      return Promise.reject(
+        new ApiError('Move this post back to draft before changing its caption.', 409, undefined, {
+          error: 'reapproval_required',
+          message: 'Move this post back to draft before changing its caption.',
+        }),
+      );
+    }
+    return Promise.resolve({
+      memberId: 'be-tt',
+      platform: 'tiktok',
+      caption: 'Adapted for TikTok',
+      previousCaption: 'TikTok copy',
+      updatedAt: 'T-adapted',
+    });
+  }
   return Promise.resolve({ updated_at: 'T1' });
 });
 mock.module('@/lib/api/http', () => ({ request: httpRequest, http: { request: httpRequest } }));
@@ -170,27 +221,26 @@ mock.module('./MediaSelectPopover', () => ({
   ),
 }));
 
-let chipsProps: { onPlatformsChange?: (next: string[]) => void } = {};
 const formatChipClick = mock(() => {});
 mock.module('./PostMetaChips', () => ({
   PostMetaChips: ({
     platforms,
+    platformControl,
     format,
     formatLabel,
     timeLabel,
     actions,
-    onPlatformsChange,
   }: {
     platforms: string[];
+    platformControl?: ReactNode;
     format: string;
     formatLabel?: string;
     timeLabel: string;
     actions?: ReactNode;
-    onPlatformsChange?: (next: string[]) => void;
   }) => {
-    chipsProps = { onPlatformsChange };
     return (
       <div data-testid="meta-chips">
+        {platformControl}
         {platforms.map((platform) => (
           <span key={platform}>{platform}</span>
         ))}
@@ -203,11 +253,6 @@ mock.module('./PostMetaChips', () => ({
       </div>
     );
   },
-}));
-
-const fanOutAndApproveMock = mock(() => Promise.resolve(true));
-mock.module('@/components/organic/hooks/useFanOutDraft', () => ({
-  useFanOutDraft: () => ({ fanOutAndApprove: fanOutAndApproveMock, isFanningOut: false }),
 }));
 
 // The menu is tested in its own file; here it records what the panel hands it.
@@ -278,10 +323,6 @@ mock.module('@/components/ui/textarea', () => ({
   Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} />,
 }));
 
-mock.module('@/lib/organic/platforms', () => ({
-  isOrganicPlatformKey: () => true,
-}));
-
 mock.module('./PreviewMediaDropZone', () => ({
   PreviewMediaDropZone: ({
     children,
@@ -307,8 +348,18 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
 
 // The preview's enrichment ladder surfaces enqueue failures as toasts, so it needs the
-// same context the (post-auth) layout wraps the whole app in.
-const render = (ui: ReactNode) => rtlRender(<ToastProvider>{ui}</ToastProvider>);
+// same context the (post-auth) layout wraps the whole app in; the brand's accounts are a query.
+function Providers({ children }: { children: ReactNode }) {
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
+  return (
+    <QueryClientProvider client={client}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
+}
+const render = (ui: ReactNode) => rtlRender(ui, { wrapper: Providers });
 
 // The store's updateDraft is a mock, so a media write is observed by replaying its
 // last mutator onto the draft the test rendered.
@@ -329,9 +380,35 @@ beforeEach(() => {
   cleanup();
   resetEditingDraftId();
   dryRunResponse = null;
+  publishAccounts = [];
   httpCalls.length = 0;
   heldSave = null;
+  fanOutFails = false;
+  adaptNeedsReapproval = false;
   menuProps = {};
+});
+
+const candidate = (
+  id: string,
+  platform: PublishAccountCandidate['platform'],
+  handle: string,
+): PublishAccountCandidate => ({
+  id,
+  platform,
+  handle,
+  displayName: null,
+  avatarUrl: null,
+  needsReauth: false,
+  isDefault: false,
+});
+
+const clip = (storagePath = 'library/clip.mp4') => ({
+  role: 'primary',
+  kind: 'video' as const,
+  slideIndex: 0,
+  storagePath,
+  storageUrl: `https://cdn.example/${storagePath}`,
+  mimeType: 'video/mp4',
 });
 
 const image = (storagePath = 'library/img.png') => ({
@@ -371,8 +448,10 @@ describe('OrganicDraftPreview — contextual shell', () => {
         onClose={onClose}
       />,
     );
-    // Until the dry run answers, the brand stands in for the account.
-    expect(container.querySelector('[data-review-account]')?.textContent).toBe('Pink Elephant');
+    // The account is the row's own stamp, never the brand standing in for it (A4).
+    expect(container.querySelector('[data-review-account]')?.textContent).not.toContain(
+      'Pink Elephant',
+    );
     expect(container.querySelector('[data-review-when]')?.textContent).toBe('Post · Not scheduled');
     expect(screen.getAllByLabelText('Post actions')).toHaveLength(1);
     fireEvent.click(screen.getByLabelText('Close preview'));
@@ -393,16 +472,14 @@ describe('OrganicDraftPreview — contextual shell', () => {
       'https://www.instagram.com/p/original/',
     );
     rerender(
-      <ToastProvider>
-        <OrganicDraftPreview draft={baseDraft({ inspirationSourceUrl: 'javascript:alert(1)' })} />
-      </ToastProvider>,
+      <OrganicDraftPreview draft={baseDraft({ inspirationSourceUrl: 'javascript:alert(1)' })} />,
     );
     expect(screen.queryByText('Inspiration source · View original post')).toBeNull();
   });
 
   it('edits the caption in place, with no edit mode to enter first', () => {
     renderPreview();
-    const readout = screen.getByLabelText('Edit instagram caption');
+    const readout = screen.getByLabelText('Edit Instagram caption');
     expect(readout.tagName).toBe('BUTTON');
     expect(readout.textContent).toContain('Test caption');
     expect(screen.queryByLabelText('Edit post')).toBeNull();
@@ -415,10 +492,10 @@ describe('OrganicDraftPreview — contextual shell', () => {
   // drops focus to <body> and the next Escape cannot close the panel (wave-1 U7).
   it('returns focus to the caption it opened from on Escape', async () => {
     renderPreview();
-    fireEvent.click(screen.getByLabelText('Edit instagram caption'));
+    fireEvent.click(screen.getByLabelText('Edit Instagram caption'));
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
     await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByLabelText('Edit instagram caption')),
+      expect(document.activeElement).toBe(screen.getByLabelText('Edit Instagram caption')),
     );
   });
 
@@ -429,7 +506,7 @@ describe('OrganicDraftPreview — contextual shell', () => {
         brandProfileId="brand-1"
       />,
     );
-    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
+    expect(screen.queryByLabelText('Edit Instagram caption')).toBeNull();
     expect(screen.getByText('Test caption')).toBeTruthy();
     expect(screen.queryByTestId('media-select')).toBeNull();
   });
@@ -608,7 +685,7 @@ describe('OrganicDraftPreview — the picker opens from every entry point, witho
 describe('OrganicDraftPreview — readiness and the primary action', () => {
   // Gating #6/#11: approve and publish read the row, so typing still coalescing must land first.
   const typeCaption = (value: string) => {
-    fireEvent.click(screen.getByLabelText('Edit instagram caption'));
+    fireEvent.click(screen.getByLabelText('Edit Instagram caption'));
     fireEvent.change(screen.getByRole('textbox'), { target: { value } });
   };
   const fieldsSent = (id: string) =>
@@ -676,17 +753,22 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
     updateDraft.mockReset();
   });
 
-  it('waits for a platform move already on the wire before it approves', async () => {
+  it('waits for an account pick already on the wire before it approves', async () => {
     let releaseSave: (value: unknown) => void = () => {};
     heldSave = new Promise((resolve) => {
       releaseSave = resolve;
     });
+    publishAccounts = [
+      candidate('acct-a', 'instagram', 'acme_a'),
+      candidate('acct-b', 'instagram', 'acme_b'),
+    ];
     const onApprove = mock(() => Promise.resolve(true));
     render(
       <OrganicDraftPreview
         draft={baseDraft({
           backendDraftId: 'be-moving',
           updatedAt: 'T0',
+          targetAccountId: 'acct-a',
           publishingAssets: [image()],
         })}
         brandProfileId="brand-1"
@@ -694,7 +776,13 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
       />,
     );
 
-    act(() => chipsProps.onPlatformsChange?.(['tiktok']));
+    fireEvent.click(await screen.findByRole('button', { name: 'Instagram account: @acme_a' }));
+    const other = within(screen.getByRole('radiogroup', { name: 'Instagram account' })).getByRole(
+      'radio',
+      { name: '@acme_b' },
+    );
+    fireEvent.pointerDown(other);
+    fireEvent.click(other);
     await waitFor(() =>
       expect(httpCalls.some((call) => call.path.endsWith('/be-moving/fields'))).toBe(true),
     );
@@ -893,9 +981,7 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
     act(() => menuProps.renderAction?.onSelect());
     expect(onStitch).toHaveBeenCalledWith('draft-1');
     rerender(
-      <ToastProvider>
-        <OrganicDraftPreview draft={reel(true)} brandProfileId="brand-1" onStitch={onStitch} />
-      </ToastProvider>,
+      <OrganicDraftPreview draft={reel(true)} brandProfileId="brand-1" onStitch={onStitch} />,
     );
     expect(menuProps.renderAction).toBeUndefined();
   });
@@ -923,7 +1009,11 @@ describe('OrganicDraftPreview — the publish plan', () => {
     dryRunResponse = dryRun([account], 'acct-1');
     const { container } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ backendDraftId: 'be-handle', publishingAssets: [image()] })}
+        draft={baseDraft({
+          backendDraftId: 'be-handle',
+          targetAccountId: 'acct-1',
+          publishingAssets: [image()],
+        })}
         brandName="Brand"
         brandProfileId="brand-1"
       />,
@@ -950,10 +1040,14 @@ describe('OrganicDraftPreview — the publish plan', () => {
   });
 
   it('asks again on return from connecting an account, and the blocker clears', async () => {
-    dryRunResponse = dryRun([], null);
+    dryRunResponse = dryRun([], 'acct-1');
     const { container } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ backendDraftId: 'be-connect', publishingAssets: [image()] })}
+        draft={baseDraft({
+          backendDraftId: 'be-connect',
+          targetAccountId: 'acct-1',
+          publishingAssets: [image()],
+        })}
         brandProfileId="brand-1"
         onApprove={mock()}
       />,
@@ -985,12 +1079,10 @@ describe('OrganicDraftPreview — the publish plan', () => {
     expect(region?.querySelector('[data-plan-notice]')).toBeNull();
 
     rerender(
-      <ToastProvider>
-        <OrganicDraftPreview
-          draft={baseDraft({ format: 'Story', publishingAssets: [image('feed.png')] })}
-          brandProfileId="brand-1"
-        />
-      </ToastProvider>,
+      <OrganicDraftPreview
+        draft={baseDraft({ format: 'Story', publishingAssets: [image('feed.png')] })}
+        brandProfileId="brand-1"
+      />,
     );
     expect(container.querySelector('[data-plan-notices]')).toBe(region);
     expect(region?.querySelector('[data-plan-notice="caption_not_sent"]')).toBeTruthy();
@@ -1009,55 +1101,44 @@ describe('OrganicDraftPreview — the publish plan', () => {
     expect(screen.queryByText('Test caption')).toBeNull();
   });
 
-  // Gating #1/#15: the platform used to be written from the browser; the row moves through
-  // the field route with the new platform's own account.
-  it('moves the row to a new first platform through the field route, with that platform account', async () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({
-          backendDraftId: 'be-move',
-          updatedAt: 'T0',
-          publishingAssets: [image()],
-        })}
-        brandProfileId="brand-1"
-      />,
-    );
-    act(() => chipsProps.onPlatformsChange?.(['tiktok']));
+  // The selection is the group's rows: ticking hands the full set to the membership route,
+  // and nothing writes a platform list from the browser (K1, C2).
+  const openSelector = async () => {
+    // Shut while the brand's accounts load: an unloaded list would read "Connect … first".
+    const trigger = await screen.findByRole('button', { name: /^Change platforms/ });
+    await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(trigger);
+    return screen.getByRole('menu');
+  };
+
+  it('ticks a platform through the membership route, with the whole card', async () => {
+    publishAccounts = [candidate('acct-fb', 'facebook', 'acme_fb')];
+    const draft = baseDraft({ backendDraftId: 'be-add', publishingAssets: [image()] });
+    render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" />);
+    const menu = await openSelector();
     await waitFor(() =>
-      expect(httpCalls.find((call) => call.path.endsWith('/be-move/fields'))?.body).toMatchObject({
-        platform: 'tiktok',
-        accountId: 'acct-tt',
-        expected_updated_at: 'T0',
-      }),
+      expect(
+        within(menu)
+          .getByRole('menuitemcheckbox', { name: 'Facebook' })
+          .getAttribute('aria-disabled'),
+      ).not.toBe('true'),
     );
+    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Facebook' }));
+    await waitFor(() => expect(fanOutCalls()).toHaveLength(1));
+    expect(fanOutCalls()[0]).toMatchObject({
+      path: '/api/organic/calendar/drafts/be-add/fan-out',
+      method: 'POST',
+      body: { platforms: ['instagram', 'facebook'] },
+    });
+    expect(httpCalls.some((call) => call.path.endsWith('/fields'))).toBe(false);
   });
 
-  // The chip hands back menu order: Instagram sorts before Facebook, and adding it must not
-  // move a Facebook row.
-  it('keeps the row on its platform when a platform that sorts first is added', () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({
-          platforms: ['facebook'],
-          backendDraftId: 'be-sorts',
-          publishingAssets: [image()],
-        })}
-        brandProfileId="brand-1"
-      />,
+  it('keeps the selector shut, saying why, until the draft has a row', () => {
+    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+    expect(screen.getByRole('button', { name: /^Change platforms/ }).hasAttribute('disabled')).toBe(
+      true,
     );
-    act(() => chipsProps.onPlatformsChange?.(['instagram', 'facebook']));
-    expect(httpCalls.some((call) => call.path.endsWith('/be-sorts/fields'))).toBe(false);
-  });
-
-  it('keeps an added second platform local until approve fans the post out', () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({ backendDraftId: 'be-add', publishingAssets: [image()] })}
-        brandProfileId="brand-1"
-      />,
-    );
-    act(() => chipsProps.onPlatformsChange?.(['instagram', 'facebook']));
-    expect(httpCalls.some((call) => call.path.endsWith('/be-add/fields'))).toBe(false);
+    expect(screen.getByText('Saving…')).toBeTruthy();
   });
 });
 
@@ -1227,7 +1308,9 @@ describe('OrganicDraftPreview — attached video renders', () => {
     expect(screen.queryByText('No media')).toBeNull();
   });
 
-  it('falls back to a first-frame seek when the library asset has no poster', () => {
+  // The preview is the post: a poster-less video paints its first frame (the chat tile, which
+  // loads no bytes before hover, would leave it a blank tile — planner:preview #231).
+  it('renders a poster-less library video with a first-frame seek, loading its metadata', () => {
     const { container } = render(
       <OrganicDraftPreview draft={videoDraft(null)} brandProfileId="brand-1" />,
     );
@@ -1235,6 +1318,7 @@ describe('OrganicDraftPreview — attached video renders', () => {
     expect(video).toBeTruthy();
     expect(video?.getAttribute('poster')).toBeNull();
     expect(video?.getAttribute('src')).toBe('https://cdn.example/clip.mp4#t=0.01');
+    expect(video?.getAttribute('preload')).toBe('metadata');
   });
 
   it('still renders an image draft as an image, not a video', () => {
@@ -1294,7 +1378,6 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     cleanup();
     resetEditingDraftId();
     (calendarStoreState.updateDraft as ReturnType<typeof mock>).mockClear();
-    fanOutAndApproveMock.mockClear();
   });
 
   it('renders no frame switcher for a single-platform draft', () => {
@@ -1306,23 +1389,32 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     render(<OrganicDraftPreview draft={multiPlatformDraft()} brandProfileId="brand-1" />);
 
     expect(screen.getByText('See it on')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'IG' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'FB' }).getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByRole('button', { name: 'LI' }).getAttribute('aria-pressed')).toBe('false');
+    // Named by the contracts label, never an abbreviation.
+    expect(screen.getByRole('button', { name: 'Instagram' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Facebook' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'LinkedIn' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
   });
 
   // THE regression this guards: "look at it on LinkedIn" must not quietly drop
   // Facebook and Instagram from the post.
   it('switches the rendered frame without mutating draft.platforms', () => {
     render(<OrganicDraftPreview draft={multiPlatformDraft()} brandProfileId="brand-1" />);
-    expect(screen.getByLabelText('Edit instagram caption')).toBeTruthy();
+    expect(screen.getByLabelText('Edit Instagram caption')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'LI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'LinkedIn' }));
 
     // The frame — and the caption's enforced char limit — follow the selector.
-    expect(screen.getByLabelText('Edit linkedin post copy')).toBeTruthy();
-    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
-    expect(screen.getByRole('button', { name: 'LI' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByLabelText('Edit LinkedIn post copy')).toBeTruthy();
+    expect(screen.queryByLabelText('Edit Instagram caption')).toBeNull();
+    expect(screen.getByRole('button', { name: 'LinkedIn' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
 
     // The post itself is untouched: no store write, and all three chips remain.
     expect(calendarStoreState.updateDraft as ReturnType<typeof mock>).not.toHaveBeenCalled();
@@ -1332,8 +1424,8 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     expect(chips.textContent).toContain('linkedin');
   });
 
-  it('offers to approve every platform at once and fans out instead of approving one row', async () => {
-    const onApprove = mock();
+  it('approves every platform at once, in one call for the whole post', async () => {
+    const onApprove = mock(() => Promise.resolve(true));
     render(
       <OrganicDraftPreview
         draft={multiPlatformDraft()}
@@ -1345,10 +1437,9 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     const cta = screen.getByRole('button', { name: 'Approve for 3 platforms' });
     fireEvent.click(cta);
 
-    // Fan-out is a backend row-copy: a browser-cloned sibling would fail the publish
-    // gate, which reads media and caption exclusively from content_json.
-    await waitFor(() => expect(fanOutAndApproveMock).toHaveBeenCalledTimes(1));
-    expect(onApprove).not.toHaveBeenCalled();
+    // The rows already exist; the workspace approves every member of the group.
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+    expect(onApprove).toHaveBeenCalledWith('draft-1');
   });
 
   it('keeps the single-platform CTA and the single-draft approve path intact', async () => {
@@ -1373,7 +1464,6 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve & schedule' }));
     await waitFor(() => expect(onApprove).toHaveBeenCalledWith('draft-1'));
-    expect(fanOutAndApproveMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1523,12 +1613,10 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       expect(frame()?.querySelector(`svg.${railIcon}`)).toBeNull();
 
       rerender(
-        <ToastProvider>
-          <OrganicDraftPreview
-            draft={{ ...reelDraft(platform), format, status: 'published' }}
-            brandProfileId="brand-1"
-          />
-        </ToastProvider>,
+        <OrganicDraftPreview
+          draft={{ ...reelDraft(platform), format, status: 'published' }}
+          brandProfileId="brand-1"
+        />,
       );
       expect(frame()?.querySelector(`svg.${railIcon}`)).toBeTruthy();
     });
@@ -1581,7 +1669,7 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
 
       expect(screen.getByTestId('media-select')).toBeTruthy();
       expect(screen.getByTestId('drop-zone')).toBeTruthy();
-      expect(screen.getByLabelText(`Edit ${platform} caption`)).toBeTruthy();
+      expect(screen.getByLabelText(`Edit ${label} caption`)).toBeTruthy();
     });
   }
 });
@@ -1687,11 +1775,7 @@ describe('OrganicDraftPreview — carousel slide navigation', () => {
     // Drop c.jpg — the draft now has two slides while the position sits at 2.
     const shrunk = sparseCarousel();
     shrunk.publishingAssets = shrunk.publishingAssets?.slice(0, 2);
-    rerender(
-      <ToastProvider>
-        <OrganicDraftPreview draft={shrunk} brandProfileId="brand-1" />
-      </ToastProvider>,
-    );
+    rerender(<OrganicDraftPreview draft={shrunk} brandProfileId="brand-1" />);
 
     expect(screen.getByText('2/2')).toBeTruthy();
     expect(shownSlideSrc()).toBe('https://cdn/b.jpg');
@@ -1705,9 +1789,7 @@ describe('OrganicDraftPreview — carousel slide navigation', () => {
     expect(screen.getByText('3/3')).toBeTruthy();
 
     rerender(
-      <ToastProvider>
-        <OrganicDraftPreview draft={sparseCarousel({ id: 'draft-2' })} brandProfileId="brand-1" />
-      </ToastProvider>,
+      <OrganicDraftPreview draft={sparseCarousel({ id: 'draft-2' })} brandProfileId="brand-1" />,
     );
 
     expect(screen.getByText('1/3')).toBeTruthy();
@@ -1783,5 +1865,197 @@ describe('OrganicDraftPreview — replacing the creative (#402)', () => {
 
     fireEvent.click(screen.getByLabelText('Enlarge creative'));
     expect(screen.queryByRole('button', { name: 'Replace' })).toBeNull();
+  });
+});
+
+// A grouped card is one row per platform: the frame in view edits ITS row.
+describe('OrganicDraftPreview — each frame is its own row', () => {
+  const fieldCalls = () => httpCalls.filter((call) => call.path.endsWith('/fields'));
+  const groupCard = () => {
+    const tiktok = baseDraft({
+      id: 'draft-1::tiktok',
+      platforms: ['tiktok'],
+      backendDraftId: 'be-tt',
+      updatedAt: 'T-tt',
+      captionPreview: 'TikTok copy',
+      targetAccountId: 'acct-tt',
+      groupId: 'group-1',
+      publishingAssets: [image()],
+    });
+    return baseDraft({
+      platforms: ['instagram', 'tiktok'],
+      backendDraftId: 'be-ig',
+      updatedAt: 'T-ig',
+      captionPreview: 'Instagram copy',
+      targetAccountId: 'acct-ig',
+      groupId: 'group-1',
+      groupMembers: [
+        {
+          backendDraftId: 'be-ig',
+          platform: 'instagram',
+          status: 'draft',
+          clientKey: 'k',
+          accountId: 'acct-ig',
+        },
+        {
+          backendDraftId: 'be-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          clientKey: 'k::tiktok',
+          accountId: 'acct-tt',
+          draft: tiktok,
+        },
+      ],
+      publishingAssets: [image()],
+    });
+  };
+
+  it('(b) a caption typed on the TikTok frame PATCHes the TikTok row and never the Instagram one', async () => {
+    render(<OrganicDraftPreview draft={groupCard()} brandProfileId="brand-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+    expect(screen.getByLabelText('Edit TikTok caption').textContent).toContain('TikTok copy');
+    fireEvent.click(screen.getByLabelText('Edit TikTok caption'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Only for TikTok' } });
+    await waitFor(() => expect(fieldCalls().length).toBe(1), { timeout: 2000 });
+    expect(fieldCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-tt/fields');
+    expect(fieldCalls()[0]?.body).toMatchObject({
+      caption: 'Only for TikTok',
+      expected_updated_at: 'T-tt',
+    });
+    expect(fieldCalls().some((call) => call.path.includes('/be-ig/'))).toBe(false);
+  });
+
+  // The platforms the store was told to show, one entry per write that changed them.
+  const platformWrites = () =>
+    (calendarStoreState.updateDraft as ReturnType<typeof mock>).mock.calls
+      .map((call) =>
+        (call[1] as (draft: OrganicCalendarDraft) => OrganicCalendarDraft)(baseDraft()),
+      )
+      .map((draft) => draft.platforms)
+      .filter((platforms) => platforms.join() !== baseDraft().platforms.join());
+
+  const tickTikTok = async () => {
+    publishAccounts = [candidate('acct-tt', 'tiktok', 'acme_tt')];
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-add',
+          updatedAt: 'T0',
+          format: 'Reel',
+          publishingAssets: [clip()],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: /^Change platforms/ });
+    await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(trigger);
+    const tiktok = () =>
+      within(screen.getByRole('menu')).getByRole('menuitemcheckbox', { name: 'TikTok' });
+    await waitFor(() => expect(tiktok().getAttribute('aria-disabled')).not.toBe('true'));
+    fireEvent.click(tiktok());
+    await waitFor(() => expect(fanOutCalls()).toHaveLength(1));
+    expect(fanOutCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-add/fan-out');
+    expect(fanOutCalls()[0]?.body).toEqual({ platforms: ['instagram', 'tiktok'] });
+  };
+
+  it('(d) ticking TikTok asks the server for the member row; refused, the card never shows it', async () => {
+    fanOutFails = true;
+    await tickTikTok();
+    await waitFor(() => expect(screen.getByText('Platforms not changed')).toBeTruthy());
+    expect(platformWrites()).toEqual([]);
+  });
+
+  it("(d) the card shows the server's answer at once, so a second tick builds on it", async () => {
+    await tickTikTok();
+    await waitFor(() => expect(platformWrites()).toEqual([['instagram', 'tiktok']]));
+  });
+
+  it("(e) names each frame's stamped account before any dry run answers, never the brand", async () => {
+    publishAccounts = [
+      candidate('acct-ig', 'instagram', 'acme_ig'),
+      candidate('acct-tt', 'tiktok', 'acme_tt'),
+    ];
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={groupCard()}
+        brandName="Pink Elephant"
+        brandProfileId="brand-1"
+      />,
+    );
+    const account = () => container.querySelector('[data-review-account]')?.textContent;
+    await waitFor(() => expect(account()).toBe('@acme_ig'));
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+    expect(account()).toBe('@acme_tt');
+    expect(container.querySelector('[data-review-identity]')?.textContent).not.toContain(
+      'Pink Elephant',
+    );
+  });
+
+  it('(f) picking an account PATCHes the frame row with that account alone', async () => {
+    publishAccounts = [
+      candidate('acct-tt', 'tiktok', 'acme_tt'),
+      candidate('acct-tt2', 'tiktok', 'acme_tt2'),
+    ];
+    render(<OrganicDraftPreview draft={groupCard()} brandProfileId="brand-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'TikTok account: @acme_tt' }));
+    const pick = within(screen.getByRole('radiogroup', { name: 'TikTok account' })).getByRole(
+      'radio',
+      { name: '@acme_tt2' },
+    );
+    fireEvent.pointerDown(pick);
+    fireEvent.click(pick);
+    await waitFor(() => expect(fieldCalls()).toHaveLength(1));
+    expect(fieldCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-tt/fields');
+    expect(fieldCalls()[0]?.body).toEqual({ accountId: 'acct-tt2', expected_updated_at: 'T-tt' });
+  });
+
+  it("(g) Apply to all platforms PATCHes every other member with this frame's caption", async () => {
+    render(<OrganicDraftPreview draft={groupCard()} brandProfileId="brand-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to all platforms' }));
+    await waitFor(() => expect(fieldCalls()).toHaveLength(1));
+    expect(fieldCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-ig/fields');
+    expect(fieldCalls()[0]?.body).toMatchObject({
+      caption: 'TikTok copy',
+      expected_updated_at: 'T-ig',
+    });
+  });
+
+  it('Adapt on a scheduled row says why and offers "Move back to draft"', async () => {
+    adaptNeedsReapproval = true;
+    render(<OrganicDraftPreview draft={groupCard()} brandProfileId="brand-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adapt for TikTok' }));
+    expect(
+      await screen.findByText('Move this post back to draft before changing its caption.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Move back to draft' })).toBeTruthy();
+  });
+
+  it('Adapt for TikTok asks the server to rewrite the TikTok row, and shows what it saved', async () => {
+    const updateDraft = calendarStoreState.updateDraft as ReturnType<typeof mock>;
+    updateDraft.mockClear();
+    render(<OrganicDraftPreview draft={groupCard()} brandProfileId="brand-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adapt for TikTok' }));
+    await waitFor(() =>
+      expect(httpCalls.find((call) => call.path.endsWith('/adapt-caption'))).toMatchObject({
+        path: '/api/organic/calendar/drafts/be-tt/adapt-caption',
+        method: 'POST',
+        body: { platform: 'tiktok' },
+      }),
+    );
+    await waitFor(() => expect(updateDraft).toHaveBeenCalled());
+    const [draftId, mutate] = updateDraft.mock.calls.at(-1) as [
+      string,
+      (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
+    ];
+    expect(draftId).toBe('draft-1::tiktok');
+    expect(mutate(baseDraft())).toMatchObject({
+      captionPreview: 'Adapted for TikTok',
+      updatedAt: 'T-adapted',
+    });
   });
 });

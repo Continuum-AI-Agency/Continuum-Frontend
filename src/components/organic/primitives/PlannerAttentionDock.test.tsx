@@ -59,7 +59,6 @@ const day = (id: string, slots: OrganicCalendarDraft[]): OrganicCalendarDay =>
 const platform = (key: PlannerPlatform['key'], label: string): PlannerPlatform => ({
   key,
   label,
-  shortLabel: label.slice(0, 2),
   Icon: ({ className }) => <svg data-brand-icon={key} className={className} aria-hidden />,
   canCreate: true,
 });

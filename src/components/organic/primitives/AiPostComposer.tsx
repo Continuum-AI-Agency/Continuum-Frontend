@@ -14,6 +14,9 @@ import {
   type OneShotPostResponse,
   type OrganicPostFormat,
   organicPostFormatEnum,
+  PUBLISH_PLATFORM_LABELS,
+  PUBLISH_PLATFORM_ORDER,
+  type PublishPlatform,
 } from '@continuum/contracts';
 import { ImageOff, Images, Loader2, Play, Sparkles } from 'lucide-react';
 import * as React from 'react';
@@ -32,10 +35,15 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { createOneShotPost } from '@/lib/organic/oneShotPost';
-import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { platformVerdicts } from '@/lib/organic/platformSelection';
 import { postFormatOptions } from '@/lib/organic/postPlatforms';
+import { defaultPublishAccount } from '@/lib/organic/publish-utils';
+import { accountName, findAccount, usePublishAccounts } from '@/lib/organic/publishTargets';
 import type { Trend } from '@/lib/organic/trends';
 import { cn } from '@/lib/utils';
+import { useDraftMembership } from '../hooks/useFanOutDraft';
+import { PlatformSelector } from './PlatformSelector';
+import type { OrganicCalendarDraft } from './types';
 import { useOneShotEvidence } from './useOneShotEvidence';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -158,7 +166,8 @@ export function AiPostComposer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   brandProfileId: string;
-  platform: OrganicPlatformKey;
+  /** The platform the composer opens on; more can be ticked. */
+  platform: PublishPlatform;
   scheduledAt: string;
   trends: Trend[];
   platformAccountIds?: Record<string, string>;
@@ -178,8 +187,13 @@ export function AiPostComposer({
   const [selectedMetricRefs, setSelectedMetricRefs] = React.useState<string[]>([]);
   const [selectedInsightRefs, setSelectedInsightRefs] = React.useState<string[]>([]);
   const [selectedAngleRefs, setSelectedAngleRefs] = React.useState<string[]>([]);
+  // The post is written for the first platform; the rest join its group once it exists.
+  const [platforms, setPlatforms] = React.useState<PublishPlatform[]>([platform]);
+  const sourcePlatform = platforms[0] ?? platform;
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const accounts = usePublishAccounts(brandProfileId);
+  const { setPlatforms: joinPlatforms } = useDraftMembership();
   // Synchronous re-entrancy latch (blocks a double-click before `submitting` state
   // commits) + a stable per-composition idempotency key so a retry replays the
   // same in-flight generation server-side instead of minting a second draft.
@@ -189,8 +203,8 @@ export function AiPostComposer({
   const { assets, loading, hasMore, loadMore } = useStudioLibraryBrowser(brandProfileId);
   const evidence = useOneShotEvidence({
     brandId: brandProfileId,
-    platform,
-    integrationAccountId: platformAccountIds?.[platform] ?? null,
+    platform: sourcePlatform,
+    integrationAccountId: platformAccountIds?.[sourcePlatform] ?? null,
     enabled: open,
   });
 
@@ -201,6 +215,7 @@ export function AiPostComposer({
       setGuidance('');
       setSelectedIds([]);
       setFormat(null);
+      setPlatforms([platform]);
       setSelectedTrendIds([]);
       setSelectedMetricRefs([]);
       setSelectedInsightRefs([]);
@@ -210,7 +225,7 @@ export function AiPostComposer({
       dispatchInFlightRef.current = false;
       idempotencyKeyRef.current = null;
     }
-  }, [open]);
+  }, [open, platform]);
 
   // Only real (uuid) trends can anchor a durable job; seeded slug trends are skipped.
   const taggableTrends = React.useMemo(() => trends.filter((t) => UUID_RE.test(t.id)), [trends]);
@@ -224,6 +239,26 @@ export function AiPostComposer({
 
   const isCarousel = selectedIds.length > 1;
   const hasDirection = Boolean(angle.trim()) || selectedAngleRefs.length > 0;
+  const verdicts = platformVerdicts({
+    format: isCarousel ? 'carousel' : format,
+    caption: null,
+    accounts,
+    selected: platforms,
+  });
+  const togglePlatform = (target: PublishPlatform, next: boolean) =>
+    setPlatforms((prev) =>
+      next ? [...prev.filter((p) => p !== target), target] : prev.filter((p) => p !== target),
+    );
+  // Where each platform posts, by name: the workspace's pick, else the brand's default (C6).
+  const destinations = PUBLISH_PLATFORM_ORDER.filter((p) => platforms.includes(p)).map((p) => {
+    const account =
+      findAccount(accounts, platformAccountIds?.[p]) ?? defaultPublishAccount(accounts, p);
+    return { platform: p, account: account ? accountName(account) : null, id: account?.id };
+  });
+  // The rows the post fans out to post as the accounts named above, not the server's pick.
+  const destinationIds = Object.fromEntries(
+    destinations.flatMap((d) => (d.id ? [[d.platform, d.id]] : [])),
+  );
 
   const handleSubmit = async () => {
     if (!hasDirection || dispatchInFlightRef.current) return;
@@ -240,7 +275,7 @@ export function AiPostComposer({
 
       const response = await createOneShotPost({
         brandId: brandProfileId,
-        platform,
+        platform: sourcePlatform,
         scheduledAt,
         direction: angle.trim() ? angle.trim() : null,
         format: isCarousel ? 'carousel' : format,
@@ -256,6 +291,16 @@ export function AiPostComposer({
       idempotencyKeyRef.current = null;
       onCreated?.(response);
       onOpenChange(false);
+      // The post exists either way; a platform that fails to join is toasted by the hook and
+      // can be ticked again from the post's platform menu.
+      if (platforms.length > 1) {
+        const created = {
+          id: response.draftId,
+          backendDraftId: response.draftId,
+          platforms: [sourcePlatform],
+        } as OrganicCalendarDraft;
+        await joinPlatforms(created, platforms, destinationIds);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the post. Try again.');
     } finally {
@@ -326,6 +371,30 @@ export function AiPostComposer({
             </>
           )}
 
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Platforms
+              </p>
+              <PlatformSelector
+                selected={platforms}
+                verdicts={verdicts}
+                onToggle={togglePlatform}
+                disabledReason={submitting ? 'Generating…' : null}
+              />
+            </div>
+            <ul className="flex flex-wrap justify-end gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              {destinations.map(({ platform: p, account }) => (
+                <li key={p} data-composer-target={p}>
+                  {PUBLISH_PLATFORM_LABELS[p]}:{' '}
+                  <span data-composer-account="" className="text-foreground">
+                    {account ?? 'choose the account on the post'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Format
@@ -342,7 +411,7 @@ export function AiPostComposer({
                 setFormat(organicPostFormatEnum.safeParse(value).data ?? null)
               }
             >
-              {postFormatOptions([platform]).map((option) => (
+              {postFormatOptions(platforms).map((option) => (
                 <ToggleGroupItem
                   key={option}
                   value={option.toLowerCase()}

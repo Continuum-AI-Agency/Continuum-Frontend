@@ -14,6 +14,7 @@ import {
   type PublishPlanGeneratedSlide,
   type PublishPlanInput,
   type PublishPlanMediaSuggestion,
+  publishAccountLabel,
   publishPlanDraftFromRow,
   publishPlanSchema,
   resolvePublishPlan,
@@ -108,7 +109,6 @@ const candidate = (id: string, handle: string): PublishPlanAccountCandidate => (
 });
 
 const account = (overrides: Partial<PublishPlanAccountInput> = {}): PublishPlanAccountInput => ({
-  requestedAccountId: null,
   boundAccountId: ACCOUNT_A,
   accounts: [candidate(ACCOUNT_A, 'brand_a')],
   ...overrides,
@@ -438,19 +438,42 @@ describe('resolvePublishPlan — caption', () => {
     expect(codes(p)).toContain('hashtags_dropped');
   });
 
-  it('cuts a 2300-character caption on Instagram but not on LinkedIn', () => {
+  // G31: this used to publish the cut caption behind a `caption_truncated` notice. An over-limit
+  // caption is refused, never cut; the plan still records where the clamp would land.
+  it('refuses a 2300-character caption on Instagram but not on LinkedIn', () => {
     const long = 'word '.repeat(460);
     const instagram = plan(draft({ caption: long }), 'instagram');
     expect(instagram.caption.truncated).toBe(true);
-    expect(instagram.caption.truncatedAt).not.toBeNull();
     expect(instagram.caption.truncatedAt ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2200);
-    expect(instagram.caption.length).toBeLessThanOrEqual(2200);
-    expect(codes(instagram)).toContain('caption_truncated');
+    expect(checkPublishability(instagram).blockers).toContainEqual({
+      reason: 'caption_too_long',
+      message: 'Instagram captions are at most 2200 characters, hashtags included — this one is 2299',
+      fix: 'caption',
+    });
 
     const linkedin = plan(draft({ caption: long }), 'linkedin');
     expect(linkedin.caption.truncated).toBe(false);
-    expect(linkedin.caption.truncatedAt).toBeNull();
-    expect(codes(linkedin)).not.toContain('caption_truncated');
+    expect(blockerReasons(linkedin)).not.toContain('caption_too_long');
+  });
+
+  it('counts the hashtags toward the limit: the wire caption is body + tags', () => {
+    const body = 'word '.repeat(430).trim();
+    expect(blockerReasons(plan(draft({ caption: body }), 'instagram'))).not.toContain(
+      'caption_too_long',
+    );
+    const tagged = plan(draft({ caption: body, hashtags: { high: tags.slice(0, 15) } }));
+    expect(checkPublishability(tagged).blockers).toContainEqual({
+      reason: 'caption_too_long',
+      message: 'Instagram captions are at most 2200 characters, hashtags included — this one is 2245',
+      fix: 'caption',
+    });
+  });
+
+  it('never refuses a story for its caption: a story sends none', () => {
+    const story = plan(
+      draft({ formats: ['story'], caption: 'word '.repeat(460), publishingAssets: images(1) }),
+    );
+    expect(blockerReasons(story)).not.toContain('caption_too_long');
   });
 
   it('sends exactly what buildPlatformCaption builds', () => {
@@ -471,79 +494,141 @@ describe('resolvePublishPlan — caption', () => {
 describe('resolvePublishPlan — account', () => {
   const resolveFor = (input: Partial<PublishPlanAccountInput>) =>
     plan(draft({ publishingAssets: images(1) }), 'instagram', { account: account(input) });
+  const accountBlocker = (p: PublishPlan) =>
+    checkPublishability(p).blockers.find((b) => b.reason === 'account_missing');
 
-  it('takes the requested account over the bound one', () => {
+  it('publishes to exactly the stamp when it is a connected candidate', () => {
     const p = resolveFor({
-      requestedAccountId: ACCOUNT_B,
-      boundAccountId: ACCOUNT_A,
+      boundAccountId: ACCOUNT_B,
       accounts: [candidate(ACCOUNT_A, 'brand_a'), candidate(ACCOUNT_B, 'brand_b')],
     });
     expect(p.account).toMatchObject({
       status: 'resolved',
       id: ACCOUNT_B,
-      source: 'request',
       handle: 'brand_b',
+      candidateCount: 2,
+      message: null,
     });
+    expect(accountBlocker(p)).toBeUndefined();
   });
 
-  it('falls to the single connected account when the bound one belongs elsewhere', () => {
+  // A2: this used to swap a foreign stamp for the brand's only account at publish time. The
+  // single-account stamp is written at creation; at publish a foreign stamp is a question.
+  it('never swaps a foreign stamp for the brand single account — it blocks and names the choice', () => {
     const p = resolveFor({
       boundAccountId: ACCOUNT_STALE,
       accounts: [candidate(ACCOUNT_B, 'brand_b')],
     });
-    expect(p.account).toMatchObject({
-      status: 'resolved',
-      id: ACCOUNT_B,
-      source: 'brand_single_account',
-      handle: 'brand_b',
-      candidateCount: 1,
+    expect(p.account).toMatchObject({ status: 'foreign', id: ACCOUNT_STALE, candidateCount: 1 });
+    expect(accountBlocker(p)?.message).toBe(
+      "This draft is set to post to an account that is not one of this brand's connected Instagram accounts — choose one of: @brand_b",
+    );
+  });
+
+  // P1/P4: the list shows a twice-linked account once; a draft stamped with the other link's id
+  // read as "not one of this brand's accounts" and offered the very same @handle as the choice.
+  it('resolves a stamp on a twin to its account, judged by that link\'s own connection', () => {
+    const twinned = {
+      ...candidate(ACCOUNT_B, 'brand_b'),
+      needsReauth: false,
+      aliases: [{ id: ACCOUNT_STALE, needsReauth: false }],
+    };
+    const live = resolveFor({ boundAccountId: ACCOUNT_STALE, accounts: [twinned] });
+    expect(live.account).toMatchObject({ status: 'resolved', id: ACCOUNT_STALE, handle: 'brand_b' });
+
+    const dead = resolveFor({
+      boundAccountId: ACCOUNT_STALE,
+      accounts: [{ ...twinned, aliases: [{ id: ACCOUNT_STALE, needsReauth: true }] }],
     });
+    expect(dead.account.status).toBe('needs_reauth');
+    expect(accountBlocker(dead)?.message).toBe(
+      '@brand_b must be reconnected before it can post — reconnect Instagram in Settings, or choose one of: @brand_b',
+    );
+  });
+
+  it('never fills a missing stamp with the brand single account at publish', () => {
+    const p = resolveFor({ boundAccountId: null, accounts: [candidate(ACCOUNT_B, 'brand_b')] });
+    expect(p.account).toMatchObject({ status: 'missing', id: null });
+    expect(accountBlocker(p)?.message).toBe(
+      'Choose which Instagram account this posts to: @brand_b',
+    );
   });
 
   it('is missing when nothing is connected, and asks to connect', () => {
     const p = resolveFor({ boundAccountId: null, accounts: [] });
     expect(p.account.status).toBe('missing');
-    const blocker = checkPublishability(p).blockers.find((b) => b.reason === 'account_missing');
-    expect(blocker?.message).toContain('Connect');
+    expect(accountBlocker(p)?.message).toBe(
+      'No Instagram account is chosen — connect Instagram first',
+    );
   });
 
-  it('is ambiguous with two candidates and no stamp, and asks to choose', () => {
+  // A17: the blocker names the accounts, never "This brand has 2 connected accounts".
+  it('names every candidate when no account is chosen', () => {
     const p = resolveFor({
       boundAccountId: null,
       accounts: [candidate(ACCOUNT_A, 'brand_a'), candidate(ACCOUNT_B, 'brand_b')],
     });
-    expect(p.account.status).toBe('ambiguous');
     expect(p.account.candidateCount).toBe(2);
-    const blocker = checkPublishability(p).blockers.find((b) => b.reason === 'account_missing');
-    expect(blocker?.message).toContain('choose');
+    expect(accountBlocker(p)?.message).toBe(
+      'Choose which Instagram account this posts to: @brand_a, @brand_b',
+    );
   });
 
-  it('trusts the bound account when the candidates were not loaded', () => {
+  // A9: a candidate that needs reconnecting is never published to, and never offered.
+  it('blocks a stamp whose connection needs renewing and offers the healthy ones', () => {
+    const p = resolveFor({
+      boundAccountId: ACCOUNT_A,
+      accounts: [
+        { ...candidate(ACCOUNT_A, 'brand_a'), needsReauth: true },
+        candidate(ACCOUNT_B, 'brand_b'),
+      ],
+    });
+    expect(p.account).toMatchObject({ status: 'needs_reauth', id: ACCOUNT_A, handle: 'brand_a' });
+    expect(accountBlocker(p)?.message).toBe(
+      '@brand_a must be reconnected before it can post — reconnect Instagram in Settings, or choose one of: @brand_b',
+    );
+  });
+
+  it('trusts the stamp only when the candidates were not loaded', () => {
     const p = resolveFor({ boundAccountId: ACCOUNT_A, accounts: null });
-    expect(p.account).toMatchObject({
-      status: 'resolved',
-      id: ACCOUNT_A,
-      source: 'bound',
-      candidateCount: null,
-    });
+    expect(p.account).toMatchObject({ status: 'resolved', id: ACCOUNT_A, candidateCount: null });
   });
 
-  it('passes a bare platform id through without checking it against candidates', () => {
-    const p = resolveFor({ boundAccountId: '17841400000000000', accounts: [] });
-    expect(p.account).toMatchObject({
-      status: 'resolved',
-      id: '17841400000000000',
-      source: 'bound',
+  // A16: a bare platform id used to skip the candidate check entirely.
+  it('checks a non-UUID stamp against the candidates like any other', () => {
+    const p = resolveFor({
+      boundAccountId: '17841400000000000',
+      accounts: [candidate(ACCOUNT_A, 'brand_a')],
     });
+    expect(p.account).toMatchObject({ status: 'foreign', id: '17841400000000000' });
+  });
+
+  // G29: null candidates means "not loaded", not "none connected" — so it never says connect.
+  it('asks which account, without "connect", when there is no stamp and no candidates loaded', () => {
+    const p = resolveFor({ boundAccountId: null, accounts: null });
+    expect(p.account).toMatchObject({ status: 'missing', id: null, candidateCount: null });
+    expect(accountBlocker(p)?.message).toBe('Choose which Instagram account this draft posts to');
   });
 
   it('reads "unassigned" as no account', () => {
     expect(resolveFor({ boundAccountId: 'unassigned', accounts: null }).account.status).toBe(
       'missing',
     );
-    expect(
-      resolveFor({ requestedAccountId: 'unassigned', boundAccountId: ACCOUNT_A }).account,
-    ).toMatchObject({ status: 'resolved', id: ACCOUNT_A, source: 'bound' });
+  });
+
+  it('labels an account by handle, a Page by its name, never by id', () => {
+    expect(publishAccountLabel({ handle: 'brand_a', displayName: 'Brand A' })).toBe('@brand_a');
+    expect(publishAccountLabel({ handle: 'Brand Page', displayName: 'Brand Page' })).toBe(
+      'Brand Page',
+    );
+    expect(publishAccountLabel({ handle: null, displayName: null })).toBe('an unnamed account');
+  });
+
+  it('never doubles the @ of a handle stored with one (YouTube)', () => {
+    expect(publishAccountLabel({ handle: '@plfidstudio', displayName: 'PL Fid Studio' })).toBe(
+      '@plfidstudio',
+    );
+    expect(publishAccountLabel({ handle: '@plfidstudio', displayName: null })).toBe('@plfidstudio');
   });
 });
 
@@ -843,19 +928,20 @@ describe('publishPlanDraftFromRow', () => {
     expect(plan(publishPlanDraftFromRow({ id: 'd', ...row })).format).toBe('REEL');
   });
 
-  it('binds the slot_data stamp over the column and ignores "unassigned"', () => {
+  // A11: one stamp. The slot_data copies are never read, whatever they say.
+  it('binds platform_account_id only and ignores "unassigned"', () => {
     expect(
       boundAccountIdFromRow({
         slot_data: { platform: { name: 'instagram', accountId: ACCOUNT_A } },
         platform_account_id: ACCOUNT_B,
       }),
-    ).toBe(ACCOUNT_A);
+    ).toBe(ACCOUNT_B);
     expect(
       boundAccountIdFromRow({
-        slot_data: { platform: { name: 'instagram', accountId: 'unassigned' } },
-        platform_account_id: ACCOUNT_B,
+        slot_data: { platform: { name: 'instagram', accountId: ACCOUNT_A } },
+        platform_account_id: null,
       }),
-    ).toBe(ACCOUNT_B);
+    ).toBeNull();
     expect(
       boundAccountIdFromRow({
         slot_data: { platform: 'instagram' },
@@ -913,14 +999,15 @@ describe('retargetDraftPlatformRow', () => {
     draftSnapshot: { format: 'Reel', platforms: ['instagram'], targetAccountId: 'old' },
   };
 
-  it('rewrites every platform stamp to the new network and account', () => {
+  // A11: the account lives in the column only; every slot_data copy is removed.
+  it('rewrites the platform everywhere and the account in the column only', () => {
     expect(retargetDraftPlatformRow(slotData, 'facebook', ACCOUNT_B)).toEqual({
       platform: 'facebook',
       platform_account_id: ACCOUNT_B,
       slot_data: {
         day: 'mon',
-        platform: { name: 'facebook', accountId: ACCOUNT_B },
-        draftSnapshot: { format: 'Reel', platforms: ['facebook'], targetAccountId: ACCOUNT_B },
+        platform: { name: 'facebook' },
+        draftSnapshot: { format: 'Reel', platforms: ['facebook'] },
       },
     });
   });
@@ -928,7 +1015,7 @@ describe('retargetDraftPlatformRow', () => {
   it('drops the old account everywhere when the new one is not chosen yet', () => {
     expect(retargetDraftPlatformRow(slotData, 'facebook', null)).toEqual({
       platform: 'facebook',
-      platform_account_id: 'unassigned',
+      platform_account_id: null,
       slot_data: {
         day: 'mon',
         platform: { name: 'facebook' },
@@ -945,11 +1032,12 @@ describe('retargetDraftPlatformRow', () => {
     });
   });
 
-  it('requires accountId to travel with platform in a field patch', () => {
+  it('requires accountId with a platform change, and takes an account pick alone', () => {
     expect(plannerDraftFieldPatchSchema.safeParse({ platform: 'facebook' }).success).toBe(false);
     expect(
       plannerDraftFieldPatchSchema.safeParse({ platform: 'facebook', accountId: null }).success,
     ).toBe(true);
+    expect(plannerDraftFieldPatchSchema.safeParse({ accountId: ACCOUNT_B }).success).toBe(true);
   });
 });
 
@@ -966,7 +1054,7 @@ describe('a post whose image failed to generate', () => {
         slot_data: null,
       }),
       platform: 'facebook',
-      account: { requestedAccountId: 'acct', boundAccountId: null, accounts: null },
+      account: { boundAccountId: 'acct', accounts: null },
       publishOptions: null,
       mediaGenerated: null,
     });
@@ -990,7 +1078,7 @@ describe('alt text on a generated image', () => {
         slot_data: null,
       }),
       platform,
-      account: { requestedAccountId: 'acct', boundAccountId: null, accounts: null },
+      account: { boundAccountId: 'acct', accounts: null },
       publishOptions: null,
       mediaGenerated: null,
     });
