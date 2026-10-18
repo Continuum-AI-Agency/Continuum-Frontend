@@ -61,6 +61,14 @@ export const microRenderBindingSchema = z
     value: z.union([z.string(), z.number(), z.boolean()]).nullable(),
     url: z.string().url().nullable(),
     layers: z.array(microRenderLayerSchema).min(1),
+    /**
+     * The AE property the value is set on, as the fleet's own graph names it on the bound layer:
+     * its path segments verbatim (`Effects->Fill->ADBE Fill-0002` →
+     * `["Effects", "Fill", "ADBE Fill-0002"]`; the middle segment is the effect's display name).
+     * The fleet walks it with `layerByID(id).property(segment)…` and sets the value there.
+     * Non-null exactly for a `color` binding.
+     */
+    property: z.array(z.string().min(1)).min(1).nullable(),
   })
   .strict();
 export type MicroRenderBinding = z.infer<typeof microRenderBindingSchema>;
@@ -119,8 +127,17 @@ export const microRenderRequestSchema = z
   .refine(
     (request) =>
       (request.timeline !== undefined) ===
-      request.outputs.some((output) => !(MICRO_STILL_FILES as readonly string[]).includes(output.file)),
+      request.outputs.some(
+        (output) => !(MICRO_STILL_FILES as readonly string[]).includes(output.file),
+      ),
     { message: 'timeline is required exactly when an output is a video file', path: ['timeline'] },
+  )
+  .refine(
+    (request) =>
+      request.bindings.every(
+        (binding) => (binding.kind === 'color') === (binding.property !== null),
+      ),
+    { message: 'property is set exactly on a color binding', path: ['bindings'] },
   );
 export type MicroRenderRequest = z.infer<typeof microRenderRequestSchema>;
 

@@ -37,6 +37,8 @@ const layer = (over: Partial<AuthoringEditableLayer>): AuthoringEditableLayer =>
   slotKeys: [],
   visibilitySlotKeys: [],
   index: 0,
+  x: 100,
+  y: 200,
   position: [100, 200],
   rotation: 0,
   scale: [100, 100],
@@ -325,7 +327,11 @@ const revisionVariants = mock(async () => ([{
   archivedAt: null,
   tags: [],
   sourceKind: 'after_effects',
-  revisions: [{ sourceAssetId: 'a', sourceVersionId: VERSION }],
+  revisions: [{
+    id: '10000000-0000-4000-8000-000000000204',
+    sourceAssetId: 'a',
+    sourceVersionId: VERSION,
+  }],
 }] as unknown as TemplateRevisionVariant[]));
 const fieldReads = mock(async (): Promise<TemplateVariablesResponse> => ({
   variables: [],
@@ -751,9 +757,9 @@ const waitForAuthoringReadyToPublish = async (actionName: string) => {
 describe('applyLayerChange', () => {
   test('a value equal to the file drops out, and a layer with nothing left is not edited', () => {
     const [text] = LAYERS;
-    const moved = applyLayerChange({}, LAYERS, text!, { position: [120, 200], rotation: 0 });
-    expect(moved).toEqual({ 114: { compId: 63, layerId: 114, position: [120, 200] } });
-    expect(applyLayerChange(moved, LAYERS, text!, { position: [100, 200] })).toEqual({});
+    const moved = applyLayerChange({}, LAYERS, text!, { x: 120, y: 200, rotation: 0 });
+    expect(moved).toEqual({ '63:114': { compId: 63, layerId: 114, x: 120 } });
+    expect(applyLayerChange(moved, LAYERS, text!, { x: 100, y: 200 })).toEqual({});
   });
   test('a shared Show field moves every layer it drives', () => {
     const shared = [
@@ -761,8 +767,8 @@ describe('applyLayerChange', () => {
       layer({ layerId: 2, compId: 412, visibilitySlotKeys: ['show-logo'] }),
     ];
     expect(Object.keys(applyLayerChange({}, shared, shared[0]!, { visible: false }))).toEqual([
-      '1',
-      '2',
+      '63:1',
+      '412:2',
     ]);
   });
 });
@@ -1638,6 +1644,8 @@ describe('TemplateLayerEditor', () => {
       packageChecksum,
       saveTo: 'new_variant',
       name: 'Card B variant',
+      parentRevisionId: '10000000-0000-4000-8000-000000000204',
+      expectedHeadRevisionId: '10000000-0000-4000-8000-000000000204',
     });
     await waitFor(() => expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'));
     expect(saves).not.toHaveBeenCalled();
@@ -1656,7 +1664,7 @@ describe('TemplateLayerEditor', () => {
     fireEvent.change(position, { target: { value: '140' } });
     fireEvent.blur(position);
     await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ position: [140, 200] }) }),
+      expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
     ));
     await waitForAuthoringReadyToPublish('Review and publish variant');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
@@ -2472,7 +2480,7 @@ describe('TemplateLayerEditor', () => {
       {
         type: 'layer.edit',
         nodeId: 'aep:63:114',
-        edit: { compId: 63, layerId: 114, position: [141.25, 202.5] },
+        edit: { compId: 63, layerId: 114, x: 141.25, y: 202.5 },
       },
     ]);
     editor();
@@ -2724,7 +2732,7 @@ describe('TemplateLayerEditor', () => {
     );
     fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
     await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ position: [140, 200] }) }),
+      expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
     ));
     await waitForAuthoringReadyToPublish('Review and publish variant');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
@@ -2781,7 +2789,7 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(commitAuthoring).toHaveBeenCalledTimes(1));
     expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({ saveTo: 'new_variant', name: 'Card B variant' });
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, position: [140, 200] },
+      type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, x: 140 },
     });
     await waitFor(() =>
       expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'),
@@ -2809,20 +2817,14 @@ describe('TemplateLayerEditor', () => {
     expect(saves).not.toHaveBeenCalled();
   });
 
-  test('re-stacking a comp previews and saves the whole front-first order', async () => {
+  test('re-stacking a comp updates the visible stack and saves its front-first order', async () => {
     enablePrivateDraftTestStorage();
     editor();
     const list = await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(within(list).getByRole('button', { name: 'Send MENOS DE 2.5 backward' }));
-    await waitFor(
-      () =>
-        expect(
-          previews.mock.calls.some(([, r]) => r.orders.length === 1 && r.orders[0]?.compId === 63),
-        ).toBe(true),
-      { timeout: 3000 },
-    );
-    const [, sent] = previews.mock.calls.find(([, r]) => r.orders.length)!;
-    expect(sent.orders).toEqual([{ compId: 63, layerIds: [71, 114, 70] }]);
+    const visibleStack = [...list.querySelectorAll('li')].map((item) => item.textContent ?? '');
+    expect(visibleStack.map((label) => ['Red Box', 'MENOS DE 2.5', 'White Box'].find((name) => label.includes(name))))
+      .toEqual(['Red Box', 'MENOS DE 2.5', 'White Box']);
     await waitFor(() => expect(compileAuthoring).toHaveBeenCalled());
     await waitFor(() => expect(prepareAuthoring).toHaveBeenCalled());
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({

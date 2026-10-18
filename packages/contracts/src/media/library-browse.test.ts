@@ -145,9 +145,9 @@ describe('ranges and technical filters', () => {
       technical: { videoCodecs: ['ProRes'], dynamicRanges: ['hdr10', 'hlg'] },
     });
     expect(query.technical?.videoCodecs).toEqual(['prores']);
-    expect(
-      libraryBrowseQuerySchema.safeParse({ brandId, ranges: { sizeBytes: {} } }).success,
-    ).toBe(false);
+    expect(libraryBrowseQuerySchema.safeParse({ brandId, ranges: { sizeBytes: {} } }).success).toBe(
+      false,
+    );
     expect(
       libraryBrowseQuerySchema.safeParse({ brandId, ranges: { frameRate: { min: 60, max: 24 } } })
         .success,

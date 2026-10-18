@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { templateParseSchema } from './template-source';
+import { presentationDiagnosticSchema } from './presentation';
 
 export const templateRebindSlotSchema = z
   .object({
@@ -21,6 +22,7 @@ export const templateRebindPreviewSchema = z
     slots: z.array(templateRebindSlotSchema),
     missingFootage: templateParseSchema.shape.missingFootage,
     requiresReview: z.boolean(),
+    presentation: z.object({ previousSlideCount: z.number().int().nonnegative(), nextSlideCount: z.number().int().nonnegative(), previousObjectCount: z.number().int().nonnegative(), nextObjectCount: z.number().int().nonnegative(), diagnostics: z.array(presentationDiagnosticSchema) }).strict().optional(),
   })
   .strict();
 export type TemplateRebindPreview = z.infer<typeof templateRebindPreviewSchema>;

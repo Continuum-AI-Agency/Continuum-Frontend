@@ -6,6 +6,8 @@ import {
   type WorkspaceTemplate,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Code2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fileSha256,
@@ -26,6 +28,7 @@ import {
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
 import {
@@ -52,6 +55,11 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplateImports';
 import { useForgeExitGuard } from './useForgeExitGuard';
+
+const PresentationWorkspace = dynamic(
+  () => import('@/components/forge/presentations/PresentationWorkspace'),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> },
+);
 
 // Forge — bring your own After Effects project.
 //
@@ -96,6 +104,7 @@ export function ForgeWorkbench({
   onOpenRender,
   templateIntent,
   onTemplateIntentConsumed,
+  onOpenWebComponents,
 }: {
   brandId: string;
   brandName?: string;
@@ -105,6 +114,7 @@ export function ForgeWorkbench({
   templateIntent?: ForgeTemplateIntent;
   /** The workbench has taken `templateIntent`; the shell drops it so a remount never replays it. */
   onTemplateIntentConsumed?: () => void;
+  onOpenWebComponents?: () => void;
 }) {
   const exitGuard = useForgeExitGuard();
   const [selected, setSelected] = useState<string | null>(null);
@@ -410,6 +420,13 @@ export function ForgeWorkbench({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
+      {onOpenWebComponents ? (
+        <div className="flex justify-end">
+          <Button type="button" size="sm" variant="outline" onClick={onOpenWebComponents}>
+            <Code2 className="mr-1.5 size-3.5" /> Web components
+          </Button>
+        </div>
+      ) : null}
       {sourceQuery.isPending ? (
         <div aria-label="Loading your templates" className="flex flex-col gap-2" role="status">
           <span aria-hidden className="h-4 w-40 animate-pulse rounded-md bg-muted/70" />
@@ -532,7 +549,19 @@ export function ForgeWorkbench({
         onOpen={open}
       />
 
-      {current?.family === 'blender' ? (
+      {current?.family === 'presentation' ? (
+        <PresentationWorkspace
+          key={`${current.assetId}:${current.versionId}`}
+          brandId={brandId}
+          source={current}
+          onBack={() => open(null)}
+          onDraftChange={exitGuard.onDraftChange}
+          onOpenVariant={(assetId) => open(assetId)}
+          revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
+          onRevisionTaken={() => setRevision(null)}
+          onChanged={refreshTemplate}
+        />
+      ) : current?.family === 'blender' ? (
         // A .blend is fields and cameras, not comps and slots: none of the After Effects sheet applies.
         <SceneTemplateDetail
           key={current.assetId}
@@ -598,6 +627,10 @@ export function ForgeWorkbench({
           onOpenRender={onOpenRender}
           onFiles={(files) => void receive(files)}
           onFonts={receiveFonts}
+          onPresentationCreated={async (assetId) => {
+            await refreshTemplate();
+            open(assetId);
+          }}
           onRejected={(files) =>
             toast.error(
               `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd, .ai or .blend, and .ttf or .otf for fonts.`,

@@ -3,7 +3,7 @@ import type { TemplateAuthoringNode, TemplateEditableLayer } from '@continuum/co
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { previewTarget, TemplateLayerPreview } from './AuthoringTemplateLayerPreview';
 
-const layer: TemplateEditableLayer = {
+const layer: TemplateEditableLayer & { position: [number, number] } = {
   compId: 1,
   comp: 'Main',
   layerId: 1,
@@ -18,6 +18,8 @@ const layer: TemplateEditableLayer = {
   slotKeys: [],
   visibilitySlotKeys: [],
   index: 0,
+  x: 100,
+  y: 200,
   position: [100, 200],
   rotation: 0,
   scale: [100, 100],
@@ -321,7 +323,7 @@ describe('template preview interactions', () => {
       compId: 1,
       layers: [layer],
       rendered: {},
-      current: { 1: { position: [120, 220] as const, rotation: 30, scale: [150, 80] as const } },
+      current: { 1: { x: 120, y: 220, rotation: 30, scale: [150, 80] as const } },
       renderedOrder: [1],
       order: [1],
     };
@@ -895,14 +897,14 @@ describe('template preview interactions', () => {
     fireEvent.keyDown(canvas, { key: 'ArrowRight' });
     expect(onEdit).toHaveBeenLastCalledWith(
       layer,
-      { position: [101, 200] },
+      { x: 101, y: 200 },
       'canvas:nudge:1',
       true,
     );
     fireEvent.keyDown(canvas, { key: 'ArrowDown', shiftKey: true });
     expect(onEdit).toHaveBeenLastCalledWith(
       layer,
-      { position: [100, 210] },
+      { x: 100, y: 210 },
       'canvas:nudge:2',
       true,
     );
@@ -970,7 +972,7 @@ describe('template preview interactions', () => {
     });
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 30, clientY: 40 });
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 30, clientY: 40 });
-    expect(onEdit).toHaveBeenLastCalledWith(layer, { position: [120, 230] }, 'canvas:move:1', true);
+    expect(onEdit).toHaveBeenLastCalledWith(layer, { x: 120, y: 230 }, 'canvas:move:1', true);
     expect(screen.queryByRole('dialog', { name: 'Layer controls' })).toBeNull();
   });
 
@@ -1002,7 +1004,7 @@ describe('template preview interactions', () => {
     fireEvent.pointerMove(canvas, { pointerId: 46, clientX: 107, clientY: 202 });
     fireEvent.pointerUp(canvas, { pointerId: 46, clientX: 107, clientY: 202 });
     expect(onGestureCommit).toHaveBeenCalledWith({
-      edits: [{ compId: 1, layerId: 1, position: [106, 200] }],
+      edits: [{ compId: 1, layerId: 1, x: 106, y: 200 }],
       selectionIds: [1],
       group: 'canvas:move:1',
     });
@@ -1049,7 +1051,7 @@ describe('template preview interactions', () => {
       fireEvent.pointerUp(canvas, { pointerId: 7, clientX: 35, clientY: 45 });
       expect(onEdit).toHaveBeenLastCalledWith(
         layer,
-        { position: [125, 235] },
+        { x: 125, y: 235 },
         'canvas:move:1',
         true,
       );
@@ -1107,8 +1109,8 @@ describe('template preview interactions', () => {
     expect(onGestureCommit).toHaveBeenCalledTimes(1);
     expect(onGestureCommit.mock.calls[0][0]).toEqual({
       edits: [
-        { compId: 1, layerId: 1, position: [120, 225] },
-        { compId: 1, layerId: 2, position: [170, 275] },
+        { compId: 1, layerId: 1, x: 120, y: 225 },
+        { compId: 1, layerId: 2, x: 170, y: 275 },
       ],
       selectionIds: [1, 2],
       group: 'canvas:move:1',

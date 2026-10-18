@@ -75,8 +75,8 @@ describe('canvas selection and geometry', () => {
     const snap = snapTranslation(unionBounds([a.bounds, b.bounds])!, 14, 15, [target], 6);
     expect(snap).toEqual({ dx: 15, dy: 15, guides: { x: 60, y: 30 } });
     expect(moveFrames([a, b], snap.dx, snap.dy)).toEqual([
-      { compId: 1, layerId: 1, position: [25, 25] },
-      { compId: 1, layerId: 2, position: [55, 25] },
+      { compId: 1, layerId: 1, x: 25, y: 25 },
+      { compId: 1, layerId: 2, x: 55, y: 25 },
     ]);
   });
 
@@ -99,12 +99,12 @@ describe('canvas selection and geometry', () => {
     const bounds = unionBounds([a.bounds, b.bounds])!;
     const resized = resizeFrames([a, b], bounds, 'se', { x: 80, y: 40 });
     expect(resized).toEqual([
-      { compId: 1, layerId: 1, position: [17.5, 13.75], scale: [250, 175] },
-      { compId: 1, layerId: 2, position: [67.5, 31.25], scale: [250, 175] },
+      { compId: 1, layerId: 1, x: 17.5, y: 13.75, scale: [250, 175] },
+      { compId: 1, layerId: 2, x: 67.5, y: 31.25, scale: [250, 175] },
     ]);
     expect(alignFrames([a, b], 'left')).toEqual([
-      { compId: 1, layerId: 1, position: [10, 10] },
-      { compId: 1, layerId: 2, position: [10, 20] },
+      { compId: 1, layerId: 1, x: 10, y: 10 },
+      { compId: 1, layerId: 2, x: 10, y: 20 },
     ]);
   });
 
@@ -113,10 +113,10 @@ describe('canvas selection and geometry', () => {
     const b = makeFrame(2, [0, 10], { left: -5, top: 5, right: 5, bottom: 15 });
     const rotated = rotateFrames([a, b], { x: 0, y: 0 }, 43, 15);
     expect(rotated.map((edit) => edit.rotation)).toEqual([45, 45]);
-    expect(rotated[0].position?.[0]).toBeCloseTo(7.0711);
-    expect(rotated[0].position?.[1]).toBeCloseTo(7.0711);
-    expect(rotated[1].position?.[0]).toBeCloseTo(-7.0711);
-    expect(rotated[1].position?.[1]).toBeCloseTo(7.0711);
+    expect(rotated[0].x).toBeCloseTo(7.0711);
+    expect(rotated[0].y).toBeCloseTo(7.0711);
+    expect(rotated[1].x).toBeCloseTo(-7.0711);
+    expect(rotated[1].y).toBeCloseTo(7.0711);
   });
 
   test('refuses unsupported parented, animated, 3D, matte, and locked members as a group', () => {

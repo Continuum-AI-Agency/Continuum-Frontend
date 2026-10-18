@@ -364,19 +364,7 @@ export const hyperframesAepMapSchema = z
     compName: z.string().min(1),
     /** Every delivery comp, when a design import wrote one per artboard. */
     comps: z
-      .array(
-        z
-          .object({
-            sourceId: z.string().min(1).optional(),
-            compId: z.number().int().optional(),
-            name: z.string().min(1),
-            width: z.number().int(),
-            height: z.number().int(),
-            fps: z.number().positive().optional(),
-            durationSec: z.number().positive().optional(),
-          })
-          .strict(),
-      )
+      .array(z.object({ sourceId: z.string().min(1).optional(), compId: z.number().int().optional(), name: z.string().min(1), width: z.number().int(), height: z.number().int(), fps: z.number().positive().optional(), durationSec: z.number().positive().optional() }).strict())
       .optional(),
     /** Stable HTML artboard identity mapped to actual native comp metadata. */
     artboards: z.array(z.object({

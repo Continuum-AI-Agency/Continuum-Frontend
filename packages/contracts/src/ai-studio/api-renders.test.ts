@@ -224,6 +224,38 @@ describe('API render contracts', () => {
     });
   });
 
+  // A server too old to say who draws the row is the fleet; a vendored client must still parse it.
+  it('reads the engine the preflight signed, and defaults an unsaid one to the fleet', () => {
+    const base = {
+      confirmationToken: 'token',
+      confirmationHash: 'a'.repeat(64),
+      expiresAt: '2026-08-24T10:00:00.000Z',
+      template: {
+        key: 'vivo-hero',
+        name: 'Vivo Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+        environment: 'Parsed_app',
+        contractVersion: '1',
+        contractHash: 'hash',
+        contractSource: 'template_forge' as const,
+        outputKinds: ['image' as const],
+        variableCount: 1,
+        previewUrl: null,
+        updatedAt: null,
+      },
+      target: null,
+      inputKeys: [],
+      effects: 'none' as const,
+    };
+    expect(apiRenderPreflightResponseSchema.parse(base).engine).toBe('fleet');
+    expect(apiRenderPreflightResponseSchema.parse({ ...base, engine: 'paint' }).engine).toBe(
+      'paint',
+    );
+    expect(apiRenderPreflightResponseSchema.safeParse({ ...base, engine: 'crayon' }).success).toBe(
+      false,
+    );
+  });
+
   // A URL in the pin slot is the exact failure this feature exists to prevent: it
   // parses as "a value was frozen" while being a thing that expires.
   it('refuses a URL where the watermark pin belongs', () => {

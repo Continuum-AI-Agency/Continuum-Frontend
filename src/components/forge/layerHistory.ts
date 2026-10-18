@@ -1,10 +1,8 @@
-import type {
-  TemplateAuthoringCommand,
-  TemplateAuthoringSourceLayerEdit,
-} from '@continuum/contracts';
+import type { TemplateAuthoringCommand, TemplateLayerEdit } from '@continuum/contracts';
 
 export type LayerDraftSnapshot = {
-  edits: Record<number, TemplateAuthoringSourceLayerEdit>;
+  /** Native source edits are keyed by compId:layerId because layer IDs repeat across comps. */
+  edits: Record<string, TemplateLayerEdit>;
   orders: Record<number, number[]>;
   /** Full stack order when authored nodes use stable draft UUID identities. */
   nodeOrders: Record<number, string[]>;

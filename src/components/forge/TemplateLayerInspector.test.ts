@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { FontInventoryRow } from '@continuum/contracts';
-import { boldFaceFor } from './TemplateLayerInspector';
+import { boldFaceFor, fontEditReason } from './TemplateLayerInspector';
 
 const font = (
   postScriptName: string,
@@ -35,4 +35,14 @@ test('bold toggle preserves font family and italic style and requires a held fac
   expect(boldFaceFor(bold.postScriptName, fonts)).toEqual({ bold: true, target: regular });
   expect(boldFaceFor(italic.postScriptName, fonts)).toEqual({ bold: false, target: boldItalic });
   expect(boldFaceFor(regular.postScriptName, [regular, other]).target).toBeUndefined();
+});
+
+test('font fields respect the split writer gate and preserve legacy response semantics', () => {
+  expect(fontEditReason({ textReason: 'Animator content is locked.' })).toBe(
+    'Animator content is locked.',
+  );
+  expect(fontEditReason({ textReason: 'Animator content is locked.', fontReason: null })).toBeNull();
+  expect(fontEditReason({ textReason: null, fontReason: 'Font face is unavailable.' })).toBe(
+    'Font face is unavailable.',
+  );
 });

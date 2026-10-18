@@ -63,10 +63,11 @@ describe('private layer draft commands', () => {
   test('round-trips precise edits, order, and exposure for reload restoration', () => {
     const snapshot = {
       edits: {
-        31: {
+        '7:31': {
           compId: 7,
           layerId: 31,
-          position: [12.125, 49.875] as [number, number],
+          x: 12.125,
+          y: 49.875,
           rotation: -0.03125,
         },
       },
@@ -79,7 +80,7 @@ describe('private layer draft commands', () => {
     expect(commands[0]).toEqual({
       type: 'layer.edit',
       nodeId: 'aep:7:31',
-      edit: snapshot.edits[31],
+      edit: snapshot.edits['7:31'],
     });
     const restored = layerSnapshotFromCommands(commands);
     expect(restored.edits).toEqual(snapshot.edits);
@@ -87,6 +88,17 @@ describe('private layer draft commands', () => {
     expect(restored.exposures).toEqual(snapshot.exposures);
     expect(restored.operations).toEqual(commands);
     expect(commandsFromLayerSnapshot(restored)).toEqual(commands);
+  });
+
+  test('keeps source edits with the same layer ID distinct across compositions', () => {
+    const commands: TemplateAuthoringCommand[] = [
+      { type: 'layer.edit', nodeId: 'aep:7:31', edit: { compId: 7, layerId: 31, rotation: 10 } },
+      { type: 'layer.edit', nodeId: 'aep:9:31', edit: { compId: 9, layerId: 31, rotation: 25 } },
+    ];
+    const snapshot = layerSnapshotFromCommands(commands);
+    expect(snapshot.edits['7:31']?.rotation).toBe(10);
+    expect(snapshot.edits['9:31']?.rotation).toBe(25);
+    expect(commandsFromLayerSnapshot(snapshot)).toEqual(commands);
   });
 
   test('round-trips authored UUID nodes, draft edits, deletes, and complete stable-ID order', () => {
