@@ -9,6 +9,7 @@ import {
   nodeIsMissingPrompt,
   resolveConnection,
   validateWorkflowGraph,
+  workflowEditOpSchema,
 } from './workflow-builder';
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({
@@ -348,6 +349,60 @@ describe('applyOps', () => {
     const refNode = graph.nodes.find((n) => n.id === 'ref');
     expect((refNode?.data as Record<string, unknown>).assetId).toBeUndefined();
     expect((refNode?.data as Record<string, unknown>).sourcePath).toBeUndefined();
+  });
+
+  // `attach_unsplash_photo` names a photo; only the backend may turn that into a url and a
+  // credit, so the pure applier refuses it and the resolved form is detach + update_node.
+  it('refuses an unresolved Unsplash attach and swaps a resolved photo out cleanly', () => {
+    const withImg = applyOps(seed(), [{ op: 'add_node', ref: 'ref', type: 'image' }]).graph;
+    expect(
+      applyOps(withImg, [{ op: 'attach_unsplash_photo', id: 'ref', photo_id: 'abc' }]).errors[0],
+    ).toContain('must be resolved through the Unsplash boundary');
+
+    const photo = applyOps(withImg, [
+      { op: 'detach_media', id: 'ref' },
+      {
+        op: 'update_node',
+        id: 'ref',
+        data: {
+          image: 'https://images.unsplash.com/photo-1?ixid=x',
+          sourceUrl: 'https://images.unsplash.com/photo-1?ixid=x',
+          attribution: { provider: 'unsplash' },
+        },
+      },
+    ]);
+    expect(photo.errors).toEqual([]);
+    const data = (graph: typeof photo.graph) =>
+      graph.nodes.find((n) => n.id === 'ref')?.data as Record<string, unknown>;
+    expect(data(photo.graph).attribution).toEqual({ provider: 'unsplash' });
+
+    const library = applyOps(photo.graph, [
+      {
+        op: 'attach_media',
+        id: 'ref',
+        media: { bucket: 'media-library', storagePath: 'b/a.png', mediaKind: 'image' },
+      },
+    ]).graph;
+    expect(data(library).image).toBeUndefined();
+    expect(data(library).attribution).toBeUndefined();
+
+    const detached = applyOps(photo.graph, [{ op: 'detach_media', id: 'ref' }]).graph;
+    expect('image' in data(detached)).toBe(false);
+    expect('attribution' in data(detached)).toBe(false);
+  });
+
+  it('accepts an Unsplash photo id and refuses anything shaped like a url', () => {
+    expect(
+      workflowEditOpSchema.safeParse({ op: 'attach_unsplash_photo', id: 'n', photo_id: 'eOLp_J-1' })
+        .success,
+    ).toBe(true);
+    expect(
+      workflowEditOpSchema.safeParse({
+        op: 'attach_unsplash_photo',
+        id: 'n',
+        photo_id: 'https://evil.example/x.jpg',
+      }).success,
+    ).toBe(false);
   });
 
   // The asset's real dimensions are known at attach time, so a 9:16 photo must not

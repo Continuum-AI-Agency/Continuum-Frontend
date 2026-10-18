@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import { apiRenderJobListQuerySchema } from '../ai-studio/api-renders';
 import {
   saveTemplateRevisionRequestSchema,
+  setTemplateVariantDefaultRequestSchema,
   templateRevisionEditsSchema,
+  templateRevisionErrorCodeSchema,
   templateRevisionSchema,
+  templateVariantDefaultsResponseSchema,
 } from './template-revisions';
 
 describe('immutable template revision edits', () => {
@@ -121,5 +125,33 @@ describe('immutable template revision edits', () => {
     expect(createdBy.safeParse('00000000-0000-0000-0000-0000000000a1').success).toBe(true);
     expect(createdBy.safeParse(null).success).toBe(true);
     expect(createdBy.safeParse('not-a-uuid').success).toBe(false);
+  });
+
+  test('a family default is one strict pointer, and only a published variant can be it', () => {
+    const templateId = '7d5f2a0e-8c1b-4c3e-9f6a-2b4d6e8f0a1c';
+    const variantId = '0f1e2d3c-4b5a-4968-8776-655443322110';
+    expect(
+      templateVariantDefaultsResponseSchema.parse({ items: [{ templateId, variantId }] }).items,
+    ).toEqual([{ templateId, variantId }]);
+    expect(
+      templateVariantDefaultsResponseSchema.safeParse({
+        items: [{ templateId, variantId, original: false }],
+      }).success,
+    ).toBe(false);
+    expect(setTemplateVariantDefaultRequestSchema.safeParse({ brandId: templateId }).success).toBe(
+      true,
+    );
+    expect(
+      setTemplateVariantDefaultRequestSchema.safeParse({ brandId: templateId, variantId }).success,
+    ).toBe(false);
+    expect(templateRevisionErrorCodeSchema.parse('template_variant_unpublished')).toBe(
+      'template_variant_unpublished',
+    );
+    expect(
+      apiRenderJobListQuerySchema.parse({ brandId: templateId, variantId }).variantId,
+    ).toBe(variantId);
+    expect(
+      apiRenderJobListQuerySchema.safeParse({ brandId: templateId, variantId: 'v1' }).success,
+    ).toBe(false);
   });
 });

@@ -1,7 +1,4 @@
-import type {
-  TemplateAuthoringSourceLayerEdit,
-  TemplateEditableLayer,
-} from '@continuum/contracts';
+import type { TemplateEditableLayer, TemplateLayerEdit } from '@continuum/contracts';
 
 /** UI view of a beta layer with source-native Position retained for private authoring commands. */
 export type AuthoringEditableLayer = Omit<TemplateEditableLayer, 'transformLocks'> & {
@@ -9,5 +6,5 @@ export type AuthoringEditableLayer = Omit<TemplateEditableLayer, 'transformLocks
   transformLocks: NonNullable<TemplateEditableLayer['transformLocks']>;
 };
 
-/** Private AEP edits keep Position pairs; beta immutable revisions continue to use x/y. */
-export type AuthoringLayerEdit = TemplateAuthoringSourceLayerEdit;
+/** Native layer edits share the canonical x/y shape used by immutable revisions. */
+export type AuthoringLayerEdit = TemplateLayerEdit;

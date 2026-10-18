@@ -315,6 +315,7 @@ export function TemplateGallery({
   onFiles,
   onFonts,
   onRejected,
+  onPresentationCreated,
 }: {
   brandId: string;
   brandName?: string;
@@ -332,6 +333,7 @@ export function TemplateGallery({
   onFiles: (files: File[]) => void;
   onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
+  onPresentationCreated?: (assetId: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -604,7 +606,14 @@ export function TemplateGallery({
       </div>
 
       {filter !== 'shared' ? (
-        <ForgeProjectDrop compact onFiles={onFiles} onFonts={onFonts} onRejected={onRejected} />
+        <ForgeProjectDrop
+          brandId={brandId}
+          onPresentationCreated={onPresentationCreated}
+          compact
+          onFiles={onFiles}
+          onFonts={onFonts}
+          onRejected={onRejected}
+        />
       ) : null}
       <div className="overflow-hidden rounded-lg border">
         <Table aria-label="Templates" className="text-xs">

@@ -3,7 +3,7 @@ import { CAROUSEL_SLIDE_TAG } from '../competitor-spy/saveToLibrary';
 import { libraryAspectRatioBinSchema, libraryPreviewFrameSchema } from './aspect-ratio';
 import {
   mediaAssetSchema,
-  mediaKindSchema,
+  type mediaKindSchema,
   mediaReviewStatusSchema,
   mediaSourceSchema,
 } from './asset';
@@ -122,6 +122,7 @@ const FAMILY_FORMAT_GROUP: Readonly<Record<LibraryFormatFamily, LibraryFormatGro
   audio: 'audio',
   document: 'document',
   office_document: 'document',
+  presentation: 'document',
   design_source: 'design',
   after_effects: 'design',
   after_effects_package: 'design',

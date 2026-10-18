@@ -7,6 +7,7 @@ export type LibraryFormatFamily =
   | 'design_source'
   | 'document'
   | 'office_document'
+  | 'presentation'
   | 'after_effects'
   | 'after_effects_package'
   | 'premiere_project'
@@ -197,13 +198,23 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     previewStrategy: 'native',
   },
   {
+    family: 'presentation',
+    extensions: ['pptx', 'potx', 'deckcraft'],
+    mimeTypes: [
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.presentationml.template',
+      'application/vnd.storyteller.deckcraft+zip',
+    ],
+    originalKind: 'file',
+    previewStrategy: 'companion',
+  },
+  {
     // No converter runs on these: the card and the stage say so and offer the download,
     // rather than inventing a thumbnail or waiting on a companion that never comes.
     family: 'office_document',
-    extensions: ['docx', 'pptx', 'xlsx', 'doc', 'ppt', 'xls'],
+    extensions: ['docx', 'xlsx', 'doc', 'ppt', 'xls'],
     mimeTypes: [
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/msword',
       'application/vnd.ms-powerpoint',
@@ -390,6 +401,9 @@ export const LIBRARY_UPLOAD_MAX_BYTES = 500 * MB;
  */
 export const LIBRARY_PROJECT_FILE_MAX_BYTES = 250 * MB;
 
+/** Native presentation archive ceiling, enforced before uploading source bytes. */
+export const LIBRARY_PRESENTATION_MAX_BYTES = 64 * MB;
+
 const PROJECT_FILE_FAMILIES: readonly LibraryFormatFamily[] = [
   'after_effects',
   'after_effects_package',
@@ -421,6 +435,9 @@ export function libraryUploadRefusal(file: {
     return `${file.fileName} is ${megabytes(size)} MB — uploads are capped at ${LIBRARY_UPLOAD_MAX_BYTES / MB} MB right now.`;
   }
   const format = classifyLibraryFileOrGeneric(file);
+  if (format.family === 'presentation' && size > LIBRARY_PRESENTATION_MAX_BYTES) {
+    return `${file.fileName} is ${megabytes(size)} MB — presentation templates must be ${LIBRARY_PRESENTATION_MAX_BYTES / MB} MB or smaller.`;
+  }
   if (PROJECT_FILE_FAMILIES.includes(format.family) && size > LIBRARY_PROJECT_FILE_MAX_BYTES) {
     return `${file.fileName} is ${megabytes(size)} MB — After Effects projects and packages must be ${LIBRARY_PROJECT_FILE_MAX_BYTES / MB} MB or smaller.`;
   }

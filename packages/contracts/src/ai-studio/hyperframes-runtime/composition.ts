@@ -6,9 +6,121 @@
  * consumers typecheck without the DOM.
  */
 
+export type HyperframesNodePlan = {
+  nodes: readonly { id: string; tag: string; inert: boolean; directText: string }[];
+};
+
+export type CompositionState = {
+  root: Element;
+  elements: Element[];
+  videos: HTMLVideoElement[];
+  audio: HTMLAudioElement[];
+  copy: HTMLElement[];
+  text: Set<Element>;
+  ids: Map<Element, string>;
+  generation: number;
+  mappedNodes: number;
+  dynamicNodes: number;
+};
+
+type CompositionManager = {
+  state: () => CompositionState;
+  dispose: () => void;
+};
+const managers = new WeakMap<Document, CompositionManager>();
+const hasDirectText = (element: Element): boolean =>
+  Array.from(element.childNodes).some((node) => node.nodeType === 3 && !!node.textContent?.trim());
+
+/** Bind Rust identities once; JavaScript-created/reparented elements invalidate topology only. */
+export function initializeComposition(doc: Document, plan?: HyperframesNodePlan): CompositionState {
+  managers.get(doc)?.dispose();
+  const planned = new Map(plan?.nodes.map((node) => [node.id, node]));
+  const dynamicIds = new WeakMap<Element, string>();
+  let nextId = 0;
+  let current: CompositionState;
+  let dirty = true;
+  let changes: MutationRecord[] = [];
+  const observer = new MutationObserver((records) => {
+    changes.push(...records);
+  });
+  observer.observe(doc, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['id', 'data-hf-id', 'data-hf-node', 'data-composition-id', 'data-hf-copy'],
+  });
+  const state = (): CompositionState => {
+    changes.push(...observer.takeRecords());
+    for (const record of changes) {
+      if (
+        record.type === 'attributes' ||
+        [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(
+          (node) => node.nodeType === 1,
+        )
+      )
+        dirty = true;
+      else {
+        const element =
+          record.target.nodeType === 1 ? (record.target as Element) : record.target.parentElement;
+        if (element && current) {
+          if (hasDirectText(element)) current.text.add(element);
+          else current.text.delete(element);
+        }
+      }
+    }
+    changes = [];
+    if (!dirty) return current;
+    const elements = Array.from(doc.querySelectorAll('*'));
+    const ids = new Map<Element, string>();
+    const used = new Set<string>();
+    let mappedNodes = 0;
+    for (const element of elements) {
+      const key = element.getAttribute('data-hf-node');
+      const mapped = key ? planned.get(key) : undefined;
+      let id =
+        mapped && mapped.tag === element.localName
+          ? key!
+          : (!plan ? key : null) ||
+            element.getAttribute('data-hf-id') ||
+            element.id ||
+            dynamicIds.get(element);
+      if (mapped && id === key && !used.has(id!)) mappedNodes++;
+      if (!id || used.has(id)) {
+        do {
+          id = `hf-dynamic-${nextId++}`;
+        } while (used.has(id) || planned.has(id));
+        dynamicIds.set(element, id);
+      }
+      used.add(id);
+      ids.set(element, id);
+    }
+    current = {
+      root: doc.querySelector('[data-composition-id]') ?? doc.body,
+      elements,
+      videos: elements.filter((el): el is HTMLVideoElement => el.tagName === 'VIDEO'),
+      audio: elements.filter((el): el is HTMLAudioElement => el.tagName === 'AUDIO'),
+      copy: elements.filter((el): el is HTMLElement => el.hasAttribute('data-hf-copy')),
+      text: new Set(elements.filter((el) => hasDirectText(el))),
+      ids,
+      generation: (current?.generation ?? 0) + 1,
+      mappedNodes,
+      dynamicNodes: plan ? elements.length - mappedNodes : 0,
+    };
+    dirty = false;
+    return current;
+  };
+  managers.set(doc, { state, dispose: () => observer.disconnect() });
+  return state();
+}
+
+export function compositionState(doc: Document): CompositionState {
+  return managers.get(doc)?.state() ?? initializeComposition(doc);
+}
+
 type HyperframesWindow = Window & {
   __hyperframe?: { seek?: (seconds: number) => void | Promise<void> };
-  __timelines?: Record<string, { seek?: (seconds: number) => void }>;
+  __timelines?: Record<string, { seek?: (seconds: number, suppressEvents?: boolean) => void }>;
 };
 
 /**
@@ -48,22 +160,27 @@ export async function seekComposition(
   doc: Document,
   view: Window,
   timestamp: number,
+  options: { waitForFrame?: boolean } = {},
 ): Promise<void> {
   const hyperframes = view as HyperframesWindow;
   await hyperframes.__hyperframe?.seek?.(timestamp);
-  for (const timeline of Object.values(hyperframes.__timelines ?? {})) timeline.seek?.(timestamp);
+  // Callback-driven text and canvas drawing must update before the frame is captured.
+  for (const timeline of Object.values(hyperframes.__timelines ?? {}))
+    timeline.seek?.(timestamp, false);
   for (const animation of doc.getAnimations()) {
     animation.pause();
     animation.currentTime = timestamp * 1000;
   }
   await Promise.all(
-    Array.from(doc.querySelectorAll('video')).map(async (video) => {
+    compositionState(doc).videos.map(async (video) => {
       video.muted = true;
       video.pause();
       await waitForSeek(video, videoSourceTime(timestamp, video.dataset));
     }),
   );
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  // Computed-style reads flush layout synchronously. Sampling structure need not paint a frame.
+  if (options.waitForFrame !== false)
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 export type HyperframesAudioElement = {

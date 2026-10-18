@@ -83,10 +83,12 @@ export function safeSvg(svg: string): SVGSVGElement | null {
   return copy(source) as SVGSVGElement | null;
 }
 
+export type PreviewLayerEdit = AuthoringLayerEdit & { position?: [number, number] };
+
 type Pose = Pick<AuthoringEditableLayer, 'position' | 'rotation' | 'scale' | 'opacity' | 'visible'>;
 
-const poseOf = (layer: AuthoringEditableLayer, edit?: AuthoringLayerEdit): Pose => ({
-  position: edit?.position ?? layer.position,
+const poseOf = (layer: AuthoringEditableLayer, edit?: PreviewLayerEdit): Pose => ({
+  position: [edit?.x ?? layer.x ?? 0, edit?.y ?? layer.y ?? 0],
   rotation: edit?.rotation ?? layer.rotation,
   scale: edit?.scale ?? layer.scale,
   opacity: edit?.opacity ?? layer.opacity,
@@ -116,8 +118,8 @@ export type PreviewEdits = {
   compId: number | null;
   layers: readonly AuthoringEditableLayer[];
   /** The edits the SVG was composed with, and the ones on screen now. */
-  rendered: Record<number, AuthoringLayerEdit>;
-  current: Record<number, AuthoringLayerEdit>;
+  rendered: Record<number, PreviewLayerEdit>;
+  current: Record<number, PreviewLayerEdit>;
   /** The scene comp's stack, front first: as composed, and as it stands now. */
   renderedOrder: readonly number[];
   order: readonly number[];

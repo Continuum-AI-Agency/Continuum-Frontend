@@ -63,13 +63,15 @@ export * from './template-brand-alignment';
 export * from './template-forge-lineage';
 export * from './template-forge-run';
 export * from './template-layer-edits';
+export * from './template-layer-edits';
 export * from './template-name';
 export * from './template-rebind';
+export * from './template-revisions';
 export * from './template-source';
 export * from './template-source-events';
 export * from './template-source-slot';
+export * from './template-timing';
 export * from './template-variants';
-export * from './template-revisions';
 export * from './timeline-draft';
 export * from './transcription';
 export * from './transformations';
@@ -78,6 +80,8 @@ export * from './unsplash';
 export * from './versions';
 export * from './workspace-template';
 export * from './zip-directory';
+
+export * from './hyperframes';
 export * from './template-authoring';
 export * from './template-authoring-preparation';
 export * from './template-authoring-writer';
@@ -93,6 +97,6 @@ export * from './template-authoring-dependency-relink';
 export * from './template-authoring-created-motion';
 export * from './template-package-fonts';
 
-export * from './template-layer-edits';
+export * from './forge-web-component';
 
-export * from './hyperframes';
+export * from './presentation';

@@ -88,7 +88,6 @@ describe('container video (MKV / AVI / WMV)', () => {
 describe('office documents', () => {
   it.each([
     ['brief.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-    ['deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
     ['budget.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
     ['old.doc', 'application/msword'],
     ['old.ppt', 'application/vnd.ms-powerpoint'],
@@ -353,4 +352,19 @@ it('refuses unsafe archive paths before selecting any parser', () => {
   expect(classifyZipEntries(['../project.aep'])).toBe('ambiguous');
   expect(classifyZipEntries(['/index.html'])).toBe('ambiguous');
   expect(classifyZipEntries(['._project.aep', 'notes.txt'])).toBe('archive');
+});
+
+describe('presentation templates', () => {
+  it.each([
+    ['brand.pptx', 'application/octet-stream'],
+    ['brand.potx', 'application/vnd.openxmlformats-officedocument.presentationml.template'],
+    ['upload', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  ])('%s is a presentation source', (fileName, mimeType) => {
+    const format = classifyLibraryFile({ fileName, mimeType });
+    if (!format.accepted) throw new Error('expected presentation to be accepted');
+    expect(format.family).toBe('presentation');
+    expect(format.originalKind).toBe('file');
+    expect(format.previewStrategy).toBe('companion');
+    expect(libraryStorageBucket(format)).toBe('media-source');
+  });
 });

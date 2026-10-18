@@ -74,6 +74,7 @@ import {
 import { NameDialog } from '@/components/forge/RenderSetMenu';
 import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail';
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
+import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import {
   addSibling,
   applyAssistOps,
@@ -155,6 +156,7 @@ import { ApiError } from '@/lib/api/errors';
 import {
   fetchTemplateRevisionVariants,
   fetchTemplateVariants,
+  fetchTemplateLineage,
   saveTemplateVariables,
 } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
@@ -374,6 +376,7 @@ export type ForgeRenderIntent = {
   renderSetId?: string;
   draftWithAi?: boolean;
   templateRevision?: TemplateRevisionRef;
+  templateRef?: string;
   /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
   rowId?: string;
   /** Select that row alone, so Render (and its review) is the next step. Never renders by itself. */
@@ -430,6 +433,7 @@ export function RenderRequestsGrid({
   // Which template, and optionally which saved set, the rows come from. A new object is a new
   // load, so an intent for another set of the same template still reloads.
   const [templateRevision, setTemplateRevision] = useState<TemplateRevisionRef | null>(null);
+  const [templateRef, setTemplateRef] = useState<string | null>(null);
   const [selection, setSelection] = useState<ForgeRenderIntent>({ templateKey: '' });
   const { templateKey } = selection;
   /**
@@ -445,6 +449,25 @@ export function RenderRequestsGrid({
     templates.find((template) => template.key === templateKey)?.bindingId ??
     null;
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
+  const sourceAssetId = contract?.template.sourceAssetId ?? null;
+  const lineage = useQuery({
+    queryKey: forgeQueryKeys.lineage(brandId, sourceAssetId ?? ''),
+    queryFn: () => fetchTemplateLineage(brandId, sourceAssetId as string),
+    enabled: sourceAssetId !== null,
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const checkpoints = useMemo(
+    () => (lineage.data ? checkpointGraph(lineage.data) : null),
+    [lineage.data],
+  );
+  const pinCheckpoint = (ref: string | null) => {
+    setTemplateRef(ref);
+    setRows((current) =>
+      current.map((row) =>
+        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
+      ),
+    );
+  };
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
@@ -1104,7 +1127,7 @@ export function RenderRequestsGrid({
     const pending = timers.current;
     for (const row of rows) {
       const snapshot = preflightSnapshot(rows, row.id);
-      const armedFor = snapshot;
+      const armedFor = `${snapshot}|${templateRef ?? ''}`;
       const scheduled = pending.get(row.id);
       // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
       if (scheduled?.snapshot === armedFor) continue;
@@ -1148,6 +1171,7 @@ export function RenderRequestsGrid({
             variables: resolved,
             ...(outputIds.length ? { outputIds } : {}),
             ...(templateRevision ? { templateRevision } : {}),
+            ...(templateRef ? { templateRef } : {}),
             ...(activeSet && signatureOf(rows, contract) === savedSignature
               ? {
                   renderSetId: activeSet.id,
@@ -1190,6 +1214,7 @@ export function RenderRequestsGrid({
     brandId,
     bindingId,
     templateRevision,
+    templateRef,
     activeSet,
     savedSignature,
   ]);
@@ -1870,6 +1895,7 @@ export function RenderRequestsGrid({
     // A revision belongs to the template it was picked from. Taking it from the intent — rather
     // than leaving it set — means switching template clears it.
     setTemplateRevision(intent.templateRevision ?? null);
+    setTemplateRef(intent.templateRef ?? null);
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
@@ -2713,9 +2739,13 @@ export function RenderRequestsGrid({
           // A revision belongs to the template it was picked from; never carry it to another.
           confirmDiscard(() => {
             setTemplateRevision(null);
+            setTemplateRef(null);
             setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
           });
         }}
+        checkpoints={checkpoints}
+        templateRef={templateRef}
+        onTemplateRefChange={pinCheckpoint}
         ready={contract !== null}
         sourceVariants={revisionVariants ? [] : sourceRoot ? publishedVariants : undefined}
         variants={contract?.outputs}
@@ -3161,6 +3191,7 @@ export function RenderRequestsGrid({
                   bindingId={bindingId}
                   templateKey={contract.template.key}
                   contractHash={contract.template.contractHash}
+                  templateRef={templateRef}
                   contract={contract}
                   rows={batch.rows}
                   records={batch.records}

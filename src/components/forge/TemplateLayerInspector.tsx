@@ -48,6 +48,11 @@ const KIND: Record<TemplateEditableLayer['kind'], string> = {
   artwork: 'Artwork',
 };
 
+/** Old writer responses omit fontReason; explicit null means the font fields are writable. */
+export function fontEditReason(layer: Pick<TemplateEditableLayer, 'fontReason' | 'textReason'>) {
+  return Object.hasOwn(layer, 'fontReason') ? layer.fontReason : layer.textReason;
+}
+
 const sizeSchema = z.number().finite().min(1).max(1000);
 const boxSchema = z.number().finite().positive().max(100_000);
 
@@ -76,13 +81,15 @@ export function TemplateLayerInspector({
   inputValues,
   invalidFields,
   onInputValue,
+  onEditCommit,
   idPrefix = 'inspector',
 }: {
   layer: TemplateEditableLayer;
   edit?: TemplateLayerEdit;
   fonts: FontInventoryRow[];
   disabled: boolean;
-  onEdit: (change: Partial<TemplateLayerEdit>) => void;
+  onEdit: (change: Partial<TemplateLayerEdit>, group?: string) => void;
+  onEditCommit?: (group: string) => void;
   onValidity: (invalidFields: string[]) => void;
   /** What was typed into a text field, kept so a blank or invalid entry stays on screen. */
   inputValues: Record<string, string>;
@@ -99,6 +106,9 @@ export function TemplateLayerInspector({
   const reasons = [...new Set(Object.values(locks))];
   const font = edit?.font ?? layer.font;
   const weight = boldFaceFor(font, fonts);
+  const fontLocked = disabled || !!fontEditReason(layer);
+  const editGroup = (field: string) => `native-layer:${layer.compId}:${layer.layerId}:${field}`;
+  const commitGroup = (field: string) => onEditCommit?.(editGroup(field));
   const textLocked = disabled || !!layer.textReason;
   const boxErrors = invalidFields.filter((name) => name !== 'size');
   const typed = (field: 'size' | 'width' | 'height', schema: z.ZodNumber, value: string) => {
@@ -109,7 +119,10 @@ export function TemplateLayerInspector({
     else next.add(field);
     onValidity([...next]);
     if (parsed.success)
-      onEdit(field === 'size' ? { fontSize: parsed.data } : { [field]: parsed.data });
+      onEdit(
+        field === 'size' ? { fontSize: parsed.data } : { [field]: parsed.data },
+        editGroup(field),
+      );
   };
   return (
     <div className="flex flex-col gap-5">
@@ -132,7 +145,7 @@ export function TemplateLayerInspector({
             size="sm"
             checked={edit?.visible ?? layer.visible}
             disabled={disabled || !!layer.visibilityReason}
-            onCheckedChange={(visible) => onEdit({ visible })}
+            onCheckedChange={(visible) => onEdit({ visible }, editGroup('visible'))}
           />
         </div>
         {layer.visibilitySlotKeys.length ? (
@@ -151,7 +164,8 @@ export function TemplateLayerInspector({
             max={100_000}
             value={x ?? 0}
             disabled={positionLock || x == null}
-            onChange={(next) => onEdit({ x: next })}
+            onChange={(next) => onEdit({ x: next }, editGroup('x'))}
+            onCommit={() => commitGroup('x')}
           />
           <NumberScrubField
             label="Y"
@@ -161,7 +175,8 @@ export function TemplateLayerInspector({
             max={100_000}
             value={y ?? 0}
             disabled={positionLock || y == null}
-            onChange={(next) => onEdit({ y: next })}
+            onChange={(next) => onEdit({ y: next }, editGroup('y'))}
+            onCommit={() => commitGroup('y')}
           />
           <NumberScrubField
             label="Rotation"
@@ -170,7 +185,8 @@ export function TemplateLayerInspector({
             max={36_000}
             value={edit?.rotation ?? layer.rotation ?? 0}
             disabled={disabled || !!locks.rotation || layer.rotation == null}
-            onChange={(rotation) => onEdit({ rotation })}
+            onChange={(rotation) => onEdit({ rotation }, editGroup('rotation'))}
+            onCommit={() => commitGroup('rotation')}
           />
           <NumberScrubField
             label="Opacity"
@@ -179,7 +195,8 @@ export function TemplateLayerInspector({
             max={100}
             value={edit?.opacity ?? layer.opacity ?? 100}
             disabled={disabled || !!locks.opacity || layer.opacity == null}
-            onChange={(opacity) => onEdit({ opacity })}
+            onChange={(opacity) => onEdit({ opacity }, editGroup('opacity'))}
+            onCommit={() => commitGroup('opacity')}
           />
           <NumberScrubField
             label="Scale X"
@@ -188,7 +205,8 @@ export function TemplateLayerInspector({
             max={10_000}
             value={scale[0]}
             disabled={disabled || !!locks.scale || layer.scale == null}
-            onChange={(next) => onEdit({ scale: [next, scale[1]] })}
+            onChange={(next) => onEdit({ scale: [next, scale[1]] }, editGroup('scale-x'))}
+            onCommit={() => commitGroup('scale-x')}
           />
           <NumberScrubField
             label="Scale Y"
@@ -197,7 +215,8 @@ export function TemplateLayerInspector({
             max={10_000}
             value={scale[1]}
             disabled={disabled || !!locks.scale || layer.scale == null}
-            onChange={(next) => onEdit({ scale: [scale[0], next] })}
+            onChange={(next) => onEdit({ scale: [scale[0], next] }, editGroup('scale-y'))}
+            onCommit={() => commitGroup('scale-y')}
           />
         </div>
         {layer.parentName ? <Note>X and Y are relative to {layer.parentName}.</Note> : null}
@@ -219,7 +238,8 @@ export function TemplateLayerInspector({
               className="h-8 text-xs"
               value={edit?.text ?? layer.text ?? ''}
               disabled={textLocked}
-              onChange={(event) => onEdit({ text: event.target.value })}
+              onChange={(event) => onEdit({ text: event.target.value }, editGroup('text'))}
+              onBlur={() => commitGroup('text')}
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
@@ -228,8 +248,9 @@ export function TemplateLayerInspector({
               aria-label="Font face"
               className="h-8 w-full rounded-md border bg-background px-2"
               value={font ?? ''}
-              disabled={textLocked}
-              onChange={(event) => onEdit({ font: event.target.value })}
+              disabled={fontLocked}
+              onChange={(event) => onEdit({ font: event.target.value }, editGroup('font'))}
+              onBlur={() => commitGroup('font')}
             >
               <option value={font ?? ''}>{font || 'Source font'}</option>
               {fonts
@@ -254,10 +275,11 @@ export function TemplateLayerInspector({
                 max={1000}
                 step="0.5"
                 className="h-8 text-xs"
-                disabled={textLocked}
+                disabled={fontLocked}
                 value={inputValues.size ?? edit?.fontSize ?? layer.fontSize ?? ''}
                 aria-invalid={invalidFields.includes('size')}
                 onChange={(event) => typed('size', sizeSchema, event.currentTarget.value)}
+                onBlur={() => commitGroup('size')}
               />
             </label>
             <label
@@ -302,6 +324,7 @@ export function TemplateLayerInspector({
                   value={inputValues[property] ?? edit?.[property] ?? layer[property] ?? ''}
                   aria-invalid={invalidFields.includes(property)}
                   onChange={(event) => typed(property, boxSchema, event.currentTarget.value)}
+                  onBlur={() => commitGroup(property)}
                 />
               </label>
             ))}
