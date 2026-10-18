@@ -15,6 +15,7 @@ export * from './jaina-ask-shape';
 export * from './jaina-dashboard';
 export * from './jaina-dashboard-spec';
 export * from './jaina-depth-rubric';
+export * from './jaina-hypothesis-ledger';
 export * from './jaina-question-plan';
 export * from './jaina-report';
 export * from './jaina-scaffold';

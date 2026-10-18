@@ -22,6 +22,7 @@ import type {
   TemplateSource,
   TemplateSourceSummary,
   WorkspaceTemplateDiscoveryResponse,
+  ForgeLineageView,
 } from '@continuum/contracts';
 import type { MediaAssetVersion } from '@continuum/contracts';
 import {
@@ -95,6 +96,17 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { listAssetVersions } from './versions';
 
 export type TemplateFontReadiness = import('@continuum/contracts').TemplateFontReadiness;
+
+/** Reads the checkpoint lineage used to identify the bytes currently rendered by Forge. */
+export async function fetchTemplateLineage(
+  brandId: string,
+  assetId: string,
+): Promise<ForgeLineageView> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/lineage?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return unwrap<ForgeLineageView>(response, 'Template lineage');
+}
 
 /** Resolves a freshly signed preview only for the immutable version in the draft. */
 export async function fetchPinnedArtworkPreview(

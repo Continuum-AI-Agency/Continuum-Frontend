@@ -1,5 +1,11 @@
 import { shaderStackV1Schema } from '../shader-stack';
-import { audioElements, seekComposition, videoSourceTime } from './composition';
+import {
+  audioElements,
+  compositionState,
+  initializeComposition,
+  seekComposition,
+  videoSourceTime,
+} from './composition';
 import { applyShaderStack } from './renderShaderStack';
 import {
   buildTemporalMetrics,
@@ -19,6 +25,8 @@ Object.assign(globalThis, {
   __hyperframesRuntime: {
     applyShaderStack,
     audioElements,
+    compositionState,
+    initializeComposition,
     buildTemporalMetrics,
     canvasLuma,
     changedPixels,

@@ -173,6 +173,15 @@ describe('set_review_state_labels', () => {
 });
 
 describe('register_forge_output', () => {
+  it('admits PPTX/PDF output but rejects arbitrary application files', () => {
+    const baseOutput = { action: 'register_forge_output', brandId: BRAND, actor: ACTOR,
+      idempotencyKey: 'presentation:1', slot: 'deck:1:pptx', renderJobId: A,
+      bucket: 'media-source', storagePath: `${BRAND}/${A}/deck.pptx`, fileName: 'deck.pptx', sizeBytes: 100 };
+    for (const mimeType of ['application/pdf', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'])
+      expect(registerForgeOutputOperationSchema.safeParse({ ...baseOutput, mimeType }).success).toBe(true);
+    expect(registerForgeOutputOperationSchema.safeParse({ ...baseOutput, mimeType: 'application/zip' }).success).toBe(false);
+  });
+
   const op = {
     action: 'register_forge_output',
     brandId: BRAND,
@@ -209,7 +218,7 @@ describe('register_forge_output', () => {
 
   it('rejects a document mime type, a missing render job, and a negative size', () => {
     expect(
-      registerForgeOutputOperationSchema.safeParse({ ...op, mimeType: 'application/pdf' }).success,
+      registerForgeOutputOperationSchema.safeParse({ ...op, mimeType: 'application/octet-stream' }).success,
     ).toBe(false);
     expect(
       registerForgeOutputOperationSchema.safeParse({ ...op, renderJobId: undefined }).success,

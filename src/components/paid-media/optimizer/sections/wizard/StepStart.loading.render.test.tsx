@@ -30,9 +30,10 @@ function renderStart(props: { isLoading: boolean; suggestions: PortfolioSuggesti
       brandId="brand-1"
       currency="MXN"
       emptyMessage="No grouped suggestions yet."
-      isError={false}
+      failure={null}
       isLoading={props.isLoading}
       onPick={() => {}}
+      onRetry={() => {}}
       onScratch={() => {}}
       snapshots={[]}
       suggestions={props.suggestions}

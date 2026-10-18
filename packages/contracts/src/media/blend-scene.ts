@@ -266,7 +266,11 @@ export type SceneRenderHistory = z.infer<typeof sceneRenderHistorySchema>;
  */
 export const scenePreviewRequestSchema = sceneRenderRequestSchema
   .pick({ brandId: true, versionId: true, outputId: true, values: true, scope: true })
-  .extend({ quality: z.enum(['draft', 'full']).optional() })
+  .extend({
+    quality: z.enum(['draft', 'full']).optional(),
+    /** The frame to draw; kept within the output's range. The first frame when left out. */
+    frame: z.number().int().nonnegative().optional(),
+  })
   .strict();
 export type ScenePreviewRequest = z.infer<typeof scenePreviewRequestSchema>;
 
@@ -333,6 +337,8 @@ export const sceneRenderJobSchema = z
         mediaType: z.enum(['image', 'video']),
         /** Lowers the file's Cycles samples for a draft; never raises them. */
         samples: z.number().int().min(1).max(128).optional(),
+        /** Overwrites the file's stored Cycles denoising; absent renders as stored. */
+        denoise: z.boolean().optional(),
       })
       .strict()
       .refine((o) => o.frameEnd >= o.frameStart && o.frameEnd - o.frameStart < MAX_FRAMES, {
@@ -428,3 +434,13 @@ export const sceneCatalogEntrySchema = z
   })
   .strict();
 export type SceneCatalogEntry = z.infer<typeof sceneCatalogEntrySchema>;
+
+/**
+ * What a continuum-scene Cloud Run Job task PUTs to its `SCENE_RESULT_URL`: the result, or why
+ * there is none (`code` is the service's own, e.g. INVALID_JOB, RENDER_FAILED).
+ */
+export const sceneRenderOutcomeSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), result: sceneRenderResultSchema }).strict(),
+  z.object({ ok: z.literal(false), code: z.string().min(1), message: z.string() }).strict(),
+]);
+export type SceneRenderOutcome = z.infer<typeof sceneRenderOutcomeSchema>;

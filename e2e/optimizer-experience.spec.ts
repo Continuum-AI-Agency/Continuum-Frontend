@@ -43,7 +43,7 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      with figures, the sub-line, the Jaina band, four to six state-coloured tiles, the
 //      recommendation cards with the lead marked, then the portfolio rows — in that order,
 //      nothing else above the fold, no chart, and none of the old copy.
-//   7. The portfolio hero as ONE module (idea D, "número ancla") on FORMULARIOS // TODOS:
+//   7. The portfolio hero as ONE module (idea D, "número ancla") on a live Meta portfolio:
 //      the name line, the 44px anchor beside two sentences with a figure, four frameless
 //      state-ruled tiles, the last-cycle line and Jaina's bar at the foot, then the cards; the
 //      ad-set ranking first in the body; the funnel and the reallocation behind "Ver
@@ -149,9 +149,19 @@ const PROPOSAL_STATE =
  *  the cycle closed ("Closed") leads with its reason and ends on the closing sentence. */
 const PROPOSAL_NOTE =
   /^(Queued|Jaina is reading|Ready|Blocked —|Failed —|Approved|Creating|Created in Meta|Activating|Undoing|Undone)|The cycle closed the recommendation it opened\.$/;
-/** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
- *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
-const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
+/** The redesign page draws the hero on FORMULARIOS // TODOS (9 ad sets on autopilot, leads
+ *  against a 35 MXN target). Easy Fit archived it on 2026-10-14, and with it every Meta
+ *  portfolio on the ledger brand, so the hero and the Overview now stand on whichever live
+ *  Meta portfolio `resolveHeroPremise` finds — the assertions are unchanged, only the
+ *  result noun follows the portfolio's objective, in the words headlineModel uses. */
+const RESULT_NOUN_BY_OBJECTIVE: Record<string, string> = {
+  lead: 'leads?',
+  conversations: 'conversations?',
+  purchase: 'purchases?',
+  app_install: 'installs?',
+  link_clicks: 'link clicks?',
+  landing_page_views: 'landing page views?',
+};
 
 const SHOTS_DIR = resolve(__dirname, '__screenshots__/optimizer-e2e');
 
@@ -165,7 +175,7 @@ let memberAccessToken: string;
 let originalActiveBrandId: string | null = null;
 let moneyEventsBefore = 0;
 let browse: BrowsePremise;
-let ledgerCta: { mensajes: string; creative: string };
+type LedgerCtaPremise = { brandId: string; accountId: string; mensajes: string; creative: string };
 
 /** The `sub` claim of a real GoTrue access token — the bench user's id, read from the
  *  token the auth server actually issued rather than looked up by email. */
@@ -400,11 +410,16 @@ async function readActionFeed(brandId: string): Promise<OptimizerActionFeedRow[]
 type PortfolioListRow = {
   id: string;
   name: string;
+  objective?: string | null;
+  cpa_target?: number | null;
+  last_cycle_current?: boolean | null;
+  roster_absent_since?: string | null;
   ad_account_id: string | null;
   adset_count: number | null;
   apply_mode: string | null;
   budget_granularity: string | null;
   daily_total: number | null;
+  platforms?: string[] | null;
 };
 
 const bareAccountId = (id: string | null | undefined) => (id ?? '').replace(/^act_/, '');
@@ -454,7 +469,13 @@ async function resolveBrowsePremise(): Promise<BrowsePremise> {
         'no portfolios'
       }`,
     );
-    const owning = new Set(portfolios.map((p) => bareAccountId(p.ad_account_id)));
+    // The account picker lists Meta accounts; a Google portfolio is reached through the
+    // Google tab, so only Meta portfolios can stand on the picker path this premise drives.
+    const owning = new Set(
+      portfolios
+        .filter((p) => (p.platforms ?? ['meta']).includes('meta'))
+        .map((p) => bareAccountId(p.ad_account_id)),
+    );
     const empty = accounts.find(
       (row) => row.platform === 'meta_ads' && !owning.has(bareAccountId(row.account_id)),
     );
@@ -489,15 +510,33 @@ type StatusReport = {
 } | null;
 type AskedRows = { rows?: Array<{ handoff?: { proposal_id?: string | null } | null }> } | null;
 
-/** The ledger brand's two CTA premises, from the reads the portfolio page makes: the
- *  per-portfolio report (optimizer-status) and its asked-for rows
- *  (optimizer_get_adhoc_suggestions). */
-async function resolveLedgerCtaPremise(): Promise<{ mensajes: string; creative: string }> {
-  const client = memberClient();
-  let mensajes: string | null = null;
-  let creative: string | null = null;
+/** The two CTA premises, from the reads the portfolio page makes: the per-portfolio report
+ *  (optimizer-status) and its asked-for rows (optimizer_get_adhoc_suggestions), searched over
+ *  every watched brand — Easy Fit's ledger portfolios were archived on 2026-10-14. Both
+ *  portfolios must sit on one Meta account, the one the test pins. Resolved inside the one
+ *  test that needs it; when production holds no such pair the test SKIPs with what it read. */
+async function resolveLedgerCtaPremise(): Promise<{
+  found: LedgerCtaPremise | null;
+  seen: string[];
+}> {
   const seen: string[] = [];
-  for (const portfolio of await listPortfolios(EASYFIT_LEDGER_BRAND_ID)) {
+  for (const brandId of WATCHED_BRAND_IDS) {
+    const found = await findLedgerCtaPortfolios(brandId, seen);
+    if (found) return { found: { brandId, ...found }, seen };
+  }
+  return { found: null, seen };
+}
+
+async function findLedgerCtaPortfolios(
+  brandId: string,
+  seen: string[],
+): Promise<{ accountId: string; mensajes: string; creative: string } | null> {
+  const client = memberClient();
+  const byAccount = new Map<string, { mensajes?: string; creative?: string }>();
+  const metaPortfolios = (await listPortfolios(brandId)).filter((p) =>
+    (p.platforms ?? ['meta']).includes('meta'),
+  );
+  for (const portfolio of metaPortfolios) {
     const [{ data: report }, { data: asked }] = await Promise.all([
       client.functions.invoke('optimizer-status', { body: { portfolio_id: portfolio.id } }),
       client.rpc('optimizer_get_adhoc_suggestions', { p_portfolio_id: portfolio.id }),
@@ -514,19 +553,54 @@ async function resolveLedgerCtaPremise(): Promise<{ mensajes: string; creative: 
     const opensProposal = ((asked as AskedRows)?.rows ?? []).some((row) =>
       Boolean(row.handoff?.proposal_id),
     );
-    seen.push(`${portfolio.name}: creative=${opensCreative} proposal=${opensProposal}`);
+    seen.push(
+      `${brandId.slice(0, 8)} ${portfolio.name}: creative=${opensCreative} proposal=${opensProposal}`,
+    );
     if (portfolio.apply_mode === 'observe') continue;
-    if (opensProposal && !mensajes) mensajes = portfolio.name;
-    if (opensCreative && !creative) creative = portfolio.name;
+    const accountId = bareAccountId(portfolio.ad_account_id);
+    const entry = byAccount.get(accountId) ?? {};
+    if (opensProposal && !entry.mensajes) entry.mensajes = portfolio.name;
+    if (opensCreative && !entry.creative) entry.creative = portfolio.name;
+    byAccount.set(accountId, entry);
   }
-  if (!mensajes || !creative) {
+  for (const [accountId, { mensajes, creative }] of byAccount) {
+    if (mensajes && creative) return { accountId, mensajes, creative };
+  }
+  return null;
+}
+
+/** What the hero and the Overview stand on: a live Meta portfolio the bench user can open —
+ *  enrolled (not observe), with ad sets and a target, its roster present — preferring one whose
+ *  last cycle is current, then the most ad sets. */
+type HeroPremise = { brandId: string; accountId: string; portfolio: PortfolioListRow };
+
+async function resolveHeroPremise(): Promise<HeroPremise> {
+  const seen: string[] = [];
+  const found: HeroPremise[] = [];
+  for (const brandId of WATCHED_BRAND_IDS) {
+    for (const portfolio of await listPortfolios(brandId)) {
+      seen.push(`${brandId.slice(0, 8)} ${portfolio.name} [${portfolio.platforms ?? 'meta'}]`);
+      if (!(portfolio.platforms ?? ['meta']).includes('meta')) continue;
+      if (portfolio.apply_mode === 'observe' || (portfolio.adset_count ?? 0) === 0) continue;
+      if (portfolio.cpa_target == null || portfolio.roster_absent_since) continue;
+      if (!RESULT_NOUN_BY_OBJECTIVE[portfolio.objective ?? '']) continue;
+      found.push({ brandId, accountId: bareAccountId(portfolio.ad_account_id), portfolio });
+    }
+  }
+  found.sort(
+    (a, b) =>
+      Number(Boolean(b.portfolio.last_cycle_current)) -
+        Number(Boolean(a.portfolio.last_cycle_current)) ||
+      (b.portfolio.adset_count ?? 0) - (a.portfolio.adset_count ?? 0),
+  );
+  const best = found[0];
+  if (!best) {
     throw new Error(
-      'PREMISE DRIFT: the ledger brand needs a portfolio whose asked-for row opened an audience ' +
-        'proposal and one whose card opens a pending creative recommendation. ' +
-        `Read: ${seen.join(' | ')}`,
+      'PREMISE DRIFT: no watched brand holds an enrolled Meta portfolio with ad sets, a target ' +
+        `and a present roster. Read: ${seen.join(' | ')}`,
     );
   }
-  return { mensajes, creative };
+  return best;
 }
 
 /** The onboarding surface's heading (OptimizerOnboarding). It used to read "Set up the
@@ -573,11 +647,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
     console.log(`[optimizer-bench] active brand before: ${originalActiveBrandId ?? '(none)'}`);
 
     browse = await resolveBrowsePremise();
-    ledgerCta = await resolveLedgerCtaPremise();
     console.log(
       `[optimizer-bench] browse premise: brand ${browse.brandId} account ${browse.accountId} (${browse.accountLabel}), enrolled "${browse.enrolled.name}", sibling "${browse.sibling.name}", empty account ${browse.emptyAccountId}`,
     );
-    console.log(`[optimizer-bench] ledger CTA premise: ${JSON.stringify(ledgerCta)}`);
   });
 
   test.afterAll(async () => {
@@ -1099,7 +1171,16 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test("portfolio CTAs — an asked-for row wears its proposal's state and opens the proposal inline, a news card's button lands on an expanded queue row, and the Jaina panel sits under the name line", async ({
     browser,
   }) => {
-    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const resolved = await resolveLedgerCtaPremise();
+    test.skip(
+      resolved.found === null,
+      'PREMISE ABSENT IN PRODUCTION: no watched brand holds, on one Meta account, a portfolio ' +
+        'whose asked-for row opened an audience proposal and one whose card opens a pending ' +
+        `creative recommendation (read: ${resolved.seen.join(' | ')})`,
+    );
+    const ledgerCta = resolved.found as LedgerCtaPremise;
+    console.log(`[optimizer-bench] ledger CTA premise: ${JSON.stringify(ledgerCta)}`);
+    await selectBrand(ledgerCta.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
@@ -1124,7 +1205,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .getByRole('tab', { name: 'Activity' });
 
     try {
-      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
+      await openOptimizationTab(page, ledgerCta.accountId);
 
       // ── MENSAJES: the asked-for row wears its proposal's state and opens it inline ──
       await page.getByRole('button').filter({ hasText: ledgerCta.mensajes }).first().click();
@@ -1314,22 +1395,24 @@ test.describe('Paid Media Optimizer — live experience', () => {
   // module on the portfolio the redesign page is drawn with. Every assertion reads the
   // RENDERED page.
   // -------------------------------------------------------------------------
-  test('portfolio hero — FORMULARIOS // TODOS opens on one module: name line, anchor number, two sentences, four tiles, the last cycle and Jaina’s bar, then the cards, with no full-width bar under it', async ({
+  test('portfolio hero — a live Meta portfolio opens on one module: name line, anchor number, two sentences, four tiles, the last cycle and Jaina’s bar, then the cards, with no full-width bar under it', async ({
     browser,
   }) => {
-    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const hero = await resolveHeroPremise();
+    const heroName = hero.portfolio.name;
+    const resultNoun = RESULT_NOUN_BY_OBJECTIVE[hero.portfolio.objective ?? ''];
+    console.log(
+      `[optimizer-bench] hero premise: brand ${hero.brandId} account ${hero.accountId} "${heroName}" (${hero.portfolio.objective}, ${hero.portfolio.adset_count} ad sets, ${hero.portfolio.apply_mode})`,
+    );
+    await selectBrand(hero.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
-      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
-      await page
-        .getByRole('button')
-        .filter({ hasText: FORMULARIOS_PORTFOLIO_NAME })
-        .first()
-        .click();
+      await openOptimizationTab(page, hero.accountId);
+      await page.getByRole('button').filter({ hasText: heroName }).first().click();
       await expect(
-        page.getByRole('heading', { level: 2 }).filter({ hasText: FORMULARIOS_PORTFOLIO_NAME }),
+        page.getByRole('heading', { level: 2 }).filter({ hasText: heroName }),
       ).toBeVisible({ timeout: 120_000 });
       await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
       await expect(page.getByTestId('portfolio-news-row')).toBeVisible({ timeout: 120_000 });
@@ -1449,13 +1532,13 @@ test.describe('Paid Media Optimizer — live experience', () => {
           firstBodyBlock: firstBodyBlock.slice(0, 80),
         };
       });
-      console.log(`[optimizer-bench] FORMULARIOS hero: ${JSON.stringify(report)}`);
+      console.log(`[optimizer-bench] hero "${heroName}": ${JSON.stringify(report)}`);
 
       // The module's blocks and the cards, all present, in this order, on one surface.
       expect(report.present).toEqual([true, true, true, true, true, true, true]);
       expect(report.ordered).toBe(true);
       expect(report.oneSurface).toBe(true);
-      expect(report.headerName).toBe(FORMULARIOS_PORTFOLIO_NAME);
+      expect(report.headerName).toBe(heroName);
       // Each setting beside the figure it governs: the anchor (left column, so first), the
       // grey line, the spend tile.
       expect(report.facts).toEqual(['target', 'objective', 'strategy', 'window', 'budget']);
@@ -1475,7 +1558,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       if (report.anchorText !== '—') expect(report.anchorPrior).toMatch(/\d+–\d+.*: /);
 
       // Two sentences with a figure; the third only when a blocker exists.
-      expect(report.status).toMatch(/^\d[\d,]* leads in \d+ days?/);
+      expect(report.status).toMatch(new RegExp(`^\\d[\\d,]* ${resultNoun} in \\d+ days?`));
       expect(report.statusFigures).toBeGreaterThanOrEqual(2);
       expect(report.opportunity).toMatch(/\d/);
       expect(report.opportunity).toMatch(
@@ -1513,13 +1596,13 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.moreSummary).toBe('Show detail');
       expect(report.moreOpen).toBe(false);
       expect(report.moreHolds).toEqual({ funnel: true, reallocation: true });
-      await shoot(page, '19-formularios-hero');
+      await shoot(page, '19-portfolio-hero');
 
       // Opening the disclosure reveals the two panels — and still no bar at the width of
       // the panel: the ramps are per-row.
       await page.getByTestId('portfolio-detail-more').locator('> summary').click();
       await expect(page.getByText('Conversion funnel').first()).toBeVisible();
-      await shoot(page, '20-formularios-ver-detalle');
+      await shoot(page, '20-portfolio-hero-detail');
 
       // The typed question deep-links into Jaina with the portfolio as context. The
       // navigation is caught before it reaches the app: nothing is asked of Jaina.
@@ -1537,8 +1620,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await field.press('Enter');
       await expect.poll(() => asked, { timeout: 30_000 }).not.toBeNull();
       const prompt = new URL(asked as unknown as string).searchParams.get('prompt') ?? '';
-      console.log(`[optimizer-bench] FORMULARIOS ask → ${prompt}`);
-      expect(prompt).toContain(`"${FORMULARIOS_PORTFOLIO_NAME}"`);
+      console.log(`[optimizer-bench] hero ask → ${prompt}`);
+      expect(prompt).toContain(`"${heroName}"`);
       expect(prompt).toContain('¿Y si pauso el conjunto más caro?');
     } finally {
       await context.close();
@@ -1557,7 +1640,13 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('overview — O1: the sentence, the sub-line, the Jaina band, the tiles, the cards and the rows, in that order and nothing else above the fold', async ({
     browser,
   }) => {
-    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    // The Overview needs Meta portfolios on the pinned account; the ledger brand's were all
+    // archived, so it stands on the hero's live premise.
+    const overview = await resolveHeroPremise();
+    console.log(
+      `[optimizer-bench] overview premise: brand ${overview.brandId} account ${overview.accountId}`,
+    );
+    await selectBrand(overview.brandId);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
@@ -1571,7 +1660,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     });
 
     try {
-      await openOptimizationTab(page, LEDGER_ACCOUNT_ID);
+      await openOptimizationTab(page, overview.accountId);
 
       // The sentence is composed once every portfolio's efficiency series has landed; until
       // then it says it is still reading, and that state must clear on a live account. A

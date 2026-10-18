@@ -157,6 +157,7 @@ describe('ForgeTabs', () => {
     renderTabs();
 
     expect(screen.getByRole('tab', { name: 'Templates' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Web components' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Render' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Render ledger' })).toBeTruthy();
     expect(screen.queryByTestId('render-grid')).toBeNull();
@@ -172,7 +173,7 @@ describe('ForgeTabs', () => {
 
     const ledger = await screen.findByRole('tab', { name: /approval count unavailable/i });
     expect(ledger.textContent).not.toMatch(/\b0\b/);
-    expect(screen.getByTitle(/approval count unavailable/i)).toBeTruthy();
+    expect(screen.getAllByTitle(/approval count unavailable/i)).toHaveLength(2);
   });
 
   test('openRender switches to the Render tab and hands the grid its intent, once', async () => {

@@ -13,6 +13,13 @@
  *  account resolution ahead of the first read cost 3–5 s on the real surfaces (the Optimizer
  *  lived at 8 s before this module existed). */
 export const READ_TIMEOUT_MS = 8_000;
+/** A read a person waits on that reads an ad platform live when its cache is cold: the
+ *  Optimizer's suggestions read the account's ad sets from Meta on a miss, measured against
+ *  production on 2026-10-17 at 8.1–10.6 s cold (13.0 s in the deep test) and 0.9–2.5 s warm.
+ *  The 8 s read bound threw the cold answer away and the wizard called the service offline
+ *  (PP-L1-suggest-slower-than-read-timeout-reads-offline). 30 s is twice the slowest cold read
+ *  seen; past READ_TIMEOUT_MS the surface says it is still reading rather than spinning. */
+export const PLATFORM_READ_TIMEOUT_MS = 30_000;
 /** A write or a job the server works on for a while (a cycle, an upload, a model call). */
 export const LONG_OPERATION_TIMEOUT_MS = 120_000;
 

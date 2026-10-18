@@ -82,6 +82,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import { Video } from '@/components/ui/video';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
@@ -494,6 +495,7 @@ export function TemplateDetail({
   const [fixing, setFixing] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [parseSlow, setParseSlow] = useState(false);
+  const [fontCheckFocusRequestId, setFontCheckFocusRequestId] = useState(0);
   const activityTrigger = useRef<HTMLButtonElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
 
@@ -1520,14 +1522,12 @@ export function TemplateDetail({
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
                       node:
                         rendered.kind === 'video' ? (
-                          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-                          <video
+                          <Video
                             src={rendered.url}
-                            className="size-full object-contain"
-                            controls
+                            ariaLabel={`${name} · ${picked.ratio ?? picked.label}`}
                             muted
-                            playsInline
-                            preload="metadata"
+                            className="aspect-auto! size-full rounded-none border-0"
+                            videoClassName="object-contain"
                           />
                         ) : (
                           // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
@@ -1820,7 +1820,11 @@ export function TemplateDetail({
             />
 
             <Panel title="Checks" bodyClassName="p-0">
-              <CheckTable rows={checks} action={footerAction} />
+              <CheckTable
+                rows={checks}
+                action={footerAction}
+                focusRowRequest={{ name: 'Fonts', requestId: fontCheckFocusRequestId }}
+              />
               <div className="border-t border-border">
                 <TemplateActivity
                   ref={activityTrigger}
@@ -1845,6 +1849,9 @@ export function TemplateDetail({
                 await Promise.all([onChanged(), loadVariables()]);
               }}
               onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
+              onDraftChange={onDraftChange}
+              hyperframesRevisionId={hyperframesRevisionId}
+              onOpenFontRepair={() => setFontCheckFocusRequestId((requestId) => requestId + 1)}
               initialComp={initialComp}
               templateKey={templateKey}
             />
@@ -1911,10 +1918,11 @@ export function TemplateDetail({
               <SourceRebindPanel
                 brandId={brandId}
                 assetId={assetId}
-                expectedVersionId={source.versionId}
-                suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
-                aepName={source.parse?.filename}
-                missingFootage={missingFootage}
+              expectedVersionId={source.versionId}
+              suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
+              aepName={source.parse?.filename}
+              sourceFamily={source.family === 'presentation' ? 'presentation' : undefined}
+              missingFootage={missingFootage}
                 initialFile={revisionFile}
                 onInitialFileTaken={onRevisionTaken}
                 onConfirmed={async () => {

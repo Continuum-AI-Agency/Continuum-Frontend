@@ -557,9 +557,7 @@ export const apiRenderTemplateFontSchema = z
      * whole contract and the template stops rendering rather than reporting a swap.
      */
     via: z.enum(['direct', 'substitute', 'package']).optional(),
-    issue: z
-      .enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required'])
-      .optional(),
+    issue: z.enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required']).optional(),
     substitutedBy: z
       .object({
         fontId: z.string().uuid(),
@@ -893,6 +891,26 @@ export function describeMxfVideo(settings: EncodeSettings | null | undefined): s
     : 'DNxHR HQ · Progressive';
 }
 
+/** Comp rates XDCAM 1080i59.94 carries: 29.97 doubles into fields, 59.94/60 split into them. */
+export const XDCAM_1080I5994_RATES = [30000 / 1001, 60000 / 1001, 60] as const;
+
+/**
+ * Why an MXF profile cannot carry a comp's frame rate, or null when it can. One rule for the
+ * Backend preflight and every renderer: a rate the profile cannot carry is refused before the
+ * render, never discovered inside it.
+ */
+export function mxfProfileRateRefusal(
+  profile: string | null | undefined,
+  rate: number | null | undefined,
+): string | null {
+  if (profile !== 'xdcam-hd422-1080i5994') return null;
+  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+    return 'has no recorded frame rate, so it cannot be checked for XDCAM 1080i59.94. Re-parse the template or choose DNxHR.';
+  }
+  if (XDCAM_1080I5994_RATES.some((carried) => Math.abs(carried - rate) < 0.01)) return null;
+  return `is ${Math.round(rate * 1000) / 1000} fps; XDCAM 1080i59.94 takes 29.97, 59.94 or 60 fps. Choose DNxHR or change the composition's frame rate.`;
+}
+
 /** A delivery comp and every measured slot box in it — enough to DRAW the layout. */
 export const apiRenderTemplateLayoutSchema = z
   .object({
@@ -1004,8 +1022,9 @@ export const apiRenderTemplateContractSchema = z
       )
       .default([]),
     /**
-     * The template's stored output settings, keyed by public output id, and the fleet defaults
-     * per container. Absent when the forge is too old to publish them.
+     * The template's stored output settings, keyed by public output id, and what it inherits
+     * per container: the fleet defaults with the brand's own binding defaults on top. Absent when
+     * the forge is too old to publish them.
      */
     encode: z
       .object({

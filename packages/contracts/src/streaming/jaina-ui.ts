@@ -46,6 +46,7 @@ export type JainaUIMessageMetadata = {
  * of render.
  */
 export type JainaUIDataTypes = {
+  'jaina-analysis-progress': import('./jaina-hypothesis-ledger').JainaAnalysisProgress;
   'jaina-report-block': Record<string, unknown>;
   'jaina-report-meta': Record<string, unknown>;
   'jaina-report-error': Record<string, unknown>;
