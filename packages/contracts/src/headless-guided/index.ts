@@ -157,7 +157,7 @@ export const headlessGuidanceSchema = z
     layout: cutLayoutSchema
       .optional()
       .describe(
-        "Locks how the montage draws its cuts (view=guidance edits). cut: each fills the frame. collage: each snaps in as a tile in its own section of one canvas and stays, the photo-wall open of an event recap. collage with no pacing locks build. Absent, cut.",
+        'Locks how the montage draws its cuts (view=guidance edits). cut: each fills the frame. collage: each snaps in as a tile in its own section of one canvas and stays, the photo-wall open of an event recap. collage with no pacing locks build. Absent, cut.',
       ),
     conceptVariantId: z
       .string()
@@ -166,6 +166,12 @@ export const headlessGuidanceSchema = z
       .optional()
       .describe(
         "A brand's approved concept variant (view=guidance); its base concept is the grammar.",
+      ),
+    motionOverlay: z
+      .boolean()
+      .optional()
+      .describe(
+        'Locks an editable motion overlay: the reel\'s CTA, type cards, burst words and display words are drawn as motion a later spoken change ("stagger the CTA") re-composes at no cost. Absent, the type is burned in.',
       ),
     direction: z
       .string()
