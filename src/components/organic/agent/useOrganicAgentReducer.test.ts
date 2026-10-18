@@ -672,6 +672,43 @@ describe('PIPELINE_STAGE', () => {
 });
 
 describe('PIPELINE_CARD', () => {
+  it('a restored stale preview stays stale until a live frame brings a fresh one', () => {
+    const preview = { caption: null, imageUrl: null, images: ['https://old/p'], format: 'post' };
+    const restored = panelReducer(initialPanelState(), {
+      type: 'PIPELINE_CARD',
+      card: { jobId: 'j', status: 'completed', draftId: 'd', preview, previewStale: true },
+    });
+    expect(restored.pipeline['j']?.previewStale).toBe(true);
+
+    // A frame with no preview (a stage tick, a status update) keeps the flag.
+    const ticked = panelReducer(restored, {
+      type: 'PIPELINE_STAGE',
+      event: {
+        jobId: 'j',
+        brandId: 'b',
+        planId: null,
+        planItemId: null,
+        stage: 'draft',
+        status: 'active',
+      },
+    });
+    expect(ticked.pipeline['j']?.previewStale).toBe(true);
+
+    const live = panelReducer(ticked, {
+      type: 'PIPELINE_CARD',
+      card: { jobId: 'j', preview: { ...preview, images: ['https://new/p'] } },
+    });
+    expect(live.pipeline['j']?.previewStale).toBe(false);
+
+    const reblueprinted = panelReducer(restored, {
+      type: 'DRAFT_BLUEPRINT',
+      draftId: 'd',
+      previewRevision: 'r2',
+      previews: ['https://new/sb'],
+    });
+    expect(reblueprinted.pipeline['j']?.previewStale).toBe(false);
+  });
+
   it('on completed, marks all stages done and merges preview + quality', () => {
     const start = panelReducer(initialPanelState(), {
       type: 'PIPELINE_STAGE',
@@ -1207,5 +1244,36 @@ describe('useOrganicAgentReducer media-choice approval token', () => {
 
     expect(next.pipeline['job-f'].checkpoint?.previewRevision).toBe('revision-f');
     expect(next.pipeline['job-f'].checkpoint?.awaitingMediaChoice).toBe(true);
+  });
+});
+
+describe('media strips', () => {
+  it('a strip replayed for the same tool call replaces it where it stands', () => {
+    const strip = (label: string, toolCallId = 'call_1') => ({
+      type: 'media_strip' as const,
+      data: {
+        toolCallId,
+        toolName: 'listDrafts',
+        items: [
+          {
+            ref: { type: 'draft' as const, draftId: 'd1' },
+            kind: 'image' as const,
+            w: null,
+            h: null,
+            label,
+          },
+        ],
+        total: 1,
+      },
+    });
+    let state = {
+      ...initialPanelState(),
+      streamingMessageId: 'a1',
+      messages: [{ id: 'a1', role: 'assistant' as const, content: '' }],
+    };
+    state = panelReducer(state, { type: 'STREAM_UI_CARD', card: strip('first') });
+    state = panelReducer(state, { type: 'STREAM_UI_CARD', card: strip('second', 'call_2') });
+    state = panelReducer(state, { type: 'STREAM_UI_CARD', card: strip('replayed') });
+    expect(state.messages[0]?.uiCards).toEqual([strip('replayed'), strip('second', 'call_2')]);
   });
 });

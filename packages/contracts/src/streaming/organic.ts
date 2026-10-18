@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
+import { uiMediaStripFrameSchema } from '../organic/chat-media';
 import { organicGeneratablePlatformSchema } from '../organic/publishing';
 import {
   uiBrandBookAppliedFrameSchema,
@@ -1269,6 +1270,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   pipelineStageSchema,
   uiPipelineCardSchema,
   mediaSearchResultsFrameSchema,
+  uiMediaStripFrameSchema,
   contextMediaResolutionSchema,
   uiBrandBookFrameSchema,
   uiReadinessScorecardFrameSchema,

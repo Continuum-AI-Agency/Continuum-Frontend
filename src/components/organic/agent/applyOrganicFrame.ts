@@ -10,7 +10,7 @@
 // impossible by construction.
 
 import { useCalendarStore } from '@/lib/organic/store';
-import { parseOrganicStreamEvent, postListCardFromToolResult } from './streamEventParser';
+import { parseOrganicStreamEvent } from './streamEventParser';
 import type { PanelAction } from './useOrganicAgentReducer';
 
 /**
@@ -70,8 +70,6 @@ export function applyOrganicFrame(
       if (parsed.ok !== false && CALENDAR_MUTATING_TOOLS.has(parsed.toolName)) {
         useCalendarStore.getState().requestCalendarRefetch();
       }
-      const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);
-      if (postCard) dispatch({ type: 'STREAM_UI_CARD', card: postCard });
       break;
     }
     case 'error':

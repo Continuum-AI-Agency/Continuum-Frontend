@@ -90,20 +90,23 @@ export function ChatMediaThumb({
     (media.kind === 'image' && imageFailed);
 
   const seed = fallbackSeed ?? media.name ?? media.caption;
+  // Every tile names its content: an empty alt would mark a creative as decoration.
+  const label =
+    [media.name, media.caption, media.badge].find((text) => text?.trim()) ??
+    (media.kind === 'video' ? 'Video' : 'Image');
 
-  // #t=0.01 makes browsers paint the first frame when there is no poster, instead of
-  // showing an empty black box.
-  const videoSrc = media.thumbnailUrl ? media.url : `${media.url}#t=0.01`;
   const videoRef = useRef<HTMLVideoElement>(null);
+  // `activated` is sticky (the first hover mounts the bytes, which then stay); `hovered`
+  // tracks the pointer so the play mark comes back when it leaves.
+  const [activated, setActivated] = useState(false);
   const [hovered, setHovered] = useState(false);
   const hoveredRef = useRef(false);
-  // With a poster to paint, a hover-play tile downloads ZERO video bytes until the
-  // pointer arrives: `preload="none"` plus a withheld src. Withholding the src is
-  // strictly stronger than gating on an IntersectionObserver — an off-screen tile has
-  // nothing to fetch either way, and a pointer that arrives before the observer fires
-  // still starts playback immediately.
-  const deferUntilHover = hoverPlay && Boolean(media.thumbnailUrl);
-  const resolvedVideoSrc = deferUntilHover && !hovered ? undefined : videoSrc;
+  // ZERO video bytes before hover or play. `preload="none"` on every tile, and a
+  // hover-play tile withholds its src until the pointer arrives — strictly stronger than
+  // an IntersectionObserver gate: an off-screen tile has nothing to fetch either way. A
+  // tile without a poster stays a neutral muted tile with a play mark; no `#t=` first-frame
+  // seek, which is a metadata download per tile just to paint a still.
+  const resolvedVideoSrc = hoverPlay && !activated ? undefined : media.url;
 
   return (
     <div className={cn('relative size-full overflow-hidden rounded-md bg-muted', className)}>
@@ -120,8 +123,10 @@ export function ChatMediaThumb({
             ref={videoRef}
             src={resolvedVideoSrc}
             poster={media.thumbnailUrl}
-            aria-label={media.name ?? media.caption}
-            preload={deferUntilHover ? 'none' : 'metadata'}
+            aria-label={label}
+            // A withheld src mounting under `preload="none"` would never load, so the
+            // hovered tile asks for the bytes it is about to play; onLoadedData starts it.
+            preload={hoverPlay && activated ? 'auto' : 'none'}
             muted
             playsInline
             loop={hoverPlay}
@@ -136,6 +141,7 @@ export function ChatMediaThumb({
               hoverPlay
                 ? () => {
                     hoveredRef.current = true;
+                    setActivated(true);
                     setHovered(true);
                     if (resolvedVideoSrc) void videoRef.current?.play();
                   }
@@ -145,6 +151,7 @@ export function ChatMediaThumb({
               hoverPlay
                 ? () => {
                     hoveredRef.current = false;
+                    setHovered(false);
                     videoRef.current?.pause();
                   }
                 : undefined
@@ -159,14 +166,17 @@ export function ChatMediaThumb({
               hoverPlay && hovered && 'opacity-0',
             )}
           >
-            <Play className="size-5 fill-neutral-50/90 text-neutral-50/90 drop-shadow" aria-hidden="true" />
+            <Play
+              className="size-5 fill-neutral-50/90 text-neutral-50/90 drop-shadow"
+              aria-hidden="true"
+            />
           </span>
         </>
       ) : showImage && imageSrc ? (
         <Image
           key={imageSrc}
           src={imageSrc}
-          alt={media.name ?? media.caption ?? ''}
+          alt={label}
           fill
           unoptimized
           sizes="(max-width: 768px) 40vw, 240px"

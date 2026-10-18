@@ -5,6 +5,7 @@ export * from './awareness';
 export * from './bestTimes';
 export * from './calendar-draft';
 export * from './calendar-plan';
+export * from './chat-media';
 export * from './competitorSeed';
 export * from './conversations';
 export * from './creativeLeaderboard';

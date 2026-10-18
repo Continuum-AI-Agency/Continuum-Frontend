@@ -305,7 +305,9 @@ export interface MediaMetadataSearchDeps {
     ids: string[],
     opts: { kind?: MediaKind; source?: MediaSource },
   ) => Promise<MediaAssetRow[]>;
-  mintSignedUrl: (bucket: string, storagePath: string) => Promise<string | null>;
+  // Optional: a caller that shows hits through resized refs (the Organic chat strip) leaves it
+  // out, so a search never signs an original it would not ship.
+  mintSignedUrl?: (bucket: string, storagePath: string) => Promise<string | null>;
 }
 
 // Pure orchestration: embed → semantic match (lexical fallback) → hydrate →
@@ -364,7 +366,9 @@ export async function runMediaMetadataSearch(
 
   const items: MediaSearchResultItem[] = await Promise.all(
     ordered.map(async (row) => {
-      const signedUrl = await deps.mintSignedUrl(row.bucket, row.storage_path);
+      const signedUrl = deps.mintSignedUrl
+        ? await deps.mintSignedUrl(row.bucket, row.storage_path)
+        : null;
       return {
         asset: mapMediaRowToAsset(row, signedUrl),
         similarity: similarityById.get(row.id) ?? 0,

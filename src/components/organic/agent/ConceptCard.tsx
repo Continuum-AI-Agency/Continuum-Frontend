@@ -19,12 +19,13 @@ import {
 } from 'lucide-react';
 import { type ButtonHTMLAttributes, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { type ChatMedia, mediaFromPreviewUrls } from '@/components/chat/media/media';
+import type { ChatMedia } from '@/components/chat/media/media';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
 import { resolveConceptPreviewUrls } from './conceptPreview';
 import { type ConceptStatus, resolvePlanItemStatus } from './conceptStatus';
 import { StatusDetail } from './StatusDetail';
@@ -118,12 +119,14 @@ function MediaWell({
   failed,
   caption,
   onOpen,
+  onRecover,
 }: {
   media: readonly ChatMedia[];
   format: string | null;
   failed: boolean;
   caption: string | null;
   onOpen: (index: number) => void;
+  onRecover: (media: ChatMedia) => void;
 }) {
   const shape = wellShape(format);
   const cover = media[0];
@@ -167,7 +170,12 @@ function MediaWell({
               onClick={() => onOpen(0)}
               type="button"
             >
-              <ChatMediaThumb className="rounded-none" hoverPlay media={cover} />
+              <ChatMediaThumb
+                className="rounded-none"
+                hoverPlay
+                media={cover}
+                onRecover={onRecover}
+              />
             </button>
           }
         />
@@ -183,6 +191,7 @@ function MediaWell({
               hoverPlay
               items={media}
               onOpen={onOpen}
+              onRecoverItem={onRecover}
             />
           </div>
           <p className="mt-2 text-3xs text-muted-foreground">
@@ -304,19 +313,37 @@ export function ConceptCard({
 
   // A storyboard frame is a still whatever the draft's format is; only realized media may
   // read its kind from the format. Getting this backwards is what put a PNG in a <video>
-  // and left every reel concept showing a fallback glyph.
+  // and left every reel concept showing a fallback glyph. The draft (by id) outranks a
+  // preview replayed from history, whose signature lapsed an hour after it was written.
   const mediaStatus = pipeline?.checkpoint?.mediaStatus;
-  const previewMedia = useMemo(() => {
-    const urls = resolveConceptPreviewUrls(pipeline?.preview);
-    if (urls.length === 0) return [];
-    const realized = mediaStatus === 'ready' || mediaStatus === 'user_supplied';
-    return mediaFromPreviewUrls(
-      `concept:${concept.itemId}`,
-      urls,
+  const draftMedia = useDraftChatMedia(draftId, pipeline?.preview);
+  const previewUrls = useMemo(
+    () => resolveConceptPreviewUrls(pipeline?.preview),
+    [pipeline?.preview],
+  );
+  const previewStale = pipeline?.previewStale === true || draftMedia.previewSuspect;
+  const { media: previewMedia } = useMemo(
+    () =>
+      rankCardMedia({
+        idPrefix: `concept:${concept.itemId}`,
+        realized: draftMedia.realized,
+        preview: previewUrls,
+        previewStale,
+        previewStage:
+          mediaStatus === 'ready' || mediaStatus === 'user_supplied' ? 'realized' : 'storyboard',
+        storyboard: draftMedia.storyboard,
+        format: concept.format,
+      }),
+    [
+      concept.itemId,
       concept.format,
-      realized ? 'realized' : 'storyboard',
-    );
-  }, [pipeline?.preview, mediaStatus, concept.itemId, concept.format]);
+      draftMedia.realized,
+      draftMedia.storyboard,
+      previewUrls,
+      previewStale,
+      mediaStatus,
+    ],
+  );
 
   const lightboxItems: LightboxItem[] = useMemo(
     () =>
@@ -412,6 +439,7 @@ export function ConceptCard({
         format={concept.format}
         media={previewMedia}
         onOpen={setLightboxIndex}
+        onRecover={draftMedia.recover}
       />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">

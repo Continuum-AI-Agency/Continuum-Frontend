@@ -143,6 +143,15 @@ describe('mediaFromPersistedAttachments', () => {
     expect(media.map((item) => item.kind)).toEqual(['image', 'video']);
   });
 
+  it('carries the asset id through, so a lapsed upload URL can be re-signed', () => {
+    const [withId, legacy] = mediaFromPersistedAttachments('m1', [
+      { url: 'https://s/a.png', assetId: 'asset-1' },
+      { url: 'https://s/b.png' },
+    ]);
+    expect(withId?.assetId).toBe('asset-1');
+    expect(legacy && 'assetId' in legacy).toBe(false);
+  });
+
   it('returns nothing when the turn had no attachments', () => {
     expect(mediaFromPersistedAttachments('m1', undefined)).toEqual([]);
   });

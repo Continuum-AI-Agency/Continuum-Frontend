@@ -1,10 +1,6 @@
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
 import type { OrganicSessionMessage } from '@/lib/organic/agent-sessions';
-import {
-  type ParsedPlanStatus,
-  parseOrganicStreamEvent,
-  postListCardFromToolResult,
-} from './streamEventParser';
+import { type ParsedPlanStatus, parseOrganicStreamEvent } from './streamEventParser';
 import type {
   AgentJobState,
   ConversationMessage,
@@ -12,7 +8,7 @@ import type {
   ToolCallEvent,
   UiCard,
 } from './types';
-import type { BulkRunRef } from './useOrganicAgentReducer';
+import { type BulkRunRef, upsertUiCard } from './useOrganicAgentReducer';
 
 export type RestoredSession = {
   messages: ConversationMessage[];
@@ -43,7 +39,7 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
   const blueprintsByDraftId = new Map<string, { previews: string[]; previewRevision: string }>();
 
   const messages = msgs.map((m) => {
-    const uiCards: UiCard[] = [];
+    let uiCards: UiCard[] = [];
     const toolCallsById = new Map<string, ToolCallEvent>();
     const mediaSearchResults: MediaSearchResultsFrame[] = [];
 
@@ -51,7 +47,7 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
       const parsed = parseOrganicStreamEvent(frame);
       switch (parsed.kind) {
         case 'uiCard':
-          uiCards.push(parsed.card);
+          uiCards = upsertUiCard(uiCards, parsed.card);
           break;
         case 'pipelineCard':
           pipelineCards.push(parsed.card);
@@ -94,8 +90,6 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
               reason: parsed.reason,
             });
           }
-          const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);
-          if (postCard) uiCards.push(postCard);
           break;
         }
         case 'mediaSearchResults':
@@ -151,6 +145,12 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
         ...(settled ? {} : { mediaStatus: 'pending', awaitingMediaChoice: true }),
       };
     }
+  }
+
+  // Every URL replayed from history was a 1h signature when it was written. Flagging it
+  // lets the card rank the draft's re-signed media above it instead of showing it expired.
+  for (const card of pipelineCards) {
+    if (card.preview) card.previewStale = true;
   }
 
   return {

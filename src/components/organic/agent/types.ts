@@ -4,6 +4,7 @@ import type {
   AgentDelegatedFrameData,
   AgentDocumentAttachment,
   BulkContentPlan,
+  ChatMediaStripData,
   MediaSearchResultsFrame,
   OrganicPostCardData,
   OrganicTrendChartData,
@@ -11,7 +12,6 @@ import type {
   PipelineStage,
   PlanItem,
   ProposedPlan,
-  UiFetchedPost,
 } from '@continuum/contracts';
 import { pipelineStageEnum } from '@continuum/contracts';
 import type { AgentMentionMetadata, AgentMentionReference } from '@/lib/agent-references';
@@ -65,8 +65,6 @@ export type PlanApprovalDecision =
   | { decision: 'edit'; planId: string; edits: PlanItem[] }
   | { decision: 'reject'; planId: string; reason?: string };
 
-export type { UiFetchedPost } from '@continuum/contracts';
-
 // Agent-proposed brand skill awaiting the user's confirm/edit/save (ui.skill_proposal).
 export type SkillProposalCardData = {
   proposalId: string;
@@ -83,7 +81,7 @@ export type UiCard =
   | { type: 'trend_chart'; data: UiTrendChart }
   | { type: 'plan_card'; data: UiPlanCard }
   | { type: 'bulk_plan_card'; data: BulkContentPlan }
-  | { type: 'post_list'; data: UiFetchedPost[]; label?: string }
+  | { type: 'media_strip'; data: ChatMediaStripData }
   | { type: 'skill_proposal'; data: SkillProposalCardData }
   | { type: 'aeo_snapshot'; data: UiAeoSnapshotCard }
   | { type: 'agent_delegated'; data: AgentDelegatedFrameData };
@@ -188,6 +186,11 @@ export type PipelineCardState = {
   pct?: number;
   status: PipelineCardStatus;
   preview?: PipelinePreview;
+  /**
+   * The preview URLs were replayed from a persisted transcript, not minted this session.
+   * They are 1h signatures, so media the draft can re-sign must outrank them.
+   */
+  previewStale?: boolean;
   quality?: PipelineQuality | null;
   draftId?: string | null;
   error?: { code?: string; message: string };

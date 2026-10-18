@@ -117,6 +117,18 @@ export type PanelAction =
 
 const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES;
 
+// A media strip is one per tool call: a frame replayed by the run store (or persisted twice)
+// replaces its strip where it stands rather than stacking a second copy under the same turn.
+export function upsertUiCard(cards: readonly UiCard[], card: UiCard): UiCard[] {
+  const at =
+    card.type === 'media_strip'
+      ? cards.findIndex(
+          (c) => c.type === 'media_strip' && c.data.toolCallId === card.data.toolCallId,
+        )
+      : -1;
+  return at === -1 ? [...cards, card] : cards.map((c, i) => (i === at ? card : c));
+}
+
 // Unique per assistant turn. A random suffix avoids same-millisecond collisions
 // (two turns opened in the same tick would otherwise share an id and a React key).
 function newAssistantMessageId(): string {
@@ -155,6 +167,7 @@ function applyPipelineStage(
     pct: ev.pct ?? prev?.pct,
     status: terminal && prev ? prev.status : 'running',
     preview: prev?.preview,
+    previewStale: prev?.previewStale,
     quality: prev?.quality,
     draftId: prev?.draftId,
     toolCallId: prev?.toolCallId,
@@ -190,6 +203,8 @@ function applyPipelineCard(
     pct: card.status === 'completed' ? 100 : (card.pct ?? base.pct),
     quality: card.quality ?? base.quality,
     preview: card.preview ?? base.preview,
+    // A preview arriving on a live frame is fresh; only restoreSession marks one stale.
+    previewStale: card.preview ? card.previewStale === true : base.previewStale,
     // Merge checkpoint fields so a later card update that omits checkpoint
     // doesn't wipe out textReady/blueprintReady received on an earlier frame.
     checkpoint: card.checkpoint ? { ...base.checkpoint, ...card.checkpoint } : base.checkpoint,
@@ -557,7 +572,10 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         ...state,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
-            ? { ...m, uiCards: [...(m.uiCards ?? []), action.card] }
+            ? {
+                ...m,
+                uiCards: upsertUiCard(m.uiCards ?? [], action.card),
+              }
             : m,
         ),
       };
@@ -845,6 +863,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                     images: previews,
                     format: card.preview?.format ?? null,
                   },
+                  previewStale: false,
                 }
               : {}),
             checkpoint: {

@@ -7,6 +7,7 @@ import { mediaFromLibraryAsset } from '@/components/chat/media/media';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useAssetMediaRecovery } from './useAssetMediaRecovery';
 
 type SearchResultItem = MediaSearchResultsFrame['data']['items'][number];
 
@@ -19,7 +20,9 @@ function SimilarityBadge({ value }: { value: number }) {
 // A library hit can be a video, and this used to render its signed MP4 straight into an <img>.
 // The shared primitive branches on kind, so a video gets a real poster frame.
 function MediaThumbnail({ item }: { item: SearchResultItem }) {
-  const media = mediaFromLibraryAsset(item.asset);
+  const { recover, resolve } = useAssetMediaRecovery(item.asset.brandId);
+  const persisted = mediaFromLibraryAsset(item.asset);
+  const media = persisted ? resolve(persisted) : null;
 
   if (!media) {
     return (
@@ -31,7 +34,7 @@ function MediaThumbnail({ item }: { item: SearchResultItem }) {
 
   return (
     <div className="h-16 w-16 shrink-0">
-      <ChatMediaThumb media={media} />
+      <ChatMediaThumb media={media} onRecover={recover} />
     </div>
   );
 }

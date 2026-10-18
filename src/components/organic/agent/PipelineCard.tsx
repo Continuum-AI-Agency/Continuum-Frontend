@@ -18,7 +18,7 @@ import {
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
-import { type ChatMedia, mediaFromPreviewUrls } from '@/components/chat/media/media';
+import type { ChatMedia } from '@/components/chat/media/media';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import {
   AgentArtifactCard,
@@ -29,7 +29,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
-import { useDraftRealizedImages, useDraftStoryboard } from '../hooks/useDraftStoryboard';
+import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
 import { resolveConceptPreviewUrls } from './conceptPreview';
 import { type ConceptStatus, resolveConceptStatus } from './conceptStatus';
 import { StatusDetail } from './StatusDetail';
@@ -54,15 +54,24 @@ function qualityPercent(score: number | undefined): number | null {
  */
 function PreviewImages({
   media,
+  pending,
   onOpen,
+  onRecover,
 }: {
   media: readonly ChatMedia[];
+  /** Media is on its way: hold the well's space so its arrival shifts nothing. */
+  pending: boolean;
   onOpen: (index: number) => void;
+  onRecover: (media: ChatMedia) => void;
 }) {
-  if (media.length === 0) return null;
+  if (media.length === 0) {
+    return pending ? (
+      <div aria-hidden="true" className="h-[220px] w-full animate-pulse rounded-lg bg-muted/60" />
+    ) : null;
+  }
   return (
     <div className={cn('h-[220px] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
-      <ChatMediaCarousel hoverPlay items={media} onOpen={onOpen} />
+      <ChatMediaCarousel hoverPlay items={media} onOpen={onOpen} onRecoverItem={onRecover} />
     </div>
   );
 }
@@ -254,34 +263,34 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   // A finished single-post pipeline persists a calendar draft; signal the calendar
   // to reconcile so it appears without a manual reload (debounced workspace-side).
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
-  // Fall back to the persisted draft's storyboard (re-signed on calendar load) when
-  // the live blueprint frame didn't populate card.preview — the expand job usually
-  // finishes after the chat stream closes, so this is the reliable inline source.
-  const realizedImages = useDraftRealizedImages(card.draftId);
-  const draftStoryboard = useDraftStoryboard(card.draftId);
-  const cardImages = resolveConceptPreviewUrls(card.preview);
-  // Final realized media (re-signed on calendar load) wins over the live blueprint
-  // preview and the storyboard concept, so the card upgrades to the finished image
-  // after "Generate media"; before realize, the live blueprint frame wins over the
-  // durable storyboard fallback.
-  const usingRealized = realizedImages.length > 0;
-  const previewImages = usingRealized
-    ? realizedImages
-    : cardImages.length > 0
-      ? cardImages
-      : draftStoryboard;
-
-  // Only realized media may read its kind from the draft's format. A storyboard frame is a
-  // still even for a reel, and calling it a video puts a PNG in a <video> tag.
-  const previewMedia = useMemo(
+  // The draft is looked up by id (calendar store first, else fetched), so its realized
+  // media — reels included — and its re-signed storyboard reach the card whatever the
+  // calendar is showing. The expand job usually finishes after the chat stream closes,
+  // so this is the reliable inline source.
+  const draftMedia = useDraftChatMedia(card.draftId, card.preview);
+  const previewUrls = useMemo(() => resolveConceptPreviewUrls(card.preview), [card.preview]);
+  // Final media wins, then the live blueprint frame, then the draft's storyboard. A
+  // preview replayed from a restored session is a lapsed signature: last resort only.
+  const { media: previewMedia } = useMemo(
     () =>
-      mediaFromPreviewUrls(
-        `preview:${card.jobId}`,
-        previewImages,
-        card.preview?.format,
-        usingRealized ? 'realized' : 'storyboard',
-      ),
-    [card.jobId, previewImages, card.preview?.format, usingRealized],
+      rankCardMedia({
+        idPrefix: `preview:${card.jobId}`,
+        realized: draftMedia.realized,
+        preview: previewUrls,
+        // A live preview that already failed once is no better than a replayed one.
+        previewStale: card.previewStale === true || draftMedia.previewSuspect,
+        storyboard: draftMedia.storyboard,
+        format: card.preview?.format,
+      }),
+    [
+      card.jobId,
+      draftMedia.realized,
+      draftMedia.storyboard,
+      previewUrls,
+      card.previewStale,
+      draftMedia.previewSuspect,
+      card.preview?.format,
+    ],
   );
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const lightboxItems: LightboxItem[] = useMemo(
@@ -299,6 +308,17 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   // media is final/user-supplied or already rendering.
   const draftId = card.draftId ?? null;
   const mediaStatus = card.checkpoint?.mediaStatus;
+  // Media is on its way: a preview frame or a final render is being made, or the card
+  // has media and its draft is still being looked up or signed.
+  const mediaInFlight =
+    mediaStatus === 'generating' ||
+    (card.status === 'running' &&
+      card.checkpoint?.textReady === true &&
+      !card.checkpoint.blueprintReady) ||
+    (draftMedia.pending &&
+      (card.checkpoint?.blueprintReady === true ||
+        mediaStatus === 'ready' ||
+        mediaStatus === 'user_supplied'));
   const mediaSettled =
     mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
   // Generate media needs the approval token: the realize path re-reads the draft's
@@ -389,7 +409,12 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         />
       ) : null}
 
-      <PreviewImages media={previewMedia} onOpen={setLightboxIndex} />
+      <PreviewImages
+        media={previewMedia}
+        pending={mediaInFlight}
+        onOpen={setLightboxIndex}
+        onRecover={draftMedia.recover}
+      />
 
       {card.preview?.caption && (
         <p className="line-clamp-2 text-sm leading-relaxed text-foreground text-pretty">
