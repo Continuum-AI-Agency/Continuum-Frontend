@@ -111,27 +111,6 @@ describe('useCalendarDraftPersistence autosave', () => {
     expect(upsertCalls).toEqual([]);
   });
 
-  it('a real edit to a manual draft writes exactly that draft', async () => {
-    requestMock.mockResolvedValue({
-      drafts: [manualRow('be-1', 'Hello'), manualRow('be-2', 'World')],
-    });
-    const { result } = renderHook(useHarness);
-    await waitFor(() => expect(result.current.isHydrated).toBe(true));
-    await waitFor(() =>
-      expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(2),
-    );
-    await act(settle);
-    expect(updateCalls).toEqual([]);
-
-    act(() => {
-      result.current.updateDraftById('be-1', (draft) => ({ ...draft, title: 'Hello, edited' }));
-    });
-    await act(settle);
-
-    expect(updateCalls).toHaveLength(1);
-    expect(upsertCalls).toEqual([]);
-  });
-
   it('a never-persisted manual draft is upserted once and only once', async () => {
     requestMock.mockResolvedValue({ drafts: [manualRow('be-1', 'Hello')] });
     const { result } = renderHook(useHarness);

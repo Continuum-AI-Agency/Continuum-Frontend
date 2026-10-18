@@ -36,6 +36,11 @@ mock.module('@/lib/api/http', () => ({
   http: { request: requestMock },
 }));
 
+const unschedule = mock(async (_draft: OrganicCalendarDraft) => true);
+mock.module('@/components/organic/hooks/useUnscheduleDraft', () => ({
+  useUnscheduleDraft: () => ({ unschedule, isUnscheduling: false }),
+}));
+
 mock.module('./DraftDeletionConfirmation', () => ({
   useDraftDeletionConfirmation: () => ({ requestDraftDeletion: mock() }),
 }));
@@ -331,6 +336,17 @@ describe('OrganicListView', () => {
     for (const control of [box, ...screen.getAllByRole('button', { name: 'Remove' })]) {
       expect(control.className).toContain('focus-visible:opacity-100');
     }
+  });
+
+  it('sends a scheduled row back to draft through the server, which cancels its publish', () => {
+    unschedule.mockClear();
+    const scheduled = makeDraft({ status: 'scheduled', backendDraftId: 'srv-1' });
+    renderList({ days: [makeDay([scheduled])] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    expect(unschedule).toHaveBeenCalledTimes(1);
+    expect(unschedule.mock.calls[0]?.[0]).toMatchObject({ id: 'draft-1', backendDraftId: 'srv-1' });
   });
 
   it('keeps every clickable row reachable from the keyboard', () => {

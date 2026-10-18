@@ -3,7 +3,10 @@
 import type { PublishEvent } from '@continuum/contracts';
 import * as React from 'react';
 import { useDestructiveConfirmation } from '@/components/organic/primitives/DestructiveConfirmation';
-import { PublishIntentSummary } from '@/components/organic/primitives/PublishIntentSummary';
+import {
+  type PublishAccountLabel,
+  PublishIntentSummary,
+} from '@/components/organic/primitives/PublishIntentSummary';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiBaseUrl } from '@/lib/api/config';
@@ -65,7 +68,8 @@ async function fetchPublishIntent(backendDraftId: string): Promise<PublishIntent
 export type PublishProgressStage = 'started' | 'container_created' | 'polling';
 
 export type UsePublishDraftResult = {
-  publish: (draft: OrganicCalendarDraft) => Promise<void>;
+  /** `account` lets the confirm name the account by the handle the caller showed. */
+  publish: (draft: OrganicCalendarDraft, account?: PublishAccountLabel) => Promise<void>;
   retryPublish: () => void;
   isPublishing: boolean;
   stage: PublishProgressStage | null;
@@ -93,7 +97,7 @@ export function usePublishDraft(): UsePublishDraftResult {
   const lastDraftRef = React.useRef<OrganicCalendarDraft | null>(null);
 
   const publish = React.useCallback(
-    async (draft: OrganicCalendarDraft) => {
+    async (draft: OrganicCalendarDraft, account?: PublishAccountLabel) => {
       // The invariant lives HERE, not on the buttons. Four surfaces call this hook (the
       // preview footer, the card context menu, the hover card and the command menu) and
       // only the footer used to check readiness — so "Publish to Instagram" was live on a
@@ -143,7 +147,9 @@ export function usePublishDraft(): UsePublishDraftResult {
         confirmDisabled: intent ? !intent.publishable || !intent.intent_hash : false,
         // createElement rather than JSX: this hook is a .ts module, and the summary is a real
         // component so it stays testable and reusable on its own.
-        ...(intent ? { details: React.createElement(PublishIntentSummary, { intent }) } : {}),
+        ...(intent
+          ? { details: React.createElement(PublishIntentSummary, { intent, account }) }
+          : {}),
       });
       if (!confirmed) return;
 

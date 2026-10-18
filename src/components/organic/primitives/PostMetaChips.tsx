@@ -174,6 +174,7 @@ export function PostMetaChips({
   onFormatChange,
   onTimeChange,
   actions,
+  className,
 }: {
   platforms: OrganicPlatformKey[];
   format: string;
@@ -184,6 +185,7 @@ export function PostMetaChips({
   onFormatChange: (next: string) => void;
   onTimeChange: (next: string) => void;
   actions?: React.ReactNode;
+  className?: string;
 }) {
   const selected = normalizeSelection(platforms);
 
@@ -198,7 +200,12 @@ export function PostMetaChips({
   };
 
   return (
-    <div className="flex items-center gap-1 border-b border-border/60 bg-muted/40 px-2 py-1.5">
+    <div
+      className={cn(
+        'flex items-center gap-1 border-b border-border/60 bg-muted/40 px-2 py-1.5',
+        className,
+      )}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger
           render={

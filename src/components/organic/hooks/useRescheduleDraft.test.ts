@@ -8,7 +8,13 @@ import { useCalendarStore } from '@/lib/organic/store';
 type RequestOptions = {
   path: string;
   method?: string;
-  body?: { dayId?: string; timeOfDay?: string; expected_updated_at?: string | null };
+  body?: {
+    dayId?: string;
+    timeOfDay?: string;
+    expected_updated_at?: string | null;
+    platform?: string;
+    accountId?: string | null;
+  };
 };
 
 const requestCalls: RequestOptions[] = [];
@@ -22,39 +28,12 @@ const show = mock(() => {});
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
 
-// The platform write's two round trips: the row read, then the guarded update.
-type RowCall = {
-  op: 'select' | 'update';
-  payload?: Record<string, unknown>;
-  filters: [string, unknown][];
-};
-const rowCalls: RowCall[] = [];
-let storedRow: { slot_data: unknown; updated_at: string } | null = null;
-let updateWrites = true;
-function draftsTable() {
-  const call: RowCall = { op: 'select', filters: [] };
-  const builder = {
-    select: () => builder,
-    update: (payload: Record<string, unknown>) => {
-      call.op = 'update';
-      call.payload = payload;
-      return builder;
-    },
-    eq: (column: string, value: unknown) => {
-      call.filters.push([column, value]);
-      return builder;
-    },
-    maybeSingle: async () => {
-      rowCalls.push(call);
-      if (call.op === 'select') return { data: storedRow, error: null };
-      return { data: updateWrites ? { updated_at: 'T1' } : null, error: null };
-    },
-  };
-  return builder;
-}
-mock.module('@/lib/supabase/client', () => ({
-  createSupabaseBrowserClient: () => ({ schema: () => ({ from: () => draftsTable() }) }),
-}));
+// The hook must never write the row from the browser: a Supabase client import is the
+// regression this mock catches.
+const supabaseClient = mock(() => {
+  throw new Error('the reschedule hook wrote the row from the browser');
+});
+mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: supabaseClient }));
 
 // Imported AFTER the module mocks so the hook binds to them.
 const { retargetDraft, useRescheduleDraft } = await import('./useRescheduleDraft');
@@ -322,14 +301,13 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
 
   beforeEach(() => {
     requestCalls.length = 0;
-    requestImpl = async () => ({});
-    rowCalls.length = 0;
-    storedRow = { slot_data: { dayId: FROM_DAY, platform: 'facebook' }, updated_at: 'T0' };
-    updateWrites = true;
+    requestImpl = async () => ({ updated_at: 'T1' });
+    supabaseClient.mockClear();
     show.mockClear();
   });
 
-  it('persists the platform, then the day under the updated_at that write left', async () => {
+  // Gating #1/#15: the platform used to be written straight to Supabase from the browser.
+  it('sends the platform, its account and the day in ONE field-route PATCH', async () => {
     seedDays([draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb', updatedAt: 'T0' })]);
     const target = dayIdAhead(20);
     const { result } = renderHook(() => useRescheduleDraft());
@@ -338,25 +316,24 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
       await result.current.reschedule('a', target, RETARGET);
     });
 
-    const update = rowCalls.find((call) => call.op === 'update');
-    expect(update?.payload).toMatchObject({
-      platform: 'instagram',
-      platform_account_id: 'acct-ig',
-      slot_data: { dayId: FROM_DAY, platform: 'instagram' },
-    });
-    expect(update?.filters).toContainEqual(['id', 'srv-a']);
-    expect(update?.filters).toContainEqual(['updated_at', 'T0']);
+    expect(supabaseClient).not.toHaveBeenCalled();
     expect(requestCalls).toHaveLength(1);
-    expect(requestCalls[0]?.body?.dayId).toBe(target);
-    expect(requestCalls[0]?.body?.expected_updated_at).toBe('T1');
-    // The store says what the row now says.
+    expect(requestCalls[0]?.path).toContain('/srv-a/fields');
+    expect(requestCalls[0]?.body).toMatchObject({
+      platform: 'instagram',
+      accountId: 'acct-ig',
+      dayId: target,
+      expected_updated_at: 'T0',
+    });
+    // The store says what the row now says, with the CAS token the write left.
     const after = findDraft('a');
     expect(after?.dayId).toBe(target);
     expect(after?.draft.platforms).toEqual(['instagram']);
     expect(after?.draft.targetAccountId).toBe('acct-ig');
+    expect(after?.draft.updatedAt).toBe('T1');
   });
 
-  it('retargets a drop on the same day, which moves no day', async () => {
+  it('retargets a drop on the same day with the platform alone', async () => {
     seedDays([draft('a', { platforms: ['facebook'] })]);
     const { result } = renderHook(() => useRescheduleDraft());
 
@@ -364,14 +341,28 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
       await result.current.reschedule('a', FROM_DAY, RETARGET);
     });
 
-    expect(rowCalls.some((call) => call.op === 'update')).toBe(true);
-    expect(requestCalls).toHaveLength(0);
+    expect(requestCalls).toHaveLength(1);
+    expect(requestCalls[0]?.body?.platform).toBe('instagram');
+    expect(requestCalls[0]?.body?.dayId).toBeUndefined();
     expect(findDraft('a')?.dayId).toBe(FROM_DAY);
     expect(findDraft('a')?.draft.platforms).toEqual(['instagram']);
   });
 
-  it('restores day and platform when the platform write is refused', async () => {
-    updateWrites = false;
+  it('sends a null account when the destination platform has none, never the old one', async () => {
+    seedDays([draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb' })]);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('a', FROM_DAY, { ...RETARGET, accountId: undefined });
+    });
+
+    expect(requestCalls[0]?.body?.accountId).toBeNull();
+  });
+
+  it('restores day and platform when the route refuses the write', async () => {
+    requestImpl = async () => {
+      throw new Error('stale_draft');
+    };
     seedDays([draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb' })]);
     const { result } = renderHook(() => useRescheduleDraft());
 
@@ -379,7 +370,6 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
       await result.current.reschedule('a', dayIdAhead(20), RETARGET);
     });
 
-    expect(requestCalls).toHaveLength(0);
     const after = findDraft('a');
     expect(after?.dayId).toBe(FROM_DAY);
     expect(after?.draft.platforms).toEqual(['facebook']);
@@ -396,7 +386,7 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
       await result.current.rescheduleMany(['a', 'b'], target, RETARGET);
     });
 
-    expect(rowCalls.filter((call) => call.op === 'update')).toHaveLength(1);
+    expect(requestCalls.filter((call) => call.body?.platform !== undefined)).toHaveLength(1);
     expect(findDraft('a')?.draft.platforms).toEqual(['instagram']);
     expect(findDraft('b')?.draft.platforms).toEqual(['facebook']);
     expect(findDraft('b')?.dayId).toBe(target);

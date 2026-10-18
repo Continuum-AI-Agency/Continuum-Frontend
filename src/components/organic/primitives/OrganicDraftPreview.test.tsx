@@ -26,9 +26,27 @@ mock.module('./HyperFramePlayer', () => ({
   HyperFramePlayer: () => <div data-testid="hyperframe-player" />,
 }));
 
+// The dry run answers who the post goes out as. Unset, it never answers — the panel then
+// shows the brand and keeps the account blocker hidden, which is the loading state.
+type HttpOptions = { path: string; method?: string; body?: Record<string, unknown> };
+const httpCalls: HttpOptions[] = [];
+let dryRunResponse: unknown = null;
+// Set, field writes wait on it: a save still in flight.
+let heldSave: Promise<unknown> | null = null;
+const httpRequest = mock((opts: HttpOptions) => {
+  httpCalls.push(opts);
+  if (opts.path.includes('/publish-plan')) {
+    return dryRunResponse ? Promise.resolve(dryRunResponse) : new Promise(() => {});
+  }
+  if (heldSave && opts.path.endsWith('/fields')) return heldSave;
+  return Promise.resolve({ updated_at: 'T1' });
+});
+mock.module('@/lib/api/http', () => ({ request: httpRequest, http: { request: httpRequest } }));
+
+const publishMock = mock();
 mock.module('@/components/organic/hooks/usePublishDraft', () => ({
   usePublishDraft: mock(() => ({
-    publish: mock(),
+    publish: publishMock,
     isPublishing: false,
     stage: null,
     pollingAttempt: 0,
@@ -53,7 +71,8 @@ const resetEditingDraftId = () => {
 const calendarStoreStub = createCalendarStoreStub({
   updateDraft: mock(),
   bulkDeleteDrafts: mock(),
-  accountContext: { accountIds: {}, accountOptions: {}, brandId: null },
+  duplicateDraft: mock(),
+  accountContext: { accountIds: { tiktok: 'acct-tt' }, accountOptions: {}, brandId: null },
   get editingDraftId() {
     return editingDraftId;
   },
@@ -137,10 +156,10 @@ mock.module('./MediaSelectPopover', () => ({
     onAttachAssets,
   }: {
     anchor: ReactNode;
-    open: boolean;
+    open?: boolean;
     onAttachAssets: (assets: MediaAsset[]) => void;
   }) => (
-    <div data-testid="media-select">
+    <div data-testid="media-select" data-open={String(Boolean(open))}>
       {anchor}
       {open && (
         <button type="button" onClick={() => onAttachAssets([PICKED_ASSET])}>
@@ -151,6 +170,8 @@ mock.module('./MediaSelectPopover', () => ({
   ),
 }));
 
+let chipsProps: { onPlatformsChange?: (next: string[]) => void } = {};
+const formatChipClick = mock(() => {});
 mock.module('./PostMetaChips', () => ({
   PostMetaChips: ({
     platforms,
@@ -158,22 +179,30 @@ mock.module('./PostMetaChips', () => ({
     formatLabel,
     timeLabel,
     actions,
+    onPlatformsChange,
   }: {
     platforms: string[];
     format: string;
     formatLabel?: string;
     timeLabel: string;
     actions?: ReactNode;
-  }) => (
-    <div data-testid="meta-chips">
-      {platforms.map((platform) => (
-        <span key={platform}>{platform}</span>
-      ))}
-      <span data-testid="meta-format">{formatLabel ?? format}</span>
-      <span>{timeLabel}</span>
-      {actions}
-    </div>
-  ),
+    onPlatformsChange?: (next: string[]) => void;
+  }) => {
+    chipsProps = { onPlatformsChange };
+    return (
+      <div data-testid="meta-chips">
+        {platforms.map((platform) => (
+          <span key={platform}>{platform}</span>
+        ))}
+        <button type="button" aria-label="Change format" onClick={formatChipClick}>
+          {formatLabel ?? format}
+        </button>
+        <span data-testid="meta-format">{formatLabel ?? format}</span>
+        <span>{timeLabel}</span>
+        {actions}
+      </div>
+    );
+  },
 }));
 
 const fanOutAndApproveMock = mock(() => Promise.resolve(true));
@@ -181,8 +210,20 @@ mock.module('@/components/organic/hooks/useFanOutDraft', () => ({
   useFanOutDraft: () => ({ fanOutAndApprove: fanOutAndApproveMock, isFanningOut: false }),
 }));
 
+// The menu is tested in its own file; here it records what the panel hands it.
+type MenuAction = { label: string; onSelect: () => void; disabledReason?: string | null };
+let menuProps: {
+  mediaAction?: MenuAction;
+  renderAction?: MenuAction;
+  onShowDetails?: () => void;
+  onPlatformOptions?: () => void;
+  onMoveBackToDraft?: () => void;
+} = {};
 mock.module('./PostCommandMenu', () => ({
-  PostCommandMenu: () => <button type="button" aria-label="Post actions" />,
+  PostCommandMenu: (props: typeof menuProps) => {
+    menuProps = props;
+    return <button type="button" aria-label="Post actions" />;
+  },
 }));
 
 mock.module('@dnd-kit/core', () => ({
@@ -283,10 +324,22 @@ const applyLastMediaWrite = (draft: OrganicCalendarDraft): OrganicCalendarDraft 
 const renderPreview = () =>
   render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
 
-// Edit intent outlives a render, so every test starts in read-only mode.
+// Edit intent outlives a render, so every test starts without one.
 beforeEach(() => {
   cleanup();
   resetEditingDraftId();
+  dryRunResponse = null;
+  httpCalls.length = 0;
+  heldSave = null;
+  menuProps = {};
+});
+
+const image = (storagePath = 'library/img.png') => ({
+  role: 'primary',
+  kind: 'image' as const,
+  slideIndex: 0,
+  storagePath,
+  storageUrl: `https://cdn.example/${storagePath}`,
 });
 
 function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
@@ -308,14 +361,34 @@ function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalend
 }
 
 describe('OrganicDraftPreview — contextual shell', () => {
-  beforeEach(() => cleanup());
+  it('names the post in one identity row: account, format, time, one ⋯ menu and close', () => {
+    const onClose = mock();
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft()}
+        brandName="Pink Elephant"
+        brandProfileId="brand-1"
+        onClose={onClose}
+      />,
+    );
+    // Until the dry run answers, the brand stands in for the account.
+    expect(container.querySelector('[data-review-account]')?.textContent).toBe('Pink Elephant');
+    expect(container.querySelector('[data-review-when]')?.textContent).toBe('Post · Not scheduled');
+    expect(screen.getAllByLabelText('Post actions')).toHaveLength(1);
+    fireEvent.click(screen.getByLabelText('Close preview'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // The schedule chips sit with the primary action, not in a second header.
+    expect(screen.getByTestId('meta-chips').textContent).toContain('9:00 AM');
+  });
 
-  it('links to the saved inspiration source and rejects unsafe links', () => {
+  it('keeps the inspiration source in Details and rejects unsafe links', () => {
     const { rerender } = render(
       <OrganicDraftPreview
         draft={baseDraft({ inspirationSourceUrl: 'https://www.instagram.com/p/original/' })}
       />,
     );
+    expect(screen.queryByText('Inspiration source · View original post')).toBeNull();
+    act(() => menuProps.onShowDetails?.());
     expect(screen.getByText('Inspiration source · View original post').getAttribute('href')).toBe(
       'https://www.instagram.com/p/original/',
     );
@@ -327,58 +400,58 @@ describe('OrganicDraftPreview — contextual shell', () => {
     expect(screen.queryByText('Inspiration source · View original post')).toBeNull();
   });
 
-  it('renders the glanceable metadata chips and the ⋯ command menu', () => {
+  it('edits the caption in place, with no edit mode to enter first', () => {
     renderPreview();
-    expect(screen.getByTestId('meta-chips')).toBeTruthy();
-    expect(screen.getByText('instagram')).toBeTruthy();
-    expect(screen.getByText('Post')).toBeTruthy();
-    expect(screen.getByText('9:00 AM')).toBeTruthy();
-    expect(screen.getByLabelText('Post actions')).toBeTruthy();
+    const readout = screen.getByLabelText('Edit instagram caption');
+    expect(readout.tagName).toBe('BUTTON');
+    expect(readout.textContent).toContain('Test caption');
+    expect(screen.queryByLabelText('Edit post')).toBeNull();
+
+    fireEvent.click(readout);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Test caption');
   });
 
-  it('defaults to a locked read-only caption and reveals the editor only in edit mode', () => {
+  // Opening the caption switches the slot to scrolling; if that remounts the caption, Escape
+  // drops focus to <body> and the next Escape cannot close the panel (wave-1 U7).
+  it('returns focus to the caption it opened from on Escape', async () => {
     renderPreview();
-    // Read (default) mode: the caption text is shown, but there is no edit affordance.
+    fireEvent.click(screen.getByLabelText('Edit instagram caption'));
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Edit instagram caption')),
+    );
+  });
+
+  it('locks a published post: no caption editor, no media picker', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ status: 'published', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
     expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
     expect(screen.getByText('Test caption')).toBeTruthy();
-
-    // The pencil toggle flips the whole preview into edit mode.
-    fireEvent.click(screen.getByLabelText('Edit post'));
-    const caption = screen.getByLabelText('Edit instagram caption');
-    expect(caption.tagName).toBe('BUTTON');
-    expect(caption.textContent).toContain('Test caption');
-
-    // Toggling back locks the preview again.
-    fireEvent.click(screen.getByLabelText('Done editing post'));
-    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
+    expect(screen.queryByTestId('media-select')).toBeNull();
   });
 
-  // #233b: the hover card's Edit button raises the intent from a different component
-  // tree, so the panel has to read edit mode off the store rather than local state.
-  it('enters edit mode when the store carries an edit intent for this draft', () => {
+  // #233b: the hover card's Edit raises the intent from another component tree; this panel
+  // answers it by opening the caption, then hands the intent back.
+  it('opens the caption when the store carries an edit intent for this draft, then clears it', () => {
     (calendarStoreState.beginEditingDraft as (id: string) => void)('draft-1');
     renderPreview();
-    expect(screen.getByLabelText('Edit instagram caption')).toBeTruthy();
-    expect(screen.getByLabelText('Done editing post')).toBeTruthy();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Test caption');
+    expect(calendarStoreState.editingDraftId).toBeNull();
   });
 
   it('ignores an edit intent that belongs to a different draft', () => {
     (calendarStoreState.beginEditingDraft as (id: string) => void)('some-other-draft');
     renderPreview();
-    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
-  });
-
-  it('clears the store edit intent when editing is toggled off', () => {
-    (calendarStoreState.beginEditingDraft as (id: string) => void)('draft-1');
-    renderPreview();
-    fireEvent.click(screen.getByLabelText('Done editing post'));
-    expect(calendarStoreState.editingDraftId).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(calendarStoreState.editingDraftId).toBe('some-other-draft');
   });
 });
 
 describe('OrganicDraftPreview — media state', () => {
-  beforeEach(() => cleanup());
-
   it("shows the persisted storyboard 'Blueprint ready' state for a pending text-only draft", () => {
     render(
       <OrganicDraftPreview
@@ -399,20 +472,14 @@ describe('OrganicDraftPreview — media state', () => {
         brandProfileId="brand-1"
       />,
     );
-    // "Blueprint ready" appears as the header enrichment pill regardless of mode.
+    // The media zone is live without an edit mode: the storyboard and its next step show.
     expect(screen.getAllByText('Blueprint ready').length).toBeGreaterThan(0);
-    // The editable media slot (storyboard + generate/use-your-own CTAs) is gated
-    // behind edit mode — the default locked preview never surfaces it.
-    expect(screen.queryByAltText('Test post — storyboard frame 1')).toBeNull();
-    fireEvent.click(screen.getByLabelText('Edit post'));
     expect(screen.getByAltText('Test post — storyboard frame 1')).toBeTruthy();
-    // The blueprint state now exposes the durable next-step CTA directly (generate
-    // final media) alongside the library fallback, instead of only opening the picker.
     expect(screen.getByRole('button', { name: 'Generate final media' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Use your own creative' })).toBeTruthy();
   });
 
-  it('surfaces the Generate media and Enrich stage actions after a text preview revision is ready', () => {
+  it('offers Generate media and Enrich in the empty media zone after a text preview revision', () => {
     render(
       <OrganicDraftPreview
         draft={baseDraft({
@@ -422,20 +489,13 @@ describe('OrganicDraftPreview — media state', () => {
         brandProfileId="brand-1"
       />,
     );
-
-    // The generate/enrich stage actions live in the editable media slot, revealed
-    // only after switching into edit mode.
-    fireEvent.click(screen.getByLabelText('Edit post'));
     expect(screen.getByRole('button', { name: 'Generate media' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Enrich (sketch first)' })).toBeTruthy();
   });
 
-  it('offers no stage actions in the empty media slot for a draft without a persisted backend id', () => {
+  it('offers no stage actions in the empty media zone for a draft without a persisted backend id', () => {
     render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
-
-    // Even inside the editable media slot, a draft with no persisted backend id
-    // cannot headless-generate, so no stage actions are offered.
-    fireEvent.click(screen.getByLabelText('Edit post'));
+    expect(screen.getByTestId('drop-zone')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Generate media' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Enrich (sketch first)' })).toBeNull();
   });
@@ -468,59 +528,536 @@ describe('OrganicDraftPreview — media state', () => {
     );
     expect(screen.queryByText('Blueprint ready')).toBeNull();
   });
+
+  // Gating #3: a one-image post could not grow; its "+" lives on the same strip as a carousel's.
+  it('shows the slide strip on a one-image post so it can grow into a carousel', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(screen.getByTestId('carousel-strip')).toBeTruthy();
+  });
+
+  it('shows no slide strip on a one-image post for a platform without carousels', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ platforms: ['youtube'], format: 'Reel', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(screen.queryByTestId('carousel-strip')).toBeNull();
+  });
 });
 
-describe('OrganicDraftPreview — schedule readiness', () => {
-  beforeEach(() => cleanup());
+// Gating #2: the picker mounted only in edit mode, so these buttons did nothing in view mode.
+describe('OrganicDraftPreview — the picker opens from every entry point, without an edit mode', () => {
+  const pickerOpen = () => screen.getAllByTestId('media-select')[0]?.getAttribute('data-open');
 
-  it('surfaces the schedule-requirements hint and gates Approve & Schedule when not ready', () => {
+  it("opens from the storyboard's Use your own creative", () => {
     render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-1',
+          mediaSuggestion: {
+            mediaStatus: 'pending',
+            storyboard: [
+              {
+                role: 'primary',
+                bucket: 'brand-profile-assets',
+                storagePath: 'organic/d/preview/1.png',
+                storageUrl: 'https://signed.example.com/1.png',
+              },
+            ],
+          },
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(pickerOpen()).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Use your own creative' }));
+    expect(pickerOpen()).toBe('true');
+  });
+
+  it("opens from Details' Reuse from library", async () => {
+    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+    act(() => menuProps.onShowDetails?.());
+    // The library entry lives in the media summary's hover card, as the user reaches it.
+    const trigger = screen.getByLabelText('Media enrichment details');
+    fireEvent.pointerEnter(trigger);
+    fireEvent.mouseEnter(trigger);
+    fireEvent.focus(trigger);
+    fireEvent.click(await screen.findByRole('button', { name: /Reuse from library/ }));
+    expect(pickerOpen()).toBe('true');
+  });
+
+  it("opens from the full-screen creative's Replace", () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Enlarge creative'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(pickerOpen()).toBe('true');
+  });
+});
+
+describe('OrganicDraftPreview — readiness and the primary action', () => {
+  // Gating #6/#11: approve and publish read the row, so typing still coalescing must land first.
+  const typeCaption = (value: string) => {
+    fireEvent.click(screen.getByLabelText('Edit instagram caption'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value } });
+  };
+  const fieldsSent = (id: string) =>
+    httpCalls.filter((call) => call.path.endsWith(`/${id}/fields`)).map((call) => call.body);
+
+  it('sends the caption still being typed before it approves', async () => {
+    let sentBeforeApprove: unknown[] = [];
+    const onApprove = mock(() => {
+      sentBeforeApprove = fieldsSent('be-order');
+      return Promise.resolve(true);
+    });
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-order',
+          updatedAt: 'T0',
+          publishingAssets: [image()],
+        })}
+        brandProfileId="brand-1"
+        onApprove={onApprove}
+      />,
+    );
+    typeCaption('Typed just now');
+    fireEvent.click(screen.getByRole('button', { name: 'Approve & schedule' }));
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+    expect(sentBeforeApprove).toEqual([
+      expect.objectContaining({ caption: 'Typed just now', expected_updated_at: 'T0' }),
+    ]);
+  });
+
+  it('waits for a media save in flight before it approves', async () => {
+    let releaseSave: (value: unknown) => void = () => {};
+    heldSave = new Promise((resolve) => {
+      releaseSave = resolve;
+    });
+    const draft = baseDraft({
+      backendDraftId: 'be-media',
+      updatedAt: 'T0',
+      format: 'Carousel',
+      publishingAssets: [
+        { ...image('a.png'), slideIndex: 0 },
+        { ...image('b.png'), slideIndex: 1 },
+        { ...image('c.png'), slideIndex: 2 },
+      ],
+    });
+    const updateDraft = calendarStoreState.updateDraft as ReturnType<typeof mock>;
+    updateDraft.mockImplementation(
+      (_id: string, mutate: (current: OrganicCalendarDraft) => OrganicCalendarDraft) =>
+        mutate(draft),
+    );
+    const onApprove = mock(() => Promise.resolve(true));
+    render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" onApprove={onApprove} />);
+
+    fireEvent.click(screen.getAllByLabelText('Enlarge creative')[0] as HTMLElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() =>
+      expect(httpCalls.some((call) => call.path.endsWith('/be-media/fields'))).toBe(true),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve & schedule' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(onApprove).not.toHaveBeenCalled();
+
+    releaseSave({ updated_at: 'T1' });
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+    updateDraft.mockReset();
+  });
+
+  it('waits for a platform move already on the wire before it approves', async () => {
+    let releaseSave: (value: unknown) => void = () => {};
+    heldSave = new Promise((resolve) => {
+      releaseSave = resolve;
+    });
+    const onApprove = mock(() => Promise.resolve(true));
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-moving',
+          updatedAt: 'T0',
+          publishingAssets: [image()],
+        })}
+        brandProfileId="brand-1"
+        onApprove={onApprove}
+      />,
+    );
+
+    act(() => chipsProps.onPlatformsChange?.(['tiktok']));
+    await waitFor(() =>
+      expect(httpCalls.some((call) => call.path.endsWith('/be-moving/fields'))).toBe(true),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve & schedule' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(onApprove).not.toHaveBeenCalled();
+
+    releaseSave({ updated_at: 'T1' });
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+  });
+
+  it('sends the caption still being typed before it publishes now', async () => {
+    publishMock.mockClear();
+    let sentBeforePublish: unknown[] = [];
+    publishMock.mockImplementation(() => {
+      sentBeforePublish = fieldsSent('be-pub-order');
+    });
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-pub-order',
+          updatedAt: 'T0',
+          publishingAssets: [image()],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+    typeCaption('Typed then published');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish now' }));
+    await waitFor(() => expect(publishMock).toHaveBeenCalledTimes(1));
+    expect(sentBeforePublish).toEqual([
+      expect.objectContaining({ caption: 'Typed then published' }),
+    ]);
+    publishMock.mockImplementation(() => {});
+  });
+
+  // Gating #4/#5/#13: the reason reads as text, each blocker is a numbered jump to its fix.
+  it('lists each blocker as a numbered fix and disables approve with the count as text', () => {
+    const { container } = render(
       <OrganicDraftPreview
         draft={baseDraft({ captionPreview: '' })}
         brandProfileId="brand-1"
         onApprove={mock()}
       />,
     );
-    // The checklist moved out of the footer into a hover popover on this chip;
-    // the chip itself is what proves the unready state is surfaced.
-    expect(screen.getByLabelText("Why this draft can't be scheduled yet")).toBeTruthy();
-    const approve = screen.getByText('Approve & Schedule').closest('button') as HTMLButtonElement;
-    expect(approve.disabled).toBe(true);
+    const fixes = Array.from(container.querySelectorAll('[data-readiness-fix]'));
+    expect(fixes.map((fix) => fix.getAttribute('data-readiness-fix')).sort()).toEqual([
+      'caption',
+      'media',
+    ]);
+    expect(fixes[0]?.textContent?.startsWith('1. ')).toBe(true);
+    const approve = screen.getByRole('button', { name: 'Approve & schedule' });
+    expect(approve.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText('2 to fix')).toBeTruthy();
   });
 
-  it('hides the schedule-requirements hint once the draft is ready', () => {
+  it('jumps to the caption from its fix', () => {
+    const { container } = render(
+      <OrganicDraftPreview draft={baseDraft({ captionPreview: '' })} brandProfileId="brand-1" />,
+    );
+    fireEvent.click(container.querySelector('[data-readiness-fix="caption"]') as HTMLElement);
+    expect(screen.getByRole('textbox')).toBeTruthy();
+  });
+
+  it('opens the media picker from the media fix', () => {
+    const { container } = render(
+      <OrganicDraftPreview draft={baseDraft({ captionPreview: '' })} brandProfileId="brand-1" />,
+    );
+    const openPickers = () =>
+      screen
+        .getAllByTestId('media-select')
+        .filter((node) => node.getAttribute('data-open') === 'true');
+    expect(openPickers()).toHaveLength(0);
+    fireEvent.click(container.querySelector('[data-readiness-fix="media"]') as HTMLElement);
+    expect(openPickers()).toHaveLength(1);
+  });
+
+  it('opens the format chip from the format fix', () => {
+    formatChipClick.mockClear();
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ platforms: ['linkedin'], format: 'Story', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    fireEvent.click(container.querySelector('[data-readiness-fix="format"]') as HTMLElement);
+    expect(formatChipClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('says it is ready once nothing blocks it', () => {
     render(
       <OrganicDraftPreview
-        draft={baseDraft({
-          captionPreview: 'Ready caption',
-          publishingAssets: [
-            {
-              role: 'primary',
-              kind: 'image',
-              slideIndex: 0,
-              storagePath: 'p0.jpg',
-              storageUrl: 'https://cdn/p0.jpg',
-            },
-          ],
-        })}
+        draft={baseDraft({ captionPreview: 'Ready caption', publishingAssets: [image()] })}
         brandProfileId="brand-1"
         onApprove={mock()}
       />,
     );
-    expect(screen.queryByLabelText("Why this draft can't be scheduled yet")).toBeNull();
+    expect(screen.getByText('Ready to schedule')).toBeTruthy();
+    const approve = screen.getByRole('button', { name: 'Approve & schedule' });
+    expect(approve.getAttribute('aria-disabled')).not.toBe('true');
   });
 
-  it('keeps the media inventory in production details while the next action stays visible', () => {
+  // Gating #14: one approve in flight, one busy button.
+  it('approves once while the approval is in flight and shows it busy', async () => {
+    let finish: (value: boolean) => void = () => {};
+    const onApprove = mock(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+        onApprove={onApprove}
+      />,
+    );
+    const approve = screen.getByRole('button', { name: 'Approve & schedule' });
+    fireEvent.click(approve);
+    fireEvent.click(approve);
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Approving…' })).toBeTruthy();
+    await act(async () => finish(true));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a scheduled post as scheduled, with no approve and a way back to draft', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ status: 'scheduled', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+        onApprove={mock()}
+      />,
+    );
+    expect(container.querySelector('[data-review-status="scheduled"]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+    expect(menuProps.onMoveBackToDraft).toBeDefined();
+  });
+
+  // Gating #12: a published post offers neither approve nor publish.
+  it('shows a published post as published, with nothing to approve or publish', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ status: 'published', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+        onApprove={mock()}
+      />,
+    );
+    expect(container.querySelector('[data-review-status="published"]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish now' })).toBeNull();
+  });
+
+  // Gating #11: Publish now is the gated secondary, never an ungated menu item.
+  it('hides Publish now while anything blocks the post, and publishes once it is clear', async () => {
+    publishMock.mockClear();
+    render(
+      <OrganicDraftPreview draft={baseDraft({ captionPreview: '' })} brandProfileId="brand-1" />,
+    );
+    expect(screen.queryByRole('button', { name: 'Publish now' })).toBeNull();
+    cleanup();
+
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish now' }));
+    await waitFor(() => expect(publishMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the media inventory in Details and hands the next media step to the ⋯ menu', () => {
     render(
       <OrganicDraftPreview
         draft={baseDraft({ backendDraftId: 'be-1' })}
         brandProfileId="brand-1"
       />,
     );
-    expect(screen.getByRole('button', { name: 'Generate copy' })).toBeTruthy();
+    expect(menuProps.mediaAction?.label).toBe('Generate copy');
     expect(screen.queryByText('No media yet')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    act(() => menuProps.onShowDetails?.());
     expect(screen.getByText('No media yet')).toBeTruthy();
+  });
+
+  it('offers Render video in the menu only for an unrendered composition', () => {
+    const onStitch = mock();
+    const reel = (generated: boolean) =>
+      baseDraft({
+        format: 'Reel',
+        mediaSuggestion: {
+          mediaStatus: 'ready',
+          reel: { generated, composition: { clips: [] } } as never,
+        },
+      });
+    const { rerender } = render(
+      <OrganicDraftPreview draft={reel(false)} brandProfileId="brand-1" onStitch={onStitch} />,
+    );
+    expect(menuProps.renderAction?.label).toBe('Render video');
+    act(() => menuProps.renderAction?.onSelect());
+    expect(onStitch).toHaveBeenCalledWith('draft-1');
+    rerender(
+      <ToastProvider>
+        <OrganicDraftPreview draft={reel(true)} brandProfileId="brand-1" onStitch={onStitch} />
+      </ToastProvider>,
+    );
+    expect(menuProps.renderAction).toBeUndefined();
+  });
+});
+
+describe('OrganicDraftPreview — the publish plan', () => {
+  const account = {
+    id: 'acct-1',
+    handle: 'pinkelephant',
+    displayName: 'Pink Elephant',
+    avatarUrl: null,
+  };
+  const dryRun = (accounts: (typeof account)[], boundAccountId: string | null) => ({
+    plan: null,
+    publishable: true,
+    blockers: [],
+    warnings: [],
+    accounts,
+    boundAccountId,
+    wire: null,
+  });
+
+  // Gating #10: the account is known before the click, not discovered by a failed publish.
+  it('names the real account handle the post goes out as', async () => {
+    dryRunResponse = dryRun([account], 'acct-1');
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ backendDraftId: 'be-handle', publishingAssets: [image()] })}
+        brandName="Brand"
+        brandProfileId="brand-1"
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('[data-review-account]')?.textContent).toBe('@pinkelephant'),
+    );
+    expect(
+      httpCalls.some((call) => call.path.includes('/be-handle/publish-plan?platform=instagram')),
+    ).toBe(true);
+  });
+
+  it('says no account is connected and makes it a fix', async () => {
+    dryRunResponse = dryRun([], null);
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ backendDraftId: 'be-noacct', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+        onApprove={mock()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('No account connected')).toBeTruthy());
+    expect(container.querySelector('[data-readiness-fix="account"]')).toBeTruthy();
+  });
+
+  it('asks again on return from connecting an account, and the blocker clears', async () => {
+    dryRunResponse = dryRun([], null);
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ backendDraftId: 'be-connect', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+        onApprove={mock()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('No account connected')).toBeTruthy());
+
+    dryRunResponse = dryRun([account], 'acct-1');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() =>
+      expect(container.querySelector('[data-review-account]')?.textContent).toBe('@pinkelephant'),
+    );
+    expect(container.querySelector('[data-readiness-fix="account"]')).toBeNull();
+    expect(httpCalls.filter((call) => call.path.includes('/be-connect/publish-plan'))).toHaveLength(
+      2,
+    );
+  });
+
+  it('has its notices region in place before the first notice, so that notice is announced', () => {
+    const { container, rerender } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ format: 'Post', publishingAssets: [image('feed.png')] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    const region = container.querySelector('[data-plan-notices]');
+    expect(region?.getAttribute('aria-live')).toBe('polite');
+    expect(region?.querySelector('[data-plan-notice]')).toBeNull();
+
+    rerender(
+      <ToastProvider>
+        <OrganicDraftPreview
+          draft={baseDraft({ format: 'Story', publishingAssets: [image('feed.png')] })}
+          brandProfileId="brand-1"
+        />
+      </ToastProvider>,
+    );
+    expect(container.querySelector('[data-plan-notices]')).toBe(region);
+    expect(region?.querySelector('[data-plan-notice="caption_not_sent"]')).toBeTruthy();
+    expect(region?.className).not.toContain('sr-only');
+  });
+
+  it('notices every way what is sent differs from what was typed', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ format: 'Story', publishingAssets: [image('story.png')] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(container.querySelector('[data-plan-notice="caption_not_sent"]')).toBeTruthy();
+    // The frame shows what goes out: a story sends no caption.
+    expect(screen.queryByText('Test caption')).toBeNull();
+  });
+
+  // Gating #1/#15: the platform used to be written from the browser; the row moves through
+  // the field route with the new platform's own account.
+  it('moves the row to a new first platform through the field route, with that platform account', async () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-move',
+          updatedAt: 'T0',
+          publishingAssets: [image()],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+    act(() => chipsProps.onPlatformsChange?.(['tiktok']));
+    await waitFor(() =>
+      expect(httpCalls.find((call) => call.path.endsWith('/be-move/fields'))?.body).toMatchObject({
+        platform: 'tiktok',
+        accountId: 'acct-tt',
+        expected_updated_at: 'T0',
+      }),
+    );
+  });
+
+  // The chip hands back menu order: Instagram sorts before Facebook, and adding it must not
+  // move a Facebook row.
+  it('keeps the row on its platform when a platform that sorts first is added', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          platforms: ['facebook'],
+          backendDraftId: 'be-sorts',
+          publishingAssets: [image()],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+    act(() => chipsProps.onPlatformsChange?.(['instagram', 'facebook']));
+    expect(httpCalls.some((call) => call.path.endsWith('/be-sorts/fields'))).toBe(false);
+  });
+
+  it('keeps an added second platform local until approve fans the post out', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ backendDraftId: 'be-add', publishingAssets: [image()] })}
+        brandProfileId="brand-1"
+      />,
+    );
+    act(() => chipsProps.onPlatformsChange?.(['instagram', 'facebook']));
+    expect(httpCalls.some((call) => call.path.endsWith('/be-add/fields'))).toBe(false);
   });
 });
 
@@ -655,7 +1192,7 @@ describe('OrganicDraftPreview — attached video renders', () => {
   it('renders a <video> with its poster in the read-only media area', () => {
     const { container } = render(
       <OrganicDraftPreview
-        draft={videoDraft('https://cdn.example/clip-poster.jpg')}
+        draft={{ ...videoDraft('https://cdn.example/clip-poster.jpg'), status: 'published' }}
         brandProfileId="brand-1"
       />,
     );
@@ -672,7 +1209,6 @@ describe('OrganicDraftPreview — attached video renders', () => {
         brandProfileId="brand-1"
       />,
     );
-    fireEvent.click(screen.getByLabelText('Edit post'));
     const video = videoIn(container);
     expect(video).toBeTruthy();
     expect(video?.getAttribute('poster')).toBe('https://cdn.example/clip-poster.jpg');
@@ -685,7 +1221,6 @@ describe('OrganicDraftPreview — attached video renders', () => {
         brandProfileId="brand-1"
       />,
     );
-    fireEvent.click(screen.getByLabelText('Edit post'));
     // The stubbed drop zone renders only the fallback ACTIONS; the real
     // library/upload split is gated on the same empty-media state, which a video
     // draft must no longer reach.
@@ -731,7 +1266,10 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     cleanup();
     render(
       <OrganicDraftPreview
-        draft={baseDraft({ platforms: ['instagram', 'facebook', 'linkedin'] })}
+        draft={baseDraft({
+          platforms: ['instagram', 'facebook', 'linkedin'],
+          publishingAssets: [image()],
+        })}
         brandProfileId="brand-1"
       />,
     );
@@ -777,7 +1315,6 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
   // Facebook and Instagram from the post.
   it('switches the rendered frame without mutating draft.platforms', () => {
     render(<OrganicDraftPreview draft={multiPlatformDraft()} brandProfileId="brand-1" />);
-    fireEvent.click(screen.getByLabelText('Edit post'));
     expect(screen.getByLabelText('Edit instagram caption')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'LI' }));
@@ -834,7 +1371,7 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Approve & Schedule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve & schedule' }));
     await waitFor(() => expect(onApprove).toHaveBeenCalledWith('draft-1'));
     expect(fanOutAndApproveMock).not.toHaveBeenCalled();
   });
@@ -863,7 +1400,7 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       ],
     });
 
-  it('holds the TikTok frame open with a Needs media placeholder until it has creative', () => {
+  it('holds the TikTok frame open with the live media zone until it has creative', () => {
     const { container } = render(
       <OrganicDraftPreview
         draft={baseDraft({ platforms: ['tiktok'], format: 'Reel' })}
@@ -873,12 +1410,15 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
 
     const frame = container.querySelector('[data-preview-frame="tiktok"]');
     expect(frame?.getAttribute('data-frame-kind')).toBe('vertical');
-    expect(frame?.querySelector('[data-frame-media]')?.textContent).toContain('Needs media');
+    expect(frame?.querySelector('[data-frame-media] [data-testid="drop-zone"]')).toBeTruthy();
+    expect(screen.getByText('Test caption')).toBeTruthy();
+  });
+
+  it('holds a frame with no picker open on a Needs media placeholder', () => {
+    render(<OrganicDraftPreview draft={baseDraft({ platforms: ['tiktok'], format: 'Reel' })} />);
     // Dark in both themes, so the neutral-50 overlay chrome stays legible on it.
     expect(screen.getByText('Needs media').parentElement?.className).toContain('bg-neutral-900');
-    expect(screen.getByText('Test caption')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit post to add media' }));
-    expect(screen.getByTestId('drop-zone')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add media' })).toBeTruthy();
   });
 
   it('renders a text-only Facebook post with no media box at all', () => {
@@ -898,12 +1438,15 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
     // The header names the draft's own slot, never a made-up "Just now".
     expect(frame?.textContent).toContain('9:00 AM');
     expect(frame?.textContent).not.toContain('Just now');
+    // Media is still one click away, from under the frame rather than inside it.
+    expect(screen.getByRole('button', { name: 'Add photo or video' })).toBeTruthy();
   });
 
-  it('previews an Instagram story with story chrome and no caption overlay', () => {
+  it('previews a published Instagram story with story chrome and no caption overlay', () => {
     const { container } = render(
       <OrganicDraftPreview
         draft={baseDraft({
+          status: 'published',
           format: 'Story',
           publishingAssets: [
             {
@@ -954,7 +1497,8 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
     // sends it (youtubePublisher), so the first line reads in both.
     expect(frame?.textContent?.split('How we brew it').length).toBe(3);
     expect(screen.getByText(/The full walkthrough\./)).toBeTruthy();
-    expect(screen.getByText('Subscribe')).toBeTruthy();
+    // Never-sent decoration is gone while the post is editable.
+    expect(screen.queryByText('Subscribe')).toBeNull();
     expect(screen.queryByText('Shorts')).toBeNull();
     expect(screen.getByTestId('meta-format').textContent).toBe('Video');
   });
@@ -965,23 +1509,35 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
     ['youtube', 'Reel', 'Short', 'lucide-thumbs-down'],
     ['tiktok', 'Reel', 'Video', 'lucide-bookmark'],
   ] as const) {
-    it(`calls a ${platform} vertical video a ${label} and draws its own action rail`, () => {
-      const { container } = render(
-        <OrganicDraftPreview
-          draft={{ ...reelDraft(platform), format }}
-          brandProfileId="brand-1"
-        />,
+    it(`calls a ${platform} vertical video a ${label}, with its action rail only once posted`, () => {
+      const { container, rerender } = render(
+        <OrganicDraftPreview draft={{ ...reelDraft(platform), format }} brandProfileId="brand-1" />,
       );
 
       expect(screen.getByTestId('meta-format').textContent).toBe(label);
-      const frame = container.querySelector(`[data-preview-frame="${platform}"]`);
-      expect(frame?.getAttribute('data-frame-kind')).toBe('vertical');
-      expect(frame?.querySelector(`svg.${railIcon}`)).toBeTruthy();
+      expect(
+        container.querySelector('[data-review-when]')?.textContent?.startsWith(`${label} · `),
+      ).toBe(true);
+      const frame = () => container.querySelector(`[data-preview-frame="${platform}"]`);
+      expect(frame()?.getAttribute('data-frame-kind')).toBe('vertical');
+      expect(frame()?.querySelector(`svg.${railIcon}`)).toBeNull();
+
+      rerender(
+        <ToastProvider>
+          <OrganicDraftPreview
+            draft={{ ...reelDraft(platform), format, status: 'published' }}
+            brandProfileId="brand-1"
+          />
+        </ToastProvider>,
+      );
+      expect(frame()?.querySelector(`svg.${railIcon}`)).toBeTruthy();
     });
   }
 
   it('shows story chrome only on a story', () => {
-    const { container } = render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+    const { container } = render(
+      <OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />,
+    );
 
     expect(container.querySelector('[data-frame-kind]')?.getAttribute('data-frame-kind')).toBe(
       'feed',
@@ -994,7 +1550,7 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
     ['tiktok', 'TikTok'],
     ['youtube', 'YouTube'],
   ] as const) {
-    it(`mounts the ${label} media and offers Publish to ${label}`, () => {
+    it(`mounts the ${label} media and offers to publish it now`, () => {
       const { container } = render(
         <OrganicDraftPreview draft={reelDraft(platform)} brandProfileId="brand-1" />,
       );
@@ -1005,25 +1561,23 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       );
       // A vertical clip with no stored size previews as a Short; TikTok carries no label.
       expect(
-        container.querySelector(`[data-preview-frame="${platform}"]`)?.getAttribute(
-          'data-frame-kind',
-        ),
+        container
+          .querySelector(`[data-preview-frame="${platform}"]`)
+          ?.getAttribute('data-frame-kind'),
       ).toBe('vertical');
-      expect(screen.queryAllByText('Shorts').length).toBe(platform === 'youtube' ? 1 : 0);
+      expect(screen.queryAllByText('Shorts').length).toBe(0);
       expect(screen.queryByText('Sponsored')).toBeNull();
-      const publish = screen.getByRole('button', { name: `Publish to ${label}` });
-      expect((publish as HTMLButtonElement).disabled).toBe(false);
-      expect(screen.queryAllByRole('button', { name: 'Publish to Instagram' }).length).toBe(0);
+      const publish = screen.getByRole('button', { name: 'Publish now' });
+      expect(publish.getAttribute('aria-disabled')).not.toBe('true');
     });
 
-    it(`opens the ${label} media zone and caption editor in edit mode`, () => {
+    it(`offers the ${label} media zone and caption editor without an edit mode`, () => {
       render(
         <OrganicDraftPreview
           draft={baseDraft({ platforms: [platform] })}
           brandProfileId="brand-1"
         />,
       );
-      fireEvent.click(screen.getByLabelText('Edit post'));
 
       expect(screen.getByTestId('media-select')).toBeTruthy();
       expect(screen.getByTestId('drop-zone')).toBeTruthy();
@@ -1213,23 +1767,21 @@ describe('OrganicDraftPreview — replacing the creative (#402)', () => {
 
     fireEvent.click(screen.getByLabelText('Enlarge creative'));
     fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
-
-    expect(calendarStoreState.editingDraftId).toBe('draft-1');
     fireEvent.click(screen.getByText('Pick library image'));
 
     const paths = applyLastMediaWrite(draft).publishingAssets?.map((asset) => asset.storagePath);
     expect(paths).toEqual([PICKED_ASSET.storagePath]);
   });
 
-  it('does not reopen a picker on the next edit after leaving edit mode with it open', () => {
-    render(<OrganicDraftPreview draft={singleImageDraft()} brandProfileId="brand-1" />);
+  it('offers no Replace on a published post, where no picker is mounted', () => {
+    render(
+      <OrganicDraftPreview
+        draft={{ ...singleImageDraft(), status: 'published' }}
+        brandProfileId="brand-1"
+      />,
+    );
 
     fireEvent.click(screen.getByLabelText('Enlarge creative'));
-    fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
-    expect(screen.getByText('Pick library image')).toBeTruthy();
-
-    fireEvent.click(screen.getByLabelText('Done editing post'));
-    fireEvent.click(screen.getByLabelText('Edit post'));
-    expect(screen.queryByText('Pick library image')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Replace' })).toBeNull();
   });
 });

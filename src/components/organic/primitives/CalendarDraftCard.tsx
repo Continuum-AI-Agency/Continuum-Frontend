@@ -19,6 +19,10 @@ import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import * as React from 'react';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
+import {
+  scheduleFieldPatch,
+  useDraftFieldEditor,
+} from '@/components/organic/hooks/useDraftFieldEditor';
 import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { useUnscheduleDraft } from '@/components/organic/hooks/useUnscheduleDraft';
@@ -50,6 +54,7 @@ import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
+import { UNSCHEDULED_DAY_ID } from './calendar-utils';
 import { PlatformBadge, StatusBadge } from './DraftCardBadges';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
@@ -255,6 +260,52 @@ export function CalendarDraftCard({
     [draft.id, focusEditor, updateDraft],
   );
 
+  // The menu's platform and time picks are saved where publish reads them, through the field
+  // route the panel uses. They used to change the store only: a manual draft reached its row
+  // through the browser autosave, and an agent draft not at all.
+  const fieldEditor = useDraftFieldEditor(draft);
+
+  const changeTime = React.useCallback(
+    (timeLabel: string) => {
+      const day = useCalendarStore
+        .getState()
+        .days.find((item) => item.slots.some((slot) => slot.id === draft.id));
+      // The unscheduled shelf has no date to compose the time against; the label stays local.
+      const patch =
+        day && day.id !== UNSCHEDULED_DAY_ID ? scheduleFieldPatch(day.id, timeLabel) : null;
+      if (!patch) {
+        applyQuickEdit((currentDraft) => ({ ...currentDraft, timeLabel }));
+        return;
+      }
+      void fieldEditor.editField(patch, ['schedule'], { timeLabel });
+      focusEditor(draft.id);
+    },
+    [applyQuickEdit, draft.id, fieldEditor, focusEditor],
+  );
+
+  const changePlatform = React.useCallback(
+    (option: (typeof ORGANIC_POST_PLATFORM_KEYS)[number]) => {
+      if (draft.platforms[0] === option) return;
+      // A fan-out card is several rows; the route moves one, so it stays a local choice.
+      if ((draft.groupMembers?.length ?? 0) > 1) {
+        applyQuickEdit((currentDraft) => ({
+          ...currentDraft,
+          platforms: [option],
+          targetAccountId: undefined,
+        }));
+        return;
+      }
+      // The account this workspace publishes to on that platform, never the old platform's.
+      const accountId = useCalendarStore.getState().accountContext?.accountIds?.[option] ?? null;
+      void fieldEditor.editField({ platform: option, accountId }, ['platforms'], {
+        platforms: [option],
+        targetAccountId: accountId ?? undefined,
+      });
+      focusEditor(draft.id);
+    },
+    [applyQuickEdit, draft.groupMembers, draft.id, draft.platforms, fieldEditor, focusEditor],
+  );
+
   const clearFailure = React.useCallback(() => {
     if (onClearFailure) {
       onClearFailure(draft.id);
@@ -274,12 +325,9 @@ export function CalendarDraftCard({
       return;
     }
     setTimeError(null);
-    applyQuickEdit((currentDraft) => ({
-      ...currentDraft,
-      timeLabel: normalized,
-    }));
+    changeTime(normalized);
     setTimePickerOpen(false);
-  }, [applyQuickEdit, pendingTime]);
+  }, [changeTime, pendingTime]);
 
   const triggerButton = (
     <Popover open={timePickerOpen} onOpenChange={setTimePickerOpen}>
@@ -738,34 +786,12 @@ export function CalendarDraftCard({
           ) : null}
           <ContextMenuSeparator />
           {ORGANIC_POST_PLATFORM_KEYS.map((option) => (
-            <ContextMenuItem
-              key={option}
-              onSelect={() =>
-                applyQuickEdit((currentDraft) =>
-                  currentDraft.platforms[0] === option
-                    ? currentDraft
-                    : {
-                        ...currentDraft,
-                        platforms: [option],
-                        // An account belongs to one platform; persistence re-picks this one's default.
-                        targetAccountId: undefined,
-                      },
-                )
-              }
-            >
+            <ContextMenuItem key={option} onSelect={() => changePlatform(option)}>
               Platform: {POST_PLATFORMS[option].label}
             </ContextMenuItem>
           ))}
           {QUICK_TIME_OPTIONS.map((time) => (
-            <ContextMenuItem
-              key={time}
-              onSelect={() =>
-                applyQuickEdit((currentDraft) => ({
-                  ...currentDraft,
-                  timeLabel: time,
-                }))
-              }
-            >
+            <ContextMenuItem key={time} onSelect={() => changeTime(time)}>
               Time: {time}
             </ContextMenuItem>
           ))}

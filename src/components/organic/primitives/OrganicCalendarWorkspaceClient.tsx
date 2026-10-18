@@ -24,15 +24,11 @@ import {
 } from '@/components/ui/resizable';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/ToastProvider';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { pluralize } from '@/lib/format/pluralize';
 import { readSavedAccountSelection } from '@/lib/organic/account-selection';
-import {
-  aiStudioHandoffIssue,
-  brandStorageKeyAiStudioLastDraft,
-} from '@/lib/organic/ai-studio-bridge';
+import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
@@ -48,6 +44,7 @@ import { CalendarPlanCard } from '../calendar-plan/CalendarPlanCard';
 import { useCalendarPlan } from '../calendar-plan/useCalendarPlan';
 import { useAiStudioHandoff } from '../hooks/useAiStudioHandoff';
 import { useApproveScheduleDraft } from '../hooks/useApproveScheduleDraft';
+import { useAttachCreative } from '../hooks/useAttachCreative';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
@@ -434,15 +431,36 @@ function OrganicCalendarWorkspaceInner({
     () => resolveDismissedFocus() ?? true,
     [resolveDismissedFocus],
   );
+  const previewTitleRef = React.useRef<HTMLHeadingElement>(null);
   const handlePlannerKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Escape' && isPlannerKeyEvent(event)) {
         returnFocusToSelection();
         setSelectedPost(null);
       }
+      // Tab from the open draft goes into its preview. Focus stays on the draft so the arrows
+      // browse drafts, and without this the rest of the grid and the dock (75 stops in a busy
+      // week) stood between a keyboard user and the panel. Escape still returns to the draft.
+      const plainTab =
+        event.key === 'Tab' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+      // The draft element itself: a control nested in it (the list row's checkbox) keeps its turn.
+      const fromDraft =
+        event.target instanceof Element ? event.target.getAttribute('data-draft-id') : null;
+      const title = previewTitleRef.current;
+      if (
+        plainTab &&
+        selectedId &&
+        fromDraft === selectedId &&
+        title &&
+        title.getClientRects().length > 0
+      ) {
+        event.preventDefault();
+        title.focus();
+        return;
+      }
       handleKeyDown(event);
     },
-    [handleKeyDown, returnFocusToSelection],
+    [handleKeyDown, returnFocusToSelection, selectedId],
   );
 
   const resolvedTrends = React.useMemo(() => {
@@ -521,6 +539,7 @@ function OrganicCalendarWorkspaceInner({
       setCalendarDays,
       updateDraftById,
       platformAccountIds: draftAccountIds,
+      timeZone: brandTimeZone,
     });
 
   // Server-authoritative freshness: subscribe to Realtime draft writes for this
@@ -789,7 +808,6 @@ function OrganicCalendarWorkspaceInner({
     (selectedId && lastResolvedDraftRef.current?.id === selectedId
       ? lastResolvedDraftRef.current
       : null);
-  const studioIssue = previewDraft ? aiStudioHandoffIssue(previewDraft) : null;
 
   React.useEffect(() => {
     if (selectedId) setSelectedPost(null);
@@ -1140,7 +1158,7 @@ function OrganicCalendarWorkspaceInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { handleOpenInAiStudio, handleOpenDraftInAiStudio } = useAiStudioHandoff({
+  const { handleOpenDraftInAiStudio } = useAiStudioHandoff({
     brandProfileId,
     weekStartId,
     selectedDraft,
@@ -1358,28 +1376,18 @@ function OrganicCalendarWorkspaceInner({
     return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)));
   }, [drafts, selectedIds]);
 
+  const attachCreative = useAttachCreative();
+
   const handlePickerAttach = React.useCallback(
     (publishingAssets: OrganicCalendarDraft['publishingAssets']) => {
       if (!publishingAssets?.length || attachTargetDraftIds.length === 0) return;
-      // Derive a mediaSuggestion patch from the publishing assets so
-      // assertPublishable + stageMediaForPublish both see consistent data.
-      const primary = publishingAssets[0];
-      const mediaPatch: OrganicCalendarDraft['mediaSuggestion'] = {
-        mediaStatus: 'user_supplied',
-        kind: primary?.kind ?? undefined,
-        bucket: primary?.bucket ?? undefined,
-        url: primary?.storagePath ?? undefined,
-      };
-      for (const draftId of attachTargetDraftIds) {
-        updateDraftById(draftId, (draft) => ({
-          ...draft,
-          publishingAssets,
-          mediaSuggestion: { ...draft.mediaSuggestion, ...mediaPatch },
-        }));
-      }
+      attachCreative(
+        drafts.filter((draft) => attachTargetDraftIds.includes(draft.id)),
+        publishingAssets,
+      );
       setAttachPickerOpen(false);
     },
-    [attachTargetDraftIds, updateDraftById],
+    [attachCreative, attachTargetDraftIds, drafts],
   );
 
   const handleBulkAttachCreative = React.useCallback(() => {
@@ -1453,72 +1461,27 @@ function OrganicCalendarWorkspaceInner({
   }, []);
 
   const previewLabel = previewPost ? 'Published post preview' : 'Draft preview';
-  const previewTitleRef = React.useRef<HTMLHeadingElement>(null);
   const previewWhen =
     previewDraft?.dateLabel || (previewPost ? formatPostedWhen(previewPost.post) : '');
   const previewContent = isPreviewOpen ? (
     <>
-      {/* The wide panel's collapse chevron sits absolutely over this row's left edge; the
-          padding keeps the title clear of it (it used to read "ST PREVIEW"). */}
-      <div
-        className={cn(
-          'mb-2 flex shrink-0 items-center justify-between gap-2 pb-1.5',
-          isWidePlanner && 'pl-7',
-        )}
-      >
-        <h2
-          ref={previewTitleRef}
-          tabIndex={-1}
-          className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground focus:outline-none"
+      {/* A draft names itself in its own identity row (account, format, time, ⋯, close); a
+          published post keeps this header. The wide panel's collapse chevron sits absolutely
+          over the row's left edge, so both rows keep clear of it. */}
+      {!previewDraft && (
+        <div
+          className={cn(
+            'mb-2 flex shrink-0 items-center justify-between gap-2 pb-1.5',
+            isWidePlanner && 'pl-7',
+          )}
         >
-          Post Preview{previewWhen ? ` · ${previewWhen}` : ''}
-        </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {previewDraft?.mediaSuggestion?.reel?.composition &&
-          previewDraft.mediaSuggestion.reel.generated !== true ? (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              disabled={stitchingDraftIds.has(previewDraft.id)}
-              onClick={() => handleStitchDraft(previewDraft.id)}
-            >
-              {stitchingDraftIds.has(previewDraft.id) ? 'Stitching…' : 'Ready to render'}
-            </Button>
-          ) : null}
-          {previewDraft ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        disabled={!brandProfileId || !previewDraft || Boolean(studioIssue)}
-                        onClick={handleOpenInAiStudio}
-                        style={
-                          !brandProfileId || !previewDraft || studioIssue
-                            ? { pointerEvents: 'none' }
-                            : undefined
-                        }
-                      >
-                        {previewDraft?.mediaSuggestion?.reel?.composition
-                          ? 'Edit in AI Studio'
-                          : 'Open in AI Studio'}
-                      </Button>
-                    </span>
-                  }
-                />
-                {!brandProfileId || studioIssue ? (
-                  <TooltipContent>
-                    {!brandProfileId ? 'Select a brand to use AI Studio' : studioIssue}
-                  </TooltipContent>
-                ) : null}
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
+          <h2
+            ref={previewTitleRef}
+            tabIndex={-1}
+            className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground focus:outline-none"
+          >
+            Post Preview{previewWhen ? ` · ${previewWhen}` : ''}
+          </h2>
           <Button
             type="button"
             variant="ghost"
@@ -1529,7 +1492,7 @@ function OrganicCalendarWorkspaceInner({
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
-      </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
         {previewPost ? (
@@ -1544,9 +1507,15 @@ function OrganicCalendarWorkspaceInner({
             draft={previewDraft}
             brandName={brandName}
             brandProfileId={brandProfileId}
-            onApprove={(draftId) => {
+            brandTimeZone={brandTimeZone}
+            titleRef={previewTitleRef}
+            insetStart={isWidePlanner}
+            onClose={closePreview}
+            onStitch={handleStitchDraft}
+            isStitching={stitchingDraftIds.has(previewDraft.id)}
+            onApprove={async (draftId) => {
               const target = drafts.find((draft) => draft.id === draftId);
-              if (target) void approveAndSchedule(target);
+              return target ? approveAndSchedule(target) : false;
             }}
           />
         ) : (
@@ -1618,10 +1587,7 @@ function OrganicCalendarWorkspaceInner({
             workspace={
               <section className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-clip">
                 {viewMode !== 'month' && (
-                  <PlannerWorkflowRail
-                    currentStage={plannerStage}
-                    insight={plannerDock.insight}
-                  />
+                  <PlannerWorkflowRail currentStage={plannerStage} insight={plannerDock.insight} />
                 )}
                 <div>
                   <CalendarToolbar

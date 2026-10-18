@@ -12,12 +12,16 @@
  * bg-black and border-white in the light theme, which turned overlay text navy on black.
  * Full-screen frames letterbox off-shape media (object-contain) and lay scrims under their
  * chrome, so the chrome survives white media and the no-media placeholder alike.
+ *
+ * A draft under review (`editable`) shows only what is sent: the account, the media, the
+ * caption exactly as the platform receives it. The decoration a platform draws around a post
+ * but nothing sends (action rails, a ⋯, "Send message", "Subscribe") is left out there, so the
+ * only controls in the panel are real ones. A published post keeps the familiar look.
  */
 import type { PublishPlatform } from '@continuum/contracts';
 import {
   Bookmark,
   Forward,
-  Hash,
   Heart,
   MessageCircle,
   MessageSquare,
@@ -25,12 +29,11 @@ import {
   Play,
   Repeat2,
   Send,
-  Sparkles,
   ThumbsDown,
   ThumbsUp,
   X,
 } from 'lucide-react';
-import type * as React from 'react';
+import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { flattenHashtags } from '@/lib/organic/hashtags';
 import { POST_PLATFORMS } from '@/lib/organic/postPlatforms';
@@ -42,14 +45,23 @@ import type { OrganicCalendarDraft } from './types';
 export type SocialPreviewProps = {
   platform: PublishPlatform;
   frame: PreviewFrame;
+  /** The caption as typed — what the editor edits. */
   caption: string;
   /**
-   * The video's own title (a published YouTube video's snippet.title). Without it YouTube
-   * frames take the caption's first line, the rule the publisher derives the title by.
+   * The caption exactly as the platform receives it (hashtags run on, cut at the limit), or
+   * null when none is sent (a story). Omitted: the caption with `hashtags` run on, which is
+   * how a published post's own caption reads.
+   */
+  sentCaption?: string | null;
+  /**
+   * The video's own title (a published YouTube video's snippet.title, a draft's planned
+   * title). Without it YouTube frames take the caption's first line, the publisher's rule.
    */
   title?: string;
   hashtags?: OrganicCalendarDraft['hashtags'];
+  /** The account the post goes out as: its handle for a draft, the brand for a post. */
   brandName?: string;
+  avatarUrl?: string | null;
   /** When the post goes (or went) out — the draft's scheduled slot, the post's own time. */
   dayLabel?: string;
   timeLabel?: string;
@@ -61,25 +73,27 @@ export type SocialPreviewProps = {
    * "Preview unavailable" box on a full-screen frame (which has nothing else to size it).
    */
   onAddMedia?: () => void;
-  // View↔edit mode. When false the frame reads as a locked "final look": caption is a
-  // clamped readout and the hover edit affordances are suppressed.
-  isEditing: boolean;
+  /** A draft under review: the caption edits in place on click, decoration is left out. */
+  editable: boolean;
   onCaptionChange?: (value: string) => void;
-  // Hover-revealed edit affordances — open the existing inline editors.
-  onEditCreativeDirection?: () => void;
-  onEditHashtags?: () => void;
+  /** Controlled caption editor, for a caller that opens it from elsewhere. */
+  captionEditing?: boolean;
+  onCaptionEditingChange?: (next: boolean) => void;
 };
 
 // Rem height of everything in a frame that is not the media box, at its view-mode maximum
 // (caption at its clamp). Each figure is the sum of the Tailwind heights in that frame
 // below — change them together. Rem, because the type scale rides the root font ladder.
 const CHROME_REM = {
-  instagram: 3 + 2.5 + 0.75 + 2 * 1.25, // h-12 header, h-10 actions, pb-3 + 2 lines
-  facebook: 3.5 + 0.75 + 5 * 1.25 + 2.5, // h-14 header, pb-3 + 5 lines, h-10 actions
-  linkedin: 3.5 + 0.75 + 3 * 1.25 + 2.5, // h-14 header, pb-3 + 3 lines, h-10 actions
+  instagram: 3 + 0.75 + 2 * 1.25, // h-12 header, pb-3 + 2 lines
+  facebook: 3.5 + 0.75 + 5 * 1.25, // h-14 header, pb-3 + 5 lines
+  linkedin: 3.5 + 0.75 + 3 * 1.25, // h-14 header, pb-3 + 3 lines
   landscape: 0.5 + 2 * 1.25 + 0.5 + 2.25 + 0.5 + 1 + 2 * 1.25, // title, channel row, description
   storyNote: 0.5 + 1.25,
+  belowCaption: 0.5 + 2 * 1.25 + 0.5, // py-2 + 2 lines, under a vertical draft's media
 } as const;
+// The h-10 action row a feed frame draws under a published post and never under a draft.
+const ACTION_ROW_REM = 2.5;
 // Borders and sub-pixel rounding.
 const SLACK_REM = 0.25;
 
@@ -115,51 +129,8 @@ function brandInitials(name: string | undefined): string {
     .toUpperCase();
 }
 
-/**
- * Hover-revealed toolbar on the post preview. Each button opens the existing
- * inline editor panel (creative direction / hashtags) — so the editors are
- * reachable on mouseover instead of only through the ⋯ command menu.
- */
-function PreviewHoverActions({
-  onEditCreativeDirection,
-  onEditHashtags,
-}: {
-  onEditCreativeDirection?: () => void;
-  onEditHashtags?: () => void;
-}) {
-  if (!onEditCreativeDirection && !onEditHashtags) return null;
-  const buttonClass =
-    'flex items-center gap-1 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
-  return (
-    <div className="pointer-events-none absolute right-2 top-2 z-30 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
-      {onEditCreativeDirection && (
-        <button
-          type="button"
-          onClick={onEditCreativeDirection}
-          aria-label="Edit creative direction"
-          className={buttonClass}
-        >
-          <Sparkles className="h-3 w-3" />
-          Direction
-        </button>
-      )}
-      {onEditHashtags && (
-        <button
-          type="button"
-          onClick={onEditHashtags}
-          aria-label="Edit hashtags"
-          className={buttonClass}
-        >
-          <Hash className="h-3 w-3" />
-          Hashtags
-        </button>
-      )}
-    </div>
-  );
-}
-
-// Scrims sit under the view-mode chrome only over real media; the no-media placeholder is dark,
-// and a scrim over it would wash out its "Edit post to add media" button.
+// Scrims sit under the overlay chrome only over real media; the no-media placeholder is dark,
+// and a scrim over it would wash out its "Add media" button.
 function TopScrim() {
   return (
     <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-neutral-950/70 via-neutral-950/35 to-transparent" />
@@ -194,7 +165,18 @@ function FrameRoot({
   );
 }
 
-function Avatar({ name, className }: { name?: string; className?: string }) {
+function Avatar({
+  name,
+  src,
+  className,
+}: {
+  name?: string;
+  src?: string | null;
+  className?: string;
+}) {
+  if (src) {
+    return <img src={src} alt="" className={cn('shrink-0 rounded-full object-cover', className)} />;
+  }
   return (
     <span
       aria-hidden="true"
@@ -230,7 +212,7 @@ function NeedsMedia({
         Needs media
       </p>
       <Button type="button" variant="outline" onClick={onAddMedia}>
-        Edit post to add media
+        Add media
       </Button>
     </div>
   );
@@ -275,99 +257,97 @@ function videoTitle(caption: string, title: string | undefined): string {
   return (firstLine ?? '').replace(/[<>]/g, '').slice(0, 100);
 }
 
+/** What the frame shows as the caption: the sent string for a draft, caption + tags for a post. */
+function shownCaption(props: SocialPreviewProps): string {
+  if (props.sentCaption !== undefined) return props.sentCaption ?? '';
+  const tags = flattenHashtags(props.hashtags);
+  return tags.length > 0 ? `${props.caption} ${tags.join(' ')}`.trim() : props.caption;
+}
+
 /**
- * The caption as each platform shows it: clamped to the platform's own truncation, with the
- * hashtag block run on at the end, in view mode; the editable caption in edit mode.
+ * The caption as each platform shows it, clamped to the platform's own truncation. On a draft
+ * under review it is also the editor: a click opens the typed caption in place, and leaving
+ * it shows the sent string again.
  */
 function PostCaption({
-  caption,
-  hashtags,
-  platform,
-  isEditing,
-  onCaptionChange,
   noun,
   lines,
   lead,
   className,
-}: Pick<
-  SocialPreviewProps,
-  'caption' | 'hashtags' | 'platform' | 'isEditing' | 'onCaptionChange'
-> & {
+  ...props
+}: SocialPreviewProps & {
   noun: 'caption' | 'post copy';
   lines: keyof typeof CLAMP;
   lead?: string;
   className?: string;
 }) {
-  const tags = flattenHashtags(hashtags);
-  const ariaLabel = `${POST_PLATFORMS[platform].label} ${noun}`;
-  const placeholder = noun === 'caption' ? 'Write your caption…' : 'Write your post copy…';
+  const [localEditing, setLocalEditing] = React.useState(false);
+  const editing = props.captionEditing ?? localEditing;
+  const setEditing = (next: boolean) => {
+    setLocalEditing(next);
+    props.onCaptionEditingChange?.(next);
+  };
+  const shown = shownCaption(props);
+  const ariaLabel = `${POST_PLATFORMS[props.platform].label} ${noun}`;
 
-  if (isEditing) {
+  if (props.editable) {
+    const leadText = lead ? <span className="font-semibold">{lead} </span> : null;
     return (
       <div className={className}>
-        {lead && <p className="font-semibold">{lead}</p>}
-        <EditableCaption
-          value={caption}
-          onChange={onCaptionChange ?? noop}
-          platform={platform}
-          ariaLabel={ariaLabel}
-          placeholder={placeholder}
-          className="text-sm leading-5"
-          editClassName="text-sm"
-        />
-        {tags.length > 0 && (
-          <p className="mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-sky-800 dark:text-sky-300">
-            {tags.map((tag) => (
-              <span key={tag}>{tag}</span>
-            ))}
-          </p>
-        )}
+        <div className="leading-5">
+          {editing && leadText}
+          <EditableCaption
+            value={props.caption}
+            displayValue={shown}
+            onChange={props.onCaptionChange ?? noop}
+            platform={props.platform}
+            ariaLabel={ariaLabel}
+            placeholder={noun === 'caption' ? 'Write your caption…' : 'Write your post copy…'}
+            editing={editing}
+            onEditingChange={setEditing}
+            lead={editing ? undefined : leadText}
+            readoutClassName={CLAMP[lines]}
+            className="p-0 text-inherit"
+            editClassName="text-sm"
+          />
+        </div>
       </div>
     );
   }
 
-  // View mode is the final look: an empty caption shows nothing, never the editor's prompt.
-  const hasCaption = caption.trim().length > 0;
-  if (!hasCaption && tags.length === 0) return null;
-
+  // A published post's caption: an empty one shows nothing, never the editor's prompt.
+  if (!shown.trim()) return null;
   // Padding lives outside the clamped box: a line-clamped box clips at its padding edge,
   // so padding on it would show the first hidden line.
   return (
     <div className={className}>
       <div className={cn('leading-5 [&>div]:inline', CLAMP[lines])}>
         {lead && <span className="font-semibold">{lead} </span>}
-        {hasCaption && (
-          <EditableCaption
-            value={caption}
-            onChange={noop}
-            platform={platform}
-            editable={false}
-            ariaLabel={ariaLabel}
-            className="p-0 text-inherit"
-          />
-        )}
-        {tags.length > 0 && <span className="opacity-80"> {tags.join(' ')}</span>}
+        <EditableCaption
+          value={shown}
+          onChange={noop}
+          platform={props.platform}
+          editable={false}
+          ariaLabel={ariaLabel}
+          className="p-0 text-inherit"
+        />
       </div>
     </div>
   );
 }
 
 function FeedFrame(props: SocialPreviewProps) {
-  const { platform, frame, brandName, mediaNode, onAddMedia, isEditing } = props;
+  const { platform, frame, brandName, mediaNode, onAddMedia, editable } = props;
   const displayName = brandName ?? 'Your Brand';
   const hasMediaBox = mediaNode != null || onAddMedia != null;
   const chrome =
-    platform === 'instagram'
+    (platform === 'instagram'
       ? CHROME_REM.instagram
-      : CHROME_REM[platform === 'linkedin' ? 'linkedin' : 'facebook'];
+      : CHROME_REM[platform === 'linkedin' ? 'linkedin' : 'facebook']) +
+    (editable ? 0 : ACTION_ROW_REM);
   const width = hasMediaBox ? frameWidth(frame.mediaAspect, chrome) : '100cqw';
   const media = <MediaBox frame={frame} mediaNode={mediaNode} onAddMedia={onAddMedia} />;
-  const hoverActions = isEditing && (
-    <PreviewHoverActions
-      onEditCreativeDirection={props.onEditCreativeDirection}
-      onEditHashtags={props.onEditHashtags}
-    />
-  );
+  const decoration = !editable;
 
   if (platform === 'instagram') {
     return (
@@ -377,22 +357,35 @@ function FeedFrame(props: SocialPreviewProps) {
         width={width}
         className="overflow-hidden rounded-xl border border-border/70 bg-card"
       >
-        {hoverActions}
         <div className="flex h-12 items-center gap-2 px-3">
           <span className="flex size-8 shrink-0 rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 p-[2px]">
-            <Avatar name={brandName} className="size-full border-2 border-card" />
+            <Avatar
+              name={brandName}
+              src={props.avatarUrl}
+              className="size-full border-2 border-card"
+            />
           </span>
           <span className="min-w-0 truncate font-semibold">{displayName}</span>
-          <MoreHorizontal className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
+          {decoration && (
+            <MoreHorizontal className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
+          )}
         </div>
         {media}
-        <div className="flex h-10 items-center gap-4 px-3" aria-hidden="true">
-          <Heart className="size-5" />
-          <MessageCircle className="size-5" />
-          <Send className="size-5" />
-          <Bookmark className="ml-auto size-5" />
-        </div>
-        <PostCaption {...props} noun="caption" lines={2} lead={displayName} className="px-3 pb-3" />
+        {decoration && (
+          <div className="flex h-10 items-center gap-4 px-3" aria-hidden="true">
+            <Heart className="size-5" />
+            <MessageCircle className="size-5" />
+            <Send className="size-5" />
+            <Bookmark className="ml-auto size-5" />
+          </div>
+        )}
+        <PostCaption
+          {...props}
+          noun="caption"
+          lines={2}
+          lead={displayName}
+          className={cn('px-3 pb-3', editable && 'pt-2')}
+        />
       </FrameRoot>
     );
   }
@@ -418,10 +411,10 @@ function FeedFrame(props: SocialPreviewProps) {
       width={width}
       className="overflow-hidden rounded-xl border border-border/70 bg-card"
     >
-      {hoverActions}
       <div className="flex h-14 items-center gap-2 px-3">
         <Avatar
           name={brandName}
+          src={props.avatarUrl}
           className={
             isLinkedIn
               ? 'size-10 rounded-md bg-primary/15 text-primary'
@@ -436,30 +429,60 @@ function FeedFrame(props: SocialPreviewProps) {
             </p>
           )}
         </div>
-        <MoreHorizontal className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
+        {decoration && (
+          <MoreHorizontal className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
+        )}
       </div>
       <PostCaption {...props} noun="post copy" lines={isLinkedIn ? 3 : 5} className="px-3 pb-3" />
       {media}
-      <div
-        className="flex h-10 items-center justify-around border-t border-border/60 px-2 text-muted-foreground"
-        aria-hidden="true"
-      >
-        {actions.map(([Icon, label]) => (
-          <span key={label} className="flex items-center gap-1.5 font-medium">
-            <Icon className="size-4" />
-            <span className={cn(isLinkedIn && 'hidden @[20rem]:inline')}>{label}</span>
-          </span>
-        ))}
-      </div>
+      {decoration && (
+        <div
+          className="flex h-10 items-center justify-around border-t border-border/60 px-2 text-muted-foreground"
+          aria-hidden="true"
+        >
+          {actions.map(([Icon, label]) => (
+            <span key={label} className="flex items-center gap-1.5 font-medium">
+              <Icon className="size-4" />
+              <span className={cn(isLinkedIn && 'hidden @[20rem]:inline')}>{label}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </FrameRoot>
   );
 }
 
 function VerticalFrame(props: SocialPreviewProps) {
-  const { platform, frame, brandName, mediaNode, onAddMedia, isEditing } = props;
+  const { platform, frame, brandName, mediaNode, onAddMedia, editable } = props;
   const label = platform === 'youtube' ? 'Shorts' : platform === 'tiktok' ? null : 'Reels';
   // A Short overlays its title where a reel overlays its caption.
   const title = platform === 'youtube' ? videoTitle(props.caption, props.title) : null;
+  const account = (
+    <div className="mb-1 flex items-center gap-2">
+      <Avatar
+        name={brandName}
+        src={props.avatarUrl}
+        className="size-7 bg-neutral-50 text-neutral-950"
+      />
+      <span className="min-w-0 truncate font-semibold">{brandName ?? 'Your Brand'}</span>
+    </div>
+  );
+
+  // A draft looks like the post: full-bleed, letterboxed, the caption over the media where a
+  // click edits it. Only while typing does the caption drop under the media, onto the card,
+  // and it is the same element both ways so the open field is never remounted.
+  const typing = editable && props.captionEditing === true;
+  const caption =
+    title === null || editable ? (
+      <div className="pointer-events-auto">
+        <PostCaption
+          {...props}
+          noun="caption"
+          lines={2}
+          className={typing ? undefined : 'text-neutral-50'}
+        />
+      </div>
+    ) : null;
 
   return (
     <FrameRoot
@@ -468,22 +491,16 @@ function VerticalFrame(props: SocialPreviewProps) {
       width={frameWidth(frame.mediaAspect, 0)}
       className="overflow-hidden rounded-xl border border-border/70 bg-card"
     >
-      {isEditing && (
-        <PreviewHoverActions
-          onEditCreativeDirection={props.onEditCreativeDirection}
-          onEditHashtags={props.onEditHashtags}
-        />
-      )}
       <div className="relative">
         <MediaBox
           frame={frame}
           mediaNode={mediaNode}
           onAddMedia={onAddMedia}
-          className={cn(!isEditing && LETTERBOX)}
+          className={LETTERBOX}
         />
         <div className="pointer-events-none absolute inset-0 text-neutral-50">
-          {!isEditing && mediaNode != null && <TopScrim />}
-          {label && (
+          {mediaNode != null && <TopScrim />}
+          {label && !editable && (
             <span
               aria-hidden="true"
               className="absolute left-3 top-3 text-base font-semibold drop-shadow"
@@ -491,71 +508,61 @@ function VerticalFrame(props: SocialPreviewProps) {
               {label}
             </span>
           )}
-          {!isEditing && (
-            <>
-              {mediaNode != null && (
-                <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-neutral-950/80 via-neutral-950/40 to-transparent" />
-              )}
-              <div
-                className="absolute bottom-24 right-2 flex flex-col items-center gap-4 drop-shadow"
-                aria-hidden="true"
-              >
-                {VERTICAL_RAIL[platform].map((Icon, index) => (
-                  <Icon key={index} className="size-6" />
-                ))}
-              </div>
-              <div className="absolute inset-x-0 bottom-0 pb-3 pl-3 pr-14">
-                <div className="mb-1 flex items-center gap-2">
-                  <Avatar name={brandName} className="size-7 bg-neutral-50 text-neutral-950" />
-                  <span className="min-w-0 truncate font-semibold">
-                    {brandName ?? 'Your Brand'}
-                  </span>
-                </div>
-                {title === null ? (
-                  <PostCaption {...props} noun="caption" lines={2} className="text-neutral-50" />
-                ) : (
-                  title && <p className="line-clamp-2 font-semibold leading-5">{title}</p>
-                )}
-              </div>
-            </>
+          {mediaNode != null && (
+            <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-neutral-950/80 via-neutral-950/40 to-transparent" />
+          )}
+          {!editable && (
+            <div
+              className="absolute bottom-24 right-2 flex flex-col items-center gap-4 drop-shadow"
+              aria-hidden="true"
+            >
+              {VERTICAL_RAIL[platform].map((Icon, index) => (
+                <Icon key={index} className="size-6" />
+              ))}
+            </div>
           )}
         </div>
       </div>
-      {isEditing && (
-        <div className="border-t border-border/70 px-3 py-2">
-          <p className="mb-1 font-semibold">Caption</p>
-          <PostCaption {...props} noun="caption" lines={2} />
-        </div>
-      )}
+      <div
+        className={cn(
+          typing
+            ? 'border-t border-border/70 px-3 py-2'
+            : 'pointer-events-none absolute inset-x-0 bottom-0 pb-3 pl-3 text-neutral-50',
+          !typing && (editable ? 'pr-3' : 'pr-14'),
+        )}
+      >
+        {!typing && account}
+        {title !== null && (title || editable) && (
+          <p className="line-clamp-2 font-semibold leading-5">{title || 'Untitled Short'}</p>
+        )}
+        {caption}
+      </div>
     </FrameRoot>
   );
 }
 
 function StoryFrame(props: SocialPreviewProps) {
-  const { platform, frame, brandName, mediaNode, onAddMedia, isEditing, caption } = props;
-  const hasCaption = caption.trim().length > 0;
+  const { platform, frame, brandName, mediaNode, onAddMedia, editable, caption } = props;
+  // A draft's plan says so in its own notice; a published story never had a caption.
+  const captionNote = !editable && caption.trim().length > 0;
 
   return (
     <FrameRoot
       platform={platform}
       kind="story"
-      width={frameWidth(frame.mediaAspect, hasCaption ? CHROME_REM.storyNote : 0)}
+      width={frameWidth(frame.mediaAspect, captionNote ? CHROME_REM.storyNote : 0)}
     >
-      {isEditing && (
-        <PreviewHoverActions
-          onEditCreativeDirection={props.onEditCreativeDirection}
-          onEditHashtags={props.onEditHashtags}
-        />
-      )}
       <div className="relative overflow-hidden rounded-xl border border-border/70">
         <MediaBox
           frame={frame}
           mediaNode={mediaNode}
           onAddMedia={onAddMedia}
-          className={cn(!isEditing && LETTERBOX)}
+          className={cn(!editable && LETTERBOX)}
         />
         <div className="pointer-events-none absolute inset-0 text-neutral-50">
-          {!isEditing && mediaNode != null && <TopScrim />}
+          {mediaNode != null && <TopScrim />}
+          {/* The progress bar is what makes this read as a story, so it stays while editing;
+              the reply bar, heart and close are viewer affordances nobody can use here. */}
           <div
             data-story-progress
             className="absolute inset-x-2 top-2 flex gap-1"
@@ -564,12 +571,16 @@ function StoryFrame(props: SocialPreviewProps) {
             <span className="h-0.5 flex-1 rounded-full bg-neutral-50" />
           </div>
           <div className="absolute inset-x-3 top-5 flex items-center gap-2 drop-shadow">
-            <Avatar name={brandName} className="size-7 bg-neutral-50 text-neutral-950" />
+            <Avatar
+              name={brandName}
+              src={props.avatarUrl}
+              className="size-7 bg-neutral-50 text-neutral-950"
+            />
             <span className="min-w-0 truncate font-semibold">{brandName ?? 'Your Brand'}</span>
             {props.timeLabel && <span className="shrink-0 opacity-80">{props.timeLabel}</span>}
-            <X className="ml-auto size-5 shrink-0" aria-hidden />
+            {!editable && <X className="ml-auto size-5 shrink-0" aria-hidden />}
           </div>
-          {!isEditing && (
+          {!editable && (
             <>
               {mediaNode != null && (
                 <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-neutral-950/70 via-neutral-950/45 to-transparent" />
@@ -588,7 +599,7 @@ function StoryFrame(props: SocialPreviewProps) {
           )}
         </div>
       </div>
-      {hasCaption && (
+      {captionNote && (
         <p className="mt-2 text-center text-muted-foreground">Stories post without a caption</p>
       )}
     </FrameRoot>
@@ -596,11 +607,10 @@ function StoryFrame(props: SocialPreviewProps) {
 }
 
 function LandscapeFrame(props: SocialPreviewProps) {
-  const { platform, frame, brandName, mediaNode, onAddMedia, isEditing, caption } = props;
+  const { platform, frame, brandName, mediaNode, onAddMedia, editable } = props;
   // The publisher sends the whole caption as the description (youtubePublisher), so the
   // description repeats the first line the title was derived from — as it does once posted.
-  const title = videoTitle(caption, props.title);
-  const hasTags = flattenHashtags(props.hashtags).length > 0;
+  const title = videoTitle(props.caption, props.title);
 
   return (
     <FrameRoot
@@ -608,12 +618,6 @@ function LandscapeFrame(props: SocialPreviewProps) {
       kind="landscape"
       width={frameWidth(frame.mediaAspect, CHROME_REM.landscape)}
     >
-      {isEditing && (
-        <PreviewHoverActions
-          onEditCreativeDirection={props.onEditCreativeDirection}
-          onEditHashtags={props.onEditHashtags}
-        />
-      )}
       <div className="relative overflow-hidden rounded-xl">
         <MediaBox
           frame={frame}
@@ -621,10 +625,10 @@ function LandscapeFrame(props: SocialPreviewProps) {
           onAddMedia={onAddMedia}
           className={cn(
             '[&_img]:object-contain [&_video]:object-contain',
-            !isEditing && 'bg-neutral-950',
+            !editable && 'bg-neutral-950',
           )}
         />
-        {mediaNode != null && !isEditing && (
+        {mediaNode != null && !editable && (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-neutral-950/70 text-neutral-50">
               <Play className="size-6 fill-current" aria-hidden />
@@ -641,16 +645,18 @@ function LandscapeFrame(props: SocialPreviewProps) {
         {title || 'Untitled video'}
       </p>
       <div className="mt-2 flex h-9 items-center gap-2">
-        <Avatar name={brandName} className="size-8" />
+        <Avatar name={brandName} src={props.avatarUrl} className="size-8" />
         <span className="min-w-0 truncate font-semibold">{brandName ?? 'Your Brand'}</span>
-        <span
-          aria-hidden="true"
-          className="ml-auto shrink-0 rounded-full bg-foreground px-3 py-1 font-medium text-background"
-        >
-          Subscribe
-        </span>
+        {!editable && (
+          <span
+            aria-hidden="true"
+            className="ml-auto shrink-0 rounded-full bg-foreground px-3 py-1 font-medium text-background"
+          >
+            Subscribe
+          </span>
+        )}
       </div>
-      {(isEditing || caption.trim() || hasTags) && (
+      {(editable || shownCaption(props).trim()) && (
         <PostCaption
           {...props}
           noun="caption"

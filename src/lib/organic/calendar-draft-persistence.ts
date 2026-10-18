@@ -1,12 +1,12 @@
 import {
   applyPlannerFutureFloor,
   deriveOrganicMediaStage,
+  draftFormatCandidates,
   formatPlannerTimeOfDay,
   type OrganicMediaStage,
   organicMediaStageSchema,
   organicUgcSpecSchema,
   PLANNER_DEFAULT_TIME_OF_DAY,
-  type PlannerDraftFieldPatch,
   parsePlannerTimeOfDay,
   parseSiblingClientKey,
   plannerCompositionSchema,
@@ -29,6 +29,7 @@ import type {
 } from '@/components/organic/primitives/types';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
+import { publishPlanSource } from '@/lib/organic/publishPlan';
 
 type PersistedDraftStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'placeholder';
 
@@ -449,8 +450,10 @@ export function buildPersistedDraftPayload(args: {
     draft.targetAccountId ?? platformAccountIds[primaryPlatform] ?? UNASSIGNED_PLATFORM_ACCOUNT_ID;
 
   const status = normalizeLocalStatus(draft.status);
+  // The row it was read from never goes back into that row.
+  const { planSource: _readFrom, ...rest } = draft;
   const snapshot: OrganicCalendarDraft = {
-    ...draft,
+    ...rest,
     status,
     backendDraftId: undefined,
   };
@@ -487,61 +490,6 @@ export function buildPersistedDraftPayload(args: {
       draftSnapshot: snapshot,
       caption: draft.captionPreview,
       title: draft.title,
-    },
-  };
-}
-
-/**
- * The copy a freshly-inserted manual row must still send through the field-edit route.
- *
- * The field editor skips its PATCH while a draft has no row, trusting the autosave
- * insert to carry the edit. The insert writes `slot_data` only, while the approve gate
- * and the publisher read `content_json.copy` — so a caption typed before the row
- * existed showed in the planner and was refused at approve as `caption_missing`.
- */
-export function newRowCopyPatch(draft: OrganicCalendarDraft): PlannerDraftFieldPatch | null {
-  const caption = draft.captionPreview.trim() ? draft.captionPreview : undefined;
-  const { high = [], medium = [], low = [] } = draft.hashtags ?? {};
-  const hashtags = high.length + medium.length + low.length > 0 ? draft.hashtags : undefined;
-  if (!caption && !hashtags) return null;
-  return { ...(caption ? { caption } : {}), ...(hashtags ? { hashtags } : {}) };
-}
-
-/**
- * The row fields a drop on another platform's row rewrites: every place the create path
- * above stamps a platform. The publisher reads the `platform` column, but the planner maps
- * a row back from the snapshot and then `slot_data.platform`, so writing only the column
- * would put the card back on its old row at the next refetch.
- *
- * Merged onto the row's current `slot_data` rather than rebuilt: an agent row carries no
- * draftSnapshot (none is invented) and may store `slot_data.platform` as `{ name }`.
- */
-export function platformRetargetRowPatch(
-  slotData: unknown,
-  platform: OrganicPlatformKey,
-  accountId: string | undefined,
-): Pick<PersistedDraftWritePayload, 'platform' | 'platform_account_id' | 'slot_data'> {
-  const current = asRecord(slotData);
-  const slotPlatform = current.platform;
-  const snapshot = current.draftSnapshot;
-  return {
-    platform,
-    platform_account_id: accountId ?? UNASSIGNED_PLATFORM_ACCOUNT_ID,
-    slot_data: {
-      ...current,
-      platform:
-        slotPlatform && typeof slotPlatform === 'object'
-          ? { ...asRecord(slotPlatform), name: platform }
-          : platform,
-      ...(snapshot && typeof snapshot === 'object'
-        ? {
-            draftSnapshot: {
-              ...asRecord(snapshot),
-              platforms: [platform],
-              targetAccountId: accountId,
-            },
-          }
-        : {}),
     },
   };
 }
@@ -829,10 +777,9 @@ export function mapPersistedRowToCalendarEntry(
     hasCopy: plannerDraftHasCopy(placement) || readString(slotData.caption) !== null,
     platforms,
     contentPlanId: readString(row.content_plan_id) ?? null,
-    // content_json-first for the same reason as the caption: the field-edit route
-    // writes there, so a user's chosen format lives there. A stale draftSnapshot
-    // format is what made a Reel-to-Carousel change revert on reload.
-    format: readString(placementContent.format) ?? readString(snapshot.format) ?? 'Post',
+    // The publisher's own order (snapshot first): a format edit rewrites the snapshot's format
+    // too, and reading content first previewed a format the post would not go out as.
+    format: draftFormatCandidates(row)[0] ?? 'Post',
     objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? 'Draft',
     // content_json-first: it is canonical for copy — the publisher and the
     // scheduled worker read it, and planner manual edits persist there. The
@@ -871,10 +818,13 @@ export function mapPersistedRowToCalendarEntry(
     adjusted: typeof snapshot.adjusted === 'boolean' ? snapshot.adjusted : undefined,
     generationAttempts: readNumber(snapshot.generationAttempts) ?? undefined,
     mediaSuggestion,
+    // content_json first: it is what the field route writes and the publisher sends. A
+    // snapshot's media differing from it previewed one image and posted another; the snapshot
+    // stays only for legacy rows with no content_json media, which the plan reports missing.
     publishingAssets: restorePublishingAssets(
-      asArray(snapshot.publishingAssets).length > 0
-        ? snapshot.publishingAssets
-        : placement.publishingAssets,
+      asArray(placement.publishingAssets).length > 0
+        ? placement.publishingAssets
+        : snapshot.publishingAssets,
       mediaSuggestion?.bucket ?? null,
     ),
     // Agent drafts have no draftSnapshot — their copy lives in content_json. Reading only the
@@ -884,5 +834,14 @@ export function mapPersistedRowToCalendarEntry(
     publishOptions: publishOptionsByPlatformSchema.safeParse(placement.publishOptions).data,
   };
 
-  return { dayId, draft };
+  return {
+    dayId,
+    draft: {
+      ...draft,
+      planSource: publishPlanSource(
+        { id: row.id, content_json: row.content_json ?? null, slot_data: row.slot_data },
+        draft,
+      ),
+    },
+  };
 }

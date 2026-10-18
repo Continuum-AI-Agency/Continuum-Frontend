@@ -109,6 +109,11 @@ export function EditableCaption({
   editClassName,
   ariaLabel = 'Caption',
   editable = true,
+  editing: controlledEditing,
+  onEditingChange,
+  displayValue,
+  lead,
+  readoutClassName,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -120,8 +125,26 @@ export function EditableCaption({
   // When false the caption is a locked, read-only readout with no edit affordance
   // (the preview's "final look" view mode). Editing is gated behind the pencil.
   editable?: boolean;
+  // Controlled open state, for a caller that opens the field from elsewhere (a readiness
+  // "Add a caption" jump). Uncontrolled when omitted.
+  editing?: boolean;
+  onEditingChange?: (next: boolean) => void;
+  // What the readout shows when it differs from the editable text: the caption exactly as
+  // it will be sent (hashtags appended, cut at the platform limit).
+  displayValue?: string;
+  /** Text that leads the readout on its first line (a feed caption's account name). */
+  lead?: React.ReactNode;
+  // Classes for the readout's text box. A line clamp goes HERE: a <button> is never a true
+  // inline box, so a clamp on its parent cannot reach the text inside it.
+  readoutClassName?: string;
 }) {
-  const [editing, setEditing] = React.useState(false);
+  const [uncontrolledEditing, setUncontrolledEditing] = React.useState(false);
+  const editing = controlledEditing ?? uncontrolledEditing;
+  const setEditing = (next: boolean) => {
+    if (controlledEditing === undefined) setUncontrolledEditing(next);
+    onEditingChange?.(next);
+  };
+  const readoutValue = displayValue ?? value;
   // Leaving the field by keyboard unmounts it, which drops focus to <body>: the next Escape
   // then reached nothing, and Tab started over from the top of the page. Focus lands back on
   // the readout that opened the field instead. A click away keeps focus where it went.
@@ -135,11 +158,11 @@ export function EditableCaption({
 
   // Read-only view mode: faithful text, no click-to-edit button or textarea.
   if (!editable) {
-    const hasText = value.trim().length > 0;
+    const hasText = readoutValue.trim().length > 0;
     return (
       <div className={cn('block w-full px-2 py-1.5 text-left text-foreground', className)}>
         {hasText ? (
-          <CaptionReadout value={value} />
+          <CaptionReadout value={readoutValue} />
         ) : (
           <span className="text-muted-foreground/50">{placeholder}</span>
         )}
@@ -148,7 +171,7 @@ export function EditableCaption({
   }
 
   if (!editing) {
-    const hasText = value.trim().length > 0;
+    const hasText = readoutValue.trim().length > 0;
     return (
       <button
         ref={readoutRef}
@@ -162,11 +185,14 @@ export function EditableCaption({
           className,
         )}
       >
-        {hasText ? (
-          <CaptionReadout value={value} />
-        ) : (
-          <span className="text-muted-foreground/50">{placeholder}</span>
-        )}
+        <span className={cn('block', readoutClassName)}>
+          {lead}
+          {hasText ? (
+            <CaptionReadout value={readoutValue} />
+          ) : (
+            <span className="text-muted-foreground/50">{placeholder}</span>
+          )}
+        </span>
       </button>
     );
   }

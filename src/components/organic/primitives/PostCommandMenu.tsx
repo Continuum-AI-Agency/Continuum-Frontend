@@ -1,11 +1,12 @@
 'use client';
 
 import {
-  CalendarCheck,
+  Clapperboard,
   Copy,
   Hash,
+  Info,
   MoreHorizontal,
-  Send,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Undo2,
@@ -16,6 +17,7 @@ import * as React from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -24,48 +26,60 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
 import { DuplicateDayPicker } from './DuplicateDayPicker';
 
+/** A menu entry the parent may offer disabled; the reason is shown in the item, as text. */
+export type PostMenuAction = {
+  label: string;
+  onSelect: () => void;
+  disabledReason?: string | null;
+};
+
+const iconClass = 'mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground';
+
+function ActionItem({ action, icon }: { action: PostMenuAction; icon: React.ReactNode }) {
+  const reason = action.disabledReason ?? null;
+  return (
+    <DropdownMenuItem onSelect={action.onSelect} disabled={reason !== null}>
+      {icon}
+      <span className="flex min-w-0 flex-col">
+        <span>{action.label}</span>
+        {reason && <span className="text-2xs leading-snug text-muted-foreground">{reason}</span>}
+      </span>
+    </DropdownMenuItem>
+  );
+}
+
 /**
- * The ⋯ command menu for the previewer: global post actions that don't earn a
- * permanent place on the canvas. Mirrors CalendarDraftCard's "Quick Edit"
- * vocabulary so the card and editor speak one language. Presentational — the
- * parent wires every action.
+ * The review panel's ONE secondary-action menu. Approve and Publish are deliberately absent:
+ * they live in the footer, and a second copy here is what made the old header unreadable.
+ * Presentational — the parent wires and gates every action.
  */
 export function PostCommandMenu({
+  onOpenInStudio,
+  mediaAction,
+  renderAction,
+  onShowDetails,
+  onPlatformOptions,
   onEditCreativeDirection,
   onEditHashtags,
-  onApproveSchedule,
-  canSchedule = false,
-  isScheduled = false,
-  onMoveBackToDraft,
   onDuplicate,
-  onPublish,
-  canPublish = false,
-  publishPlatformLabel = 'the platform',
-  isPublishing = false,
-  publishBlockedReason,
-  onOpenInStudio,
+  onMoveBackToDraft,
   onDelete,
 }: {
+  onOpenInStudio?: PostMenuAction;
+  /** The next media step: generate, sketch a blueprint, or realize one. */
+  mediaAction?: PostMenuAction;
+  /** Stitch a composed reel into its final video. */
+  renderAction?: PostMenuAction;
+  onShowDetails: () => void;
+  onPlatformOptions?: () => void;
   onEditCreativeDirection: () => void;
   onEditHashtags: () => void;
-  onApproveSchedule?: () => void;
-  canSchedule?: boolean;
-  isScheduled?: boolean;
-  onMoveBackToDraft?: () => void;
   /** Clone this post onto another day. Same picker the calendar card uses. */
   onDuplicate?: (dayId: string) => void;
-  onPublish?: () => void;
-  canPublish?: boolean;
-  /** Who the post goes out to, e.g. "TikTok". */
-  publishPlatformLabel?: string;
-  isPublishing?: boolean;
-  /** Non-null when the draft is not ready to publish. Renders the item disabled and says
-      why, instead of offering a click that usePublishDraft will refuse. */
-  publishBlockedReason?: string;
-  onOpenInStudio?: () => void;
+  /** Only offered while the post is scheduled. */
+  onMoveBackToDraft?: () => void;
   onDelete: () => void;
 }) {
   const [isDuplicateOpen, setIsDuplicateOpen] = React.useState(false);
@@ -83,40 +97,56 @@ export function PostCommandMenu({
           </button>
         }
       />
-      <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuLabel>Edit</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={onEditCreativeDirection}>
-          <Sparkles className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-          Creative direction
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onEditHashtags}>
-          <Hash className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-          Hashtags
-        </DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-60">
+        {(onOpenInStudio || mediaAction || renderAction) && (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Create</DropdownMenuLabel>
+              {mediaAction && (
+                <ActionItem action={mediaAction} icon={<Wand2 className={iconClass} />} />
+              )}
+              {renderAction && (
+                <ActionItem action={renderAction} icon={<Clapperboard className={iconClass} />} />
+              )}
+              {onOpenInStudio && (
+                <ActionItem action={onOpenInStudio} icon={<Sparkles className={iconClass} />} />
+              )}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
+
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Edit</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={onEditHashtags}>
+            <Hash className={iconClass} />
+            Hashtags
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onEditCreativeDirection}>
+            <Sparkles className={iconClass} />
+            Creative direction
+          </DropdownMenuItem>
+          {onPlatformOptions && (
+            <DropdownMenuItem onSelect={onPlatformOptions}>
+              <SlidersHorizontal className={iconClass} />
+              Platform options
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={onShowDetails}>
+            <Info className={iconClass} />
+            Details
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
-
-        {onApproveSchedule && (
-          <DropdownMenuItem onSelect={onApproveSchedule} disabled={!canSchedule}>
-            <CalendarCheck className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-            Approve &amp; schedule
-          </DropdownMenuItem>
-        )}
-        {isScheduled && onMoveBackToDraft && (
-          <DropdownMenuItem onSelect={onMoveBackToDraft}>
-            <Undo2 className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-            Move back to draft
-          </DropdownMenuItem>
-        )}
 
         {onDuplicate && (
           <DropdownMenuSub open={isDuplicateOpen} onOpenChange={setIsDuplicateOpen}>
             <DropdownMenuSubTrigger>
-              <Copy className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+              <Copy className={iconClass} />
               Duplicate…
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-auto p-3">
-              {/* The calendar card's picker, reused rather than reimplemented. */}
               <DuplicateDayPicker
                 onSelect={(dayId) => {
                   onDuplicate(dayId);
@@ -127,34 +157,13 @@ export function PostCommandMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-
-        {canPublish && onPublish && (
-          <DropdownMenuItem
-            onSelect={onPublish}
-            disabled={isPublishing || publishBlockedReason !== undefined}
-            title={publishBlockedReason}
-          >
-            <Send className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-            {isPublishing
-              ? 'Publishing…'
-              : publishBlockedReason
-                ? `Publish to ${publishPlatformLabel} — needs setup`
-                : `Publish to ${publishPlatformLabel}`}
+        {onMoveBackToDraft && (
+          <DropdownMenuItem onSelect={onMoveBackToDraft}>
+            <Undo2 className={iconClass} />
+            Move back to draft
           </DropdownMenuItem>
         )}
-        {onOpenInStudio && (
-          <DropdownMenuItem onSelect={onOpenInStudio}>
-            <Wand2 className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-            Open in AI Studio
-          </DropdownMenuItem>
-        )}
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem
-          onSelect={onDelete}
-          className={cn('text-destructive focus:text-destructive')}
-        >
+        <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />
           Delete draft
         </DropdownMenuItem>

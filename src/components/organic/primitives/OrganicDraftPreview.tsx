@@ -4,8 +4,10 @@ import {
   type MediaAsset,
   type PublishFormat,
   type PublishOptionsByPlatform,
+  type PublishPlan,
   publishFormatForAssetKinds,
   resolvePublishFormat,
+  supportsFormat,
 } from '@continuum/contracts';
 import {
   DndContext,
@@ -17,13 +19,12 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
+  Info,
   Library,
   Loader2,
   Maximize2,
-  Pencil,
   PencilRuler,
   Replace,
   Send,
@@ -41,12 +42,12 @@ import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithF
 import { useFanOutDraft } from '@/components/organic/hooks/useFanOutDraft';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
+import { usePublishPlan } from '@/components/organic/hooks/usePublishPlan';
 import {
   type PublishOptionsChange,
   PublishOptionsPanel,
 } from '@/components/organic/publish-options/PublishOptionsPanel';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
@@ -55,6 +56,7 @@ import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform, POST_PLATFORMS, type PostFormatOption } from '@/lib/organic/postPlatforms';
 import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
+import { formatScheduleWithZone } from '@/lib/organic/scheduleLabel';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { resolveDraftHook } from '@/lib/virality/draftHook';
@@ -68,11 +70,16 @@ import { type DraftMediaKind, resolveDraftMedia } from './DraftCardMedia';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import {
   deriveMediaStageLabel,
-  EnrichmentLadder,
   MediaEnrichmentSummary,
   resolveDraftMediaStage,
-  SchedulingRequirementsHint,
 } from './DraftLifecycle';
+import {
+  type ReadinessFixTarget,
+  type ReadinessItem,
+  ReadinessLine,
+  ReviewFooter,
+  ReviewIdentityRow,
+} from './DraftReviewChrome';
 import { draftStatusPresentation } from './draft-card-styles';
 import { EditableCaption, InlinePreviewTextarea } from './EditableCaption';
 import { HyperFramePlayer } from './HyperFramePlayer';
@@ -96,7 +103,17 @@ interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft;
   brandName?: string;
   brandProfileId?: string;
-  onApprove?: (draftId: string) => void;
+  /** Resolves once the post is approved (true) or refused; the button stays busy until then. */
+  onApprove?: (draftId: string) => Promise<boolean> | void;
+  onClose?: () => void;
+  /** The panel's initial focus target: the account heading. */
+  titleRef?: React.Ref<HTMLHeadingElement>;
+  /** The wide panel's collapse chevron sits over the identity row's start. */
+  insetStart?: boolean;
+  brandTimeZone?: string;
+  /** Stitch a composed reel into its final video; the workspace owns the job. */
+  onStitch?: (draftId: string) => void;
+  isStitching?: boolean;
 }
 
 function hasText(value: unknown): value is string {
@@ -149,6 +166,28 @@ type PreviewSlide = {
 // useDraftWithFreshMedia), ordered by slideIndex. Videos are slides too — filtering
 // to `kind === 'image'` here is what left an attached video with zero slides, which
 // the media area reads as "no media" and replaces with the library/upload split.
+// What the platform receives, in the order it receives it. The plan's URL is the signed one
+// the draft holds (fresh, through useDraftWithFreshMedia); a slide not yet signed waits.
+// ponytail: an unsigned slide is skipped for that render, not drawn as a placeholder.
+function slidesFromPlan(plan: PublishPlan, draft: OrganicCalendarDraft): PreviewSlide[] {
+  const poster = plan.cover?.url ?? draft.mediaSuggestion?.reel?.thumbnailUrl ?? null;
+  return plan.media.flatMap((media) =>
+    media.url
+      ? [
+          {
+            storageUrl: media.url,
+            assetId: media.assetId,
+            storagePath: media.storagePath ?? media.url,
+            kind: media.kind,
+            poster: media.kind === 'video' ? poster : null,
+            width: media.width,
+            height: media.height,
+          },
+        ]
+      : [],
+  );
+}
+
 function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
   const reelPoster = draft.mediaSuggestion?.reel?.thumbnailUrl;
   const published = (draft.publishingAssets ?? [])
@@ -398,8 +437,6 @@ function InteractiveCarouselMediaArea({
   onSelectSlide,
   onStepSlide,
   placement,
-  onAddSlideRequest,
-  onReplaceSlideRequest,
   onGenerate,
   canGenerate,
   isGenerating,
@@ -420,8 +457,6 @@ function InteractiveCarouselMediaArea({
   onFilesChosen?: (files: File[]) => void;
   isUploading?: boolean;
   placement?: ReturnType<typeof useDraftMediaPlacement>;
-  onAddSlideRequest?: () => void;
-  onReplaceSlideRequest?: (position: number) => void;
   onGenerate: () => void;
   canGenerate: boolean;
   isGenerating: boolean;
@@ -431,7 +466,6 @@ function InteractiveCarouselMediaArea({
   onEnlargeFrame: (index: number) => void;
 }) {
   const total = slides.length;
-  const isCarousel = draft.format.toLowerCase() === 'carousel';
   const showCta = shouldShowUseOwnCta(draft);
   // A draft with a persisted blueprint but no final media shows its storyboard in
   // the otherwise-empty slot. This holds through realizing too, so the "Generate
@@ -496,57 +530,48 @@ function InteractiveCarouselMediaArea({
   }
 
   return (
-    <div>
-      <PreviewMediaDropZone
-        isActive={false}
-        state={dropState}
-        fallbackActions={fallbackActions}
-        slotId={slotId}
-        onNativeDrop={onNativeDrop}
-        onActivate={onActivate}
-        onSelectLibrary={onSelectLibrary}
-        onFilesChosen={onFilesChosen}
-        aspectRatio={aspectRatio}
-        className="w-full"
-        error={placement?.error}
-      >
-        <CarouselSlideNav
-          slides={slides}
-          activeIndex={activeIndex}
+    <PreviewMediaDropZone
+      isActive={false}
+      state={dropState}
+      fallbackActions={fallbackActions}
+      slotId={slotId}
+      onNativeDrop={onNativeDrop}
+      onActivate={onActivate}
+      onSelectLibrary={onSelectLibrary}
+      onFilesChosen={onFilesChosen}
+      aspectRatio={aspectRatio}
+      className="w-full"
+      error={placement?.error}
+    >
+      <CarouselSlideNav
+        slides={slides}
+        activeIndex={activeIndex}
+        alt={alt}
+        onSelectSlide={onSelectSlide}
+        onStepSlide={onStepSlide}
+        onEnlargeSlide={onEnlargeSlide}
+        overlayChrome={overlayChrome}
+      />
+
+      {/* Overlaid, not stacked: the slot keeps the frame's aspect while it says what is missing. */}
+      {dropState === 'fallback' && (
+        <span className="pointer-events-none absolute left-2 top-2 z-20 rounded bg-background/90 px-1.5 py-0.5 text-sm font-medium text-muted-foreground">
+          Needs media
+        </span>
+      )}
+
+      {showStoryboard && (
+        <BlueprintStoryboard
+          frames={storyboardFrames}
           alt={alt}
-          onSelectSlide={onSelectSlide}
-          onStepSlide={onStepSlide}
-          onEnlargeSlide={onEnlargeSlide}
-          overlayChrome={overlayChrome}
-        />
-
-        {showStoryboard && (
-          <BlueprintStoryboard
-            frames={storyboardFrames}
-            alt={alt}
-            canGenerate={canGenerate}
-            isGenerating={isGenerating}
-            onGenerate={onGenerate}
-            onUseOwn={onActivate}
-            onEnlargeFrame={onEnlargeFrame}
-          />
-        )}
-      </PreviewMediaDropZone>
-
-      {/* Carousel slide strip — editing surface (not the preview dots) */}
-      {isCarousel && slides.length > 0 && placement && (
-        <CarouselSlideStrip
-          slides={slides}
-          activeIndex={activeIndex}
-          onSelectSlide={onSelectSlide}
-          placement={placement}
-          onAddRequest={onAddSlideRequest ?? onActivate}
-          onReplaceRequest={onReplaceSlideRequest}
-          onEnlarge={onEnlargeSlide}
-          className="border-b border-border/60 px-2"
+          canGenerate={canGenerate}
+          isGenerating={isGenerating}
+          onGenerate={onGenerate}
+          onUseOwn={onActivate}
+          onEnlargeFrame={onEnlargeFrame}
         />
       )}
-    </div>
+    </PreviewMediaDropZone>
   );
 }
 
@@ -777,6 +802,12 @@ export function OrganicDraftPreview({
   brandName,
   brandProfileId,
   onApprove,
+  onClose,
+  titleRef,
+  insetStart,
+  brandTimeZone,
+  onStitch,
+  isStitching = false,
 }: OrganicDraftPreviewProps) {
   // Typed text reaches the store once per burst; until then only the editor's copy has it, so
   // everything this panel shows, gates and publishes reads that copy.
@@ -789,6 +820,8 @@ export function OrganicDraftPreview({
     (state) => state.days.find((day) => day.slots.some((slot) => slot.id === draft.id))?.id ?? null,
   );
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
+  const planAccountIds = useCalendarStore((state) => state.accountContext.accountIds);
   const editingDraftId = useCalendarStore((state) => state.editingDraftId);
   const setEditingDraftId = useCalendarStore((state) => state.setEditingDraftId);
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
@@ -819,11 +852,25 @@ export function OrganicDraftPreview({
   // Media placement hook — the single write path for user-supplied creatives.
   const placement = useDraftMediaPlacement(draft.id);
 
+  // The plan: exactly what the platform in view receives. The frame, the caption, the notices
+  // and the readiness line all read it, through the resolver the publisher runs.
+  const { plan, verdict, accountsLoaded } = usePublishPlan(
+    draftForPreview,
+    isPostPlatform(framePlatform) ? framePlatform : null,
+  );
+  // A rendered hyperframe is an ordinary video once its MP4 exists; until then only its
+  // composition can be shown.
+  const showHyperframePlayer = isHyperframeFormat && (plan?.media.length ?? 0) === 0;
+
   // The slides of record, resolved once: the media areas, the strip, the clamp and
-  // the lightbox all index into this same array.
+  // the lightbox all index into this same array. The plan's media when it sends any; else
+  // whatever is attached, so media the plan cannot send is still visible beside its notice.
   const previewSlides = React.useMemo(
-    () => resolveCarouselSlides(draftForPreview),
-    [draftForPreview],
+    () =>
+      plan && plan.media.length > 0
+        ? slidesFromPlan(plan, draftForPreview)
+        : resolveCarouselSlides(draftForPreview),
+    [plan, draftForPreview],
   );
   const lastSlidePosition = Math.max(previewSlides.length - 1, 0);
 
@@ -841,7 +888,6 @@ export function OrganicDraftPreview({
     ? 'CAROUSEL'
     : resolvePublishFormat(draft.format);
   // The post itself, or what each platform does with it beyond the caption.
-  const [panelTab, setPanelTab] = React.useState<'post' | 'publish'>('post');
 
   // Active carousel slide POSITION (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
@@ -913,48 +959,34 @@ export function OrganicDraftPreview({
   // replaceSlide instead of addSlide. A ref (not state) so the captured position
   // survives the picker round-trip without re-rendering the strip mid-flow.
   const replaceTargetRef = React.useRef<number | null>(null);
+  // "+" on a one-image post: the next pick is a second slide, not a replacement.
+  const addSlideRef = React.useRef(false);
+  // The library picker is anchored on the live media area, which only mounts while the
+  // draft is editable. Controls reachable from a read-only view (the lightbox, #402) are
+  // offered only when that anchor exists, so a pick never flips state on nothing.
+  const openMediaPicker = React.useCallback((replacePosition: number | null = null) => {
+    replaceTargetRef.current = replacePosition;
+    setMediaSelectOpen(true);
+  }, []);
   const [creativeOpen, setCreativeOpen] = React.useState(false);
   const [hashtagsOpen, setHashtagsOpen] = React.useState(false);
   const [productionDetailsOpen, setProductionDetailsOpen] = React.useState(false);
-  // View↔edit mode. Default: a locked, read-only "final look" preview. The pencil
-  // toggle mounts the editable affordances (caption textarea, hashtag/creative
-  // editors, media dropzone). Every save/change handler below stays wired — it is
-  // simply unreachable until the user opts into editing.
-  // Edit mode lives in the store, not here: the hover card's Edit button and the
-  // "Open in editor" context items sit in a different component tree entirely and
-  // have to be able to drive it.
-  const isEditing = editingDraftId === draft.id;
-  const setIsEditing = React.useCallback(
-    (next: boolean) => {
-      setEditingDraftId(next ? draft.id : null);
-    },
-    [draft.id, setEditingDraftId],
-  );
-  const toggleEditing = React.useCallback(() => {
-    const next = !isEditing;
-    // Leaving edit mode collapses the on-demand editor panels so the read-only
-    // frame reads as a clean final look.
-    if (!next) {
-      setCreativeOpen(false);
-      setHashtagsOpen(false);
-      setMediaSelectOpen(false);
-      replaceTargetRef.current = null;
-    }
-    setIsEditing(next);
-  }, [isEditing, setIsEditing]);
-  // The library picker is anchored on the editable media area, which only mounts in
-  // edit mode on the Post tab. Every "pick media" control routes through here so one
-  // reachable from the read-only preview (the lightbox Replace, #402) or the Publish
-  // tab opens a picker that exists instead of flipping state on nothing.
-  const openMediaPicker = React.useCallback(
-    (replacePosition: number | null = null) => {
-      replaceTargetRef.current = replacePosition;
-      setPanelTab('post');
-      setIsEditing(true);
-      setMediaSelectOpen(true);
-    },
-    [setIsEditing],
-  );
+  const [optionsOpen, setOptionsOpen] = React.useState(false);
+  const [captionEditing, setCaptionEditing] = React.useState(false);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  // There is no edit mode: the frame edits in place. A hover card's Edit or an "Open in
+  // editor" item (another component tree) still asks through the store; for this panel that
+  // means opening the caption, which is what those entry points were for.
+  // Declared first: effects run in order, so a mount that carries an intent resets, then opens.
+  React.useEffect(() => {
+    setCaptionEditing(false);
+    setOptionsOpen(false);
+  }, [draft.id]);
+  React.useEffect(() => {
+    if (editingDraftId !== draft.id) return;
+    setCaptionEditing(true);
+    setEditingDraftId(null);
+  }, [draft.id, editingDraftId, setEditingDraftId]);
   // Enlarge-and-act lightbox target: a blueprint concept frame or a realized slide.
   const [lightbox, setLightbox] = React.useState<{
     kind: 'blueprint' | 'slide';
@@ -993,6 +1025,34 @@ export function OrganicDraftPreview({
       updateDraft(draft.id, (current) => ({ ...current, ...patch }));
     },
     [draft.id, updateDraft],
+  );
+
+  // The row publishes on its own platform. Adding platforms is a local choice until approve
+  // fans the post out, one row per platform, and the row's own platform stays first (the chip
+  // hands back menu order). Only dropping the row's platform moves the row — through the
+  // field-edit route, with the new platform's account, never the old one's.
+  const handlePlatformsChange = React.useCallback(
+    (next: string[]) => {
+      const selected = next.filter((value) => isOrganicPlatformKey(value));
+      const current = draft.platforms[0];
+      if (current && selected.includes(current)) {
+        patchDraftLocally({ platforms: [current, ...selected.filter((p) => p !== current)] });
+        return;
+      }
+      const platforms = selected;
+      const primary = platforms[0];
+      if (!primary) return;
+      if (!isPostPlatform(primary) || !draft.backendDraftId) {
+        patchDraftLocally({ platforms });
+        return;
+      }
+      const accountId = planAccountIds[primary] ?? null;
+      void fieldEditor.editField({ platform: primary, accountId }, ['platforms'], {
+        platforms,
+        targetAccountId: accountId ?? undefined,
+      });
+    },
+    [draft.backendDraftId, draft.platforms, fieldEditor, patchDraftLocally, planAccountIds],
   );
 
   const handleFormatChange = React.useCallback(
@@ -1066,11 +1126,6 @@ export function OrganicDraftPreview({
     [draft.id, fieldEditor, publishOptions],
   );
 
-  const isApproveDisabled = draft.status === 'scheduled' || draft.status === 'streaming';
-
-  // Bare-minimum gate for scheduling/publishing: caption + at least one media asset.
-  const readiness = React.useMemo(() => evaluateDraftReadiness(draft), [draft]);
-
   // Coalesced, not per-keystroke: a caption is typed, not picked.
   const handleCaptionChange = React.useCallback(
     (value: string) => {
@@ -1086,27 +1141,53 @@ export function OrganicDraftPreview({
   // (rather than at selection) is what keeps the copy/media shared while it is editable.
   const { fanOutAndApprove, isFanningOut } = useFanOutDraft();
   const isMultiPlatform = selectedPlatforms.length > 1;
-  // Typing is saved in bursts; approving or publishing before the burst lands would bump
-  // updated_at under it, so the queued caption 409s and the post ships with the old one.
+  const isPublished = draft.status === 'published';
+  const isScheduled = draft.status === 'scheduled';
+  const isStreaming = draft.status === 'streaming';
+  const editable = !isPublished && !isStreaming;
+
+  // What blocks the post: the shared gate over the plan in view (with its account, once the
+  // dry run has answered), plus every other selected platform's gate — approve fans out into
+  // one row per platform and each row meets its own.
+  const readiness = React.useMemo(() => evaluateDraftReadiness(draft), [draft]);
+  const readinessItems = React.useMemo<ReadinessItem[]>(() => {
+    const seen = new Set<string>();
+    return [...(verdict?.blockers ?? []), ...readiness.blockers].flatMap((issue) => {
+      const key = `${issue.reason}:${issue.fix}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{ key, message: issue.message, fix: issue.fix }];
+    });
+  }, [verdict, readiness]);
+
+  // Saves land before approve and publish read the row: a media pick or a burst of typing
+  // still in flight would otherwise be overwritten by, or 409 against, the approval.
+  const flushPendingEdits = React.useCallback(async (): Promise<boolean> => {
+    const mediaSaved = await placement.flushMedia();
+    const fieldsSaved = await fieldEditor.flush();
+    return mediaSaved && fieldsSaved;
+  }, [placement, fieldEditor]);
+
+  const [isApproving, setIsApproving] = React.useState(false);
+  const approvingRef = React.useRef(false);
   const handleApprove = React.useCallback(async () => {
-    if (!onApprove) return;
-    await fieldEditor.flush();
-    if (isMultiPlatform) {
-      void fanOutAndApprove(draft);
-      return;
+    if (!onApprove || approvingRef.current) return;
+    approvingRef.current = true;
+    setIsApproving(true);
+    try {
+      if (!(await flushPendingEdits())) return;
+      if (isMultiPlatform) {
+        await fanOutAndApprove(draft);
+        return;
+      }
+      await onApprove(draft.id);
+    } finally {
+      approvingRef.current = false;
+      setIsApproving(false);
     }
-    onApprove(draft.id);
-  }, [draft, fanOutAndApprove, fieldEditor.flush, isMultiPlatform, onApprove]);
-  const approveLabel = isFanningOut
-    ? 'Approving…'
-    : draft.status === 'scheduled'
-      ? 'Approved for posting'
-      : isMultiPlatform
-        ? `Approve for ${selectedPlatforms.length} platforms`
-        : 'Approve & Schedule';
+  }, [draft, fanOutAndApprove, flushPendingEdits, isMultiPlatform, onApprove]);
+
   // Gate on "is there a publisher for this draft's platform", not on Instagram specifically.
-  // The literal check hid the Publish button — and the whole footer — on every Facebook and
-  // LinkedIn draft, leaving the card's right-click menu as the only way to publish them.
   const publishPlatform = inferPublishPlatform(draft);
   // Only platforms whose post id alone forms a public URL declare `permalink`; the rest get
   // no link rather than a broken one.
@@ -1115,9 +1196,7 @@ export function OrganicDraftPreview({
     publishPlatform && publishedPostId
       ? POST_PLATFORMS[publishPlatform].permalink?.(publishedPostId)
       : undefined;
-  const isPublished = draft.status === 'published';
-  const canPublish = publishPlatform != null && !isPublished && draft.status !== 'streaming';
-  const showFooter = onApprove != null || canPublish || isPublished;
+  const canPublish = publishPlatform != null && editable;
 
   // Single unified attach path: every selection from the media Popover goes
   // through useDraftMediaPlacement (gains undo + always emits publishable shapes).
@@ -1125,7 +1204,9 @@ export function OrganicDraftPreview({
   const handleAttachAssets = React.useCallback(
     (assets: MediaAsset[]) => {
       if (assets.length === 0) return;
-      if (isCarouselFormat) {
+      const growing = addSlideRef.current;
+      addSlideRef.current = false;
+      if (isCarouselFormat || growing) {
         // Replace mode: a slide's replace control set a target position — swap that
         // one slide and consume the target (extra picks are ignored for replace).
         const replaceTarget = replaceTargetRef.current;
@@ -1211,7 +1292,6 @@ export function OrganicDraftPreview({
   // Enrich is the text-stage sibling of Generate: once a storyboard exists the
   // BlueprintStoryboard + realize flow is the approval surface instead.
   const canEnrich = canGenerate && resolveDraftMediaStage(draft) === 'text_only';
-  const canMarkScheduled = readiness.ready && !isApproveDisabled;
 
   // The Media rung delegates to the existing Stage-3 paths: headless realize when the
   // draft can generate, the library picker otherwise (manual drafts never headless-gen).
@@ -1227,7 +1307,15 @@ export function OrganicDraftPreview({
 
   // The media zone, pre-wired with its contextual MediaSelectPopover. Clicking
   // the empty/CTA area (or a carousel "+") opens the library Popover anchored here.
-  const interactiveMediaNode =
+  // A one-image post grows into a carousel from the same strip a carousel adds slides with.
+  const canGrowIntoCarousel =
+    isCarouselFormat ||
+    (previewSlides.length === 1 &&
+      previewSlides[0]?.kind === 'image' &&
+      previewFrame.kind === 'feed' &&
+      isPostPlatform(framePlatform) &&
+      supportsFormat(framePlatform, 'CAROUSEL'));
+  const mediaPicker = (anchor: React.ReactNode) =>
     !isHyperframeFormat && brandProfileId ? (
       <MediaSelectPopover
         format={publishFormat}
@@ -1236,52 +1324,53 @@ export function OrganicDraftPreview({
         onOpenChange={(open) => {
           // Drop a pending replace target if the picker closes without a pick, so a
           // cancelled replace can't hijack the next add.
-          if (!open) replaceTargetRef.current = null;
+          if (!open) {
+            replaceTargetRef.current = null;
+            addSlideRef.current = false;
+          }
           setMediaSelectOpen(open);
         }}
         onAttachAssets={handleAttachAssets}
+        // Generate lives in the media zone below and in the ⋯ menu; a third copy in the
+        // picker was one of the six ways to reach it.
         onGenerate={handleGenerateMedia}
-        canGenerate={canGenerate}
+        canGenerate={false}
         isGenerating={isGenerating}
-        onEnrich={handleEnrichMedia}
-        canEnrich={canEnrich}
-        isEnriching={isExpanding}
-        anchor={
-          <InteractiveCarouselMediaArea
-            draft={draftForPreview}
-            slides={previewSlides}
-            alt={resolveDraftMediaAltText(draftForPreview)}
-            aspectRatio={mediaAspectRatio}
-            slotId={`preview-media-${draft.id}`}
-            onActivate={() => openMediaPicker()}
-            onSelectLibrary={() => openMediaPicker()}
-            onFilesChosen={handleUploadFiles}
-            isUploading={isUploading}
-            activeIndex={activeSlidePosition}
-            onSelectSlide={selectSlide}
-            onStepSlide={stepSlide}
-            placement={placement}
-            onAddSlideRequest={() => openMediaPicker()}
-            onReplaceSlideRequest={(position) => openMediaPicker(position)}
-            onGenerate={handleGenerateMedia}
-            canGenerate={canGenerate}
-            isGenerating={isGenerating}
-            onEnrich={handleEnrichMedia}
-            canEnrich={canEnrich}
-            isEnriching={isExpanding}
-            onEnlargeFrame={(index) => setLightbox({ kind: 'blueprint', index })}
-            onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
-            overlayChrome={overlayChrome}
-          />
-        }
+        anchor={anchor}
       />
     ) : null;
+  const interactiveMediaNode = mediaPicker(
+    <InteractiveCarouselMediaArea
+      draft={draftForPreview}
+      slides={previewSlides}
+      alt={resolveDraftMediaAltText(draftForPreview)}
+      aspectRatio={mediaAspectRatio}
+      slotId={`preview-media-${draft.id}`}
+      onActivate={() => setMediaSelectOpen(true)}
+      onSelectLibrary={() => setMediaSelectOpen(true)}
+      onFilesChosen={handleUploadFiles}
+      isUploading={isUploading}
+      activeIndex={activeSlidePosition}
+      onSelectSlide={selectSlide}
+      onStepSlide={stepSlide}
+      placement={placement}
+      onGenerate={handleGenerateMedia}
+      canGenerate={canGenerate}
+      isGenerating={isGenerating}
+      onEnrich={handleEnrichMedia}
+      canEnrich={canEnrich}
+      isEnriching={isExpanding}
+      onEnlargeFrame={(index) => setLightbox({ kind: 'blueprint', index })}
+      onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
+      overlayChrome={overlayChrome}
+    />,
+  );
 
   // Read-only "final look" media: the resolved creative with view-only navigation,
   // no dropzone or generate/replace controls. Shown unless the pencil is active; a
   // draft with no slides has no media node, and the frame shows its own placeholder.
   const readOnlyMediaNode =
-    !isHyperframeFormat && previewSlides.length > 0 ? (
+    !showHyperframePlayer && previewSlides.length > 0 ? (
       <ReadOnlyCarouselMediaArea
         slides={previewSlides}
         alt={resolveDraftMediaAltText(draftForPreview)}
@@ -1298,7 +1387,49 @@ export function OrganicDraftPreview({
       />
     ) : null;
 
-  const mediaNode = isEditing ? interactiveMediaNode : readOnlyMediaNode;
+  // A Facebook or LinkedIn post with no media goes out as text: its frame draws no media box,
+  // and media is added from a link under it instead.
+  const isTextPost = canPostWithoutMedia && previewSlides.length === 0 && !showHyperframePlayer;
+  // The picker works without an edit mode: an unpublished draft's media is always live.
+  const mediaNode = isTextPost
+    ? null
+    : editable
+      ? (interactiveMediaNode ?? readOnlyMediaNode)
+      : readOnlyMediaNode;
+  // The slide strip with its "+" sits under the frame, outside it: it edits the post and is
+  // not part of it, so it must not change the frame's aspect.
+  const slideStrip =
+    editable && interactiveMediaNode && canGrowIntoCarousel && previewSlides.length > 0 ? (
+      <CarouselSlideStrip
+        slides={previewSlides}
+        activeIndex={activeSlidePosition}
+        onSelectSlide={selectSlide}
+        placement={placement}
+        onAddRequest={() => {
+          replaceTargetRef.current = null;
+          addSlideRef.current = true;
+          setMediaSelectOpen(true);
+        }}
+        onReplaceRequest={(position) => {
+          replaceTargetRef.current = position;
+          setMediaSelectOpen(true);
+        }}
+        onEnlarge={(index) => setLightbox({ kind: 'slide', index })}
+        className="shrink-0 px-2"
+      />
+    ) : null;
+  const addMediaToTextPost =
+    isTextPost && editable
+      ? mediaPicker(
+          <button
+            type="button"
+            onClick={() => setMediaSelectOpen(true)}
+            className="self-start rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            Add photo or video
+          </button>,
+        )
+      : null;
 
   // Enlarge-and-act lightbox contents, derived from the current target so the
   // dialog stays a dumb, reusable shell. Blueprint frames offer generate / use-
@@ -1339,25 +1470,8 @@ export function OrganicDraftPreview({
           if (lightbox.kind === 'slide') selectSlide(index);
         }}
         actions={
-          lightbox.kind === 'blueprint' ? (
+          !editable || !interactiveMediaNode ? null : lightbox.kind === 'blueprint' ? (
             <>
-              <button
-                type="button"
-                disabled={!canGenerate || isGenerating}
-                onClick={() => {
-                  setLightbox(null);
-                  handleGenerateMedia();
-                }}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors',
-                  !canGenerate || isGenerating
-                    ? 'cursor-not-allowed bg-muted text-muted-foreground'
-                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
-                )}
-              >
-                <Wand2 className="h-4 w-4" />
-                Generate final media
-              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1430,105 +1544,313 @@ export function OrganicDraftPreview({
       </fieldset>
     ) : null;
 
-  const panelTabs = (
-    <div
-      role="tablist"
-      aria-label="Preview or publish options"
-      className="flex items-center gap-0.5 self-start rounded-md border border-border/60 bg-background p-0.5"
-    >
-      {(['post', 'publish'] as const).map((tab) => (
-        <button
-          key={tab}
-          type="button"
-          role="tab"
-          aria-selected={panelTab === tab}
-          onClick={() => setPanelTab(tab)}
-          className={cn(
-            'h-6 rounded px-2.5 text-xs font-medium transition-colors duration-150',
-            panelTab === tab
-              ? 'bg-muted/70 text-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {tab === 'post' ? 'Preview' : 'Publish'}
-        </button>
-      ))}
-    </div>
+  // ── Who, what, when ────────────────────────────────────────────────────────────
+  const whenLabel = formatScheduleWithZone(dayId, draft.timeLabel, brandTimeZone);
+  const formatLabel =
+    plan?.verb === 'text'
+      ? 'Text post'
+      : frameFormatLabel(
+          toPublishFormat(plan?.format ?? draft.format),
+          framePlatform,
+          previewFrame.kind,
+        );
+  const rawHandle = plan?.account.handle ?? plan?.account.displayName ?? null;
+  // A username reads with its @; a Page or a company name does not.
+  const shownHandle =
+    rawHandle && (framePlatform === 'instagram' || framePlatform === 'tiktok')
+      ? rawHandle.startsWith('@')
+        ? rawHandle
+        : `@${rawHandle}`
+      : rawHandle;
+  // Until the dry run answers, the account is not known to be missing: name the brand.
+  const identityHandle = accountsLoaded ? shownHandle : (shownHandle ?? brandName ?? null);
+  const frameAccountName = rawHandle?.replace(/^@/, '') ?? brandName;
+  // The confirm names the account by the handle shown here, when it is the one addressed.
+  const handlePublishNow = React.useCallback(async () => {
+    if (!(await flushPendingEdits())) return;
+    publish(draft, { id: plan?.account.id ?? null, label: shownHandle });
+  }, [draft, flushPendingEdits, plan, publish, shownHandle]);
+  const sentCaption = plan ? plan.caption.text : undefined;
+
+  const handleFix = React.useCallback(
+    (target: ReadinessFixTarget) => {
+      const panel = panelRef.current;
+      switch (target) {
+        case 'caption':
+          setCaptionEditing(true);
+          return;
+        case 'media':
+          panel?.querySelector('[data-frame-media]')?.scrollIntoView({ block: 'nearest' });
+          if (brandProfileId && !isHyperframeFormat) setMediaSelectOpen(true);
+          return;
+        case 'format':
+          panel?.querySelector<HTMLButtonElement>('[aria-label="Change format"]')?.click();
+          return;
+        case 'account':
+          // ponytail: both "connect one" and "choose between several" open the brand's
+          // integrations, where accounts are assigned; an in-panel account picker is the
+          // upgrade if choosing per post becomes common.
+          window.open('/settings?section=integrations', '_blank', 'noopener,noreferrer');
+          return;
+        case 'options':
+        case 'cover':
+          setOptionsOpen(true);
+          return;
+      }
+    },
+    [brandProfileId, isHyperframeFormat],
   );
 
-  const publishTab = (
-    <div className="flex flex-col gap-3">
-      {platformSwitch('Options for')}
-      {isPostPlatform(framePlatform) ? (
-        <PublishOptionsPanel
-          draft={draftForPreview}
-          publishOptions={publishOptions}
-          platform={framePlatform}
-          format={publishFormat}
-          brandId={brandProfileId}
-          disabled={isPublished || draft.status === 'streaming'}
-          onChange={handlePublishOptionsChange}
-        />
-      ) : (
-        <p className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-          Publishing to {framePlatform} is not supported yet, so it has no publish options.
+  const reelComposition = draft.mediaSuggestion?.reel;
+  const menu = (
+    <PostCommandMenu
+      onOpenInStudio={
+        openInStudio
+          ? {
+              label: reelComposition?.composition ? 'Edit in AI Studio' : 'Open in AI Studio',
+              onSelect: () => openInStudio(draft.id),
+              disabledReason: aiStudioHandoffIssue(draft),
+            }
+          : undefined
+      }
+      mediaAction={
+        editable && ladder.actionLabel
+          ? {
+              label: ladder.actionLabel,
+              onSelect: ladder.run,
+              disabledReason: ladder.isBusy ? 'Working on it…' : ladder.disabledReason,
+            }
+          : undefined
+      }
+      renderAction={
+        onStitch && reelComposition?.composition && reelComposition.generated !== true
+          ? {
+              label: isStitching ? 'Rendering video…' : 'Render video',
+              onSelect: () => onStitch(draft.id),
+              disabledReason: isStitching ? 'Already rendering.' : null,
+            }
+          : undefined
+      }
+      onShowDetails={() => setProductionDetailsOpen(true)}
+      onPlatformOptions={isPostPlatform(framePlatform) ? () => setOptionsOpen(true) : undefined}
+      onEditCreativeDirection={() => setCreativeOpen(true)}
+      onEditHashtags={() => setHashtagsOpen(true)}
+      onDuplicate={(targetDayId) => duplicateDraft(draft.id, targetDayId)}
+      onMoveBackToDraft={
+        isScheduled
+          ? () => {
+              void unschedule(draft);
+            }
+          : undefined
+      }
+      onDelete={handleDelete}
+    />
+  );
+
+  // ── Footer: when, go, and why not ─────────────────────────────────────────────
+  const blocked = readinessItems.length > 0;
+  const approveVerb = isMultiPlatform
+    ? `Approve for ${selectedPlatforms.length} platforms`
+    : 'Approve & schedule';
+  const primaryAction =
+    onApprove && editable && !isScheduled
+      ? {
+          label: whenLabel ? `${approveVerb} · ${whenLabel}` : approveVerb,
+          busyLabel: 'Approving…',
+          busy: isApproving || isFanningOut,
+          disabledReason: isUploading
+            ? 'Uploading your media…'
+            : blocked
+              ? `${readinessItems.length} to fix`
+              : null,
+          onClick: () => void handleApprove(),
+        }
+      : null;
+  const publishNowAction =
+    canPublish && !blocked && !isUploading
+      ? {
+          label: 'Publish now',
+          busyLabel:
+            stage === 'container_created'
+              ? 'Uploading media…'
+              : stage === 'polling'
+                ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
+                : 'Publishing…',
+          busy: isPublishing,
+          disabledReason: null,
+          onClick: () => void handlePublishNow(),
+          icon: <Send aria-hidden />,
+        }
+      : null;
+  const footerNote =
+    !editable || isScheduled ? null : isUploading ? (
+      <p data-footer-reason className="text-xs text-muted-foreground">
+        Uploading your media…
+      </p>
+    ) : (
+      <ReadinessLine items={readinessItems} readyLabel="Ready to schedule" onFix={handleFix} />
+    );
+  const footerStatus = isPublished ? (
+    <p data-review-status="published" className="flex items-center gap-2 text-sm">
+      <span className="font-medium text-emerald-700 dark:text-emerald-400">Published</span>
+      {permalink && publishPlatform && (
+        <a
+          href={permalink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline underline-offset-2"
+        >
+          View on {publishPlatformLabel(publishPlatform)}
+        </a>
+      )}
+    </p>
+  ) : isScheduled ? (
+    <p data-review-status="scheduled" className="text-sm font-medium">
+      Scheduled{whenLabel ? ` · ${whenLabel}` : ''}
+    </p>
+  ) : null;
+  const footerAlert = (
+    <>
+      {tokenExpired && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+          {publishPlatformLabel(publishPlatform)} access token expired.{' '}
+          <a href="/settings?section=integrations" className="underline underline-offset-2">
+            Reconnect your account
+          </a>
+        </div>
+      )}
+      {placement.error && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+        >
+          {placement.error.message}
+          <button
+            type="button"
+            onClick={placement.clearError}
+            className="ml-2 underline underline-offset-2"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+    </>
+  );
+  const scheduleChips = editable ? (
+    <PostMetaChips
+      className="border-0 bg-transparent p-0"
+      platforms={selectedPlatforms}
+      format={toPublishFormat(draft.format)}
+      formatLabel={formatLabel}
+      timeLabel={draft.timeLabel}
+      onPlatformsChange={handlePlatformsChange}
+      onFormatChange={handleFormatChange}
+      onTimeChange={handleTimeChange}
+    />
+  ) : null;
+
+  // ── Below the frame: every way what goes out differs from what was typed ──────
+  // Mounted whenever there is a plan, empty or not: a live region that arrives with its first
+  // notice is not announced. Out of the layout while empty.
+  const planNotices = plan ? (
+    <div
+      data-plan-notices=""
+      aria-live="polite"
+      className={cn(
+        'flex shrink-0 flex-col gap-1',
+        plan.notices.length === 0 && !plan.cover && 'sr-only',
+      )}
+    >
+      {plan.cover && (
+        <p
+          data-plan-cover={plan.cover.storagePath ?? plan.cover.url ?? ''}
+          className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/90 px-3 py-1.5 text-xs text-muted-foreground"
+        >
+          {plan.cover.url && (
+            <img src={plan.cover.url} alt="" className="size-6 shrink-0 rounded object-cover" />
+          )}
+          Cover sent with the video
         </p>
       )}
+      {plan.notices.map((notice) => (
+        <p
+          key={`${notice.code}:${notice.message}`}
+          data-plan-notice={notice.code}
+          className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/90 px-3 py-1.5 text-xs text-muted-foreground"
+        >
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {notice.message}
+        </p>
+      ))}
     </div>
-  );
+  ) : null;
 
-  const editToggle = (
-    <button
-      type="button"
-      onClick={toggleEditing}
-      aria-pressed={isEditing}
-      aria-label={isEditing ? 'Done editing post' : 'Edit post'}
-      title={isEditing ? 'Done editing' : 'Edit post'}
-      className={cn(
-        'flex items-center gap-1 rounded-md border px-2 py-1 text-2xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        isEditing
-          ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15'
-          : 'border-border/60 bg-background/90 text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-      {isEditing ? 'Done' : 'Edit'}
-    </button>
-  );
-
-  const headerActions = (
-    <div className="flex items-center gap-1">
-      {editToggle}
-      <PostCommandMenu
-        onEditCreativeDirection={() => {
-          setIsEditing(true);
-          setCreativeOpen(true);
-        }}
-        onEditHashtags={() => {
-          setIsEditing(true);
-          setHashtagsOpen(true);
-        }}
-        onApproveSchedule={onApprove ? handleApprove : undefined}
-        canSchedule={canMarkScheduled}
-        isScheduled={draft.status === 'scheduled'}
-        onMoveBackToDraft={() => {
-          void unschedule(draft);
-        }}
-        onPublish={canPublish ? () => publish(draft) : undefined}
-        canPublish={canPublish}
-        publishPlatformLabel={publishPlatformLabel(publishPlatform)}
-        isPublishing={isPublishing}
-        onOpenInStudio={
-          openInStudio && !aiStudioHandoffIssue(draft) ? () => openInStudio(draft.id) : undefined
-        }
-        onDelete={handleDelete}
-      />
-    </div>
-  );
-
-  const slotScrolls = isEditing || creativeOpen || hashtagsOpen || isHyperframeFormat;
+  const slotScrolls =
+    captionEditing ||
+    creativeOpen ||
+    hashtagsOpen ||
+    optionsOpen ||
+    productionDetailsOpen ||
+    showHyperframePlayer;
   const slotContent = (
     <>
+      {productionDetailsOpen && (
+        <ContextualPanel title="Details" onClose={() => setProductionDetailsOpen(false)}>
+          <div className="flex flex-col gap-2">
+            <LifecyclePill status={draft.status} />
+            <p className="text-xs text-muted-foreground">
+              {draftStatusPresentation(draft.status).label} ·{' '}
+              {deriveMediaStageLabel(resolveDraftMediaStage(draft))}
+            </p>
+            <MediaEnrichmentSummary
+              draft={draft}
+              onReuseLibrary={() => setMediaSelectOpen(true)}
+              onRealize={handleGenerateMedia}
+              canRealize={false}
+            />
+            {draftHook && brandProfileId ? (
+              <div className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2">
+                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Hook
+                </span>
+                <p className="min-w-0 flex-1 truncate text-sm" title={draftHook}>
+                  {draftHook}
+                </p>
+                <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
+              </div>
+            ) : null}
+            {inspirationSourceUrl && (
+              <a
+                href={inspirationSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Inspiration source · View original post
+              </a>
+            )}
+          </div>
+        </ContextualPanel>
+      )}
+
+      {optionsOpen && isPostPlatform(framePlatform) && (
+        <ContextualPanel title="Platform options" onClose={() => setOptionsOpen(false)}>
+          <div className="flex flex-col gap-3">
+            {platformSwitch('Options for')}
+            <PublishOptionsPanel
+              draft={draftForPreview}
+              publishOptions={publishOptions}
+              platform={framePlatform}
+              format={publishFormat}
+              brandId={brandProfileId}
+              disabled={!editable}
+              onChange={handlePublishOptionsChange}
+            />
+          </div>
+        </ContextualPanel>
+      )}
+
       {creativeOpen && (
         <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
           <InlinePreviewTextarea
@@ -1549,7 +1871,7 @@ export function OrganicDraftPreview({
         </ContextualPanel>
       )}
 
-      {isHyperframeFormat ? (
+      {showHyperframePlayer ? (
         <div className="flex flex-col gap-3">
           <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
           <div className="rounded-xl border border-border/70 bg-background/90 p-3">
@@ -1558,278 +1880,115 @@ export function OrganicDraftPreview({
             </p>
             <EditableCaption
               value={draft.captionPreview}
+              displayValue={sentCaption ?? undefined}
               onChange={handleCaptionChange}
               platform={framePlatform}
-              editable={isEditing}
+              editable={editable}
+              editing={captionEditing}
+              onEditingChange={setCaptionEditing}
             />
           </div>
         </div>
       ) : (
-        <SocialPostFrame
-          platform={framePlatform}
-          frame={previewFrame}
-          caption={draftForPreview.captionPreview}
-          hashtags={draftForPreview.hashtags}
-          brandName={brandName}
-          dayLabel={frameDayLabel(dayId)}
-          timeLabel={draft.timeLabel}
-          mediaNode={mediaNode}
-          onAddMedia={canPostWithoutMedia ? undefined : () => setIsEditing(true)}
-          isEditing={isEditing}
-          onCaptionChange={handleCaptionChange}
-          onEditCreativeDirection={() => setCreativeOpen(true)}
-          onEditHashtags={() => setHashtagsOpen(true)}
-        />
+        <div
+          className={cn(
+            isTextPost
+              ? '[container-type:inline-size]'
+              : slotScrolls
+                ? 'h-full shrink-0 [container-type:size]'
+                : 'min-h-0 flex-1 [container-type:size]',
+          )}
+        >
+          <SocialPostFrame
+            platform={framePlatform}
+            frame={previewFrame}
+            caption={draftForPreview.captionPreview}
+            sentCaption={sentCaption}
+            title={plan?.options.youtube?.title}
+            hashtags={draftForPreview.hashtags}
+            brandName={frameAccountName}
+            avatarUrl={plan?.account.avatarUrl}
+            timeLabel={whenLabel ?? draft.timeLabel}
+            mediaNode={mediaNode}
+            onAddMedia={canPostWithoutMedia ? undefined : () => handleFix('media')}
+            editable={editable}
+            onCaptionChange={handleCaptionChange}
+            captionEditing={captionEditing}
+            onCaptionEditingChange={setCaptionEditing}
+          />
+        </div>
+      )}
+
+      {slideStrip}
+
+      {addMediaToTextPost}
+
+      {planNotices}
+
+      {placement.canUndo && (
+        <button
+          type="button"
+          onClick={placement.undo}
+          className="self-start rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          Undo last media change
+        </button>
+      )}
+
+      {selectedPlatforms.length > 1 && (
+        <div className="shrink-0">{platformSwitch('See it on')}</div>
       )}
     </>
   );
 
   return (
     <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
-      <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
-        {/* Glanceable metadata strip + ⋯ command menu. Nothing else lives here
-            permanently — every editing tool opens on demand. */}
-        <PostMetaChips
-          platforms={selectedPlatforms}
-          format={toPublishFormat(draft.format)}
-          formatLabel={frameFormatLabel(
-            toPublishFormat(draft.format),
-            framePlatform,
-            previewFrame.kind,
-          )}
-          timeLabel={draft.timeLabel}
-          onPlatformsChange={(next) => {
-            const platforms = next.filter((value) => isOrganicPlatformKey(value));
-            if (platforms.length === 0) return;
-            // Platform selection drives the fan-out at approve time, not content_json,
-            // so it stays a local choice until the draft is approved.
-            patchDraftLocally({ platforms });
-          }}
-          onFormatChange={handleFormatChange}
-          onTimeChange={handleTimeChange}
-          actions={headerActions}
+      {/* The plan this panel renders, as the joint fidelity bench reads it against the dry run. */}
+      <div
+        ref={panelRef}
+        data-plan-platform={plan?.platform}
+        data-plan-format={plan?.format}
+        data-plan-verb={plan?.verb}
+        className="flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm"
+      >
+        <ReviewIdentityRow
+          titleRef={titleRef}
+          insetStart={insetStart}
+          account={{ handle: identityHandle, avatarUrl: plan?.account.avatarUrl ?? null }}
+          platform={isPostPlatform(framePlatform) ? framePlatform : 'instagram'}
+          summary={[formatLabel, whenLabel ?? 'Not scheduled'].join(' · ')}
+          menu={menu}
+          onClose={onClose}
         />
 
-        <div className="shrink-0 border-b border-border/60 bg-muted/30">
-          <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5">
-            <span className="text-xs font-semibold text-foreground">
-              {draftStatusPresentation(draft.status).label}
-            </span>
-            <span className="text-xs text-muted-foreground" aria-hidden="true">
-              ·
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {deriveMediaStageLabel(resolveDraftMediaStage(draft))}
-            </span>
-            {!isPublished && !readiness.ready && (
-              <SchedulingRequirementsHint checks={readiness.checks} />
-            )}
-            <div className="ml-auto flex items-center gap-1">
-              {!productionDetailsOpen && !isPublished && ladder.actionLabel && (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="secondary"
-                  disabled={ladder.isBusy || ladder.disabledReason !== null}
-                  onClick={ladder.run}
-                >
-                  {ladder.disabledReason ?? ladder.actionLabel}
-                </Button>
-              )}
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                aria-expanded={productionDetailsOpen}
-                onClick={() => setProductionDetailsOpen((open) => !open)}
-              >
-                {productionDetailsOpen ? 'Hide details' : 'Details'}
-              </Button>
-            </div>
-          </div>
-          {productionDetailsOpen && (
-            <div className="flex flex-col gap-1.5 border-t border-border/60 px-3 py-2">
-              <LifecyclePill status={draft.status} />
-              <EnrichmentLadder ladder={ladder} />
-              <MediaEnrichmentSummary
-                draft={draft}
-                onReuseLibrary={() => openMediaPicker()}
-                onRealize={handleGenerateMedia}
-                canRealize={canGenerate}
-              />
-            </div>
-          )}
-          {placement.canUndo && (
-            <button
-              type="button"
-              onClick={placement.undo}
-              className="mx-3 mb-1.5 rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              Undo last media change
-            </button>
-          )}
-          {placement.error && (
-            <div
-              role="alert"
-              aria-live="assertive"
-              className="mx-3 mb-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300"
-            >
-              {placement.error.message}
-              <button
-                type="button"
-                onClick={placement.clearError}
-                className="ml-2 underline underline-offset-2"
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Fixed rows above, then the frame slot. The slot is a size container: the frame
-            sizes itself from the slot's width AND height, so in view mode the whole post fits
-            without scrolling. Editing (and the on-demand editor panels) may outgrow it, so
-            those states scroll inside the same slot. min-h-0 keeps the flex-1 children from
-            growing to their content and being clipped by the panel. */}
+        {/* The frame slot is a size container: the frame sizes itself from the slot's width AND
+            height, so the whole post fits without scrolling. An open editor or panel may outgrow
+            it, so those states scroll inside the same slot. min-h-0 keeps the flex-1 children
+            from growing to their content and being clipped by the panel. */}
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/10 p-3">
-          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {panelTabs}
-            {inspirationSourceUrl && (
-              <a
-                href={inspirationSourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                Inspiration source · View original post
-              </a>
+          {/* One element in both states: swapping it remounted the open caption, which lost
+              the focus it returns to on Escape. */}
+          <div
+            data-preview-frame-slot=""
+            className={cn(
+              'flex min-h-0 flex-1 flex-col',
+              slotScrolls ? 'gap-3 overflow-y-auto' : 'gap-2 overflow-hidden',
             )}
+            onLoadCapture={handleMediaLoaded}
+            onLoadedMetadataCapture={handleMediaLoaded}
+          >
+            {slotContent}
           </div>
-
-          {panelTab === 'publish' ? (
-            <ScrollArea className="min-h-0 flex-1">{publishTab}</ScrollArea>
-          ) : (
-            <>
-              {draftHook && brandProfileId ? (
-                <div className="flex shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-background/90 px-3 py-2">
-                  <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Hook
-                  </span>
-                  <p className="min-w-0 flex-1 truncate text-sm text-foreground" title={draftHook}>
-                    {draftHook}
-                  </p>
-                  <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
-                </div>
-              ) : null}
-
-              {selectedPlatforms.length > 1 && (
-                <div className="shrink-0">{platformSwitch('See it on')}</div>
-              )}
-
-              {slotScrolls ? (
-                <ScrollArea
-                  data-preview-frame-slot=""
-                  className="min-h-0 flex-1 [container-type:size]"
-                  onLoadCapture={handleMediaLoaded}
-                  onLoadedMetadataCapture={handleMediaLoaded}
-                >
-                  <div className="flex flex-col gap-3">{slotContent}</div>
-                </ScrollArea>
-              ) : (
-                <div
-                  data-preview-frame-slot=""
-                  className="flex min-h-0 flex-1 flex-col overflow-hidden [container-type:size]"
-                  onLoadCapture={handleMediaLoaded}
-                  onLoadedMetadataCapture={handleMediaLoaded}
-                >
-                  {slotContent}
-                </div>
-              )}
-            </>
-          )}
         </div>
 
-        {/* Footer CTA */}
-        {showFooter ? (
-          <div className="shrink-0 border-t border-border/70 bg-background/90 p-3 flex flex-col gap-2">
-            {tokenExpired && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-                {publishPlatformLabel(publishPlatform)} access token expired.{' '}
-                <a href="/settings?section=integrations" className="underline underline-offset-2">
-                  Reconnect your account
-                </a>
-              </div>
-            )}
-
-            {(onApprove || canPublish) && (
-              <div className="flex gap-2">
-                {onApprove && (
-                  <button
-                    type="button"
-                    disabled={isApproveDisabled || !readiness.ready || isFanningOut}
-                    onClick={handleApprove}
-                    className={cn(
-                      'flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold leading-tight transition-colors',
-                      isApproveDisabled || !readiness.ready || isFanningOut
-                        ? 'cursor-not-allowed bg-muted text-muted-foreground'
-                        : 'bg-primary text-primary-foreground hover:bg-primary/90',
-                    )}
-                  >
-                    {approveLabel}
-                  </button>
-                )}
-
-                {canPublish && (
-                  <button
-                    type="button"
-                    disabled={isPublishing || !readiness.ready}
-                    onClick={() => void fieldEditor.flush().then(() => publish(draft))}
-                    className={cn(
-                      'flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold leading-tight transition-colors',
-                      isPublishing || !readiness.ready
-                        ? 'cursor-not-allowed bg-muted text-muted-foreground'
-                        : 'bg-primary text-primary-foreground hover:bg-primary/90',
-                    )}
-                  >
-                    {isPublishing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {stage === 'container_created'
-                          ? 'Uploading media…'
-                          : stage === 'polling'
-                            ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
-                            : 'Publishing…'}
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4" />
-                        {isMultiPlatform
-                          ? 'Publish now'
-                          : `Publish to ${publishPlatformLabel(publishPlatform)}`}
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {isPublished && (
-              <div className="flex items-center justify-center gap-2 px-4 py-1.5">
-                <span className="text-sm text-muted-foreground">Published</span>
-                {permalink && publishPlatform && (
-                  <a
-                    href={permalink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary underline underline-offset-2"
-                  >
-                    View on {publishPlatformLabel(publishPlatform)}
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        ) : null}
+        <ReviewFooter
+          when={scheduleChips}
+          primary={primaryAction}
+          secondary={publishNowAction}
+          note={footerNote}
+          status={footerStatus}
+          alert={footerAlert}
+        />
       </div>
       {lightboxNode}
     </DndContext>

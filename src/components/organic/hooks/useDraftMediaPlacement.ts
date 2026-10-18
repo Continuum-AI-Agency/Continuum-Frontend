@@ -8,6 +8,7 @@
 import type { CreativeRef, MediaAsset } from '@continuum/contracts';
 import {
   creativeRefFromAsset,
+  deriveOrganicMediaStage,
   findMultiVideoSelectionError,
   matchPublishFormat,
   reconcileFormatWithAssetKinds,
@@ -16,6 +17,7 @@ import {
 import * as React from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
+import { isCarouselFormat } from '@/lib/organic/carousel';
 import { useCalendarStore } from '@/lib/organic/store';
 import { useDraftFieldPersistence } from './useDraftFieldEditor';
 
@@ -30,10 +32,20 @@ import { useDraftFieldPersistence } from './useDraftFieldEditor';
  * validated `content_json` and then never forwarded it — so even for a manual draft
  * the write was a silent no-op. `mediaStatus: user_supplied` is what stops the next
  * refetch from overwriting the result.
+ *
+ * Saves are serialized. Every write carries the draft's `updatedAt` as a CAS token, so a
+ * second placement sent while the first PATCH is in flight would present a token the
+ * first one already consumed and 409. Each save therefore waits for the one before it and
+ * reads the draft back from the store at send time — media AND token — which also means a
+ * burst of placements collapses into the writes it actually needs.
  */
 
-/** The media fields a failed write has to put back — format included, since media moves it. */
-type MediaSnapshot = Pick<OrganicCalendarDraft, 'mediaSuggestion' | 'publishingAssets' | 'format'>;
+/** The media fields a failed write has to put back. */
+// Format rides along: growing a post into a carousel changes both, and a failed save undoes both.
+type MediaSnapshot = Pick<
+  OrganicCalendarDraft,
+  'mediaSuggestion' | 'publishingAssets' | 'mediaStage' | 'format'
+>;
 
 /**
  * The draft with its format restated from its media: kept when the media can publish as it,
@@ -78,6 +90,10 @@ export type UseDraftMediaPlacementResult = {
   addSlide: (asset: MediaAsset) => PlacementError | null;
   error: PlacementError | null;
   clearError: () => void;
+  // Resolves once every pending media save has settled: true when all of them succeeded.
+  // Approve awaits this so it never gates on media the server has not received yet.
+  flushMedia: () => Promise<boolean>;
+  isSavingMedia: boolean;
 };
 
 type PublishingAsset = NonNullable<OrganicCalendarDraft['publishingAssets']>[number];
@@ -96,6 +112,50 @@ function asUserSupplied(
     publishingAssets,
     mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: 'user_supplied' },
   };
+}
+
+// The store keeps a stamped `mediaStage` that `resolveDraftMediaStage` prefers over
+// derivation, so a media change has to restamp it or the draft keeps reading 'text_only'.
+// Same derivation the backend runs on every persist.
+function withDerivedMediaStage(draft: OrganicCalendarDraft): OrganicCalendarDraft {
+  return {
+    ...draft,
+    mediaStage: deriveOrganicMediaStage({
+      publishingAssets: draft.publishingAssets,
+      creative: {
+        mediaSuggestion: {
+          mediaStatus: draft.mediaSuggestion?.mediaStatus ?? null,
+          storyboard: draft.mediaSuggestion?.storyboard ?? null,
+        },
+      },
+    }),
+  };
+}
+
+function snapshotMedia(draft: OrganicCalendarDraft): MediaSnapshot {
+  return {
+    mediaSuggestion: draft.mediaSuggestion,
+    publishingAssets: draft.publishingAssets,
+    mediaStage: draft.mediaStage,
+    format: draft.format,
+  };
+}
+
+function findStoreDraft(draftId: string): OrganicCalendarDraft | undefined {
+  for (const day of useCalendarStore.getState().days) {
+    const slot = day.slots.find((s) => s.id === draftId);
+    if (slot) return slot;
+  }
+  return undefined;
+}
+
+// Slides (images and videos) in the order the strip renders them. Unindexed slides (a
+// single-media post carries no slideIndex) sort LAST; every op reindexes what it writes back,
+// so the persisted order is the order that was shown.
+function sortedSlides(draft: OrganicCalendarDraft): PublishingAsset[] {
+  return [...(draft.publishingAssets ?? [])].sort(
+    (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
+  );
 }
 
 function validateKindForTarget(
@@ -137,14 +197,65 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
   );
   const [error, setError] = React.useState<PlacementError | null>(null);
 
+  // The tail of the save queue; `pending` counts saves not yet settled. A batch is the run
+  // of saves between two idle moments — flushMedia reports on the current one.
+  const queueRef = React.useRef<Promise<boolean>>(Promise.resolve(true));
+  const pendingRef = React.useRef(0);
+  // The media the server last confirmed. A failure restores THIS, not the failed op's own
+  // "before": by then later ops may have built on media the server never accepted.
+  const confirmedRef = React.useRef<MediaSnapshot | null>(null);
+  const [isSavingMedia, setIsSavingMedia] = React.useState(false);
+
+  const saveLatestMedia = React.useCallback(
+    async (fallback: OrganicCalendarDraft): Promise<boolean> => {
+      const latest = findStoreDraft(draftId) ?? fallback;
+      const confirmed = confirmedRef.current;
+      if (
+        confirmed &&
+        latest.publishingAssets === confirmed.publishingAssets &&
+        latest.mediaSuggestion === confirmed.mediaSuggestion &&
+        latest.format === confirmed.format
+      ) {
+        return true;
+      }
+
+      // One PATCH: a second one for the format would race this one's CAS token.
+      const formatChanged = confirmed !== null && latest.format !== confirmed.format;
+      const result = await persistDraftFields(latest, {
+        media: {
+          publishingAssets: latest.publishingAssets ?? [],
+          mediaSuggestion: latest.mediaSuggestion ?? undefined,
+        },
+        ...(formatChanged ? { format: latest.format } : {}),
+      });
+
+      if (result.ok) {
+        confirmedRef.current = snapshotMedia(latest);
+        const { updatedAt } = result;
+        if (updatedAt) updateDraft(draftId, (current) => ({ ...current, updatedAt }));
+        return true;
+      }
+
+      if (confirmed) updateDraft(draftId, (current) => ({ ...current, ...confirmed }));
+      show({
+        title: 'Media not saved',
+        description: result.stale
+          ? 'This post changed elsewhere. Reopen it and try again.'
+          : result.message,
+        variant: 'error',
+      });
+      return false;
+    },
+    [draftId, updateDraft, persistDraftFields, show],
+  );
+
   /**
-   * Runs a store mutation and writes the resulting media through to content_json. Every
-   * placement op goes through here, so an assignment can never be store-only again.
+   * Runs a store mutation and queues the write of the resulting media to content_json.
+   * Every placement op goes through here, so an assignment can never be store-only again.
    *
-   * The write is awaited internally rather than fired and forgotten: the previous
-   * version issued a bare `fetch` with no `await`, no `.catch` and no `response.ok`
-   * check, so a rejected attach left the media on screen and nowhere else. On failure
-   * the previous media is restored and the user is told.
+   * A failed write restores the last server-confirmed media and tells the user; saves
+   * still queued behind it in the same batch are not sent, since the rollback already
+   * put the server's media back on screen.
    */
   const applyMedia = React.useCallback(
     (mutate: (current: OrganicCalendarDraft) => OrganicCalendarDraft) => {
@@ -160,48 +271,35 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
         const mutated = mutate(current);
         // A validation no-op returns the draft untouched — nothing to write through.
         if (mutated === current) return current;
-        const next = withMediaFormat(mutated);
-        captured.previous = {
-          mediaSuggestion: current.mediaSuggestion,
-          publishingAssets: current.publishingAssets,
-          format: current.format,
-        };
+        const next = withDerivedMediaStage(withMediaFormat(mutated));
+        captured.previous = snapshotMedia(current);
         captured.next = next;
         return next;
       });
 
       const next: OrganicCalendarDraft | null = captured.next;
-      const previous: MediaSnapshot | null = captured.previous;
       if (!next) return;
 
-      void persistDraftFields(next, {
-        media: {
-          publishingAssets: next.publishingAssets ?? [],
-          mediaSuggestion: next.mediaSuggestion ?? undefined,
-        },
-        // Undo back to the generation clears the assets, so the server has no media to
-        // restate the format from — it has to be told.
-        ...(next.format !== previous?.format ? { format: next.format } : {}),
-      }).then((result) => {
-        if (result.ok) {
-          // The row's new version. Without it the next edit (switching the format chip,
-          // say) carries a stale expected_updated_at, is refused as "changed elsewhere",
-          // and snaps back.
-          const { updatedAt } = result;
-          if (updatedAt) updateDraft(draftId, (current) => ({ ...current, updatedAt }));
-          return;
-        }
-        if (previous) updateDraft(draftId, (current) => ({ ...current, ...previous }));
-        show({
-          title: 'Media not saved',
-          description: result.stale
-            ? 'This post changed elsewhere. Reopen it and try again.'
-            : result.message,
-          variant: 'error',
-        });
+      if (pendingRef.current === 0) {
+        queueRef.current = Promise.resolve(true);
+        confirmedRef.current = captured.previous;
+      }
+      pendingRef.current += 1;
+      setIsSavingMedia(true);
+
+      queueRef.current = queueRef.current.then(async (batchOk) => {
+        const ok = batchOk ? await saveLatestMedia(next) : false;
+        pendingRef.current -= 1;
+        if (pendingRef.current === 0) setIsSavingMedia(false);
+        return ok;
       });
     },
-    [draftId, updateDraft, persistDraftFields, show],
+    [draftId, updateDraft, saveLatestMedia],
+  );
+
+  const flushMedia = React.useCallback(
+    (): Promise<boolean> => (pendingRef.current === 0 ? Promise.resolve(true) : queueRef.current),
+    [],
   );
 
   const place = React.useCallback(
@@ -306,9 +404,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
   const reorderSlides = React.useCallback(
     (fromIndex: number, toIndex: number) => {
       applyMedia((current) => {
-        const slides = [...(current.publishingAssets ?? [])].sort(
-          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
-        );
+        const slides = sortedSlides(current);
 
         if (fromIndex < 0 || fromIndex >= slides.length) return current;
         if (toIndex < 0 || toIndex >= slides.length) return current;
@@ -337,9 +433,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       let slideErr: PlacementError | null = null;
 
       applyMedia((current) => {
-        const slides = [...(current.publishingAssets ?? [])].sort(
-          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
-        );
+        const slides = sortedSlides(current);
 
         if (slides.length <= 1) {
           slideErr = { type: 'min_slides', message: 'A carousel needs at least one slide.' };
@@ -377,9 +471,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
       let slideErr: PlacementError | null = null;
       applyMedia((current) => {
-        const slides = [...(current.publishingAssets ?? [])].sort(
-          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
-        );
+        const slides = sortedSlides(current);
 
         if (position < 0 || position >= slides.length) {
           slideErr = { type: 'empty_selection', message: 'That slide no longer exists.' };
@@ -425,9 +517,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       }
 
       applyMedia((current) => {
-        const slides = [...(current.publishingAssets ?? [])].sort(
-          (a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999),
-        );
+        const slides = sortedSlides(current);
 
         const newSlide: PublishingAsset = {
           role: 'primary',
@@ -442,7 +532,14 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           height: asset.height ?? undefined,
         };
 
-        return asUserSupplied(current, [...slides, newSlide]);
+        // Reindex the existing slides too: a single-image post's one image has no
+        // slideIndex, and left unindexed it would sort after the slide appended here.
+        const reindexed = slides.map((a, i) => ({ ...a, slideIndex: i }));
+        const grown = asUserSupplied(current, [...reindexed, newSlide]);
+        // A post publishes one image: a second slide only goes out once it is a carousel.
+        return current.format && !isCarouselFormat(current.format)
+          ? { ...grown, format: 'Carousel' }
+          : grown;
       });
 
       return null;
@@ -462,5 +559,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
     addSlide,
     error,
     clearError,
+    flushMedia,
+    isSavingMedia,
   };
 }

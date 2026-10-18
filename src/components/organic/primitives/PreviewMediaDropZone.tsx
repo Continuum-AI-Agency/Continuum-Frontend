@@ -179,7 +179,8 @@ export function PreviewMediaDropZone({
         />
       )}
 
-      {/* Drag-over overlay */}
+      {/* Drag-over overlay. The zone renders inside a post frame, whose text floor is 12px:
+          text-xs is 11.25px against the 15px root, so labels here are text-sm. */}
       <div
         aria-hidden
         className={cn(
@@ -195,7 +196,7 @@ export function PreviewMediaDropZone({
       >
         <div
           className={cn(
-            'flex flex-col items-center gap-1 text-xs font-medium',
+            'flex flex-col items-center gap-1 text-sm font-medium',
             isInvalidDrag ? 'text-amber-700 dark:text-amber-400' : 'text-primary',
           )}
         >
@@ -229,7 +230,7 @@ export function PreviewMediaDropZone({
                   <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/40 bg-background text-primary transition-colors group-hover/gen:border-primary/70">
                     {action.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : action.icon}
                   </div>
-                  <p className="text-xs font-medium text-primary">
+                  <p className="text-sm font-medium text-primary">
                     {action.busy ? (action.busyLabel ?? action.label) : action.label}
                   </p>
                 </button>
@@ -247,7 +248,7 @@ export function PreviewMediaDropZone({
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background transition-colors group-hover/lib:border-primary/40">
               <ImageIcon className="h-4 w-4 text-muted-foreground transition-colors group-hover/lib:text-primary" />
             </div>
-            <p className="text-xs font-medium text-muted-foreground transition-colors group-hover/lib:text-foreground">
+            <p className="text-sm font-medium text-muted-foreground transition-colors group-hover/lib:text-foreground">
               Select from library
             </p>
           </button>
@@ -259,7 +260,7 @@ export function PreviewMediaDropZone({
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background transition-colors group-hover/up:border-primary/40">
               <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover/up:text-primary" />
             </div>
-            <p className="text-xs font-medium text-muted-foreground transition-colors group-hover/up:text-foreground">
+            <p className="text-sm font-medium text-muted-foreground transition-colors group-hover/up:text-foreground">
               Upload from your computer
             </p>
             <input

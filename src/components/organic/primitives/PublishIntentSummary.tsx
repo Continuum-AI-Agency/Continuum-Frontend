@@ -23,12 +23,27 @@ export type PublishIntentSummaryData = {
   media: { count: number; required: number };
 };
 
-export function PublishIntentSummary({ intent }: { intent: PublishIntentSummaryData }) {
+/** The account the caller showed the user, named by its handle. */
+export type PublishAccountLabel = { id: string | null; label: string | null };
+
+export function PublishIntentSummary({
+  intent,
+  account,
+}: {
+  intent: PublishIntentSummaryData;
+  account?: PublishAccountLabel;
+}) {
+  // The handle names the account only when it is the one the server will address; otherwise
+  // the id is the honest answer.
+  const accountName =
+    (account?.label && account.id === intent.account.id ? account.label : null) ??
+    intent.account.id ??
+    'No account selected';
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
         <dt className="text-secondary">Account</dt>
-        <dd className="truncate font-medium">{intent.account.id ?? 'No account selected'}</dd>
+        <dd className="truncate font-medium">{accountName}</dd>
         <dt className="text-secondary">Format</dt>
         <dd className="font-medium">{intent.format}</dd>
         <dt className="text-secondary">Media</dt>

@@ -7,6 +7,7 @@ import type {
 } from '@continuum/contracts';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { PublishPlanSource } from '@/lib/organic/publishPlan';
 
 export type { CalendarGenerationEvent, OrganicMediaStage };
 
@@ -334,6 +335,8 @@ export type OrganicCalendarDraft = {
     medium?: string[];
     low?: string[];
   };
+  /** The row this draft was read from: the publish plan reads it, not the display fields. */
+  planSource?: PublishPlanSource;
 };
 
 export type OrganicCalendarDay = {

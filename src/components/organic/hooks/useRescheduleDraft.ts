@@ -12,10 +12,8 @@ import type {
   OrganicPlatformTag,
 } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
-import { platformRetargetRowPatch } from '@/lib/organic/calendar-draft-persistence';
+import { isPostPlatform } from '@/lib/organic/postPlatforms';
 import { useCalendarStore } from '@/lib/organic/store';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Json } from '@/lib/supabase/types';
 import { scheduleFieldPatch, useDraftFieldPersistence } from './useDraftFieldEditor';
 
 const DAY_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -99,38 +97,6 @@ function movedFields(
   return { dateLabel, platforms, targetAccountId, groupMembers };
 }
 
-/**
- * Rewrites the row's platform fields: read, merge, write under an `updated_at` guard, so a
- * generation write landing in between is not overwritten with this tab's older slot_data.
- * The field-edit route has no platform field, so this is the autosave's direct write.
- * Resolves to the row's new `updated_at`, or null when the row moved on or was refused.
- */
-async function persistPlatform(
-  backendDraftId: string,
-  draft: OrganicCalendarDraft,
-): Promise<string | null> {
-  const organic = createSupabaseBrowserClient().schema('organic');
-  const { data: row } = await organic
-    .from('organic_calendar_drafts')
-    .select('slot_data, updated_at')
-    .eq('id', backendDraftId)
-    .maybeSingle();
-  if (!row) return null;
-  const patch = platformRetargetRowPatch(row.slot_data, draft.platforms[0], draft.targetAccountId);
-  const { data: written } = await organic
-    .from('organic_calendar_drafts')
-    .update({
-      ...patch,
-      slot_data: patch.slot_data as Json,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', backendDraftId)
-    .eq('updated_at', row.updated_at)
-    .select('updated_at')
-    .maybeSingle();
-  return written?.updated_at ?? null;
-}
-
 async function runChunked<T>(
   items: T[],
   size: number,
@@ -175,31 +141,32 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
 
   const { persistDraftFields } = useDraftFieldPersistence();
 
+  // One PATCH through the field-edit route carries the platform and the day. The route
+  // restamps the row's platform, account and slot_data under its own CAS guard, so the
+  // browser never writes the row (it used to, straight to Supabase, for the platform).
   const persistDraft = React.useCallback(
     async (snapshot: RescheduleSnapshot, targetDayId: string): Promise<boolean> => {
       const { draft, retargeted } = snapshot;
       if (!draft.backendDraftId) return true;
       const movesDay = snapshot.fromDayId !== targetDayId;
-      const patch = movesDay ? scheduleFieldPatch(targetDayId, draft.timeLabel) : null;
-      if (movesDay && !patch) return false;
-
-      let updatedAt = draft.updatedAt;
-      if (retargeted) {
-        const written = await persistPlatform(draft.backendDraftId, retargeted);
-        if (!written) return false;
-        // The day PATCH below is guarded by updated_at, and this write just moved it.
-        updatedAt = written;
-        updateDraft(draft.id, (current) => ({ ...current, updatedAt: written }));
-      }
-      if (!patch) return true;
-      // The field-edit route, not the reschedule route: it is what rewrites a
-      // manual draft's `slot_data.dayId` server-side. Manual drafts used to be
-      // excluded here entirely and left to the browser autosave, which is why a
-      // manual drag never persisted.
+      const schedule = movesDay ? scheduleFieldPatch(targetDayId, draft.timeLabel) : null;
+      if (movesDay && !schedule) return false;
+      const platform = retargeted?.platforms[0];
+      if (retargeted && !isPostPlatform(platform)) return false;
+      if (!schedule && !retargeted) return true;
       const result = await persistDraftFields(
-        { id: draft.id, backendDraftId: draft.backendDraftId, updatedAt },
-        patch,
+        { id: draft.id, backendDraftId: draft.backendDraftId, updatedAt: draft.updatedAt },
+        {
+          ...schedule,
+          ...(retargeted && isPostPlatform(platform)
+            ? { platform, accountId: retargeted.targetAccountId ?? null }
+            : {}),
+        },
       );
+      if (result.ok && result.updatedAt) {
+        const updatedAt = result.updatedAt;
+        updateDraft(draft.id, (current) => ({ ...current, updatedAt }));
+      }
       return result.ok;
     },
     [persistDraftFields, updateDraft],

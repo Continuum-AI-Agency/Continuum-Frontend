@@ -202,7 +202,7 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
           dayLabel={frameDayLabel(post.dayId)}
           timeLabel={post.timeLabel}
           mediaNode={mediaNode}
-          isEditing={false}
+          editable={false}
         />
       </div>
       <div className="flex shrink-0 flex-col gap-2">

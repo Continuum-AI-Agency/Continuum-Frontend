@@ -221,41 +221,38 @@ describe('SocialPostFrame', () => {
     platform: 'instagram' as const,
     caption: '',
     mediaNode: null,
-    onEditCreativeDirection: () => undefined,
-    onEditHashtags: () => undefined,
   };
 
-  it('offers the hover edit actions on a story in edit mode, and hides its reply pill from readers', () => {
+  it('draws the story reply bar only for readers, keeping the progress bar while editable', () => {
     const { container, rerender } = render(
-      <SocialPostFrame {...props} frame={{ kind: 'story', mediaAspect: 9 / 16 }} isEditing />,
+      <SocialPostFrame {...props} frame={{ kind: 'story', mediaAspect: 9 / 16 }} editable />,
     );
-    expect(screen.getByRole('button', { name: 'Edit creative direction' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Edit hashtags' })).toBeTruthy();
+    expect(screen.queryByText('Send message')).toBeNull();
+    // The progress bar is the story's identity, not an affordance: it stays.
+    expect(container.querySelector('[data-story-progress]')).toBeTruthy();
 
     rerender(
-      <SocialPostFrame
-        {...props}
-        frame={{ kind: 'story', mediaAspect: 9 / 16 }}
-        isEditing={false}
-      />,
+      <SocialPostFrame {...props} frame={{ kind: 'story', mediaAspect: 9 / 16 }} editable={false} />,
     );
-    expect(screen.queryByRole('button', { name: 'Edit hashtags' })).toBeNull();
     expect(screen.getByText('Send message').getAttribute('aria-hidden')).toBe('true');
     expect(container.querySelector('[data-frame-media]')?.textContent).toBe('Preview unavailable');
   });
 
-  it('keeps the "Needs media" action for a draft and the caption prompt only while editing', () => {
+  it('keeps the "Needs media" action for a draft and the caption prompt only while editable', () => {
+    const onAddMedia = mock();
     render(
       <SocialPostFrame
         {...props}
         frame={{ kind: 'vertical', mediaAspect: 9 / 16 }}
-        onAddMedia={() => undefined}
-        isEditing
+        onAddMedia={onAddMedia}
+        editable
       />,
     );
     expect(screen.getByText('Needs media')).toBeTruthy();
     expect(screen.queryByText('Preview unavailable')).toBeNull();
     expect(screen.getByText('Write your caption…')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add media' }));
+    expect(onAddMedia).toHaveBeenCalledTimes(1);
   });
 
   it('titles a YouTube draft by its caption first line and describes it with the whole caption', () => {
@@ -265,10 +262,38 @@ describe('SocialPostFrame', () => {
         platform="youtube"
         caption={'\nLaunch <day>\nEverything we shipped.'}
         frame={{ kind: 'landscape', mediaAspect: 16 / 9 }}
-        isEditing={false}
+        editable={false}
       />,
     );
     expect(screen.getByText('Launch day')).toBeTruthy();
     expect(screen.getByText(/Everything we shipped\./).textContent).toContain('Launch <day>');
+  });
+
+  // The frame shows what goes out: the plan's caption (hashtags folded in, limits applied),
+  // and nothing at all when the plan sends none.
+  it('shows the caption as sent when the plan gives one, instead of the typed one', () => {
+    const { rerender } = render(
+      <SocialPostFrame
+        {...props}
+        caption="Typed"
+        hashtags={{ high: ['#dropped'] }}
+        sentCaption="Sent text #kept"
+        frame={{ kind: 'feed', mediaAspect: 1 }}
+        editable={false}
+      />,
+    );
+    expect(screen.getByText(/Sent text #kept/)).toBeTruthy();
+    expect(screen.queryByText(/#dropped/)).toBeNull();
+
+    rerender(
+      <SocialPostFrame
+        {...props}
+        caption="Typed"
+        sentCaption={null}
+        frame={{ kind: 'feed', mediaAspect: 1 }}
+        editable={false}
+      />,
+    );
+    expect(screen.queryByText(/Typed/)).toBeNull();
   });
 });

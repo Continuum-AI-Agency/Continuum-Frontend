@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -16,13 +16,25 @@ mock.module('next/image', () => ({
 
 import { AiStudioHandoffProvider } from './AiStudioHandoffContext';
 import { CalendarDraftCard } from './CalendarDraftCard';
-import type { OrganicCalendarDraft } from './types';
+import { makeCalendarDay } from './calendar-utils';
+import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 
+type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+const requestCalls: RequestOptions[] = [];
+const request = mock(async (opts: RequestOptions) => {
+  requestCalls.push(opts);
+  return { updated_at: 'T1' };
+});
+mock.module('@/lib/api/http', () => ({ request, http: { request } }));
+
+const storeDays: OrganicCalendarDay[] = [];
 const store = {
   updateDraft: mock(),
   bulkDeleteDrafts: mock(),
   duplicateDraft: mock(),
   beginEditingDraft: mock((_id: string) => undefined),
+  days: storeDays,
+  accountContext: { accountIds: { linkedin: 'li-acct' }, accountOptions: {}, brandId: 'b1' },
 };
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub(store));
@@ -138,6 +150,8 @@ describe('CalendarDraftCard', () => {
     store.beginEditingDraft.mockClear();
     approveAndSchedule.mockClear();
     unschedule.mockClear();
+    requestCalls.length = 0;
+    storeDays.length = 0;
   });
 
   afterEach(() => {
@@ -263,6 +277,51 @@ describe('CalendarDraftCard', () => {
     ) => OrganicCalendarDraft;
     expect(updater(draft).timeLabel).toBe('1:00 PM');
     expect(onSelect).toHaveBeenCalledWith('draft-1');
+  });
+
+  it('saves a time preset on a draft with a row through the field route, on its own day', async () => {
+    const saved = { ...draft, backendDraftId: 'srv-1', updatedAt: 'T0' };
+    storeDays.push({ ...makeCalendarDay('2030-01-07'), slots: [saved] });
+    render(
+      <CalendarDraftCard
+        draft={saved}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText('Time: 1:00 PM')[0]);
+
+    await waitFor(() => expect(requestCalls).toHaveLength(1));
+    expect(requestCalls[0]).toMatchObject({
+      path: '/api/organic/calendar/drafts/srv-1/fields',
+      method: 'PATCH',
+      body: { dayId: '2030-01-07', timeOfDay: '13:00', expected_updated_at: 'T0' },
+    });
+  });
+
+  it("moves a draft with a row to another platform through the field route, with that platform's account", async () => {
+    const saved = { ...draft, backendDraftId: 'srv-1', updatedAt: 'T0' };
+    render(
+      <CalendarDraftCard
+        draft={saved}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
+
+    await waitFor(() => expect(requestCalls).toHaveLength(1));
+    expect(requestCalls[0]?.body).toEqual({
+      platform: 'linkedin',
+      accountId: 'li-acct',
+      expected_updated_at: 'T0',
+    });
   });
 
   it('exposes a custom time picker entry that defers mutation to the popover', () => {

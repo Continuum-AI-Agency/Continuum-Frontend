@@ -34,6 +34,9 @@ const agentCarouselDraft = (
   captionPreview: 'Stop losing 15 hours a week',
   tags: [],
   mediaCount: 1,
+  // The handoff carries the row's concurrency token; a draft without one never hands off.
+  backendDraftId: 'srv-1',
+  updatedAt: '2030-08-01T00:00:00.000Z',
   publishingAssets: Array.from({ length: 10 }, (_, index) => ({
     role: `slide_${index + 1}`,
     kind: 'image' as const,

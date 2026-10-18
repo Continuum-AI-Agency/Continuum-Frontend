@@ -4,6 +4,7 @@ import { Check, ChevronDown, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
+import { useUnscheduleDraft } from '@/components/organic/hooks/useUnscheduleDraft';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -394,7 +395,6 @@ export function OrganicListView({
   const [creating, setCreating] = React.useState<string | null>(null);
   const bulkDeleteDrafts = useCalendarStore((s) => s.bulkDeleteDrafts);
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
-  const updateDraft = useCalendarStore((s) => s.updateDraft);
 
   // Undated drafts (the "unscheduled" sentinel day) get their own group; the
   // status groups below cover only dated drafts so each draft appears once.
@@ -440,10 +440,16 @@ export function OrganicListView({
       requestDraftDeletion([draftId], (ids) => ids.forEach(onDeleteBacklogDraft)),
     [onDeleteBacklogDraft, requestDraftDeletion],
   );
-  // A scheduled row's remove sends it back to draft rather than deleting it.
+  // A scheduled row's remove sends it back to draft rather than deleting it, through the
+  // backend, which is what cancels its publish. A store-only flip left the row scheduled and
+  // the post still going out.
+  const { unschedule } = useUnscheduleDraft();
   const handleUnscheduleDraft = React.useCallback(
-    (draftId: string) => updateDraft(draftId, (d) => ({ ...d, status: 'draft' as const })),
-    [updateDraft],
+    (draftId: string) => {
+      const draft = scheduledDrafts.find((item) => item.id === draftId);
+      if (draft) void unschedule(draft);
+    },
+    [scheduledDrafts, unschedule],
   );
 
   const handleCreateBacklog = (title: string) => {

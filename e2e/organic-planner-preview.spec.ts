@@ -6,6 +6,7 @@ import { type BrowserContext, expect, type Locator, type Page, test } from '@pla
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
+import { dayIdOffsetFromToday, forgetCachedIntegrations } from './support/plannerBench';
 
 // Organic planner list + draft-preview bench (Airtable #227, #225, #226, #231, #233).
 //
@@ -130,14 +131,6 @@ function admin(): SupabaseClient {
     );
   }
   return createClient(url, key, { auth: { persistSession: false } });
-}
-
-function dayIdOffsetFromToday(offsetDays: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 // The browser half of the bench (a real Mediabunny H.264 encode) is bundled for the page with
@@ -1185,15 +1178,16 @@ test.describe('organic planner list + draft preview', () => {
     );
     await page.screenshot({ path: `${SCREENSHOT_DIR}/preview-video-readonly.png` });
 
-    // Edit mode is a SEPARATE component tree, and it regressed separately.
-    // `getByLabel('Edit post')` matches TWICE — the button carries both aria-label and title —
-    // and `.first()` picked the one whose click did nothing, which made the edit-mode half of
-    // this bench pass without ever leaving read-only. Target the button itself.
-    const editToggle = preview.locator('button[aria-label="Edit post"]');
-    await editToggle.click();
+    // There is no edit mode any more: the frame edits in place, so the media above IS the
+    // editable media area. Prove it is (the live media slot, no toggle to find) and that the
+    // reel decodes inside it.
     await expect(
-      preview.locator('button[aria-label="Done editing post"]'),
-      'the Edit toggle did not enter edit mode',
+      preview.locator('button[aria-label="Edit post"]'),
+      'an Edit post toggle came back — the frame is meant to edit in place',
+    ).toHaveCount(0);
+    await expect(
+      preview.locator('[aria-label^="Media slot"]').first(),
+      'the in-place media area is not the live media slot',
     ).toBeVisible({ timeout: 20_000 });
     const editVideo = preview.locator('video');
     await expect(editVideo, 'edit mode renders no <video>').toHaveCount(1, { timeout: 30_000 });
@@ -1207,7 +1201,7 @@ test.describe('organic planner list + draft preview', () => {
         { timeout: 60_000, intervals: [1000, 2000, 3000] },
       )
       .toBe(true);
-    console.log('[#231] edit mode decoded the same attached reel');
+    console.log('[#231] the in-place media slot decoded the same attached reel');
     await page.screenshot({ path: `${SCREENSHOT_DIR}/preview-video-editing.png` });
   });
 
@@ -1219,15 +1213,7 @@ test.describe('organic planner list + draft preview', () => {
 
     const preview = page.getByRole('complementary', { name: 'Draft preview' });
     await expect(preview).toBeVisible({ timeout: 60_000 });
-    // `getByLabel('Edit post')` matches TWICE — the button carries both aria-label and title —
-    // and `.first()` picked the one whose click did nothing, which made the edit-mode half of
-    // this bench pass without ever leaving read-only. Target the button itself.
-    const editToggle = preview.locator('button[aria-label="Edit post"]');
-    await editToggle.click();
-    await expect(
-      preview.locator('button[aria-label="Done editing post"]'),
-      'the Edit toggle did not enter edit mode',
-    ).toBeVisible({ timeout: 20_000 });
+    // Gating #2: the picker works without an edit mode.
 
     // The empty slot splits into "Select from library" and "Upload from your computer"; a
     // forced click on the slot's centre lands on Upload and opens the OS file chooser, never
@@ -1258,10 +1244,17 @@ test.describe('organic planner list + draft preview', () => {
 
   for (const platform of ['tiktok', 'youtube'] as const) {
     const label = PLATFORM_REEL_LABELS[platform];
-    test(`${label}: the reel previews, the library picker opens, and Publish reaches the ${label} confirm`, async () => {
+    test(`${label}: the reel previews, the library picker opens, and the account gate holds before the click`, async () => {
       await openListPlanner(page);
       const row = listRow(page, PLATFORM_REEL_TITLES[platform]);
       await expect(row).toBeVisible({ timeout: 120_000 });
+      // The dry run fires as the preview opens: listen first.
+      const planResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes('/publish-plan') &&
+          response.url().includes(`platform=${platform}`),
+        { timeout: 90_000 },
+      );
       await row.click();
 
       const preview = page.getByRole('complementary', { name: 'Draft preview' });
@@ -1298,14 +1291,10 @@ test.describe('organic planner list + draft preview', () => {
       expect(box && box.height > box.width, `the ${label} reel frame is not vertical`).toBe(true);
       await page.screenshot({ path: `${SCREENSHOT_DIR}/preview-${platform}-readonly.png` });
 
-      // The library picker is mounted inside the media node the placeholder used to drop.
-      const editToggle = preview.locator('button[aria-label="Edit post"]');
-      await editToggle.click();
-      await expect(preview.locator('button[aria-label="Done editing post"]')).toBeVisible({
-        timeout: 20_000,
-      });
+      // The library picker is mounted inside the media node the placeholder used to drop, and
+      // it is live without an edit mode.
       const mediaSlot = preview.locator('[aria-label^="Media slot"]').first();
-      await expect(mediaSlot, `the ${label} edit mode has no media slot`).toBeVisible({
+      await expect(mediaSlot, `the ${label} preview has no live media slot`).toBeVisible({
         timeout: 30_000,
       });
       // A slot that already holds media opens the creative full screen; its Replace is the
@@ -1338,37 +1327,41 @@ test.describe('organic planner list + draft preview', () => {
       console.log(`[${platform}] library picker opened with the seeded library videos`);
       await page.keyboard.press('Escape');
       await expect(pickerHeader).toHaveCount(0, { timeout: 20_000 });
-      await preview.locator('button[aria-label="Done editing post"]').click();
 
-      // Publish goes through the REAL publish-intent route, then stops at the confirm dialog.
-      const publish = preview.getByRole('button', { name: `Publish to ${label}`, exact: true });
-      await expect(publish, `no enabled "Publish to ${label}" button`).toBeEnabled({
-        timeout: 30_000,
-      });
-      await expect(preview.getByRole('button', { name: 'Publish to Instagram' })).toHaveCount(0);
-
-      const intentResponse = page.waitForResponse(
-        (response) =>
-          response.url().includes('/publish-intent') && response.request().method() === 'POST',
-        { timeout: 60_000 },
-      );
-      await publish.click();
-      const intent = await intentResponse;
-      const intentBody = (await intent.json().catch(() => null)) as Record<string, unknown> | null;
+      // The server's own reading of the row, from the same resolver publish runs: the post goes
+      // to this platform, with its media.
+      const plan = await planResponse;
+      const planBody = (await plan.json().catch(() => null)) as {
+        plan?: { platform?: string; media?: unknown[] } | null;
+        accounts?: { id: string }[];
+        blockers?: { reason: string }[];
+      } | null;
       console.log(
-        `[${platform}] publish-intent ${intent.status()} platform=${String(intentBody?.platform)} publishable=${String(intentBody?.publishable)} media=${JSON.stringify(intentBody?.media ?? null)} account=${JSON.stringify(intentBody?.account ?? null)} blockers=${JSON.stringify(intentBody?.blockers ?? null)}`,
+        `[${platform}] publish-plan ${plan.status()} platform=${String(planBody?.plan?.platform)} media=${planBody?.plan?.media?.length ?? 0} accounts=${planBody?.accounts?.length ?? 0} blockers=${JSON.stringify(planBody?.blockers?.map((b) => b.reason) ?? null)}`,
       );
-      expect(intent.status(), `publish-intent failed for ${label}`).toBeLessThan(400);
-      // The server's own reading of the row: the post goes to this platform, with its media.
-      expect(intentBody?.platform).toBe(platform);
-      expect((intentBody?.media as { count?: number } | undefined)?.count).toBeGreaterThan(0);
+      expect(plan.status(), `publish-plan failed for ${label}`).toBeLessThan(400);
+      expect(planBody?.plan?.platform).toBe(platform);
+      expect(planBody?.plan?.media?.length ?? 0).toBeGreaterThan(0);
 
-      const dialog = page.getByRole('alertdialog');
-      await expect(dialog.getByText(`Publish to ${label}?`)).toBeVisible({ timeout: 30_000 });
-      await page.screenshot({ path: `${SCREENSHOT_DIR}/publish-confirm-${platform}.png` });
-      // Never confirm: this bench does not post.
-      await dialog.getByRole('button', { name: 'Cancel' }).click();
-      await expect(dialog).toHaveCount(0, { timeout: 20_000 });
+      // Gating #10/#11: the account is known BEFORE the click. This brand connects no ${label}
+      // account; the old panel let Publish reach the confirm dialog and the server then refused
+      // it (account_missing). Now the preview says so, makes it a fix, and offers no Publish now.
+      const accountConnected = (planBody?.accounts?.length ?? 0) > 0;
+      if (accountConnected) {
+        await expect(
+          preview.getByRole('button', { name: 'Publish now', exact: true }),
+          `no enabled "Publish now" for a ${label} post with an account`,
+        ).toBeEnabled({ timeout: 30_000 });
+      } else {
+        await expect(preview.locator('[data-review-account]')).toHaveText('No account connected', {
+          timeout: 30_000,
+        });
+        await expect(preview.locator('[data-readiness-fix="account"]')).toBeVisible();
+        await expect(preview.getByRole('button', { name: 'Publish now', exact: true })).toHaveCount(
+          0,
+        );
+      }
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/publish-gate-${platform}.png` });
     });
   }
 
@@ -1444,9 +1437,11 @@ test.describe('organic planner list + draft preview', () => {
       `[#233a] ${signRequests.length} sign POST(s) total; the second hover added ${signRequests.length - signsAfterFirstHover}`,
     );
 
-    // ---- (c) a click opens the side preview; the context action enters edit mode ----
+    // ---- (c) a click opens the side preview; the context action opens the caption ----
+    // There is no edit mode: "Open in editor" opens the caption editor in place.
     const preview = page.getByRole('complementary', { name: 'Draft preview' });
-    const doneEditing = page.locator('button[aria-label="Done editing post"]');
+    const doneEditing = preview.getByRole('textbox', { name: /caption/i }).first();
+    const closeCaption = () => doneEditing.evaluate((el) => (el as HTMLTextAreaElement).blur());
 
     await dismissHoverCard(page);
     await monthChip(page, VIDEO_TITLE).click();
@@ -1456,14 +1451,14 @@ test.describe('organic planner list + draft preview', () => {
     await expect(preview.locator('video').first()).toBeVisible({ timeout: 30_000 });
     await monthChip(page, VIDEO_TITLE).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Open in editor' }).click();
-    await expect(doneEditing, 'Open in editor left the panel read-only').toBeVisible({
+    await expect(doneEditing, 'Open in editor did not open the caption').toBeVisible({
       timeout: 30_000,
     });
-    console.log('[#233b] click opened the preview and the context action opened edit mode');
+    console.log('[#233b] click opened the preview and the context action opened the caption');
     await page.screenshot({ path: `${SCREENSHOT_DIR}/month-edit-opens-editor.png` });
 
     // ---- (d) the ALREADY-SELECTED case ----
-    await doneEditing.click();
+    await closeCaption();
     await expect(doneEditing).toHaveCount(0, { timeout: 20_000 });
     await dismissHoverCard(page);
     await monthChip(page, VIDEO_TITLE).click();
@@ -1478,7 +1473,7 @@ test.describe('organic planner list + draft preview', () => {
     console.log('[#233b] Edit works on an already-selected draft');
 
     // ---- (e) the COLLAPSED case: the intent has to re-open the panel ----
-    await doneEditing.click();
+    await closeCaption();
     await page.getByLabel('Collapse draft preview').click();
     await expect
       .poll(
@@ -1498,7 +1493,7 @@ test.describe('organic planner list + draft preview', () => {
       doneEditing,
       'Edit left the panel collapsed — the edit intent never re-expanded it',
     ).toBeVisible({ timeout: 30_000 });
-    console.log('[#233b] Edit re-expanded a collapsed preview into edit mode');
+    console.log('[#233b] Edit re-expanded a collapsed preview with the caption open');
     await page.screenshot({ path: `${SCREENSHOT_DIR}/month-edit-from-collapsed.png` });
   });
 });
@@ -1894,7 +1889,7 @@ type UxFrameReading = {
   mediaContent: { fit: string; decoded: boolean; rect: UxBox | null } | null;
 };
 
-const uxTodayIndex = () => (new Date().getDay() + 6) % 7;
+const uxTodayIndex = () => (new Date(`${dayIdOffsetFromToday(0)}T12:00:00Z`).getUTCDay() + 6) % 7;
 
 // Mon..Sun of the week the planner opens on, in the browser's (= this machine's) local zone.
 function uxWeekDayIds(): string[] {
@@ -2164,6 +2159,26 @@ async function uxSettle(page: Page): Promise<void> {
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   );
   await page.waitForTimeout(UX_FIXTURE_SETTLE_MS);
+}
+
+// The dock and the platform rows draw from async reads (integrations, posted content) that can
+// land after the planner first paints, seconds late in a long run. A baseline taken before they
+// land reads a late dock as the sheet moving the grid, so "before" waits for the page's requests
+// to go quiet (capped: a poll may never let them) and then for two reads 400ms apart to agree.
+async function uxSettledGeometry(page: Page, view: UxView) {
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+  let last = await page.evaluate(uxGeometryProbe, view);
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    await page.waitForTimeout(400);
+    const next = await page.evaluate(uxGeometryProbe, view);
+    const same =
+      next?.dockHeight === last?.dockHeight &&
+      next?.scroller.height === last?.scroller.height &&
+      next?.scroller.scrollHeight === last?.scroller.scrollHeight;
+    last = next;
+    if (same) break;
+  }
+  return last;
 }
 
 async function uxSwitchView(page: Page, view: UxView): Promise<void> {
@@ -2984,9 +2999,12 @@ function uxAssertFrame(
   expect
     .soft(reading.storyProgress, `${label}: [data-story-progress] present=${reading.storyProgress}`)
     .toBe(isStory);
+  // Wave 2 (fidelity item 11): "Send message" is a viewer affordance a post never sends, so an
+  // editable draft's story frame no longer draws it. Wave 1 asserted it on stories; the plan
+  // inverts that, and the story still reads as one through [data-story-progress] above.
   expect
     .soft(reading.sendMessage, `${label}: "Send message" present=${reading.sendMessage}`)
-    .toBe(isStory);
+    .toBe(false);
 }
 
 // Polls the frame until the media box stops moving: media sizes itself once it loads.
@@ -3117,6 +3135,7 @@ test.describe('planner UX (U1–U7)', () => {
     await setActiveBrand(supabase, BRAND_ID);
     await repairOnboarding(supabase);
     await purgeUxRows(supabase);
+    await forgetCachedIntegrations();
 
     cookies = (await mintSessionWithPassword(LOCAL_OWNER_EMAIL, LOCAL_OWNER_PASSWORD)).cookies;
     context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -3669,7 +3688,8 @@ test.describe('planner UX (U1–U7)', () => {
             (row.client_key ?? '').startsWith('draft-') &&
             row.slot_data?.dayId === tileDay &&
             row.slot_data?.title === expectedTitle &&
-            row.slot_data?.draftSnapshot?.format === 'Post' &&
+            // The field route rewrites the snapshot's format in the publisher's spelling (POST).
+            row.slot_data?.draftSnapshot?.format?.toLowerCase() === 'post' &&
             row.slot_data?.draftSnapshot?.origin === 'manual',
         )
         .map((row) => row.id);
@@ -4044,7 +4064,8 @@ test.describe('planner UX (U1–U7)', () => {
                 ? Array.from(header.querySelectorAll('*')).find((el) => ownText(el) && !onFill(el))
                 : null;
               colors.storyHeader = srgb(headerText);
-              colors.sendMessage = srgb(all.find((el) => ownText(el) === 'Send message'));
+              // No 'Send message' bar to read: a draft never draws the reply bar it cannot send
+              // (fidelity item 11), which uxAssertFrame asserts.
             }
             if (saved.theme === null) html.removeAttribute('data-theme');
             else html.setAttribute('data-theme', saved.theme);
@@ -4315,7 +4336,6 @@ test.describe('planner UX (U1–U7)', () => {
           await expect(preview, `${view}: no preview to type into`).toBeVisible({
             timeout: 30_000,
           });
-          await preview.locator('button[aria-label="Edit post"]').click();
           const editCaption = preview
             .getByRole('button', { name: /^(Edit|Add an?) (\w+ )?caption$/i })
             .first();
@@ -4593,7 +4613,7 @@ test.describe('planner UX (U1–U7)', () => {
 
         await page.setViewportSize(viewport);
         await uxOpenPlanner(page, view, target.title);
-        const before = await page.evaluate(uxGeometryProbe, view);
+        const before = await uxSettledGeometry(page, view);
         // Phone width, before anything opens: the workflow stepper's four stages and its insight
         // note must not overprint each other, and the week's sticky platform rail must stay on
         // top of the cards that scroll under it.
@@ -4906,17 +4926,39 @@ test.describe('planner UX (U1–U7)', () => {
                 ?.contains(document.activeElement),
             ),
           );
+        // Tab from the open draft lands in its preview in ONE press, whatever the week holds;
+        // without that the walk crossed the rest of the grid and the dock (75 stops in a busy
+        // week). The loop runs to the page's own tab stops so a miss records the path it took.
+        const tabStops = await page.evaluate(
+          () =>
+            document.querySelectorAll(
+              'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+            ).length,
+        );
         let tabs = 0;
         let reached = false;
-        while (tabs < 80 && !reached) {
+        const tabPath: string[] = [];
+        while (tabs < tabStops + 5 && !reached) {
           await page.keyboard.press('Tab');
           tabs += 1;
           reached = await insidePreview();
+          tabPath.push(
+            await page.evaluate(() => {
+              const el = document.activeElement;
+              const label = el?.getAttribute('aria-label') ?? el?.textContent ?? '';
+              return `${el?.tagName ?? '?'}:${label.trim().slice(0, 40)}`;
+            }),
+          );
         }
         steps.tabsToPreview = reached ? tabs : null;
+        steps.tabStops = tabStops;
+        if (!reached) steps.tabPath = tabPath;
         expect
-          .soft(reached, `Tab from the chip never reached the preview in ${tabs} presses`)
-          .toBe(true);
+          .soft(
+            steps.tabsToPreview,
+            `Tab from the open draft took ${tabs} presses to reach its preview`,
+          )
+          .toBe(1);
         // Recorded, not gated: what one Escape does on the first tab stop inside the preview.
         // A tooltip-wrapped control there takes the first Escape for its tooltip.
         if (reached) {
@@ -5055,13 +5097,12 @@ test.describe('planner UX (U1–U7)', () => {
           await expect(preview, 'Enter on a focused chip did not open the preview').toBeVisible({
             timeout: 30_000,
           });
-          await preview.locator('button[aria-label="Edit post"]').click();
           const editCaption = preview
             .getByRole('button', { name: /^(Edit|Add an?) (\w+ )?caption$/i })
             .first();
           if (await editCaption.isVisible().catch(() => false)) await editCaption.click();
           const caption = preview.getByRole('textbox', { name: /caption/i }).first();
-          await expect(caption, 'no caption textbox in edit mode').toBeVisible({
+          await expect(caption, 'no caption textbox in the preview').toBeVisible({
             timeout: 20_000,
           });
           await caption.evaluate((el) => {

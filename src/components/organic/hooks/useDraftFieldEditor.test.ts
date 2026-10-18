@@ -72,7 +72,7 @@ mock.module('@/lib/organic/store', () =>
 );
 
 // Imported AFTER the module mocks so the hook binds to them.
-const { useDraftFieldEditor } = await import('./useDraftFieldEditor');
+const { useDraftFieldEditor, useDraftFieldPersistence } = await import('./useDraftFieldEditor');
 
 function draft(over: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
@@ -392,6 +392,147 @@ describe('queueFieldEdit', () => {
     });
 
     expect(requestCalls).toHaveLength(0);
+  });
+
+  it('flush() waits for a discrete edit already on the wire', async () => {
+    const target = draft();
+    seed(target);
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+    });
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(flushed).toBeNull();
+
+    await act(async () => {
+      release({ updated_at: 'T1' });
+    });
+    await waitFor(() => expect(flushed).toBe(true));
+  });
+
+  it('a burst flushed behind a save on the wire goes out after it, with the token it returned', async () => {
+    const target = draft();
+    seed(target);
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      requestCalls.length === 1
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve({ updated_at: 'T2' });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+    });
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requestCalls).toHaveLength(1);
+
+    await act(async () => {
+      release({ updated_at: 'T1' });
+    });
+    await waitFor(() => expect(flushed).toBe(true));
+    expect(requestCalls).toHaveLength(2);
+    expect(requestCalls[1]?.body).toMatchObject({ caption: 'typed', expected_updated_at: 'T1' });
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it('two writers on one row save in turn, each sending the token the last one returned', async () => {
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      requestCalls.length === 1
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve({ updated_at: 'T2' });
+    const media = renderHook(() => useDraftFieldPersistence()).result.current;
+    const fields = renderHook(() => useDraftFieldPersistence()).result.current;
+    const row = { id: 'local-1', backendDraftId: 'srv-1', updatedAt: 'T0' };
+
+    const first = media.persistDraftFields(row, { format: 'Carousel' });
+    const second = fields.persistDraftFields(row, { caption: 'typed' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requestCalls).toHaveLength(1);
+    expect(requestCalls[0]?.body).toMatchObject({ expected_updated_at: 'T0' });
+
+    release({ updated_at: 'T1' });
+    expect(await first).toEqual({ ok: true, updatedAt: 'T1' });
+    expect(await second).toEqual({ ok: true, updatedAt: 'T2' });
+    expect(requestCalls[1]?.body).toMatchObject({ caption: 'typed', expected_updated_at: 'T1' });
+  });
+
+  it('flush() waits for a burst whose coalesce timer already fired', async () => {
+    const target = draft();
+    seed(target);
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+    });
+    await waitFor(() => expect(requestCalls).toHaveLength(1));
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(flushed).toBeNull();
+    expect(requestCalls).toHaveLength(1);
+
+    await act(async () => {
+      release({ updated_at: 'T1' });
+    });
+    await waitFor(() => expect(flushed).toBe(true));
+  });
+
+  it('flush() reports false when the edit on the wire fails', async () => {
+    const target = draft();
+    seed(target);
+    let fail: (error: unknown) => void = () => {};
+    requestImpl = () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+    });
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await act(async () => {
+      fail(new ApiError('boom', 500));
+    });
+    await waitFor(() => expect(flushed).toBe(false));
   });
 
   it('merges different queued fields into one patch rather than dropping either', async () => {

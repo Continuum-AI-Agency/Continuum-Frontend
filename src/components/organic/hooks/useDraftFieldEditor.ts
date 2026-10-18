@@ -52,6 +52,35 @@ function messageForError(error: unknown): string {
   return 'Your change could not be saved.';
 }
 
+// One save at a time per row. The route's concurrency token is the row's updated_at, so two
+// saves sent together carry the same token and the second is refused as stale: the user's own
+// edit, reported as "changed elsewhere". Each save waits for the one before it on the same row
+// (the panel's fields, its media, a move) and sends the token that save came back with.
+type RowSaves = { tail: Promise<void>; token: string | null; pending: number };
+const savesByRow = new Map<string, RowSaves>();
+
+async function saveInTurn(
+  rowId: string,
+  save: (token: string | null) => Promise<DraftFieldPersistResult>,
+  token: string | null,
+): Promise<DraftFieldPersistResult> {
+  const busy = savesByRow.get(rowId);
+  const saves = busy ?? { tail: Promise.resolve(), token, pending: 0 };
+  savesByRow.set(rowId, saves);
+  saves.pending += 1;
+  // An idle row saves at once, so the request is on the wire when the caller returns.
+  const result = busy ? saves.tail.then(() => save(saves.token)) : save(token);
+  saves.tail = result.then((settled) => {
+    if (settled.ok && settled.updatedAt) saves.token = settled.updatedAt;
+  });
+  try {
+    return await result;
+  } finally {
+    saves.pending -= 1;
+    if (saves.pending === 0) savesByRow.delete(rowId);
+  }
+}
+
 export function useDraftFieldPersistence() {
   const persistDraftFields = React.useCallback(
     async (
@@ -59,29 +88,35 @@ export function useDraftFieldPersistence() {
       patch: PlannerDraftFieldPatch,
     ): Promise<DraftFieldPersistResult> => {
       // A draft with no server row yet is inserted by the autosave, which replays its
-      // copy through this route once the row exists (`newRowCopyPatch`) — there is
+      // content through this route once the row exists (`newDraftFieldPatch`) — there is
       // nothing to PATCH yet, and reporting a failure here would be a lie.
-      if (!target.backendDraftId) return { ok: true, updatedAt: null };
+      const rowId = target.backendDraftId;
+      if (!rowId) return { ok: true, updatedAt: null };
 
-      const parsed = plannerDraftFieldPatchSchema.safeParse({
-        ...patch,
-        expected_updated_at: patch.expected_updated_at ?? target.updatedAt ?? null,
-      });
-      if (!parsed.success) {
-        return { ok: false, stale: false, message: 'That value is not valid.' };
-      }
-
-      try {
-        const response = await request<{ updated_at?: string | null }>({
-          path: `/api/organic/calendar/drafts/${target.backendDraftId}/fields`,
-          method: 'PATCH',
-          body: parsed.data,
-        });
-        return { ok: true, updatedAt: response?.updated_at ?? null };
-      } catch (error) {
-        const stale = error instanceof ApiError && error.status === 409;
-        return { ok: false, stale, message: messageForError(error) };
-      }
+      return saveInTurn(
+        rowId,
+        async (token) => {
+          const parsed = plannerDraftFieldPatchSchema.safeParse({
+            ...patch,
+            expected_updated_at: token,
+          });
+          if (!parsed.success) {
+            return { ok: false, stale: false, message: 'That value is not valid.' };
+          }
+          try {
+            const response = await request<{ updated_at?: string | null }>({
+              path: `/api/organic/calendar/drafts/${rowId}/fields`,
+              method: 'PATCH',
+              body: parsed.data,
+            });
+            return { ok: true, updatedAt: response?.updated_at ?? null };
+          } catch (error) {
+            const stale = error instanceof ApiError && error.status === 409;
+            return { ok: false, stale, message: messageForError(error) };
+          }
+        },
+        patch.expected_updated_at ?? target.updatedAt ?? null,
+      );
     },
     [],
   );
@@ -109,8 +144,12 @@ export type UseDraftFieldEditorResult = {
     fields: readonly DraftEditField[],
     localPatch?: Partial<OrganicCalendarDraft>,
   ) => void;
-  /** Send any coalesced edit immediately. Call on blur and before navigating away. */
-  flush: () => Promise<void>;
+  /**
+   * Send any coalesced edit immediately and wait for every save already on the wire. Call on
+   * blur and before navigating away. False when one of them failed to save, so approve and
+   * publish can stop instead of sending the old copy.
+   */
+  flush: () => Promise<boolean>;
   /** The draft with any typing that has not reached the store yet. Render THIS one. */
   draft: OrganicCalendarDraft;
   isSaving: boolean;
@@ -164,6 +203,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
 
   const queuedRef = React.useRef<QueuedEdit | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = React.useRef(new Set<Promise<boolean>>());
 
   const send = React.useCallback(
     async (
@@ -175,6 +215,17 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     ): Promise<boolean> => {
       const draftId = target.id;
       markDraftEditPending(draftId, fields);
+      // Lets flush() wait for this save. Never rejects: persistDraftFields catches.
+      let settle: (saved: boolean) => void = () => {};
+      const tracked = new Promise<boolean>((resolve) => {
+        settle = resolve;
+      });
+      inFlightRef.current.add(tracked);
+      const finish = (saved: boolean) => {
+        inFlightRef.current.delete(tracked);
+        settle(saved);
+        return saved;
+      };
       setSavingFields((current) => new Set([...current, ...fields]));
 
       // The freshest CAS token: an edit that settled while this one waited moved it on.
@@ -210,7 +261,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
         }
         settleTyped();
         setSaveError(null);
-        return true;
+        return finish(true);
       }
 
       if (result.stale) {
@@ -223,7 +274,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
         });
         requestCalendarRefetch();
         settleTyped();
-        return false;
+        return finish(false);
       }
 
       if (snapshot) updateDraft(draftId, (current) => ({ ...current, ...snapshot }));
@@ -232,7 +283,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       settleTyped();
       setSaveError(result.message);
       show({ title: 'Change not saved', description: result.message, variant: 'error' });
-      return false;
+      return finish(false);
     },
     [
       persistDraftFields,
@@ -272,15 +323,18 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     [send, snapshotFor, updateDraft],
   );
 
-  const flush = React.useCallback(async (): Promise<void> => {
+  const flush = React.useCallback(async (): Promise<boolean> => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     const queued = queuedRef.current;
-    if (!queued) return;
     queuedRef.current = null;
-    await send(queued.target, queued.patch, queued.fields, null, queued.localPatch);
+    if (queued) void send(queued.target, queued.patch, queued.fields, null, queued.localPatch);
+    // A burst whose timer already fired, and a format or time picked a moment ago, are on the
+    // wire, not queued: approving without them sends what the row held before.
+    const saved = await Promise.all(inFlightRef.current);
+    return saved.every(Boolean);
   }, [send]);
 
   const queueFieldEdit = React.useCallback(
