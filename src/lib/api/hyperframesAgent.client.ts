@@ -1,5 +1,7 @@
 import {
   type HyperframesAgentTurnRequest,
+  type HyperframesMotionCommitRequest,
+  type HyperframesMotionCommitResponse,
   type HyperframesAepAuthoringRequest,
   type HyperframesAepAuthoringResponse,
   hyperframesAepAuthoringRequestSchema,
@@ -10,6 +12,7 @@ import {
   type HyperframesStoryPlanRequest,
   hyperframesAgentTurnResponseSchema,
   hyperframesCompositionRevisionSchema,
+  hyperframesMotionCommitResponseSchema,
   hyperframesStoryAnglesSchema,
   hyperframesStoryboardSchema,
 } from '@continuum/contracts';
@@ -92,6 +95,20 @@ export function cancelHyperframesRun(runId: string): Promise<{ cancelled: boolea
     path: `${base(runId)}/cancel`,
     method: 'POST',
     schema: z.object({ cancelled: z.boolean() }),
+    cache: 'no-store',
+  });
+}
+
+/** Commits timeline edits as a new revision; a 409 means `revisionId` is no longer the latest. */
+export function commitHyperframesMotion(
+  revisionId: string,
+  commit: HyperframesMotionCommitRequest,
+): Promise<HyperframesMotionCommitResponse> {
+  return http.request({
+    path: `${base()}/revisions/${encodeURIComponent(revisionId)}/motion`,
+    method: 'POST',
+    body: commit,
+    schema: hyperframesMotionCommitResponseSchema,
     cache: 'no-store',
   });
 }

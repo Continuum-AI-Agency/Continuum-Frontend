@@ -339,6 +339,14 @@ export function clipWithEffectSpec<T extends VisualClip>(
     .map((keyframe) => ({ ...keyframe, timeSec: keyframe.timeSec * stretch }));
   const owned = (effect: EditorVideoClip['effects'][number]) =>
     SPEC_EFFECT_TYPES.has(effect.effectType) || SPEC_EFFECT_IDS.has(effect.effectId);
+  // A rewritten look keeps its instance id (the first of its kind, the one that renders), so
+  // effect.parameter keys that name it still drive it.
+  const idByEffect = new Map(
+    clip.effects
+      .filter(owned)
+      .toReversed()
+      .map((effect) => [effect.effectId, effect.id] as const),
+  );
   const next = {
     ...retimed,
     transform: {
@@ -346,7 +354,13 @@ export function clipWithEffectSpec<T extends VisualClip>(
       anchorX: clip.transform.anchorX,
       anchorY: clip.transform.anchorY,
     },
-    effects: [...clip.effects.filter((effect) => !owned(effect)), ...mapped.effects],
+    effects: [
+      ...clip.effects.filter((effect) => !owned(effect)),
+      ...mapped.effects.map((effect) => ({
+        ...effect,
+        id: idByEffect.get(effect.effectId) ?? effect.id,
+      })),
+    ],
     blendMode: mapped.blendMode,
     keyframes: [
       ...kept,

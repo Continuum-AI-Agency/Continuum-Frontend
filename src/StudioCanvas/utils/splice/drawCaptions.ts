@@ -5,7 +5,7 @@ import {
 } from '@/lib/clips/captionAnimation';
 import { resolveStyleWithPreset } from '@/lib/clips/captionPresets';
 import { type CaptionStyle, DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
-import { opacityFor, resolveTransformAt } from '../render/effectSpec';
+import { opacityFor, resolveTransformAt, sampleStops } from '../render/effectSpec';
 import type { CaptionCue, CaptionWord } from './captionCues';
 
 // Burns one word-synced caption line onto the output frame. Drawn in the splice worker
@@ -27,7 +27,8 @@ import type { CaptionCue, CaptionWord } from './captionCues';
 // The motion itself lives in lib/clips/captionAnimation.ts as a pure function of word age,
 // so this file never sees a delta, a clock, or any state between frames. A text clip's
 // keyframes (cue.motion) move the whole cue on top of that, sampled by the same
-// resolveTransformAt a video clip moves by.
+// resolveTransformAt a video clip moves by; its font size and tracking keys are sampled
+// before layout, so a growing title re-wraps and re-centres frame by frame.
 
 const MIN_FONT_PX = 16;
 const MAX_TEXT_WIDTH_FRACTION = 0.9;
@@ -153,10 +154,22 @@ export function drawActiveCaption(
   // Preset < stored style < per-cue override. The DOM preview resolves through the SAME
   // helper, which is what stops the gallery from lying about what will be rendered.
   const resolvedStyle = resolveStyleWithPreset(style, cue.style);
-  const fontPx = Math.max(
-    MIN_FONT_PX,
-    Math.round(targetHeight * (resolvedStyle.fontSizeFrac ?? 0.055)),
+  const span = cue.endSec - cue.startSec;
+  const u = span > 0 ? (outputTimeSec - cue.startSec) / span : 0;
+  const textChannels = cue.motion?.motionChannels;
+  const fontSizeFrac = sampleStops(
+    textChannels?.fontSizeFrac,
+    u,
+    resolvedStyle.fontSizeFrac ?? 0.055,
+    cue.motion,
   );
+  const trackingEm = sampleStops(
+    textChannels?.trackingEm,
+    u,
+    resolvedStyle.trackingEm ?? 0,
+    cue.motion,
+  );
+  const fontPx = Math.max(MIN_FONT_PX, Math.round(targetHeight * fontSizeFrac));
   const fontStack = resolvedStyle.fontFamily
     ? `"${resolvedStyle.fontFamily}", ${FALLBACK_FONT_STACK}`
     : FALLBACK_FONT_STACK;
@@ -175,6 +188,8 @@ export function drawActiveCaption(
   ctx.font = baseFont;
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
+  // Set before measuring, so tracking widens the words the wrap and the centring see.
+  if (trackingEm !== 0) ctx.letterSpacing = `${trackingEm * fontPx}px`;
 
   // ── Layout: everything below is measured ONCE, for the whole cue ────────────────────
   const uppercase = resolvedStyle.uppercase === true;
@@ -244,8 +259,6 @@ export function drawActiveCaption(
   // A text clip's keyframed transform moves the whole cue about its anchor point.
   let cueAlpha = 1;
   if (cue.motion) {
-    const span = cue.endSec - cue.startSec;
-    const u = span > 0 ? (outputTimeSec - cue.startSec) / span : 0;
     const at = resolveTransformAt(cue.motion, u);
     cueAlpha = opacityFor(cue.motion, u);
     ctx.translate(targetWidth * (0.5 + at.offsetX), targetHeight * (0.5 + at.offsetY));

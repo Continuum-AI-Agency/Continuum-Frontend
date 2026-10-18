@@ -9,6 +9,8 @@ import {
   type EditorTextClip,
   type EditorTransition,
   type EditorVideoClip,
+  LOOK_EFFECTS,
+  type LookEffectId,
   parentPositionTracks,
   resolveNestedSequence,
 } from '@continuum/contracts';
@@ -27,6 +29,7 @@ import {
 import { viewProjectForSequence } from '@/StudioCanvas/nodes/timeline/editorProjectV2AssemblyModel';
 import { persistTimelineRender } from '@/StudioCanvas/utils/persistTimelineRender';
 import type {
+  AnimatedLook,
   ClipEffectSpec,
   ClipMotionChannels,
   ClipPropertyStop,
@@ -146,6 +149,8 @@ const transformKeyframesFor = (clip: {
 
 type EditorClipKeyframe = {
   property: string;
+  parameterName?: string;
+  effectInstanceId?: string;
   timeSec: number;
   value: unknown;
   interpolation?: ClipPropertyStop['interpolation'];
@@ -225,6 +230,87 @@ const motionChannelsFor = (clip: {
   return Object.keys(channels).length > 0 ? channels : undefined;
 };
 
+type EditorClipEffect = {
+  id?: string;
+  enabled: boolean;
+  effectType: string;
+  effectId: string;
+  mix?: number;
+  parameters: Record<string, unknown>;
+};
+
+/** The looks with a strength parameter (`LOOK_EFFECTS[id].parameter`), each with a channel. */
+type ParameterLookId = {
+  [Id in LookEffectId]: (typeof LOOK_EFFECTS)[Id]['parameter'] extends null ? never : Id;
+}[LookEffectId];
+const ANIMATED_LOOKS: Record<ParameterLookId, AnimatedLook> = {
+  blur: 'blur',
+  tint: 'tint',
+  vignette: 'vignette',
+  film_grain: 'filmGrain',
+  dust: 'dust',
+  light_leaks: 'lightLeaks',
+  chromatic_aberration: 'chromaticAberration',
+  vhs: 'vhs',
+  pixelate: 'pixelate',
+  corner_radius: 'cornerRadius',
+  chroma_key: 'chromaKey',
+};
+const isParameterLook = (effectId: string): effectId is ParameterLookId =>
+  Object.hasOwn(ANIMATED_LOOKS, effectId);
+
+const isEnabledLook = (candidate: EditorClipEffect): boolean =>
+  candidate.enabled &&
+  (candidate.effectType === 'color_adjustment' ||
+    candidate.effectType === 'video_filter' ||
+    candidate.effectType === 'blur');
+
+/** The instance a look renders from: the readers in `clipEffectSpecFromEditorClip` pick it. */
+const renderedLookFor = (
+  effects: readonly EditorClipEffect[] | undefined,
+  effectId: ParameterLookId,
+): EditorClipEffect | undefined =>
+  effects?.find((candidate) =>
+    effectId === 'blur'
+      ? isEnabledLook(candidate) && numberParameter(candidate.parameters.blur) !== undefined
+      : effectId === 'chroma_key'
+        ? candidate.enabled &&
+          (candidate.effectType === 'chroma_key' || candidate.effectType === 'background_removal')
+        : candidate.enabled && candidate.effectId === effectId,
+  );
+
+/**
+ * A clip's effect.parameter keys as per-frame look channels. A key drives the effect it names
+ * (`effectInstanceId`, else the clip's first enabled effect that has `parameterName`) through
+ * that look's strength parameter; keyframe_clip refuses any other parameter. A key on a
+ * disabled or shadowed instance draws nothing, as that instance itself draws nothing.
+ */
+const effectStopsFor = (clip: {
+  durationSec: number;
+  effects?: EditorClipEffect[];
+  keyframes?: EditorClipKeyframe[];
+}): ClipEffectSpec['effectStops'] => {
+  if (clip.durationSec <= 0) return undefined;
+  const stops: NonNullable<ClipEffectSpec['effectStops']> = {};
+  for (const keyframe of clip.keyframes ?? []) {
+    const { parameterName, effectInstanceId } = keyframe;
+    if (keyframe.property !== 'effect.parameter' || typeof keyframe.value !== 'number') continue;
+    if (parameterName === undefined) continue;
+    const target =
+      effectInstanceId !== undefined
+        ? clip.effects?.find((effect) => effect.id === effectInstanceId)
+        : clip.effects?.find(
+            (effect) => effect.enabled && Object.hasOwn(effect.parameters, parameterName),
+          );
+    if (!target || !isParameterLook(target.effectId)) continue;
+    if (LOOK_EFFECTS[target.effectId].parameter !== parameterName) continue;
+    if (renderedLookFor(clip.effects, target.effectId) !== target) continue;
+    const look = ANIMATED_LOOKS[target.effectId];
+    stops[look] = [...(stops[look] ?? []), toStop(keyframe, clip.durationSec, keyframe.value)];
+  }
+  return Object.keys(stops).length > 0 ? stops : undefined;
+};
+
 /**
  * A V2 clip's effect instances back into the render spec `composeTimeline` consumes.
  *
@@ -256,13 +342,7 @@ export const clipEffectSpecFromEditorClip = (
     };
     crop?: ClipEffectSpec['crop'];
     blendMode?: ClipEffectSpec['blendMode'];
-    effects?: Array<{
-      enabled: boolean;
-      effectType: string;
-      effectId: string;
-      mix?: number;
-      parameters: Record<string, unknown>;
-    }>;
+    effects?: EditorClipEffect[];
     keyframes?: EditorClipKeyframe[];
     keyframeOffsetSec?: number;
   },
@@ -304,14 +384,7 @@ export const clipEffectSpecFromEditorClip = (
     // Every enabled look counts, not just the first: a clip with a VHS look (itself a
     // video_filter) and then a black-and-white filter plays both, and a blur look sits
     // beside a filter preset. The first instance to name a preset or an adjustment wins it.
-    const looks =
-      clip.effects?.filter(
-        (candidate) =>
-          candidate.enabled &&
-          (candidate.effectType === 'color_adjustment' ||
-            candidate.effectType === 'video_filter' ||
-            candidate.effectType === 'blur'),
-      ) ?? [];
+    const looks = clip.effects?.filter(isEnabledLook) ?? [];
     if (looks.length === 0) return {};
     const filterPreset = looks
       .map((look) => stringParameter(look.parameters.filterPreset ?? look.effectId))
@@ -347,11 +420,7 @@ export const clipEffectSpecFromEditorClip = (
     // pipeline can actually do — no segmentation model ships in the browser renderer.
     // Defaults are `chromaKeyConfig`'s own, so an instance stored with no parameters
     // keys green rather than silently doing nothing.
-    const key = clip.effects?.find(
-      (candidate) =>
-        candidate.enabled &&
-        (candidate.effectType === 'chroma_key' || candidate.effectType === 'background_removal'),
-    );
+    const key = renderedLookFor(clip.effects, 'chroma_key');
     if (!key) return {};
     return {
       chromaKey: {
@@ -362,24 +431,21 @@ export const clipEffectSpecFromEditorClip = (
     };
   })(),
   ...(() => {
-    const tint = clip.effects?.find(
-      (candidate) => candidate.enabled && candidate.effectId === 'tint',
-    );
+    const tint = renderedLookFor(clip.effects, 'tint');
     const color = tint ? stringParameter(tint.parameters.color) : undefined;
     const amount = tint ? numberParameter(tint.parameters.amount) : undefined;
-    return color && amount !== undefined && amount > 0 ? { tint: { color, amount } } : {};
+    // A keyed tint keeps its colour at amount 0, so its keys have something to fade in.
+    return color && amount !== undefined && (amount > 0 || effectStopsFor(clip)?.tint)
+      ? { tint: { color, amount } }
+      : {};
   })(),
   ...(() => {
-    const amountFor = (effectId: string): number | undefined => {
-      const effect = clip.effects?.find(
-        (candidate) => candidate.enabled && candidate.effectId === effectId,
-      );
+    const amountFor = (effectId: ParameterLookId): number | undefined => {
+      const effect = renderedLookFor(clip.effects, effectId);
       return effect ? numberParameter(effect.parameters.amount) : undefined;
     };
     const blockPx = (() => {
-      const effect = clip.effects?.find(
-        (candidate) => candidate.enabled && candidate.effectId === 'pixelate',
-      );
+      const effect = renderedLookFor(clip.effects, 'pixelate');
       return effect ? numberParameter(effect.parameters.blockPx) : undefined;
     })();
     const vignette = amountFor('vignette');
@@ -401,15 +467,14 @@ export const clipEffectSpecFromEditorClip = (
     };
   })(),
   ...(() => {
-    const corner = clip.effects?.find(
-      (candidate) => candidate.enabled && candidate.effectId === 'corner_radius',
-    );
+    const corner = renderedLookFor(clip.effects, 'corner_radius');
     const radiusFrac = corner ? numberParameter(corner.parameters.radiusFrac) : undefined;
     return radiusFrac !== undefined && radiusFrac > 0 ? { cornerRadiusFrac: radiusFrac } : {};
   })(),
   ...(transformKeyframesFor(clip) ? { keyframes: transformKeyframesFor(clip) } : {}),
   ...(opacityStopsFor(clip) ? { opacityStops: opacityStopsFor(clip) } : {}),
   ...(motionChannelsFor(clip) ? { motionChannels: motionChannelsFor(clip) } : {}),
+  ...(effectStopsFor(clip) ? { effectStops: effectStopsFor(clip) } : {}),
 });
 
 const FILTER_PRESET_IDS = ['none', 'bw', 'vintage', 'vivid', 'cool', 'warm', 'noir', 'dream'];
@@ -445,19 +510,37 @@ const transitionFor = (transition: EditorTransition | undefined): ClipTransition
   return { type, durationSec: transition.durationSec };
 };
 
-/** The part of a clip's render spec that moves a text clip: transform, opacity, keyframes. */
+/**
+ * The part of a clip's render spec that moves a text clip: transform, opacity, keyframes, and
+ * its `text.fontSize` (px, carried as a fraction of the canvas height) and `text.tracking`
+ * (em) keys, which drawActiveCaption samples per frame.
+ */
 const textMotionFor = (
   clip: Parameters<typeof clipEffectSpecFromEditorClip>[0],
+  canvasHeight: number,
   project?: EditorProjectV2,
 ) => {
   const {
     transform,
     opacity,
-    motionChannels,
+    motionChannels: geometry,
     motionDurationSec,
     keyframeOffsetSec,
     parentPositionTracks,
   } = clipEffectSpecFromEditorClip(clip, project);
+  const fontSizeFrac = numericStopsFor(clip, 'text.fontSize')?.map((stop) => ({
+    ...stop,
+    value: stop.value / canvasHeight,
+  }));
+  const trackingEm = numericStopsFor(clip, 'text.tracking');
+  const motionChannels: ClipMotionChannels | undefined =
+    fontSizeFrac || trackingEm
+      ? {
+          ...geometry,
+          ...(fontSizeFrac ? { fontSizeFrac } : {}),
+          ...(trackingEm ? { trackingEm } : {}),
+        }
+      : geometry;
   return {
     ...(transform ? { transform } : {}),
     ...(opacity !== undefined ? { opacity } : {}),
@@ -478,6 +561,7 @@ const captionStyleFor = (
       fontWeight: number;
       shadowColor?: string;
       shadowBlurPx: number;
+      trackingEm?: number;
     };
     transform: { position: { x: number; y: number } };
     highlightColor?: string;
@@ -495,6 +579,7 @@ const captionStyleFor = (
   fontSizeFrac: clip.style.fontSizePx / canvasHeight,
   outlineWidthFrac:
     clip.style.fontSizePx > 0 ? clip.style.outlineWidthPx / clip.style.fontSizePx : 0,
+  ...(clip.style.trackingEm ? { trackingEm: clip.style.trackingEm } : {}),
   position: {
     xFrac: clip.transform.position.x,
     yFrac: clip.transform.position.y,
@@ -538,7 +623,7 @@ export function textCueFor(
       animation: captionAnimationFromEditorId(clip.animationIn),
       exitAnimation: captionAnimationFromEditorId(clip.animationOut),
     },
-    motion: textMotionFor(clip, project),
+    motion: textMotionFor(clip, canvasHeight, project),
   };
 }
 
@@ -562,7 +647,7 @@ export function captionCueFor(
         }))
       : wordsForCaptionText(clip.text, clip.timelineStartSec, endSec),
     style: captionStyleFor(clip, canvasHeight),
-    motion: textMotionFor(clip, project),
+    motion: textMotionFor(clip, canvasHeight, project),
   };
 }
 

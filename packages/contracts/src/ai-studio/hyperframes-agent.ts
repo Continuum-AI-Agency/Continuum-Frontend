@@ -6,6 +6,7 @@ import {
   sceneSpecSchema,
 } from '../streaming/hyperframes';
 import { brandBookPieceKindSchema } from './brand-enforcement';
+import { motionTargetSchema } from './motion-timeline';
 import { shaderStackV1Schema } from './shader-stack';
 
 export const HYPERFRAMES_AGENT_NODE_TYPE = 'hyperframesAgent' as const;
@@ -260,6 +261,8 @@ export const hyperframesAgentTurnRequestSchema = z
     resolution: hyperframesResolutionSchema.default('1080p'),
     shaderStack: shaderStackV1Schema.optional(),
     revisionTarget: hyperframesRevisionTargetSchema.optional(),
+    /** The timeline selection a motion-only turn may change (`diffMotion` ⊆ it). */
+    motionTarget: motionTargetSchema.optional(),
     approvedStoryboard: hyperframesStoryboardSchema.optional(),
     /** Set on a report film run: the film is compiled from metrics, not drafted from `prompt`. */
     report: hyperframesReportRequestSchema.optional(),
