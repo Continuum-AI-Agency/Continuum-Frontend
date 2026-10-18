@@ -1,0 +1,84 @@
+{
+  "template": {
+    "url": "https://storage.googleapis.com/bench/forge-template.blend?X-Goog-Signature=abc",
+    "sha256": "0f343b0931126a20f133d67c2b018a3b5d3c8f1e6b3a1d6f0e2c4b7a9d8e1f20"
+  },
+  "values": [
+    {
+      "target": {
+        "idCode": "OB",
+        "idName": "Title",
+        "path": "text.body"
+      },
+      "kind": "text",
+      "value": "Black Friday"
+    },
+    {
+      "target": {
+        "idCode": "IM",
+        "idName": "Logo",
+        "path": "image.file"
+      },
+      "kind": "image",
+      "assetUrl": "https://storage.googleapis.com/bench/green.png?X-Goog-Signature=def",
+      "fileName": "green.png"
+    },
+    {
+      "target": {
+        "idCode": "MA",
+        "idName": "Swatch",
+        "path": "socket",
+        "node": "Emission",
+        "socket": "Color"
+      },
+      "kind": "color",
+      "value": "#FF0000"
+    },
+    {
+      "target": {
+        "idCode": "OB",
+        "idName": "Badge",
+        "path": "hide_render"
+      },
+      "kind": "boolean",
+      "value": true
+    },
+    {
+      "target": {
+        "idCode": "LA",
+        "idName": "Key",
+        "path": "light.energy"
+      },
+      "kind": "number",
+      "value": 750
+    },
+    {
+      "target": {
+        "idCode": "OB",
+        "idName": "Swatch",
+        "path": "transform.location"
+      },
+      "kind": "vector3",
+      "value": [
+        0,
+        0,
+        -2
+      ]
+    }
+  ],
+  "output": {
+    "scene": "Main",
+    "camera": "CamWide",
+    "width": 640,
+    "height": 360,
+    "frameStart": 1,
+    "frameEnd": 1,
+    "fps": 24,
+    "mediaType": "image",
+    "samples": 8
+  },
+  "upload": {
+    "putUrl": "https://storage.googleapis.com/bench/out.png?X-Goog-Signature=ghi",
+    "contentType": "image/png"
+  }
+}

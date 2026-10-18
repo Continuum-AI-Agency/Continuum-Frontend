@@ -445,3 +445,37 @@ export function forgeCheckpointOfBytes(
     checkpoints.find((checkpoint) => checkpoint.id === wanted || checkpoint.blob === wanted) ?? null
   );
 }
+
+export function forgeLineageVariantOfAttachment(
+  view: Pick<ForgeLineageView, 'roots'>,
+  attachmentId: number | null | undefined,
+): ForgeVariantPin | null {
+  if (typeof attachmentId !== 'number' || !Number.isFinite(attachmentId)) return null;
+
+  const shippedAs = (node: ForgeLineageNode): number | null => {
+    const shipped = (node.tags ?? {}).shipped as { attachmentId?: unknown } | undefined;
+    return typeof shipped?.attachmentId === 'number' ? shipped.attachmentId : null;
+  };
+
+  const walk = (node: ForgeLineageNode): ForgeVariantPin | null => {
+    if (shippedAs(node) === attachmentId) {
+      // `id` is the commit (a hash of the instruction set); `sha` is the checkout blob and is the
+      // commit only for an intake. Prefer the commit, and never pin to the ledger placeholder.
+      const commitSha = node.id || node.sha;
+      if (commitSha && commitSha !== 'from-ledger') {
+        return { commitSha, ref: node.refs[0] ?? null };
+      }
+    }
+    for (const child of node.children ?? []) {
+      const hit = walk(child);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  for (const root of view.roots) {
+    const hit = walk(root);
+    if (hit) return hit;
+  }
+  return null;
+}

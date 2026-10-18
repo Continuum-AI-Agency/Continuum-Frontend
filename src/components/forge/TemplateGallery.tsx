@@ -45,8 +45,10 @@ import {
 import { pluralize } from '@/lib/format/pluralize';
 import {
   fetchTemplateRevisionVariants,
+  fetchTemplateVariantDefaults,
   fetchTemplateVariants,
 } from '@/lib/library/templateSources';
+import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -313,6 +315,7 @@ export function TemplateGallery({
   onFiles,
   onFonts,
   onRejected,
+  onPresentationCreated,
 }: {
   brandId: string;
   brandName?: string;
@@ -330,6 +333,7 @@ export function TemplateGallery({
   onFiles: (files: File[]) => void;
   onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
+  onPresentationCreated?: (assetId: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -384,11 +388,25 @@ export function TemplateGallery({
     queryFn: () => fetchTemplateRevisionVariants(brandId),
     staleTime: FORGE_STALE_MS.active,
   });
+  const { data: defaults } = useQuery({
+    queryKey: forgeQueryKeys.variantDefaults(brandId),
+    queryFn: () => fetchTemplateVariantDefaults(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+  });
   // The registry's template families, keyed by the original upload's asset id. Every other upload
   // in a family — a named variant, a later revision — is a card under that original, never a row.
   const families = new Map<string, TemplateRevisionVariant[]>();
   for (const variant of canonicalVariants ?? [])
     families.set(variant.templateId, [...(families.get(variant.templateId) ?? []), variant]);
+  // The variant a family opens on, when someone made one the default; else the Original.
+  const defaultOf = (familyId: string | null | undefined) => {
+    const variantId = defaults?.find((item) => item.templateId === familyId)?.variantId;
+    const variant = families.get(familyId ?? '')?.find((item) => item.variantId === variantId);
+    const head = variant?.revisions.find((item) => item.id === variant.publishedHeadRevisionId);
+    return variant && head && !variant.original && !variant.archivedAt
+      ? { variant, head, templateKey: head.publications[0]?.templateKey ?? null }
+      : null;
+  };
   const canonicalBySource = new Map(
     canonicalVariants?.flatMap((variant) =>
       variant.revisions.map((revision) => [revision.sourceAssetId, variant] as const),
@@ -588,7 +606,14 @@ export function TemplateGallery({
       </div>
 
       {filter !== 'shared' ? (
-        <ForgeProjectDrop compact onFiles={onFiles} onFonts={onFonts} onRejected={onRejected} />
+        <ForgeProjectDrop
+          brandId={brandId}
+          onPresentationCreated={onPresentationCreated}
+          compact
+          onFiles={onFiles}
+          onFonts={onFonts}
+          onRejected={onRejected}
+        />
       ) : null}
       <div className="overflow-hidden rounded-lg border">
         <Table aria-label="Templates" className="text-xs">
@@ -658,9 +683,13 @@ export function TemplateGallery({
                         (branched ? family.length : 0) + published.length + listedOutputs.length;
                       const nested = subEntries > 0;
                       const open = nested && expanded.has(item.key);
-                      // A build standing in as the row renders under its own key, not its source's.
+                      const lead = item.kind === 'source' ? defaultOf(item.source.assetId) : null;
+                      // A build standing in as the row renders under its own key, not its source's;
+                      // a family with a default variant shows that variant's renders.
                       const primeKey =
-                        item.kind === 'shared' ? item.shared.templateKey : item.source.templateKey;
+                        item.kind === 'shared'
+                          ? item.shared.templateKey
+                          : (lead?.templateKey ?? item.source.templateKey);
                       return (
                         <Fragment key={item.key}>
                           <TableRow>
@@ -695,7 +724,9 @@ export function TemplateGallery({
                                         aria-label={`Open ${item.name}`}
                                         onClick={() =>
                                           item.kind === 'source'
-                                            ? onOpen(item.source.assetId)
+                                            ? onOpen(
+                                                lead?.head.sourceAssetId ?? item.source.assetId,
+                                              )
                                             : onOpenShared(item.shared)
                                         }
                                       />
@@ -740,7 +771,7 @@ export function TemplateGallery({
                                           <dd>{source.parse?.missingFootage?.length ?? '—'}</dd>
                                         </dl>
                                         {source.parseError ? (
-                                          <p className="text-destructive">{source.parseError}</p>
+                                          <p className="text-destructive">{parseErrorSentence(source.parseError)}</p>
                                         ) : null}
                                         <Button
                                           size="sm"
@@ -868,13 +899,21 @@ export function TemplateGallery({
                                     source={SOURCE_TYPES[variant.sourceKind]}
                                     ratios={draft.source.ratios}
                                     status={
-                                      <Badge
-                                        variant={
-                                          variant.publishedHeadRevisionId ? 'success' : 'muted'
-                                        }
-                                      >
-                                        {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
-                                      </Badge>
+                                      <span className="inline-flex flex-wrap gap-1">
+                                        <Badge
+                                          variant={
+                                            variant.publishedHeadRevisionId ? 'success' : 'muted'
+                                          }
+                                        >
+                                          {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
+                                        </Badge>
+                                        {variant.variantId === lead?.variant.variantId ? (
+                                          <Badge variant="violet">Default</Badge>
+                                        ) : null}
+                                        {variant.tags.includes('brand_aligned') ? (
+                                          <Badge variant="violet">Brand-aligned</Badge>
+                                        ) : null}
+                                      </span>
                                     }
                                     updatedAt={draft.createdAt}
                                     preview={

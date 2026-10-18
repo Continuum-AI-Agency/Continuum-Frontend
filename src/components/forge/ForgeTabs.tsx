@@ -10,6 +10,7 @@ import {
   waitingCount,
 } from '@/components/forge/PendingApprovals';
 import { templateListQuery } from '@/components/forge/queryKeys';
+import { confirmForgeExit } from '@/components/forge/useForgeExitGuard';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,6 +21,11 @@ const RenderRequestsGrid = dynamic(() =>
 const RenderJobsGrid = dynamic(() =>
   import('@/components/forge/RenderJobsGrid').then((module) => module.RenderJobsGrid),
 );
+const WebComponentWorkspace = dynamic(() =>
+  import('@/components/forge/web-components/WebComponentWorkspace').then(
+    (module) => module.WebComponentWorkspace,
+  ),
+);
 
 // The three things a person does on Forge, as three tabs: make a template, set up renders
 // against a published one, and watch them come back. A render request is against a PUBLISHED
@@ -29,7 +35,7 @@ const RenderJobsGrid = dynamic(() =>
 // Approvals are the ledger's: a finished render waits there for a person before it becomes an ad.
 // The ledger tab carries the waiting count, so nothing waits unseen from the Templates tab.
 
-type ForgeTab = 'templates' | 'render' | 'renders';
+type ForgeTab = 'templates' | 'web-components' | 'render' | 'renders';
 
 // `min-w-0` down the chain: a flex child's minimum width is its content's, so without it one wide
 // row (a long file name, a wide grid) widens the whole page instead of scrolling inside its panel.
@@ -43,23 +49,26 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
   useEffect(() => {
     void queryClient.prefetchQuery(templateListQuery(brandId));
   }, [brandId, queryClient]);
-  const activate = (next: ForgeTab) => {
-    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
-    setTab(next);
+  const activate = (next: ForgeTab, after?: () => void) => {
+    void confirmForgeExit().then((allowed) => {
+      if (!allowed) return;
+      setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+      setTab(next);
+      after?.();
+    });
   };
   // The last "open this in Render" from anywhere on the page, until the grid takes it. Dropped
   // once taken: an intent kept around would replace whatever the person moved on to.
   const [renderIntent, setRenderIntent] = useState<ForgeRenderIntent | undefined>(undefined);
   const openRender = (intent: ForgeRenderIntent) => {
-    setRenderIntent(intent);
-    activate('render');
+    activate('render', () => setRenderIntent(intent));
   };
   // The way back: a template opened from the Render tab, held until the workbench takes it.
   const [templateIntent, setTemplateIntent] = useState<ForgeTemplateIntent | undefined>(undefined);
   const openTemplate = (intent: ForgeTemplateIntent) => {
-    setTemplateIntent(intent);
-    activate('templates');
+    activate('templates', () => setTemplateIntent(intent));
   };
+  const openWebComponents = () => activate('web-components');
   // The approval notification links to `/forge#approvals`. A hash never reaches the server, so the
   // ledger opens after mount.
   useEffect(() => {
@@ -67,7 +76,17 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     setVisited((current) => new Set(current).add('renders'));
     setTab('renders');
   }, []);
-  const waiting = waitingCount(useRenderApprovals(brandId).data);
+  const approvalQuery = useRenderApprovals(brandId);
+  const waiting = waitingCount(approvalQuery.data);
+  const approvalCountUnavailable = approvalQuery.isError && waiting === undefined;
+  const approvalStatus =
+    approvalQuery.data === undefined
+      ? approvalQuery.isError
+        ? 'unavailable'
+        : 'checking'
+        : approvalQuery.isError
+          ? 'stale'
+          : null;
   return (
     // Bounded by the page: the strip stays put and each panel scrolls on its own.
     <Tabs
@@ -77,14 +96,41 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     >
       <TabsList className="shrink-0">
         <TabsTrigger value="templates">Templates</TabsTrigger>
+        <TabsTrigger value="web-components">Web components</TabsTrigger>
         <TabsTrigger value="render">Render</TabsTrigger>
         <TabsTrigger value="renders">
           Render ledger
-          {waiting ? (
+          {approvalCountUnavailable ? (
+            <Badge variant="warning" className="ml-1.5" title="Approval count unavailable">
+              Approval count unavailable
+            </Badge>
+          ) : waiting ? (
             <Badge variant="warning" className="ml-1.5 tabular-nums">
               {waiting}
               <span className="sr-only"> waiting for approval</span>
             </Badge>
+          ) : null}
+          {approvalStatus === 'unavailable' ? (
+            <Badge
+              variant="destructive"
+              className="ml-1.5"
+              title="Approval count unavailable. Open the ledger and retry to check pending work."
+            >
+              ?<span className="sr-only"> Approval count unavailable</span>
+            </Badge>
+          ) : null}
+          {approvalStatus === 'checking' ? (
+            <Badge variant="muted" className="ml-1.5" title="Checking approval count">
+              …<span className="sr-only"> Checking approval count</span>
+            </Badge>
+          ) : null}
+          {approvalStatus === 'stale' ? (
+            <span
+              className="ml-1.5 text-xs text-muted-foreground"
+              title="Approval count may be stale"
+            >
+              stale
+            </span>
           ) : null}
         </TabsTrigger>
       </TabsList>
@@ -96,8 +142,17 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
           onOpenRender={openRender}
           templateIntent={templateIntent}
           onTemplateIntentConsumed={() => setTemplateIntent(undefined)}
+          onOpenWebComponents={openWebComponents}
         />
       </TabsContent>
+      {visited.has('web-components') ? (
+        <TabsContent value="web-components" keepMounted className={PANEL}>
+          <WebComponentWorkspace
+            key={brandId}
+            brandId={brandId}
+          />
+        </TabsContent>
+      ) : null}
       {/* Kept mounted: unsaved rows live in the grid, and a tab round trip must not reload them. */}
       {visited.has('render') ? (
         <TabsContent value="render" keepMounted className={PANEL}>

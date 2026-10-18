@@ -58,7 +58,11 @@ const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
 const preflightMock = mock(
   async (_input: { variables: Record<string, unknown> }): Promise<unknown> => READY_RESPONSE,
 );
-const listRenderSetsMock = mock(async () => ({ items: [] as unknown[], nextCursor: null }));
+const listRenderSetsMock = mock(async (_brandId: string, _templateKey: string) => ({
+  items: [] as unknown[],
+  nextCursor: null,
+}));
+const listInputSetsMock = mock(async () => ({ items: [] as unknown[], nextCursor: null }));
 const createRenderSetMock = mock(async (input: Record<string, unknown>) => ({
   ...input,
   id: '33333333-3333-4333-8333-333333333333',
@@ -206,13 +210,15 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
       layerSwitchesNotAsked: [],
       ...contractOverrides,
     }),
-    listInputSets: async () => ({ items: [], nextCursor: null }),
+    listInputSets: listInputSetsMock,
     createInputSet: createInputSetMock,
     listRenderSets: listRenderSetsMock,
     createRenderSet: createRenderSetMock,
     updateRenderSet: updateRenderSetMock,
     deleteRenderSet: deleteRenderSetMock,
     suggestRows: suggestRowsMock,
+    getImportMapping: async () => null,
+    saveImportMapping: async () => ({ mapping: null }),
     getRenderSet: async (_brandId: string, id: string) => SAVED_SETS.find((set) => set.id === id),
     batchPreflight: batchPreflightMock,
     listDeliveryDestinations: async () => ({
@@ -272,35 +278,9 @@ const saveTemplateVariablesMock = mock(
     _slots: Array<{ slotKey: string; exposed?: boolean | null }>,
   ) => {},
 );
-const UPLOAD = '881c3036'.padEnd(64, '0');
-const fetchTemplateLineageMock = mock(async (_brandId: string, _assetId: string) => ({
-  connected: true,
-  known: true,
-  master: UPLOAD,
-  currentMaster: UPLOAD,
-  pinnedToOlderMaster: false,
-  roots: [
-    {
-      sha: 'c'.repeat(64),
-      id: 'b'.repeat(64),
-      tool: 'forge ratio',
-      reason: 'geometry',
-      base: UPLOAD,
-      refs: ['utec277/9:16/base'],
-      tags: {},
-      children: [],
-    },
-  ],
-  log: [{ id: UPLOAD, parent: null, tool: 'intake', reason: 'intake', checkout: { blob: UPLOAD } }],
-  worktrees: [],
-  refs: { 'Continuum_app/277@published': UPLOAD },
-  cachedAt: null,
-  unavailable: null,
-}));
 mock.module('@/lib/library/templateSources', () => ({
   ...templateSources,
   saveTemplateVariables: saveTemplateVariablesMock,
-  fetchTemplateLineage: fetchTemplateLineageMock,
 }));
 
 // The grid reads the person's brand role from the brand provider; outside one, this file is an
@@ -347,6 +327,9 @@ const render = (
   });
 };
 
+const flushAsyncState = async () =>
+  await act(async () => await new Promise((resolve) => setTimeout(resolve, 0)));
+
 // Base UI waits on a MutationObserver when a menu or radio opens; happy-dom's, lifted per file
 // the way the review tray's own test does.
 installPickerDomGlobals();
@@ -358,6 +341,8 @@ afterEach(() => {
   preflightMock.mockImplementation(async () => READY_RESPONSE);
   listRenderSetsMock.mockReset();
   listRenderSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+  listInputSetsMock.mockReset();
+  listInputSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
   createRenderSetMock.mockClear();
   updateRenderSetMock.mockClear();
   deleteRenderSetMock.mockClear();
@@ -414,39 +399,198 @@ const openSetName = () =>
     ?.replace(/^Open /, '');
 
 describe('RenderRequestsGrid', () => {
-  test('includes the saved output selection when checking a saved row', async () => {
-    const outputId = '77777777-7777-4777-8777-777777777771';
-    const savedRow = NEWEST.rows[0];
-    if (!savedRow) throw new Error('Missing saved row');
-    contractOverrides = {
-      outputs: [{ id: outputId, label: 'Card A', ratio: '16:9', mediaType: 'video' }],
-    };
-    listRenderSetsMock.mockImplementation(async () => ({
-      items: [
-        {
-          ...NEWEST,
-          rows: [{ ...savedRow, overrides: { headline: 'Hola mundo' }, outputIds: [outputId] }],
-        },
-      ],
-      nextCursor: null,
-    }));
-    preflightMock.mockImplementation(async (input) => {
-      if (
-        'renderSetId' in input &&
-        (!('outputIds' in input) || JSON.stringify(input.outputIds) !== JSON.stringify([outputId]))
-      ) {
-        throw new ApiError('render_set_row_snapshot_mismatch', 409);
-      }
-      return READY_RESPONSE;
+  test('keeps outage edits when render-set and input-set lists fail, then retries without auto-creating Untitled', async () => {
+    listRenderSetsMock.mockImplementationOnce(async () => {
+      throw new Error('render sets offline');
+    });
+    listRenderSetsMock.mockImplementationOnce(async () => ({ items: [NEWEST], nextCursor: null }));
+    listInputSetsMock.mockImplementationOnce(async () => {
+      throw new Error('input sets offline');
     });
     render(<RenderRequestsGrid brandId={BRAND} />);
-    await waitFor(() => expect(preflightMock).toHaveBeenCalled());
-    expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
-      renderSetId: NEWEST.id,
-      renderSetRowId: savedRow.id,
-      outputIds: [outputId],
+    const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
+    expect(await screen.findByText('Saved render sets could not be loaded')).toBeTruthy();
+    expect(await screen.findByText('Input sets could not be loaded')).toBeTruthy();
+
+    fireEvent.change(headline, { target: { value: 'Outage edit' } });
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 1700)));
+    expect(createRenderSetMock).not.toHaveBeenCalled();
+
+    const setAlert = screen
+      .getByText('Saved render sets could not be loaded')
+      .closest('[role="alert"]')!;
+    fireEvent.click(within(setAlert).getByRole('button', { name: 'Retry' }));
+    await flushAsyncState();
+    expect(screen.queryByText('Saved render sets could not be loaded')).toBeNull();
+    const inputAlert = screen
+      .getByText('Input sets could not be loaded')
+      .closest('[role="alert"]')!;
+    fireEvent.click(within(inputAlert).getByRole('button', { name: 'Retry' }));
+    await flushAsyncState();
+    expect(screen.queryByText('Input sets could not be loaded')).toBeNull();
+    expect(screen.getByDisplayValue('Outage edit')).toBeTruthy();
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 1700)));
+    expect(createRenderSetMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New set' }));
+    await confirmDialog('Discard');
+    const dialog = await screen.findByRole('dialog', { name: 'New render set' });
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Recovered work' },
     });
-    await screen.findByText('Ready');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1));
+    expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
+      name: 'Recovered work',
+      rows: [{ overrides: { headline: 'Outage edit' } }],
+    });
+    expect(screen.getByDisplayValue('Outage edit')).toBeTruthy();
+  }, 10_000);
+
+  test('a failed explicitly named set creation leaves the outage draft on screen', async () => {
+    listRenderSetsMock.mockImplementationOnce(async () => {
+      throw new Error('render sets offline');
+    });
+    createRenderSetMock.mockImplementationOnce(async () => {
+      throw new Error('create failed');
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
+    await screen.findByText('Saved render sets could not be loaded');
+    fireEvent.change(headline, { target: { value: 'Keep this draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved edits)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Save render set' });
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Named draft' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save set' }));
+    await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('dialog', { name: 'Save render set' })).toBeTruthy();
+    expect(screen.getByDisplayValue('Keep this draft')).toBeTruthy();
+  });
+
+  test('a successful empty retry restores first-use autosave', async () => {
+    listRenderSetsMock.mockImplementationOnce(async () => {
+      throw new Error('render sets offline');
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
+    const alert = await screen.findByText('Saved render sets could not be loaded');
+    fireEvent.change(headline, { target: { value: 'Recovered empty list' } });
+    fireEvent.click(
+      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+    );
+
+    await flushAsyncState();
+    expect(screen.queryByText('Saved render sets could not be loaded')).toBeNull();
+    await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 4_000 });
+    expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Untitled set' });
+    expect(screen.getByDisplayValue('Recovered empty list')).toBeTruthy();
+  }, 10_000);
+
+  test('a pristine retry opens the requested inventory set', async () => {
+    listRenderSetsMock.mockImplementationOnce(async () => {
+      throw new Error('render sets offline');
+    });
+    listRenderSetsMock.mockImplementationOnce(async () => ({ items: [NEWEST], nextCursor: null }));
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const alert = await screen.findByText('Saved render sets could not be loaded');
+    fireEvent.click(
+      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+    );
+
+    expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();
+    expect(openSetName()).toBe('Newest');
+    expect(screen.queryByText('Saved render sets could not be loaded')).toBeNull();
+  });
+
+  test('a typed draft survives retry when saved sets exist and requires an explicit choice', async () => {
+    listRenderSetsMock.mockImplementationOnce(async () => {
+      throw new Error('render sets offline');
+    });
+    listRenderSetsMock.mockImplementationOnce(async () => ({ items: [NEWEST], nextCursor: null }));
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
+    const alert = await screen.findByText('Saved render sets could not be loaded');
+    fireEvent.change(headline, { target: { value: 'Typed during outage' } });
+    fireEvent.click(
+      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+    );
+
+    expect(
+      await screen.findByText('Your edited rows are not assigned to a saved set'),
+    ).toBeTruthy();
+    expect(screen.getByDisplayValue('Typed during outage')).toBeTruthy();
+    expect(screen.queryByDisplayValue('Newest row')).toBeNull();
+    expect(createRenderSetMock).not.toHaveBeenCalled();
+  });
+
+  test('a successful named create does not hide the failed inventory retry', async () => {
+    listRenderSetsMock.mockImplementationOnce(async () => {
+      throw new Error('render sets offline');
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const alert = await screen.findByText('Saved render sets could not be loaded');
+    fireEvent.click(screen.getByRole('button', { name: 'New set' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New render set' });
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Explicit while offline' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('Saved render sets could not be loaded')).toBeTruthy();
+    expect(
+      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+    ).toBeTruthy();
+  });
+
+  test('a delayed retry after a template switch cannot replace the new template inventory', async () => {
+    const secondTemplate = {
+      ...TEMPLATE,
+      key: '222',
+      name: 'forge_bench_other',
+      displayName: 'Other template',
+    };
+    const secondSet = {
+      ...savedSet('55555555-5555-4555-8555-555555555553', 'Other set', 'Other row'),
+      templateKey: '222',
+    };
+    extraTemplates = [];
+    let resolveDelayed!: (response: { items: unknown[]; nextCursor: null }) => void;
+    const delayed = new Promise<{ items: unknown[]; nextCursor: null }>((resolve) => {
+      resolveDelayed = resolve;
+    });
+    let firstTemplateRead = true;
+    listRenderSetsMock.mockImplementation(async (_brandId, key) => {
+      if (key === '133') {
+        if (firstTemplateRead) {
+          firstTemplateRead = false;
+          throw new Error('render sets offline');
+        }
+        return delayed;
+      }
+      return { items: [secondSet], nextCursor: null };
+    });
+    const view = render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const alert = await screen.findByText('Saved render sets could not be loaded');
+    fireEvent.click(
+      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+    );
+
+    extraTemplates = [secondTemplate];
+    view.rerender(
+      <RenderRequestsGrid
+        brandId={BRAND}
+        intent={{ templateKey: '222', bindingId: TEMPLATE.bindingId }}
+      />,
+    );
+    expect(await screen.findByDisplayValue('Other row')).toBeTruthy();
+    resolveDelayed({ items: [NEWEST], nextCursor: null });
+    await waitFor(() => expect(screen.getByDisplayValue('Other row')).toBeTruthy());
+    expect(screen.queryByDisplayValue('Newest row')).toBeNull();
+    expect(openSetName()).toBe('Other set');
   });
 
   test('associates an authoritative guardrail refusal with its row and cell', async () => {
@@ -577,30 +721,26 @@ describe('RenderRequestsGrid', () => {
     unsubscribe();
   });
 
-  // A template is a git history: the picker says which checkpoint renders (live, found by bytes),
-  // lists the forks that are not live without letting them be picked, and pins by name.
-  test('the checkpoint picker shows what renders, keeps non-live forks unpickable, and pins by name', async () => {
+  test('a layer switch no row has set reads as the file shows it, labelled Default', async () => {
+    const carrera = variable({
+      key: 'show_carrera',
+      label: 'Show Carrera',
+      kind: 'boolean',
+      sample: 'true',
+      sourceSlotKey: 'boolean__show-carrera',
+      exposed: false,
+    });
     contractOverrides = {
       template: { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' },
+      variables: [...VARIABLES, carrera],
+      layerSwitchesNotAsked: [carrera],
     };
     render(<RenderRequestsGrid brandId={BRAND} />);
-    const picker = await screen.findByRole('button', { name: 'Checkpoint' });
-    expect(picker.textContent).toContain('881c303600');
-    expect(picker.textContent).toContain('live');
-
-    fireEvent.click(picker);
-    const fork = await screen.findByRole('menuitem', { name: /Size · 9:16\/base/ });
-    expect(fork.getAttribute('aria-disabled') ?? fork.getAttribute('data-disabled')).not.toBeNull();
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: /Pin upload/ }));
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Checkpoint' }).textContent).toContain('pinned'),
-    );
-    await waitFor(() =>
-      expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
-        templateRef: 'Continuum_app/277@published',
-      }),
-    );
+    const cell = (await screen.findByRole('switch', { name: 'Show Carrera' }))
+      .parentElement as HTMLElement;
+    // Existing rows never set it: preserve the file's shown default and label it as the default.
+    expect(within(cell).getByText('Shown')).toBeTruthy();
+    expect(within(cell).getByText('Default')).toBeTruthy();
   });
 
   test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
@@ -634,7 +774,7 @@ describe('RenderRequestsGrid', () => {
       return screen.findByRole('dialog', { name: 'Import render rows' });
     };
     const importButton = (dialog: HTMLElement) =>
-      within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Import reviewed rows' });
+      within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Import \d+ rows$/ });
 
     const rows = (count: number) =>
       ['headline', ...Array.from({ length: count }, (_, index) => `Row ${index}`)].join('\n');
@@ -647,12 +787,15 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
     expect(screen.getAllByLabelText('Select row')).toHaveLength(1);
 
-    // Parent and Formats are columns a paste understands too, and a bad cell is named.
+    // Parent and Formats are columns a paste understands too; a bad cell is named, and imports
+    // empty rather than holding the other rows back.
     dialog = await paste(
       'Name\tParent\tHeadline\tPrice\nSpain\t\tHola\tcheap\nSale\tSpain\tRebajas\t\n',
     );
-    expect(within(dialog).getByText('Row 1 · Price: Not a number')).toBeTruthy();
-    expect(importButton(dialog).disabled).toBe(true);
+    expect(
+      within(dialog).getByText('Row 1 · Price: Not a number — imported empty'),
+    ).toBeTruthy();
+    await waitFor(() => expect(importButton(dialog).disabled).toBe(false));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
 
@@ -815,6 +958,31 @@ describe('RenderRequestsGrid', () => {
     // A second fork of the same parent takes the next letter.
     await openMenu('Row actions for Base', 'Add variation');
     expect(await screen.findByDisplayValue('Base · C')).toBeTruthy();
+  });
+
+  test('the side inspector follows inherited edits and keeps clear distinct from reset', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    await openMenu('Row actions for Base', 'Add variation');
+    const fork = (await screen.findByDisplayValue('Base · B')).closest('tr')!;
+    fireEvent.click(fork);
+    const fields = screen.getByRole('region', { name: 'Fields' });
+    const toggle = within(fields).getByRole('button', { name: /^Fields/ });
+    if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
+    const headline = within(fields).getByLabelText('Headline') as HTMLInputElement;
+    expect(headline.value).toBe('Hola mundo');
+    const root = screen.getByDisplayValue('Base').closest('tr')!;
+    fireEvent.change(within(root).getByLabelText('Headline'), {
+      target: { value: 'Parent changed' },
+    });
+    expect(headline.value).toBe('Parent changed');
+    fireEvent.change(headline, { target: { value: '' } });
+    expect(headline.value).toBe('');
+    expect((within(root).getByLabelText('Headline') as HTMLInputElement).value).toBe(
+      'Parent changed',
+    );
+    fireEvent.click(within(fields).getByRole('button', { name: 'Reset Headline to inherited' }));
+    expect(headline.value).toBe('Parent changed');
   });
 
   test('"Save as inputs" on a fork saves what it renders with, inherited values included', async () => {
@@ -1708,8 +1876,9 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
+    // With rows on the grid the button is the assistant; a brief for new rows is its second action.
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), { target: { value: 'Summer' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft new rows' }));
 
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     expect(banner.textContent).toContain('2 proposed rows');
@@ -1737,14 +1906,69 @@ describe('RenderRequestsGrid', () => {
     ]);
   });
 
+  test('the AI button edits the rows on screen: one ask, one undo step, nothing proposed', async () => {
+    withSavedSets();
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const row = await screen.findByDisplayValue('Newest row');
+    const rowId = row.closest('tr')!.getAttribute('data-row-id')!;
+    suggestRowsMock.mockImplementationOnce(async () => ({
+      rows: [],
+      assets: [],
+      dropped: [],
+      unfilled: [],
+      ops: [
+        { op: 'set', rowIds: [rowId], key: 'headline', value: 'Precio loco' },
+        { op: 'select', rowIds: [rowId] },
+      ],
+      reply: 'Cambié el titular.',
+      assumptions: [],
+      cannot: ['Hero: pictures are chosen in the grid, not by the assistant'],
+    }));
+    await openMenu('Add', 'Draft with AI…');
+    const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), {
+      target: { value: 'Titular de la fila 1: Precio loco' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByDisplayValue('Precio loco')).toBeTruthy();
+    const sent = suggestRowsMock.mock.calls.at(-1)![0] as {
+      prompt: string;
+      grid: { rows: Array<{ id: string; label: string }>; mapColumns: boolean };
+    };
+    expect(sent.prompt).toBe('Titular de la fila 1: Precio loco');
+    expect(sent.grid.mapColumns).toBe(false);
+    expect(sent.grid.rows.map((item) => item.label)).toEqual(['Newest row']);
+    // The bubble stays open with what was done and what could not be.
+    expect(within(dialog).getByText('Cambié el titular.')).toBeTruthy();
+    expect(within(dialog).getByText(/pictures are chosen in the grid/)).toBeTruthy();
+    // Applied, not proposed: there is nothing to keep, and the row is left selected.
+    expect(screen.queryAllByRole('region', { name: 'Proposed rows' })).toHaveLength(0);
+    const edited = screen.getByDisplayValue('Precio loco').closest('tr')!;
+    expect(within(edited).getByLabelText('Select row').getAttribute('aria-checked')).toBe('true');
+
+    // The answer carries its own Undo; ⌘Z from the toolbar puts it back the other way.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Undo this change' }));
+    await waitFor(() => expect(screen.queryByDisplayValue('Precio loco')).toBeNull());
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    fireEvent.keyDown(within(toolbar).getByRole('button', { name: 'Import' }), {
+      key: 'z',
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(await screen.findByDisplayValue('Precio loco')).toBeTruthy();
+  });
+
   test('Discard all takes the proposed rows back and leaves the set as it was', async () => {
     withSavedSets();
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
+    // With rows on the grid the button is the assistant; a brief for new rows is its second action.
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), { target: { value: 'Summer' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Draft new rows' }));
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     fireEvent.click(within(banner).getByRole('button', { name: 'Discard all' }));
     await waitFor(() => expect(screen.queryAllByDisplayValue('Drafted')).toHaveLength(0));
@@ -1918,7 +2142,7 @@ describe('RenderRequestsGrid', () => {
     };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    fireEvent.change(screen.getByLabelText('Template variant'), {
+    fireEvent.change(screen.getByLabelText('Artboard'), {
       target: { value: 'Headline' },
     });
     expect(await screen.findByRole('button', { name: 'Formats Headline' })).toBeTruthy();

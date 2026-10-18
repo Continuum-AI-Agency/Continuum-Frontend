@@ -320,6 +320,7 @@ describe('templateFamilyForLibraryFormat', () => {
   it('claims only the families something can actually read', () => {
     expect(templateFamilyForLibraryFormat('after_effects')).toBe('after_effects');
     expect(templateFamilyForLibraryFormat('after_effects_package')).toBe('after_effects_package');
+    expect(templateFamilyForLibraryFormat('blender')).toBe('blender');
     // A PSD is a project file, but nothing parses one yet. A permanently-pending template
     // card reads as broken, not as not-yet-built.
     expect(templateFamilyForLibraryFormat('design_source')).toBeNull();

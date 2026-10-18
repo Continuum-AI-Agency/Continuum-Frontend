@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 import { templateRevisionLayerEditSchema } from './template-revisions';
+import { templateAuthoringKeyframesInventorySchema } from './template-authoring-keyframes';
+import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 
 export const templateLayerEditSchema = templateRevisionLayerEditSchema;
 
@@ -53,11 +54,21 @@ export const templateEditableLayerSchema = z
     visible: z.boolean(),
     visibilityReason: z.string().nullable(),
     textReason: z.string().nullable(),
+    /** Optional on legacy writer responses; when present, null means font/style fields are editable. */
+    fontReason: z.string().nullable().optional(),
     text: z.string().nullable(),
     font: z.string().nullable(),
     fontSize: z.number().finite().nullable(),
+    /** Supplemental design-file association; Rust comp/layer identity remains authoritative. */
     designLayerId: z.number().int().nullable().optional(),
     artboardId: z.number().int().nullable().optional(),
+    /** Optional on legacy inventories; null is affirmative native grouping eligibility. */
+    groupingReason: z.string().nullable().optional(),
+    timingReason: z.string().nullable().optional(),
+    keyframeReasons: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeReasons.optional(),
+    keyframeChannels: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeChannels.optional(),
+    maskReason: z.string().nullable().optional(),
+    /** Writer-supplied text geometry in comp pixels; never a Rust structural identity. */
     x: z.number().finite().nullable().optional(),
     y: z.number().finite().nullable().optional(),
     width: z.number().finite().nullable().optional(),
@@ -94,6 +105,14 @@ export const templateLayerPreviewResponseSchema = z
     layers: z.array(templateEditableLayerSchema),
     svg: z.string().min(1),
     warnings: z.array(z.string()),
+    /** Present whenever a recolour was asked for: an older forge drops it without a word. */
+    recolor: z
+      .object({
+        applied: z.number().int().nonnegative(),
+        unmapped: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type TemplateLayerPreviewResponse = z.infer<typeof templateLayerPreviewResponseSchema>;

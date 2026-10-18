@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { TemplateForgeNeed } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import {
   decisionsFor,
   groupMappingNeeds,
-  MappingQuestions,
   suggestedAnswer,
-} from './MappingQuestions';
+  type TemplateForgeNeed,
+} from '@continuum/contracts';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MappingQuestions } from './MappingQuestions';
 
 afterEach(cleanup);
 

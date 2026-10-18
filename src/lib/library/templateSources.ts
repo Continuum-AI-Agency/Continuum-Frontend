@@ -1,17 +1,30 @@
 'use client';
 
 import type {
-  ForgeLineageView,
   RenderWorkspace,
   TemplateFontPushResponse,
+  TemplateAuthoringDocument,
+  TemplateAuthoringDraft,
+  TemplateAuthoringDraftPut,
+  TemplateAuthoringWorkspacePreviewResponse,
+  TemplateAuthoringArtifact,
+  TemplateAuthoringCompileRequest,
+  TemplateAuthoringArtifactReview,
+  TemplateAuthoringArtifactCommit,
+  TemplateAuthoringPreparationRequest,
+  TemplateAuthoringPreparation,
+  TemplateAuthoringNativeRenderRequest,
+  TemplateAuthoringNativeRender,
   TemplateForgeBundle,
   TemplateForgeNeed,
   TemplateMappingReview,
   TemplateRebindPreview,
   TemplateSource,
   TemplateSourceSummary,
-  WorkspaceTemplate,
+  WorkspaceTemplateDiscoveryResponse,
+  ForgeLineageView,
 } from '@continuum/contracts';
+import type { MediaAssetVersion } from '@continuum/contracts';
 import {
   type CreateTemplateVariantRequest,
   createTemplateVariantRequestSchema,
@@ -33,6 +46,7 @@ import {
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
   type TemplateRevisionPreviewRequest,
+  type TemplateLayerPreviewRequest,
   type TemplateSourceEvent,
   type TemplateTextMoveRequest,
   type TemplateTextMoveResponse,
@@ -45,24 +59,63 @@ import {
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
   templateForgeBundleSchema,
-  templateLayerInventorySchema,
+  templateAuthoringDocumentSchema,
+  templateAuthoringDraftSchema,
+  templateAuthoringWorkspacePreviewResponseSchema,
+  templateAuthoringArtifactSchema,
+  templateAuthoringCompileRequestSchema,
+  templateAuthoringArtifactReviewSchema,
+  templateAuthoringArtifactCommitSchema,
+  templateAuthoringPreparationRequestSchema,
+  templateAuthoringPreparationSchema,
+  templateAuthoringNativeRenderRequestSchema,
+  templateAuthoringNativeRenderSchema,
   templateLayerPreviewResponseSchema,
+  templateLayerInventorySchema,
   templateLayerSceneSchema,
+  templateLayerVariantResponseSchema,
   templateMappingReviewSchema,
   templateRebindPreviewSchema,
   templateRevisionSchema,
   templateRevisionVariantsResponseSchema,
+  templateVariantDefaultsResponseSchema,
+  templateVariantSchema,
+  templateVariantsResponseSchema,
   templateSourceEventsResponseSchema,
   templateSourceSchema,
   templateSourceSummarySchema,
   templateTextMoveResponseSchema,
-  templateVariantSchema,
-  templateVariantsResponseSchema,
+  workspaceTemplateDiscoveryResponseSchema,
 } from '@continuum/contracts';
+import { TemplateAuthoringDraftError } from '@/components/forge/layerDraft';
+import { verifyTemplateAuthoringPackageResponse } from '@/components/forge/templateAuthoringPackage';
+import { verifyTemplateAuthoringFontResponse } from '@/components/forge/templateAuthoringFont';
+import { resolvePinnedArtworkVersion, type PinnedArtworkAssetRef } from '@/components/forge/templateArtworkPreview';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { listAssetVersions } from './versions';
 
 export type TemplateFontReadiness = import('@continuum/contracts').TemplateFontReadiness;
+
+/** Reads the checkpoint lineage used to identify the bytes currently rendered by Forge. */
+export async function fetchTemplateLineage(
+  brandId: string,
+  assetId: string,
+): Promise<ForgeLineageView> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/lineage?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return unwrap<ForgeLineageView>(response, 'Template lineage');
+}
+
+/** Resolves a freshly signed preview only for the immutable version in the draft. */
+export async function fetchPinnedArtworkPreview(
+  brandId: string,
+  assetRef: PinnedArtworkAssetRef,
+): Promise<MediaAssetVersion> {
+  const versions = await listAssetVersions({ brandId, assetId: assetRef.assetId });
+  return resolvePinnedArtworkVersion(versions, assetRef);
+}
 
 export async function repairTemplateText(
   assetId: string,
@@ -265,13 +318,12 @@ export async function fetchRenderWorkspaces(brandId: string): Promise<RenderWork
 export async function discoverWorkspaceTemplates(
   brandId: string,
   workspaceId?: string,
-): Promise<{ workspace: RenderWorkspace; items: WorkspaceTemplate[] }> {
+): Promise<WorkspaceTemplateDiscoveryResponse> {
   const params = new URLSearchParams({ brandId });
   if (workspaceId) params.set('workspaceId', workspaceId);
   const response = await authorizedFetch(`/api/ai-studio/templates/discover?${params}`);
-  return unwrap<{ workspace: RenderWorkspace; items: WorkspaceTemplate[] }>(
-    response,
-    'Workspace templates',
+  return workspaceTemplateDiscoveryResponseSchema.parse(
+    await unwrap<unknown>(response, 'Workspace templates'),
   );
 }
 
@@ -519,25 +571,40 @@ export async function saveTemplateColourFields(
 }
 
 /** Every layer a design-import template's source file stacks, and the arrangements saved on it. */
+/** A design import's own stack and arrangements; null for a template not imported from a design. */
 export async function fetchDesignLayers(
   brandId: string,
   assetId: string,
-): Promise<DesignLayersResponse> {
+): Promise<DesignLayersResponse | null> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${assetId}/design-layers?brandId=${encodeURIComponent(brandId)}`,
   );
+  if (response.status === 422) {
+    const body = (await response
+      .clone()
+      .json()
+      .catch(() => ({}))) as { error?: string };
+    if (body.error === 'not_a_design_import') return null;
+  }
   return designLayersResponseSchema.parse(await unwrap(response, 'Layers'));
 }
 
-/** The whole approved set; the server re-authors the template as its next revision. */
+/**
+ * The whole approved set. On the golden import it lands as a new variant named `name`; on an
+ * arrangement variant `this_variant` writes that variant's next revision.
+ */
 export async function saveDesignArrangements(
   brandId: string,
   assetId: string,
-  arrangements: DesignArrangement[],
+  save: {
+    arrangements: DesignArrangement[];
+    saveTo: 'new_variant' | 'this_variant';
+    name?: string;
+  },
 ): Promise<DesignArrangementsResponse> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${assetId}/design-arrangements`,
-    { method: 'PUT', body: JSON.stringify({ brandId, arrangements }) },
+    { method: 'PUT', body: JSON.stringify({ brandId, ...save }) },
   );
   return designArrangementsResponseSchema.parse(await unwrap(response, 'Saving arrangements'));
 }
@@ -565,16 +632,6 @@ export type TemplateRunRow = {
   root_table: string | null;
   application: string | null;
 };
-
-export async function fetchTemplateLineage(
-  brandId: string,
-  assetId: string,
-): Promise<ForgeLineageView> {
-  const response = await authorizedFetch(
-    `/api/ai-studio/templates/${assetId}/lineage?brandId=${encodeURIComponent(brandId)}`,
-  );
-  return unwrap<ForgeLineageView>(response, 'Template lineage');
-}
 
 export async function fetchTemplateRun(
   brandId: string,
@@ -626,7 +683,273 @@ export async function fetchTemplateVariants(
   const response = await authorizedFetch(`/api/ai-studio/template-variants?${params}`);
   return templateVariantsResponseSchema.parse(await unwrap(response, 'Template variants')).items;
 }
-export async function createTemplateVariant(
+
+export async function fetchTemplateAuthoringUserId(): Promise<string> {
+  const { data } = await createSupabaseBrowserClient().auth.getSession();
+  if (!data.session?.user.id) throw new Error('A signed-in session is required');
+  return data.session.user.id;
+}
+
+export async function fetchTemplateAuthoringDocument(
+  assetId: string,
+  brandId: string,
+  baseVersionId: string,
+): Promise<TemplateAuthoringDocument> {
+  const query = new URLSearchParams({ brandId, baseVersionId });
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-document?${query}`,
+  );
+  const result = (await unwrap(response, 'Authoring source')) as { document: unknown };
+  return templateAuthoringDocumentSchema.parse(result.document);
+}
+
+export async function fetchTemplateAuthoringWorkspacePreview(
+  assetId: string,
+  scope: { brandId: string; baseVersionId: string },
+  expectedRevision: number,
+  compId?: number,
+): Promise<TemplateAuthoringWorkspacePreviewResponse> {
+  const query = new URLSearchParams({
+    ...scope,
+    expectedRevision: String(expectedRevision),
+    ...(compId ? { compId: String(compId) } : {}),
+  });
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-workspace-preview?${query}`,
+  );
+  return templateAuthoringWorkspacePreviewResponseSchema.parse(
+    await unwrap(response, 'Private workspace preview'),
+  );
+}
+
+export async function fetchTemplateAuthoringFontPreview(
+  assetId: string,
+  scope: { brandId: string; baseVersionId: string },
+  font:
+    | { fontId: string; postScriptName: string; sha256: string }
+    | { kind: 'workspace_package'; packageChecksum: string; postScriptName: string; sha256: string },
+  workspaceSeed?: { seedArtifactId: string; seedPackageChecksum: string; expectedRevision: number },
+): Promise<{ bytes: ArrayBuffer; contentType: string; sha256: string }> {
+  const packageFont = 'kind' in font;
+  if (packageFont && (!workspaceSeed || font.packageChecksum.toLowerCase() !== workspaceSeed.seedPackageChecksum.toLowerCase()))
+    throw new Error('The package font does not match the attached private workspace seed.');
+  const query = new URLSearchParams({
+    ...scope,
+    postScriptName: font.postScriptName,
+    sha256: font.sha256,
+    ...('fontId' in font ? { fontId: font.fontId } : { kind: font.kind }),
+    ...(workspaceSeed ? {
+      seedArtifactId: workspaceSeed.seedArtifactId,
+      seedPackageChecksum: workspaceSeed.seedPackageChecksum,
+      expectedRevision: String(workspaceSeed.expectedRevision),
+    } : {}),
+  });
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-font-preview?${query}`,
+  );
+  return verifyTemplateAuthoringFontResponse(
+    response,
+    font.sha256,
+    packageFont && workspaceSeed
+      ? { postScriptName: font.postScriptName, ...workspaceSeed }
+      : undefined,
+  );
+}
+
+export async function fetchTemplateAuthoringDraft(
+  assetId: string,
+  brandId: string,
+  baseVersionId: string,
+): Promise<TemplateAuthoringDraft | null> {
+  const query = new URLSearchParams({ brandId, baseVersionId });
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-draft?${query}`,
+  );
+  const result = (await unwrap(response, 'Private draft')) as {
+    draft: TemplateAuthoringDraft | null;
+  };
+  return result.draft === null ? null : templateAuthoringDraftSchema.parse(result.draft);
+}
+
+export async function putTemplateAuthoringDraft(
+  assetId: string,
+  request: TemplateAuthoringDraftPut,
+): Promise<TemplateAuthoringDraft> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-draft`,
+    { method: 'PUT', body: JSON.stringify(request) },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const code = typeof body.error === 'string' ? body.error : `http_${response.status}`;
+    throw new TemplateAuthoringDraftError(
+      response.status,
+      code,
+      typeof body.detail === 'string'
+        ? body.detail
+        : `Private draft save failed (${response.status})`,
+      body,
+    );
+  }
+  const result = (await response.json()) as { draft: TemplateAuthoringDraft };
+  return templateAuthoringDraftSchema.parse(result.draft);
+}
+
+export async function compileTemplateAuthoring(
+  assetId: string,
+  request: TemplateAuthoringCompileRequest,
+): Promise<TemplateAuthoringArtifact> {
+  const body = templateAuthoringCompileRequestSchema.parse(request);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-compile`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  const result = (await unwrap(response, 'Prepare private package')) as { artifact: unknown };
+  return templateAuthoringArtifactSchema.parse(result.artifact);
+}
+
+export async function fetchTemplateAuthoringArtifact(
+  assetId: string,
+  artifactId: string,
+  scope: { brandId: string; baseVersionId: string },
+): Promise<TemplateAuthoringArtifact> {
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}?${query}`,
+  );
+  const result = (await unwrap(response, 'Private package')) as { artifact: unknown };
+  return templateAuthoringArtifactSchema.parse(result.artifact);
+}
+
+export async function fetchTemplateAuthoringArtifactPackage(
+  assetId: string,
+  artifact: TemplateAuthoringArtifact,
+  scope: { brandId: string; baseVersionId: string },
+): Promise<Blob> {
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifact.artifactId)}/package?${query}`,
+  );
+  return verifyTemplateAuthoringPackageResponse(response, artifact);
+}
+
+export async function prepareTemplateAuthoringArtifact(
+  assetId: string,
+  artifactId: string,
+  scope: { brandId: string; baseVersionId: string },
+  request: TemplateAuthoringPreparationRequest,
+): Promise<TemplateAuthoringPreparation> {
+  const body = templateAuthoringPreparationRequestSchema.parse(request);
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/prepare?${query}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  const result = (await unwrap(response, 'Prepare private package')) as { preparation: unknown };
+  return templateAuthoringPreparationSchema.parse(result.preparation);
+}
+
+export async function fetchTemplateAuthoringPreparation(
+  assetId: string,
+  artifactId: string,
+  scope: { brandId: string; baseVersionId: string },
+): Promise<TemplateAuthoringPreparation> {
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/preparation?${query}`,
+  );
+  const result = (await unwrap(response, 'Private package preparation')) as { preparation: unknown };
+  return templateAuthoringPreparationSchema.parse(result.preparation);
+}
+
+export async function requestTemplateAuthoringNativeRender(
+  assetId: string,
+  artifactId: string,
+  scope: { brandId: string; baseVersionId: string },
+  request: TemplateAuthoringNativeRenderRequest,
+): Promise<TemplateAuthoringNativeRender> {
+  const body = templateAuthoringNativeRenderRequestSchema.parse(request);
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/native-renders?${query}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  const result = (await unwrap(response, 'Native sample render')) as { render: unknown };
+  return templateAuthoringNativeRenderSchema.parse(result.render);
+}
+
+export async function fetchTemplateAuthoringNativeRender(
+  assetId: string,
+  artifactId: string,
+  renderId: string,
+  scope: { brandId: string; baseVersionId: string },
+): Promise<TemplateAuthoringNativeRender> {
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/native-renders/${encodeURIComponent(renderId)}?${query}`,
+  );
+  const result = (await unwrap(response, 'Native sample render')) as { render: unknown };
+  return templateAuthoringNativeRenderSchema.parse(result.render);
+}
+
+export async function fetchTemplateAuthoringNativeRenderFrame(
+  assetId: string,
+  artifactId: string,
+  renderId: string,
+  frameId: string,
+  scope: { brandId: string; baseVersionId: string },
+): Promise<{ blob: Blob; sha256: string; stale: boolean }> {
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/native-renders/${encodeURIComponent(renderId)}/frames/${encodeURIComponent(frameId)}?${query}`,
+  );
+  if (!response.ok) await unwrap(response, 'Native sample frame');
+  const sha256 = response.headers.get('x-content-sha256');
+  if (!sha256 || !/^[a-f0-9]{64}$/i.test(sha256))
+    throw new Error('Native sample frame did not include a verified checksum.');
+  const stale = response.headers.get('x-authoring-stale') === 'true';
+  if (stale) throw new Error('This native sample belongs to an older private draft.');
+  const blob = await response.blob();
+  const bytes = await blob.arrayBuffer();
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  const actual = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  if (actual !== sha256.toLowerCase()) throw new Error('Native sample checksum verification failed.');
+  return { blob, sha256: actual, stale };
+}
+
+export async function reviewTemplateAuthoringArtifact(
+  assetId: string,
+  artifactId: string,
+  scope: { brandId: string; baseVersionId: string },
+  request: TemplateAuthoringArtifactReview,
+): Promise<TemplateAuthoringArtifact> {
+  const body = templateAuthoringArtifactReviewSchema.parse(request);
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/review?${query}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  const result = (await unwrap(response, 'Review private package')) as { artifact: unknown };
+  return templateAuthoringArtifactSchema.parse(result.artifact);
+}
+
+export async function commitTemplateAuthoringArtifact(
+  assetId: string,
+  artifactId: string,
+  scope: { brandId: string; baseVersionId: string },
+  request: TemplateAuthoringArtifactCommit,
+): Promise<TemplateAuthoringArtifact> {
+  const body = templateAuthoringArtifactCommitSchema.parse(request);
+  const query = new URLSearchParams(scope);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/commit?${query}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  const result = (await unwrap(response, 'Save verified package')) as { artifact: unknown };
+  return templateAuthoringArtifactSchema.parse(result.artifact);
+}
+
+export async function saveTemplateLayerVariant(
   assetId: string,
   request: CreateTemplateVariantRequest,
 ): Promise<TemplateVariant> {
@@ -637,8 +960,15 @@ export async function createTemplateVariant(
   return templateVariantSchema.parse(await unwrap(response, 'Create variant'));
 }
 
+export async function createTemplateVariant(
+  assetId: string,
+  request: CreateTemplateVariantRequest,
+): Promise<TemplateVariant> {
+  return saveTemplateLayerVariant(assetId, request);
+}
+
 /** No workspace is normal for a new brand; discovery is advisory to its upload list. */
-export async function loadWorkspaceTemplates(brandId: string): Promise<WorkspaceTemplate[]> {
+export async function loadWorkspaceTemplates(brandId: string) {
   return discoverWorkspaceTemplates(brandId)
     .then((result) => result.items)
     .catch(() => []);
@@ -649,15 +979,12 @@ export async function fetchTemplateRevisionVariants(
   assetId?: string,
   includeArchived = false,
 ) {
+  const query = new URLSearchParams({ brandId, ...(includeArchived ? { includeArchived: 'true' } : {}) });
+  const path = assetId
+    ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants?${query}`
+    : `/api/ai-studio/templates/revision-variants?${query}`;
   return templateRevisionVariantsResponseSchema.parse(
-    await unwrap(
-      await authorizedFetch(
-        assetId
-          ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`
-          : `/api/ai-studio/templates/revision-variants?brandId=${encodeURIComponent(brandId)}${includeArchived ? '&includeArchived=true' : ''}`,
-      ),
-      'Template revision variants',
-    ),
+    await unwrap(await authorizedFetch(path), 'Template revision variants'),
   ).items;
 }
 
@@ -672,6 +999,18 @@ export async function previewTemplateRevision(
         { method: 'POST', body: JSON.stringify(request) },
       ),
       'Template revision preview',
+    ),
+  );
+}
+
+export async function previewTemplateLayers(assetId: string, request: TemplateLayerPreviewRequest) {
+  return templateLayerPreviewResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/layer-preview`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+      'Layer preview',
     ),
   );
 }
@@ -742,4 +1081,46 @@ export async function archiveTemplateRevisionVariant(
     ),
     'Archive template variant',
   );
+}
+
+/** Success may come with or without a body; only a refusal is read. */
+async function variantAction(path: string, init: RequestInit, what: string) {
+  const response = await authorizedFetch(path, init);
+  if (!response.ok) await unwrap(response, what);
+}
+
+export async function unarchiveTemplateRevisionVariant(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await variantAction(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/unarchive`,
+    { method: 'POST', body: JSON.stringify({ brandId }) },
+    'Restore template variant',
+  );
+}
+
+/** The variant each family opens on. Making the Original the default clears the pointer. */
+export async function setTemplateVariantDefault(
+  brandId: string,
+  assetId: string,
+  variantId: string,
+) {
+  await variantAction(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revision-variants/${encodeURIComponent(variantId)}/default`,
+    { method: 'PUT', body: JSON.stringify({ brandId }) },
+    'Make variant the default',
+  );
+}
+
+export async function fetchTemplateVariantDefaults(brandId: string) {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/variant-defaults?${new URLSearchParams({ brandId })}`,
+  );
+  // A Backend that predates defaults has no such route: every family opens on its Original.
+  if (response.status === 404) return [];
+  return templateVariantDefaultsResponseSchema.parse(
+    await unwrap(response, 'Template variant defaults'),
+  ).items;
 }

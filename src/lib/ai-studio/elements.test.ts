@@ -21,6 +21,7 @@ import {
   elementSourceAssetId,
   generateElementReference,
   listElements,
+  promoteElementToHeadless,
   setElementDefaultReference,
   signLibraryAsset,
   updateElement,
@@ -135,6 +136,59 @@ describe('elements api', () => {
         body: { brandId: 'brand-1', assetId: 'asset-2', expectedUpdatedAt: 'updated-1' },
       }),
     );
+  });
+
+  it('sends the board fields through on a patch, each replacing the stored value', async () => {
+    requestMock.mockResolvedValueOnce({ element: buildElement() } as never);
+
+    await updateElement('element-1', {
+      brandId: 'brand-1',
+      memberRoles: { '33333333-3333-4333-8333-333333333333': 'front' },
+      styleSlugs: ['film-grain'],
+      boardElementIds: [],
+      expectedUpdatedAt: 'updated-1',
+    });
+
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      body: {
+        memberRoles: { '33333333-3333-4333-8333-333333333333': 'front' },
+        styleSlugs: ['film-grain'],
+        boardElementIds: [],
+        expectedUpdatedAt: 'updated-1',
+      },
+    });
+  });
+
+  it('promotes a product Element to an approved headless revision', async () => {
+    requestMock.mockResolvedValueOnce({
+      element: buildElement(),
+      revision: 2,
+      approved: true,
+    } as never);
+
+    const result = await promoteElementToHeadless('brand-1', 'element-1', 'own product shots');
+
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      path: '/api/media/elements/element-1/headless',
+      method: 'POST',
+      body: { brandId: 'brand-1', rightsNote: 'own product shots' },
+    });
+    expect(result.revision).toBe(2);
+  });
+
+  it('omits the rights note when the Element already carries its own', async () => {
+    requestMock.mockResolvedValueOnce({
+      element: buildElement(),
+      revision: 1,
+      approved: true,
+    } as never);
+
+    await promoteElementToHeadless('brand-1', 'element-1');
+
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({ body: { brandId: 'brand-1' } });
+    expect(
+      (requestMock.mock.calls[0]?.[0] as unknown as { body: Record<string, unknown> }).body,
+    ).not.toHaveProperty('rightsNote');
   });
 
   it('clears the default through the same endpoint', async () => {

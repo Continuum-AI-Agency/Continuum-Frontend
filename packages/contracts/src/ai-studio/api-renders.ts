@@ -7,6 +7,8 @@ import {
 } from '../media/template-revision-pin';
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
+import { microOutputTimingSchema } from './delivery-timing';
+import { forgeImportMappingSchema } from './forge-render-imports';
 
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
@@ -554,7 +556,8 @@ export const apiRenderTemplateFontSchema = z
      * `templateFontStatuses` its substitution map, a strict schema without them refuses the
      * whole contract and the template stops rendering rather than reporting a swap.
      */
-    via: z.enum(['direct', 'substitute']).optional(),
+    via: z.enum(['direct', 'substitute', 'package']).optional(),
+    issue: z.enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required']).optional(),
     substitutedBy: z
       .object({
         fontId: z.string().uuid(),
@@ -888,6 +891,26 @@ export function describeMxfVideo(settings: EncodeSettings | null | undefined): s
     : 'DNxHR HQ · Progressive';
 }
 
+/** Comp rates XDCAM 1080i59.94 carries: 29.97 doubles into fields, 59.94/60 split into them. */
+export const XDCAM_1080I5994_RATES = [30000 / 1001, 60000 / 1001, 60] as const;
+
+/**
+ * Why an MXF profile cannot carry a comp's frame rate, or null when it can. One rule for the
+ * Backend preflight and every renderer: a rate the profile cannot carry is refused before the
+ * render, never discovered inside it.
+ */
+export function mxfProfileRateRefusal(
+  profile: string | null | undefined,
+  rate: number | null | undefined,
+): string | null {
+  if (profile !== 'xdcam-hd422-1080i5994') return null;
+  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+    return 'has no recorded frame rate, so it cannot be checked for XDCAM 1080i59.94. Re-parse the template or choose DNxHR.';
+  }
+  if (XDCAM_1080I5994_RATES.some((carried) => Math.abs(carried - rate) < 0.01)) return null;
+  return `is ${Math.round(rate * 1000) / 1000} fps; XDCAM 1080i59.94 takes 29.97, 59.94 or 60 fps. Choose DNxHR or change the composition's frame rate.`;
+}
+
 /** A delivery comp and every measured slot box in it — enough to DRAW the layout. */
 export const apiRenderTemplateLayoutSchema = z
   .object({
@@ -999,8 +1022,9 @@ export const apiRenderTemplateContractSchema = z
       )
       .default([]),
     /**
-     * The template's stored output settings, keyed by public output id, and the fleet defaults
-     * per container. Absent when the forge is too old to publish them.
+     * The template's stored output settings, keyed by public output id, and what it inherits
+     * per container: the fleet defaults with the brand's own binding defaults on top. Absent when
+     * the forge is too old to publish them.
      */
     encode: z
       .object({
@@ -1188,6 +1212,17 @@ const approvalDestinationIdsField = z.array(z.string().uuid()).max(20).optional(
  */
 const finalField = z.boolean().optional();
 
+/**
+ * Which renderer to try. Omitted or `after_effects` is the fleet, which is every render before
+ * this field existed. `experimental` asks for the owned renderer on Cloud Run (engine `micro`):
+ * it renders only what it can reproduce and refuses everything else by name, and a refused job
+ * goes to the fleet with that refusal recorded on it (`engineFallback`), so asking never costs a
+ * delivery. Signed into the confirmation like `final`.
+ */
+export const RENDERERS = ['after_effects', 'experimental'] as const;
+export type Renderer = (typeof RENDERERS)[number];
+const rendererField = z.enum(RENDERERS).optional();
+
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
@@ -1238,6 +1273,7 @@ export const apiRenderPreflightRequestSchema = z
     acceptMissingFonts: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
+    renderer: rendererField,
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage)
@@ -1340,6 +1376,7 @@ export const apiRenderBatchPreflightRequestSchema = z
     acceptMissingFonts: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
+    renderer: rendererField,
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -1386,6 +1423,9 @@ export const apiRenderOutputSchema = z
     // Download-disposed — a <video> ignores that, an <a> saves it. Absent until the copy exists;
     // `url` stays the fleet's address because other screens match outputs by it.
     libraryUrl: z.string().url().optional(),
+    // An Experimental Renderer output's delivery timing: the planned timeline, this file's
+    // measurements from a full decode, and the job's check. Absent on After Effects outputs.
+    timing: microOutputTimingSchema.optional(),
   })
   .strict();
 export type ApiRenderOutput = z.infer<typeof apiRenderOutputSchema>;
@@ -1434,6 +1474,17 @@ export const apiRenderJobSchema = z
     // It is what was REQUESTED: the fleet's watermark switch is off upstream, so today a proof
     // and a final are the same pixels.
     test: z.boolean().default(true),
+    /**
+     * Which engine rendered (or is rendering) the job: `fleet` (After Effects), `paint` (the PSD
+     * still painter) or `micro` (the Experimental Renderer on Cloud Run).
+     */
+    engine: z.enum(['fleet', 'paint', 'micro']).default('fleet'),
+    /**
+     * Why the Experimental Renderer handed this job to After Effects — the refusal it named
+     * (`text:raster:arithmetic-underived`, `binding:color`, ...). Null when it was never asked,
+     * or when it rendered the job itself.
+     */
+    engineFallback: z.string().nullable().default(null),
     outputs: z.array(apiRenderOutputSchema),
     delivery: z.array(apiRenderDeliveryReceiptSchema),
     error: z.string().nullable(),
@@ -1523,6 +1574,8 @@ export const apiRenderJobListQuerySchema = z
     templateKey: z.string().min(1).optional(),
     status: apiRenderJobSchema.shape.status.optional(),
     batchId: z.string().uuid().optional(),
+    /** Jobs pinned to this template variant (`templateRevision.variantId`), any revision of it. */
+    variantId: z.string().uuid().optional(),
   })
   .strict();
 export type ApiRenderJobListQuery = z.infer<typeof apiRenderJobListQuerySchema>;
@@ -1623,6 +1676,13 @@ export const apiRenderPreflightResponseSchema = z
       .default([]),
     /** Null when nothing in this render goes to Meta, so nothing parks for approval. */
     approval: apiRenderApprovalSummarySchema.nullable().default(null),
+    /**
+     * Who draws this row, as signed into the confirmation: `paint` is a flat design the Backend
+     * draws in the same call, `micro` the Experimental Renderer, `fleet` After Effects. Echoed so
+     * a caller that must not spend a fleet render (an organic draft wearing a template) can refuse
+     * before confirming. Defaulted: a server too old to say is the fleet.
+     */
+    engine: z.enum(['fleet', 'paint', 'micro']).default('fleet'),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
@@ -1716,6 +1776,119 @@ export type ApiRenderDraftSourcesStatusResponse = z.infer<
   typeof apiRenderDraftSourcesStatusResponseSchema
 >;
 
+/**
+ * What the AI button sees of the open grid — its rows, the selection, every sheet attached
+ * (located in the browser, notes and colour legend included) and the set's own rules — so it can
+ * change rows, not only add them. Present means "edit this grid"; absent is the draft-new-rows ask.
+ */
+export const API_RENDER_ASSIST_ROWS_MAX = 50;
+export const API_RENDER_ASSIST_TABLES_MAX = 8;
+export const API_RENDER_ASSIST_TABLE_ROWS_MAX = 200;
+export const apiRenderAssistTableSchema = z
+  .object({
+    name: z.string().max(200),
+    headers: z.array(z.string().max(200)).max(100),
+    rows: z
+      .array(z.record(z.string().max(200), z.string().max(500)))
+      .max(API_RENDER_ASSIST_TABLE_ROWS_MAX),
+    notes: z.array(z.string().max(300)).max(40).default([]),
+    legend: z.record(z.string().max(100), z.string().max(7)).default({}),
+  })
+  .strict();
+export type ApiRenderAssistTable = z.infer<typeof apiRenderAssistTableSchema>;
+export const apiRenderAssistGridSchema = z
+  .object({
+    rows: z
+      .array(
+        z
+          .object({
+            id: z.string().uuid(),
+            parentId: z.string().uuid().nullable(),
+            label: z.string().max(200),
+            outputIds: z.array(z.string().min(1)).max(20),
+            /** Effective values, inheritance resolved — what the row renders. */
+            values: apiRenderVariableMapSchema,
+          })
+          .strict(),
+      )
+      .max(API_RENDER_ASSIST_ROWS_MAX),
+    selection: z.array(z.string().uuid()).max(API_RENDER_ASSIST_ROWS_MAX).default([]),
+    tables: z.array(apiRenderAssistTableSchema).max(API_RENDER_ASSIST_TABLES_MAX).default([]),
+    /** The set's description — where a team writes its rules ("red box on the higher odd"). */
+    setDescription: z.string().max(4000).nullable().default(null),
+    /** Map the attached sheet's columns instead of changing rows. */
+    mapColumns: z.boolean().default(false),
+  })
+  .strict();
+export type ApiRenderAssistGrid = z.infer<typeof apiRenderAssistGridSchema>;
+
+const assistRowIds = z.array(z.string().uuid()).min(1).max(API_RENDER_ASSIST_ROWS_MAX);
+const assistScalar = z.union([z.string().max(2000), z.number(), z.boolean()]);
+/**
+ * One change the AI button asks the grid to make, already checked against the contract. The grid
+ * applies a whole answer as ONE undo step; nothing here renders.
+ */
+export const apiRenderAssistOpSchema = z.discriminatedUnion('op', [
+  z
+    .object({
+      op: z.literal('set'),
+      rowIds: assistRowIds,
+      key: apiRenderVariableKeySchema,
+      value: assistScalar,
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal('add_rows'),
+      rows: z
+        .array(
+          z
+            .object({
+              /** Names this new row for a later row's parentRef. */
+              ref: z.string().min(1).max(40),
+              /** An existing row id or an earlier new row's ref; null for a new root. */
+              parentRef: z.string().min(1).max(40).nullable(),
+              label: z.string().min(1).max(200),
+              overrides: apiRenderVariableMapSchema,
+              outputIds: z.array(z.string().min(1)).max(20).default([]),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(API_RENDER_ASSIST_ROWS_MAX),
+    })
+    .strict(),
+  z.object({ op: z.literal('delete_rows'), rowIds: assistRowIds }).strict(),
+  z
+    .object({
+      op: z.literal('set_outputs'),
+      rowIds: assistRowIds,
+      outputIds: z.array(z.string().min(1)).min(1).max(20),
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal('rename'),
+      rowId: z.string().uuid(),
+      label: z.string().min(1).max(200),
+    })
+    .strict(),
+  z.object({ op: z.literal('select'), rowIds: assistRowIds }).strict(),
+  z
+    .object({
+      op: z.literal('map'),
+      mapping: forgeImportMappingSchema.pick({
+        columns: true,
+        label: true,
+        outputs: true,
+        decimals: true,
+        kits: true,
+      }),
+    })
+    .strict(),
+]);
+export type ApiRenderAssistOp = z.infer<typeof apiRenderAssistOpSchema>;
+
 export const API_RENDER_SUGGEST_ROWS_MAX = 20;
 /** Variations drafted under each new row. Rows and their variations together stay within the max. */
 export const API_RENDER_SUGGEST_FORKS_MAX = 4;
@@ -1747,11 +1920,14 @@ export const apiRenderSuggestRowsRequestSchema = z
       })
       .strict()
       .optional(),
+    grid: apiRenderAssistGridSchema.optional(),
   })
   .strict()
   .refine(
     (request) =>
-      request.prompt.length > 0 || request.documentIds.length + request.mediaAssetIds.length > 0,
+      request.prompt.length > 0 ||
+      request.documentIds.length + request.mediaAssetIds.length > 0 ||
+      (request.grid?.tables.length ?? 0) > 0,
     {
       message: 'A brief or uploaded file is required',
       path: ['prompt'],
@@ -1862,6 +2038,14 @@ export const apiRenderSuggestRowsResponseSchema = z
     unfilled: z.array(z.string()).default([]),
     /** A source was too large to read in full, or has no matching template slot. */
     sourceWarnings: z.array(z.string()).default([]),
+    /** Answering a `grid`: the changes to apply, in order. Absent on a draft. */
+    ops: z.array(apiRenderAssistOpSchema).optional(),
+    /** One or two sentences on what changed, said to the person. */
+    reply: z.string().max(2000).optional(),
+    /** Every rule the answer inferred rather than read ("red box on the higher odd"). */
+    assumptions: z.array(z.string().max(500)).max(20).optional(),
+    /** What was asked and could not be done, by name ("Card A is not in this CSV"). */
+    cannot: z.array(z.string().max(500)).max(20).optional(),
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;

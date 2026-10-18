@@ -413,7 +413,7 @@ describe('RenderJobsGrid', () => {
     );
   }, 30_000);
 
-  test('the Template version column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
+  test('the Variant · revision column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
     const SHA = `${'a1b2c3d4e5'.repeat(6)}f1b2`;
     const OTHER_SHA = `${'0f9e8d7c6b'.repeat(6)}a0b1`;
     const pinned: ApiRenderJob = {
@@ -435,7 +435,7 @@ describe('RenderJobsGrid', () => {
       },
     };
     await renderLedger([pinned, revised, { ...BASE, id: 'job-legacy', label: 'Legacy' }], []);
-    expect(screen.getByRole('columnheader', { name: /Template version/ })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: /Variant · revision/ })).toBeTruthy();
     // The source revision and the day the render ran, the full digest one hover away.
     // `feat(forge): the ledger names the variant a render used, or says unchecked` (6104ec94)
     // wrapped the label so the variant can sit beside it, and the title moved to that
@@ -956,6 +956,31 @@ describe('RenderJobsGrid', () => {
     expect(thumbnail.getAttribute('src')).toBe('https://cdn.example.com/madrid.png');
     fireEvent.error(thumbnail);
     expect(rowOf('Expired link').querySelector('img')).toBeNull();
+  }, 30_000);
+
+  test('the Experimental Renderer marks its jobs, and a job it handed to After Effects says why', async () => {
+    const reason = 'text:raster:arithmetic-underived@Main/Headline';
+    const rendered: ApiRenderJob = { ...MADRID, label: 'Rendered here', engine: 'micro' };
+    const handedOver: ApiRenderJob = { ...ROMA, label: 'Handed over', engineFallback: reason };
+    const farm: ApiRenderJob = {
+      ...ROMA,
+      id: '11111111-1111-4111-8111-111111111141',
+      label: 'Farm only',
+    };
+    await renderLedger([rendered, handedOver, farm], [TEMPLATE]);
+    const rowOf = (label: string) => screen.getByText(label).closest('tr') as HTMLElement;
+
+    expect(within(rowOf('Rendered here')).getByText('Experimental')).toBeTruthy();
+    expect(
+      within(rowOf('Handed over')).getByText('Experimental → After Effects').getAttribute('title'),
+    ).toBe(`Sent to After Effects: ${reason}`);
+    expect(within(rowOf('Farm only')).queryByText(/Experimental/)).toBeNull();
+
+    // The detail has room for the reason as words on the page, not only on hover.
+    fireEvent.click(screen.getByText('Handed over'));
+    expect(await screen.findByRole('heading', { name: 'Handed over' })).toBeTruthy();
+    expect(screen.getByText('Renderer')).toBeTruthy();
+    expect(screen.getByText(`· the Experimental Renderer handed it over: ${reason}`)).toBeTruthy();
   }, 30_000);
 
   test('a comp delivered as MP4, MOV and MXF lists every file, previews the playable one, and downloads each', async () => {

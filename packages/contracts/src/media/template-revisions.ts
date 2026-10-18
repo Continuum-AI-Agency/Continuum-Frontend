@@ -73,12 +73,30 @@ const revisionArrangementSchema = designArrangementSchema.extend({
   artboardId: z.number().int().nullable().default(null),
 });
 
+/**
+ * Every chromatic colour the forge can write moves to its nearest palette entry (OKLab); white,
+ * black and the greys stay, which is what keeps text legible. A snapshot field like the others, so
+ * a later revision of the variant replays it — a brand colour's nearest entry is itself.
+ */
+export const templateRevisionRecolorSchema = z
+  .object({
+    palette: z
+      .array(z.string().regex(/^#[0-9a-f]{6}$/i))
+      .min(1)
+      .max(12),
+    /** Below this chroma (max − min channel, 0..1) a colour is a neutral and stays. Forge default: 0.008. */
+    minChroma: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+export type TemplateRevisionRecolor = z.infer<typeof templateRevisionRecolorSchema>;
+
 export const templateRevisionEditsSchema = z
   .object({
     arrangement: revisionArrangementSchema.optional(),
     layers: z.array(templateRevisionLayerEditSchema).max(64).default([]),
     slots: z.array(templateSourceSlotEditSchema).max(500).default([]),
     orders: z.array(templateLayerOrderSchema).max(16).default([]),
+    recolor: templateRevisionRecolorSchema.optional(),
   })
   .strict()
   .superRefine((edits, ctx) => {
@@ -131,10 +149,16 @@ export const templateRevisionErrorCodeSchema = z.enum([
   /** The exact file is still there, but its bytes no longer match what was published. */
   'template_revision_source_changed',
   'template_variant_archived',
+  /** Only a variant with a published revision can be the one a family opens on. */
+  'template_variant_unpublished',
   'template_revision_head_conflict',
   'template_revision_multi_source_edit_unsupported',
   'template_revision_multi_source_publish_unsupported',
   'template_revision_sources_invalid',
+  /** The forge would leave part of the file in the old colours, so it changed none of them. */
+  'template_recolor_refused',
+  /** The forge answered without applying the recolour: it predates it. Deploy the forge first. */
+  'template_forge_recolor_unsupported',
 ]);
 export type TemplateRevisionErrorCode = z.infer<typeof templateRevisionErrorCodeSchema>;
 
@@ -195,6 +219,10 @@ export const templateRevisionSchema = z
   .strict();
 export type TemplateRevision = z.infer<typeof templateRevisionSchema>;
 
+/** What a variant is FOR, beyond its name. `brand_aligned`: made by "Apply my design system". */
+export const templateVariantTagSchema = z.enum(['brand_aligned']);
+export type TemplateVariantTag = z.infer<typeof templateVariantTagSchema>;
+
 export const templateRevisionVariantSchema = z
   .object({
     templateId: z.string().uuid(),
@@ -205,6 +233,7 @@ export const templateRevisionVariantSchema = z
     draftHeadRevisionId: z.string().uuid(),
     publishedHeadRevisionId: z.string().uuid().nullable(),
     archivedAt: z.string().nullable(),
+    tags: z.array(templateVariantTagSchema).default([]),
     sourceKind: templateSourceKindSchema,
     revisions: z.array(templateRevisionSchema),
   })
@@ -213,6 +242,26 @@ export type TemplateRevisionVariant = z.infer<typeof templateRevisionVariantSche
 export const templateRevisionVariantsResponseSchema = z
   .object({ items: z.array(templateRevisionVariantSchema) })
   .strict();
+
+/**
+ * The variant a family opens on — its gallery card and the Render tab. No row means the Original.
+ * Its own read rather than a field on the strict variant shape: an unpromoted Frontend rejects
+ * unknown keys, so one default would fail every catalog read for the brand.
+ */
+export const templateVariantDefaultSchema = z
+  .object({ templateId: z.string().uuid(), variantId: z.string().uuid() })
+  .strict();
+export type TemplateVariantDefault = z.infer<typeof templateVariantDefaultSchema>;
+export const templateVariantDefaultsResponseSchema = z
+  .object({ items: z.array(templateVariantDefaultSchema) })
+  .strict();
+/** Making the Original the default clears the family's pointer. */
+export const setTemplateVariantDefaultRequestSchema = z
+  .object({ brandId: z.string().uuid() })
+  .strict();
+export type SetTemplateVariantDefaultRequest = z.infer<
+  typeof setTemplateVariantDefaultRequestSchema
+>;
 
 export const templateRevisionPreviewRequestSchema = z
   .object({
@@ -231,12 +280,15 @@ export const saveTemplateRevisionRequestSchema = templateRevisionPreviewRequestS
     expectedHeadRevisionId: z.string().uuid(),
     idempotencyKey: z.string().uuid(),
     uploadAssetId: z.string().uuid().optional(),
+    /** Only a new variant is tagged: a tag says what the variant was made for. */
+    tags: z.array(templateVariantTagSchema).max(4).optional(),
   })
   .strict()
   .refine(
     (request) => Boolean(request.variantId) !== Boolean(request.name),
     'Name a new variant or choose an existing one',
-  );
+  )
+  .refine((request) => !request.tags?.length || Boolean(request.name), 'Tag a new variant only');
 export type SaveTemplateRevisionRequest = z.infer<typeof saveTemplateRevisionRequestSchema>;
 
 export const changeRenderSetTemplateRevisionRequestSchema = z

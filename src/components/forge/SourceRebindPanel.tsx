@@ -53,6 +53,7 @@ type SourceRebindProps = {
   repairOnly?: boolean;
   onNeedsReview?: (versionId: string) => void;
   aepName?: string;
+  sourceFamily?: 'presentation';
   onConfirmed: () => Promise<void>;
   missingFootage?: MissingMedia[];
   /** A file dropped on the gallery as this template's next revision: uploaded once, on arrival. */
@@ -87,6 +88,7 @@ function SourceRebindForm({
   repairOnly = false,
   onNeedsReview,
   aepName,
+  sourceFamily,
   onConfirmed,
   initialFile,
   onInitialFileTaken,
@@ -639,7 +641,7 @@ function SourceRebindForm({
         <Label className="cursor-pointer">
           <Input
             type="file"
-            accept=".aep,.aepx,.aet,.zip"
+            accept={sourceFamily === 'presentation' ? '.pptx,.potx' : '.aep,.aepx,.aet,.zip'}
             className="sr-only"
             disabled={busy}
             onChange={(event) => {

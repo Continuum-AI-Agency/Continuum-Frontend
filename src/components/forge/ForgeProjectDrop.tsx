@@ -1,8 +1,13 @@
 'use client';
 
-import { FORGE_PROJECT_FILE_MAX_MB, type TemplateSourceSummary } from '@continuum/contracts';
+import {
+  FORGE_PROJECT_FILE_MAX_MB,
+  LIBRARY_PRESENTATION_MAX_BYTES,
+  type TemplateSourceSummary,
+} from '@continuum/contracts';
 import { FileUp, FolderUp } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { NewPresentationButton } from '@/components/forge/presentations/NewPresentationButton';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import {
@@ -12,7 +17,7 @@ import {
 } from '@/lib/library/folderUpload';
 import { cn } from '@/lib/utils';
 
-export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.psd,.ai,.ttf,.otf';
+export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.html,.htm,.psd,.ai,.blend,.pptx,.potx,.ttf,.otf';
 
 /** Layered Photoshop and Illustrator files the Forge turns into a template: every layer comes in,
  * text stays live. */
@@ -70,7 +75,8 @@ export function uploadRefusal(
 ): string | null {
   if (!error || !/exceeded the maximum allowed size|failed \(413\)/i.test(error)) return null;
   const megabytes = Math.max(1, Math.round(file.sizeBytes / (1024 * 1024)));
-  return `${file.name} is ${megabytes} MB, over the ${FORGE_PROJECT_FILE_MAX_MB} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
+  const limitMb = /\.(pptx|potx)$/i.test(file.name) ? LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024) : FORGE_PROJECT_FILE_MAX_MB;
+  return `${file.name} is ${megabytes} MB, over the ${limitMb} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
 }
 
 /**
@@ -85,7 +91,21 @@ export function partitionForgeProjectFiles(files: File[]): {
   return files.reduce<{ accepted: File[]; fonts: File[]; rejected: File[] }>(
     (result, file) => {
       const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      if (['.aep', '.aepx', '.aet', '.zip', ...FORGE_DESIGN_EXTENSIONS].includes(extension))
+      // A .blend uploads like an .aep: the Library registers it and the forge parses it.
+      if (
+        [
+          '.aep',
+          '.aepx',
+          '.aet',
+          '.zip',
+          '.html',
+          '.htm',
+          '.blend',
+          '.pptx',
+          '.potx',
+          ...FORGE_DESIGN_EXTENSIONS,
+        ].includes(extension)
+      )
         result.accepted.push(file);
       else if (['.ttf', '.otf'].includes(extension)) result.fonts.push(file);
       else result.rejected.push(file);
@@ -100,11 +120,15 @@ export function ForgeProjectDrop({
   onFiles,
   onFonts,
   onRejected,
+  brandId,
+  onPresentationCreated,
 }: {
   compact?: boolean;
   onFiles: (files: File[]) => void;
   onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
+  brandId?: string;
+  onPresentationCreated?: (assetId: string) => Promise<void>;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -214,7 +238,7 @@ export function ForgeProjectDrop({
           {packing ? 'Preparing folder…' : 'New template'}
         </span>
         <span className="max-w-60 text-xs font-normal text-muted-foreground">
-          Drop a project folder, ZIP, After Effects project, layered Photoshop or Illustrator file,
+          Drop a PowerPoint deck or template, project folder, ZIP, After Effects project, layered Photoshop or Illustrator file,
           or click to choose files.
         </span>
       </Button>
@@ -227,6 +251,9 @@ export function ForgeProjectDrop({
         <FolderUp aria-hidden />
         Upload folder
       </Button>
+      {brandId && onPresentationCreated ? (
+        <NewPresentationButton brandId={brandId} onCreated={onPresentationCreated} />
+      ) : null}
       {compact ? null : (
         <>
           <details className="text-xs text-muted-foreground">
@@ -250,7 +277,7 @@ export function ForgeProjectDrop({
             </ol>
           </details>
           <p className="text-xs text-muted-foreground">
-            Up to {FORGE_PROJECT_FILE_MAX_MB} MB per upload. You can add font files separately.
+            PowerPoint decks and templates up to {LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024)} MB; other projects up to {FORGE_PROJECT_FILE_MAX_MB} MB. You can add font files separately.
           </p>
         </>
       )}

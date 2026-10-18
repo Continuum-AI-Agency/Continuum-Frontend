@@ -1,28 +1,22 @@
 'use client';
 
-// The preview inspector’s layer editor for a Photoshop or Illustrator template: the file's own stack,
-// and editable layer orders. Saving authors a separate variant from the immutable original design.
+// Arrangements of a template imported from a Photoshop or Illustrator file: the same layers in
+// another front-to-back order, each re-authored by the server as its own comp so a render row picks
+// it like a format. Every layer carries its masks and clipping in its own pixels, so any order is
+// safe. The import itself is the golden source: arrangements saved on it land in a new variant, and
+// re-arranging a variant writes that variant's next revision. Renders nothing for other templates.
 
-import {
-  type DesignArrangement,
-  type DesignLayersResponse,
-  designArrangementsRequestSchema,
-  readableLayerName,
-  type TemplateVariant,
+import type {
+  DesignArrangement,
+  DesignLayersResponse,
+  TemplateRevision,
 } from '@continuum/contracts';
-import {
-  ArrowDown,
-  ArrowUp,
-  Image as ImageIcon,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Trash2,
-  Type,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Pill } from '@/components/kibo-ui/pill';
+import { readableLayerName } from '@continuum/contracts';
+import { ChevronDown, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
+import { type StackRow, TemplateLayerList } from '@/components/forge/TemplateLayerList';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -32,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
-import { createTemplateVariant, fetchDesignLayers } from '@/lib/library/templateSources';
+import { fetchDesignLayers, saveTemplateRevision } from '@/lib/library/templateSources';
 
 type Layers = DesignLayersResponse;
 type Board = Layers['artboards'][number];
@@ -41,107 +35,56 @@ type Board = Layers['artboards'][number];
 const fileOrder = (layers: Layers, board: Board) =>
   layers.layers.filter((layer) => layer.artboardId === board.id).map((layer) => layer.id);
 
-/** `order` with one layer moved one step toward the viewer (+1) or away from them (−1). */
-export function moveLayer(order: readonly number[], id: number, step: 1 | -1): number[] {
-  const at = order.indexOf(id);
-  const to = at + step;
-  if (at < 0 || to < 0 || to >= order.length) return [...order];
-  const next = [...order];
-  [next[at], next[to]] = [next[to] as number, next[at] as number];
-  return next;
-}
-
-function StackList({
-  layers,
-  order,
-  onMove,
-  disabled,
-}: {
-  layers: Layers;
-  order: readonly number[];
-  onMove?: (id: number, step: 1 | -1) => void;
-  disabled?: boolean;
-}) {
+/** A bottom-first order as the list's front-first rows. */
+function rowsOf(layers: Layers, order: readonly number[]): StackRow[] {
   const byId = new Map(layers.layers.map((layer) => [layer.id, layer]));
-  // Shown front first, the way a layers panel reads.
-  const front = [...order].reverse();
-  return (
-    <ol className="flex flex-col divide-y divide-border rounded-md border border-border">
-      {front.map((id, index) => {
-        const layer = byId.get(id);
-        if (!layer) return null;
-        const name = readableLayerName(layer.name) || layer.name;
-        return (
-          <li key={id} className="flex items-center gap-2 px-2 py-1 text-xs">
-            {layer.kind === 'text' ? (
-              <Type className="size-3.5 text-muted-foreground" aria-hidden />
-            ) : (
-              <ImageIcon className="size-3.5 text-muted-foreground" aria-hidden />
-            )}
-            <span className="min-w-0 flex-1 truncate">{name}</span>
-            {layer.hidden ? <Pill variant="muted">Hidden in the file</Pill> : null}
-            {onMove ? (
-              <span className="flex items-center gap-0.5">
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={`Bring ${name} forward`}
-                  disabled={disabled || index === 0}
-                  onClick={() => onMove(id, 1)}
-                >
-                  <ArrowUp aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={`Send ${name} backward`}
-                  disabled={disabled || index === front.length - 1}
-                  onClick={() => onMove(id, -1)}
-                >
-                  <ArrowDown aria-hidden />
-                </Button>
-              </span>
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
-  );
+  return [...order].reverse().flatMap((id) => {
+    const layer = byId.get(id);
+    if (!layer) return [];
+    return [
+      {
+        id,
+        label: readableLayerName(layer.name) || layer.name,
+        kind: layer.kind === 'text' ? ('text' as const) : ('artwork' as const),
+        hidden: layer.hidden,
+      },
+    ];
+  });
 }
 
 export function DesignLayersPanel({
   brandId,
   assetId,
-  active,
+  revisionId,
+  expectedHeadRevisionId,
+  variantId,
   onSaved,
-  expectedVersionId,
-  onCreated,
 }: {
   brandId: string;
   assetId: string;
-  /** Reading the layers opens the source file, so it waits until the tab is first shown. */
-  active: boolean;
-  onSaved: () => Promise<unknown> | unknown;
-  expectedVersionId: string;
-  onCreated?: (variant: TemplateVariant) => Promise<unknown> | unknown;
+  /** Exact immutable revision used as both the parent and expected variant head. */
+  revisionId: string;
+  expectedHeadRevisionId: string;
+  /** Omit for the golden source; provide the stable variant ID to append an immutable revision. */
+  variantId?: string;
+  onSaved: (revision: TemplateRevision) => Promise<unknown> | unknown;
 }) {
-  const [layers, setLayers] = useState<Layers | null>(null);
+  // Reading the layers opens the Photoshop or Illustrator file, so it waits for the first expand.
+  const [open, setOpen] = useState(false);
+  const [layers, setLayers] = useState<Layers | null | undefined>(undefined);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [draft, setDraft] = useState<DesignArrangement[]>([]);
+  const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [selected, setSelected] = useState(0);
 
   useEffect(() => {
-    if (!active || layers || refusal) return;
+    if (!open || layers !== undefined || refusal) return;
     let cancelled = false;
     fetchDesignLayers(brandId, assetId)
       .then((read) => {
         if (cancelled) return;
         setLayers(read);
-        setDraft(read.arrangements);
+        setDraft(read?.arrangements ?? []);
       })
       .catch((error: unknown) => {
         if (!cancelled)
@@ -150,217 +93,269 @@ export function DesignLayersPanel({
     return () => {
       cancelled = true;
     };
-  }, [active, assetId, brandId, layers, refusal]);
+  }, [open, assetId, brandId, layers, refusal]);
 
-  if (refusal) return <p className="text-xs text-muted-foreground">{refusal}</p>;
-  if (!layers)
-    return (
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" aria-hidden /> Reading the file’s layers…
-      </p>
-    );
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="rounded-lg border border-border bg-card"
+    >
+      <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
+        <span>
+          <span className="block text-sm font-medium">Arrangements · extra formats</span>
+          <span className="block text-xs text-muted-foreground">
+            The same layers in another front-to-back order, each one a format a render row can pick.
+          </span>
+        </span>
+        <ChevronDown
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-180"
+          aria-hidden
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-3 border-t border-border p-3">
+        {layers ? (
+          <Arrangements
+            layers={layers}
+            draft={draft}
+            setDraft={setDraft}
+            name={name}
+            setName={setName}
+            saving={saving}
+            setSaving={setSaving}
+            variantId={variantId}
+            save={(arrangement) =>
+              saveTemplateRevision(assetId, {
+                brandId,
+                parentRevisionId: revisionId,
+                expectedHeadRevisionId,
+                idempotencyKey: crypto.randomUUID(),
+                ...(variantId ? { variantId } : { name: arrangement.name }),
+                edits: {
+                  arrangement,
+                  layers: [],
+                  slots: [],
+                  orders: [],
+                },
+              })
+            }
+            onSaved={onSaved}
+          />
+        ) : refusal ? (
+          <p className="text-xs text-muted-foreground">{refusal}</p>
+        ) : layers === null ? (
+          <p className="text-xs text-muted-foreground">This template has no design arrangements.</p>
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden /> Reading the file’s layers…
+          </p>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
+function Arrangements({
+  layers,
+  draft,
+  setDraft,
+  name,
+  setName,
+  saving,
+  setSaving,
+  variantId,
+  save: send,
+  onSaved,
+}: {
+  layers: Layers;
+  draft: DesignArrangement[];
+  setDraft: Dispatch<SetStateAction<DesignArrangement[]>>;
+  name: string;
+  setName: (name: string) => void;
+  saving: boolean;
+  setSaving: (saving: boolean) => void;
+  variantId?: string;
+  save: (arrangement: DesignArrangement) => Promise<TemplateRevision>;
+  onSaved: (revision: TemplateRevision) => Promise<unknown> | unknown;
+}) {
+  const [selected, setSelected] = useState(0);
   const boardOf = (arrangement: DesignArrangement) =>
     layers.artboards.find((board) => board.id === arrangement.artboardId) ?? layers.artboards[0];
-  const changed = JSON.stringify(draft) !== JSON.stringify(layers.arrangements);
   const update = (index: number, patch: Partial<DesignArrangement>) =>
     setDraft((current) => current.map((item, at) => (at === index ? { ...item, ...patch } : item)));
 
   const addArrangement = () => {
-    const base = draft[selected];
-    const board = base ? boardOf(base) : layers.artboards[0];
+    const board = layers.artboards[0];
     if (!board) return;
-    let suffix = 2;
-    const name = () => `${board.name.slice(0, 52)} · ${suffix}`;
-    while (draft.some((item) => item.name === name())) suffix++;
-    setSelected(draft.length);
-    setDraft([
-      ...draft,
+    setDraft((current) => [
+      ...current,
       {
-        name: name(),
+        name: `${board.name} · ${current.length + 2}`.slice(0, 60),
         artboardId: board.id,
-        order: base ? [...base.order] : fileOrder(layers, board),
+        order: fileOrder(layers, board),
       },
     ]);
   };
 
   const save = async () => {
-    const valid = designArrangementsRequestSchema.shape.arrangements.safeParse(draft);
-    if (!valid.success) {
-      setSaveError('Give each variant a name and keep at most 12 variants.');
+    const arrangement = draft[selected];
+    if (!arrangement) {
+      toast.error('Create or select an arrangement first.');
       return;
     }
-    if (new Set(valid.data.map((item) => item.name)).size !== draft.length) {
-      setSaveError('Give each variant a different name.');
+    if (!variantId && !name.trim()) {
+      toast.error('Name the new variant.');
       return;
     }
-    setSaveError(null);
     setSaving(true);
+    let saved: TemplateRevision;
     try {
-      const arrangement = valid.data[Math.min(selected, valid.data.length - 1)];
-      if (!arrangement) throw new Error('Create a named variant first.');
-      const name = layers.arrangements.some((item) => item.name === arrangement.name)
-        ? `${arrangement.name.slice(0, 52)} copy`
-        : arrangement.name;
-      const created = await createTemplateVariant(assetId, {
-        brandId,
-        expectedVersionId,
-        name,
-        arrangement: { ...arrangement, name },
-      });
-      toast.success('Variant created. Inspect its checks, then build and publish it to render.');
-      await onSaved();
-      await onCreated?.(created);
+      saved = await send({ ...arrangement, name: variantId ? arrangement.name : name.trim() });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not save the variants';
-      setSaveError(message);
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Could not save the arrangement');
+      setSaving(false);
+      return;
     } finally {
       setSaving(false);
     }
+    if (!variantId) setName('');
+    toast.success(variantId ? 'Saved a new immutable revision.' : 'Created an immutable variant revision.');
+    await onSaved(saved);
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs text-muted-foreground">
-        Create a named variant, then move layers forward or backward. Build and publish the saved
-        variant to choose it when making a render set.
-      </p>
-
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={saving || draft.length >= 12}
-          onClick={addArrangement}
-        >
-          <Plus data-icon="inline-start" aria-hidden /> New variant
-        </Button>
-        <Button type="button" size="sm" disabled={!changed || saving} onClick={save}>
-          {saving ? (
-            <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
-          ) : null}
-          Create variant
-        </Button>
-        {changed ? (
-          <span className="text-xs text-muted-foreground">
-            Saving creates a new variant; the original is retained.
-          </span>
-        ) : null}
-      </div>
-      {saveError ? (
-        <p role="alert" className="text-xs text-destructive">
-          {saveError}
-        </p>
-      ) : null}
-      {draft.length > 0 ? (
-        <label className="flex items-center gap-2 text-xs">
-          Variant
-          <select
-            aria-label="Edit variant"
-            disabled={saving}
-            value={Math.min(selected, draft.length - 1)}
-            onChange={(event) => setSelected(Number(event.target.value))}
-            className="min-w-0 rounded-md border bg-background p-1"
-          >
-            {draft.map((item, index) => (
-              <option key={index} value={index}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      {draft.map((arrangement, index) => {
-        if (index !== Math.min(selected, draft.length - 1)) return null;
-        const board = boardOf(arrangement);
-        return (
+    <>
+      <div className="grid max-h-[32rem] gap-3 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
+        {layers.artboards.map((board) => (
           <section
-            // biome-ignore lint/suspicious/noArrayIndexKey: an arrangement's name is what is being edited.
-            key={index}
-            aria-label={`Variant ${arrangement.name}`}
+            key={board.id ?? 'canvas'}
             className="flex flex-col gap-1.5 rounded-md border border-border p-2"
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                aria-label="Variant name"
-                className="h-7 w-56 text-xs"
-                disabled={saving}
-                value={arrangement.name}
-                maxLength={60}
-                onChange={(event) => update(index, { name: event.target.value })}
-              />
-              {layers.artboards.length > 1 && board ? (
-                <Select
-                  disabled={saving}
-                  value={String(board.id)}
-                  onValueChange={(next) => {
-                    const picked = layers.artboards.find((item) => String(item.id) === next);
-                    if (picked)
-                      update(index, { artboardId: picked.id, order: fileOrder(layers, picked) });
-                  }}
-                >
-                  <SelectTrigger size="sm" aria-label="Artboard it re-stacks">
-                    <SelectValue>{board.name}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {layers.artboards.map((item) => (
-                      <SelectItem key={item.id ?? 'canvas'} value={String(item.id)}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                disabled={saving}
-                onClick={() => board && update(index, { order: fileOrder(layers, board) })}
-              >
-                <RotateCcw data-icon="inline-start" aria-hidden /> Reset to the file’s order
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                disabled={saving}
-                aria-label={`Remove ${arrangement.name}`}
-                onClick={() => setDraft((current) => current.filter((_, at) => at !== index))}
-              >
-                <Trash2 aria-hidden />
-              </Button>
-            </div>
-            <StackList
-              layers={layers}
-              disabled={saving}
-              order={arrangement.order}
-              onMove={(id, step) =>
-                update(index, { order: moveLayer(arrangement.order, id, step) })
-              }
-            />
-          </section>
-        );
-      })}
-
-      <details>
-        <summary className="cursor-pointer text-xs text-muted-foreground">
-          Original file layers
-        </summary>
-        {layers.artboards.map((board) => (
-          <section key={board.id ?? 'canvas'} className="flex flex-col gap-1.5">
-            <h3 className="text-xs font-medium">
+            <h4 className="text-xs font-medium">
               {board.name} · as the file stacks it{' '}
               <span className="font-normal text-muted-foreground">
                 {board.w}×{board.h}
               </span>
-            </h3>
-            <StackList layers={layers} order={fileOrder(layers, board)} />
+            </h4>
+            <TemplateLayerList
+              label={`${board.name} as the file stacks it`}
+              rows={rowsOf(layers, fileOrder(layers, board))}
+            />
           </section>
         ))}
-      </details>
-    </div>
+
+        {draft.map((arrangement, index) => {
+          const board = boardOf(arrangement);
+          return (
+            <section
+              // biome-ignore lint/suspicious/noArrayIndexKey: an arrangement's name is what is being edited.
+              key={index}
+              aria-label={`Arrangement ${arrangement.name}`}
+              className="flex flex-col gap-1.5 rounded-md border border-primary/30 p-2"
+            >
+              <div className="flex flex-wrap items-center gap-1">
+                <Input
+                  aria-label="Arrangement name"
+                  className="h-7 min-w-0 flex-1 text-xs"
+                  value={arrangement.name}
+                  maxLength={60}
+                  onChange={(event) => update(index, { name: event.target.value })}
+                />
+                {layers.artboards.length > 1 && board ? (
+                  <Select
+                    value={String(board.id)}
+                    onValueChange={(next) => {
+                      const picked = layers.artboards.find((item) => String(item.id) === next);
+                      if (picked)
+                        update(index, {
+                          artboardId: picked.id,
+                          order: fileOrder(layers, picked),
+                        });
+                    }}
+                  >
+                    <SelectTrigger size="sm" aria-label="Artboard it re-stacks">
+                      <SelectValue>{board.name}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {layers.artboards.map((item) => (
+                        <SelectItem key={item.id ?? 'canvas'} value={String(item.id)}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Reset to the file’s order"
+                  onClick={() => board && update(index, { order: fileOrder(layers, board) })}
+                >
+                  <RotateCcw aria-hidden />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Remove ${arrangement.name}`}
+                  onClick={() => setDraft((current) => current.filter((_, at) => at !== index))}
+                >
+                  <Trash2 aria-hidden />
+                </Button>
+              </div>
+              <TemplateLayerList
+                label={`${arrangement.name} stack`}
+                rows={rowsOf(layers, arrangement.order)}
+                onReorder={(front) =>
+                  update(index, { order: front.filter((id): id is number => typeof id === 'number').reverse() })
+                }
+              />
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <Button type="button" size="sm" variant="outline" onClick={addArrangement}>
+          <Plus data-icon="inline-start" aria-hidden /> New arrangement
+        </Button>
+        <div className="flex-1" />
+        <Select
+          value={String(Math.min(selected, Math.max(0, draft.length - 1)))}
+          onValueChange={(value) => setSelected(Number(value))}
+          disabled={!draft.length || saving}
+        >
+          <SelectTrigger size="sm" aria-label="Arrangement to save">
+            <SelectValue>{draft[Math.min(selected, draft.length - 1)]?.name ?? 'No arrangement'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {draft.map((item, index) => (
+              <SelectItem key={`${item.name}:${index}`} value={String(index)}>{item.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!variantId ? (
+          <Input
+            aria-label="Arrangement variant name"
+            placeholder="Name the new variant"
+            className="h-8 w-56 text-xs"
+            value={name}
+            maxLength={60}
+            onChange={(event) => setName(event.target.value)}
+          />
+        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          variant={variantId ? 'default' : 'outline'}
+          disabled={!draft.length || saving || (!variantId && !name.trim())}
+          onClick={() => void save()}
+        >
+          {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+          {variantId ? 'Save arrangement revision' : 'Save as immutable variant'}
+        </Button>
+      </div>
+    </>
   );
 }
