@@ -5,8 +5,8 @@ import {
   API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
+  API_RENDER_IMPORT_MAPPING_ROUTE,
   API_RENDER_IMPORT_MEDIA_ROUTE,
-  API_RENDER_IMPORT_PREVIEW_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
   API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
@@ -73,6 +73,8 @@ import {
   type CreateForgeRenderSetRequest,
   FORGE_LIBRARY_STATE_ROUTE,
   FORGE_PROVENANCE_ROUTE,
+  type ForgeImportMapping,
+  type ForgeImportMappingQuery,
   type ForgeLibraryStateResponse,
   type ForgeMotionProof,
   type ForgeMotionProofFormat,
@@ -82,8 +84,6 @@ import {
   type ForgeRenderDriveSnapshotRequest,
   type ForgeRenderImportMediaRequest,
   type ForgeRenderImportMediaResponse,
-  type ForgeRenderImportPreview,
-  type ForgeRenderImportPreviewRequest,
   type ForgeRenderLive,
   type ForgeRenderLiveRequest,
   type ForgeRenderPictures,
@@ -95,13 +95,13 @@ import {
   type ForgeRenderSetShareResponse,
   type ForgeRenderSketch,
   type ForgeRenderSketchRequest,
+  forgeImportMappingResponseSchema,
   forgeLibraryStateResponseSchema,
   forgeMotionProofFormatsSchema,
   forgeMotionProofSchema,
   forgeProvenanceResponseSchema,
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportMediaResponseSchema,
-  forgeRenderImportPreviewSchema,
   forgeRenderLiveSchema,
   forgeRenderPicturesSchema,
   forgeRenderPreviewSchema,
@@ -128,12 +128,20 @@ export const apiRendersApi = {
       schema: forgeRenderImportMediaResponseSchema,
     });
   },
-  previewImport(input: ForgeRenderImportPreviewRequest) {
-    return http.request<ForgeRenderImportPreview>({
-      path: API_RENDER_IMPORT_PREVIEW_ROUTE,
-      method: 'POST',
+  /** The column mapping this brand last confirmed for one template; null until one is saved. */
+  async getImportMapping(input: ForgeImportMappingQuery): Promise<ForgeImportMapping | null> {
+    const answer = await http.request<{ mapping: ForgeImportMapping | null }>({
+      path: `${API_RENDER_IMPORT_MAPPING_ROUTE}?${query(input)}`,
+      schema: forgeImportMappingResponseSchema,
+    });
+    return answer.mapping;
+  },
+  saveImportMapping(input: ForgeImportMappingQuery & { mapping: ForgeImportMapping | null }) {
+    return http.request<{ mapping: ForgeImportMapping | null }>({
+      path: API_RENDER_IMPORT_MAPPING_ROUTE,
+      method: 'PUT',
       body: input,
-      schema: forgeRenderImportPreviewSchema,
+      schema: forgeImportMappingResponseSchema,
     });
   },
   snapshotDriveFolder(input: ForgeRenderDriveSnapshotRequest) {
@@ -265,6 +273,7 @@ export const apiRendersApi = {
       templateKey?: string;
       status?: ApiRenderJob['status'];
       batchId?: string;
+      variantId?: string;
     },
   ) {
     return http.request<ApiRenderJobListResponse>({
@@ -277,6 +286,7 @@ export const apiRendersApi = {
         ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
         ...(options?.status ? { status: options.status } : {}),
         ...(options?.batchId ? { batchId: options.batchId } : {}),
+        ...(options?.variantId ? { variantId: options.variantId } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
     });

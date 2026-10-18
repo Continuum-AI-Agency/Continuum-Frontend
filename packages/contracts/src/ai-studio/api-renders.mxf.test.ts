@@ -28,6 +28,32 @@ describe('MXF request and inspection contracts', () => {
     expect(contract.apiRenderFieldOrderSchema.safeParse('tt').success).toBe(true);
     expect(contract.apiRenderFieldOrderSchema.safeParse('guessed').success).toBe(false);
   });
+  // The conformance table for every renderer that writes an XDCAM MXF. Copied verbatim into
+  // continuum-render-api test/encode.test.js (FlowStream ilftbbyr3); keep the rows identical.
+  test('XDCAM 1080i59.94 takes 29.97, 59.94 and 60 fps comps and refuses the rest', () => {
+    const cases: Array<[number | null, boolean]> = [
+      [30000 / 1001, true],
+      [29.97, true],
+      [60000 / 1001, true],
+      [59.94, true],
+      [60, true],
+      [30, false],
+      [25, false],
+      [24, false],
+      [50, false],
+      [null, false],
+    ];
+    for (const [rate, accepted] of cases) {
+      const refusal = contract.mxfProfileRateRefusal('xdcam-hd422-1080i5994', rate);
+      expect({ rate, accepted: refusal === null }).toEqual({ rate, accepted });
+      expect(contract.mxfProfileRateRefusal('dnxhr-hq', rate)).toBeNull();
+      expect(contract.mxfProfileRateRefusal(undefined, rate)).toBeNull();
+    }
+    expect(contract.mxfProfileRateRefusal('xdcam-hd422-1080i5994', null)).toContain(
+      'no recorded frame rate',
+    );
+    expect(contract.mxfProfileRateRefusal('xdcam-hd422-1080i5994', 25)).toContain('25 fps');
+  });
   test('accepts the two MXF layouts and preserves them through merge and clear helpers', () => {
     for (const api of [contract]) {
       const settings = { audio: { layout: 'stereo', channels: 4 } };

@@ -12,6 +12,19 @@ export type TemplateSourceEventStage = z.infer<typeof templateSourceEventStageSc
 export const templateSourceEventLevelSchema = z.enum(['info', 'warn', 'error']);
 export type TemplateSourceEventLevel = z.infer<typeof templateSourceEventLevelSchema>;
 
+/**
+ * Who took the step: a person at the Forge page, or the autopilot (forgeAutopilot.ts) acting
+ * on a run-state change. Written both as the `source` column
+ * (supabase/migrations/20261017042017_template_source_events_source.sql) and in `detail.source`,
+ * which is what the Activity chip reads.
+ */
+export const templateSourceEventSourceSchema = z.enum(['person', 'auto']);
+export type TemplateSourceEventSource = z.infer<typeof templateSourceEventSourceSchema>;
+
+/** True for a step the autopilot took, however the row recorded it. */
+export const isAutoTemplateEvent = (event: { detail: Record<string, unknown> | null }) =>
+  event.detail?.source === 'auto';
+
 export const templateSourceEventSchema = z.object({
   id: z.string(),
   at: z.string(),

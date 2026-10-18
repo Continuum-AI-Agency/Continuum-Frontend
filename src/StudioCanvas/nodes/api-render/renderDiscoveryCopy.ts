@@ -56,6 +56,8 @@ const TEMPLATE_REVISION_MESSAGES: Record<TemplateRevisionErrorCode, string> = {
     'A file behind that revision changed after it was published. Publish a new revision, then save.',
   template_variant_archived:
     'That variant was archived. Choose another revision for this set, or restore the variant.',
+  template_variant_unpublished:
+    'Publish this variant revision before making it the default. Open it from the Variants tab to publish.',
   template_revision_head_conflict:
     'Someone else saved this template at the same time. Reload it and save again.',
   template_revision_multi_source_edit_unsupported:
@@ -64,6 +66,10 @@ const TEMPLATE_REVISION_MESSAGES: Record<TemplateRevisionErrorCode, string> = {
     'This revision renders from several After Effects files and cannot be published from just one of them. Ask your Continuum contact to publish it.',
   template_revision_sources_invalid:
     'These files cannot be registered as one template revision: each output must name exactly one file.',
+  template_recolor_refused:
+    'Some colours in this template cannot be changed safely, so this revision changed none of them. Recolour those layers in After Effects, then try again.',
+  template_forge_recolor_unsupported:
+    'Template Forge needs an update before it can save a design-system revision. Ask your Continuum contact.',
 };
 
 const MESSAGES: Record<string, string> = {

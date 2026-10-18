@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { CAROUSEL_SLIDE_TAG } from '../competitor-spy/saveToLibrary';
 import { libraryAspectRatioBinSchema, libraryPreviewFrameSchema } from './aspect-ratio';
-import { mediaAssetSchema, mediaKindSchema, mediaReviewStatusSchema, mediaSourceSchema } from './asset';
+import {
+  mediaAssetSchema,
+  type mediaKindSchema,
+  mediaReviewStatusSchema,
+  mediaSourceSchema,
+} from './asset';
 import { classifyLibraryFileOrGeneric, type LibraryFormatFamily } from './asset-formats';
 import { customFieldFilterSchema } from './custom-fields';
 import { ELEMENT_REFERENCE_TAG } from './element';
@@ -52,7 +57,10 @@ export const librarySortSchema = z.enum([
   ...LIBRARY_SORT_KEYS.flatMap((key) => [`${key}_desc`, `${key}_asc`] as const),
   ...LEGACY_LIBRARY_SORTS,
   // flatMap widens the tuple to an array; the values are exactly these literals.
-] as unknown as [DirectionalLibrarySort, ...(DirectionalLibrarySort | (typeof LEGACY_LIBRARY_SORTS)[number])[]]);
+] as unknown as [
+  DirectionalLibrarySort,
+  ...(DirectionalLibrarySort | (typeof LEGACY_LIBRARY_SORTS)[number])[],
+]);
 
 export type LibrarySort = z.infer<typeof librarySortSchema>;
 
@@ -114,12 +122,15 @@ const FAMILY_FORMAT_GROUP: Readonly<Record<LibraryFormatFamily, LibraryFormatGro
   audio: 'audio',
   document: 'document',
   office_document: 'document',
+  presentation: 'document',
   design_source: 'design',
   after_effects: 'design',
   after_effects_package: 'design',
   premiere_project: 'design',
   model_3d: 'model_3d',
+  blender: 'model_3d',
   html_bundle: 'html',
+  hyperframes: 'html',
   font: 'other',
   generic: 'other',
 };

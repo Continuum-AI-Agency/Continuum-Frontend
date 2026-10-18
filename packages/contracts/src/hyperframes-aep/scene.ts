@@ -110,9 +110,33 @@ const filtersSchema = z
 /** Comp-space outline the layer is clipped to (clip-path / overflow:hidden on an ancestor). */
 const clipSchema = z.object({ points: z.array(z.tuple([z.number(), z.number()])).min(3) }).strict();
 
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+const provenanceSchema = {
+  sourceRevisionId: z.string().min(1).optional(),
+  sourceHtmlSha256: sha256Schema.optional(),
+  extractedSceneSha256: sha256Schema.optional(),
+  targetTemplateAssetId: z.string().min(1).optional(),
+  baseVersionId: z.string().min(1).optional(),
+};
+
+const hierarchyGroupSchema = z.object({
+  id: z.string().min(1),
+  artboardId: z.string().min(1).optional(),
+  parentId: z.string().min(1).nullable(),
+  x: z.number(),
+  y: z.number(),
+  scaleX: z.number().positive(),
+  scaleY: z.number().positive(),
+  rotationDeg: z.number(),
+}).strict();
+
 const layerBase = {
   /** `data-hf-id` of the source element — the thread from a Forge slot back to the HTML. */
   id: z.string().min(1),
+  /** Stable `data-artboard-id` from the source HTML; native comp IDs remain separate. */
+  artboardId: z.string().min(1).optional(),
+  /** Explicit source group. Absent for legacy scenes, or when the ancestor was flattened. */
+  parentId: z.string().min(1).nullable().optional(),
   name: z.string().min(1),
   sceneId: z.string().min(1).nullable(),
   inSec: z.number().nonnegative(),
@@ -229,11 +253,30 @@ export const hyperframesAepLayerSchema = z.discriminatedUnion('kind', [
 export type HyperframesAepLayer = z.infer<typeof hyperframesAepLayerSchema>;
 
 /** Something the page does that the writer has no AE equivalent for yet — named, never dropped silently. */
-const gapSchema = z.object({ elementId: z.string().min(1), feature: z.string().min(1) }).strict();
+const gapSchema = z.object({ elementId: z.string().min(1), artboardId: z.string().min(1).optional(), feature: z.string().min(1) }).strict();
+const editabilityGapSchema = z.object({
+  elementId: z.string().min(1),
+  artboardId: z.string().min(1).optional(),
+  feature: z.string().min(1),
+  reason: z.string().min(1),
+}).strict();
 
 export const hyperframesAepSceneSchema = z
   .object({
     version: z.literal(1),
+    ...provenanceSchema,
+    hierarchyVersion: z.literal(1).optional(),
+    groups: z.array(hierarchyGroupSchema).optional(),
+    fullyEditable: z.boolean().optional(),
+    /** Explicit source boards; layers/groups/audio refer to these IDs and are authored per board. */
+    artboards: z.array(z.object({
+      sourceId: z.string().min(1),
+      title: z.string().min(1),
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      fps: z.number().positive(),
+      durationSec: z.number().positive(),
+    }).strict()).min(1).optional(),
     source: z.enum(['hyperframes', 'figma', 'canva']),
     title: z.string().min(1),
     width: z.number().int().positive(),
@@ -245,6 +288,7 @@ export const hyperframesAepSceneSchema = z
       z
         .object({
           id: z.string().min(1),
+          artboardId: z.string().min(1).optional(),
           role: z.string().min(1),
           layout: z.string().min(1),
           startSec: z.number().nonnegative(),
@@ -278,6 +322,7 @@ export const hyperframesAepSceneSchema = z
       z
         .object({
           assetId: z.string().min(1),
+          artboardId: z.string().min(1).optional(),
           startSec: z.number().nonnegative(),
           volume: z.number().min(0).max(1),
         })
@@ -287,6 +332,8 @@ export const hyperframesAepSceneSchema = z
     unmapped: z.array(gapSchema),
     /** Structure the export simplified on purpose (per-word animation on one text layer). */
     flattened: z.array(gapSchema),
+    /** Source features preserved in the native file but locked by Forge's current authoring controls. */
+    editabilityGaps: z.array(editabilityGapSchema).optional(),
   })
   .strict();
 export type HyperframesAepScene = z.infer<typeof hyperframesAepSceneSchema>;
@@ -299,17 +346,32 @@ export type HyperframesAepScene = z.infer<typeof hyperframesAepSceneSchema>;
 export const hyperframesAepMapSchema = z
   .object({
     version: z.literal(1),
+    ...provenanceSchema,
+    hierarchyVersion: z.literal(1).optional(),
+    sourceLayers: z.array(z.object({
+      sourceId: z.string().min(1),
+      artboardId: z.string().min(1).optional(),
+      parentId: z.string().min(1).nullable(),
+      compId: z.number().int(),
+      layerUid: z.number().int(),
+      aeParentUid: z.number().int().nullable(),
+    }).strict()).optional(),
+    fullyEditable: z.boolean().optional(),
+    /** Source features preserved in the native file but locked by Forge's current authoring controls. */
+    editabilityGaps: z.array(editabilityGapSchema).optional(),
     source: z.enum(['hyperframes', 'figma', 'canva', 'photoshop', 'illustrator']),
     aepFileName: z.string().min(1),
     compName: z.string().min(1),
     /** Every delivery comp, when a design import wrote one per artboard. */
     comps: z
-      .array(
-        z
-          .object({ name: z.string().min(1), width: z.number().int(), height: z.number().int() })
-          .strict(),
-      )
+      .array(z.object({ sourceId: z.string().min(1).optional(), compId: z.number().int().optional(), name: z.string().min(1), width: z.number().int(), height: z.number().int(), fps: z.number().positive().optional(), durationSec: z.number().positive().optional() }).strict())
       .optional(),
+    /** Stable HTML artboard identity mapped to actual native comp metadata. */
+    artboards: z.array(z.object({
+      sourceId: z.string().min(1), compId: z.number().int(), name: z.string().min(1),
+      width: z.number().int().positive(), height: z.number().int().positive(),
+      fps: z.number().positive(), durationSec: z.number().positive(),
+    }).strict()).optional(),
     variables: z.array(
       z
         .object({

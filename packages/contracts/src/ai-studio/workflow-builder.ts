@@ -529,6 +529,7 @@ export type WorkflowEditOp =
   | { op: 'disconnect'; from?: string; to?: string; targetHandle?: string }
   | { op: 'rewire'; from: string; to: string; role?: string }
   | { op: 'attach_library_asset'; id: string; asset_id: string; version_id?: string }
+  | { op: 'attach_unsplash_photo'; id: string; photo_id: string }
   | { op: 'attach_media'; id: string; media: AttachMediaInput }
   | { op: 'detach_media'; id: string }
   | { op: 'rename'; id: string; label: string }
@@ -562,6 +563,10 @@ const MEDIA_DATA_KEYS = [
   'fileName',
   'referenceType',
   'renditionRole',
+  // A hotlinked Unsplash reference (`attach_unsplash_photo`) is held as a URL plus the
+  // photographer credit the canvas must keep rendering beside it.
+  'image',
+  'attribution',
 ];
 
 /**
@@ -757,6 +762,10 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
             // Written even when undefined, like assetId: the canvas must know it shows a
             // rendition, and new media must not inherit the old one's flag.
             renditionRole: op.media.renditionRole,
+            // Storage media replaces a hotlinked Unsplash photo whole — its URL and its
+            // photographer credit must not outlive it.
+            image: undefined,
+            attribution: undefined,
             ...(ratio ? { aspectRatio: ratio } : {}),
             ...(node.type === 'image'
               ? { referenceType: op.media.referenceType ?? 'default' }
@@ -768,6 +777,12 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
       case 'attach_library_asset': {
         errors.push(
           `attach_library_asset for node "${op.id}" must be resolved through the Library boundary`,
+        );
+        break;
+      }
+      case 'attach_unsplash_photo': {
+        errors.push(
+          `attach_unsplash_photo for node "${op.id}" must be resolved through the Unsplash boundary`,
         );
         break;
       }
@@ -1042,6 +1057,13 @@ export const workflowEditOpSchema = z.discriminatedUnion('op', [
       id: z.string(),
       asset_id: z.string().uuid(),
       version_id: z.string().uuid().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal('attach_unsplash_photo'),
+      id: z.string(),
+      photo_id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
     })
     .strict(),
   z.object({ op: z.literal('detach_media'), id: z.string() }).strict(),

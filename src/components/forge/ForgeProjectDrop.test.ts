@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import {
   FORGE_PROJECT_FILE_MAX_MB,
@@ -53,6 +53,13 @@ describe('partitionForgeProjectFiles', () => {
       file('preview.mov'),
       file('Invitados.PSD'),
       file('travel.ai'),
+      file('spot.blend'),
+      file('example.HTML'),
+      file('scene.htm'),
+      file('pitch.PPTX'),
+      file('brand.potx'),
+      file('legacy.ppt'),
+      file('notes.docx'),
     ]);
 
     expect(result.accepted.map((item) => item.name)).toEqual([
@@ -63,13 +70,24 @@ describe('partitionForgeProjectFiles', () => {
       // A layered Photoshop or Illustrator file becomes a template too (uploaded, then imported).
       'Invitados.PSD',
       'travel.ai',
+      // A Blender scene uploads like an .aep; the forge reads its fields.
+      'spot.blend',
+      'example.HTML',
+      'scene.htm',
+      'pitch.PPTX',
+      'brand.potx',
     ]);
     expect(result.fonts.map((item) => item.name)).toEqual([
       '2f0cf1733d838e005b2ef333cfea82b6.ttf',
       'Brand-Bold.OTF',
     ]);
-    expect(result.rejected.map((item) => item.name)).toEqual(['preview.mov']);
+    expect(result.rejected.map((item) => item.name)).toEqual(['preview.mov', 'legacy.ppt', 'notes.docx']);
   });
+});
+
+test('PowerPoint storage refusals explain the native 64 MB ceiling', () => {
+  const refusal = uploadRefusal({ name: 'pitch.pptx', sizeBytes: 65 * 1024 * 1024 }, 'upload failed (413)');
+  expect(refusal).toContain('64 MB');
 });
 
 describe('isForgeDesignFile', () => {

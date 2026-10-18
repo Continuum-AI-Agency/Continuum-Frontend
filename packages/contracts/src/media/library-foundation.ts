@@ -157,7 +157,11 @@ export const registerForgeOutputOperationSchema = z
     bucket: z.string().min(1).max(100),
     storagePath: z.string().min(1).max(1024),
     fileName: z.string().min(1).max(255),
-    mimeType: z.string().regex(/^(image|video|audio)\//),
+    mimeType: z.string().refine((mime) => /^(image|video|audio)\//.test(mime) || [
+      'application/pdf',
+      'application/vnd.storyteller.deckcraft+zip',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ].includes(mime), 'Forge output must be media, a native presentation source, PPTX, or PDF'),
     sizeBytes: z.number().int().nonnegative(),
     width: z.number().int().positive().nullable().optional(),
     height: z.number().int().positive().nullable().optional(),

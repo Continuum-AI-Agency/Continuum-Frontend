@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
+import { dropConflictingShortcuts, parseShortcutTokens } from '../skills/shortcuts';
 import {
   buildElementReferenceLabel,
   buildElementReferencePrompt,
+  createElementRequestSchema,
   defaultElementUseIntent,
   ELEMENT_CATALOG_ROW_LIMIT,
   ELEMENT_CATEGORIES,
@@ -15,12 +17,16 @@ import {
   elementRecordSchema,
   elementReferenceAspectRatio,
   elementSlug,
+  elementSourceAssetId,
   importElementCatalogRequestSchema,
   importElementCatalogResponseSchema,
   isElementPersonCategory,
+  isElementProductCategory,
   matchCatalogRowToElement,
   partitionElementCatalog,
   resolveElementRefs,
+  updateElementRequestSchema,
+  withElementStyleTokens,
 } from './element';
 import { HIDDEN_LIBRARY_TAGS } from './library-browse';
 
@@ -40,7 +46,7 @@ describe('buildElementReferencePrompt', () => {
       const built = buildElementReferencePrompt(category, 3);
       expect(built.prompt.length).toBeGreaterThan(200);
       expect(built.aspectRatio).toMatch(/^\d+:\d+$/);
-      if (!isElementPersonCategory(category)) {
+      if (!isElementPersonCategory(category) && !isElementProductCategory(category)) {
         expect(built.aspectRatio).toBe(elementReferenceAspectRatio(category));
       }
       expect(built.prompt).toContain('multi-panel sheet');
@@ -53,7 +59,9 @@ describe('buildElementReferencePrompt', () => {
     expect(elementReferenceAspectRatio('model')).toBe('3:4');
     expect(elementReferenceAspectRatio('character')).toBe('3:4');
     expect(elementReferenceAspectRatio('setting')).toBe('16:9');
-    expect(elementReferenceAspectRatio('product')).toBe('16:9');
+    // So is a product's and an object's: the product continuity sheet.
+    expect(elementReferenceAspectRatio('product')).toBe('3:4');
+    expect(elementReferenceAspectRatio('object')).toBe('3:4');
     expect(elementReferenceAspectRatio('moodboard')).toBe('16:9');
   });
 
@@ -454,5 +462,120 @@ describe('matchCatalogRowToElement', () => {
       slug: 'brand-new',
       externalKey: 'element:brand-new',
     });
+  });
+});
+
+describe('Element boards and style tags', () => {
+  const brandId = '11111111-1111-4111-8111-111111111111';
+  const [front, label] = members(2).map((member) => member.assetId) as [string, string];
+
+  it('accepts roles, style slugs and linked boards on create and update', () => {
+    const body = {
+      brandId,
+      name: 'Hero bottle',
+      category: 'product' as const,
+      memberAssetIds: [front, label],
+      memberRoles: { [front]: 'front', [label]: 'label' },
+      styleSlugs: ['goldenhour', '35mm-film'],
+      boardElementIds: [brandId],
+    };
+    expect(createElementRequestSchema.parse(body).memberRoles).toEqual(body.memberRoles);
+    expect(updateElementRequestSchema.parse({ brandId, styleSlugs: [] }).styleSlugs).toEqual([]);
+  });
+
+  it('refuses a role outside the vocabulary, a slug carrying its slash, and too many of each', () => {
+    const base = { brandId, name: 'x', category: 'product' as const, memberAssetIds: [front] };
+    expect(
+      createElementRequestSchema.safeParse({ ...base, memberRoles: { [front]: 'hero' } }).success,
+    ).toBe(false);
+    expect(
+      createElementRequestSchema.safeParse({ ...base, styleSlugs: ['/goldenhour'] }).success,
+    ).toBe(false);
+    expect(
+      createElementRequestSchema.safeParse({
+        ...base,
+        styleSlugs: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+      }).success,
+    ).toBe(false);
+    expect(
+      createElementRequestSchema.safeParse({ ...base, boardElementIds: Array(5).fill(brandId) })
+        .success,
+    ).toBe(false);
+  });
+
+  it('reads a stored bag without the new keys as a record without them', () => {
+    const origin = elementOriginRefSchema.parse({ category: 'product' });
+    expect('memberRoles' in origin).toBe(false);
+    expect('styleSlugs' in origin).toBe(false);
+    expect('boardElementIds' in origin).toBe(false);
+  });
+
+  it('a member may carry its role on the record', () => {
+    const record = {
+      id: brandId,
+      brandId,
+      name: 'Hero bottle',
+      slug: 'hero-bottle',
+      category: 'product',
+      guidelines: null,
+      rightsNote: null,
+      members: [{ assetId: front, position: 0, role: 'front' }],
+      referenceHistory: [],
+      defaultReferenceAssetId: null,
+      styleSlugs: ['goldenhour'],
+      createdAt: 'now',
+      updatedAt: 'now',
+    };
+    expect(elementRecordSchema.safeParse(record).success).toBe(true);
+  });
+});
+
+describe('withElementStyleTokens', () => {
+  it('prepends the tokens so the parser reads them before the prompt', () => {
+    expect(withElementStyleTokens('a bottle on sand', ['goldenhour', '35mm'])).toBe(
+      '/goldenhour /35mm a bottle on sand',
+    );
+    expect(parseShortcutTokens(withElementStyleTokens('a bottle /8k', ['4k'])).slugs).toEqual([
+      '4k',
+      '8k',
+    ]);
+  });
+
+  it('leaves a prompt alone with no slugs, and a blank prompt becomes the tokens', () => {
+    expect(withElementStyleTokens('a bottle', [])).toBe('a bottle');
+    expect(withElementStyleTokens('  ', ['goldenhour'])).toBe('/goldenhour');
+  });
+
+  it("lets the prompt's own slug beat a conflicting Element default", () => {
+    const skills = [
+      { slug: '4k', tags: ['shortcut', 'conflicts:8k'] },
+      { slug: '8k', tags: ['shortcut', 'conflicts:4k'] },
+    ];
+    const order = parseShortcutTokens(withElementStyleTokens('a bottle /8k', ['4k'])).slugs;
+    const resolved = dropConflictingShortcuts(
+      order.map((slug) => skills.find((skill) => skill.slug === slug)!),
+    );
+    expect(resolved.map((skill) => skill.slug)).toEqual(['8k']);
+  });
+});
+
+describe('elementSourceAssetId', () => {
+  const element = {
+    category: 'product' as const,
+    members: members(2),
+    defaultReferenceAssetId: null,
+    motionAssetId: '99999999-9999-4999-8999-999999999999',
+  };
+
+  it('is the pinned sheet, else the first member, else the motion clip for motion', () => {
+    expect(elementSourceAssetId(element, 'subject')).toBe(members(1)[0]!.assetId);
+    expect(
+      elementSourceAssetId(
+        { ...element, defaultReferenceAssetId: element.motionAssetId },
+        'subject',
+      ),
+    ).toBe(element.motionAssetId);
+    expect(elementSourceAssetId(element, 'motion')).toBe(element.motionAssetId);
+    expect(elementSourceAssetId({ ...element, members: [] }, 'treatment')).toBeUndefined();
   });
 });

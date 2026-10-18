@@ -116,6 +116,16 @@ export function TemplateStatusPill({ status }: { status: TemplateStatus }) {
   );
 }
 
+/** A scene the house owns and every brand may render; it cannot be renamed or removed here. */
+export function HouseScenePill() {
+  return (
+    <Pill>
+      <PillIndicator variant="info" />
+      House scene
+    </Pill>
+  );
+}
+
 /** A name that turns into a field: pencil or double-click to edit, Enter saves, Esc or leaving cancels. */
 export function InlineRename({
   value,
@@ -529,9 +539,16 @@ export function TemplateCard({
         </div>
       </TemplateMorph>
       <div className="pointer-events-none flex min-w-0 flex-col gap-2 p-3">
-        <InlineRename value={name} onRename={onRename} className="text-sm font-medium" />
+        {source.house ? (
+          <p className="truncate text-sm font-medium" title={name}>
+            {name}
+          </p>
+        ) : (
+          <InlineRename value={name} onRename={onRename} className="text-sm font-medium" />
+        )}
         <div className="flex flex-wrap items-center gap-1">
           <TemplateStatusPill status={status} />
+          {source.house ? <HouseScenePill /> : null}
           <RatioChips ratios={source.ratios} />
           {source.slotCount ? (
             <span className="text-2xs text-muted-foreground">

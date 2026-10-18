@@ -13,6 +13,7 @@ import {
   encodeContainerOf,
   mergeEncodeSettings,
   outputFormatsOfParse,
+  type Renderer,
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -77,8 +78,8 @@ import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJo
 //   Confirm — only when a row goes to Meta, so the ads it touches are read once more. Without
 //             one, what Confirm says (Proof or Final, each row's output) sits at the foot of
 //             Deliver. Either way Render runs a second batch preflight carrying `slack`, each
-//             row's delivery and `final`, so the signed token covers exactly what was reviewed,
-//             then create batch.
+//             row's delivery, `final` and `renderer`, so the signed token covers exactly what was
+//             reviewed, then create batch.
 //   Running — the fired jobs, polled until they settle.
 //
 // One button moves the tray on, always at the bottom right, named for what it does next.
@@ -103,7 +104,6 @@ export type RenderReviewTrayProps = {
   bindingId: string | null;
   templateKey: string;
   contractHash: string;
-  /** The named head to render, or null for the template's live pointer. */
   templateRef?: string | null;
   contract: ApiRenderTemplateContract;
   rows: RenderPreflightRow[];
@@ -239,6 +239,7 @@ export function RenderReviewTray({
   // reaches the tray instead of falling to <body>.
   const deliveryEditorRef = useRef<HTMLElement>(null);
   const [final, setFinal] = useState(false);
+  const [renderer, setRenderer] = useState<Renderer>('after_effects');
   // Sticky for the rest of this tray: a person who accepted the missing faces to review must
   // not have the render refused again when they fire it.
   const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
@@ -308,6 +309,7 @@ export function RenderReviewTray({
           records: records.map(({ delivery: _delivery, ...record }) => record),
           ...(acceptFonts ? { acceptMissingFonts: true } : {}),
           ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
+          ...(renderer === 'experimental' ? { renderer } : {}),
         });
         setReview({ state: 'ready', readiness: response.readiness });
       } catch (error) {
@@ -328,6 +330,7 @@ export function RenderReviewTray({
       templateRef,
       records,
       approvalDestinationIds,
+      renderer,
     ],
   );
 
@@ -456,6 +459,9 @@ export function RenderReviewTray({
         ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
         // Signed into the token: a batch reviewed as a proof cannot be created as a final.
         ...(final ? { final: true } : {}),
+        // Signed into the token too: the Backend decides per job whether it is eligible, and a
+        // job it is not, or one the renderer refuses, goes to After Effects with the reason kept.
+        ...(renderer === 'experimental' ? { renderer } : {}),
       });
       setApprovalWarning(preflight.approval?.warning ?? null);
       const batch = await apiRendersApi.createBatch({
@@ -531,6 +537,37 @@ export function RenderReviewTray({
             </Label>
             <span className="pl-6 text-muted-foreground">
               {finalBlocked ?? 'Ready to go. Recorded as final.'}
+            </span>
+          </div>
+        </RadioGroup>
+      </section>
+      <section aria-label="Renderer" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
+        <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+          Renderer
+        </h3>
+        <RadioGroup
+          aria-label="Renderer"
+          value={renderer}
+          onValueChange={(value) =>
+            setRenderer(value === 'experimental' ? 'experimental' : 'after_effects')
+          }
+          className="flex flex-wrap gap-x-6 gap-y-1.5"
+        >
+          <div className="flex flex-col gap-0.5">
+            <Label className="text-xs">
+              <RadioGroupItem value="after_effects" />
+              After Effects
+            </Label>
+            <span className="pl-6 text-muted-foreground">The render farm.</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <Label className="text-xs">
+              <RadioGroupItem value="experimental" />
+              Experimental Renderer
+            </Label>
+            <span className="pl-6 text-muted-foreground">
+              Our own renderer on Google Cloud. It renders what it can reproduce; anything else goes
+              to After Effects automatically, and the job shows why.
             </span>
           </div>
         </RadioGroup>

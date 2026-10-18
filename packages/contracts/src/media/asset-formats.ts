@@ -7,12 +7,16 @@ export type LibraryFormatFamily =
   | 'design_source'
   | 'document'
   | 'office_document'
+  | 'presentation'
   | 'after_effects'
   | 'after_effects_package'
   | 'premiere_project'
   | 'font'
   | 'model_3d'
+  /** A Blender scene: a Forge template source, parsed by the forge's `blend-library`. */
+  | 'blender'
   | 'html_bundle'
+  | 'hyperframes'
   /** Anything no other family claims: stored, versioned, shared and downloaded, never drawn. */
   | 'generic';
 
@@ -194,13 +198,23 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     previewStrategy: 'native',
   },
   {
+    family: 'presentation',
+    extensions: ['pptx', 'potx', 'deckcraft'],
+    mimeTypes: [
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.presentationml.template',
+      'application/vnd.storyteller.deckcraft+zip',
+    ],
+    originalKind: 'file',
+    previewStrategy: 'companion',
+  },
+  {
     // No converter runs on these: the card and the stage say so and offer the download,
     // rather than inventing a thumbnail or waiting on a companion that never comes.
     family: 'office_document',
-    extensions: ['docx', 'pptx', 'xlsx', 'doc', 'ppt', 'xls'],
+    extensions: ['docx', 'xlsx', 'doc', 'ppt', 'xls'],
     mimeTypes: [
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/msword',
       'application/vnd.ms-powerpoint',
@@ -266,11 +280,27 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     previewStrategy: 'model_viewer',
   },
   {
+    // A scene, not a mesh: no browser viewer reads it, so it is a template source the forge
+    // parses rather than a model the 3D viewer draws.
+    family: 'blender',
+    extensions: ['blend'],
+    mimeTypes: ['application/x-blender'],
+    originalKind: 'file',
+    previewStrategy: 'none',
+  },
+  {
     family: 'after_effects',
     extensions: ['aep', 'aepx', 'aet'],
     mimeTypes: ['application/vnd.adobe.aftereffects.project'],
     originalKind: 'file',
     previewStrategy: 'companion',
+  },
+  {
+    family: 'hyperframes',
+    extensions: ['html', 'htm'],
+    mimeTypes: ['text/html'],
+    originalKind: 'file',
+    previewStrategy: 'none',
   },
   AFTER_EFFECTS_PACKAGE_FORMAT,
   {
@@ -371,9 +401,14 @@ export const LIBRARY_UPLOAD_MAX_BYTES = 500 * MB;
  */
 export const LIBRARY_PROJECT_FILE_MAX_BYTES = 250 * MB;
 
+/** Native presentation archive ceiling, enforced before uploading source bytes. */
+export const LIBRARY_PRESENTATION_MAX_BYTES = 64 * MB;
+
 const PROJECT_FILE_FAMILIES: readonly LibraryFormatFamily[] = [
   'after_effects',
   'after_effects_package',
+  'blender',
+  'hyperframes',
 ];
 
 function megabytes(bytes: number): string {
@@ -400,6 +435,9 @@ export function libraryUploadRefusal(file: {
     return `${file.fileName} is ${megabytes(size)} MB — uploads are capped at ${LIBRARY_UPLOAD_MAX_BYTES / MB} MB right now.`;
   }
   const format = classifyLibraryFileOrGeneric(file);
+  if (format.family === 'presentation' && size > LIBRARY_PRESENTATION_MAX_BYTES) {
+    return `${file.fileName} is ${megabytes(size)} MB — presentation templates must be ${LIBRARY_PRESENTATION_MAX_BYTES / MB} MB or smaller.`;
+  }
   if (PROJECT_FILE_FAMILIES.includes(format.family) && size > LIBRARY_PROJECT_FILE_MAX_BYTES) {
     return `${file.fileName} is ${megabytes(size)} MB — After Effects projects and packages must be ${LIBRARY_PROJECT_FILE_MAX_BYTES / MB} MB or smaller.`;
   }
@@ -462,7 +500,7 @@ export function isPlayableSidecarPreview(input: {
  * - `html_bundle`: an `index.html` at the root, or under one wrapping folder.
  * - `archive`: anything else — stored as a generic file.
  */
-export type ZipContentKind = 'aep_package' | 'html_bundle' | 'archive';
+export type ZipContentKind = 'aep_package' | 'html_bundle' | 'archive' | 'ambiguous';
 
 export const LIBRARY_ZIP_FORMATS: Readonly<Record<ZipContentKind, LibraryFormatDefinition>> = {
   aep_package: AFTER_EFFECTS_PACKAGE_FORMAT,
@@ -474,11 +512,15 @@ export const LIBRARY_ZIP_FORMATS: Readonly<Record<ZipContentKind, LibraryFormatD
     previewStrategy: 'html_sandbox',
   },
   archive: LIBRARY_GENERIC_FORMAT,
+  ambiguous: LIBRARY_GENERIC_FORMAT,
 };
 
 function isZipNoise(name: string): boolean {
   return (
-    name.startsWith('__MACOSX/') || name.endsWith('/') || name.split('/').pop() === '.DS_Store'
+    name.startsWith('__MACOSX/') ||
+    name.endsWith('/') ||
+    name.split('/').pop()?.startsWith('._') ||
+    name.split('/').pop() === '.DS_Store'
   );
 }
 
@@ -488,12 +530,18 @@ export function htmlBundleEntryPoint(entryNames: readonly string[]): string | nu
     .map((name) => name.replaceAll('\\', '/'))
     .filter((name) => !isZipNoise(name));
   const isIndex = (path: string) => /^index\.html?$/i.test(path);
-  const atRoot = names.find(isIndex);
-  if (atRoot) return atRoot;
+  const atRoot = names.filter(isIndex);
+  if (atRoot.length === 1) return atRoot[0];
+  if (atRoot.length > 1) return null;
   const [first] = names;
   const wrapper = first?.includes('/') ? first.slice(0, first.indexOf('/') + 1) : null;
-  if (!wrapper || !names.every((name) => name.startsWith(wrapper))) return null;
-  return names.find((name) => isIndex(name.slice(wrapper.length))) ?? null;
+  if (wrapper && names.every((name) => name.startsWith(wrapper))) {
+    const wrapped = names.filter((name) => isIndex(name.slice(wrapper.length)));
+    if (wrapped.length === 1) return wrapped[0];
+    if (wrapped.length > 1) return null;
+  }
+  const html = names.filter((name) => /\.html?$/i.test(name));
+  return html.length === 1 ? html[0] : null;
 }
 
 /**
@@ -547,8 +595,28 @@ export function htmlBundleRendition(input: {
 }
 
 export function classifyZipEntries(entryNames: readonly string[]): ZipContentKind {
-  if (entryNames.some((name) => /\.aepx?$/i.test(name) && !isZipNoise(name))) return 'aep_package';
-  return htmlBundleEntryPoint(entryNames) ? 'html_bundle' : 'archive';
+  const names = entryNames
+    .map((name) => name.replaceAll('\\', '/'))
+    .filter((name) => !isZipNoise(name));
+  if (
+    names.some(
+      (name) =>
+        name.startsWith('/') ||
+        name.includes('\0') ||
+        name
+          .split('/')
+          .some((part) => !part || part === '.' || part === '..' || part.includes(':')),
+    )
+  )
+    return 'ambiguous';
+  const ae = names.some(
+    (name) => /\.(aep|aepx|aet)$/i.test(name) && !/adobe after effects auto-save/i.test(name),
+  );
+  const html = htmlBundleEntryPoint(names);
+  if (ae && html) return 'ambiguous';
+  if (ae) return 'aep_package';
+  if (html) return 'html_bundle';
+  return names.some((name) => /\.html?$/i.test(name)) ? 'ambiguous' : 'archive';
 }
 
 const STORED_IMAGE_PREVIEW_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif']);
