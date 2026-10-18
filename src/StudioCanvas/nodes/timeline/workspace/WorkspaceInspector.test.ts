@@ -121,6 +121,45 @@ describe('visual clip ↔ effect spec', () => {
     const off = clipWithEffectSpec(on, { ...inspectorSpecFor(on), kenBurns: undefined }, true);
     expect(off.keyframes).toEqual(clip.keyframes);
   });
+
+  test('an edit keeps a keyed look, even at strength 0, under the id its keys name', () => {
+    const keyed: EditorVideoClip = {
+      ...clip,
+      effects: [
+        ...clip.effects,
+        {
+          id: 'fx-vignette',
+          effectType: 'video_filter',
+          effectId: 'vignette',
+          enabled: true,
+          mix: 1,
+          parameters: { amount: 0 },
+        },
+      ],
+      keyframes: [0, 4].map((timeSec) => ({
+        id: `vignette-${timeSec}`,
+        property: 'effect.parameter' as const,
+        parameterName: 'amount',
+        effectInstanceId: 'fx-vignette',
+        timeSec,
+        value: timeSec / 4,
+        interpolation: 'linear' as const,
+      })),
+    };
+    const spec = inspectorSpecFor(keyed);
+    const next = clipWithEffectSpec(
+      keyed,
+      { ...spec, transform: { ...spec.transform, scale: 3 } },
+      false,
+    );
+    expect(next.effects.map((effect) => effect.id)).toEqual([
+      'stab',
+      'v1:effect:look',
+      'v1:effect:tint',
+      'fx-vignette',
+    ]);
+    expect(Object.keys(inspectorSpecFor(next).effectStops ?? {})).toEqual(['vignette']);
+  });
 });
 
 const caption = (id: string, startSec: number, words: [string, string]): EditorCaptionClip => ({

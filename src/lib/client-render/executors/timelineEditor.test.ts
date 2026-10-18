@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import {
   createEditorProjectV2,
   editorProjectV2Schema,
+  editorTextClipSchema,
   numericKeysForProperty,
   parentPositionDelta,
   retainParentMotionForEdit,
@@ -9,6 +10,7 @@ import {
 } from '@continuum/contracts';
 import {
   clipEffectsToCss,
+  effectsAt,
   opacityFor,
   resolveTransformAt,
 } from '@/StudioCanvas/utils/render/effectSpec';
@@ -16,6 +18,7 @@ import {
   assertSupportedTimelineEditorExport,
   buildTimelineEditorRenderPlan,
   clipEffectSpecFromEditorClip,
+  textCueFor,
 } from './timelineEditor';
 
 const originalFetch = globalThis.fetch;
@@ -158,6 +161,109 @@ describe('clipEffectSpecFromEditorClip', () => {
     expect(spec.transform?.perspective).toBe(1);
     expect(spec.motionChannels?.rotateX?.map((stop) => stop.value)).toEqual([0, 30]);
     expect(spec.motionChannels?.rotateY?.map((stop) => stop.value)).toEqual([0, -20]);
+  });
+
+  const looks = [
+    {
+      id: 'fx-tint',
+      enabled: true,
+      effectType: 'video_filter',
+      effectId: 'tint',
+      parameters: { amount: 0, color: '#ff7a00' },
+    },
+    {
+      id: 'fx-vignette',
+      enabled: true,
+      effectType: 'video_filter',
+      effectId: 'vignette',
+      parameters: { amount: 0.2 },
+    },
+  ];
+  const amountKeys = (effectInstanceId?: string, parameterName = 'amount') =>
+    [0, 2].map((timeSec) => ({
+      property: 'effect.parameter',
+      parameterName,
+      ...(effectInstanceId ? { effectInstanceId } : {}),
+      timeSec,
+      value: timeSec / 2,
+      interpolation: 'linear' as const,
+    }));
+  const lookSpec = (keyframes: ReturnType<typeof amountKeys>) =>
+    clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 2,
+      effects: looks,
+      keyframes,
+    });
+
+  it('drives only the effect an effect.parameter key names, sampled per frame', () => {
+    const spec = lookSpec(amountKeys('fx-vignette'));
+    expect(Object.keys(spec.effectStops ?? {})).toEqual(['vignette']);
+    expect(effectsAt(spec, 0.5).vignette).toEqual({ amount: 0.5 });
+    expect(effectsAt(spec, 0.5).tint).toBeUndefined();
+  });
+
+  it('drives the first enabled effect with the parameter when the key names none', () => {
+    const spec = lookSpec(amountKeys());
+    expect(Object.keys(spec.effectStops ?? {})).toEqual(['tint']);
+    // Keyed at a static amount of 0, the tint keeps its colour for the keys to fade in.
+    expect(effectsAt(spec, 0.25).tint).toEqual({ color: '#ff7a00', amount: 0.25 });
+    expect(effectsAt(spec, 0.25).vignette).toEqual({ amount: 0.2 });
+  });
+
+  it('leaves a clip without effect keys exactly as it was', () => {
+    const spec = lookSpec([]);
+    expect(spec.effectStops).toBeUndefined();
+    expect(spec.tint).toBeUndefined();
+    expect(effectsAt(spec, 0.5)).toBe(spec);
+  });
+
+  it('gives no channel to a parameter the look does not animate', () => {
+    expect(lookSpec(amountKeys('fx-tint', 'color')).effectStops).toBeUndefined();
+  });
+});
+
+describe('textCueFor', () => {
+  const title = (keyframes: unknown[], trackingEm = 0) =>
+    editorTextClipSchema.parse({
+      id: 'title',
+      kind: 'text',
+      timelineStartSec: 1,
+      durationSec: 2,
+      text: 'GROW',
+      style: { fontFamily: 'Arial', fontSizePx: 48, fontWeight: 900, color: '#ffffff', trackingEm },
+      keyframes,
+    });
+  const key = (property: string, timeSec: number, value: number) => ({
+    id: `${property}-${timeSec}`,
+    property,
+    timeSec,
+    value,
+    interpolation: 'linear',
+  });
+
+  it('carries font size keys as canvas fractions and tracking keys as ems', () => {
+    const cue = textCueFor(
+      title([
+        key('text.fontSize', 0, 48),
+        key('text.fontSize', 2, 96),
+        key('text.tracking', 0, 0),
+        key('text.tracking', 2, 0.5),
+      ]),
+      1920,
+    );
+    expect(cue.motion?.motionChannels?.fontSizeFrac?.map((stop) => stop.value)).toEqual([
+      48 / 1920,
+      96 / 1920,
+    ]);
+    expect(cue.motion?.motionChannels?.trackingEm?.map((stop) => stop.value)).toEqual([0, 0.5]);
+    expect(cue.motion?.motionDurationSec).toBe(2);
+  });
+
+  it('carries static tracking on the style, and none when it is 0', () => {
+    expect(textCueFor(title([], 0.3), 1920).style?.trackingEm).toBe(0.3);
+    expect(textCueFor(title([]), 1920).style).not.toHaveProperty('trackingEm');
+    expect(textCueFor(title([]), 1920).motion).not.toHaveProperty('motionChannels');
   });
 });
 

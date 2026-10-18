@@ -211,7 +211,9 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
     });
   }
 
-  if (effects.tint && effects.tint.amount > 0) {
+  // A keyed look survives at strength 0: its effect.parameter keys still need it to drive.
+  const keyed = effects.effectStops ?? {};
+  if (effects.tint && (effects.tint.amount > 0 || keyed.tint)) {
     instances.push({
       id: `${itemId}:effect:tint`,
       effectType: 'custom',
@@ -222,24 +224,21 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
     });
   }
 
+  const amountOf = (look: { amount: number } | undefined, isKeyed: unknown) =>
+    look?.amount || isKeyed ? { amount: look?.amount ?? 0 } : undefined;
   for (const [effectId, parameters] of [
-    ['vignette', effects.vignette?.amount ? { amount: effects.vignette.amount } : undefined],
-    ['film_grain', effects.filmGrain?.amount ? { amount: effects.filmGrain.amount } : undefined],
-    ['dust', effects.dust?.amount ? { amount: effects.dust.amount } : undefined],
-    ['light_leaks', effects.lightLeaks?.amount ? { amount: effects.lightLeaks.amount } : undefined],
+    ['vignette', amountOf(effects.vignette, keyed.vignette)],
+    ['film_grain', amountOf(effects.filmGrain, keyed.filmGrain)],
+    ['dust', amountOf(effects.dust, keyed.dust)],
+    ['light_leaks', amountOf(effects.lightLeaks, keyed.lightLeaks)],
     [
       'pixelate',
-      effects.pixelate && effects.pixelate.blockPx >= 2
-        ? { blockPx: effects.pixelate.blockPx }
+      (effects.pixelate && effects.pixelate.blockPx >= 2) || keyed.pixelate
+        ? { blockPx: effects.pixelate?.blockPx ?? 0 }
         : undefined,
     ],
-    [
-      'chromatic_aberration',
-      effects.chromaticAberration?.amount
-        ? { amount: effects.chromaticAberration.amount }
-        : undefined,
-    ],
-    ['vhs', effects.vhs?.amount ? { amount: effects.vhs.amount } : undefined],
+    ['chromatic_aberration', amountOf(effects.chromaticAberration, keyed.chromaticAberration)],
+    ['vhs', amountOf(effects.vhs, keyed.vhs)],
   ] as const) {
     if (!parameters) continue;
     instances.push({
@@ -256,7 +255,7 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
   // radius. Without this a rounded clip loses its corners on the durable path, which
   // is the same bug as the chroma gap above, one field over.
   const cornerRadiusFrac = cornerRadiusFracFor(effects);
-  if (cornerRadiusFrac > 0) {
+  if (cornerRadiusFrac > 0 || keyed.cornerRadius) {
     instances.push({
       id: `${itemId}:effect:corner-radius`,
       effectType: 'custom',

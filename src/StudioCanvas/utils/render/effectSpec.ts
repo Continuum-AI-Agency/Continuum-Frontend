@@ -207,7 +207,26 @@ export interface ClipEffectSpec {
   vhs?: { amount: number };
   /** Canonical ordered/keyframed stack, used by shader action nodes and V2 clips. */
   shaderStack?: ShaderStackV1;
+  /**
+   * A V2 clip's `effect.parameter` keys, by the look they drive: each look's one strength
+   * parameter (`LOOK_EFFECTS[...].parameter`), sampled per frame by `effectsAt`.
+   */
+  effectStops?: Partial<Record<AnimatedLook, ClipPropertyStop[]>>;
 }
+
+/** The looks whose strength parameter has a per-frame channel (`effectStops`). */
+export type AnimatedLook =
+  | 'blur'
+  | 'tint'
+  | 'vignette'
+  | 'filmGrain'
+  | 'dust'
+  | 'lightLeaks'
+  | 'chromaticAberration'
+  | 'vhs'
+  | 'pixelate'
+  | 'cornerRadius'
+  | 'chromaKey';
 
 export interface TransformKeyframe {
   /** Normalized clip time, 0..1. */
@@ -238,6 +257,9 @@ export type ClipMotionChannel =
   | 'rotateX'
   | 'rotateY';
 export interface ClipMotionChannels {
+  /** Text clips only (`text.fontSize`, `text.tracking`), sampled by drawActiveCaption. */
+  fontSizeFrac?: ClipPropertyStop[];
+  trackingEm?: ClipPropertyStop[];
   opacity?: ClipPropertyStop[];
   offsetX?: ClipPropertyStop[];
   offsetY?: ClipPropertyStop[];
@@ -337,7 +359,7 @@ function resolveTransform(transform: ClipTransform | undefined): ResolvedClipTra
   };
 }
 
-function sampleStops(
+export function sampleStops(
   stops: ClipPropertyStop[] | undefined,
   u: number,
   fallback: number,
@@ -358,6 +380,45 @@ function sampleStops(
     fallback,
     spec?.keyframeOffsetSec,
   );
+}
+
+/** The spec with every keyed look at normalized clip time `u`; the spec itself when none is. */
+export function effectsAt(spec: ClipEffectSpec, u: number): ClipEffectSpec {
+  const stops = spec.effectStops;
+  if (!stops) return spec;
+  const at = (track: ClipPropertyStop[] | undefined, fallback: number) =>
+    sampleStops(track, Math.max(0, Math.min(1, u)), fallback, spec);
+  const amount = (track: ClipPropertyStop[] | undefined, look?: { amount: number }) =>
+    track ? { amount: at(track, look?.amount ?? 0) } : look;
+  return {
+    ...spec,
+    ...(stops.blur
+      ? { adjustments: { ...spec.adjustments, blur: at(stops.blur, spec.adjustments?.blur ?? 0) } }
+      : {}),
+    ...(stops.tint && spec.tint
+      ? { tint: { ...spec.tint, amount: at(stops.tint, spec.tint.amount) } }
+      : {}),
+    ...(stops.chromaKey && spec.chromaKey
+      ? {
+          chromaKey: {
+            ...spec.chromaKey,
+            tolerance: at(stops.chromaKey, spec.chromaKey.tolerance),
+          },
+        }
+      : {}),
+    ...(stops.pixelate
+      ? { pixelate: { blockPx: at(stops.pixelate, spec.pixelate?.blockPx ?? 0) } }
+      : {}),
+    ...(stops.cornerRadius
+      ? { cornerRadiusFrac: at(stops.cornerRadius, spec.cornerRadiusFrac ?? 0) }
+      : {}),
+    vignette: amount(stops.vignette, spec.vignette),
+    filmGrain: amount(stops.filmGrain, spec.filmGrain),
+    dust: amount(stops.dust, spec.dust),
+    lightLeaks: amount(stops.lightLeaks, spec.lightLeaks),
+    chromaticAberration: amount(stops.chromaticAberration, spec.chromaticAberration),
+    vhs: amount(stops.vhs, spec.vhs),
+  };
 }
 
 /** Effective playback rate; always > 0. */
@@ -546,8 +607,9 @@ export function cornerRadiusFracFor(spec: ClipEffectSpec | undefined): number {
 }
 
 /** Resolve the clip's visual effects to CSS for the preview <video>/<img>. */
-export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): ClipEffectCss {
-  if (!spec) return {};
+export function clipEffectsToCss(clipSpec: ClipEffectSpec | undefined, u: number): ClipEffectCss {
+  if (!clipSpec) return {};
+  const spec = effectsAt(clipSpec, u);
   const filter = filterString(resolveAdjustments(spec)) || undefined;
 
   const t = resolveTransformAt(spec, u);
@@ -681,6 +743,7 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       (spec.pixelate && spec.pixelate.blockPx >= 2) ||
       (spec.chromaticAberration && spec.chromaticAberration.amount > 0) ||
       (spec.vhs && spec.vhs.amount > 0) ||
+      spec.effectStops ||
       spec.shaderStack?.effects.some((effect) => effect.enabled),
   );
 }

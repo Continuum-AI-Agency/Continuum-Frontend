@@ -6,6 +6,7 @@ import {
   applyCanvasTransform,
   type ClipEffectSpec,
   cornerRadiusFracFor,
+  effectsAt,
   hasVisualEffects,
   opacityFor,
   resolveTransformAt,
@@ -388,11 +389,13 @@ export async function drawEffectFrame(
   sourceHeight: number,
   targetWidth: number,
   targetHeight: number,
-  effects: ClipEffectSpec | undefined,
+  clipEffects: ClipEffectSpec | undefined,
   t: number,
   alphaMul = 1,
   timeSec = t,
 ): Promise<void> {
+  // Keyed looks (a V2 clip's effect.parameter keys) at this frame; every draw step reads them.
+  const effects = clipEffects && effectsAt(clipEffects, t);
   ctx.save();
   try {
     ctx.globalAlpha = (effects ? opacityFor(effects, t) : 1) * alphaMul;
