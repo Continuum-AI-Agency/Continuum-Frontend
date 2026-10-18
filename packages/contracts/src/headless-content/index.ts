@@ -520,6 +520,10 @@ export const headlessCompositionSchema = z
     /** The effect over the footage (never the type), as resolved when the piece was made. Beside
      * `template` and `presentation`, so either kind of composition can carry one. */
     effect: resolvedEffectSchema.optional(),
+    /** Draw the CTA, type cards, fast-cut burst words and display words as an editable HyperFrames
+     * motion overlay (a transparent film Render lays under the captions) instead of burning them.
+     * Optional so existing specs and their signatures stay unchanged; absent = burned. */
+    motionOverlay: z.boolean().optional(),
     /** A stylised packshot cutaway over the start of one shot's picture; its voice keeps playing. */
     productHero: z
       .object({
