@@ -44,6 +44,8 @@ export const PERSISTED_CARD_FRAME_TYPES = [
   "agent.delegated",
   // One media strip per tool call, keyed by toolCallId.
   "ui.media_strip",
+  // A headless batch's latest status, keyed by batchId (organic/headless-batch.ts).
+  "ui.headless_batch",
 ] as const;
 
 /**
@@ -121,6 +123,8 @@ export const persistedCardKey = (type: string, data: Record<string, unknown>): s
       return `xcall:${readString(data, "callId")}`;
     case "ui.media_strip":
       return `media_strip:${readString(data, "toolCallId")}`;
+    case "ui.headless_batch":
+      return `headless_batch:${readString(data, "batchId")}`;
     default:
       return `${type}:${readString(data, "id")}`;
   }

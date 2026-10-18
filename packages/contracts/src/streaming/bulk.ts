@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { shaderStackV1Schema } from '../ai-studio/shader-stack';
 import { artDirectionSchema } from '../creative/art-direction';
 import { bestTimeSourceSchema } from '../organic/bestTimes';
+import { headlessBatchBlocksSchema, headlessBatchFormatSchema } from '../organic/headless-batch';
 import { coerceLegacyHyperframeFormat } from './organic';
 import {
   organicHyperframeAspectRatioSchema,
@@ -194,6 +195,16 @@ export const bulkPlacementSpecSchema = z
      * directives; the batch engine derives the angle per placement instead.
      */
     openBrief: z.boolean().optional(),
+    /**
+     * Made by the product's own director in the plan's ONE headless batch (organic/
+     * headless-batch.ts) instead of by the batch engine: the format and blocks bulkPlan
+     * assigned. Absent or null, the batch engine makes it.
+     */
+    headless: z
+      .object({ format: headlessBatchFormatSchema, blocks: headlessBatchBlocksSchema.optional() })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 

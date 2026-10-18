@@ -3,6 +3,7 @@ import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
 import { uiMediaStripFrameSchema } from '../organic/chat-media';
+import { headlessBatchQuoteSchema, uiHeadlessBatchFrameSchema } from '../organic/headless-batch';
 import { organicGeneratablePlatformSchema } from '../organic/publishing';
 import {
   uiBrandBookAppliedFrameSchema,
@@ -905,6 +906,8 @@ const toolApprovalRequiredSchema = z.object({
       toolCallId: z.string().min(1),
       toolName: z.string().min(1),
       input: z.unknown(),
+      /** headlessBatchCreate only: the batch's bound, cost and cast step, for its one card. */
+      batchPreview: headlessBatchQuoteSchema.optional(),
     })
     .loose(),
 });
@@ -1271,6 +1274,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   uiPipelineCardSchema,
   mediaSearchResultsFrameSchema,
   uiMediaStripFrameSchema,
+  uiHeadlessBatchFrameSchema,
   contextMediaResolutionSchema,
   uiBrandBookFrameSchema,
   uiReadinessScorecardFrameSchema,
