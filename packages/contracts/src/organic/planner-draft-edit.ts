@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { publishOptionsByPlatformSchema } from './publish-body';
 import { plannerDayIdSchema, plannerTimeOfDaySchema } from './planner-schedule';
+import { publishOptionsByPlatformSchema } from './publish-body';
+import { type PublishPlatform, publishPlatformSchema } from './publishing';
 
 /**
  * A planner draft FIELD EDIT — the one shape a caption, format, hashtag, creative
@@ -69,6 +70,7 @@ export const PLANNER_EDITABLE_FIELDS = [
   'timeOfDay',
   'media',
   'publishOptions',
+  'platform',
 ] as const;
 export type PlannerEditableField = (typeof PLANNER_EDITABLE_FIELDS)[number];
 
@@ -95,6 +97,17 @@ export const plannerDraftFieldPatchSchema = z
      */
     publishOptions: publishOptionsByPlatformSchema.optional(),
     /**
+     * Move the draft to another network: the `platform` column, `platform_account_id` and every
+     * `slot_data` key the planner reads a row's platform from. Persisted here, beside every other
+     * edit, rather than written to Supabase from the browser.
+     */
+    platform: publishPlatformSchema.optional(),
+    /**
+     * The account bound with that platform; null when none is chosen yet. Required whenever
+     * `platform` is named, so a retarget can never keep the previous network's account.
+     */
+    accountId: z.string().min(1).nullable().optional(),
+    /**
      * Optimistic-concurrency token: the `updated_at` the caller last saw. The
      * write RPC fails the item with `stale_state` when the row has moved on, so a
      * stale browser tab cannot silently overwrite a teammate's or the agent's edit.
@@ -104,6 +117,10 @@ export const plannerDraftFieldPatchSchema = z
   .strict()
   .refine((patch) => PLANNER_EDITABLE_FIELDS.some((field) => patch[field] !== undefined), {
     message: 'patch must name at least one editable field',
+  })
+  .refine((patch) => (patch.platform === undefined) === (patch.accountId === undefined), {
+    message: 'platform and accountId travel together (accountId may be null)',
+    path: ['accountId'],
   });
 export type PlannerDraftFieldPatch = z.infer<typeof plannerDraftFieldPatchSchema>;
 
@@ -155,6 +172,54 @@ export function plannerFieldPatchToContentJson(
   if (patch.publishOptions !== undefined) contentJson.publishOptions = patch.publishOptions;
 
   return contentJson;
+}
+
+const UNASSIGNED_ACCOUNT_ID = 'unassigned';
+
+/**
+ * The row columns a platform edit rewrites: every place a draft's platform is stamped. The
+ * publisher reads the `platform` column, but the planner maps a row back from
+ * `slot_data.draftSnapshot` and then `slot_data.platform`, so writing only the column puts the
+ * card back on its old row at the next refetch.
+ *
+ * Merged onto the current `slot_data`, never rebuilt: an agent row carries no draftSnapshot (none
+ * is invented) and may store `slot_data.platform` as `{ name, accountId }` — whose `accountId`
+ * is replaced too, because it outranks the column when the publisher resolves the account.
+ */
+export function retargetDraftPlatformRow(
+  slotData: unknown,
+  platform: PublishPlatform,
+  accountId: string | null,
+): { platform: PublishPlatform; platform_account_id: string; slot_data: Record<string, unknown> } {
+  const current = readRecord(slotData);
+  const slotPlatform = current.platform;
+  const snapshot = current.draftSnapshot;
+  const platformObject = withoutKey(readRecord(slotPlatform), 'accountId');
+  return {
+    platform,
+    platform_account_id: accountId ?? UNASSIGNED_ACCOUNT_ID,
+    slot_data: {
+      ...current,
+      platform:
+        slotPlatform && typeof slotPlatform === 'object'
+          ? { ...platformObject, name: platform, ...(accountId ? { accountId } : {}) }
+          : platform,
+      ...(snapshot && typeof snapshot === 'object'
+        ? {
+            draftSnapshot: {
+              ...withoutKey(readRecord(snapshot), 'targetAccountId'),
+              platforms: [platform],
+              ...(accountId ? { targetAccountId: accountId } : {}),
+            },
+          }
+        : {}),
+    },
+  };
+}
+
+function withoutKey(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const { [key]: _dropped, ...rest } = record;
+  return rest;
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

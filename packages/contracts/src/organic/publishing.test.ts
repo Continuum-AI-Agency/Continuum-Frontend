@@ -16,10 +16,17 @@ import {
 
 describe('publish platform capabilities', () => {
   it("caps carousels at each platform's real child limit", () => {
-    expect(carouselLimits('instagram')).toEqual({ min: 2, max: 10 });
-    expect(carouselLimits('facebook')).toEqual({ min: 2, max: 10 });
-    expect(carouselLimits('linkedin')).toEqual({ min: 2, max: 20 });
-    expect(carouselLimits('tiktok')).toEqual({ min: 2, max: 35 });
+    expect(carouselLimits('instagram')).toEqual({ min: 2, max: 10, videoSlides: true });
+    expect(carouselLimits('facebook')).toEqual({ min: 2, max: 10, videoSlides: false });
+    expect(carouselLimits('linkedin')).toEqual({ min: 2, max: 20, videoSlides: false });
+    expect(carouselLimits('tiktok')).toEqual({ min: 2, max: 35, videoSlides: false });
+  });
+
+  it('publishes text-only posts on Facebook, LinkedIn and X alone', () => {
+    const textPlatforms = Object.entries(PLATFORM_CAPABILITIES)
+      .filter(([, capability]) => capability.textPost)
+      .map(([platform]) => platform);
+    expect(textPlatforms).toEqual(['facebook', 'linkedin', 'x']);
   });
 
   it('marks LinkedIn as the only byte-transport platform', () => {

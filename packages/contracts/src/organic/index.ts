@@ -19,6 +19,7 @@ export * from './planner-composition';
 export * from './planner-draft-edit';
 export * from './planner-schedule';
 export * from './publish-body';
+export * from './publish-plan';
 export * from './publishing';
 export * from './quick-create';
 export * from './winners';

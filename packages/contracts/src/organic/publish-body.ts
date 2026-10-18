@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-caption';
 import { trialGraduationStrategySchema } from '../trial-reels/index';
+import { type PublishPlanDraft, type PublishPlanMedia, resolvePublishPlan } from './publish-plan';
 import {
   PLATFORM_CAPABILITIES,
   type PublishFormat,
@@ -238,36 +239,59 @@ export function buildFullCaption(
   return buildPlatformCaption(platform, draft.captionPreview, draft.hashtags);
 }
 
-/**
- * Carousel slides, in order. Realized `publishingAssets` win — they are what the planner
- * writes when a user assigns or replaces a creative. Generated `mediaSuggestion.assets` are
- * the headless fallback, and only reachable when nothing has been assigned.
- */
-function carouselItems(draft: PublishableDraft): CarouselPublishItem[] {
-  const assigned = (draft.publishingAssets ?? [])
-    .filter((asset) => !!asset.storageUrl)
-    .slice()
-    .sort((a, b) => (a.slideIndex ?? 0) - (b.slideIndex ?? 0))
-    .map(
-      (asset): CarouselPublishItem =>
-        asset.kind === 'video' ? { videoUrl: asset.storageUrl } : { imageUrl: asset.storageUrl },
-    );
-
-  if (draft.publishingAssets?.length) return assigned;
-
-  return (draft.mediaSuggestion?.assets ?? [])
-    .slice()
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .flatMap((asset): CarouselPublishItem[] => {
-      const url =
-        asset.assetUrl ||
-        (asset.assetBase64
-          ? `data:${asset.mimeType ?? 'image/png'};base64,${asset.assetBase64}`
-          : '');
-      if (!url) return [];
-      return [asset.mimeType?.startsWith('video/') ? { videoUrl: url } : { imageUrl: url }];
-    });
+/** The planner's draft as publish-plan input. Fields it does not carry read as absent. */
+function planDraftOf(draft: PublishableDraft): PublishPlanDraft {
+  const generated = draft.mediaSuggestion?.assets ?? [];
+  return {
+    id: draft.id,
+    formats: [draft.format],
+    caption: draft.captionPreview ?? null,
+    hashtags: draft.hashtags ?? null,
+    publishingAssets: (draft.publishingAssets ?? []).map((asset) => ({
+      role: asset.role,
+      kind: asset.kind,
+      slideIndex: asset.slideIndex ?? null,
+      assetId: null,
+      bucket: null,
+      storagePath: null,
+      storageUrl: asset.storageUrl || null,
+      mimeType: null,
+      width: null,
+      height: null,
+    })),
+    mediaSuggestion: generated.length
+      ? {
+          mediaStatus: null,
+          url: null,
+          assetUrl: null,
+          signedUrl: null,
+          assetBase64: null,
+          bucket: null,
+          mimeType: null,
+          width: null,
+          height: null,
+          alt: null,
+          assets: generated.map((asset) => ({
+            order: asset.order ?? null,
+            url: null,
+            assetUrl: asset.assetUrl ?? null,
+            signedUrl: null,
+            assetBase64: asset.assetBase64 ?? null,
+            bucket: null,
+            mimeType: asset.mimeType ?? null,
+            width: null,
+            height: null,
+          })),
+          reel: null,
+          hyperframe: null,
+        }
+      : null,
+    savedPublishOptions: null,
+  };
 }
+
+const mediaUrl = (media: PublishPlanMedia | undefined): string | undefined =>
+  media?.url ?? undefined;
 
 export function buildPublishBody(
   draft: PublishableDraft,
@@ -276,13 +300,16 @@ export function buildPublishBody(
   brandId: string | null,
   publishOptions?: PublishOptions | null,
 ): PublishRequestBody {
-  const postType = inferPostType(draft);
-  const caption = buildFullCaption(draft, platform ?? undefined) || undefined;
-  const assets = draft.publishingAssets ?? [];
-  const video = assets.find((asset) => asset.kind === 'video');
-  const image =
-    assets.find((asset) => asset.kind === 'image' && asset.role === 'primary') ??
-    assets.find((asset) => asset.kind === 'image');
+  // Instagram's limits when the destination is unknown: the tightest, so nothing over-reports.
+  const plan = resolvePublishPlan({
+    draft: planDraftOf(draft),
+    platform: platform ?? 'instagram',
+    account: { requestedAccountId: accountId, boundAccountId: null, accounts: null },
+    publishOptions: publishOptions ?? null,
+    mediaGenerated: null,
+  });
+  const caption = plan.caption.text ?? undefined;
+  const [first] = plan.media;
 
   const target: PublishTarget = {
     ...(platform ? { platform } : {}),
@@ -291,30 +318,32 @@ export function buildPublishBody(
     ...(publishOptions ? { publishOptions } : {}),
   };
 
-  if (postType === 'REEL') {
-    const cover = assets.find((asset) => asset.role === 'cover' && asset.kind === 'image');
+  if (plan.format === 'REEL') {
+    const coverUrl = plan.cover?.source === 'publishing_asset' ? plan.cover.url : null;
     return {
       postType: 'REEL',
       placementId: draft.id,
-      ...(video ? { videoUrl: video.storageUrl } : {}),
-      ...(cover ? { coverUrl: cover.storageUrl } : {}),
+      ...(first ? { videoUrl: mediaUrl(first) } : {}),
+      ...(coverUrl ? { coverUrl } : {}),
       caption,
       shareToFeed: true,
       ...target,
     };
   }
 
-  if (postType === 'STORY') {
-    return {
-      postType: 'STORY',
-      placementId: draft.id,
-      ...(video ? { videoUrl: video.storageUrl } : image ? { imageUrl: image.storageUrl } : {}),
-      ...target,
-    };
+  if (plan.format === 'STORY') {
+    const media = first
+      ? first.kind === 'video'
+        ? { videoUrl: mediaUrl(first) }
+        : { imageUrl: mediaUrl(first) }
+      : {};
+    return { postType: 'STORY', placementId: draft.id, ...media, ...target };
   }
 
-  if (postType === 'CAROUSEL') {
-    const items = carouselItems(draft);
+  if (plan.format === 'CAROUSEL') {
+    const items = plan.media.flatMap((item) =>
+      item.url ? [item.kind === 'video' ? { videoUrl: item.url } : { imageUrl: item.url }] : [],
+    );
     return {
       postType: 'CAROUSEL',
       placementId: draft.id,
@@ -328,7 +357,7 @@ export function buildPublishBody(
   return {
     postType: 'POST',
     placementId: draft.id,
-    ...(image ? { imageUrl: image.storageUrl } : {}),
+    ...(first ? { imageUrl: mediaUrl(first) } : {}),
     caption,
     ...target,
   };
