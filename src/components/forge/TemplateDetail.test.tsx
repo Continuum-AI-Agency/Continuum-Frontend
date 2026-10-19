@@ -451,7 +451,7 @@ describe('TemplateDetail', () => {
     workspaces = [CONTINUUM_WORKSPACE, PARSED_WORKSPACE];
     run = null;
     renderDetail();
-    fireEvent.click(await screen.findByRole('button', { name: 'Build details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Set up details' }));
     await screen.findByRole('textbox', { name: 'Template name' });
     expect(screen.queryByRole('combobox', { name: 'Render workspace' })).toBeNull();
     expect(visibleText()).not.toMatch(/Workspace \d/);
@@ -460,7 +460,7 @@ describe('TemplateDetail', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Template name' }), {
       target: { value: 'winter_promo' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Build the template' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up template' }));
     await waitFor(() => expect(sendTemplateToForge).toHaveBeenCalledTimes(1));
     // Three arguments, and none of them a workspace.
     expect(sendTemplateToForge.mock.calls[0]).toHaveLength(3);
@@ -477,8 +477,8 @@ describe('TemplateDetail', () => {
     fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
     renderDetail(undefined, { ...SOURCE, parseState: 'pending', parse: null, fonts: [] });
     await waitFor(() => expect(fact('Fonts')).toBe('Not known yet'));
-    expect(check('Fonts').textContent).toContain('Waits for the file to be read');
-    expect(visibleText()).not.toMatch(/All 0 uploaded|Uses no typefaces/);
+    expect(check('Fonts').textContent).toContain('Waiting for your file to be read');
+    expect(visibleText()).not.toMatch(/All 0 found|No fonts used/);
   });
 
   test('refreshes pending font state from readiness without mixing in stale source names', async () => {
@@ -500,14 +500,14 @@ describe('TemplateDetail', () => {
     });
 
     await waitFor(() => expect(fact('Fonts')).toBe('1 · 1 missing'));
-    expect(check('Fonts').textContent).toContain('1 of 1 not uploaded: Fresh Parsed Face');
+    expect(check('Fonts').textContent).toContain('1 of 1 missing: Fresh Parsed Face');
     expect(visibleText()).not.toContain('HeadingNow');
 
     // A missing face is the common case, so the footer fixes it rather than pointing at it.
     fireEvent.click(screen.getByRole('button', { name: 'Fix problems' }));
     await waitFor(() => expect(healTemplateFonts).toHaveBeenCalledWith(BRAND, ASSET));
     fireEvent.click(screen.getByRole('button', { name: 'Fonts details' }));
-    expect(await screen.findByText('Fresh Parsed Face · not uploaded')).toBeTruthy();
+    expect(await screen.findByText('Fresh Parsed Face · missing')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add font files' })).toBeTruthy();
   });
 
@@ -565,7 +565,7 @@ describe('TemplateDetail', () => {
     expect(within(repair).getByText('Footage/hero.mov')).toBeTruthy();
     expect(repair.querySelector('input[type="file"]')).toBeTruthy();
     expect(
-      screen.getByRole('tab', { name: 'Source file' }).getAttribute('aria-selected'),
+      screen.getByRole('tab', { name: 'Replace file' }).getAttribute('aria-selected'),
     ).not.toBe('true');
   });
 
@@ -592,15 +592,15 @@ describe('TemplateDetail', () => {
       'listitem',
     );
     expect(rows.map((row) => row.querySelector('.font-mono')?.textContent)).toEqual([
-      'Parse',
+      'Read your file',
       'Fonts',
-      'Build',
-      'Mapping',
+      'Set up',
+      'Connect layers',
       'Test render',
       'Publish',
     ]);
     expect(check('Test render').textContent).toContain(
-      'Renders one watermarked frame to prove each variable reaches its layer.',
+      'We render one watermarked frame to make sure each variable shows up in the right place.',
     );
     expect(screen.getByText('2 to do').getAttribute('role')).toBe('status');
 
@@ -751,7 +751,7 @@ describe('TemplateDetail', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move Headline' }), { key: 'ArrowRight' });
     fireEvent.click(screen.getByRole('button', { name: 'Save text layout' }));
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Text repair saved, not applied yet',
+      'Your text changes are saved but not live yet',
     );
     expect(screen.getByRole('alert').textContent).toContain('Review is unavailable');
     expect(confirmTemplateRebind).not.toHaveBeenCalled();

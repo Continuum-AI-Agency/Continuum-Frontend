@@ -49,10 +49,10 @@ describe('templateChecks', () => {
   test('six rows in order, each saying what it checks', () => {
     const checks = templateChecks(PARSED);
     expect(checks.map((check) => check.name)).toEqual([
-      'Parse',
+      'Read your file',
       'Fonts',
-      'Build',
-      'Mapping',
+      'Set up',
+      'Connect layers',
       'Test render',
       'Publish',
     ]);
@@ -80,43 +80,22 @@ describe('templateChecks', () => {
       unmatchedSlots: [],
       ignoredSlots: [],
     };
-    expect(
-      row({ mappingReview: ready, run: runRow({ state: 'review_ready' }) }, 'mapping'),
-    ).toMatchObject({ state: 'pass', result: '1 of 1 layers mapped' });
-    expect(
-      row(
-        {
-          mappingReview: { ...ready, identityAvailable: false },
-          run: runRow({ state: 'review_ready' }),
-        },
-        'mapping',
-      ).state,
-    ).toBe('warn');
-    expect(
-      row(
-        {
-          mappingReview: {
-            ...ready,
-            state: 'needs_review',
-            matchedSlots: 0,
-            unmatchedSlots: [
-              { key: 'text__headline', name: 'Headline', kind: 'text', comps: ['wide'] },
-            ],
-          },
-          run: runRow({ state: 'review_ready' }),
-        },
-        'mapping',
-      ).state,
-    ).toBe('fail');
+    expect(row({ mappingReview: ready, run: runRow({ state: 'review_ready' }) }, 'mapping'))
+      .toMatchObject({ state: 'pass', result: '1 of 1 layers connected' });
+    expect(row({ mappingReview: { ...ready, identityAvailable: false } , run: runRow({ state: 'review_ready' }) }, 'mapping').state)
+      .toBe('warn');
+    expect(row({ mappingReview: { ...ready, state: 'needs_review', matchedSlots: 0,
+      unmatchedSlots: [{ key: 'text__headline', name: 'Headline', kind: 'text', comps: ['wide'] }] },
+      run: runRow({ state: 'review_ready' }) }, 'mapping').state).toBe('fail');
   });
 
   test('PARSE: read, not opened, unreadable, unsupported', () => {
     expect(row({}, 'parse')).toMatchObject({
       state: 'pass',
-      result: 'Read 12 variables in 3 formats',
+      result: 'Found 12 variables in 3 formats',
     });
     expect(row({ variableCount: 1, formatCount: 1 }, 'parse').result).toBe(
-      'Read 1 variable in 1 format',
+      'Found 1 variable in 1 format',
     );
     expect(row({ parseState: 'pending' }, 'parse')).toMatchObject({
       state: 'todo',
@@ -124,18 +103,18 @@ describe('templateChecks', () => {
     });
     expect(row({ parseState: 'failed', parseError: 'Truncated RIFX' }, 'parse')).toMatchObject({
       state: 'fail',
-      result: "Couldn't read this file: Truncated RIFX",
+      result: "We couldn't open this file: Truncated RIFX",
     });
     expect(row({ parseState: 'unsupported' }, 'parse')).toMatchObject({
       state: 'skipped',
-      result: "This file type isn't read",
+      result: "We don't read this file type",
     });
   });
 
   test('FONTS: all uploaded, missing, unchecked, checking, waiting for the parse', () => {
     expect(row({}, 'fonts')).toMatchObject({
       state: 'pass',
-      result: 'All 2 uploaded',
+      result: 'All 2 found',
       ticks: ['pass', 'pass'],
     });
     expect(
@@ -154,31 +133,31 @@ describe('templateChecks', () => {
       ),
     ).toMatchObject({
       state: 'fail',
-      result: '1 of 2 not uploaded: Geist',
+      result: '1 of 2 missing: Geist',
       ticks: ['pass', 'fail'],
     });
     expect(row({ fontReadiness: null, fontCheckFailed: true }, 'fonts')).toMatchObject({
       state: 'warn',
-      result: "Couldn't check the brand's fonts",
+      result: "Couldn't check your fonts",
     });
     expect(row({ fontReadiness: null }, 'fonts')).toMatchObject({ state: 'running' });
     expect(
       row({ fontReadiness: { parseState: 'parsed', missing: 0, fonts: [] } }, 'fonts'),
-    ).toMatchObject({ state: 'pass', result: 'Uses no typefaces' });
+    ).toMatchObject({ state: 'pass', result: 'No fonts used' });
     for (const input of [
       { parseState: 'pending', fontReadiness: null },
       { fontReadiness: { parseState: 'pending' as const, missing: 0, fonts: [] } },
     ]) {
       expect(row(input, 'fonts')).toMatchObject({
         state: 'todo',
-        result: 'Waits for the file to be read',
+        result: 'Waiting for your file to be read',
       });
     }
   });
 
   test('BUILD: not built, running with phase ticks, needs, failed, built', () => {
-    expect(row({}, 'build')).toMatchObject({ state: 'todo', result: 'Not built yet' });
-    expect(row({ templateKey: '133' }, 'build')).toMatchObject({ state: 'pass', result: 'Built' });
+    expect(row({}, 'build')).toMatchObject({ state: 'todo', result: 'Not set up yet' });
+    expect(row({ templateKey: '133' }, 'build')).toMatchObject({ state: 'pass', result: 'Set up' });
     expect(row({ forgeState: 'published' }, 'build')).toMatchObject({ state: 'pass' });
 
     const phases = [
@@ -198,7 +177,7 @@ describe('templateChecks', () => {
       ),
     ).toMatchObject({
       state: 'running',
-      result: 'Building the spec',
+      result: 'Setting up',
       ticks: ['pass', 'todo', 'todo'],
     });
 
@@ -210,7 +189,7 @@ describe('templateChecks', () => {
       row({ run: runRow({ state: 'needs_input', needs: assetNeeds }) }, 'build'),
     ).toMatchObject({
       state: 'warn',
-      result: 'Pick a picture for 2 media variables',
+      result: 'Pick an image for 2 media variables, then set up again',
       action: 'resume',
     });
     const mixedNeeds: TemplateRunRow['needs'] = [
@@ -221,10 +200,10 @@ describe('templateChecks', () => {
       { run: runRow({ state: 'needs_input', needs: mixedNeeds, findings: [{ code: 'x' }] }) },
       'build',
     );
-    expect(mixed).toMatchObject({ state: 'warn', result: '2 slots nothing could bind' });
+    expect(mixed).toMatchObject({ state: 'warn', result: "2 layers we couldn't connect" });
     expect(mixed.chips).toEqual([
-      { label: "1 couldn't bind", tone: 'warning' },
-      { label: '1 finding', tone: 'muted' },
+      { label: '1 not connected', tone: 'warning' },
+      { label: '1 issue', tone: 'muted' },
     ]);
 
     expect(
@@ -252,27 +231,27 @@ describe('templateChecks', () => {
       ticks: ['pass', 'fail'],
     });
     expect(row({ run: runRow({ state: 'failed' }) }, 'build').result).toBe(
-      'The run stopped on an error.',
+      'Setup stopped on an error.',
     );
     for (const state of ['draft_ready', 'smoking', 'review_ready', 'promoting', 'published']) {
       expect(row({ run: runRow({ state }) }, 'build')).toMatchObject({
         state: 'pass',
-        result: 'Built',
+        result: 'Set up',
       });
     }
   });
 
   test('TEST RENDER: offered on a draft, running while smoking, passed once reviewed', () => {
-    expect(row({}, 'test')).toMatchObject({ state: 'todo', result: 'Not run' });
+    expect(row({}, 'test')).toMatchObject({ state: 'todo', result: 'Not run yet' });
     expect(row({}, 'test').action).toBeUndefined();
     expect(row({ run: runRow({ state: 'draft_ready' }) }, 'test')).toMatchObject({
       state: 'todo',
-      result: 'Not run',
+      result: 'Not run yet',
       action: 'smoke',
     });
     expect(row({ run: runRow({ state: 'smoking' }) }, 'test')).toMatchObject({
       state: 'running',
-      result: 'Rendering the test frame…',
+      result: 'Rendering a test frame…',
     });
     for (const state of ['review_ready', 'promoting', 'published']) {
       expect(row({ run: runRow({ state }) }, 'test')).toMatchObject({
@@ -285,7 +264,7 @@ describe('templateChecks', () => {
   test('PUBLISH: a key shows publication while live worker verification is pending', () => {
     expect(row({ templateKey: '133' }, 'publish')).toMatchObject({
       state: 'pass',
-      result: 'Published · checking the worker graph and layout…',
+      result: 'Published · checking the layout…',
     });
     expect(row({ templateKey: '133', publishCheckFailed: true }, 'publish')).toMatchObject({
       state: 'warn',
@@ -293,7 +272,7 @@ describe('templateChecks', () => {
     const published = { state: 'pass' as const, issues: [], workerAttachmentId: 7, media: [] };
     expect(row({ templateKey: '133', publishVerification: published }, 'publish')).toMatchObject({
       state: 'pass',
-      result: 'Published · worker graph and 0 media slots measured',
+      result: 'Published · 0 image spots checked',
     });
     expect(
       row(
@@ -329,11 +308,11 @@ describe('templateChecks', () => {
     });
     expect(row({ run: runRow({ state: 'published' }) }, 'publish')).toMatchObject({
       state: 'todo',
-      result: 'Not published',
+      result: 'Not published yet',
     });
     expect(row({ run: runRow({ state: 'review_ready' }) }, 'publish')).toMatchObject({
       state: 'todo',
-      result: 'Not published',
+      result: 'Not published yet',
       action: 'promote',
     });
     expect(row({ run: runRow({ state: 'promoting' }) }, 'publish')).toMatchObject({

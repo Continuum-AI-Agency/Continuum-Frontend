@@ -846,6 +846,18 @@ export const templateSourceSummarySchema = templateSourceSchema
   .strict();
 export type TemplateSourceSummary = z.infer<typeof templateSourceSummarySchema>;
 
+/**
+ * `GET /api/ai-studio/templates`: one page, newest first. `nextCursor` (pass it back as `cursor`)
+ * is null on the last page. A page can be empty while `nextCursor` is set, so keep reading.
+ */
+export const templateSourceListResponseSchema = z
+  .object({
+    items: z.array(templateSourceSummarySchema),
+    nextCursor: z.string().nullable().default(null),
+  })
+  .strict();
+export type TemplateSourceListResponse = z.infer<typeof templateSourceListResponseSchema>;
+
 /** One uploaded project can publish several independently rendered delivery compositions. */
 export const templateForgeBundleSchema = z
   .object({

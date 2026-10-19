@@ -73,6 +73,10 @@ const renameTemplateSource = mock(async (_brandId: string, _assetId: string, tit
 
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateSources,
+  // The gallery streams its list; each stream is one read of the same fixture.
+  streamTemplateSources: async function* () {
+    yield await fetchTemplateSources();
+  },
   fetchTemplateVariants: async () => [],
   fetchTemplateRevisionVariants: async () => [],
   importDesignTemplate,
@@ -189,12 +193,12 @@ describe('ForgeWorkbench', () => {
       fetchedSources = [{ ...SOURCE, parseState: 'pending' }];
       uploadFinished?.({ file: new File(['x'], 'promo.aep'), uploaded: { assetId: 'asset-new' } });
 
-      expect(await screen.findByText('Unpacking')).toBeTruthy();
+      expect(await screen.findByText('Opening')).toBeTruthy();
       expect(screen.getByLabelText('Search templates')).toBeTruthy();
 
       fetchedSources = [SOURCE];
       if (typeof poll === 'function') poll();
-      expect(await screen.findByText('Parsed')).toBeTruthy();
+      expect(await screen.findByText('Ready to set up')).toBeTruthy();
       // ONE read: the server merges every binding, so the browser never enumerates workspaces.
       expect(fetchRenderWorkspaces).not.toHaveBeenCalled();
       expect(discoverWorkspaceTemplates).toHaveBeenCalledTimes(1);

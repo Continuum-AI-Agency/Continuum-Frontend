@@ -155,7 +155,7 @@ const aspectOf = (format: PreviewFormat): [number, number] =>
   format.width && format.height ? [format.width, format.height] : ratioParts(format.ratio);
 
 const ESTIMATE_CAPTION =
-  'Boxes measured from the template; type size, wrapping and brand fonts are guesses.';
+  'Positions come from your file; text size, line breaks and fonts are estimates.';
 
 export function FormatPreview({
   label,

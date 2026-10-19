@@ -613,11 +613,10 @@ export function RenderReviewTray({
           <div className="flex flex-col gap-0.5">
             <Label className="text-xs">
               <RadioGroupItem value="experimental" />
-              Experimental Renderer
+              Continuum&apos;s New Renderer
             </Label>
             <span className="pl-6 text-muted-foreground">
-              Our own renderer on Google Cloud. It renders what it can reproduce; anything else goes
-              to After Effects automatically, and the job shows why.
+              Anything it can&apos;t render goes to After Effects automatically.
             </span>
           </div>
         </RadioGroup>
