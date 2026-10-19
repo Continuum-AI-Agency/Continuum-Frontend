@@ -139,6 +139,7 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                 </span>
                 <span
                   className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${paid.className}`}
+                  title={c.metaPageResolutionError ?? undefined}
                 >
                   {paid.label}
                 </span>

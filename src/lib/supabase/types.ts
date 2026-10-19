@@ -30648,6 +30648,19 @@ export type Database = {
           pending: number
         }[]
       }
+      creative_elements_pending_competitor_ads: {
+        Args: { p_brand_id?: string; p_limit?: number }
+        Returns: {
+          brand_id: string
+          competitor_id: string
+          creative_media_bucket: string
+          creative_media_path: string
+          creative_media_status: string
+          first_seen_at: string
+          id: string
+          payload: Json
+        }[]
+      }
       creative_elements_pending_competitor_posts: {
         Args: { p_days?: number; p_limit?: number }
         Returns: {
