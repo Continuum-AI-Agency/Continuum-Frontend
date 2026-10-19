@@ -2,6 +2,7 @@
 
 import { Send } from 'lucide-react';
 import { useState } from 'react';
+import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { sendVideoProjectAgentTurn } from '@/lib/api/videoProjects.client';
@@ -78,14 +79,22 @@ export function EditorAgentPanel({
           void send();
         }}
       >
-        <Textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Describe an edit…"
-          aria-label="Ask the Video Editor agent"
-          rows={3}
-          disabled={sending}
-        />
+        <div className="relative">
+          <Textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Describe an edit…"
+            aria-label="Ask the Video Editor agent"
+            rows={3}
+            disabled={sending}
+            className="pr-9"
+          />
+          <DictationButton
+            className="absolute right-1 top-1"
+            disabled={sending}
+            onTranscript={(spoken) => setDraft((current) => appendDictation(current, spoken))}
+          />
+        </div>
         <Button type="submit" size="sm" className="w-full" disabled={sending || !draft.trim()}>
           <Send className="size-3.5" /> Apply edit
         </Button>

@@ -10,6 +10,7 @@ import {
   LOOK_EFFECTS,
   type LookEffectId,
   lookEffectInstance,
+  sampleNumericTrack,
   TEXT_ANIMATION_IDS,
 } from '@continuum/contracts';
 import {
@@ -1202,6 +1203,292 @@ export async function runRecordedExport(
   }
 }
 
+// ── Text and effect keyframes ────────────────────────────────────────────────────────
+// text.fontSize, text.tracking and effect.parameter keys through the same plan and
+// compositor. The oracle is the keys themselves, sampled with the contracts sampler at the
+// instant each output frame is drawn (frame k at k/30 s).
+
+const GROW_KEYS = [
+  {
+    timeSec: 0,
+    value: 48,
+    interpolation: 'bezier' as const,
+    easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
+  },
+  { timeSec: 1.5, value: 96, interpolation: 'linear' as const },
+];
+const TRACKING_KEYS = [
+  { timeSec: 0, value: 0, interpolation: 'linear' as const },
+  { timeSec: 1.5, value: 0.5, interpolation: 'linear' as const },
+];
+const KEYED_SEC = 4;
+const GROUND = '#808080';
+/** Clear of the titles and inside the vignette's flat centre (radius < 0.35). */
+const CENTRE = { left: 150, right: 210, top: 290, bottom: 350 };
+
+type EffectKeying = 'none' | 'named' | 'unnamed';
+
+function keyframedProject(keying: EffectKeying) {
+  const created = createEditorProjectV2({
+    projectId: '00000000-0000-4000-8000-000000000781',
+    title: 'Keyframe render proof',
+    width: WIDTH,
+    height: HEIGHT,
+    now: '2026-10-17T12:00:00.000Z',
+  });
+  const key = (property: string, at: { timeSec: number; value: number }, extra = {}) => ({
+    id: `${property}-${at.timeSec}`,
+    property,
+    interpolation: 'linear',
+    ...at,
+    ...extra,
+  });
+  // `named` drives the vignette by id while the tint, first with `amount`, holds; `unnamed`
+  // names no effect, so the tint (the first enabled effect with `amount`) is the one driven.
+  const effectKeys =
+    keying === 'none'
+      ? []
+      : keying === 'named'
+        ? [0, KEYED_SEC].map((timeSec) =>
+            key(
+              'effect.parameter',
+              { timeSec, value: timeSec / KEYED_SEC },
+              { parameterName: 'amount', effectInstanceId: 'fx-vignette' },
+            ),
+          )
+        : [0, KEYED_SEC].map((timeSec) =>
+            key(
+              'effect.parameter',
+              { timeSec, value: 0.3 + (0.7 * timeSec) / KEYED_SEC },
+              { parameterName: 'amount' },
+            ),
+          );
+  return editorProjectV2Schema.parse({
+    ...created,
+    durationSec: KEYED_SEC,
+    exportSettings: {
+      ...created.exportSettings,
+      width: WIDTH,
+      height: HEIGHT,
+      videoBitrateKbps: 2_000,
+      captionMode: 'burn_in',
+    },
+    tracks: [
+      {
+        id: 'main',
+        name: 'Main',
+        order: 0,
+        kind: 'video',
+        clips: [
+          {
+            id: 'ground',
+            kind: 'video',
+            timelineStartSec: 0,
+            durationSec: KEYED_SEC,
+            source: source('ground'),
+            audioEnabled: false,
+            effects: [
+              {
+                id: 'fx-tint',
+                effectType: 'video_filter',
+                effectId: 'tint',
+                parameters: { amount: 0.3, color: '#ff7a00' },
+              },
+              {
+                id: 'fx-vignette',
+                effectType: 'video_filter',
+                effectId: 'vignette',
+                parameters: { amount: 0 },
+              },
+            ],
+            keyframes: effectKeys,
+          },
+        ],
+      },
+      {
+        id: 'titles',
+        name: 'Titles',
+        order: 1,
+        kind: 'text',
+        clips: [
+          textClip(
+            'grow',
+            'HIH',
+            0.2,
+            1.5,
+            {
+              keyframes: GROW_KEYS.map((at) => key('text.fontSize', at, at)),
+            },
+            { fontSizePx: 48 },
+            0.25,
+          ),
+          textClip(
+            'track',
+            'TRACK',
+            2,
+            1.5,
+            {
+              keyframes: TRACKING_KEYS.map((at) => key('text.tracking', at)),
+            },
+            {},
+            0.25,
+          ),
+          // A static 48 px "HIH" after both: the encoder's edge spread, measured on the
+          // static path, so the keyed frames compare against an encoded reference.
+          textClip('still', 'HIH', 3.55, 0.45, {}, { fontSizePx: 48 }, 0.25),
+        ],
+      },
+      {
+        id: 'spacing',
+        name: 'Spacing',
+        order: 2,
+        kind: 'text',
+        clips: [
+          textClip('spaced', 'TRACK', 0.2, 1.5, {}, { trackingEm: 0.3 }, 0.75),
+          textClip('plain', 'TRACK', 2, 1.5, {}, {}, 0.75),
+        ],
+      },
+    ],
+  });
+}
+
+async function renderKeyframed(keying: EffectKeying, groundUrl: string) {
+  const plan = await buildTimelineEditorRenderPlan({
+    project: keyframedProject(keying),
+    jobInputs: [
+      {
+        sourceId: 'ground',
+        sourceAssetId: 'asset-ground',
+        sourceRevision: 'version-ground',
+        storage: { bucket: 'bench', path: 'ground' },
+      },
+    ],
+    signedUrls: new Map([['bench\nground', groundUrl]]),
+    signal: new AbortController().signal,
+  });
+  await registerCaptionFonts(plan.captionFonts);
+  const rendered = await composeTimeline({
+    ...plan,
+    videoBitrate: 2_000_000,
+    audioBitrate: 128_000,
+    targetWidth: WIDTH,
+    targetHeight: HEIGHT,
+    frameRate: 30,
+  });
+  URL.revokeObjectURL(rendered.objectUrl);
+  const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
+  return new Input({ source: new BlobSource(rendered.blob), formats: ALL_FORMATS });
+}
+
+/**
+ * The ink height of the grow title's glyphs drawn statically at `px`, in the compositor's
+ * font and colour over the ground, measured with the same threshold. Plus the encoder's edge
+ * spread (`encodeSpreadPx`), it is the reference a frame keyed to `px` must match.
+ */
+function referenceGlyphHeight(px: number): number {
+  const canvas = new OffscreenCanvas(WIDTH, HEIGHT);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('No reference glyph canvas');
+  context.fillStyle = GROUND;
+  context.fillRect(0, 0, WIDTH, HEIGHT);
+  context.font = `900 ${px}px "Arial", "Helvetica Neue", Arial, sans-serif`;
+  context.fillStyle = TEXT_GREEN;
+  context.fillText('HIH', 40, 200);
+  const box = textBox(context.getImageData(0, 0, WIDTH, HEIGHT).data, TOP_BAND, 0);
+  return box.bottom - box.top + 1;
+}
+
+/** Mean |ΔRGB| between two frames, over the whole frame or one box of it. */
+function meanDelta(
+  left: Uint8ClampedArray,
+  right: Uint8ClampedArray,
+  box = { left: 0, right: WIDTH, top: 0, bottom: HEIGHT },
+): number {
+  let sum = 0;
+  for (let y = box.top; y < box.bottom; y += 1)
+    for (let x = box.left; x < box.right; x += 1)
+      for (let channel = 0; channel < 3; channel += 1) {
+        const offset = (y * WIDTH + x) * 4 + channel;
+        sum += Math.abs((left[offset] ?? 0) - (right[offset] ?? 0));
+      }
+  return sum / ((box.bottom - box.top) * (box.right - box.left) * 3);
+}
+
+export type KeyframeRenderRun = {
+  grow: Array<{ timeSec: number; height: number; sampledPx: number; referenceHeight: number }>;
+  /** The static 48 px title's encoded height minus its unencoded reference. */
+  encodeSpreadPx: number;
+  tracking: Array<{ timeSec: number; width: number; trackingPx: number }>;
+  staticTracking: { plain: number; spaced: number; fontPx: number; glyphs: number };
+  named: Array<{ timeSec: number; frameDelta: number; centreDelta: number }>;
+  unnamed: Array<{ timeSec: number; frameDelta: number; centreDelta: number }>;
+};
+
+export async function runKeyframeRender(): Promise<KeyframeRenderRun> {
+  const groundUrl = URL.createObjectURL(await encodeSolidVideo(GROUND, KEYED_SEC));
+  const inputs = {
+    none: await renderKeyframed('none', groundUrl),
+    named: await renderKeyframed('named', groundUrl),
+    unnamed: await renderKeyframed('unnamed', groundUrl),
+  };
+  try {
+    const drawnAt = (t: number) => Math.floor(t * 30 + 1e-6) / 30;
+    const frame = (keying: EffectKeying, t: number) => framePixels(inputs[keying], t);
+    const still = textBox(await frame('named', 3.75), TOP_BAND, 3.75);
+    const encodeSpreadPx = still.bottom - still.top + 1 - referenceGlyphHeight(48);
+    const grow = [];
+    for (const t of frameTimes(0.25, 1.65, 0.1)) {
+      const box = textBox(await frame('named', t), TOP_BAND, t);
+      const sampledPx = Math.round(sampleNumericTrack(GROW_KEYS, drawnAt(t) - 0.2, 48));
+      grow.push({
+        timeSec: t,
+        height: box.bottom - box.top + 1,
+        sampledPx,
+        referenceHeight: referenceGlyphHeight(sampledPx) + encodeSpreadPx,
+      });
+    }
+    const tracking = [];
+    for (const t of frameTimes(2.05, 3.45, 0.1)) {
+      const box = textBox(await frame('named', t), TOP_BAND, t);
+      const em = sampleNumericTrack(TRACKING_KEYS, drawnAt(t) - 2, 0);
+      tracking.push({ timeSec: t, width: box.right - box.left + 1, trackingPx: em * FONT_PX });
+    }
+    const inkWidth = async (t: number) => {
+      const box = textBox(await frame('named', t), BOTTOM_BAND, t);
+      return box.right - box.left + 1;
+    };
+    const effects = async (keying: EffectKeying) => {
+      const out = [];
+      for (const t of [0.25, 0.75, 1.25, 1.75, 2.25, 2.75, 3.25, 3.75]) {
+        const control = await frame('none', t);
+        const keyed = await frame(keying, t);
+        out.push({
+          timeSec: t,
+          frameDelta: meanDelta(keyed, control),
+          centreDelta: meanDelta(keyed, control, CENTRE),
+        });
+      }
+      return out;
+    };
+    return {
+      grow,
+      encodeSpreadPx,
+      tracking,
+      staticTracking: {
+        plain: await inkWidth(2.75),
+        spaced: await inkWidth(0.95),
+        fontPx: FONT_PX,
+        glyphs: 'TRACK'.length,
+      },
+      named: await effects('named'),
+      unnamed: await effects('unnamed'),
+    };
+  } finally {
+    for (const input of Object.values(inputs)) input.dispose();
+    URL.revokeObjectURL(groundUrl);
+  }
+}
+
 declare global {
   interface Window {
     __motionRenderBench: {
@@ -1213,6 +1500,7 @@ declare global {
       dust: typeof runDustDensity;
       curves: typeof runRetainedCurves;
       recordedExport: typeof runRecordedExport;
+      keyframes: typeof runKeyframeRender;
     };
   }
 }
@@ -1226,4 +1514,5 @@ window.__motionRenderBench = {
   dust: runDustDensity,
   curves: runRetainedCurves,
   recordedExport: runRecordedExport,
+  keyframes: runKeyframeRender,
 };

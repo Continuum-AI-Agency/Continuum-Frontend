@@ -211,13 +211,14 @@ async function seek(page: Page, pxPerSec: number, sec: number) {
   const box = await ruler.boundingBox();
   if (!box) throw new Error('ruler not visible');
   await ruler.click({ position: { x: pxPerSec * sec, y: box.height / 2 } });
+  // The clock shows tenths, so 1.25 s reads "1.3": half a tenth off, plus float noise.
   await expect
     .poll(async () => {
       const clock = await page.locator('[data-testid="timeline-clock"]:visible').innerText();
       const match = /^(\d+):([\d.]+)/.exec(clock);
-      return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
+      return match ? Math.abs(Number(match[1]) * 60 + Number(match[2]) - sec) : Number.NaN;
     })
-    .toBeCloseTo(sec, 1);
+    .toBeLessThanOrEqual(0.05 + 1e-9);
 }
 async function selectClip(page: Page, clipId: string, fraction = 0.5) {
   const clip = page.locator(`[data-clip-id="${clipId}"]:visible`);

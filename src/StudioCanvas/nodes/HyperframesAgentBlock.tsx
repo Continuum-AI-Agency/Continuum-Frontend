@@ -9,6 +9,7 @@ import {
   type HyperframesAgentEvent,
   type HyperframesStoryAngle,
   hyperframesAgentEventSchema,
+  type MotionTarget,
 } from '@continuum/contracts';
 import {
   Handle,
@@ -31,10 +32,11 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
+import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
-import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { useElements } from '@/lib/ai-studio/elements';
 import {
@@ -128,6 +130,7 @@ export function HyperframesAgentBlock({
   const [embedCode, setEmbedCode] = useState<{ video: string; interactive: string } | null>(null);
   const [previewMode, setPreviewMode] = useState<'video' | 'interactive'>('video');
   const [sceneFeedback, setSceneFeedback] = useState<Record<string, string>>({});
+  const [motionTarget, setMotionTarget] = useState<MotionTarget | null>(null);
   const video = data.generatedVideoUrl;
 
   const events = useMemo(
@@ -193,6 +196,15 @@ export function HyperframesAgentBlock({
         width: landscape ? longEdge : shortEdge,
         height: landscape ? shortEdge : square ? shortEdge : longEdge,
         storyboard,
+        // Only when the film is that revision's render: the editor edits motion through the link.
+        ...(revision && revision.data.revisionId === data.revisionId
+          ? {
+              hyperframes: {
+                revisionId: revision.data.revisionId,
+                fingerprint: revision.data.fingerprint,
+              },
+            }
+          : {}),
       });
       router.push(href);
     } catch (error) {
@@ -204,7 +216,7 @@ export function HyperframesAgentBlock({
     } finally {
       setOpeningEditor(false);
     }
-  }, [data, openingEditor, router, runtime, show, storyboard]);
+  }, [data, openingEditor, revision, router, runtime, show, storyboard]);
 
   // The film renders on the server; the run's events and the node's own status carry it.
   const failure = runError || data.error;
@@ -278,6 +290,7 @@ export function HyperframesAgentBlock({
         nodeId: id,
         roomId: runtime.roomId,
         brandId: runtime.brandProfileId,
+        motionTarget: data.revisionTarget ? null : motionTarget,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not start HyperFrames Agent.';
@@ -286,7 +299,7 @@ export function HyperframesAgentBlock({
     } finally {
       setStarting(false);
     }
-  }, [id, running, runtime, show, updateNodeData]);
+  }, [data.revisionTarget, id, motionTarget, running, runtime, show, updateNodeData]);
 
   const storyRequest = useCallback(() => {
     if (!runtime) throw new Error('Open this canvas in a brand workspace.');
@@ -837,16 +850,34 @@ export function HyperframesAgentBlock({
           ) : null}
 
           {data.sessionId && !data.revisionTarget ? (
-            <textarea
-              value={data.feedbackPrompt ?? ''}
-              onChange={(event) => {
-                updateNodeData(id, { feedbackPrompt: event.target.value });
-                triggerSave();
-              }}
-              placeholder="Global feedback: slow every zoom to 0.7x, adjust pacing, change the closing line…"
-              aria-label="Global video feedback"
-              className="min-h-14 w-full resize-y rounded-md border bg-muted/20 p-2 text-xs"
-            />
+            <div className="relative">
+              <textarea
+                value={data.feedbackPrompt ?? ''}
+                onChange={(event) => {
+                  updateNodeData(id, { feedbackPrompt: event.target.value });
+                  triggerSave();
+                }}
+                placeholder={
+                  motionTarget
+                    ? 'Speak or type the change for the selected animations: stagger this animation…'
+                    : 'Global feedback: slow every zoom to 0.7x, adjust pacing, change the closing line…'
+                }
+                aria-label="Global video feedback"
+                className="min-h-14 w-full resize-y rounded-md border bg-muted/20 p-2 pr-9 text-xs"
+              />
+              <DictationButton
+                className="absolute right-1 top-1"
+                disabled={running}
+                onTranscript={(spoken) => {
+                  const current = useStudioStore.getState().nodes.find((node) => node.id === id)
+                    ?.data as HyperframesAgentNodeData | undefined;
+                  updateNodeData(id, {
+                    feedbackPrompt: appendDictation(current?.feedbackPrompt ?? '', spoken),
+                  });
+                  triggerSave();
+                }}
+              />
+            </div>
           ) : null}
 
           {data.activeRunId && (data.revisionId || revision) ? (
@@ -875,7 +906,11 @@ export function HyperframesAgentBlock({
               label="Download rendered clip"
             />
             {previewMode === 'interactive' && data.activeRunId && (data.revisionId || revision) ? (
-              <InteractiveHyperframesPreview key={data.activeRunId} runId={data.activeRunId} />
+              <InteractiveHyperframesPreview
+                key={data.activeRunId}
+                runId={data.activeRunId}
+                onMotionTargetChange={setMotionTarget}
+              />
             ) : video ? (
               <NodeVideoPreview src={video} className="bg-transparent" />
             ) : running ? (
@@ -902,15 +937,17 @@ export function HyperframesAgentBlock({
 
           <Button
             onClick={() => void start()}
-            disabled={!runtime || running || (!data.revisionTarget && !approved)}
+            disabled={!runtime || running || (!data.revisionTarget && !approved && !motionTarget)}
             className="w-full"
           >
             <Play className="mr-2 h-3.5 w-3.5" />
             {data.revisionTarget
               ? 'Send scene revision'
-              : data.sessionId
-                ? 'Send global revision'
-                : 'Animate approved storyboard'}
+              : motionTarget
+                ? 'Send motion revision'
+                : data.sessionId
+                  ? 'Send global revision'
+                  : 'Animate approved storyboard'}
           </Button>
 
           {data.revisionId || revision ? (

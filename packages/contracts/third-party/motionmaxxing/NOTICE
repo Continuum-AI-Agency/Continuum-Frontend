@@ -1,0 +1,11 @@
+Continuum motion recipes contain easing mathematics adapted from motionmaxxing
+by Tejas Makwana (https://github.com/Tejashmakwana/motionmaxxing), upstream
+commit 8c8ec0f2a6f6c9a0da15cd24f7b1298ab298368c, under Apache-2.0.
+
+Continuum modifications, October 2026: TypeScript exports, native keyframe
+sampling, bounds validation, opacity clamping, and host-project timing.
+See LICENSE and UPSTREAM-NOTICE in this directory.
+
+Only the original easing mathematics and selected authoring guidance are
+adapted into the product. No upstream GSAP, Three.js, fonts, sound-provider
+scripts, showcase brand media, or private research corpus are incorporated.

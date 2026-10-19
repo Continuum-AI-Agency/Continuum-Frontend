@@ -3,6 +3,7 @@ import {
   applyCanvasTransform,
   clipEffectsToCss,
   cornerRadiusFracFor,
+  effectsAt,
   FILTER_PRESETS,
   filterString,
   hasVisualEffects,
@@ -449,4 +450,35 @@ it('shares a non-center pivot between CSS and canvas while retaining legacy cent
   );
   expect(calls[0]).toEqual(['translate', 350, 325]);
   expect(calls.at(-1)).toEqual(['translate', -250, -375]);
+});
+
+describe('effectsAt — keyed looks', () => {
+  const ramp = [
+    { t: 0, value: 0, interpolation: 'linear' as const },
+    { t: 1, value: 1, interpolation: 'linear' as const },
+  ];
+
+  it('samples every keyed look at the frame and leaves the rest alone', () => {
+    const spec = {
+      tint: { color: '#ff0000', amount: 0 },
+      vhs: { amount: 0.4 },
+      adjustments: { contrast: 1.2 },
+      effectStops: { tint: ramp, vignette: ramp, blur: ramp, pixelate: ramp, cornerRadius: ramp },
+    };
+    const at = effectsAt(spec, 0.25);
+    expect(at.tint).toEqual({ color: '#ff0000', amount: 0.25 });
+    expect(at.vignette).toEqual({ amount: 0.25 });
+    expect(at.adjustments).toEqual({ contrast: 1.2, blur: 0.25 });
+    expect(at.pixelate).toEqual({ blockPx: 0.25 });
+    expect(at.cornerRadiusFrac).toBe(0.25);
+    expect(at.vhs).toEqual({ amount: 0.4 });
+  });
+
+  it('counts a keyed look as a visual effect even at amount 0', () => {
+    expect(hasVisualEffects({ effectStops: { vignette: ramp } })).toBe(true);
+  });
+
+  it('previews a keyed blur in CSS at the frame', () => {
+    expect(clipEffectsToCss({ effectStops: { blur: ramp } }, 0.5).filter).toBe('blur(0.5px)');
+  });
 });
