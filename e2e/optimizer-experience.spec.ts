@@ -1696,6 +1696,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
           'jaina-entry-chips',
           'account-tiles',
           'account-cards',
+          'overview-links',
           'portfolio-rows',
         ]
           .map((id) => inner(id))
@@ -1759,7 +1760,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       console.log(`[optimizer-bench] Overview O1: ${JSON.stringify(report)}`);
 
       // In this order and nothing else: the sentence block, the Ask Jaina strip, the tiles, the
-      // platform comparison and the cards (when a read has landed), the rows. The platform tabs
+      // platform comparison and the cards (when a read has landed), the links, the rows. The platform tabs
       // live in the Performance+ bar above the Overview — every brand, Meta-only included, a
       // platform it has not connected stays in the row and says Connect — and exactly once.
       await expect(page.getByTestId('platform-tabs')).toHaveCount(1);
@@ -1767,7 +1768,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
       if (report.ids.includes('platform-comparison')) expectedIds.push('platform-comparison');
       if (report.ids.includes('overview-recommendations'))
         expectedIds.push('overview-recommendations');
-      expectedIds.push('portfolio-rows');
+      // Where the cards' decisions go next (Review in Actions, Activity): rendered with no
+      // condition on both tabs, so it is expected every time (redesign review 2026-10-17).
+      expectedIds.push('overview-links', 'portfolio-rows');
       expect(report.ids).toEqual(expectedIds);
       expect(report.ordered).toBe(true);
       expect(report.jainaLabel).toBe(true);
