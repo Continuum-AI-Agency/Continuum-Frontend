@@ -88,7 +88,10 @@ export type PreviewLayerEdit = AuthoringLayerEdit & { position?: [number, number
 type Pose = Pick<AuthoringEditableLayer, 'position' | 'rotation' | 'scale' | 'opacity' | 'visible'>;
 
 const poseOf = (layer: AuthoringEditableLayer, edit?: PreviewLayerEdit): Pose => ({
-  position: [edit?.x ?? layer.x ?? 0, edit?.y ?? layer.y ?? 0],
+  position: [
+    edit?.x ?? edit?.position?.[0] ?? layer.position?.[0] ?? layer.x ?? 0,
+    edit?.y ?? edit?.position?.[1] ?? layer.position?.[1] ?? layer.y ?? 0,
+  ],
   rotation: edit?.rotation ?? layer.rotation,
   scale: edit?.scale ?? layer.scale,
   opacity: edit?.opacity ?? layer.opacity,

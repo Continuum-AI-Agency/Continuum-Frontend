@@ -191,7 +191,7 @@ describe('Forge editor exit guard integration', () => {
     expect(draftWrites.at(-1)?.commands).toHaveLength(1);
     expect(draftWrites.at(-1)?.commands[0]).toMatchObject({
       type: 'layer.edit', nodeId: 'aep:63:114',
-      edit: { compId: 63, layerId: 114, position: [140, 200] },
+      edit: { compId: 63, layerId: 114, x: 140 },
     });
     expect(persistedDraft?.revision).toBe(1);
     expect(persistedDraft?.scope).toEqual(scope);
