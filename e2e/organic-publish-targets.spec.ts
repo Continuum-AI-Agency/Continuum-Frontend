@@ -412,7 +412,12 @@ async function captionBox(panel: Locator): Promise<Locator> {
   const edit = panel
     .getByRole('button', { name: /^(Edit|Add an?) (\w+ )?(caption|post copy)$/i })
     .first();
-  if (await edit.isVisible().catch(() => false)) await edit.click();
+  // The preview is a lazy chunk: wait for its Edit button (isVisible() would not wait).
+  const editShown = await edit
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (editShown) await edit.click();
   const box = panel.getByRole('textbox', { name: /caption|post copy/i }).first();
   await expect(box, 'FE: no caption textbox in the review panel').toBeVisible({ timeout: 20_000 });
   return box;

@@ -86,11 +86,9 @@ import {
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
-import { OrganicDraftPreview } from './OrganicDraftPreview';
 import { PlannerAttentionDock } from './PlannerAttentionDock';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
-import { PostedContentPreview } from './PostedContentQuickLook';
 import { usePlannerDateAnchors } from './planner-date-anchor';
 import {
   buildPlannerPlatforms,
@@ -127,11 +125,23 @@ const OrganicTrendsDrawer = dynamic(
   () => import('./OrganicTrendsDrawer').then((m) => m.OrganicTrendsDrawer),
   { ssr: false },
 );
+// Gesture-gated too: a preview renders only once a post is selected. Warmed on idle below,
+// so the first click does not wait on the chunk.
+const OrganicDraftPreview = dynamic(
+  () => import('./OrganicDraftPreview').then((m) => m.OrganicDraftPreview),
+  { ssr: false },
+);
+const PostedContentPreview = dynamic(
+  () => import('./PostedContentQuickLook').then((m) => m.PostedContentPreview),
+  { ssr: false },
+);
 
-/** Warm the lazy view chunks so the SECOND view switch is instant. */
+/** Warm the lazy chunks so the SECOND view switch and the FIRST preview are instant. */
 function warmPlannerViewChunks(): void {
   void import('./OrganicMonthlyCalendar');
   void import('./OrganicListView');
+  void import('./OrganicDraftPreview');
+  void import('./PostedContentQuickLook');
 }
 
 const PREVIEW_LAYOUT_KEY = 'continuum:organic-planner:preview-percent';

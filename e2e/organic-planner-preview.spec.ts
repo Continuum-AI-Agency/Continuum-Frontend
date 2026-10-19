@@ -4339,7 +4339,14 @@ test.describe('planner UX (U1–U7)', () => {
           const editCaption = preview
             .getByRole('button', { name: /^(Edit|Add an?) (\w+ )?caption$/i })
             .first();
-          if (await editCaption.isVisible().catch(() => false)) await editCaption.click();
+          // The preview's body is a lazy chunk: wait for the button, isVisible() would not.
+          if (
+            await editCaption
+              .waitFor({ state: 'visible', timeout: 10_000 })
+              .then(() => true)
+              .catch(() => false)
+          )
+            await editCaption.click();
           const caption = preview.getByRole('textbox', { name: /caption/i }).first();
           await expect(caption, `${view}: no caption textbox`).toBeVisible({ timeout: 20_000 });
           await caption.evaluate((el) => {
@@ -5100,7 +5107,14 @@ test.describe('planner UX (U1–U7)', () => {
           const editCaption = preview
             .getByRole('button', { name: /^(Edit|Add an?) (\w+ )?caption$/i })
             .first();
-          if (await editCaption.isVisible().catch(() => false)) await editCaption.click();
+          // The preview's body is a lazy chunk: wait for the button, isVisible() would not.
+          if (
+            await editCaption
+              .waitFor({ state: 'visible', timeout: 10_000 })
+              .then(() => true)
+              .catch(() => false)
+          )
+            await editCaption.click();
           const caption = preview.getByRole('textbox', { name: /caption/i }).first();
           await expect(caption, 'no caption textbox in the preview').toBeVisible({
             timeout: 20_000,
