@@ -1840,6 +1840,7 @@ export function TemplateDetail({
             <TemplateLayerEditor
               brandId={brandId}
               assetId={assetId}
+              active={tab === 'layers'}
               versionId={source.versionId}
               name={source.displayName ?? source.parse?.filename ?? 'Template'}
               parse={source.parse}

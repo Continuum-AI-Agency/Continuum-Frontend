@@ -297,6 +297,7 @@ export function TemplateLayerEditor({
   versionId,
   name,
   parse,
+  active,
   onSaved,
   onOpenVariant,
   onDraftChange,
@@ -311,6 +312,7 @@ export function TemplateLayerEditor({
   name: string;
   /** The parse the page already holds: the shell paints from it before any layer data arrives. */
   parse?: TemplatePreview | null;
+  active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void | Promise<void>;
   initialComp?: string;
