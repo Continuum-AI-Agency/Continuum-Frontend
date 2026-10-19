@@ -16,14 +16,14 @@ Anything the Frontend and Backend both touch:
 ## How consumers import
 
 ```ts
-// Backend (Continuum-Backend, moduleResolution: "node")
+// Backend (Continuum-Backend, moduleResolution: "bundler")
 import { OrganicStreamFrame, serializeFrame, type StreamEnvelope } from '@continuum/contracts';
 
 // Frontend (Continuum-Frontend, moduleResolution: "bundler")
 import { organicStreamFrameSchema, type OrganicStreamFrame } from '@continuum/contracts';
 ```
 
-**Always import from the root entry (`@continuum/contracts`).** Subpath imports (`@continuum/contracts/streaming/organic`) resolve in the Frontend's `bundler` resolution but NOT in the Backend's classic `node` resolution — using the root entry keeps both sides identical and prevents drift.
+**Always import from the root entry (`@continuum/contracts`).** Using it everywhere keeps both sides identical and prevents drift.
 
 ## Files (current)
 
